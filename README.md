@@ -1,8 +1,6 @@
 # manabot
 
-A reinforcement learning framework for [Magic: The Gathering](https://magic.wizards.com/), built on top of [managym](https://github.com/jacklionheart/managym).
-
-manabot currently uses PPO with a MLP backing a shared value/policy network.
+A reinforcement learning framework for [Magic: The Gathering](https://magic.wizards.com/), built on top of [managym](https://github.com/jacklionheart/managym), using PPO as the core training algorithm.
 
 ### Training
 
@@ -128,12 +126,3 @@ When working with this codebase, LLMs should:
   1. Full implementations of changed files that can be copied into the codebase 
   2. Questions that could clarify intent
   3. Notes on what was intentionally left out
-
-## Future Roadmap
-
-Long-term goals and exploration areas:
-- Model behavioral analysis: ELO, etc.
-- Attentional model architecture
-- Unknown information estimation  
-- Performance: C++ side inference
-
