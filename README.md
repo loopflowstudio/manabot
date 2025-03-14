@@ -12,7 +12,7 @@ Manabot is currently trained primarily on Ubuntu machines in aws and requires wa
 # Clone the repo
 git clone https://github.com/jacklionheart/manabot.git
 cd manabot
-# Update python
+# Update python for AWS Ubuntu deep learning AMIs
 ops/machine.sh
 # Install managym
 pip install -e managym
