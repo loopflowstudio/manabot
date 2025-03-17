@@ -369,10 +369,12 @@ class Trainer:
                 )
 
                 if update % 100 == 0 and self.wandb:
+                    self.logger.info(f"Saving artifact @ update: {update} step: {self.global_step}")
                     self.save()
 
                 self.logger.info(f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}")
 
+            self.save()
             env.close()
             self.experiment.close()
             self.logger.info("Training completed.")
