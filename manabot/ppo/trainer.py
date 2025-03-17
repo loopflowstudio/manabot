@@ -368,11 +368,12 @@ class Trainer:
                     f"Update {update}/{num_updates} | SPS: {sps} | Total time: {time_since_start:.2f}s"
                 )
 
+                if update % 100 == 0 and self.wandb:
+                    self.save()
+
                 self.logger.info(f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}")
 
             env.close()
-            if self.wandb:
-                self.save()
             self.experiment.close()
             self.logger.info("Training completed.")
 
