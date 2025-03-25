@@ -11,36 +11,23 @@ This module provides:
 
 import os
 import time
-from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import torch
 import wandb
 import threading
+import logging
 from collections import defaultdict, Counter
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
-from manabot.ppo.agent import Agent
 from manabot.env import Env, Match, Reward, ObservationSpace
 from manabot.env.observation import get_agent_indices
-from manabot.infra.hypers import MatchHypers, RewardHypers, add_hypers, parse_hypers
+from manabot.infra.hypers import SimulationHypers, ExperimentHypers
 from manabot.infra.log import getLogger
+from manabot.infra.experiment import Experiment
 from manabot.sim.player import Player, ModelPlayer, RandomPlayer, DefaultPlayer, load_model_from_wandb
-logger = getLogger(__name__)
-
-# -----------------------------------------------------------------------------
-# Evaluation Hyperparameters
-# -----------------------------------------------------------------------------
-
-@dataclass
-class SimulationHypers:
-    """Hyperparameters for model simulation."""
-    hero: str = "quick_train"
-    villain: str = "default"
-    num_games: int = 100
-    num_threads: int = 4
-    max_steps: int = 2000
-    match: MatchHypers = field(default_factory=MatchHypers)  # Match configuration
 
 # -----------------------------------------------------------------------------
 # Game Statistics
@@ -503,7 +490,7 @@ def simulate_models(
     Returns:
         GameStats with results
     """
-    logger = getLogger(__name__).getChild("simulate_parallel")
+    logger = getLogger("manabot.sim.sim").getChild("simulate_parallel")
     
     # Set up hyperparameters
     sim_hypers = sim_hypers or SimulationHypers()
@@ -527,7 +514,7 @@ def simulate_models(
         # Create environment for this thread
         match = Match(sim_hypers.match)
         observation_space = ObservationSpace()
-        reward = Reward(RewardHypers())
+        reward = Reward(sim_hypers.reward)
         env = Env(match, observation_space, reward, auto_reset=False, enable_profiler=True, enable_behavior_tracking=True)
         
         nonlocal completed_games
@@ -652,6 +639,7 @@ def _simulate_game(
     Returns:
         Tuple of (outcome, steps, duration, profiler_data, behavior_data)
     """
+    logger = getLogger("manabot.sim.sim").getChild("simulate_game")
     # Reset environment
     start_time = time.time()
     obs, info = env.reset()
@@ -713,46 +701,53 @@ def _simulate_game(
     
     return outcome, turn_count, duration, profiler_data, behavior_data
 
+def load_player(model_str: str) -> Player:
+    if model_str.lower() == "random":
+        return RandomPlayer("RandomPlayer")
+    elif model_str.lower() == "default":
+        return DefaultPlayer("DefaultPlayer")
+    else:
+        if ":" in model_str:
+            model, version = model_str.split(":")
+        else:
+            model = model_str
+            version = "latest"
+        return ModelPlayer(f"Model_{model_str}", load_model_from_wandb(model, version, device="cpu"))
+
 # -----------------------------------------------------------------------------
 # Command Line Interface
 # -----------------------------------------------------------------------------
 
-def main():
-    """Command line interface for evaluation."""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Evaluate manabot models")
-    
-    # Automatically add arguments from SimulationHypers
-    add_hypers(parser, SimulationHypers)    
-    args = parser.parse_args()
-    sim_hypers = parse_hypers(args, SimulationHypers)
+@hydra.main(version_base=None, config_path="../conf/sim", config_name="sim")
+def main(cfg: DictConfig) -> None:
+    """
+    Hydra-powered simulation entry point.
+    Expects a configuration file (e.g. conf/sim/sim.yaml) with fields:
+      - hero: str
+      - villain: str
+      - num_games: int
+      - num_threads: int
+      - max_steps: int
+      - match: (dictionary matching MatchHypers)
+    """
+    # Convert the config to a dictionary.
+    sim_hypers = OmegaConf.to_object(cfg.sim)
+    experiment_hypers = OmegaConf.to_object(cfg.experiment)
     assert isinstance(sim_hypers, SimulationHypers)
-    
+    assert isinstance(experiment_hypers, ExperimentHypers)
+
+    # Initialize the logging etc
+    _ = Experiment(experiment_hypers)
+
+    logger = getLogger("manabot.sim.sim")
+    logger.info("Simulation configuration:\n" + OmegaConf.to_yaml(cfg))
+
     logger.info(f"Loading hero model: {sim_hypers.hero}")
-    hero_agent = load_model_from_wandb(sim_hypers.hero, device="cpu")
+    logger.info(f"Loading villain model: {sim_hypers.villain}")
+    hero_player = load_player(sim_hypers.hero)
+    villain_player = load_player(sim_hypers.villain)
     
-    if sim_hypers.villain.lower() == "random":
-        logger.info("Using random opponent")
-        villain_player = RandomPlayer("RandomVillain")
-    elif sim_hypers.villain.lower() == "default":
-        logger.info("Using default opponent")
-        villain_player = DefaultPlayer("DefaultVillain")
-    else:
-        logger.info(f"Loading villain model: {sim_hypers.villain}") 
-        villain_agent = load_model_from_wandb(sim_hypers.villain, device="cpu")
-        villain_player = ModelPlayer(f"Model_{sim_hypers.villain}", villain_agent)
-    
-    hero_player = ModelPlayer(
-        f"Model_{sim_hypers.hero}", 
-        hero_agent, 
-    )
-    
-    simulate_models(
-        hero_player=hero_player,
-        villain_player=villain_player,
-        sim_hypers=sim_hypers,
-    )
-    
+    simulate_models(hero_player, villain_player, sim_hypers)
+
 if __name__ == "__main__":
     main()

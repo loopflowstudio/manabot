@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 from manabot.env import VectorEnv, Match, ObservationSpace, Reward
-from manabot.ppo import Agent, Trainer
+from manabot.model import Agent, Trainer
 from manabot.infra import (
     Experiment, TrainHypers, AgentHypers, ObservationSpaceHypers, 
     RewardHypers, ExperimentHypers

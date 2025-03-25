@@ -1,4 +1,4 @@
-# manabot/conf/config.yaml
+# manabot/conf/model/simple.yaml
 
 defaults:
   - observation: default

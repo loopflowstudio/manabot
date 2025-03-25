@@ -4,7 +4,7 @@ import os
 import wandb
 from typing import Dict, Optional
 from enum import Enum
-from manabot.ppo.agent import Agent
+from manabot.model.agent import Agent
 from collections import Counter
 
 from manabot.env import ObservationSpace
@@ -16,7 +16,7 @@ from manabot.infra.hypers import ObservationSpaceHypers, AgentHypers
 
     
 def load_model_from_wandb(
-    artifact_name: str,
+    model: str,
     version: str = "latest", 
     project: Optional[str] = None,
     device: str = "cpu"
@@ -25,7 +25,7 @@ def load_model_from_wandb(
     Load a trained model from wandb artifacts with minimal wandb interaction.
     
     Args:
-        artifact_name: Name of the experiment (e.g. "quick_train")
+        model: Name of the model (e.g. "quick_train")
         version: Version string (e.g. "v3" or "latest")
         project: Wandb project name
         device: Device to load model on ("cpu" or "cuda")
@@ -40,15 +40,15 @@ def load_model_from_wandb(
         
         # Use a silent API object without starting a run
         api = wandb.Api()
-        artifact_path = f"{project or 'manabot'}/{artifact_name}:{version}"
+        artifact_path = f"{project or 'manabot'}/{model}:{version}"
         logger.info(f"Loading artifact: {artifact_path}")
         artifact = api.artifact(artifact_path)
         artifact_dir = artifact.download("/tmp")
         
         # Directly use the expected filename pattern based on the save method
         potential_paths = [
-            os.path.join(artifact_dir, f"{artifact_name}.pt"),
-            os.path.join(artifact_dir, f"{artifact_name}_latest.pt"),
+            os.path.join(artifact_dir, f"{model}.pt"),
+            os.path.join(artifact_dir, f"{model}_latest.pt"),
         ]
         
         # Also look for any .pt files
@@ -82,16 +82,23 @@ def load_model_from_wandb(
             raise ValueError(f"Checkpoint does not contain a state dictionary. Keys found: {list(checkpoint.keys())}")
             
         logger.info(f"Using state dictionary from key: {state_dict_key}")
+        
+        assert 'hypers' in checkpoint
+        logger.info("Found hyperparameters in checkpoint")
+        hypers_dict = checkpoint['hypers']
             
+        assert 'observation_hypers' in hypers_dict
+        obs_hypers = ObservationSpaceHypers(**hypers_dict['observation_hypers'])
+        logger.info(f"Using saved observation hyperparameters")
         
-        # Create default observation space and agent hyperparameters
-        obs_hypers = ObservationSpaceHypers()
-        agent_hypers = AgentHypers()
+        assert 'agent_hypers' in hypers_dict
+        agent_hypers = AgentHypers(**hypers_dict['agent_hypers'])
+        logger.info(f"Using saved agent hyperparameters (attention_on={agent_hypers.attention_on})")
         
-        # Create observation space and agent with default hyperparameters
+        # Create observation space and agent with the appropriate hyperparameters
         obs_space = ObservationSpace(obs_hypers)
         agent = Agent(obs_space, agent_hypers)
-        logger.info("Created model with default hyperparameters")
+        logger.info(f"Created model with {'saved' if 'hypers' in checkpoint or 'agent_hypers' in checkpoint else 'default'} hyperparameters")
         
         # Load model weights
         agent.load_state_dict(checkpoint[state_dict_key])
@@ -108,7 +115,7 @@ def load_model_from_wandb(
         logger.error(f"Error loading model from wandb: {e}")
         # If the exception relates to artifact not found, show clear message
         if "not found" in str(e).lower():
-            logger.error(f"Could not find artifact '{artifact_name}'. Check if the name is correct and the artifact exists.")
+            logger.error(f"Could not find artifact '{model}:{version}'. Check if the name is correct and the artifact exists.")
         # If the exception relates to model loading, print more details
         elif "state dictionary" in str(e) or "state_dict" in str(e):
             logger.error("The model file was found but its structure doesn't match expectations.")
@@ -179,7 +186,7 @@ class ModelPlayer(Player):
         self, 
         name: str, 
         agent: Agent, 
-        deterministic: bool = True,
+        deterministic: bool = False,
         record_logits: bool = False
     ):
         super().__init__(name, PlayerType.MODEL)

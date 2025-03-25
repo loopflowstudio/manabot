@@ -22,7 +22,7 @@ from typing import Dict, Tuple, Generator
 
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
-from manabot.ppo import Agent
+from manabot.model import Agent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

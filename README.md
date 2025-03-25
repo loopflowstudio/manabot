@@ -17,7 +17,7 @@ pip install -e managym
 # Install other dependencies
 pip install -e .
 # Run training
-python manabot/ppo/trainer.py --config-name simple
+python manabot/ppo/train.py --config-name simple
 ```
 
 ### Simulation

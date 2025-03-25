@@ -46,7 +46,7 @@ class Experiment:
         self.wandb_run = None
         self.profiler = Profiler(enabled=experiment_hypers.profiler_enabled)
         level = getattr(logging, self.experiment_hypers.log_level.upper(), logging.INFO)
-        manabot.infra.log.LOG_LEVEL = level
+        manabot.infra.log.setGlobalLogLevel(level)
         self.logger = manabot.infra.log.getLogger(__name__)
 
         self._setup_random()
