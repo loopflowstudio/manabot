@@ -1,0 +1,29 @@
+# manabot/conf/model/simple.yaml
+
+defaults:
+  - observation: default
+  - match: default
+  - train: default
+  - reward: default
+  - agent: default
+  - experiment: default
+
+train:
+  num_envs: 16
+  num_steps: 256
+  total_timesteps: 10000000
+  learning_rate: 2.5e-4
+
+experiment:
+  exp_name: "simple"
+  device: "cuda"
+  profiler_enabled: True
+
+agent:
+  attention_on: False
+
+hydra:
+  run:
+    dir: ${experiment.runs_dir}/${experiment.exp_name}/${hydra.job.name}_${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True

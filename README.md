@@ -1,137 +1,143 @@
-# managym
+# manabot
 
-managym is a reinforcement learning environment for Magic: The Gathering, built to be used with [manabot](https://github.com/jacklionheart/manabot).
+A reinforcement learning framework for [Magic: The Gathering](https://magic.wizards.com/), using PPO as the core training algorithm.
 
-managym is written in C++ but uses pybind11 to create a python library `managym`.
-
-```
-python
-import managym
-env = managym.Env()
-...
-```
+This repository contains both:
+- **manabot** (Python): RL training framework, Gymnasium environment wrapper, experiment tracking
+- **managym** (C++): Game engine with pybind11 Python bindings
 
 ## Installation
 
-```zsh
-git clone git@github.com:jacklionheart/managym.git
+```bash
+# Clone the repo
+git clone git@github.com:loopflowstudio/manabot.git
+cd manabot
+
+# Install managym (C++ module)
+pip install -e managym
+
+# Install manabot
 pip install -e .
 ```
 
-## Architecture 
+## Training
 
-The codebase is organized into the following key areas:
+Manabot is primarily trained on Ubuntu machines in AWS and requires wandb credentials.
 
-1. `managym/agent/`: Core API for RL agents to interact with the game. Defines observation and action spaces. The pybind11 interface used by manabot lives in `managym/agent/pybind.cpp`.
+```bash
+# Run training
+python manabot/ppo/train.py --config-name simple
+```
 
-2. `managym/flow/`: Game state progression including the turn system, priority system, and combat phases. Handles core game loop and rule enforcement.
+## Simulation
 
-3. `managym/state/`: Game state tracking and data structures. Manages cards, players, permanents, and the zones system.
+Simulation pulls models from wandb. At small scales this can be done locally on CPU machines.
 
-4. `managym/cardsets/`: Card implementations and registry. Currently focused on basic lands and simple creatures. 
-
-5. `managym/infra/`: Core infrastructure, currently just logging.
-
-Dependencies flow downward: agent → flow → state → infra. (cardsets is a bit messy right now)
+```bash
+python sim/sim.py --hero attention --villain simple
+```
 
 ## Testing
 
-```zsh
-# Run all tests
+```bash
+# Python tests
+pytest tests/
+
+# C++ tests
 mkdir -p build && cd build
 cmake ..
 make run_tests
 
-# Run specific tests
+# Run specific C++ tests
 ./managym_test --gtest_filter=TestRegex.* --log=priority,turn,test
 ```
 
-Test options:
-- `--gtest_filter=<pattern>`: Run tests matching pattern
-- `--gtest_list_tests`: List available tests  
-- `--log=<cat1,cat2>`: Enable logging categories
-  - priority, turn, state, rules, combat, agent, test
+## Architecture
+
+### manabot (Python)
+
+1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
+   - `VectorEnv`: AsyncVectorEnv-based interface
+   - `ObservationSpace`: Observation space encoding
+   - `Match`: Game configuration (decklists, etc.)
+   - `Reward`: Reward function
+
+2. **`manabot.ppo`**: PPO implementation
+   - `Agent`: Shared value/policy network
+   - `Trainer`: PPO trainer
+
+3. **`manabot.sim`**: Game simulation
+   - `Player`: Agent implementations (learned or random)
+   - `Sim`: Multi-game simulation runner
+
+4. **`manabot.infra`**: Infrastructure
+   - `Experiment`: W&B/TensorBoard tracking
+   - `Hypers`: Hydra config management
+   - `Profiler`: Performance profiling
+
+### managym (C++)
+
+1. **`managym/agent/`**: RL agent API and pybind11 bindings
+2. **`managym/flow/`**: Game state progression (turns, priority, combat)
+3. **`managym/state/`**: Game state (cards, players, zones)
+4. **`managym/cardsets/`**: Card implementations
+5. **`managym/infra/`**: Logging and profiling
+
+Dependencies flow: agent → flow → state → infra
 
 ## Style Guide
 
-### Code Organization
+### Python (manabot)
 
-cpp files should follow this template:
+```python
+"""
+filename.py
+One-line purpose of file
+
+Instructions for collaborators on how to approach understanding and editing.
+"""
+
+# Standard library
+import os
+from typing import Dict, List
+
+# Third-party imports
+from torch import Tensor
+
+# manabot imports
+from manabot.env import ObservationSpace
+
+# Local imports
+from .sibling import Thing
+```
+
+### C++ (managym)
 
 ```cpp
 // filename.h/.cpp
 // One-line purpose of file
 //
-// ------------------------------------------------------------------------------------------------
 // EDITING INSTRUCTIONS:
-// Instructions for collaborators (both human and LLM) on how to approach editing.
-// Keep these focused and impactful.
-// ------------------------------------------------------------------------------------------------ 
+// Instructions for collaborators on how to approach editing.
 
-// Corresponding header to this .cpp filen
-#include "me.h"
-
-// Headers in same directory
-#include "sibling.h"
-
-// Any other managym headers  
-#include "managym/other.h"
-
-// 3rd Party 
-#include <3rdparty.h>
-
-// Built-ins
-#include <std>
+#include "me.h"           // Corresponding header
+#include "sibling.h"      // Same directory
+#include "managym/other.h" // Other managym headers
+#include <3rdparty.h>     // Third party
+#include <std>            // Standard library
 ```
 
-Header files should have comments on each public method, but most data fields should be self-explantory.
+Objects use `struct` with single ownership via `std::unique_ptr<T>`. Other references are raw pointers.
 
-### Objects
+### DO NOT USE in C++
 
-Objects should be declared as `struct` unless access control is needed. Each object has exactly one owner, which stores it in a `std::unique_ptr<T>`. Other references are raw pointers (`T*`). This ensures:
-- Clear and reliable memory management 
-- Consistent access patterns throughout the codebase
-- Compile-time errors for accidental copies
+- std::shared_ptr, templates/metaprogramming, macros, manual memory management
+- dynamic_cast, multiple inheritance, auto typing (strongly avoid)
 
-Simple subobjects which are not referenced by other objects should be stored directly as member variables.
+## LLM Collaboration
 
-### Error Handling
-
-Exceptions serve two distinct purposes:
-1. `AgentError`: Thrown for invalid API usage or bad parameters. These represent user errors and should be handled gracefully.
-2. Other exceptions: Thrown for internal errors, invariant violations, or unrecoverable states. These represent bugs in managym.
-
-### Documentation 
-
-Comments use // rather than /* */. Each file should have a one-line summary and optional editing instructions at the top.
-
-When a comment starts with MR405.1 that references section 405.1 of the Magic Rules. A searchable version can be found at [yawgatog](https://yawgatog.com/resources/magic-rules/).
-
-Public APIs should have clear, concise explanations focused on behavior and edge cases. Organizational comments are welcome but most code should speak for itself.
-
-### DO NOT USE
-
-LITERARLLY NEVER DO ANY OF THIS:
-- std::shared_ptr
-- Templates and metaprogramming
-- Macros
-- Manual memory management / reference counting
-- dynamic_cast
-- Multiple inheritance
-
-STRONGLY AVOID USING:
-- auto typing
-- Implementiation of methods in header files
-- Operator overloading (beyond ==)  
-
-### Instructions for LLM Codegen
-
-When working with this codebase, LLMs should:
-- Avoid comments that are transient/denote changes. Imagine the code will be directly copied into the codebase for eternity.
-- Pay special attention to file headers and README content for context
+When working with this codebase:
+- Avoid transient comments that denote changes
+- Pay attention to file headers and README content
 - Propose small, iterative changes
-- End responses with:
-  1. Full implementations of changed files that can be copied into the codebase 
-  2. Questions that could clarify intent
-  3. Notes on what was intentionally left out
-  
+- End responses with full implementations, clarifying questions, and notes on what was left out

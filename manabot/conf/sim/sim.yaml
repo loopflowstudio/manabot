@@ -1,0 +1,19 @@
+# conf/sim/sim.yaml
+
+# The defaults list should only reference config groups.
+defaults:
+  - match: default
+  - experiment: default
+  - sim: default
+
+experiment:
+  exp_name: "sim"
+  log_level: "DEBUG"
+  wandb: false
+
+
+hydra:
+  run:
+    dir: ${experiment.runs_dir}/${experiment.exp_name}/${hydra.job.name}_${now:%Y-%m-%d_%H-%M-%S}
+  job:
+    chdir: True

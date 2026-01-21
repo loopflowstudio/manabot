@@ -1,6 +1,8 @@
 {
     "files.watcherExclude": {
         "**/build/**": true,
+        "**/__pycache__/**": true,
+        "**/.cache/**": true
     },
     "editor.inlineSuggest.enabled": true,
     "editor.tabCompletion": "on",
@@ -8,6 +10,8 @@
     "files.autoSave": "afterDelay",
     "python.analysis.typeCheckingMode": "standard",
     "python.defaultInterpreterPath": "/Users/jack/micromamba/envs/manabot/bin/python",
+    "python.analysis.extraPaths": ["/Users/jack/micromamba/envs/manabot/lib/python3.12/site-packages"],
+    "python.autoComplete.extraPaths": ["/Users/jack/micromamba/envs/manabot/lib/python3.12/site-packages"],
     "explorer.excludeGitIgnore": true,
     "json.schemas": [],
     "files.associations": {
@@ -27,7 +31,7 @@
         "--offset-encoding=utf-16",
         "--query-driver=/usr/bin/clang++",
         "--cross-file-rename",
-        "--fallback-style=LLVM", // Changed to match your .clang-format
+        "--fallback-style=LLVM",
         "--suggest-missing-includes",
         "--header-insertion-decorators",
         "--completion-style=detailed",
@@ -35,7 +39,7 @@
     ],
     "C_Cpp.intelliSenseEngine": "disabled",
     "editor.formatOnSave": true,
-    "editor.formatOnType": true, // Added this
+    "editor.formatOnType": true,
     "problems.defaultViewMode": "tree",
     "problems.showCurrentInStatus": true,
     "problems.decorations.enabled": true,
@@ -43,5 +47,10 @@
         "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
         "editor.tabSize": 4,
         "editor.insertSpaces": true
+    },
+    "files.exclude": {
+        "build/": true,
+        "__pycache__/": true,
+        ".cache": true
     }
 }
