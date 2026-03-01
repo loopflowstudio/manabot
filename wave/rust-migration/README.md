@@ -12,7 +12,8 @@ arenas instead of `unique_ptr` webs, enums instead of virtual dispatch, flat
 
 The Python-facing API (`Env.reset()`, `Env.step()`) stays identical. The
 observation struct, action types, reward semantics, and enum values are all
-preserved. manabot training code should work with zero changes after cutover.
+preserved. manabot training code should work with zero changes — just swap the
+import.
 
 ### Not here
 
@@ -21,7 +22,6 @@ preserved. manabot training code should work with zero changes after cutover.
 - Gameplay features the C++ doesn't have (instants, triggered abilities, etc.)
 - Changes to the Python manabot code (env wrapper, observation encoder, agent)
 - Performance optimization beyond "at least as fast as C++"
-- Long-term dual-backend maintenance (C++ + Rust)
 
 ## Principles
 
@@ -35,11 +35,16 @@ preserved. manabot training code should work with zero changes after cutover.
   explicitly.
 - **Data, not objects.** Turn/phase/step progression is state + match, not an
   object hierarchy with virtual `tick()` methods.
-- **Semantic correctness as the required gate.** C++ trace replay is an optional
-  migration debugging aid, not the long-term source of truth. Rust tests assert
-  intended semantics.
-- **Single-backend destination.** Rust is the only maintained backend by wave
-  end. C++ runtime/backend path is removed once cutover gates are green.
+
+## Goals
+
+1. **Exact behavioral parity** with C++ managym — same seeds produce same game
+   traces
+2. **PyO3 bindings** exposing identical `Env` API to Python
+3. **Clean Rust architecture** using arenas, enums, and flat state
+4. **Comprehensive tests** — unit tests for each module + parity tests against
+   C++ engine
+5. **Drop-in replacement** — `import managym` works with either backend
 
 ## Risks
 
@@ -48,14 +53,14 @@ preserved. manabot training code should work with zero changes after cutover.
   requires discipline.
 - **Observation field ordering.** Python encoder depends on exact field names and
   types. Any mismatch silently breaks training.
-- **Mana payment determinism.** The greedy left-to-right tapping must be stable
-  and reproducible under seeded runs.
+- **Mana payment determinism.** The greedy left-to-right tapping must produce
+  identical results to C++ for same-seed parity.
 - **PyO3 GIL overhead.** Need to ensure the Python↔Rust boundary isn't slower
   than pybind11.
 
-## Cutover gate (must be true before removing C++)
+## Metrics
 
-1. Rust engine + binding tests are green (`cargo test`, `pytest tests/env/ tests/agent/`)
-2. Throughput is at least parity with current C++ baseline on agreed benchmark
-3. Rust/PyO3 backend is the default `managym` runtime path
-4. C++ runtime/backend path and CMake-based Python module build are removed
+- Parity test pass rate: 100% (same seed, same actions → same observations)
+- Rust test coverage: every module has unit tests
+- Throughput: ≥ C++ steps/second on same hardware
+- Python integration: existing `tests/env/` and `tests/agent/` pass unmodified
