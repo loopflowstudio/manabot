@@ -59,7 +59,16 @@ Standard GAE over the flat buffer.
 `VectorEnv` wraps N `SingleAgentEnv` instances instead of raw `Env`.
 The opponent policy is configured via hypers.
 
-### 4. Remove multi-agent training path
+### 4. Change reward to +1/-1
+
+Replace `win_reward=100.0` / `lose_reward=-100.0` with `+1.0` / `-1.0`.
+
+Large reward magnitudes cause the value loss to dominate the policy
+gradient (value targets of ~100 vs policy loss of ~1). +1/-1 is standard
+(CleanRL Atari clips to {-1, 0, +1}) and plays well with default
+`vf_coef=0.5`.
+
+### 5. Remove multi-agent training path
 
 `MultiAgentBuffer` stays in the codebase (sim still uses it) but is
 no longer used by the trainer. The trainer's rollout loop simplifies to

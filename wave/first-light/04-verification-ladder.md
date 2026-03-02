@@ -9,6 +9,12 @@ move to the next step until the current one passes.
 Four verification steps implemented as runnable scripts with clear
 pass/fail criteria. Steps 0-3 all pass.
 
+## Configuration
+
+All steps use `attention_on=False`. The attention mechanism is a
+complexity multiplier that can be re-enabled after basic learning is
+proven.
+
 ## The ladder
 
 ### Step 0: Environment sanity
@@ -26,8 +32,8 @@ Passive win rate > 95%.
 ### Step 1: Trivial reward
 
 Set reward to +1.0 every step (the `trivial` reward mode already exists).
-Train for 500 updates. The value function should learn to predict
-`1 / (1 - gamma)` ≈ 100 (with gamma=0.99).
+Train for 500 updates (`attention_on=False`). The value function should
+learn to predict `1 / (1 - gamma)` ≈ 100 (with gamma=0.99).
 
 This isolates the optimization machinery from the game. If explained
 variance doesn't rise, there's a bug in the training loop independent
@@ -37,9 +43,9 @@ of MTG.
 
 ### Step 2: Memorization
 
-`num_envs=1`, fixed seed, tiny deck (20 Mountains for each player).
-The game plays out nearly identically each time. Train against passive
-opponent.
+`num_envs=1`, fixed seed, tiny deck (20 Mountains for each player),
+`attention_on=False`. The game plays out nearly identically each time.
+Train against passive opponent.
 
 The agent should achieve near-100% win rate because it can memorize the
 single game trajectory.
@@ -48,9 +54,9 @@ single game trajectory.
 
 ### Step 3: Beat passive
 
-Full setup: 16 envs, Mountains + Grey Ogres deck, train against passive
-opponent. The agent should learn to play lands, cast creatures, and
-attack.
+Full setup: 16 envs, Mountains + Grey Ogres deck, `attention_on=False`,
+train against passive opponent. The agent should learn to play lands,
+cast creatures, and attack.
 
 **Pass criteria:**
 - Win rate > 90% after 5M steps
