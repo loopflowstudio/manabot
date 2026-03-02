@@ -767,7 +767,7 @@ impl Game {
     }
 
     fn resolve_combat_damage(&mut self) {
-        let Some(combat) = self.state.combat.clone() else {
+        let Some(combat) = self.state.combat.take() else {
             return;
         };
 
@@ -792,6 +792,8 @@ impl Game {
                 self.apply_permanent_damage(*blocker_id, attacker_power);
             }
         }
+
+        self.state.combat = Some(combat);
     }
 
     fn apply_permanent_damage(&mut self, permanent_id: PermanentId, amount: i32) {
