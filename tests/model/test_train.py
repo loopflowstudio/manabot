@@ -6,12 +6,14 @@ Tests for the PPO Trainer using actual simulation environment.
 import logging
 import pytest
 import torch
+import numpy as np
 from contextlib import contextmanager
 from typing import Generator
 import os
 import shutil
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from manabot.env import VectorEnv, Match, ObservationSpace, Reward
 from manabot.model import Agent, Trainer
@@ -197,6 +199,98 @@ class TestPPOOptimization:
         # Test with clipping
         trainer.hypers.clip_vloss = True
         _, _ = trainer._optimize_step(obs, logprobs, actions, advantages, returns, values)
+
+
+class TestPPOCorrectnessFixes:
+    def _mock_step(
+        self,
+        trainer,
+        monkeypatch,
+        truncated: torch.Tensor,
+        action_space_truncated: list[bool],
+    ):
+        next_obs, _ = trainer.env.reset()
+        actor_ids = obs_mod.get_agent_indices(next_obs)
+        terminated = torch.zeros_like(truncated)
+        reward = torch.zeros(trainer.hypers.num_envs, dtype=torch.float32, device=trainer.experiment.device)
+
+        def fake_step(_action):
+            return (
+                next_obs,
+                reward,
+                terminated,
+                truncated,
+                {"action_space_truncated": np.array(action_space_truncated)},
+            )
+
+        monkeypatch.setattr(trainer.env, "step", fake_step)
+        return next_obs, actor_ids
+
+    def test_truncated_episode_marks_done(self, trainer, monkeypatch):
+        truncated = torch.tensor([True, False], dtype=torch.bool, device=trainer.experiment.device)
+        next_obs, actor_ids = self._mock_step(
+            trainer,
+            monkeypatch,
+            truncated=truncated,
+            action_space_truncated=[False, False],
+        )
+        trainer.logger.warning = MagicMock()
+        _, done, _ = trainer._rollout_step(next_obs, actor_ids)
+
+        assert done.tolist() == [True, False]
+        trainer.logger.warning.assert_called_once_with("Truncation in 1/2 envs (no value bootstrap)")
+
+    def test_advantage_normalization(self, trainer):
+        advantages = torch.tensor([1.0, 2.0, 3.0], device=trainer.experiment.device)
+
+        trainer.hypers.norm_adv = True
+        normalized = trainer._maybe_normalize_advantages(advantages)
+        assert normalized.mean().item() == pytest.approx(0.0, abs=1e-5)
+        assert normalized.std().item() == pytest.approx(1.0, abs=1e-5)
+        singleton = trainer._maybe_normalize_advantages(advantages[:1])
+        assert torch.isfinite(singleton).all()
+        assert singleton.item() == pytest.approx(0.0, abs=1e-8)
+
+        trainer.hypers.norm_adv = False
+        untouched = trainer._maybe_normalize_advantages(advantages)
+        assert torch.equal(untouched, advantages)
+
+    def test_actual_batch_size_used(self, trainer):
+        inds, minibatch_size = trainer._build_minibatch_plan(actual_batch_size=7)
+        assert minibatch_size == 1
+        assert len(inds) == 7
+        assert inds[-1] == 6
+
+    def test_small_actual_batch_skips_update(self, trainer):
+        trainer.hypers.num_minibatches = 8
+        trainer.logger.warning = MagicMock()
+        plan = trainer._build_minibatch_plan(actual_batch_size=4)
+        assert plan is None
+        trainer.logger.warning.assert_called_once()
+
+    def test_no_weight_decay(self, trainer):
+        assert trainer.optimizer.param_groups[0]["weight_decay"] == 0
+
+    def test_rollout_health_counters(self, trainer, monkeypatch):
+        trainer._reset_rollout_health_update()
+        trainer._increment_rollout_health("skipped_steps", 2)
+
+        truncated = torch.tensor([True, True], dtype=torch.bool, device=trainer.experiment.device)
+        next_obs, actor_ids = self._mock_step(
+            trainer,
+            monkeypatch,
+            truncated=truncated,
+            action_space_truncated=[True, False],
+        )
+        trainer.logger.warning = MagicMock()
+        trainer._rollout_step(next_obs, actor_ids)
+
+        assert trainer.rollout_health_update["skipped_steps"] == 2
+        assert trainer.rollout_health_update["truncated_episodes"] == 2
+        assert trainer.rollout_health_update["action_space_truncations"] == 1
+        assert trainer.rollout_health["skipped_steps"] >= 2
+        assert trainer.rollout_health["truncated_episodes"] >= 2
+        assert trainer.rollout_health["action_space_truncations"] >= 1
 
 
 def test_action_masking(trainer):

@@ -247,6 +247,12 @@ def test_probability_distribution(agent: Agent, real_observation: Dict[str, torc
     if invalid_mask.any():
         assert torch.all(probs[invalid_mask] == 0), "Non-zero probability for invalid actions"
 
+def test_policy_head_initial_logits(agent: Agent):
+    """Final policy layer should have small initial scale for exploration."""
+    final_layer = agent.policy_head[2]
+    assert isinstance(final_layer, nn.Linear)
+    assert final_layer.weight.norm().item() < 0.1
+
 def test_attention_stability(agent: Agent, real_observation: Dict[str, torch.Tensor]):
     """
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
@@ -286,6 +292,23 @@ def test_action_entropy(agent: Agent, real_observation: Dict[str, torch.Tensor])
     valid_actions = obs["actions_valid"].sum(dim=-1)
     max_entropy = torch.log(valid_actions)
     assert torch.all(entropy <= max_entropy + 1e-5), "Entropy exceeds theoretical maximum"
+
+def test_categorical_logits(agent: Agent, real_observation: Dict[str, torch.Tensor], monkeypatch):
+    """Action distribution should be built from logits for numerical stability."""
+    call_kwargs = {}
+    original_categorical = torch.distributions.Categorical
+
+    class CategoricalSpy(original_categorical):
+        def __init__(self, *args, **kwargs):
+            call_kwargs.update(kwargs)
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(torch.distributions, "Categorical", CategoricalSpy)
+    with torch.no_grad():
+        agent.get_action_and_value(real_observation)
+
+    assert "logits" in call_kwargs
+    assert "probs" not in call_kwargs
 
 if __name__ == "__main__":
     pytest.main([__file__])

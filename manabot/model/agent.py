@@ -69,7 +69,7 @@ class Agent(nn.Module):
         self.policy_head = nn.Sequential(
             layer_init(nn.Linear(embed_dim, embed_dim)),
             nn.ReLU(),
-            layer_init(nn.Linear(embed_dim, 1))
+            layer_init(nn.Linear(embed_dim, 1), gain=0.01)
         )
         self.value_head = nn.Sequential(
             layer_init(nn.Linear(embed_dim, embed_dim)),
@@ -197,9 +197,7 @@ class Agent(nn.Module):
         logits, value = self.forward(obs)
         if (obs["actions_valid"].sum(dim=-1) == 0).any():
             raise ValueError("No valid actions available")
-        probs = torch.softmax(logits, dim=-1)
-        self.logger.debug(f"Action probabilities: mean={probs.mean().item():.4f}, std={probs.std().item():.4f}")
-        dist = torch.distributions.Categorical(probs=probs)
+        dist = torch.distributions.Categorical(logits=logits)
         if action is None:
             action = logits.argmax(dim=-1) if deterministic else dist.sample()
         # For each sample, if the chosen action equals DECLARE_ATTACKER (attack), log extra details
