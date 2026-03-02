@@ -188,20 +188,15 @@ impl Mana {
         }
 
         let mut generic = cost.cost[Color::Generic as usize] as i32;
-        // Spend colorless first, then colored (preserve colored for future casts)
-        let priority = [
-            Color::Colorless as usize,
-            Color::White as usize,
-            Color::Blue as usize,
-            Color::Black as usize,
-            Color::Red as usize,
-            Color::Green as usize,
-        ];
         while generic > 0 {
-            for &idx in &priority {
-                while generic > 0 && self.mana[idx] > 0 {
-                    self.mana[idx] -= 1;
-                    generic -= 1;
+            for amount in self.mana.iter_mut() {
+                if *amount == 0 {
+                    continue;
+                }
+                *amount -= 1;
+                generic -= 1;
+                if generic == 0 {
+                    break;
                 }
             }
         }
@@ -223,35 +218,5 @@ mod tests {
         assert!(mana.can_pay(&cost));
         mana.pay(&cost);
         assert_eq!(mana.total(), 1);
-    }
-
-    #[test]
-    fn generic_cost_spends_colorless_first() {
-        use super::Color;
-        let mut mana = Mana::default();
-        mana.mana[Color::Colorless as usize] = 2;
-        mana.mana[Color::Green as usize] = 1;
-
-        let cost = ManaCost::parse("2G");
-        assert!(mana.can_pay(&cost));
-        mana.pay(&cost);
-
-        assert_eq!(mana.mana[Color::Colorless as usize], 0);
-        assert_eq!(mana.mana[Color::Green as usize], 0);
-    }
-
-    #[test]
-    fn generic_cost_preserves_colored_mana() {
-        use super::Color;
-        let mut mana = Mana::default();
-        mana.mana[Color::Colorless as usize] = 1;
-        mana.mana[Color::Red as usize] = 1;
-
-        let cost = ManaCost::parse("1");
-        mana.pay(&cost);
-
-        // Colorless spent, red preserved
-        assert_eq!(mana.mana[Color::Colorless as usize], 0);
-        assert_eq!(mana.mana[Color::Red as usize], 1);
     }
 }

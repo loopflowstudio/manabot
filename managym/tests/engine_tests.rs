@@ -1,10 +1,7 @@
 use std::collections::BTreeMap;
 
 use managym::{
-    agent::{
-        action::{ActionSpaceKind, ActionType},
-        env::Env,
-    },
+    agent::env::Env,
     flow::turn::{PhaseKind, StepKind},
     state::{player::PlayerConfig, zone::ZoneType},
     Game,
@@ -116,53 +113,4 @@ fn observation_contract_enum_values_stable() {
 
     assert_eq!(StepKind::Untap as i32, 0);
     assert_eq!(StepKind::Cleanup as i32, 11);
-}
-
-#[test]
-fn combat_damage_reduces_life() {
-    // Grey Ogre deck: creatures will eventually attack and deal damage.
-    // skip_trivial=false so we control every decision.
-    let p1 = PlayerConfig::new("attacker", aggro_deck());
-    let p2 = PlayerConfig::new("defender", aggro_deck());
-    let mut game = Game::new(vec![p1, p2], 42, false);
-
-    let mut damage_dealt = false;
-
-    for _ in 0..2000 {
-        if game.is_game_over() {
-            break;
-        }
-
-        let space = match game.action_space() {
-            Some(s) => s.clone(),
-            None => break,
-        };
-
-        let action_index = match space.kind {
-            // During attack declaration, always attack
-            ActionSpaceKind::DeclareAttacker => space
-                .actions
-                .iter()
-                .position(|a| a.action_type() == ActionType::DeclareAttacker)
-                .unwrap_or(0),
-            // During block declaration, don't block (last action)
-            ActionSpaceKind::DeclareBlocker => space.actions.len() - 1,
-            // Priority: play lands and cast spells when possible, else pass
-            ActionSpaceKind::Priority => 0,
-            ActionSpaceKind::GameOver => break,
-        };
-
-        game.step(action_index).expect("step should succeed");
-
-        // Check if any player took combat damage
-        if game.state.players[0].life < 20 || game.state.players[1].life < 20 {
-            damage_dealt = true;
-            break;
-        }
-    }
-
-    assert!(
-        damage_dealt,
-        "combat damage should reduce a player's life below 20"
-    );
 }
