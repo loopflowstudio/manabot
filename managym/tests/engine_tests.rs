@@ -140,13 +140,11 @@ fn combat_damage_reduces_life() {
 
         let action_index = match space.kind {
             // During attack declaration, always attack
-            ActionSpaceKind::DeclareAttacker => {
-                space
-                    .actions
-                    .iter()
-                    .position(|a| a.action_type() == ActionType::DeclareAttacker)
-                    .unwrap_or(0)
-            }
+            ActionSpaceKind::DeclareAttacker => space
+                .actions
+                .iter()
+                .position(|a| a.action_type() == ActionType::DeclareAttacker)
+                .unwrap_or(0),
             // During block declaration, don't block (last action)
             ActionSpaceKind::DeclareBlocker => space.actions.len() - 1,
             // Priority: play lands and cast spells when possible, else pass
@@ -163,5 +161,8 @@ fn combat_damage_reduces_life() {
         }
     }
 
-    assert!(damage_dealt, "combat damage should reduce a player's life below 20");
+    assert!(
+        damage_dealt,
+        "combat damage should reduce a player's life below 20"
+    );
 }
