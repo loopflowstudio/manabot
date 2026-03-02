@@ -115,8 +115,9 @@ class Env(gym.Env):
         reward = self.reward.compute(cpp_reward, self._last_obs, cpp_obs)
         info["true_terminated"] = terminated
         info["true_truncated"] = truncated
-        info["action_space_truncated"] = len(cpp_obs.action_space.actions) > self.obs_space.encoder.max_actions
-
+        info["action_space_truncated"] = (
+            len(cpp_obs.action_space.actions) > self.obs_space.encoder.max_actions
+        )
 
         log.debug(f"Stepped env. Step output: reward={cpp_reward}, terminated={terminated}, truncated={truncated}")
         if terminated or truncated:

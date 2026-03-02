@@ -31,8 +31,6 @@ from manabot.env import ObservationSpace, VectorEnv, Match, Reward
 from manabot.model.agent import Agent
 import manabot.infra.hypers
 
-from manabot.infra.profiler import Profiler
-
 manabot.infra.hypers.initialize()
 
 ROLLOUT_HEALTH_KEYS = (
@@ -289,7 +287,8 @@ class Trainer:
                 self._reset_rollout_health_update()
 
                 self.logger.info("Starting rollout data collection.")
-                wandb.log({"rollout/step": 0}, step=self.global_step)
+                if self.wandb:
+                    self.wandb.log({"rollout/step": 0}, step=self.global_step)
 
                 if update % 10 == 0 and self.agent.hypers.attention_on:
                     self.logger.info("Verifying attention masking mechanism...")
@@ -386,7 +385,9 @@ class Trainer:
                 )
 
                 if update % 100 == 0:
-                    self.logger.info(f"Saving artifa    ct @ update: {update} step: {self.global_step}")
+                    self.logger.info(
+                        f"Saving artifact @ update: {update} step: {self.global_step}"
+                    )
                     self.save()
 
                 self.logger.info(f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}")
@@ -408,7 +409,7 @@ class Trainer:
                 new_obs, reward, terminated, truncated, info = self.env.step(action)
         except Exception as e:
             self.logger.error(f"env.step() failed: {e}")
-            raise e
+            raise
 
         done = terminated | truncated
         if truncated.any():
@@ -445,7 +446,12 @@ class Trainer:
     def _maybe_normalize_advantages(self, advantages: torch.Tensor) -> torch.Tensor:
         if not self.hypers.norm_adv:
             return advantages
-        return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        advantages_centered = advantages - advantages.mean()
+        std = advantages.std()
+        if torch.isnan(std) or std < 1e-8:
+            return advantages_centered
+        return advantages_centered / (std + 1e-8)
 
     def _build_minibatch_plan(self, actual_batch_size: int) -> Tuple[np.ndarray, int] | None:
         if actual_batch_size < self.hypers.num_minibatches:
@@ -519,7 +525,7 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
         
-        # NEW: Gradient norm monitoring
+        # Gradient norm monitoring
         total_grad_norm = 0.0
         layer_grad_norms = {}
         
@@ -743,7 +749,7 @@ class Trainer:
                 "system/gpu_memory_allocated": torch.cuda.memory_allocated() / (1024 * 1024),
                 "system/gpu_memory_reserved": torch.cuda.memory_reserved() / (1024 * 1024)
             })
-        wandb.log(metrics, step=self.global_step)
+        self.wandb.log(metrics, step=self.global_step)
         self.logger.debug(f"Logged system metrics: {metrics}")
 
     def save(self) -> None:

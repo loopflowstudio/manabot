@@ -247,6 +247,9 @@ class TestPPOCorrectnessFixes:
         normalized = trainer._maybe_normalize_advantages(advantages)
         assert normalized.mean().item() == pytest.approx(0.0, abs=1e-5)
         assert normalized.std().item() == pytest.approx(1.0, abs=1e-5)
+        singleton = trainer._maybe_normalize_advantages(advantages[:1])
+        assert torch.isfinite(singleton).all()
+        assert singleton.item() == pytest.approx(0.0, abs=1e-8)
 
         trainer.hypers.norm_adv = False
         untouched = trainer._maybe_normalize_advantages(advantages)
