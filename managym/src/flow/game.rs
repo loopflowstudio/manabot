@@ -202,7 +202,7 @@ impl Game {
 
         if action >= action_space.actions.len() {
             return Err(AgentError(format!(
-                "action index {action} out of bounds: {}",
+                "Action index {action} out of bounds: {}",
                 action_space.actions.len()
             )));
         }

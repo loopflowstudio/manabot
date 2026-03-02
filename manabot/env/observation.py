@@ -3,7 +3,7 @@ observation.py
 Defines a Gymnasium-compatible observation space from managym observations.
 
 This module is responsible for:
-1. Converting managym's map-based observations into fixed-size tensors,
+1. Converting managym observations into fixed-size tensors,
 2. Structuring tensors in a natural way for the agent to build a policy, and
 3. Defining the observation space as a Gymnasium space.
 
@@ -16,8 +16,8 @@ Additional updates in this version:
 """
 
 from enum import IntEnum
-from typing import Dict, Tuple, KeysView, ValuesView, ItemsView, Union
-import numpy as np  
+from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
+import numpy as np
 import gymnasium as gym
 import torch
 import managym
@@ -211,14 +211,14 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(self, cards: Dict[int, managym.Card]) -> np.ndarray:
+    def _encode_cards(self, cards: List[managym.Card]) -> np.ndarray:
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
-        sorted_ids = sorted(cards.keys())[:self.cards_per_player]
-        for i, cid in enumerate(sorted_ids):
-            feat[i] = self._encode_card_features(cards[cid])
-            self.object_to_index[cid] = self.current_object_index
+        ordered_cards = cards[:self.cards_per_player]
+        for i, card in enumerate(ordered_cards):
+            feat[i] = self._encode_card_features(card)
+            self.object_to_index[card.id] = self.current_object_index
             self.current_object_index += 1
-        unused_slots = self.cards_per_player - len(sorted_ids)
+        unused_slots = self.cards_per_player - len(ordered_cards)
         self.current_object_index += unused_slots
         return feat
 
@@ -255,14 +255,14 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Permanents (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_perms(self, perms: Dict[int, managym.Permanent]) -> np.ndarray:
+    def _encode_perms(self, perms: List[managym.Permanent]) -> np.ndarray:
         feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
-        sorted_ids = sorted(perms.keys())[:self.perms_per_player]
-        for i, pid in enumerate(sorted_ids):
-            feat[i] = self._encode_permanent_features(perms[pid])
-            self.object_to_index[pid] = self.current_object_index
+        ordered_perms = perms[:self.perms_per_player]
+        for i, perm in enumerate(ordered_perms):
+            feat[i] = self._encode_permanent_features(perm)
+            self.object_to_index[perm.id] = self.current_object_index
             self.current_object_index += 1
-        unused_slots = self.perms_per_player - len(sorted_ids)
+        unused_slots = self.perms_per_player - len(ordered_perms)
         self.current_object_index += unused_slots
         return feat
 

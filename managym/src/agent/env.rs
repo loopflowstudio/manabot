@@ -9,8 +9,6 @@ use crate::{
 pub struct Env {
     game: Option<Game>,
     skip_trivial: bool,
-    enable_profiler: bool,
-    enable_behavior_tracking: bool,
     seed: u64,
     pub profiler: Profiler,
     pub hero_tracker: BehaviorTracker,
@@ -27,8 +25,6 @@ impl Env {
         Self {
             game: None,
             skip_trivial,
-            enable_profiler,
-            enable_behavior_tracking,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
@@ -40,6 +36,7 @@ impl Env {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
+        let _scope = self.profiler.track("env_reset");
         let game = Game::new(player_configs, self.seed, self.skip_trivial);
         let observation = Observation::new(&game);
         self.game = Some(game);
@@ -50,6 +47,7 @@ impl Env {
         &mut self,
         action: usize,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
+        let _scope = self.profiler.track("env_step");
         let game = self
             .game
             .as_mut()
@@ -92,42 +90,60 @@ impl Env {
     }
 
     pub fn info(&self) -> InfoDict {
+        let _scope = self.profiler.track("env_info");
         let mut info = empty_info_dict();
         self.add_profiler_info(&mut info);
         self.add_behavior_info(&mut info);
         info
     }
 
-    fn add_profiler_info(&self, info: &mut InfoDict) {
-        if !self.enable_profiler {
-            return;
+    pub fn export_profile_baseline(&self) -> String {
+        if self.profiler.is_enabled() {
+            self.profiler.export_baseline()
+        } else {
+            String::new()
         }
+    }
+
+    pub fn compare_profile(&self, baseline: &str) -> String {
+        if self.profiler.is_enabled() {
+            self.profiler.compare_to_baseline(baseline)
+        } else {
+            "Profiler not enabled".to_string()
+        }
+    }
+
+    fn add_profiler_info(&self, info: &mut InfoDict) {
         let mut out = empty_info_dict();
-        for (name, stats) in self.profiler.get_stats() {
-            insert_info(
-                &mut out,
-                name,
-                InfoValue::String(format!("total={}, count={}", stats.total_time, stats.count)),
-            );
+        if self.profiler.is_enabled() {
+            for (name, stats) in self.profiler.get_stats() {
+                let mut scoped = empty_info_dict();
+                insert_info(
+                    &mut scoped,
+                    "total_time",
+                    InfoValue::Float(stats.total_time),
+                );
+                insert_info(&mut scoped, "count", InfoValue::Int(stats.count as i64));
+                insert_info(&mut out, name, InfoValue::Map(scoped));
+            }
         }
         insert_info(info, "profiler", InfoValue::Map(out));
     }
 
     fn add_behavior_info(&self, info: &mut InfoDict) {
-        if !self.enable_behavior_tracking {
-            return;
-        }
         let mut behavior = empty_info_dict();
-        let mut hero = empty_info_dict();
-        for (k, v) in self.hero_tracker.get_stats() {
-            insert_info(&mut hero, k, InfoValue::String(v));
+        if self.hero_tracker.is_enabled() || self.villain_tracker.is_enabled() {
+            let mut hero = empty_info_dict();
+            for (k, v) in self.hero_tracker.get_stats() {
+                insert_info(&mut hero, k, InfoValue::String(v));
+            }
+            let mut villain = empty_info_dict();
+            for (k, v) in self.villain_tracker.get_stats() {
+                insert_info(&mut villain, k, InfoValue::String(v));
+            }
+            insert_info(&mut behavior, "hero", InfoValue::Map(hero));
+            insert_info(&mut behavior, "villain", InfoValue::Map(villain));
         }
-        let mut villain = empty_info_dict();
-        for (k, v) in self.villain_tracker.get_stats() {
-            insert_info(&mut villain, k, InfoValue::String(v));
-        }
-        insert_info(&mut behavior, "hero", InfoValue::Map(hero));
-        insert_info(&mut behavior, "villain", InfoValue::Map(villain));
         insert_info(info, "behavior", InfoValue::Map(behavior));
     }
 }
