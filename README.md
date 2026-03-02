@@ -50,6 +50,12 @@ make run_tests
 
 # Run specific C++ tests
 ./managym_test --gtest_filter=TestRegex.* --log=priority,turn,test
+
+# Rust engine tests (stage-01 migration path)
+cd managym
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
 ```
 
 ## Architecture
