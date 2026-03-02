@@ -1,0 +1,1 @@
+Never add "Co-Authored by:" tags in commits 

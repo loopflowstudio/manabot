@@ -1,0 +1,13 @@
+message generation output
+
+=== stdout ===
+```json
+{
+  "title": "rust-migration: full PyO3 binding surface and maturin build",
+  "body": "## Try it\n\n```bash\n# Build and install the Rust-backed Python module\nmaturin develop --manifest-path managym/Cargo.toml\n\n# Verify enum parity\npython -c \"import managym; assert int(managym.ZoneEnum.STACK) == 4\"\n\n# Run Rust engine tests\ncargo test\n```\n\n## Summary\n\nExpands the minimal PyO3 seam from stage 01 into a complete Python binding surface that mirrors the C++ pybind11 API. Env.reset/step now return structured `PyObservation` objects (not JSON strings), all 5 game enums are exposed with correct integer discriminants, and the profiler is fully implemented with hierarchical scope tracking and baseline comparison. The build system switches from scikit-build/CMake to maturin.\n\n## Changes\n\n- **876-line `bindings.rs`**: 10 data classes (`PyObservation`, `PyPlayer`, `PyTurn`, `PyCard`, `PyCardTypes`, `PyManaCost`, `PyPermanent`, `PyAction`, `PyActionSpace`, `PyPlayerConfig`), 5 enums with `#[repr(i32)]` and `__int__`/`__index__`, `AgentError` exception\n- **Structured observation return**: `Env.reset`/`step` return `PyObservation` instead of debug JSON strings; `toJSON()` now produces proper field-level JSON via `serde_json`\n- **List-backed collections**: `agent_cards`, `opponent_cards`, `agent_permanents`, `opponent_permanents` changed from `Dict[int, T]` to `List[T]` — Python observation encoder and stubs updated to match\n- **Profiler**: Real timing with `Instant`, hierarchical path tracking (`env_reset/...`), `export_profile_baseline`/`compare_profile` for perf regression workflows\n- **Observation validation**: Now checks card ownership and permanent controller consistency\n- **Build system**: `pyproject.toml` switched to maturin, removed `crate-type = [\"cdylib\"]` from `Cargo.toml` (maturin handles this)\n- **Wave docs**: Completed 02-bindings, added 03-integration-tests and 04-cutover plans"
+}
+```
+
+
+=== stderr ===
+
