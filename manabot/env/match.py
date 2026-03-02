@@ -82,18 +82,14 @@ class Reward:
     def __init__(self, hypers: RewardHypers):
         self.hypers = hypers
 
-    def compute(self, cpp_reward : float, last_obs : managym.Observation, new_obs : managym.Observation) -> float:
+    def compute(self, cpp_reward: float, _last_obs: managym.Observation, new_obs: managym.Observation) -> float:
         if self.hypers.managym:
-            return cpp_reward   
+            return cpp_reward
 
         if self.hypers.trivial:
             return 1.0
 
-        else:
-            if new_obs.game_over:                
-                if new_obs.won:
-                    return self.hypers.win_reward
-                else:
-                    return self.hypers.lose_reward
-            else:
-                return cpp_reward 
+        if not new_obs.game_over:
+            return cpp_reward
+
+        return self.hypers.win_reward if new_obs.won else self.hypers.lose_reward

@@ -35,6 +35,12 @@ from manabot.infra.profiler import Profiler
 
 manabot.infra.hypers.initialize()
 
+ROLLOUT_HEALTH_KEYS = (
+    "skipped_steps",
+    "truncated_episodes",
+    "action_space_truncations",
+)
+
 
 # -----------------------------------------------------------------------------
 # Buffer Classes
@@ -237,16 +243,8 @@ class Trainer:
         self.consecutive_invalid_batches = 0
         self.invalid_batch_threshold = 5
         self.wandb = self.experiment.wandb_run
-        self.rollout_health = {
-            "skipped_steps": 0,
-            "truncated_episodes": 0,
-            "action_space_truncations": 0,
-        }
-        self.rollout_health_update = {
-            "skipped_steps": 0,
-            "truncated_episodes": 0,
-            "action_space_truncations": 0,
-        }
+        self.rollout_health = self._new_rollout_health()
+        self.rollout_health_update = self._new_rollout_health()
 
         # Initialize the profiler
         self.profiler = self.experiment.profiler
@@ -434,8 +432,11 @@ class Trainer:
         return new_obs, done, new_actor_ids
 
     def _reset_rollout_health_update(self) -> None:
-        for key in self.rollout_health_update:
+        for key in ROLLOUT_HEALTH_KEYS:
             self.rollout_health_update[key] = 0
+
+    def _new_rollout_health(self) -> Dict[str, int]:
+        return {key: 0 for key in ROLLOUT_HEALTH_KEYS}
 
     def _increment_rollout_health(self, key: str, n: int) -> None:
         self.rollout_health[key] += n
@@ -474,25 +475,19 @@ class Trainer:
         return int(np.count_nonzero(events_arr))
 
     def _log_rollout_health(self, update: int) -> None:
-        skipped = self.rollout_health_update["skipped_steps"]
-        truncated = self.rollout_health_update["truncated_episodes"]
-        action_trunc = self.rollout_health_update["action_space_truncations"]
+        rollout_parts = [
+            f"{key}={self.rollout_health_update[key]} (total={self.rollout_health[key]})"
+            for key in ROLLOUT_HEALTH_KEYS
+        ]
         self.logger.info(
-            f"Update {update} rollout health | skipped_steps={skipped} "
-            f"(total={self.rollout_health['skipped_steps']}), "
-            f"truncated_episodes={truncated} (total={self.rollout_health['truncated_episodes']}), "
-            f"action_space_truncations={action_trunc} "
-            f"(total={self.rollout_health['action_space_truncations']})"
+            f"Update {update} rollout health | {', '.join(rollout_parts)}"
         )
         if self.wandb:
-            self.wandb.log({
-                "rollout/skipped_steps": skipped,
-                "rollout/truncated_episodes": truncated,
-                "rollout/action_space_truncations": action_trunc,
-                "rollout/skipped_steps_total": self.rollout_health["skipped_steps"],
-                "rollout/truncated_episodes_total": self.rollout_health["truncated_episodes"],
-                "rollout/action_space_truncations_total": self.rollout_health["action_space_truncations"],
-            }, step=self.global_step)
+            metrics = {}
+            for key in ROLLOUT_HEALTH_KEYS:
+                metrics[f"rollout/{key}"] = self.rollout_health_update[key]
+                metrics[f"rollout/{key}_total"] = self.rollout_health[key]
+            self.wandb.log(metrics, step=self.global_step)
 
     def _optimize_step(self, obs: Dict[str, torch.Tensor],
                     logprobs: torch.Tensor,

@@ -3,7 +3,6 @@ env.py
 Environment wrapper around the C++ managym.Env that conforms to the Gymnasium API.
 """
 
-from ast import Match
 import gymnasium as gym
 from gymnasium import spaces
 from typing import Optional, Any, Tuple, Dict
@@ -173,13 +172,6 @@ class VectorEnv:
         """
         obs_tuple, info = self._env.reset(seed=seed, options=options)
         return self._process_obs(obs_tuple), info
-
-    def _parse_bool(self, val):
-        if isinstance(val, bool):
-            return val
-        if isinstance(val, str):
-            return val.lower() == "true"
-        return bool(val)
 
     def step(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """

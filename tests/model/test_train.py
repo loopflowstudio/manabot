@@ -202,24 +202,39 @@ class TestPPOOptimization:
 
 
 class TestPPOCorrectnessFixes:
-    def test_truncated_episode_marks_done(self, trainer, monkeypatch):
+    def _mock_step(
+        self,
+        trainer,
+        monkeypatch,
+        truncated: torch.Tensor,
+        action_space_truncated: list[bool],
+    ):
         next_obs, _ = trainer.env.reset()
         actor_ids = obs_mod.get_agent_indices(next_obs)
-        truncated = torch.tensor([True, False], dtype=torch.bool, device=trainer.experiment.device)
         terminated = torch.zeros_like(truncated)
+        reward = torch.zeros(trainer.hypers.num_envs, dtype=torch.float32, device=trainer.experiment.device)
 
         def fake_step(_action):
             return (
                 next_obs,
-                torch.zeros(trainer.hypers.num_envs, dtype=torch.float32, device=trainer.experiment.device),
+                reward,
                 terminated,
                 truncated,
-                {"action_space_truncated": np.array([False, False])},
+                {"action_space_truncated": np.array(action_space_truncated)},
             )
 
-        trainer.logger.warning = MagicMock()
         monkeypatch.setattr(trainer.env, "step", fake_step)
+        return next_obs, actor_ids
 
+    def test_truncated_episode_marks_done(self, trainer, monkeypatch):
+        truncated = torch.tensor([True, False], dtype=torch.bool, device=trainer.experiment.device)
+        next_obs, actor_ids = self._mock_step(
+            trainer,
+            monkeypatch,
+            truncated=truncated,
+            action_space_truncated=[False, False],
+        )
+        trainer.logger.warning = MagicMock()
         _, done, _ = trainer._rollout_step(next_obs, actor_ids)
 
         assert done.tolist() == [True, False]
@@ -257,22 +272,14 @@ class TestPPOCorrectnessFixes:
         trainer._reset_rollout_health_update()
         trainer._increment_rollout_health("skipped_steps", 2)
 
-        next_obs, _ = trainer.env.reset()
-        actor_ids = obs_mod.get_agent_indices(next_obs)
         truncated = torch.tensor([True, True], dtype=torch.bool, device=trainer.experiment.device)
-        terminated = torch.zeros_like(truncated)
-
-        def fake_step(_action):
-            return (
-                next_obs,
-                torch.zeros(trainer.hypers.num_envs, dtype=torch.float32, device=trainer.experiment.device),
-                terminated,
-                truncated,
-                {"action_space_truncated": np.array([True, False])},
-            )
-
+        next_obs, actor_ids = self._mock_step(
+            trainer,
+            monkeypatch,
+            truncated=truncated,
+            action_space_truncated=[True, False],
+        )
         trainer.logger.warning = MagicMock()
-        monkeypatch.setattr(trainer.env, "step", fake_step)
         trainer._rollout_step(next_obs, actor_ids)
 
         assert trainer.rollout_health_update["skipped_steps"] == 2
