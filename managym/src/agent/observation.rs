@@ -64,7 +64,6 @@ pub struct CardData {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PermanentData {
     pub id: i32,
-    pub card_id: i32,
     pub controller_id: i32,
     pub tapped: bool,
     pub damage: i32,
@@ -157,7 +156,7 @@ impl Observation {
         };
 
         obs.populate_cards(game, agent_player);
-        obs.populate_permanents(game, agent_player);
+        obs.populate_permanents(game);
         obs
     }
 
@@ -200,7 +199,7 @@ impl Observation {
         }
     }
 
-    fn populate_permanents(&mut self, game: &Game, _agent_player: PlayerId) {
+    fn populate_permanents(&mut self, game: &Game) {
         for player in game.players_starting_with_agent() {
             for card_id in game.state.zones.zone_cards(ZoneType::Battlefield, player) {
                 if let Some(perm_id) = game.state.card_to_permanent[card_id.0] {
@@ -232,7 +231,6 @@ impl Observation {
     fn add_permanent(&mut self, game: &Game, permanent: &Permanent) {
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
-            card_id: game.state.cards[permanent.card.0].id.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,

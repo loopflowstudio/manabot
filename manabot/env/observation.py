@@ -16,8 +16,8 @@ Additional updates in this version:
 """
 
 from enum import IntEnum
-from typing import Dict, List, Tuple, Union
-import numpy as np  
+from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
+import numpy as np
 import gymnasium as gym
 import torch
 import managym
@@ -211,14 +211,9 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _ordered_cards(self, cards: Union[Dict[int, managym.Card], List[managym.Card]]) -> List[managym.Card]:
-        if isinstance(cards, dict):
-            return [cards[cid] for cid in sorted(cards.keys())]
-        return list(cards)
-
-    def _encode_cards(self, cards: Union[Dict[int, managym.Card], List[managym.Card]]) -> np.ndarray:
+    def _encode_cards(self, cards: List[managym.Card]) -> np.ndarray:
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
-        ordered_cards = self._ordered_cards(cards)[:self.cards_per_player]
+        ordered_cards = cards[:self.cards_per_player]
         for i, card in enumerate(ordered_cards):
             feat[i] = self._encode_card_features(card)
             self.object_to_index[card.id] = self.current_object_index
@@ -260,14 +255,9 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Permanents (with validity mask support)
     # -------------------------------------------------------------------------
-    def _ordered_permanents(self, perms: Union[Dict[int, managym.Permanent], List[managym.Permanent]]) -> List[managym.Permanent]:
-        if isinstance(perms, dict):
-            return [perms[pid] for pid in sorted(perms.keys())]
-        return list(perms)
-
-    def _encode_perms(self, perms: Union[Dict[int, managym.Permanent], List[managym.Permanent]]) -> np.ndarray:
+    def _encode_perms(self, perms: List[managym.Permanent]) -> np.ndarray:
         feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
-        ordered_perms = self._ordered_permanents(perms)[:self.perms_per_player]
+        ordered_perms = perms[:self.perms_per_player]
         for i, perm in enumerate(ordered_perms):
             feat[i] = self._encode_permanent_features(perm)
             self.object_to_index[perm.id] = self.current_object_index

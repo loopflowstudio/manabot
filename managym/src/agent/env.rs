@@ -9,8 +9,6 @@ use crate::{
 pub struct Env {
     game: Option<Game>,
     skip_trivial: bool,
-    enable_profiler: bool,
-    enable_behavior_tracking: bool,
     seed: u64,
     pub profiler: Profiler,
     pub hero_tracker: BehaviorTracker,
@@ -27,8 +25,6 @@ impl Env {
         Self {
             game: None,
             skip_trivial,
-            enable_profiler,
-            enable_behavior_tracking,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
@@ -102,7 +98,7 @@ impl Env {
     }
 
     pub fn export_profile_baseline(&self) -> String {
-        if self.enable_profiler {
+        if self.profiler.is_enabled() {
             self.profiler.export_baseline()
         } else {
             String::new()
@@ -110,7 +106,7 @@ impl Env {
     }
 
     pub fn compare_profile(&self, baseline: &str) -> String {
-        if self.enable_profiler {
+        if self.profiler.is_enabled() {
             self.profiler.compare_to_baseline(baseline)
         } else {
             "Profiler not enabled".to_string()
@@ -119,7 +115,7 @@ impl Env {
 
     fn add_profiler_info(&self, info: &mut InfoDict) {
         let mut out = empty_info_dict();
-        if self.enable_profiler {
+        if self.profiler.is_enabled() {
             for (name, stats) in self.profiler.get_stats() {
                 let mut scoped = empty_info_dict();
                 insert_info(
@@ -136,7 +132,7 @@ impl Env {
 
     fn add_behavior_info(&self, info: &mut InfoDict) {
         let mut behavior = empty_info_dict();
-        if self.enable_behavior_tracking {
+        if self.hero_tracker.is_enabled() || self.villain_tracker.is_enabled() {
             let mut hero = empty_info_dict();
             for (k, v) in self.hero_tracker.get_stats() {
                 insert_info(&mut hero, k, InfoValue::String(v));
