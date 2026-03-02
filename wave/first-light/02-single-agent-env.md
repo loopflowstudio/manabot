@@ -81,6 +81,14 @@ the standard CleanRL pattern.
 - Auto-reset must still work — when a game ends, the next `reset()` or
   auto-reset should start a new game with the same opponent policy
 - The observation returned must always be from the hero's perspective
+- The env now returns `(obs, reward, terminated, truncated, info)` per
+  Gymnasium spec (fixed in stage 01). The wrapper's inner opponent-step
+  loop must propagate both `terminated` and `truncated` correctly.
+- Truncation value bootstrap is deferred (no `final_observation` plumbing
+  yet). The wrapper should preserve `info["action_space_truncated"]`
+  from inner steps so rollout health counters remain accurate.
+- Reward is currently `win_reward=100.0` / `lose_reward=-100.0` — the
+  +1/-1 change (section 4) interacts with `vf_coef` tuning.
 
 ## Done when
 

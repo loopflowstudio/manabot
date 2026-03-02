@@ -85,6 +85,12 @@ to match the new feature dimensions. The `player_dim`, `card_dim`, and
 - Validity masks must still work correctly with reduced padding
 - The observation must not leak hidden information (opponent's hand
   contents should not be visible)
+- Action-space truncation warning already exists in the observation
+  encoder (added in stage 01) and fires when actions exceed
+  `max_actions`. The env wrapper also emits `info["action_space_truncated"]`.
+  If `max_actions=10` stays, verify this never fires with the test
+  deck during profiling (section 4). If it does, the reduced padding
+  is too aggressive.
 
 ## Done when
 

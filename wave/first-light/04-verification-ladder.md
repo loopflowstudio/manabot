@@ -93,6 +93,18 @@ python -m manabot.verify.step4_beat_random
 - Steps 1-3 should complete in under 30 minutes on a laptop
 - Step 4 may take longer and is a stretch goal for this wave
 
+## Available instrumentation (from stage 01)
+
+Rollout health counters are already wired into the trainer and wandb:
+- `rollout/skipped_steps` (+ `_total`)
+- `rollout/truncated_episodes` (+ `_total`)
+- `rollout/action_space_truncations` (+ `_total`)
+
+These should be monitored at each ladder step. If `skipped_steps` is
+non-trivial or `action_space_truncations` is persistent, the ladder
+result is unreliable — fix the data quality issue before interpreting
+the learning signal.
+
 ## Done when
 
 Steps 0-3 pass. Step 4 is attempted and results are documented even
