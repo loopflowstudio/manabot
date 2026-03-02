@@ -463,10 +463,17 @@ class Trainer:
         return np.arange(actual_batch_size), minibatch_size
 
     def _count_info_events(self, info: Dict[str, Any], key: str) -> int:
+        """Count truthy events in a vectorized env info dict.
+
+        Gymnasium's AsyncVectorEnv stores per-env values under `key` and an
+        autoreset mask under `_key`.  The mask indicates which entries come
+        from the most recent step (True) vs. stale post-reset values (False).
+        We only count events where the mask is True.
+        """
         if key not in info:
             return 0
         events = info[key]
-        event_mask = info.get(f"_{key}")
+        autoreset_mask = info.get(f"_{key}")
 
         events_arr = np.asarray(events)
         if events_arr.dtype == np.object_:
@@ -474,8 +481,8 @@ class Trainer:
         else:
             events_arr = events_arr.astype(bool, copy=False)
 
-        if event_mask is not None:
-            mask_arr = np.asarray(event_mask).astype(bool, copy=False)
+        if autoreset_mask is not None:
+            mask_arr = np.asarray(autoreset_mask).astype(bool, copy=False)
             if events_arr.shape == mask_arr.shape:
                 events_arr = events_arr[mask_arr]
         return int(np.count_nonzero(events_arr))
