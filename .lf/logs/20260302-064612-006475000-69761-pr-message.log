@@ -1,0 +1,13 @@
+message generation output
+
+=== stdout ===
+```json
+{
+  "title": "rust: implement stage-01 managym engine port",
+  "body": "## Try it\n\n```bash\ncd managym\ncargo fmt --check\ncargo clippy --all-targets --all-features -- -D warnings\ncargo test\n```\n\n## Summary\n\nPorts the C++ managym game engine to Rust as the first stage of the rust-migration wave. The new `managym/` crate implements a complete two-player Magic engine with turn/phase/step progression, priority, combat, mana production/payment, and state-based actions. Architecture shifts from pointer-based OOP to index-based data-oriented design: flat `Vec` arenas referenced by typed indices (`CardId`, `PermanentId`, `PlayerId`), enums instead of virtual dispatch, and a single `GameState` struct owning everything.\n\n## Changes\n\n- **Game engine** — full game loop with untap/upkeep/draw, main phases, combat (declare attackers/blockers, damage assignment), cleanup, and state-based actions (lethal damage, life loss, empty library)\n- **Card registry** — 5 basic lands, Llanowar Elves, Grey Ogre with mana abilities and creature stats\n- **Env API** — `Env::reset` / `Env::step` matching the Python gym interface, with observation building, reward calculation, and info dict\n- **Deterministic RNG** — ChaCha8 seeded, same seed + actions = identical game trace\n- **PyO3 seam** — minimal `PyEnv` and `PyPlayerConfig` bindings behind `python` cargo feature (not yet linked end-to-end)\n- **Tests** — initial state setup, full game completion, empty-library loss condition, determinism across two env instances, enum value stability, mana parsing/payment\n- **Wave planning** — `wave/rust-migration/` with README, stage-02 design doc, and gate definition"
+}
+```
+
+
+=== stderr ===
+

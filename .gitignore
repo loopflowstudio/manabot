@@ -7,3 +7,5 @@ compile_commands.json
 dist/
 *.so
 *.dylib
+.lf/log/
+target/

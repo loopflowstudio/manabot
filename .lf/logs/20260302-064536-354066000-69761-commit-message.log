@@ -1,0 +1,13 @@
+message generation output
+
+=== stdout ===
+```json
+{
+  "title": "rust engine: implement stage-01 managym port",
+  "body": "Complete Rust rewrite of the game engine: state (cards, mana, zones, permanents, players), flow (turn/phase/step, priority, combat, SBAs), agent (observation, action spaces, env), card registry (basic lands, Llanowar Elves, Grey Ogre), and minimal PyO3 seam behind feature flag.\n\nIndex-based arenas replace pointer graphs, flat GameState enables future cloning/MCTS, deterministic ChaCha8 RNG ensures reproducibility. Six integration tests cover setup, full game loop, empty-library loss, seed determinism, enum stability, and mana payment."
+}
+```
+
+
+=== stderr ===
+
