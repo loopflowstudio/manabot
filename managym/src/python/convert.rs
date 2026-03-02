@@ -20,6 +20,12 @@ pub fn info_dict_to_pydict<'py>(py: Python<'py>, info: &InfoDict) -> Bound<'py, 
                 let nested = info_dict_to_pydict(py, m);
                 let _ = out.set_item(k, nested);
             }
+            InfoValue::Int(i) => {
+                let _ = out.set_item(k, i);
+            }
+            InfoValue::Float(f) => {
+                let _ = out.set_item(k, f);
+            }
         }
     }
     out

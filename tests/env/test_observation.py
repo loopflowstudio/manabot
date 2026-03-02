@@ -183,7 +183,10 @@ class TestObservationEncoder:
         
         # Find a sample card ID
         if observation.agent_cards:
-            card_id = next(iter(observation.agent_cards.keys()))
+            if isinstance(observation.agent_cards, dict):
+                card_id = next(iter(observation.agent_cards.keys()))
+            else:
+                card_id = observation.agent_cards[0].id
             assert card_id in mapping, "Card ID not found in mapping"
             idx = mapping[card_id]
             # Index should be after players but before max objects

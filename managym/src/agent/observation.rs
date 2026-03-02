@@ -12,6 +12,7 @@ use crate::{
         zone::ZoneType,
     },
 };
+use serde_json::{json, Value};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TurnData {
@@ -219,9 +220,9 @@ impl Observation {
         zone: ZoneType,
     ) {
         let card = &game.state.cards[card_id.0];
-        let card_data = Self::card_data(card, zone);
+        let card_data = Self::card_data(game, card, zone);
 
-        if card.owner.0 == self.agent.player_index as usize {
+        if card_data.owner_id == self.agent.id {
             self.agent_cards.push(card_data);
         } else {
             self.opponent_cards.push(card_data);
@@ -247,10 +248,10 @@ impl Observation {
         self.add_card(game, permanent.card, ZoneType::Battlefield);
     }
 
-    fn card_data(card: &Card, zone: ZoneType) -> CardData {
+    fn card_data(game: &Game, card: &Card, zone: ZoneType) -> CardData {
         CardData {
             zone,
-            owner_id: card.owner.0 as i32,
+            owner_id: game.state.players[card.owner.0].id.0 as i32,
             id: card.id.0 as i32,
             registry_key: card.registry_key.0 as i32,
             power: card.power.unwrap_or(0),
@@ -320,10 +321,124 @@ impl Observation {
         if self.agent.is_agent == self.opponent.is_agent {
             return false;
         }
+        for card in &self.agent_cards {
+            if card.owner_id != self.agent.id {
+                return false;
+            }
+        }
+        for card in &self.opponent_cards {
+            if card.owner_id != self.opponent.id {
+                return false;
+            }
+        }
+        for permanent in &self.agent_permanents {
+            if permanent.controller_id != self.agent.id {
+                return false;
+            }
+        }
+        for permanent in &self.opponent_permanents {
+            if permanent.controller_id != self.opponent.id {
+                return false;
+            }
+        }
         true
     }
 
     pub fn to_json(&self) -> String {
-        format!("{self:?}")
+        fn player_json(player: &PlayerData) -> Value {
+            json!({
+                "player_index": player.player_index,
+                "id": player.id,
+                "is_active": player.is_active,
+                "is_agent": player.is_agent,
+                "life": player.life,
+                "zone_counts": player.zone_counts,
+            })
+        }
+
+        fn card_json(card: &CardData) -> Value {
+            json!({
+                "id": card.id,
+                "registry_key": card.registry_key,
+                "zone": card.zone as i32,
+                "owner_id": card.owner_id,
+                "power": card.power,
+                "toughness": card.toughness,
+                "card_types": {
+                    "is_castable": card.card_types.is_castable,
+                    "is_permanent": card.card_types.is_permanent,
+                    "is_non_land_permanent": card.card_types.is_non_land_permanent,
+                    "is_non_creature_permanent": card.card_types.is_non_creature_permanent,
+                    "is_spell": card.card_types.is_spell,
+                    "is_creature": card.card_types.is_creature,
+                    "is_land": card.card_types.is_land,
+                    "is_planeswalker": card.card_types.is_planeswalker,
+                    "is_enchantment": card.card_types.is_enchantment,
+                    "is_artifact": card.card_types.is_artifact,
+                    "is_kindred": card.card_types.is_kindred,
+                    "is_battle": card.card_types.is_battle,
+                },
+                "mana_cost": {
+                    "cost": card.mana_cost.cost[..6]
+                        .iter()
+                        .map(|v| i32::from(*v))
+                        .collect::<Vec<_>>(),
+                    "mana_value": i32::from(card.mana_cost.mana_value),
+                }
+            })
+        }
+
+        fn permanent_json(permanent: &PermanentData) -> Value {
+            json!({
+                "id": permanent.id,
+                "controller_id": permanent.controller_id,
+                "tapped": permanent.tapped,
+                "damage": permanent.damage,
+                "is_summoning_sick": permanent.is_summoning_sick,
+            })
+        }
+
+        let action_json = self
+            .action_space
+            .actions
+            .iter()
+            .map(|action| {
+                json!({
+                    "type": action.action_type as i32,
+                    "focus": action.focus,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        json!({
+            "game_over": self.game_over,
+            "won": self.won,
+            "turn": {
+                "turn_number": self.turn.turn_number,
+                "phase": self.turn.phase as i32,
+                "step": self.turn.step as i32,
+                "active_player_id": self.turn.active_player_id,
+                "agent_player_id": self.turn.agent_player_id,
+            },
+            "action_space": {
+                "type": self.action_space.action_space_type as i32,
+                "actions": action_json,
+            },
+            "agent": player_json(&self.agent),
+            "agent_cards": self.agent_cards.iter().map(card_json).collect::<Vec<_>>(),
+            "agent_permanents": self
+                .agent_permanents
+                .iter()
+                .map(permanent_json)
+                .collect::<Vec<_>>(),
+            "opponent": player_json(&self.opponent),
+            "opponent_cards": self.opponent_cards.iter().map(card_json).collect::<Vec<_>>(),
+            "opponent_permanents": self
+                .opponent_permanents
+                .iter()
+                .map(permanent_json)
+                .collect::<Vec<_>>(),
+        })
+        .to_string()
     }
 }
