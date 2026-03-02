@@ -53,3 +53,18 @@ the next.
 - Entropy decay rate (should decrease steadily, not collapse)
 - Mean episode length vs. passive (should decrease as agent learns to attack)
 - Per-action-type frequency (should show increasing land/creature/attack rate)
+
+## References
+
+- [PPO paper](https://arxiv.org/abs/1707.06347)
+- [37 PPO implementation details (ICLR blog)](https://iclr-blog-track.github.io/2022/03/25/ppo-implementation-details/)
+- [CleanRL PPO docs](https://docs.cleanrl.dev/rl-algorithms/ppo/)
+- [PufferLib docs](https://puffer.ai/docs.html)
+- [Sample Factory architecture](https://www.samplefactory.dev/06-architecture/overview/)
+- [KataGo paper](https://arxiv.org/abs/1902.10565)
+- [KataGo methods doc](https://raw.githubusercontent.com/lightvector/KataGo/master/docs/KataGoMethods.md)
+- [OpenSpiel](https://github.com/google-deepmind/open_spiel)
+- [NFSP paper](https://arxiv.org/abs/1603.01121)
+- [MAPPO paper](https://arxiv.org/abs/2103.01955)
+- [OpenAI Five](https://arxiv.org/abs/1912.06680)
+- [IMPALA](https://arxiv.org/abs/1802.01561)

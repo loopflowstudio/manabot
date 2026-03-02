@@ -285,6 +285,10 @@ class ObservationEncoder:
         valid_actions = np.zeros(self.max_actions, dtype=bool)
         # We'll accumulate the focus indices for each action here.
         action_focus_indices = []  # Expected shape: (max_actions, max_focus_objects)
+        if len(obs.action_space.actions) > self.max_actions:
+            log.warning(
+                f"Action space truncated: {len(obs.action_space.actions)} -> {self.max_actions}"
+            )
         for idx, action in enumerate(obs.action_space.actions[: self.max_actions]):
             valid_actions[idx] = True
             action_type = int(action.action_type)

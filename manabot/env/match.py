@@ -91,7 +91,7 @@ class Reward:
 
         else:
             if new_obs.game_over:                
-                if new_obs.won == last_obs.agent.player_index:
+                if new_obs.won:
                     return self.hypers.win_reward
                 else:
                     return self.hypers.lose_reward

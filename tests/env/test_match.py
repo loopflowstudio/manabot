@@ -3,10 +3,11 @@ test_match.py
 """
 
 import pytest
-import argparse
 from typing import Dict
+from types import SimpleNamespace
 
-from manabot.env.match import Match, parse_deck
+from manabot.env.match import Match, Reward, parse_deck
+from manabot.infra.hypers import RewardHypers
 
 # Common Test Data
 SAMPLE_DECKS = {
@@ -87,6 +88,17 @@ class TestMatch:
         assert dict(hero_config.decklist) == sample_match.hero_deck
         assert villain_config.name == "urza"
         assert dict(villain_config.decklist) == sample_match.villain_deck
+
+
+@pytest.mark.parametrize("player_index", [0, 1])
+def test_reward_correct_both_players(player_index):
+    reward = Reward(RewardHypers(win_reward=7.0, lose_reward=-3.0))
+    last_obs = SimpleNamespace(agent=SimpleNamespace(player_index=player_index))
+    won_obs = SimpleNamespace(game_over=True, won=True)
+    lost_obs = SimpleNamespace(game_over=True, won=False)
+
+    assert reward.compute(0.0, last_obs, won_obs) == 7.0
+    assert reward.compute(0.0, last_obs, lost_obs) == -3.0
 
 if __name__ == "__main__":
     pytest.main([__file__])
