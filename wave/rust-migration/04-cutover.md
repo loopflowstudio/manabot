@@ -24,9 +24,13 @@ Depends on 03-integration-tests passing. At that point:
    Rust backends. Document results. Rust must be at least parity.
 
 2. **C++ code removal.**
-   - Remove `managym/include/`, `managym/src/*.cpp`, `managym/src/*.h`
-   - Remove `CMakeLists.txt`, cmake config, pybind11 dependency
-   - Remove C++ test infrastructure (`managym/tests/*.cpp`, googletest)
+   - Remove C++ source: `managym/agent/*.{cpp,h}`, `managym/state/*.{cpp,h}`,
+     `managym/flow/*.{cpp,h}`, `managym/infra/*.{cpp,h}`,
+     `managym/cardsets/**/*.{cpp,h}`, `managym/main.cpp` (46 files total)
+   - Remove C++ test files: `tests/agent/*.cpp`, `tests/flow/*.cpp`,
+     `tests/infra/*.cpp`, `tests/state/*.cpp`, `tests/main.cpp`,
+     `tests/managym_test.{cpp,h}` (10 files)
+   - Remove root `CMakeLists.txt`, cmake config, pybind11 dependency
    - Clean up any C++-only CI/build scripts
 
 3. **Build system cleanup.**
@@ -44,6 +48,8 @@ Depends on 03-integration-tests passing. At that point:
 - Throughput regression — Rust may be slower on specific workloads (GIL
   overhead, allocation patterns). Profile before removing C++.
 - Missed C++ files — grep for `.cpp`, `.h`, `cmake` patterns after removal.
+  Note: C++ source is co-located alongside Rust `src/` — careful not to
+  remove the Rust code in `managym/src/`.
 - Third-party code depending on C++ headers (unlikely but check).
 
 ## Done when
