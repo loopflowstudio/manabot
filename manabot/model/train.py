@@ -14,7 +14,7 @@ This version uses a multi-agent buffer organized as (num_envs x num_players) que
 
 from dataclasses import asdict
 from omegaconf import DictConfig, OmegaConf
-from typing import Dict, Tuple, List
+from typing import Any, Dict, Tuple
 import time
 import datetime
 import wandb
@@ -31,9 +31,13 @@ from manabot.env import ObservationSpace, VectorEnv, Match, Reward
 from manabot.model.agent import Agent
 import manabot.infra.hypers
 
-from manabot.infra.profiler import Profiler
-
 manabot.infra.hypers.initialize()
+
+ROLLOUT_HEALTH_KEYS = (
+    "skipped_steps",
+    "truncated_episodes",
+    "action_space_truncations",
+)
 
 
 # -----------------------------------------------------------------------------
@@ -229,7 +233,6 @@ class Trainer:
             self.agent.parameters(),
             lr=hypers.learning_rate,
             eps=1e-5,
-            weight_decay=0.01
         )
 
         self.logger = getLogger(__name__)
@@ -238,6 +241,8 @@ class Trainer:
         self.consecutive_invalid_batches = 0
         self.invalid_batch_threshold = 5
         self.wandb = self.experiment.wandb_run
+        self.rollout_health = self._new_rollout_health()
+        self.rollout_health_update = self._new_rollout_health()
 
         # Initialize the profiler
         self.profiler = self.experiment.profiler
@@ -257,7 +262,6 @@ class Trainer:
             env = self.env
             device = self.experiment.device
             batch_size = hypers.num_envs * hypers.num_steps
-            minibatch_size = batch_size // hypers.num_minibatches
             num_updates = hypers.total_timesteps // batch_size
             self.start_time = time.time()
 
@@ -280,9 +284,11 @@ class Trainer:
                     self.logger.info(f"Update {update}: LR = {current_lr}")
 
                 self.multi_buffer.reset()
+                self._reset_rollout_health_update()
 
                 self.logger.info("Starting rollout data collection.")
-                wandb.log({"rollout/step": 0}, step=self.global_step)
+                if self.wandb:
+                    self.wandb.log({"rollout/step": 0}, step=self.global_step)
 
                 if update % 10 == 0 and self.agent.hypers.attention_on:
                     self.logger.info("Verifying attention masking mechanism...")
@@ -300,6 +306,7 @@ class Trainer:
                                 self.consecutive_invalid_batches = 0
                             except Exception as e:
                                 self.consecutive_invalid_batches += 1
+                                self._increment_rollout_health("skipped_steps", 1)
                                 self.logger.error(f"Rollout step error at step {step}: {e}")
                                 if self.consecutive_invalid_batches >= self.invalid_batch_threshold:
                                     raise RuntimeError(f"Failure during rollout; halting training: {e}")
@@ -319,20 +326,27 @@ class Trainer:
                             self.logger.error(f"No valid transitions in buffers: {e}")
                             raise
 
+                self._log_rollout_health(update)
+
                 clipfracs = []
                 approx_kl = 0.0
-                inds = np.arange(batch_size)
+                actual_batch_size = logprobs.shape[0]
+                minibatch_plan = self._build_minibatch_plan(actual_batch_size)
+                if minibatch_plan is None:
+                    continue
+                inds, minibatch_size = minibatch_plan
 
                 with self.profiler.track("gradient"):
                     for epoch in range(hypers.update_epochs):
                         np.random.shuffle(inds)
-                        for start in range(0, batch_size, minibatch_size):
+                        for start in range(0, actual_batch_size, minibatch_size):
                             end = start + minibatch_size
                             mb_inds = inds[start:end]
                             mb_obs = {k: v[mb_inds] for k, v in obs.items()}
                             mb_old_logprobs = logprobs[mb_inds]
                             mb_actions = actions[mb_inds]
                             mb_advantages = advantages[mb_inds]
+                            mb_advantages = self._maybe_normalize_advantages(mb_advantages)
                             mb_returns = returns[mb_inds]
                             mb_values = values[mb_inds]
 
@@ -371,7 +385,9 @@ class Trainer:
                 )
 
                 if update % 100 == 0:
-                    self.logger.info(f"Saving artifa    ct @ update: {update} step: {self.global_step}")
+                    self.logger.info(
+                        f"Saving artifact @ update: {update} step: {self.global_step}"
+                    )
                     self.save()
 
                 self.logger.info(f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}")
@@ -390,10 +406,21 @@ class Trainer:
 
         try:
             with self.profiler.track("env"):
-                new_obs, reward, done, _, info = self.env.step(action)
+                new_obs, reward, terminated, truncated, info = self.env.step(action)
         except Exception as e:
             self.logger.error(f"env.step() failed: {e}")
-            raise e
+            raise
+
+        done = terminated | truncated
+        if truncated.any():
+            n_truncated = int(truncated.sum().item())
+            self._increment_rollout_health("truncated_episodes", n_truncated)
+            self.logger.warning(
+                f"Truncation in {n_truncated}/{self.hypers.num_envs} envs (no value bootstrap)"
+            )
+        action_truncations = self._count_info_events(info, "action_space_truncated")
+        if action_truncations > 0:
+            self._increment_rollout_health("action_space_truncations", action_truncations)
 
         self.global_step += self.hypers.num_envs
 
@@ -404,6 +431,76 @@ class Trainer:
         new_actor_ids = manabot.env.observation.get_agent_indices(new_obs)
         self.logger.debug(f"Rollout step completed; new actor_ids: {new_actor_ids}")
         return new_obs, done, new_actor_ids
+
+    def _reset_rollout_health_update(self) -> None:
+        for key in ROLLOUT_HEALTH_KEYS:
+            self.rollout_health_update[key] = 0
+
+    def _new_rollout_health(self) -> Dict[str, int]:
+        return {key: 0 for key in ROLLOUT_HEALTH_KEYS}
+
+    def _increment_rollout_health(self, key: str, n: int) -> None:
+        self.rollout_health[key] += n
+        self.rollout_health_update[key] += n
+
+    def _maybe_normalize_advantages(self, advantages: torch.Tensor) -> torch.Tensor:
+        if not self.hypers.norm_adv:
+            return advantages
+
+        advantages_centered = advantages - advantages.mean()
+        std = advantages.std()
+        if torch.isnan(std) or std < 1e-8:
+            return advantages_centered
+        return advantages_centered / (std + 1e-8)
+
+    def _build_minibatch_plan(self, actual_batch_size: int) -> Tuple[np.ndarray, int] | None:
+        if actual_batch_size < self.hypers.num_minibatches:
+            self.logger.warning(
+                f"Skipping update: actual_batch_size={actual_batch_size} < num_minibatches={self.hypers.num_minibatches}"
+            )
+            return None
+        minibatch_size = max(1, actual_batch_size // self.hypers.num_minibatches)
+        return np.arange(actual_batch_size), minibatch_size
+
+    def _count_info_events(self, info: Dict[str, Any], key: str) -> int:
+        """Count truthy events in a vectorized env info dict.
+
+        Gymnasium's AsyncVectorEnv stores per-env values under `key` and an
+        autoreset mask under `_key`.  The mask indicates which entries come
+        from the most recent step (True) vs. stale post-reset values (False).
+        We only count events where the mask is True.
+        """
+        if key not in info:
+            return 0
+        events = info[key]
+        autoreset_mask = info.get(f"_{key}")
+
+        events_arr = np.asarray(events)
+        if events_arr.dtype == np.object_:
+            events_arr = np.array([bool(v) for v in events_arr], dtype=bool)
+        else:
+            events_arr = events_arr.astype(bool, copy=False)
+
+        if autoreset_mask is not None:
+            mask_arr = np.asarray(autoreset_mask).astype(bool, copy=False)
+            if events_arr.shape == mask_arr.shape:
+                events_arr = events_arr[mask_arr]
+        return int(np.count_nonzero(events_arr))
+
+    def _log_rollout_health(self, update: int) -> None:
+        rollout_parts = [
+            f"{key}={self.rollout_health_update[key]} (total={self.rollout_health[key]})"
+            for key in ROLLOUT_HEALTH_KEYS
+        ]
+        self.logger.info(
+            f"Update {update} rollout health | {', '.join(rollout_parts)}"
+        )
+        if self.wandb:
+            metrics = {}
+            for key in ROLLOUT_HEALTH_KEYS:
+                metrics[f"rollout/{key}"] = self.rollout_health_update[key]
+                metrics[f"rollout/{key}_total"] = self.rollout_health[key]
+            self.wandb.log(metrics, step=self.global_step)
 
     def _optimize_step(self, obs: Dict[str, torch.Tensor],
                     logprobs: torch.Tensor,
@@ -435,7 +532,7 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
         
-        # NEW: Gradient norm monitoring
+        # Gradient norm monitoring
         total_grad_norm = 0.0
         layer_grad_norms = {}
         
@@ -659,7 +756,7 @@ class Trainer:
                 "system/gpu_memory_allocated": torch.cuda.memory_allocated() / (1024 * 1024),
                 "system/gpu_memory_reserved": torch.cuda.memory_reserved() / (1024 * 1024)
             })
-        wandb.log(metrics, step=self.global_step)
+        self.wandb.log(metrics, step=self.global_step)
         self.logger.debug(f"Logged system metrics: {metrics}")
 
     def save(self) -> None:

@@ -14,6 +14,8 @@ This test suite verifies:
 import pytest
 import numpy as np
 from typing import Tuple, Set
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import managym
 from manabot.env.observation import (
@@ -202,6 +204,26 @@ class TestObservationEncoder:
         # All indices should be either -1 (no focus) or within valid range
         valid = (focus == -1) | ((focus >= 0) & (focus < total_objects))
         assert valid.all(), f"Invalid focus indices found: {focus[~valid]}"
+
+    def test_action_space_truncation_warning(self, monkeypatch):
+        hypers = ObservationSpaceHypers(max_actions=2, max_focus_objects=2)
+        encoder = ObservationEncoder(hypers)
+        fake_actions = [
+            SimpleNamespace(action_type=0, focus=[]),
+            SimpleNamespace(action_type=1, focus=[]),
+            SimpleNamespace(action_type=2, focus=[]),
+        ]
+        fake_obs = SimpleNamespace(action_space=SimpleNamespace(actions=fake_actions))
+        fake_parent_logger = MagicMock()
+        fake_logger = MagicMock()
+        fake_parent_logger.getChild.return_value = fake_logger
+        monkeypatch.setattr("manabot.env.observation.getLogger", lambda *_: fake_parent_logger)
+
+        actions, action_focus = encoder._encode_actions(fake_obs)
+
+        assert actions.shape == (2, encoder.action_dim)
+        assert action_focus.shape == (2, hypers.max_focus_objects)
+        fake_logger.warning.assert_called_once_with("Action space truncated: 3 -> 2")
 
 if __name__ == "__main__":
     pytest.main([__file__])
