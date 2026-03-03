@@ -166,3 +166,46 @@ fn combat_damage_reduces_life() {
         "combat damage should reduce a player's life below 20"
     );
 }
+
+#[test]
+fn invalid_game_action_preserves_action_space() {
+    let mut game = make_game(42, false);
+    let action_count = game
+        .action_space()
+        .expect("initial action space should exist")
+        .actions
+        .len();
+
+    let error = game
+        .step(action_count)
+        .expect_err("out-of-range action should fail");
+    assert!(
+        error.to_string().contains("Action index"),
+        "unexpected error: {error}"
+    );
+
+    assert!(
+        game.action_space().is_some(),
+        "action space should still be available after invalid action"
+    );
+    game.step(0)
+        .expect("valid action should still work after invalid action");
+}
+
+#[test]
+fn env_reports_negative_action_index() {
+    let mut env = Env::new(7, true, false, false);
+    let p1 = PlayerConfig::new("gaea", mixed_deck());
+    let p2 = PlayerConfig::new("urza", mixed_deck());
+    let (obs, _) = env.reset(vec![p1, p2]).expect("reset should succeed");
+    let action_count = obs.action_space.actions.len();
+
+    let error = env.step(-1).expect_err("negative action index should fail");
+    assert_eq!(
+        error.to_string(),
+        format!("Action index -1 out of bounds: {action_count}")
+    );
+
+    env.step(0)
+        .expect("valid action should still work after negative action");
+}

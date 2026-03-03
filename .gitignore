@@ -10,3 +10,5 @@ dist/
 .lf/log/
 target/
 .lf/prompts/
+.venv/
+.uv-cache/

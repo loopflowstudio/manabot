@@ -805,7 +805,7 @@ impl PyEnv {
     fn step(
         &self,
         py: Python<'_>,
-        action: usize,
+        action: i64,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
         let mut env = self
             .inner

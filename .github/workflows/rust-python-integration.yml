@@ -1,11 +1,15 @@
-name: Rust + Python integration
+name: Rust/Python Integration
 
 on:
   pull_request:
   push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   integration:
+    name: Integration (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -81,3 +85,18 @@ jobs:
         run: |
           source .venv/bin/activate
           python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
+
+  tests-result:
+    name: Tests Result
+    runs-on: ubuntu-latest
+    needs:
+      - integration
+    if: always()
+    steps:
+      - name: Check integration matrix status
+        run: |
+          echo "integration result: ${{ needs.integration.result }}"
+          if [ "${{ needs.integration.result }}" != "success" ]; then
+            echo "At least one integration job failed."
+            exit 1
+          fi

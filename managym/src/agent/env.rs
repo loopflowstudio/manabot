@@ -45,7 +45,7 @@ impl Env {
 
     pub fn step(
         &mut self,
-        action: usize,
+        action: i64,
     ) -> Result<(Observation, f64, bool, bool, InfoDict), AgentError> {
         let _scope = self.profiler.track("env_step");
         let game = self
@@ -57,10 +57,25 @@ impl Env {
             return Err(AgentError("env.step called after game over".to_string()));
         }
 
-        let agent = game
+        let action_space = game
             .action_space()
-            .and_then(|space| space.player)
+            .cloned()
+            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+        let agent = action_space
+            .player
             .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+        let action = usize::try_from(action).map_err(|_| {
+            AgentError(format!(
+                "Action index {action} out of bounds: {}",
+                action_space.actions.len()
+            ))
+        })?;
+        if action >= action_space.actions.len() {
+            return Err(AgentError(format!(
+                "Action index {action} out of bounds: {}",
+                action_space.actions.len()
+            )));
+        }
 
         let done = game.step(action)?;
         let observation = Observation::new(game);
