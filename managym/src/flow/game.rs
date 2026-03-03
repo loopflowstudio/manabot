@@ -201,6 +201,7 @@ impl Game {
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
 
         if action >= action_space.actions.len() {
+            self.current_action_space = Some(action_space.clone());
             return Err(AgentError(format!(
                 "Action index {action} out of bounds: {}",
                 action_space.actions.len()
@@ -208,7 +209,10 @@ impl Game {
         }
 
         let selected_action = action_space.actions[action].clone();
-        self.execute_action(&selected_action)?;
+        if let Err(error) = self.execute_action(&selected_action) {
+            self.current_action_space = Some(action_space);
+            return Err(error);
+        }
 
         let game_over = self.tick();
         if game_over {

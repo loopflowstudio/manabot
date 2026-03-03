@@ -9,3 +9,4 @@ dist/
 *.dylib
 .lf/log/
 target/
+.lf/prompts/
