@@ -69,10 +69,10 @@ impl Env {
                 "Action index {action} out of bounds: {action_count}"
             ))
         };
-        let action = usize::try_from(action).map_err(|_| out_of_bounds())?;
-        if action >= action_count {
-            return Err(out_of_bounds());
-        }
+        let action = match usize::try_from(action) {
+            Ok(index) if index < action_count => index,
+            _ => return Err(out_of_bounds()),
+        };
 
         let done = game.step(action)?;
         let observation = Observation::new(game);

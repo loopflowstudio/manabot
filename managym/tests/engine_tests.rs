@@ -4,6 +4,7 @@ use managym::{
     agent::{
         action::{ActionSpaceKind, ActionType},
         env::Env,
+        observation::Observation,
     },
     flow::turn::{PhaseKind, StepKind},
     state::{player::PlayerConfig, zone::ZoneType},
@@ -27,6 +28,14 @@ fn make_game(seed: u64, skip_trivial: bool) -> Game {
     let p1 = PlayerConfig::new("gaea", mixed_deck());
     let p2 = PlayerConfig::new("urza", mixed_deck());
     Game::new(vec![p1, p2], seed, skip_trivial)
+}
+
+fn reset_env(seed: u64, skip_trivial: bool) -> (Env, Observation) {
+    let mut env = Env::new(seed, skip_trivial, false, false);
+    let p1 = PlayerConfig::new("gaea", mixed_deck());
+    let p2 = PlayerConfig::new("urza", mixed_deck());
+    let (obs, _) = env.reset(vec![p1, p2]).expect("reset should succeed");
+    (env, obs)
 }
 
 #[test]
@@ -194,10 +203,7 @@ fn invalid_game_action_preserves_action_space() {
 
 #[test]
 fn env_reports_negative_action_index() {
-    let mut env = Env::new(7, true, false, false);
-    let p1 = PlayerConfig::new("gaea", mixed_deck());
-    let p2 = PlayerConfig::new("urza", mixed_deck());
-    let (obs, _) = env.reset(vec![p1, p2]).expect("reset should succeed");
+    let (mut env, obs) = reset_env(7, true);
     let action_count = obs.action_space.actions.len();
 
     let error = env.step(-1).expect_err("negative action index should fail");
@@ -212,10 +218,7 @@ fn env_reports_negative_action_index() {
 
 #[test]
 fn observation_stays_valid_through_game() {
-    let mut env = Env::new(7, true, false, false);
-    let p1 = PlayerConfig::new("gaea", mixed_deck());
-    let p2 = PlayerConfig::new("urza", mixed_deck());
-    let (mut obs, _) = env.reset(vec![p1, p2]).expect("reset should succeed");
+    let (mut env, mut obs) = reset_env(7, true);
     assert!(obs.validate(), "initial observation should validate");
 
     for _ in 0..2000 {
@@ -237,10 +240,7 @@ fn observation_stays_valid_through_game() {
 
 #[test]
 fn agent_player_index_alternates() {
-    let mut env = Env::new(7, true, false, false);
-    let p1 = PlayerConfig::new("gaea", mixed_deck());
-    let p2 = PlayerConfig::new("urza", mixed_deck());
-    let (mut obs, _) = env.reset(vec![p1, p2]).expect("reset should succeed");
+    let (mut env, mut obs) = reset_env(7, true);
 
     let mut seen = std::collections::BTreeSet::new();
     for _ in 0..1000 {
