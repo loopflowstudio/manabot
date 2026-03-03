@@ -171,12 +171,19 @@ class VectorEnv:
         observation_space: ObservationSpace,
         reward: Reward,
         device: str,
+        opponent_policy: Optional[Any] = None,
     ):
+        if opponent_policy is None:
+            make_env = lambda: Env(match, observation_space, reward, auto_reset=True)
+        else:
+            from .single_agent_env import SingleAgentEnv
+
+            make_env = lambda: SingleAgentEnv(
+                match, observation_space, reward, opponent_policy
+            )
+
         self._env = gym.vector.AsyncVectorEnv(
-            [
-                lambda: Env(match, observation_space, reward, auto_reset=True)
-                for _ in range(num_envs)
-            ],
+            [make_env for _ in range(num_envs)],
             shared_memory=False,
         )
         self.observation_space = observation_space

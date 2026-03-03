@@ -9,7 +9,7 @@ import pytest
 import torch
 
 # Local imports
-from manabot.env import Env, Reward, VectorEnv
+from manabot.env import Env, PassivePolicy, Reward, VectorEnv
 from manabot.env.match import Match
 import manabot.env.observation
 from manabot.env.observation import ObservationSpace
@@ -183,6 +183,22 @@ class TestEnvironment:
             observations, info = vector_env.reset()
             for key, tensor in observations.items():
                 assert tensor.device.type == "mps"
+
+        vector_env.close()
+
+    def test_vectorenv_single_agent_mode(self, sample_match, observation_space, reward):
+        vector_env = VectorEnv(
+            num_envs=3,
+            match=sample_match,
+            observation_space=observation_space,
+            reward=reward,
+            device="cpu",
+            opponent_policy=PassivePolicy(),
+        )
+
+        obs, _ = vector_env.reset()
+        actor_ids = manabot.env.observation.get_agent_indices(obs)
+        assert torch.all(actor_ids == 0)
 
         vector_env.close()
 

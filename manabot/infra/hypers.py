@@ -90,14 +90,15 @@ class TrainHypers:
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5
     target_kl: float = float("inf")
+    opponent_policy: str = "passive"
 
 
 @dataclass
 class RewardHypers:
     trivial: bool = False
     managym: bool = False
-    win_reward: float = 100.0
-    lose_reward: float = -100.0
+    win_reward: float = 1.0
+    lose_reward: float = -1.0
 
 
 @dataclass

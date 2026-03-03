@@ -9,7 +9,7 @@ PPO training steps:
   - Perform PPO updates.
   - Save/load checkpoints.
 
-This version uses a multi-agent buffer organized as (num_envs x num_players) queues.
+This version uses CleanRL-style flat rollout tensors with shape (num_steps, num_envs, ...).
 """
 
 from dataclasses import asdict
@@ -26,8 +26,13 @@ import torch.nn as nn
 import wandb
 
 # Local imports
-from manabot.env import Match, ObservationSpace, Reward, VectorEnv
-import manabot.env.observation
+from manabot.env import (
+    Match,
+    ObservationSpace,
+    Reward,
+    VectorEnv,
+    build_opponent_policy,
+)
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 import manabot.infra.hypers
 from manabot.model.agent import Agent
@@ -42,226 +47,6 @@ ROLLOUT_HEALTH_KEYS = (
 
 
 # -----------------------------------------------------------------------------
-# Buffer Classes
-# -----------------------------------------------------------------------------
-
-
-class PPOBuffer:
-    def __init__(self, device: str):
-        self.device = device
-        self.reset()
-
-    def store(
-        self,
-        obs: dict,
-        action: torch.Tensor,
-        reward: torch.Tensor,
-        value: torch.Tensor,
-        logprob: torch.Tensor,
-        done: torch.Tensor,
-    ) -> None:
-        # Ensure each observation tensor is stored properly
-        for k, v in obs.items():
-            # Stack tensors along a new dimension
-            self.obs_buff[k].append(v.unsqueeze(0))
-        self.actions_buf.append(action.unsqueeze(0))
-        self.logprobs_buf.append(logprob.unsqueeze(0))
-        self.rewards_buf.append(reward.unsqueeze(0))
-        self.values_buf.append(value.unsqueeze(0))
-        self.dones_buf.append(done.unsqueeze(0))
-
-    def compute_advantages(
-        self,
-        gamma: float,
-        gae_lambda: float,
-        next_value: torch.Tensor,
-        next_done: torch.Tensor,
-    ):
-        """
-        Compute advantages using GAE for the transitions in this buffer.
-        next_value: a scalar bootstrap value for this (env, player) pair.
-        next_done: a scalar (0 or 1) indicating if the environment was done.
-        """
-        self.obs = {k: torch.cat(v, dim=0) for k, v in self.obs_buff.items()}
-        self.actions = torch.cat(self.actions_buf, dim=0)
-        self.logprobs = torch.cat(self.logprobs_buf, dim=0)
-        self.rewards = torch.cat(self.rewards_buf, dim=0)
-        self.values = torch.cat(self.values_buf, dim=0)
-        self.dones = torch.cat(self.dones_buf, dim=0)
-
-        T = self.rewards.shape[0]
-        if T == 0:
-            self.advantages = torch.tensor([], device=self.device)
-            self.returns = torch.tensor([], device=self.device)
-            return
-
-        advantages = torch.zeros_like(self.rewards)
-        lastgaelam = 0.0
-        for t in reversed(range(T)):
-            if t == T - 1:
-                # For the last timestep, use the externally provided next_done flag.
-                next_non_terminal = 1.0 - next_done.float()
-                next_val = next_value
-            else:
-                next_non_terminal = 1.0 - self.dones[t + 1].float()
-                next_val = self.values[t + 1]
-            delta = (
-                self.rewards[t] + gamma * next_val * next_non_terminal - self.values[t]
-            )
-            lastgaelam = delta + gamma * gae_lambda * next_non_terminal * lastgaelam
-            advantages[t] = lastgaelam
-
-        self.advantages = advantages
-        self.returns = advantages + self.values
-
-    def reset(self):
-        from collections import defaultdict
-
-        self.obs_buff = defaultdict(list)
-        self.actions_buf = []
-        self.logprobs_buf = []
-        self.rewards_buf = []
-        self.values_buf = []
-        self.dones_buf = []
-        self.obs = None
-        self.actions = None
-        self.logprobs = None
-        self.rewards = None
-        self.values = None
-        self.dones = None
-
-        self.advantages = None
-        self.returns = None
-
-
-class MultiAgentBuffer:
-    """
-    Maintains a separate PPOBuffer for each (env, player) pair.
-    """
-
-    def __init__(self, device: str, num_envs: int, num_players: int = 2):
-        self.device = device
-        self.num_envs = num_envs
-        self.num_players = num_players
-        self.buffers = {
-            (env_idx, pid): PPOBuffer(device)
-            for env_idx in range(num_envs)
-            for pid in range(num_players)
-        }
-
-    def store(
-        self,
-        obs: dict,
-        action: torch.Tensor,
-        reward: torch.Tensor,
-        value: torch.Tensor,
-        logprob: torch.Tensor,
-        done: torch.Tensor,
-        actor_ids: torch.Tensor,
-    ) -> None:
-        # For each environment in the batch, store the transition in the buffer for the acting player.
-        num_envs = action.shape[0]
-        for i in range(num_envs):
-            pid = int(actor_ids[i].item())
-            key = (i, pid)
-            single_obs = {k: v[i] for k, v in obs.items()}
-            self.buffers[key].store(
-                single_obs, action[i], reward[i], value[i], logprob[i], done[i]
-            )
-
-    def compute_advantages(
-        self,
-        next_values: torch.Tensor,
-        next_dones: torch.Tensor,
-        gamma: float,
-        gae_lambda: float,
-    ):
-        """
-        Compute advantages for each (env, player) buffer.
-        next_values: tensor of shape (num_envs,) for each environment.
-        next_dones: tensor of shape (num_envs,) for each environment.
-        """
-        for env in range(self.num_envs):
-            for pid in range(self.num_players):
-                buf = self.buffers[(env, pid)]
-                if len(buf.actions_buf) == 0:
-                    continue
-                bootstrap_value = (
-                    next_values[env]
-                    if not next_dones[env].item()
-                    else torch.tensor(0.0, device=self.device)
-                )
-                buf.compute_advantages(
-                    gamma, gae_lambda, bootstrap_value, next_dones[env]
-                )
-
-    def get_flattened(
-        self,
-    ) -> Tuple[
-        Dict[str, torch.Tensor],
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-    ]:
-        """
-        Flatten transitions from all (env, player) buffers into a single batch.
-        Returns:
-          merged_obs, merged_logprobs, merged_actions, merged_advantages, merged_returns, merged_values
-        """
-        all_obs = []
-        all_logprobs = []
-        all_actions = []
-        all_advantages = []
-        all_returns = []
-        all_values = []
-
-        for buf in self.buffers.values():
-            assert buf.obs is not None
-            assert buf.actions is not None
-            assert buf.logprobs is not None
-            assert buf.values is not None
-            assert buf.advantages is not None
-            assert buf.returns is not None
-
-            if len(buf.actions) == 0:
-                continue
-            all_obs.append(buf.obs)
-            all_logprobs.append(buf.logprobs)
-            all_actions.append(buf.actions)
-            all_advantages.append(buf.advantages)
-            all_returns.append(buf.returns)
-            all_values.append(buf.values)
-
-        if not all_obs:
-            raise ValueError("No valid transitions found in any buffer.")
-
-        merged_obs = {}
-        for k in all_obs[0].keys():
-            merged_obs[k] = torch.cat([obs[k] for obs in all_obs], dim=0)
-
-        merged_logprobs = torch.cat(all_logprobs, dim=0)
-        merged_actions = torch.cat(all_actions, dim=0)
-        merged_advantages = torch.cat(all_advantages, dim=0)
-        merged_returns = torch.cat(all_returns, dim=0)
-        merged_values = torch.cat(all_values, dim=0)
-
-        return (
-            merged_obs,
-            merged_logprobs,
-            merged_actions,
-            merged_advantages,
-            merged_returns,
-            merged_values,
-        )
-
-    def reset(self):
-        for buf in self.buffers.values():
-            buf.reset()
-
-
-# -----------------------------------------------------------------------------
 # Trainer Class
 # -----------------------------------------------------------------------------
 
@@ -271,10 +56,9 @@ class Trainer:
     PPO Trainer for manabot.
 
     Implements the training loop:
-      1. Collect trajectories using vectorized environments.
-      2. Compute advantages per (env, player) buffer.
-      3. Merge buffers for a unified policy update.
-      4. Run multiple update epochs with detailed logging.
+      1. Collect trajectories into flat rollout tensors.
+      2. Compute advantages with standard GAE.
+      3. Flatten to a deterministic batch and run PPO updates.
 
     Also provides checkpoint saving/loading functionality.
     """
@@ -300,9 +84,6 @@ class Trainer:
 
         self.logger = getLogger(__name__)
 
-        self.multi_buffer = MultiAgentBuffer(
-            experiment.device, hypers.num_envs, num_players=2
-        )
         self.consecutive_invalid_batches = 0
         self.invalid_batch_threshold = 5
         self.wandb = self.experiment.wandb_run
@@ -336,8 +117,6 @@ class Trainer:
             next_obs, _ = env.reset()
             next_done = torch.zeros(hypers.num_envs, dtype=torch.bool, device=device)
 
-            prev_actor_ids = manabot.env.observation.get_agent_indices(next_obs)
-
             self.save()
             for update in range(1, num_updates + 1):
                 if hypers.anneal_lr:
@@ -350,8 +129,15 @@ class Trainer:
                     current_lr = self.optimizer.param_groups[0]["lr"]
                     self.logger.info(f"Update {update}: LR = {current_lr}")
 
-                self.multi_buffer.reset()
                 self._reset_rollout_health_update()
+                (
+                    obs_buf,
+                    actions_buf,
+                    logprobs_buf,
+                    rewards_buf,
+                    dones_buf,
+                    values_buf,
+                ) = self._init_rollout_buffers(next_obs)
 
                 self.logger.info("Starting rollout data collection.")
                 if self.wandb:
@@ -369,10 +155,22 @@ class Trainer:
                 with self.profiler.track("rollout"):
                     with self.profiler.track("step"):
                         for step in range(hypers.num_steps):
+                            for key in obs_buf:
+                                obs_buf[key][step] = next_obs[key]
                             try:
-                                next_obs, next_done, prev_actor_ids = (
-                                    self._rollout_step(next_obs, prev_actor_ids)
-                                )
+                                (
+                                    next_obs,
+                                    reward,
+                                    next_done,
+                                    action,
+                                    logprob,
+                                    value,
+                                ) = self._rollout_step(next_obs)
+                                actions_buf[step] = action
+                                logprobs_buf[step] = logprob
+                                rewards_buf[step] = reward
+                                dones_buf[step] = next_done
+                                values_buf[step] = value
                                 self.consecutive_invalid_batches = 0
                             except Exception as e:
                                 self.consecutive_invalid_batches += 1
@@ -393,20 +191,28 @@ class Trainer:
                     with self.profiler.track("advantage"):
                         with torch.no_grad():
                             next_value = self.agent.get_value(next_obs)
-                        self.multi_buffer.compute_advantages(
-                            next_value, next_done, hypers.gamma, hypers.gae_lambda
+                        advantages, returns = self._compute_gae(
+                            rewards_buf,
+                            values_buf,
+                            dones_buf,
+                            next_value,
+                            next_done,
+                            hypers.gamma,
+                            hypers.gae_lambda,
                         )
-
-                        try:
-                            obs, logprobs, actions, advantages, returns, values = (
-                                self.multi_buffer.get_flattened()
+                        obs, logprobs, actions, advantages, returns, values = (
+                            self._flatten_rollout(
+                                obs_buf,
+                                actions_buf,
+                                logprobs_buf,
+                                advantages,
+                                returns,
+                                values_buf,
                             )
-                            self.logger.info(
-                                f"Flattened buffer has {logprobs.numel()} transitions."
-                            )
-                        except ValueError as e:
-                            self.logger.error(f"No valid transitions in buffers: {e}")
-                            raise
+                        )
+                        self.logger.info(
+                            f"Flattened buffer has {logprobs.numel()} transitions."
+                        )
 
                 self._log_rollout_health(update)
 
@@ -489,18 +295,21 @@ class Trainer:
                     )
                     self.save()
 
-                self.logger.info(
-                    f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}"
-                )
-
             self.save()
             env.close()
             self.experiment.close()
             self.logger.info("Training completed.")
 
     def _rollout_step(
-        self, next_obs: Dict[str, torch.Tensor], actor_ids: torch.Tensor
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        self, next_obs: Dict[str, torch.Tensor]
+    ) -> Tuple[
+        Dict[str, torch.Tensor],
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
         with torch.no_grad():
             action, logprob, _, value = self.agent.get_action_and_value(next_obs)
 
@@ -529,12 +338,107 @@ class Trainer:
         if not self._validate_obs(new_obs):
             raise RuntimeError("Invalid observation format detected; halting training.")
 
-        self.multi_buffer.store(
-            next_obs, action, reward, value, logprob, done, actor_ids
+        self.logger.debug("Rollout step completed.")
+        return new_obs, reward, done, action, logprob, value
+
+    def _init_rollout_buffers(
+        self, sample_obs: Dict[str, torch.Tensor]
+    ) -> Tuple[
+        Dict[str, torch.Tensor],
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        num_steps = self.hypers.num_steps
+        num_envs = self.hypers.num_envs
+        obs_buf = {
+            key: torch.zeros(
+                (num_steps, *value.shape), dtype=value.dtype, device=value.device
+            )
+            for key, value in sample_obs.items()
+        }
+        actions_buf = torch.zeros(
+            (num_steps, num_envs), dtype=torch.int64, device=self.experiment.device
         )
-        new_actor_ids = manabot.env.observation.get_agent_indices(new_obs)
-        self.logger.debug(f"Rollout step completed; new actor_ids: {new_actor_ids}")
-        return new_obs, done, new_actor_ids
+        logprobs_buf = torch.zeros(
+            (num_steps, num_envs), dtype=torch.float32, device=self.experiment.device
+        )
+        rewards_buf = torch.zeros(
+            (num_steps, num_envs), dtype=torch.float32, device=self.experiment.device
+        )
+        dones_buf = torch.zeros(
+            (num_steps, num_envs), dtype=torch.bool, device=self.experiment.device
+        )
+        values_buf = torch.zeros(
+            (num_steps, num_envs), dtype=torch.float32, device=self.experiment.device
+        )
+        return obs_buf, actions_buf, logprobs_buf, rewards_buf, dones_buf, values_buf
+
+    def _compute_gae(
+        self,
+        rewards: torch.Tensor,
+        values: torch.Tensor,
+        dones: torch.Tensor,
+        next_value: torch.Tensor,
+        next_done: torch.Tensor,
+        gamma: float,
+        gae_lambda: float,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        advantages = torch.zeros_like(rewards)
+        lastgaelam = torch.zeros(
+            rewards.shape[1], dtype=torch.float32, device=rewards.device
+        )
+        next_value = next_value.view(-1)
+
+        for t in reversed(range(self.hypers.num_steps)):
+            if t == self.hypers.num_steps - 1:
+                next_non_terminal = 1.0 - next_done.float()
+                next_values = next_value
+            else:
+                next_non_terminal = 1.0 - dones[t + 1].float()
+                next_values = values[t + 1]
+
+            delta = rewards[t] + gamma * next_values * next_non_terminal - values[t]
+            lastgaelam = delta + gamma * gae_lambda * next_non_terminal * lastgaelam
+            advantages[t] = lastgaelam
+
+        returns = advantages + values
+        return advantages, returns
+
+    def _flatten_rollout(
+        self,
+        obs_buf: Dict[str, torch.Tensor],
+        actions_buf: torch.Tensor,
+        logprobs_buf: torch.Tensor,
+        advantages_buf: torch.Tensor,
+        returns_buf: torch.Tensor,
+        values_buf: torch.Tensor,
+    ) -> Tuple[
+        Dict[str, torch.Tensor],
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        flattened_obs = {
+            key: value.reshape((-1, *value.shape[2:])) for key, value in obs_buf.items()
+        }
+        flattened_logprobs = logprobs_buf.reshape(-1)
+        flattened_actions = actions_buf.reshape(-1)
+        flattened_advantages = advantages_buf.reshape(-1)
+        flattened_returns = returns_buf.reshape(-1)
+        flattened_values = values_buf.reshape(-1)
+        return (
+            flattened_obs,
+            flattened_logprobs,
+            flattened_actions,
+            flattened_advantages,
+            flattened_returns,
+            flattened_values,
+        )
 
     def _reset_rollout_health_update(self) -> None:
         for key in ROLLOUT_HEALTH_KEYS:
@@ -998,6 +902,7 @@ def main(cfg: DictConfig) -> None:
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
+    opponent_policy = build_opponent_policy(hypers.train.opponent_policy)
 
     # Create environment and agent
     env = VectorEnv(
@@ -1006,6 +911,7 @@ def main(cfg: DictConfig) -> None:
         observation_space,
         reward,
         device=experiment.device,
+        opponent_policy=opponent_policy,
     )
     agent = Agent(observation_space, hypers.agent)
 
