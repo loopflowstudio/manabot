@@ -220,7 +220,7 @@ def test_statistical_metrics():
     print("Expected p95:", expected_p95)
     print("Profiler reported for 'test_node':", test_stats)
 
-    tol = 0.01  # Tolerance in seconds.
+    tol = 0.015  # Tolerance in seconds (sleep overshoot on macOS).
     assert (
         abs(test_stats["min"] - expected_min) < tol
     ), f"min mismatch: expected {expected_min}, got {test_stats['min']}"
