@@ -5,8 +5,8 @@ Environment wrapper around the C++ managym.Env that conforms to the Gymnasium AP
 
 from typing import Any, Dict, Optional, Tuple
 
-from gymnasium import spaces
 import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 import torch
 
@@ -174,14 +174,14 @@ class VectorEnv:
         opponent_policy: Optional[Any] = None,
     ):
         if opponent_policy is None:
-            make_env = lambda: Env(match, observation_space, reward, auto_reset=True)
+
+            def make_env():
+                return Env(match, observation_space, reward, auto_reset=True)
         else:
-            # Local directory imports
             from .single_agent_env import SingleAgentEnv
 
-            make_env = lambda: SingleAgentEnv(
-                match, observation_space, reward, opponent_policy
-            )
+            def make_env():
+                return SingleAgentEnv(match, observation_space, reward, opponent_policy)
 
         self._env = gym.vector.AsyncVectorEnv(
             [make_env for _ in range(num_envs)],
@@ -204,7 +204,9 @@ class VectorEnv:
         obs_tuple, info = self._env.reset(seed=seed, options=options)
         return self._process_obs(obs_tuple), info
 
-    def step(self, actions: torch.Tensor) -> Tuple[
+    def step(
+        self, actions: torch.Tensor
+    ) -> Tuple[
         Dict[str, torch.Tensor],
         torch.Tensor,
         torch.Tensor,
@@ -249,31 +251,24 @@ class VectorEnv:
         )
 
     def _process_obs(
-        self, obs_tuple: Tuple[Dict[str, np.ndarray], ...]
+        self, obs_tuple: tuple[dict[str, np.ndarray], ...]
     ) -> Dict[str, torch.Tensor]:
         """
-        Convert tuple of observation dicts into dict of batched tensors.
+        Convert tuple of per-env observation dicts into dict of batched tensors.
 
-        Args:
-            obs_tuple: Tuple of length num_envs, where each element is a dict
-                      of observations for a single environment.
+        AsyncVectorEnv with shared_memory=False returns a tuple of dicts,
+        one per sub-environment.
 
         Returns:
             Dict where each value is a tensor with leading dimension num_envs.
         """
-        # Get keys from first observation
         keys = obs_tuple[0].keys()
-
-        # Initialize dict to store batched tensors
-        batched = {}
-
-        # For each key, stack the arrays and convert to tensor
-        for key in keys:
-            arrays = [obs[key] for obs in obs_tuple]
-            stacked = np.stack(arrays)
-            batched[key] = torch.tensor(stacked, dtype=torch.float32).to(self.device)
-
-        return batched
+        return {
+            key: torch.tensor(
+                np.stack([obs[key] for obs in obs_tuple]), dtype=torch.float32
+            ).to(self.device)
+            for key in keys
+        }
 
     def to(self, device: str) -> "VectorEnv":
         """

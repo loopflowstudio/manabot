@@ -73,16 +73,16 @@ def run_profile(games: int, seed: int):
     steps_per_sec = total_steps / wall_time
     avg_steps_per_game = total_steps / games
 
-    print(f"\n## Configuration")
+    print("\n## Configuration")
     print(f"- Games: {games}")
     print(f"- Seed: {seed}")
-    print(f"- Threads: 1")
-    print(f"- skip_trivial: True")
-    print(f"- enable_profiler: True")
-    print(f"- Deck: Grey Ogre mirror (Mountain x20, Grey Ogre x20)")
-    print(f"- Policy: random")
+    print("- Threads: 1")
+    print("- skip_trivial: True")
+    print("- enable_profiler: True")
+    print("- Deck: Grey Ogre mirror (Mountain x20, Grey Ogre x20)")
+    print("- Policy: random")
 
-    print(f"\n## Throughput")
+    print("\n## Throughput")
     print(f"- **Games/sec**: {games_per_sec:.2f}")
     print(f"- **Steps/sec**: {steps_per_sec:.2f}")
     print(f"- **Total steps**: {total_steps}")
@@ -100,11 +100,10 @@ def run_profile(games: int, seed: int):
         }
 
         env_step_time = env_step_paths.get("env_step", {}).get("total_time", 1.0)
-        env_step_count = env_step_paths.get("env_step", {}).get("count", 1)
 
-        print(f"\n## Time Breakdown")
-        print(f"\n| Component | Time | % of Total | Calls | Per-call |")
-        print(f"|-----------|------|------------|-------|----------|")
+        print("\n## Time Breakdown")
+        print("\n| Component | Time | % of Total | Calls | Per-call |")
+        print("|-----------|------|------------|-------|----------|")
 
         # Sort by path for consistent output
         sorted_paths = sorted(env_step_paths.keys())
@@ -119,7 +118,7 @@ def run_profile(games: int, seed: int):
             )
 
     # Raw output
-    print(f"\n## Raw Profiler Output")
+    print("\n## Raw Profiler Output")
     print("```")
     if "profiler" in final_info:
         env_step_items = {
@@ -131,10 +130,10 @@ def run_profile(games: int, seed: int):
 
     # Behavior stats if available
     if "behavior" in final_info and "hero" in final_info["behavior"]:
-        print(f"\n## Behavior Stats (Hero)")
+        print("\n## Behavior Stats (Hero)")
         behavior = final_info["behavior"]["hero"]
-        print(f"\n| Metric | Value |")
-        print(f"|--------|-------|")
+        print("\n| Metric | Value |")
+        print("|--------|-------|")
         for key, value in sorted(behavior.items()):
             print(f"| {key} | {value} |")
 

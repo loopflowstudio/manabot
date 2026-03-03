@@ -1,5 +1,3 @@
-import logging
-
 # Local directory imports
 from .experiment import Experiment
 from .hypers import (

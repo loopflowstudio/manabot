@@ -181,9 +181,9 @@ class TestObservationEncoder:
 
         # Verify all expected keys are present
         expected_keys = self.get_expected_keys()
-        assert (
-            set(encoded.keys()) == expected_keys
-        ), f"Keys mismatch. Missing: {expected_keys - set(encoded.keys())}"
+        assert set(encoded.keys()) == expected_keys, (
+            f"Keys mismatch. Missing: {expected_keys - set(encoded.keys())}"
+        )
 
         # Check shapes match specification
         for key in encoded:
@@ -201,9 +201,9 @@ class TestObservationEncoder:
         actual_cards = len(observation.agent_cards)
         expected_valid = min(actual_cards, hypers.max_cards_per_player)
         valid_sum = int(agent_cards_valid.sum())  # Convert to Python int for comparison
-        assert (
-            valid_sum == expected_valid
-        ), f"Expected {expected_valid} valid cards, got {valid_sum}"
+        assert valid_sum == expected_valid, (
+            f"Expected {expected_valid} valid cards, got {valid_sum}"
+        )
 
         # Verify invalid slots are zeroed
         for key in [
@@ -216,13 +216,13 @@ class TestObservationEncoder:
             invalid = ~encoded[valid_key].astype(bool)
             if np.any(invalid):
                 array_slice = encoded[key][invalid]
-                assert (
-                    array_slice == 0
-                ).all(), f"Non-zero values found in invalid {key} slots: {array_slice[array_slice != 0]}"
+                assert (array_slice == 0).all(), (
+                    f"Non-zero values found in invalid {key} slots: {array_slice[array_slice != 0]}"
+                )
 
     def test_object_index_mapping(self, observation_space, observation, hypers):
         """Test that object IDs are mapped to consistent indices."""
-        encoded = observation_space.encode(observation)
+        observation_space.encode(observation)
         mapping = observation_space.encoder.object_to_index
 
         # Find a sample card ID

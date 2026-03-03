@@ -29,9 +29,9 @@ class TestManagym:
         assert hasattr(obs, "agent"), "Observation missing 'agent' field"
         assert hasattr(obs, "opponent"), "Observation missing 'opponent' field"
         # Check that agent and opponent have different IDs
-        assert (
-            obs.agent.id != obs.opponent.id
-        ), "Agent and opponent must have different IDs"
+        assert obs.agent.id != obs.opponent.id, (
+            "Agent and opponent must have different IDs"
+        )
         # Also check turn and action_space fields exist
         assert hasattr(obs, "turn"), "Observation missing 'turn' field"
         assert hasattr(obs, "action_space"), "Observation missing 'action_space' field"
@@ -163,9 +163,9 @@ class TestManagym:
                 bf_count = obs.agent.zone_counts[managym.ZoneEnum.BATTLEFIELD]
             else:
                 bf_count = obs.opponent.zone_counts[managym.ZoneEnum.BATTLEFIELD]
-            assert (
-                bf_count >= 1
-            ), "Battlefield should have at least one card after playing a land"
+            assert bf_count >= 1, (
+                "Battlefield should have at least one card after playing a land"
+            )
 
         # Try casting a spell if available.
         cast_idx = find_action(obs, managym.ActionEnum.PRIORITY_CAST_SPELL)
@@ -193,7 +193,7 @@ class TestManagym:
             step_count += 1
 
         assert terminated, "Game should eventually terminate"
-        assert (
-            trivial >= 10
-        ), "There should be a number of trivial action spaces encountered"
+        assert trivial >= 10, (
+            "There should be a number of trivial action spaces encountered"
+        )
         assert step_count <= 2000, "Game should not exceed 2000 steps"

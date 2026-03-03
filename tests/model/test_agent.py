@@ -13,9 +13,8 @@ Each test aims to verify a specific aspect of the agent's behavior while
 maintaining robustness to architectural changes.
 """
 
-import copy
 import logging
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator
 
 import pytest
 import torch
@@ -120,10 +119,12 @@ def test_forward_pass_shapes(
     assert logits.shape == (
         batch_size,
         observation_space.encoder.max_actions,
-    ), f"Expected logits shape {(batch_size, observation_space.encoder.max_actions)}, got {logits.shape}"
-    assert value.shape == (
-        batch_size,
-    ), f"Expected value shape {(batch_size,)}, got {value.shape}"
+    ), (
+        f"Expected logits shape {(batch_size, observation_space.encoder.max_actions)}, got {logits.shape}"
+    )
+    assert value.shape == (batch_size,), (
+        f"Expected value shape {(batch_size,)}, got {value.shape}"
+    )
 
     # Check for any degenerate values
     assert not torch.isnan(logits).any(), "NaN in logits"
@@ -144,9 +145,9 @@ def test_gradient_flow(agent: Agent, real_observation: Dict[str, torch.Tensor]):
     for name, param in agent.named_parameters():
         assert param.grad is not None, f"No gradient for parameter {name}"
         assert not torch.isnan(param.grad).any(), f"NaN gradient in parameter {name}"
-        assert not torch.isinf(
-            param.grad
-        ).any(), f"Infinite gradient in parameter {name}"
+        assert not torch.isinf(param.grad).any(), (
+            f"Infinite gradient in parameter {name}"
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -191,9 +192,9 @@ def test_object_embeddings(
     # Invalid objects should have zero embeddings
     invalid_mask = ~validity.bool()
     if invalid_mask.any():
-        assert torch.all(
-            objects[invalid_mask] == 0
-        ), "Invalid objects should have zero embeddings"
+        assert torch.all(objects[invalid_mask] == 0), (
+            "Invalid objects should have zero embeddings"
+        )
 
 
 def test_attention_mechanism(agent: Agent, real_observation: Dict[str, torch.Tensor]):
@@ -205,17 +206,17 @@ def test_attention_mechanism(agent: Agent, real_observation: Dict[str, torch.Ten
     key_padding_mask = validity == 0
     attended = agent.attention(objects, is_agent, key_padding_mask=key_padding_mask)
 
-    assert (
-        attended.shape == objects.shape
-    ), f"Attention changed shape from {objects.shape} to {attended.shape}"
+    assert attended.shape == objects.shape, (
+        f"Attention changed shape from {objects.shape} to {attended.shape}"
+    )
     assert not torch.isnan(attended).any(), "NaN in attention output"
     assert not torch.isinf(attended).any(), "Inf in attention output"
 
     if key_padding_mask.any():
         masked_positions = key_padding_mask.unsqueeze(-1).expand_as(attended)
-        assert torch.all(
-            attended[masked_positions] == 0
-        ), "Attention leaked through mask"
+        assert torch.all(attended[masked_positions] == 0), (
+            "Attention leaked through mask"
+        )
 
 
 def test_focus_object_incorporation(
@@ -257,9 +258,9 @@ def test_focus_object_incorporation(
                 .expand(-1, obs["actions"].shape[1], agent.hypers.hidden_dim)
             )
             focus_embeddings = actions_with_focus[..., focus_slice]
-            assert torch.all(
-                focus_embeddings[invalid_positions] == 0
-            ), f"Invalid focus index {i} produced non-zero embedding"
+            assert torch.all(focus_embeddings[invalid_positions] == 0), (
+                f"Invalid focus index {i} produced non-zero embedding"
+            )
 
 
 # -----------------------------------------------------------------------------
@@ -277,9 +278,9 @@ def test_action_masking(agent: Agent, real_observation: Dict[str, torch.Tensor])
     batch_size = action_mask.shape[0]
     for i in range(batch_size):
         chosen_action = action[i].item()
-        assert (
-            action_mask[i, chosen_action].item() == 1
-        ), f"Selected invalid action {chosen_action} in batch {i}"
+        assert action_mask[i, chosen_action].item() == 1, (
+            f"Selected invalid action {chosen_action} in batch {i}"
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -296,9 +297,9 @@ def test_value_estimate_range(agent: Agent, real_observation: Dict[str, torch.Te
         _, value = agent(obs)
     assert not torch.isnan(value).any(), "NaN in value estimates"
     assert not torch.isinf(value).any(), "Inf in value estimates"
-    assert torch.all(value > -1000) and torch.all(
-        value < 1000
-    ), "Value estimates outside reasonable range"
+    assert torch.all(value > -1000) and torch.all(value < 1000), (
+        "Value estimates outside reasonable range"
+    )
 
 
 def test_probability_distribution(
@@ -315,16 +316,16 @@ def test_probability_distribution(
     assert not torch.isinf(probs).any(), "Inf in probabilities"
     assert torch.all(probs >= 0), "Negative probabilities found"
     prob_sums = probs.sum(dim=-1)
-    assert torch.allclose(
-        prob_sums, torch.ones_like(prob_sums)
-    ), "Probabilities do not sum to 1"
+    assert torch.allclose(prob_sums, torch.ones_like(prob_sums)), (
+        "Probabilities do not sum to 1"
+    )
 
     valid_mask = obs["actions_valid"].bool()
     invalid_mask = ~valid_mask
     if invalid_mask.any():
-        assert torch.all(
-            probs[invalid_mask] == 0
-        ), "Non-zero probability for invalid actions"
+        assert torch.all(probs[invalid_mask] == 0), (
+            "Non-zero probability for invalid actions"
+        )
 
 
 def test_policy_head_initial_logits(agent: Agent):
@@ -346,9 +347,9 @@ def test_attention_stability(agent: Agent, real_observation: Dict[str, torch.Ten
         attended = agent.attention(objects, is_agent, key_padding_mask=key_padding_mask)
         outputs.append(attended)
     for i in range(1, len(outputs)):
-        assert torch.allclose(
-            outputs[0], outputs[i], rtol=1e-5
-        ), "Attention outputs not consistent across forward passes"
+        assert torch.allclose(outputs[0], outputs[i], rtol=1e-5), (
+            "Attention outputs not consistent across forward passes"
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -366,9 +367,9 @@ def test_policy_output_consistency(
     with torch.no_grad():
         logits_direct, value_direct = agent(obs)
         _, _, _, value_action = agent.get_action_and_value(obs)
-    assert torch.allclose(
-        value_direct, value_action
-    ), "Inconsistent values between forward and get_action_and_value"
+    assert torch.allclose(value_direct, value_action), (
+        "Inconsistent values between forward and get_action_and_value"
+    )
 
 
 def test_action_entropy(agent: Agent, real_observation: Dict[str, torch.Tensor]):
@@ -381,9 +382,9 @@ def test_action_entropy(agent: Agent, real_observation: Dict[str, torch.Tensor])
     assert torch.all(entropy >= 0), "Negative entropy found"
     valid_actions = obs["actions_valid"].sum(dim=-1)
     max_entropy = torch.log(valid_actions)
-    assert torch.all(
-        entropy <= max_entropy + 1e-5
-    ), "Entropy exceeds theoretical maximum"
+    assert torch.all(entropy <= max_entropy + 1e-5), (
+        "Entropy exceeds theoretical maximum"
+    )
 
 
 def test_categorical_logits(

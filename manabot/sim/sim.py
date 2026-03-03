@@ -11,8 +11,6 @@ This module provides:
 
 from collections import Counter, defaultdict
 from enum import Enum
-import logging
-import os
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -551,8 +549,6 @@ def simulate_models(
             with completed_lock:
                 if completed_games >= sim_hypers.num_games:
                     break
-                # Claim this game
-                game_id = completed_games
                 completed_games += 1
 
             # Simulate a single game

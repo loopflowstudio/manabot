@@ -79,7 +79,6 @@ class Experiment:
     def _setup_tracking(self):
         """Setup experiment tracking with wandb."""
         run_name = f"{self.exp_name}__{self.seed}__{int(time.time())}"
-        run_dir = self.runs_dir / run_name
 
         if self.wandb_on:
             try:

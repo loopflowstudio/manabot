@@ -4,7 +4,6 @@ test_env.py
 
 import logging
 
-import numpy as np
 import pytest
 import torch
 
@@ -74,9 +73,9 @@ class TestEnvironment:
         """Test basic environment initialization."""
         obs, info = env.reset()
         assert isinstance(obs, dict), "Observation should be a dictionary"
-        assert all(
-            isinstance(v, (int, float, bool, dict)) for v in info.values()
-        ), "Info values should be basic Python types"
+        assert all(isinstance(v, (int, float, bool, dict)) for v in info.values()), (
+            "Info values should be basic Python types"
+        )
 
     def test_step_types(self, env):
         """Test types of environment step outputs."""
@@ -105,12 +104,12 @@ class TestEnvironment:
                 f"Step {steps_taken}: Got reward {reward}, terminated={terminated}"
             )
             steps_taken += 1
-            assert isinstance(
-                reward, float
-            ), f"Invalid reward type at step {steps_taken}"
-            assert not (
-                terminated and truncated
-            ), "Cannot be both terminated and truncated"
+            assert isinstance(reward, float), (
+                f"Invalid reward type at step {steps_taken}"
+            )
+            assert not (terminated and truncated), (
+                "Cannot be both terminated and truncated"
+            )
 
             if steps_taken % 1000 == 0:
                 print(f"Game still running after {steps_taken} steps...")
@@ -126,9 +125,9 @@ class TestEnvironment:
 
         for step in range(steps):
             next_obs, reward, done, truncated, info = env.step(0)
-            assert set(next_obs.keys()) == set(
-                obs.keys()
-            ), f"Observation keys changed at step {step}"
+            assert set(next_obs.keys()) == set(obs.keys()), (
+                f"Observation keys changed at step {step}"
+            )
             obs = next_obs
 
             if done or truncated:
@@ -225,9 +224,9 @@ class TestEnvironment:
             raw_obs = env.last_cpp_obs
             cpp_player_idx = raw_obs.agent.player_index
 
-            assert (
-                actor_idx == cpp_player_idx
-            ), f"Actor index {actor_idx} doesn't match managym player index {cpp_player_idx}"
+            assert actor_idx == cpp_player_idx, (
+                f"Actor index {actor_idx} doesn't match managym player index {cpp_player_idx}"
+            )
 
             # Record the turn count.
             turn_counts[actor_idx] = turn_counts.get(actor_idx, 0) + 1
@@ -244,9 +243,9 @@ class TestEnvironment:
                 break
 
         print(f"Agent turn counts: {turn_counts}")
-        assert (
-            len(turn_counts) >= 2
-        ), f"Expected at least 2 different agent indices, got {turn_counts}"
+        assert len(turn_counts) >= 2, (
+            f"Expected at least 2 different agent indices, got {turn_counts}"
+        )
 
 
 if __name__ == "__main__":

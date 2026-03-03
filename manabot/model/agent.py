@@ -2,13 +2,10 @@
 agent.py
 """
 
-import logging
-import os
 from typing import Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 # Local imports
 from manabot.env import ObservationSpace
@@ -407,7 +404,7 @@ class GameObjectAttention(nn.Module):
         post_norm = self.norm2(x + mlp_out)
         log.debug(f"[SHAPES] After second normalization: {post_norm.shape}")
 
-        mask = (~key_padding_mask).unsqueeze(-1).float()  # shape: [B, 302, 1]
+        mask = (~key_padding_mask).unsqueeze(-1).float()
         post_norm = post_norm * mask  # broadcasting over last dim works correctly
 
         # Use expanded mask for the assertion to ensure the masked positions are truly zero.
@@ -419,7 +416,9 @@ class GameObjectAttention(nn.Module):
         return post_norm
 
 
-def layer_init(layer: nn.Module, gain: int = 1, bias_const: float = 0.0) -> nn.Module:
+def layer_init(
+    layer: nn.Module, gain: float = 1.0, bias_const: float = 0.0
+) -> nn.Module:
     torch.nn.init.orthogonal_(layer.weight, gain)
     torch.nn.init.constant_(layer.bias, bias_const)
     getLogger(__name__).debug(

@@ -40,7 +40,6 @@ from manabot.model.agent import Agent
 manabot.infra.hypers.initialize()
 
 ROLLOUT_HEALTH_KEYS = (
-    "skipped_steps",
     "truncated_episodes",
     "action_space_truncations",
 )
@@ -84,8 +83,6 @@ class Trainer:
 
         self.logger = getLogger(__name__)
 
-        self.consecutive_invalid_batches = 0
-        self.invalid_batch_threshold = 5
         self.wandb = self.experiment.wandb_run
         self.rollout_health = self._new_rollout_health()
         self.rollout_health_update = self._new_rollout_health()
@@ -157,36 +154,19 @@ class Trainer:
                         for step in range(hypers.num_steps):
                             for key in obs_buf:
                                 obs_buf[key][step] = next_obs[key]
-                            try:
-                                (
-                                    next_obs,
-                                    reward,
-                                    next_done,
-                                    action,
-                                    logprob,
-                                    value,
-                                ) = self._rollout_step(next_obs)
-                                actions_buf[step] = action
-                                logprobs_buf[step] = logprob
-                                rewards_buf[step] = reward
-                                dones_buf[step] = next_done
-                                values_buf[step] = value
-                                self.consecutive_invalid_batches = 0
-                            except Exception as e:
-                                self.consecutive_invalid_batches += 1
-                                self._increment_rollout_health("skipped_steps", 1)
-                                self.logger.error(
-                                    f"Rollout step error at step {step}: {e}"
-                                )
-                                if (
-                                    self.consecutive_invalid_batches
-                                    >= self.invalid_batch_threshold
-                                ):
-                                    raise RuntimeError(
-                                        f"Failure during rollout; halting training: {e}"
-                                    )
-                                else:
-                                    self.logger.error("Skipping faulty rollout step.")
+                            (
+                                next_obs,
+                                reward,
+                                next_done,
+                                action,
+                                logprob,
+                                value,
+                            ) = self._rollout_step(next_obs)
+                            actions_buf[step] = action
+                            logprobs_buf[step] = logprob
+                            rewards_buf[step] = reward
+                            dones_buf[step] = next_done
+                            values_buf[step] = value
 
                     with self.profiler.track("advantage"):
                         with torch.no_grad():
@@ -247,6 +227,7 @@ class Trainer:
                                 mb_advantages,
                                 mb_returns,
                                 mb_values,
+                                log_gradients=(update % 10 == 0),
                             )
                             clipfracs.append(clip_fraction)
 
@@ -300,7 +281,9 @@ class Trainer:
             self.experiment.close()
             self.logger.info("Training completed.")
 
-    def _rollout_step(self, next_obs: Dict[str, torch.Tensor]) -> Tuple[
+    def _rollout_step(
+        self, next_obs: Dict[str, torch.Tensor]
+    ) -> Tuple[
         Dict[str, torch.Tensor],
         torch.Tensor,
         torch.Tensor,
@@ -339,7 +322,9 @@ class Trainer:
         self.logger.debug("Rollout step completed.")
         return new_obs, reward, done, action, logprob, value
 
-    def _init_rollout_buffers(self, sample_obs: Dict[str, torch.Tensor]) -> Tuple[
+    def _init_rollout_buffers(
+        self, sample_obs: Dict[str, torch.Tensor]
+    ) -> Tuple[
         Dict[str, torch.Tensor],
         torch.Tensor,
         torch.Tensor,
@@ -514,6 +499,7 @@ class Trainer:
         advantages: torch.Tensor,
         returns: torch.Tensor,
         values: torch.Tensor,
+        log_gradients: bool = False,
     ) -> Tuple[float, float]:
         hypers = self.hypers
         _, new_logprobs, entropy, new_values = self.agent.get_action_and_value(
@@ -545,123 +531,10 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
 
-        # Gradient norm monitoring
-        total_grad_norm = 0.0
-        layer_grad_norms = {}
-
-        # Group parameters by layer type for more helpful analysis
-        embedding_grad_norm = 0.0
-        attention_grad_norm = 0.0
-        policy_head_grad_norm = 0.0
-        value_head_grad_norm = 0.0
-        other_grad_norm = 0.0
-
-        # Log per-layer gradient norms
-        for name, param in self.agent.named_parameters():
-            if param.grad is not None:
-                grad_norm = param.grad.detach().data.norm(2).item()
-                layer_grad_norms[name] = grad_norm
-                total_grad_norm += grad_norm**2
-
-                # Categorize gradients by component
-                if (
-                    "player_embedding" in name
-                    or "card_embedding" in name
-                    or "perm_embedding" in name
-                ):
-                    embedding_grad_norm += grad_norm**2
-                elif "attention" in name:
-                    attention_grad_norm += grad_norm**2
-                elif "policy_head" in name:
-                    policy_head_grad_norm += grad_norm**2
-                elif "value_head" in name:
-                    value_head_grad_norm += grad_norm**2
-                else:
-                    other_grad_norm += grad_norm**2
-
-        total_grad_norm = total_grad_norm**0.5
-        embedding_grad_norm = embedding_grad_norm**0.5
-        attention_grad_norm = attention_grad_norm**0.5
-        policy_head_grad_norm = policy_head_grad_norm**0.5
-        value_head_grad_norm = value_head_grad_norm**0.5
-        other_grad_norm = other_grad_norm**0.5
-
-        # Get largest and smallest non-zero gradient norm for outlier detection
-        non_zero_norms = [norm for norm in layer_grad_norms.values() if norm > 0]
-        if non_zero_norms:
-            max_layer_norm = max(non_zero_norms)
-            min_layer_norm = min(non_zero_norms)
-            max_to_min_ratio = (
-                max_layer_norm / min_layer_norm if min_layer_norm > 0 else float("inf")
-            )
-        else:
-            max_layer_norm = 0
-            min_layer_norm = 0
-            max_to_min_ratio = 0
-
-        # Log all gradient information
-        self.logger.info(f"Total gradient norm: {total_grad_norm:.4f}")
-
-        # Log if any concerning gradient patterns are detected
-        if total_grad_norm > 10.0:
-            self.logger.warning(
-                f"Potentially exploding gradient: {total_grad_norm:.4f}"
-            )
-        elif total_grad_norm < 1e-4:
-            self.logger.warning(
-                f"Potentially vanishing gradient: {total_grad_norm:.4f}"
-            )
-
-        if max_to_min_ratio > 1000:
-            self.logger.warning(
-                f"Extreme gradient imbalance: max/min ratio = {max_to_min_ratio:.2f}"
-            )
-
-        # Log the top 5 highest gradient norms for detailed debugging
-        if layer_grad_norms:
-            top_grads = sorted(
-                layer_grad_norms.items(), key=lambda x: x[1], reverse=True
-            )[:5]
-            self.logger.debug("Top 5 highest gradient norms:")
-            for name, norm in top_grads:
-                self.logger.debug(f"  {name}: {norm:.6f}")
-
-        # Log to wandb if available
-        if self.wandb:
-            gradient_metrics = {
-                "gradients/total_norm": total_grad_norm,
-                "gradients/embedding_norm": embedding_grad_norm,
-                "gradients/attention_norm": attention_grad_norm,
-                "gradients/policy_head_norm": policy_head_grad_norm,
-                "gradients/value_head_norm": value_head_grad_norm,
-                "gradients/other_norm": other_grad_norm,
-                "gradients/max_layer_norm": max_layer_norm,
-                "gradients/min_layer_norm": min_layer_norm,
-                "gradients/max_to_min_ratio": max_to_min_ratio,
-            }
-            self.wandb.log(gradient_metrics, step=self.global_step)
-
         nn.utils.clip_grad_norm_(self.agent.parameters(), hypers.max_grad_norm)
 
-        clipped_total_grad_norm = 0.0
-        for param in self.agent.parameters():
-            if param.grad is not None:
-                clipped_total_grad_norm += param.grad.detach().data.norm(2).item() ** 2
-        clipped_total_grad_norm = clipped_total_grad_norm**0.5
-
-        if clipped_total_grad_norm < total_grad_norm and self.wandb:
-            self.wandb.log(
-                {
-                    "gradients/pre_clip_norm": total_grad_norm,
-                    "gradients/post_clip_norm": clipped_total_grad_norm,
-                    "gradients/clip_ratio": (
-                        clipped_total_grad_norm / total_grad_norm
-                        if total_grad_norm > 0
-                        else 0
-                    ),
-                },
-                step=self.global_step,
-            )
+        if log_gradients:
+            self._log_gradient_norms()
 
         self.optimizer.step()
 
@@ -773,7 +646,7 @@ class Trainer:
         }
 
         # Log summary
-        self.logger.debug(f"Observation validity statistics:")
+        self.logger.debug("Observation validity statistics:")
         for key, count in validity_stats.items():
             self.logger.debug(f"  {key}: {count}")
 
@@ -782,10 +655,10 @@ class Trainer:
             validity_stats["agent_player_valid"] < 1
             or validity_stats["opponent_player_valid"] < 1
         ):
-            self.logger.warning(f"Missing valid players in observation!")
+            self.logger.warning("Missing valid players in observation!")
 
         if validity_stats["actions_valid"] < 1:
-            self.logger.warning(f"No valid actions in observation!")
+            self.logger.warning("No valid actions in observation!")
 
         # Log to wandb
         if self.wandb:
@@ -817,6 +690,96 @@ class Trainer:
             )
         self.wandb.log(metrics, step=self.global_step)
         self.logger.debug(f"Logged system metrics: {metrics}")
+
+    def _log_gradient_norms(self) -> None:
+        """Log per-component gradient norms. Called periodically, not every minibatch."""
+        layer_grad_norms = {}
+        total_grad_norm = 0.0
+        embedding_grad_norm = 0.0
+        attention_grad_norm = 0.0
+        policy_head_grad_norm = 0.0
+        value_head_grad_norm = 0.0
+        other_grad_norm = 0.0
+
+        for name, param in self.agent.named_parameters():
+            if param.grad is not None:
+                grad_norm = param.grad.detach().data.norm(2).item()
+                layer_grad_norms[name] = grad_norm
+                total_grad_norm += grad_norm**2
+
+                if (
+                    "player_embedding" in name
+                    or "card_embedding" in name
+                    or "perm_embedding" in name
+                ):
+                    embedding_grad_norm += grad_norm**2
+                elif "attention" in name:
+                    attention_grad_norm += grad_norm**2
+                elif "policy_head" in name:
+                    policy_head_grad_norm += grad_norm**2
+                elif "value_head" in name:
+                    value_head_grad_norm += grad_norm**2
+                else:
+                    other_grad_norm += grad_norm**2
+
+        total_grad_norm = total_grad_norm**0.5
+        embedding_grad_norm = embedding_grad_norm**0.5
+        attention_grad_norm = attention_grad_norm**0.5
+        policy_head_grad_norm = policy_head_grad_norm**0.5
+        value_head_grad_norm = value_head_grad_norm**0.5
+        other_grad_norm = other_grad_norm**0.5
+
+        non_zero_norms = [norm for norm in layer_grad_norms.values() if norm > 0]
+        if non_zero_norms:
+            max_layer_norm = max(non_zero_norms)
+            min_layer_norm = min(non_zero_norms)
+            max_to_min_ratio = (
+                max_layer_norm / min_layer_norm if min_layer_norm > 0 else float("inf")
+            )
+        else:
+            max_layer_norm = 0
+            min_layer_norm = 0
+            max_to_min_ratio = 0
+
+        self.logger.info(f"Total gradient norm (post-clip): {total_grad_norm:.4f}")
+
+        if total_grad_norm > 10.0:
+            self.logger.warning(
+                f"Potentially exploding gradient: {total_grad_norm:.4f}"
+            )
+        elif total_grad_norm < 1e-4:
+            self.logger.warning(
+                f"Potentially vanishing gradient: {total_grad_norm:.4f}"
+            )
+
+        if max_to_min_ratio > 1000:
+            self.logger.warning(
+                f"Extreme gradient imbalance: max/min ratio = {max_to_min_ratio:.2f}"
+            )
+
+        if layer_grad_norms:
+            top_grads = sorted(
+                layer_grad_norms.items(), key=lambda x: x[1], reverse=True
+            )[:5]
+            self.logger.debug("Top 5 highest gradient norms:")
+            for name, norm in top_grads:
+                self.logger.debug(f"  {name}: {norm:.6f}")
+
+        if self.wandb:
+            self.wandb.log(
+                {
+                    "gradients/total_norm": total_grad_norm,
+                    "gradients/embedding_norm": embedding_grad_norm,
+                    "gradients/attention_norm": attention_grad_norm,
+                    "gradients/policy_head_norm": policy_head_grad_norm,
+                    "gradients/value_head_norm": value_head_grad_norm,
+                    "gradients/other_norm": other_grad_norm,
+                    "gradients/max_layer_norm": max_layer_norm,
+                    "gradients/min_layer_norm": min_layer_norm,
+                    "gradients/max_to_min_ratio": max_to_min_ratio,
+                },
+                step=self.global_step,
+            )
 
     def save(self) -> None:
         if self.wandb is None:

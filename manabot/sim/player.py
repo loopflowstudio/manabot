@@ -96,7 +96,7 @@ def load_model_from_wandb(
 
         assert "observation_hypers" in hypers_dict
         obs_hypers = ObservationSpaceHypers(**hypers_dict["observation_hypers"])
-        logger.info(f"Using saved observation hyperparameters")
+        logger.info("Using saved observation hyperparameters")
 
         assert "agent_hypers" in hypers_dict
         agent_hypers = AgentHypers(**hypers_dict["agent_hypers"])
@@ -120,7 +120,7 @@ def load_model_from_wandb(
         if "global_step" in checkpoint:
             logger.info(f"Model was trained for {checkpoint['global_step']} steps")
 
-        logger.info(f"Successfully loaded model")
+        logger.info("Successfully loaded model")
         return agent
     except Exception as e:
         logger.error(f"Error loading model from wandb: {e}")

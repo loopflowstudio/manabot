@@ -6,7 +6,7 @@ Defines configuration for a Magic: The Gathering match between two players.
 from copy import deepcopy
 from dataclasses import dataclass
 import json
-from typing import Any, Dict
+from typing import Dict
 
 # Local imports
 from manabot.infra.hypers import MatchHypers, RewardHypers
