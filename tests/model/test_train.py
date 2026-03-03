@@ -16,7 +16,13 @@ import pytest
 import torch
 
 # Local imports
-from manabot.env import Match, ObservationSpace, Reward, VectorEnv, build_opponent_policy
+from manabot.env import (
+    Match,
+    ObservationSpace,
+    Reward,
+    VectorEnv,
+    build_opponent_policy,
+)
 from manabot.infra import (
     AgentHypers,
     Experiment,

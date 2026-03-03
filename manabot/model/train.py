@@ -300,9 +300,7 @@ class Trainer:
             self.experiment.close()
             self.logger.info("Training completed.")
 
-    def _rollout_step(
-        self, next_obs: Dict[str, torch.Tensor]
-    ) -> Tuple[
+    def _rollout_step(self, next_obs: Dict[str, torch.Tensor]) -> Tuple[
         Dict[str, torch.Tensor],
         torch.Tensor,
         torch.Tensor,
@@ -341,9 +339,7 @@ class Trainer:
         self.logger.debug("Rollout step completed.")
         return new_obs, reward, done, action, logprob, value
 
-    def _init_rollout_buffers(
-        self, sample_obs: Dict[str, torch.Tensor]
-    ) -> Tuple[
+    def _init_rollout_buffers(self, sample_obs: Dict[str, torch.Tensor]) -> Tuple[
         Dict[str, torch.Tensor],
         torch.Tensor,
         torch.Tensor,

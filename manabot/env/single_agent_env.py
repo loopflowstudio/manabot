@@ -8,7 +8,7 @@ from typing import Any, Optional
 import gymnasium as gym
 import numpy as np
 
-# Local imports
+# Local directory imports
 from .env import Env
 from .observation import ActionEnum
 

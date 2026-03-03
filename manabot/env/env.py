@@ -176,6 +176,7 @@ class VectorEnv:
         if opponent_policy is None:
             make_env = lambda: Env(match, observation_space, reward, auto_reset=True)
         else:
+            # Local directory imports
             from .single_agent_env import SingleAgentEnv
 
             make_env = lambda: SingleAgentEnv(
