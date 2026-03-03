@@ -16,7 +16,7 @@ the next.
 
 - Self-play training (comes after we can beat random)
 - Attention mechanism tuning (turn it off, prove learning without it)
-- Rust engine integration (parallel effort, this wave works with existing C++ engine)
+- Rust engine work (now on main; this wave builds on the Rust engine but doesn't modify it)
 - Distributed training / multi-GPU
 - Complex card interactions beyond vanilla creatures
 
