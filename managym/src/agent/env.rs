@@ -59,22 +59,19 @@ impl Env {
 
         let action_space = game
             .action_space()
-            .cloned()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
         let agent = action_space
             .player
             .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
-        let action = usize::try_from(action).map_err(|_| {
+        let action_count = action_space.actions.len();
+        let out_of_bounds = || {
             AgentError(format!(
-                "Action index {action} out of bounds: {}",
-                action_space.actions.len()
+                "Action index {action} out of bounds: {action_count}"
             ))
-        })?;
-        if action >= action_space.actions.len() {
-            return Err(AgentError(format!(
-                "Action index {action} out of bounds: {}",
-                action_space.actions.len()
-            )));
+        };
+        let action = usize::try_from(action).map_err(|_| out_of_bounds())?;
+        if action >= action_count {
+            return Err(out_of_bounds());
         }
 
         let done = game.step(action)?;
