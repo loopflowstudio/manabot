@@ -16,25 +16,27 @@ All pass, zero test modifications. CI enforces this on every PR.
 
 ## Current state
 
-The binding surface and build system are in place. Two predicted failure modes
-have been fixed on the branch:
+The binding surface and build system are in place. Several fixes derived from
+code review are on the branch but **untested against pytest**:
 
-**Fixed:**
+**Fixed (code review, not pytest-verified):**
 - Negative action index handling — `Env.step()` accepts `i64`, bounds-checks
   in Rust, raises `AgentError("Action index -1 out of bounds: N")`.
   (`env.rs`, `bindings.rs`)
 - Action space preservation after invalid step — `Game::step` no longer
-  consumes the action space on out-of-range actions. Two new engine tests
-  verify this. (`engine_tests.rs`)
+  consumes the action space on out-of-range actions. (`engine_tests.rs`)
+- Observation validation + player alternation — Rust integration tests added
+  for `observation_stays_valid_through_game` and
+  `agent_player_index_alternates`. Both pass. (`engine_tests.rs`)
 - CI workflow — `tests-result` rollup job, branch filtering, `workflow_dispatch`.
 
-**Not yet verified:** `pytest tests/env/ tests/agent/` has not been run against
-the Rust backend. The fixes above were derived from code review, not from
-running the tests.
+**Not yet verified:** `pytest tests/env/ tests/agent/` has not been run.
+The fixes above were derived from code review. Running the tests is the only
+way to know if they're correct and sufficient.
 
 Codebase facts:
 - `bindings.rs`: 877 lines — 10 data classes, 5 enums, AgentError exception
-- `cargo test`: 11 tests pass (3 unit, 8 integration)
+- `cargo test`: 10 tests pass (10 integration in `engine_tests.rs`)
 - Maturin `pyproject.toml` replaces scikit-build/pybind11
 - `__init__.pyi` stubs fixed (ZoneEnum STACK=4, EXILE=5)
 
@@ -49,17 +51,56 @@ Codebase facts:
    maturin develop --features python  # managym
    ```
 
-2. **Run tests, fix remaining failures.** `pytest tests/env/ tests/agent/ -v`
-   The two most likely failures are already fixed (see above). Remaining
-   predicted failure modes, ranked:
-   - Game behavior differences — Rust engine produces different game states
-     than C++ (card ordering, timing). Fix in engine Rust code.
-   - `test_agent_turns_distribution` — `player_index` encoding differs
-     between engines. Fix in `observation.rs` or `bindings.rs`.
-   - Field name mismatches in observation encoding.
-   - Build/import failures — module path, missing `__init__.py` re-exports.
+2. **Triage run.** `pytest tests/env/ tests/agent/ -v --tb=short 2>&1 | tee scratch/triage.log`
+   Run all tests before fixing anything. Classify failures into buckets:
 
-3. **Profiler parity.** Run the profiler smoke test to confirm
+   | Bucket | Example | Fix location |
+   |--------|---------|-------------|
+   | Import/build | `ModuleNotFoundError` | `pyproject.toml`, module layout |
+   | API mismatch | Missing attribute, wrong type | `bindings.rs` |
+   | Encoding mismatch | Wrong shape, NaN, wrong values | `observation.rs`, `bindings.rs` |
+   | Engine behavior | Wrong game state, validation failure | `game.rs`, `flow/`, `state/` |
+
+   Fix in dependency order: imports → API → encoding → engine behavior.
+   **Fix Rust code only, never test code** (wave constraint: zero test modifications).
+
+3. **Predicted failure surface** (ranked, from code review):
+
+   1. **Engine validation (HIGH).** `test_observation_validation` calls
+      `obs.validate()` every step — checks `owner_id` on cards, `controller_id`
+      on permanents, `is_agent` exactly one player. If `populate_cards` or
+      `populate_permanents` partition incorrectly (e.g., by controller instead
+      of owner for cards), validation returns `false`. Rust integration test
+      `observation_stays_valid_through_game` passes — but the Python validation
+      checks additional fields the Rust test may not cover.
+      Fix: `observation.rs` — `populate_cards`, `populate_permanents`.
+
+   2. **Player alternation (MEDIUM).** `test_agent_turns_distribution` needs
+      `agent.player_index` to take ≥2 distinct values. Rust integration test
+      `agent_player_index_alternates` passes. If the Python test still fails,
+      it's a binding conversion issue.
+      Fix: `env.rs` or `bindings.rs`.
+
+   3. **Play land / cast spell (MEDIUM).** `test_play_land_and_cast_spell`
+      searches for `PRIORITY_PLAY_LAND` and `PRIORITY_CAST_SPELL` actions.
+      **Warning:** assertions are inside `if land_idx is not None` — test
+      passes vacuously if action types aren't generated. Watch for false green.
+      Fix: `flow/priority.rs`.
+
+   4. **Game termination (LOW-MEDIUM).** Tests loop until `terminated`. If
+      engine has infinite priority cycling or combat damage bugs, tests hang at
+      step limit. Rust `full_game_loop_completes` passes, so likely OK.
+      Fix: `flow/` — combat damage, SBAs, player death.
+
+   5. **Info dict type check (LOW).** `test_initialization` checks value types.
+      Reset returns empty dict → `all()` on empty is True. Likely fine.
+
+   6. **AsyncVectorEnv subprocess import (LOW).** `test_vectorenv_tensor_outputs`
+      spawns 7 subprocess workers. If maturin module doesn't survive `fork()`,
+      fails with obscure errors. Test in isolation: `pytest -k test_vectorenv -s`
+      and check subprocess stderr.
+
+4. **Profiler parity.** Run the profiler smoke test to confirm
    `export_profile_baseline` and `compare_profile` work end-to-end through
    the Python API.
 
@@ -106,3 +147,6 @@ already correct.
   between C++ and Rust implementations.
 - Game behavior differences (card ordering, combat timing) may cause subtle
   test failures that only appear at runtime.
+- Previous sandbox attempts to run pytest were blocked by missing network
+  access (`uv` panics, `pip install` fails DNS). This step requires a
+  network-enabled environment with `uv`, `maturin`, and Python 3.12+.
