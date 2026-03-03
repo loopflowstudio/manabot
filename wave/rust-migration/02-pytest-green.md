@@ -6,30 +6,39 @@ zero test modifications.
 ## Finish line
 
 ```bash
+source .venv/bin/activate
 maturin develop --features python
-pytest tests/env/ tests/agent/
+pytest tests/env/ tests/agent/ -v
 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 ```
 
 All pass, zero test modifications. CI enforces this on every PR.
 
-## Starting point
+## Current state
 
-The branch has the full binding surface and build system:
-- 797-line `bindings.rs`: 10 data classes, 5 enums, AgentError exception
-- Maturin `pyproject.toml` (replaces scikit-build/pybind11)
+The binding surface and build system are in place. Two predicted failure modes
+have been fixed on the branch:
+
+**Fixed:**
+- Negative action index handling — `Env.step()` accepts `i64`, bounds-checks
+  in Rust, raises `AgentError("Action index -1 out of bounds: N")`.
+  (`env.rs`, `bindings.rs`)
+- Action space preservation after invalid step — `Game::step` no longer
+  consumes the action space on out-of-range actions. Two new engine tests
+  verify this. (`engine_tests.rs`)
+- CI workflow — `tests-result` rollup job, branch filtering, `workflow_dispatch`.
+
+**Not yet verified:** `pytest tests/env/ tests/agent/` has not been run against
+the Rust backend. The fixes above were derived from code review, not from
+running the tests.
+
+Codebase facts:
+- `bindings.rs`: 877 lines — 10 data classes, 5 enums, AgentError exception
+- `cargo test`: 11 tests pass (3 unit, 8 integration)
+- Maturin `pyproject.toml` replaces scikit-build/pybind11
 - `__init__.pyi` stubs fixed (ZoneEnum STACK=4, EXILE=5)
-- CI workflow (`.github/workflows/rust-python-integration.yml`): OS matrix,
-  cargo fmt/clippy/test, maturin develop, pytest, enum smoke
-- `cargo test` passes (9 tests)
-- Manual Python API smoke verified: reset/step, enum parity, dict-backed
-  collections, invalid action error message, profiler methods
 
-**Not yet verified:** `pytest tests/env/ tests/agent/` has not been run.
-The binding code was smoke-tested via `cargo rustc --features python --crate-type cdylib`
-+ module copy, not through a full maturin install + pytest run.
-
-## Work needed
+## Work remaining
 
 1. **Environment setup.** Use `uv` to create a working Python environment:
    ```bash
@@ -40,36 +49,60 @@ The binding code was smoke-tested via `cargo rustc --features python --crate-typ
    maturin develop --features python  # managym
    ```
 
-2. **Run tests, fix failures.** `pytest tests/env/ tests/agent/` — likely failure
-   modes:
-   - Field name mismatches in observation encoding
-   - Enum value mismatches (stubs are fixed but runtime behavior may differ)
-   - InfoDict conversion edge cases
-   - Reward value or sign differences
-   - Game termination timing (turn limits, empty library)
+2. **Run tests, fix remaining failures.** `pytest tests/env/ tests/agent/ -v`
+   The two most likely failures are already fixed (see above). Remaining
+   predicted failure modes, ranked:
+   - Game behavior differences — Rust engine produces different game states
+     than C++ (card ordering, timing). Fix in engine Rust code.
+   - `test_agent_turns_distribution` — `player_index` encoding differs
+     between engines. Fix in `observation.rs` or `bindings.rs`.
+   - Field name mismatches in observation encoding.
+   - Build/import failures — module path, missing `__init__.py` re-exports.
 
 3. **Profiler parity.** Run the profiler smoke test to confirm
    `export_profile_baseline` and `compare_profile` work end-to-end through
    the Python API.
 
-## Key decisions (from design)
+## Key decisions
 
-- **Dict, not List, for card/permanent collections.** `observation.py:216` does
-  `sorted(cards.keys())[:N]` and `test_observation.py:186` does
-  `next(iter(observation.agent_cards.keys()))`. Changing these would require test
-  modifications. The Rust `Vec<CardData>` converts to `Dict[int, Card]` keyed by
-  `card.id` in the PyO3 layer.
+### Collections are List, not Dict
 
-- **PyO3 enums with `eq_int`, not Python IntEnum.** `#[pyclass(eq, eq_int)]`
-  gives `__int__` conversion and integer equality. Satisfies both
-  `int(managym.ZoneEnum.STACK) == 4` and `zone_counts[managym.ZoneEnum.BATTLEFIELD]`.
+The earlier design doc claimed dict-backed collections were needed. This is
+stale. Current code agrees on lists:
+- `observation.py:216` does `cards[:self.cards_per_player]` (list slice)
+- `test_observation.py:188` does `observation.agent_cards[0].id` (list index)
+- `bindings.rs` exposes `Vec<PyCard>` as Python `list`
 
-- **ZoneEnum values follow Rust.** STACK=4, EXILE=5. Stubs were wrong (inverted),
-  now fixed. `observation.py` was already correct.
+### PyO3 enums with `eq_int`, not Python IntEnum
+
+`#[pyclass(eq, eq_int)]` gives `__int__` conversion, `__index__`, and integer
+equality. Satisfies both `int(managym.ZoneEnum.STACK) == 4` and
+`zone_counts[managym.ZoneEnum.BATTLEFIELD]` (Python lists call `__index__` for
+non-int subscripts). Tests only use these operations.
+
+### ZoneEnum values follow Rust
+
+STACK=4, EXILE=5. Stubs were wrong (inverted), now fixed. `observation.py` was
+already correct.
+
+### InfoDict is empty on reset, sparse on step
+
+- Rust `reset()` returns `empty_info_dict()` → empty dict → `all()` on empty
+  iterable is True ✓
+- Rust `step()` returns `winner_name` (string) only on game end
+- Python `Env` wrapper adds `true_terminated`, `true_truncated`,
+  `action_space_truncated` (all bool) — tests only check
+  `isinstance(step_info, dict)` ✓
+
+### Reward pipeline passes through
+
+- Rust engine returns `1.0`/`-1.0` for win/loss, `0.0` otherwise
+- Tests assert `−1.0 ≤ final_reward ≤ 1.0` and `isinstance(reward, float)` —
+  both satisfied by Rust `f64` → Python `float`
 
 ## Risks
 
-- Tests may depend on observation field ordering or exact dict key sets that
-  differ between C++ and Rust implementations.
-- `manabot/env/observation.py` was updated for list-backed collections in an
-  earlier iteration — verify this matches current dict-backed binding behavior.
+- Tests may depend on observation field ordering or exact key sets that differ
+  between C++ and Rust implementations.
+- Game behavior differences (card ordering, combat timing) may cause subtle
+  test failures that only appear at runtime.
