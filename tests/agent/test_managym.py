@@ -1,12 +1,13 @@
 import pytest
+
+# Local imports
 import managym
+
 
 @pytest.fixture
 def basic_deck_configs():
-    return [
-        {'Grey Ogre': 8, 'Mountain': 12},
-        {'Forest': 12, 'Llanowar Elves': 8}
-    ]
+    return [{"Grey Ogre": 8, "Mountain": 12}, {"Forest": 12, "Llanowar Elves": 8}]
+
 
 class TestManagym:
     def test_init(self):
@@ -17,7 +18,7 @@ class TestManagym:
         """Test reset() returns a valid Observation with correct fields."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env()
         obs, info = env.reset(player_configs)
@@ -25,23 +26,25 @@ class TestManagym:
         # In the new API, the Observation should expose 'agent' and 'opponent'
         assert obs is not None
         assert isinstance(info, dict)
-        assert hasattr(obs, 'agent'), "Observation missing 'agent' field"
-        assert hasattr(obs, 'opponent'), "Observation missing 'opponent' field"
+        assert hasattr(obs, "agent"), "Observation missing 'agent' field"
+        assert hasattr(obs, "opponent"), "Observation missing 'opponent' field"
         # Check that agent and opponent have different IDs
-        assert obs.agent.id != obs.opponent.id, "Agent and opponent must have different IDs"
+        assert (
+            obs.agent.id != obs.opponent.id
+        ), "Agent and opponent must have different IDs"
         # Also check turn and action_space fields exist
-        assert hasattr(obs, 'turn'), "Observation missing 'turn' field"
-        assert hasattr(obs, 'action_space'), "Observation missing 'action_space' field"
+        assert hasattr(obs, "turn"), "Observation missing 'turn' field"
+        assert hasattr(obs, "action_space"), "Observation missing 'action_space' field"
 
     def test_multiple_resets(self, basic_deck_configs):
         """Test multiple resets update Observation correctly."""
         player_configs1 = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         player_configs2 = [
             managym.PlayerConfig("Blue Mage", {"Island": 20}),
-            managym.PlayerConfig("Black Mage", {"Swamp": 20})
+            managym.PlayerConfig("Black Mage", {"Swamp": 20}),
         ]
 
         env = managym.Env()
@@ -63,7 +66,7 @@ class TestManagym:
         """Test a full game loop by always taking the first action."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env()
         obs, info = env.reset(player_configs)
@@ -87,7 +90,7 @@ class TestManagym:
         """Test that out-of-range action indices raise an error."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env()
         obs, _ = env.reset(player_configs)
@@ -103,7 +106,7 @@ class TestManagym:
         """Ensure that observations pass validate() throughout game progression."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env()
         obs, _ = env.reset(player_configs)
@@ -121,7 +124,7 @@ class TestManagym:
         """Test reward values are in the correct range on game end."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env()
         obs, _ = env.reset(player_configs)
@@ -140,7 +143,7 @@ class TestManagym:
         """Test playing a land and casting a spell using priority actions."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env()
         obs, _ = env.reset(player_configs)
@@ -160,7 +163,9 @@ class TestManagym:
                 bf_count = obs.agent.zone_counts[managym.ZoneEnum.BATTLEFIELD]
             else:
                 bf_count = obs.opponent.zone_counts[managym.ZoneEnum.BATTLEFIELD]
-            assert bf_count >= 1, "Battlefield should have at least one card after playing a land"
+            assert (
+                bf_count >= 1
+            ), "Battlefield should have at least one card after playing a land"
 
         # Try casting a spell if available.
         cast_idx = find_action(obs, managym.ActionEnum.PRIORITY_CAST_SPELL)
@@ -172,7 +177,7 @@ class TestManagym:
         """Test that when skip_trivial is False, trivial action spaces are not auto-skipped."""
         player_configs = [
             managym.PlayerConfig("Red Mage", basic_deck_configs[0]),
-            managym.PlayerConfig("Green Mage", basic_deck_configs[1])
+            managym.PlayerConfig("Green Mage", basic_deck_configs[1]),
         ]
         env = managym.Env(skip_trivial=False)
         obs, _ = env.reset(player_configs)
@@ -188,5 +193,7 @@ class TestManagym:
             step_count += 1
 
         assert terminated, "Game should eventually terminate"
-        assert trivial >= 10, "There should be a number of trivial action spaces encountered"
+        assert (
+            trivial >= 10
+        ), "There should be a number of trivial action spaces encountered"
         assert step_count <= 2000, "Game should not exceed 2000 steps"

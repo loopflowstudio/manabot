@@ -13,23 +13,24 @@ This version uses a multi-agent buffer organized as (num_envs x num_players) que
 """
 
 from dataclasses import asdict
-from omegaconf import DictConfig, OmegaConf
-from typing import Any, Dict, Tuple
-import time
 import datetime
-import wandb
+import time
+from typing import Any, Dict, Tuple
 
+import hydra
 import numpy as np
+from omegaconf import DictConfig, OmegaConf
 import psutil
 import torch
 import torch.nn as nn
-import hydra
+import wandb
 
-from manabot.infra import getLogger, Experiment, Hypers, TrainHypers
+# Local imports
+from manabot.env import Match, ObservationSpace, Reward, VectorEnv
 import manabot.env.observation
-from manabot.env import ObservationSpace, VectorEnv, Match, Reward
-from manabot.model.agent import Agent
+from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 import manabot.infra.hypers
+from manabot.model.agent import Agent
 
 manabot.infra.hypers.initialize()
 
@@ -44,12 +45,21 @@ ROLLOUT_HEALTH_KEYS = (
 # Buffer Classes
 # -----------------------------------------------------------------------------
 
+
 class PPOBuffer:
     def __init__(self, device: str):
         self.device = device
         self.reset()
-    def store(self, obs: dict, action: torch.Tensor, reward: torch.Tensor,
-              value: torch.Tensor, logprob: torch.Tensor, done: torch.Tensor) -> None:
+
+    def store(
+        self,
+        obs: dict,
+        action: torch.Tensor,
+        reward: torch.Tensor,
+        value: torch.Tensor,
+        logprob: torch.Tensor,
+        done: torch.Tensor,
+    ) -> None:
         # Ensure each observation tensor is stored properly
         for k, v in obs.items():
             # Stack tensors along a new dimension
@@ -60,7 +70,13 @@ class PPOBuffer:
         self.values_buf.append(value.unsqueeze(0))
         self.dones_buf.append(done.unsqueeze(0))
 
-    def compute_advantages(self, gamma: float, gae_lambda: float, next_value: torch.Tensor, next_done: torch.Tensor):
+    def compute_advantages(
+        self,
+        gamma: float,
+        gae_lambda: float,
+        next_value: torch.Tensor,
+        next_done: torch.Tensor,
+    ):
         """
         Compute advantages using GAE for the transitions in this buffer.
         next_value: a scalar bootstrap value for this (env, player) pair.
@@ -89,7 +105,9 @@ class PPOBuffer:
             else:
                 next_non_terminal = 1.0 - self.dones[t + 1].float()
                 next_val = self.values[t + 1]
-            delta = self.rewards[t] + gamma * next_val * next_non_terminal - self.values[t]
+            delta = (
+                self.rewards[t] + gamma * next_val * next_non_terminal - self.values[t]
+            )
             lastgaelam = delta + gamma * gae_lambda * next_non_terminal * lastgaelam
             advantages[t] = lastgaelam
 
@@ -98,6 +116,7 @@ class PPOBuffer:
 
     def reset(self):
         from collections import defaultdict
+
         self.obs_buff = defaultdict(list)
         self.actions_buf = []
         self.logprobs_buf = []
@@ -114,10 +133,12 @@ class PPOBuffer:
         self.advantages = None
         self.returns = None
 
+
 class MultiAgentBuffer:
     """
     Maintains a separate PPOBuffer for each (env, player) pair.
     """
+
     def __init__(self, device: str, num_envs: int, num_players: int = 2):
         self.device = device
         self.num_envs = num_envs
@@ -128,19 +149,33 @@ class MultiAgentBuffer:
             for pid in range(num_players)
         }
 
-    def store(self, obs: dict, action: torch.Tensor, reward: torch.Tensor,
-              value: torch.Tensor, logprob: torch.Tensor, done: torch.Tensor,
-              actor_ids: torch.Tensor) -> None:
+    def store(
+        self,
+        obs: dict,
+        action: torch.Tensor,
+        reward: torch.Tensor,
+        value: torch.Tensor,
+        logprob: torch.Tensor,
+        done: torch.Tensor,
+        actor_ids: torch.Tensor,
+    ) -> None:
         # For each environment in the batch, store the transition in the buffer for the acting player.
         num_envs = action.shape[0]
         for i in range(num_envs):
             pid = int(actor_ids[i].item())
             key = (i, pid)
             single_obs = {k: v[i] for k, v in obs.items()}
-            self.buffers[key].store(single_obs, action[i], reward[i],
-                                      value[i], logprob[i], done[i])
+            self.buffers[key].store(
+                single_obs, action[i], reward[i], value[i], logprob[i], done[i]
+            )
 
-    def compute_advantages(self, next_values: torch.Tensor, next_dones: torch.Tensor, gamma: float, gae_lambda: float):
+    def compute_advantages(
+        self,
+        next_values: torch.Tensor,
+        next_dones: torch.Tensor,
+        gamma: float,
+        gae_lambda: float,
+    ):
         """
         Compute advantages for each (env, player) buffer.
         next_values: tensor of shape (num_envs,) for each environment.
@@ -151,11 +186,25 @@ class MultiAgentBuffer:
                 buf = self.buffers[(env, pid)]
                 if len(buf.actions_buf) == 0:
                     continue
-                bootstrap_value = next_values[env] if not next_dones[env].item() else torch.tensor(0.0, device=self.device)
-                buf.compute_advantages(gamma, gae_lambda, bootstrap_value, next_dones[env])
+                bootstrap_value = (
+                    next_values[env]
+                    if not next_dones[env].item()
+                    else torch.tensor(0.0, device=self.device)
+                )
+                buf.compute_advantages(
+                    gamma, gae_lambda, bootstrap_value, next_dones[env]
+                )
 
-    def get_flattened(self) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor,
-                                      torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_flattened(
+        self,
+    ) -> Tuple[
+        Dict[str, torch.Tensor],
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
         """
         Flatten transitions from all (env, player) buffers into a single batch.
         Returns:
@@ -198,8 +247,15 @@ class MultiAgentBuffer:
         merged_returns = torch.cat(all_returns, dim=0)
         merged_values = torch.cat(all_values, dim=0)
 
-        return merged_obs, merged_logprobs, merged_actions, merged_advantages, merged_returns, merged_values
-    
+        return (
+            merged_obs,
+            merged_logprobs,
+            merged_actions,
+            merged_advantages,
+            merged_returns,
+            merged_values,
+        )
+
     def reset(self):
         for buf in self.buffers.values():
             buf.reset()
@@ -208,6 +264,7 @@ class MultiAgentBuffer:
 # -----------------------------------------------------------------------------
 # Trainer Class
 # -----------------------------------------------------------------------------
+
 
 class Trainer:
     """
@@ -221,8 +278,14 @@ class Trainer:
 
     Also provides checkpoint saving/loading functionality.
     """
-    def __init__(self, agent: Agent, experiment: Experiment,
-                 env: VectorEnv, hypers: TrainHypers = TrainHypers()):
+
+    def __init__(
+        self,
+        agent: Agent,
+        experiment: Experiment,
+        env: VectorEnv,
+        hypers: TrainHypers = TrainHypers(),
+    ):
         self.agent = agent.to(experiment.device)
         self.experiment = experiment
         self.env = env
@@ -237,7 +300,9 @@ class Trainer:
 
         self.logger = getLogger(__name__)
 
-        self.multi_buffer = MultiAgentBuffer(experiment.device, hypers.num_envs, num_players=2)
+        self.multi_buffer = MultiAgentBuffer(
+            experiment.device, hypers.num_envs, num_players=2
+        )
         self.consecutive_invalid_batches = 0
         self.invalid_batch_threshold = 5
         self.wandb = self.experiment.wandb_run
@@ -246,13 +311,15 @@ class Trainer:
 
         # Initialize the profiler
         self.profiler = self.experiment.profiler
-        
+
         if self.wandb:
-            self.wandb.summary.update({
-                "max_episode_return": float("-inf"),
-                "best_win_rate": 0.0,
-                "time_to_converge": None,
-            })
+            self.wandb.summary.update(
+                {
+                    "max_episode_return": float("-inf"),
+                    "best_win_rate": 0.0,
+                    "time_to_converge": None,
+                }
+            )
         self.logger.info("Trainer initialized.")
 
     def train(self) -> None:
@@ -294,34 +361,49 @@ class Trainer:
                     self.logger.info("Verifying attention masking mechanism...")
                     attention_valid = self.verify_attention_masking(next_obs)
                     if self.wandb:
-                        self.wandb.log({"verification/attention_valid": int(attention_valid)}, 
-                                    step=self.global_step)
+                        self.wandb.log(
+                            {"verification/attention_valid": int(attention_valid)},
+                            step=self.global_step,
+                        )
 
-                
                 with self.profiler.track("rollout"):
                     with self.profiler.track("step"):
                         for step in range(hypers.num_steps):
                             try:
-                                next_obs, next_done, prev_actor_ids = self._rollout_step(next_obs, prev_actor_ids)
+                                next_obs, next_done, prev_actor_ids = (
+                                    self._rollout_step(next_obs, prev_actor_ids)
+                                )
                                 self.consecutive_invalid_batches = 0
                             except Exception as e:
                                 self.consecutive_invalid_batches += 1
                                 self._increment_rollout_health("skipped_steps", 1)
-                                self.logger.error(f"Rollout step error at step {step}: {e}")
-                                if self.consecutive_invalid_batches >= self.invalid_batch_threshold:
-                                    raise RuntimeError(f"Failure during rollout; halting training: {e}")
+                                self.logger.error(
+                                    f"Rollout step error at step {step}: {e}"
+                                )
+                                if (
+                                    self.consecutive_invalid_batches
+                                    >= self.invalid_batch_threshold
+                                ):
+                                    raise RuntimeError(
+                                        f"Failure during rollout; halting training: {e}"
+                                    )
                                 else:
                                     self.logger.error("Skipping faulty rollout step.")
-                    
+
                     with self.profiler.track("advantage"):
                         with torch.no_grad():
                             next_value = self.agent.get_value(next_obs)
-                        self.multi_buffer.compute_advantages(next_value, next_done,
-                                                            hypers.gamma, hypers.gae_lambda)
+                        self.multi_buffer.compute_advantages(
+                            next_value, next_done, hypers.gamma, hypers.gae_lambda
+                        )
 
                         try:
-                            obs, logprobs, actions, advantages, returns, values = self.multi_buffer.get_flattened()
-                            self.logger.info(f"Flattened buffer has {logprobs.numel()} transitions.")
+                            obs, logprobs, actions, advantages, returns, values = (
+                                self.multi_buffer.get_flattened()
+                            )
+                            self.logger.info(
+                                f"Flattened buffer has {logprobs.numel()} transitions."
+                            )
                         except ValueError as e:
                             self.logger.error(f"No valid transitions in buffers: {e}")
                             raise
@@ -346,37 +428,54 @@ class Trainer:
                             mb_old_logprobs = logprobs[mb_inds]
                             mb_actions = actions[mb_inds]
                             mb_advantages = advantages[mb_inds]
-                            mb_advantages = self._maybe_normalize_advantages(mb_advantages)
+                            mb_advantages = self._maybe_normalize_advantages(
+                                mb_advantages
+                            )
                             mb_returns = returns[mb_inds]
                             mb_values = values[mb_inds]
 
                             approx_kl, clip_fraction = self._optimize_step(
-                                mb_obs, mb_old_logprobs, mb_actions,
-                                mb_advantages, mb_returns, mb_values
+                                mb_obs,
+                                mb_old_logprobs,
+                                mb_actions,
+                                mb_advantages,
+                                mb_returns,
+                                mb_values,
                             )
                             clipfracs.append(clip_fraction)
 
                             if update % 10 == 0:
                                 self._log_system_metrics()
 
-                            if hypers.target_kl != float("inf") and approx_kl > hypers.target_kl:
-                                self.logger.info(f"Early stopping at epoch {epoch} due to KL divergence {approx_kl:.4f}")
+                            if (
+                                hypers.target_kl != float("inf")
+                                and approx_kl > hypers.target_kl
+                            ):
+                                self.logger.info(
+                                    f"Early stopping at epoch {epoch} due to KL divergence {approx_kl:.4f}"
+                                )
                                 break
-
 
                 with torch.no_grad():
                     y_pred, y_true = values.cpu().numpy(), returns.cpu().numpy()
                 var_y = np.var(y_true)
-                explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+                explained_var = (
+                    np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+                )
 
                 sps = int(self.global_step / (time.time() - self.start_time))
                 if self.wandb:
-                    self.wandb.log({
-                        "charts/learning_rate": self.optimizer.param_groups[0]["lr"],
-                        "losses/explained_variance": explained_var,
-                        "charts/SPS": sps
-                    }, step=self.global_step)
-                
+                    self.wandb.log(
+                        {
+                            "charts/learning_rate": self.optimizer.param_groups[0][
+                                "lr"
+                            ],
+                            "losses/explained_variance": explained_var,
+                            "charts/SPS": sps,
+                        },
+                        step=self.global_step,
+                    )
+
                 self.experiment.log_performance(step=self.global_step)
 
                 time_since_start = time.time() - self.start_time
@@ -390,17 +489,18 @@ class Trainer:
                     )
                     self.save()
 
-                self.logger.info(f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}")
+                self.logger.info(
+                    f"Buffer sizes: {[len(buf.actions_buf) for buf in self.multi_buffer.buffers.values()]}"
+                )
 
             self.save()
             env.close()
             self.experiment.close()
             self.logger.info("Training completed.")
 
-    def _rollout_step(self, next_obs: Dict[str, torch.Tensor],
-                      actor_ids: torch.Tensor) -> Tuple[Dict[str, torch.Tensor],
-                                                        torch.Tensor,
-                                                        torch.Tensor]:
+    def _rollout_step(
+        self, next_obs: Dict[str, torch.Tensor], actor_ids: torch.Tensor
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             action, logprob, _, value = self.agent.get_action_and_value(next_obs)
 
@@ -420,14 +520,18 @@ class Trainer:
             )
         action_truncations = self._count_info_events(info, "action_space_truncated")
         if action_truncations > 0:
-            self._increment_rollout_health("action_space_truncations", action_truncations)
+            self._increment_rollout_health(
+                "action_space_truncations", action_truncations
+            )
 
         self.global_step += self.hypers.num_envs
 
         if not self._validate_obs(new_obs):
             raise RuntimeError("Invalid observation format detected; halting training.")
-        
-        self.multi_buffer.store(next_obs, action, reward, value, logprob, done, actor_ids)
+
+        self.multi_buffer.store(
+            next_obs, action, reward, value, logprob, done, actor_ids
+        )
         new_actor_ids = manabot.env.observation.get_agent_indices(new_obs)
         self.logger.debug(f"Rollout step completed; new actor_ids: {new_actor_ids}")
         return new_obs, done, new_actor_ids
@@ -453,7 +557,9 @@ class Trainer:
             return advantages_centered
         return advantages_centered / (std + 1e-8)
 
-    def _build_minibatch_plan(self, actual_batch_size: int) -> Tuple[np.ndarray, int] | None:
+    def _build_minibatch_plan(
+        self, actual_batch_size: int
+    ) -> Tuple[np.ndarray, int] | None:
         if actual_batch_size < self.hypers.num_minibatches:
             self.logger.warning(
                 f"Skipping update: actual_batch_size={actual_batch_size} < num_minibatches={self.hypers.num_minibatches}"
@@ -492,9 +598,7 @@ class Trainer:
             f"{key}={self.rollout_health_update[key]} (total={self.rollout_health[key]})"
             for key in ROLLOUT_HEALTH_KEYS
         ]
-        self.logger.info(
-            f"Update {update} rollout health | {', '.join(rollout_parts)}"
-        )
+        self.logger.info(f"Update {update} rollout health | {', '.join(rollout_parts)}")
         if self.wandb:
             metrics = {}
             for key in ROLLOUT_HEALTH_KEYS:
@@ -502,25 +606,34 @@ class Trainer:
                 metrics[f"rollout/{key}_total"] = self.rollout_health[key]
             self.wandb.log(metrics, step=self.global_step)
 
-    def _optimize_step(self, obs: Dict[str, torch.Tensor],
-                    logprobs: torch.Tensor,
-                    actions: torch.Tensor,
-                    advantages: torch.Tensor,
-                    returns: torch.Tensor,
-                    values: torch.Tensor) -> Tuple[float, float]:
+    def _optimize_step(
+        self,
+        obs: Dict[str, torch.Tensor],
+        logprobs: torch.Tensor,
+        actions: torch.Tensor,
+        advantages: torch.Tensor,
+        returns: torch.Tensor,
+        values: torch.Tensor,
+    ) -> Tuple[float, float]:
         hypers = self.hypers
-        _, new_logprobs, entropy, new_values = self.agent.get_action_and_value(obs, actions)
+        _, new_logprobs, entropy, new_values = self.agent.get_action_and_value(
+            obs, actions
+        )
         logratio = new_logprobs - logprobs
         ratio = logratio.exp()
 
         pg_loss1 = -advantages * ratio
-        pg_loss2 = -advantages * torch.clamp(ratio, 1 - hypers.clip_coef, 1 + hypers.clip_coef)
+        pg_loss2 = -advantages * torch.clamp(
+            ratio, 1 - hypers.clip_coef, 1 + hypers.clip_coef
+        )
         pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
         new_values = new_values.view(-1)
         if hypers.clip_vloss:
             v_loss_unclipped = (new_values - returns) ** 2
-            v_clipped = values + torch.clamp(new_values - values, -hypers.clip_coef, hypers.clip_coef)
+            v_clipped = values + torch.clamp(
+                new_values - values, -hypers.clip_coef, hypers.clip_coef
+            )
             v_loss_clipped = (v_clipped - returns) ** 2
             v_loss = 0.5 * torch.max(v_loss_unclipped, v_loss_clipped).mean()
         else:
@@ -531,74 +644,88 @@ class Trainer:
 
         self.optimizer.zero_grad()
         loss.backward()
-        
+
         # Gradient norm monitoring
         total_grad_norm = 0.0
         layer_grad_norms = {}
-        
+
         # Group parameters by layer type for more helpful analysis
         embedding_grad_norm = 0.0
         attention_grad_norm = 0.0
         policy_head_grad_norm = 0.0
         value_head_grad_norm = 0.0
         other_grad_norm = 0.0
-        
+
         # Log per-layer gradient norms
         for name, param in self.agent.named_parameters():
             if param.grad is not None:
                 grad_norm = param.grad.detach().data.norm(2).item()
                 layer_grad_norms[name] = grad_norm
-                total_grad_norm += grad_norm ** 2
-                
+                total_grad_norm += grad_norm**2
+
                 # Categorize gradients by component
-                if "player_embedding" in name or "card_embedding" in name or "perm_embedding" in name:
-                    embedding_grad_norm += grad_norm ** 2
+                if (
+                    "player_embedding" in name
+                    or "card_embedding" in name
+                    or "perm_embedding" in name
+                ):
+                    embedding_grad_norm += grad_norm**2
                 elif "attention" in name:
-                    attention_grad_norm += grad_norm ** 2
+                    attention_grad_norm += grad_norm**2
                 elif "policy_head" in name:
-                    policy_head_grad_norm += grad_norm ** 2
+                    policy_head_grad_norm += grad_norm**2
                 elif "value_head" in name:
-                    value_head_grad_norm += grad_norm ** 2
+                    value_head_grad_norm += grad_norm**2
                 else:
-                    other_grad_norm += grad_norm ** 2
-                    
-        total_grad_norm = total_grad_norm ** 0.5
-        embedding_grad_norm = embedding_grad_norm ** 0.5
-        attention_grad_norm = attention_grad_norm ** 0.5
-        policy_head_grad_norm = policy_head_grad_norm ** 0.5
-        value_head_grad_norm = value_head_grad_norm ** 0.5
-        other_grad_norm = other_grad_norm ** 0.5
-        
+                    other_grad_norm += grad_norm**2
+
+        total_grad_norm = total_grad_norm**0.5
+        embedding_grad_norm = embedding_grad_norm**0.5
+        attention_grad_norm = attention_grad_norm**0.5
+        policy_head_grad_norm = policy_head_grad_norm**0.5
+        value_head_grad_norm = value_head_grad_norm**0.5
+        other_grad_norm = other_grad_norm**0.5
+
         # Get largest and smallest non-zero gradient norm for outlier detection
         non_zero_norms = [norm for norm in layer_grad_norms.values() if norm > 0]
         if non_zero_norms:
             max_layer_norm = max(non_zero_norms)
             min_layer_norm = min(non_zero_norms)
-            max_to_min_ratio = max_layer_norm / min_layer_norm if min_layer_norm > 0 else float('inf')
+            max_to_min_ratio = (
+                max_layer_norm / min_layer_norm if min_layer_norm > 0 else float("inf")
+            )
         else:
             max_layer_norm = 0
             min_layer_norm = 0
             max_to_min_ratio = 0
-            
+
         # Log all gradient information
         self.logger.info(f"Total gradient norm: {total_grad_norm:.4f}")
-        
+
         # Log if any concerning gradient patterns are detected
         if total_grad_norm > 10.0:
-            self.logger.warning(f"Potentially exploding gradient: {total_grad_norm:.4f}")
+            self.logger.warning(
+                f"Potentially exploding gradient: {total_grad_norm:.4f}"
+            )
         elif total_grad_norm < 1e-4:
-            self.logger.warning(f"Potentially vanishing gradient: {total_grad_norm:.4f}")
-        
+            self.logger.warning(
+                f"Potentially vanishing gradient: {total_grad_norm:.4f}"
+            )
+
         if max_to_min_ratio > 1000:
-            self.logger.warning(f"Extreme gradient imbalance: max/min ratio = {max_to_min_ratio:.2f}")
-            
+            self.logger.warning(
+                f"Extreme gradient imbalance: max/min ratio = {max_to_min_ratio:.2f}"
+            )
+
         # Log the top 5 highest gradient norms for detailed debugging
         if layer_grad_norms:
-            top_grads = sorted(layer_grad_norms.items(), key=lambda x: x[1], reverse=True)[:5]
+            top_grads = sorted(
+                layer_grad_norms.items(), key=lambda x: x[1], reverse=True
+            )[:5]
             self.logger.debug("Top 5 highest gradient norms:")
             for name, norm in top_grads:
                 self.logger.debug(f"  {name}: {norm:.6f}")
-        
+
         # Log to wandb if available
         if self.wandb:
             gradient_metrics = {
@@ -613,48 +740,59 @@ class Trainer:
                 "gradients/max_to_min_ratio": max_to_min_ratio,
             }
             self.wandb.log(gradient_metrics, step=self.global_step)
-        
+
         nn.utils.clip_grad_norm_(self.agent.parameters(), hypers.max_grad_norm)
-        
+
         clipped_total_grad_norm = 0.0
         for param in self.agent.parameters():
             if param.grad is not None:
                 clipped_total_grad_norm += param.grad.detach().data.norm(2).item() ** 2
-        clipped_total_grad_norm = clipped_total_grad_norm ** 0.5
-        
+        clipped_total_grad_norm = clipped_total_grad_norm**0.5
+
         if clipped_total_grad_norm < total_grad_norm and self.wandb:
-            self.wandb.log({
-                "gradients/pre_clip_norm": total_grad_norm,
-                "gradients/post_clip_norm": clipped_total_grad_norm,
-                "gradients/clip_ratio": clipped_total_grad_norm / total_grad_norm if total_grad_norm > 0 else 0,
-            }, step=self.global_step)
-        
+            self.wandb.log(
+                {
+                    "gradients/pre_clip_norm": total_grad_norm,
+                    "gradients/post_clip_norm": clipped_total_grad_norm,
+                    "gradients/clip_ratio": (
+                        clipped_total_grad_norm / total_grad_norm
+                        if total_grad_norm > 0
+                        else 0
+                    ),
+                },
+                step=self.global_step,
+            )
+
         self.optimizer.step()
 
         with torch.no_grad():
             approx_kl = ((ratio - 1) - logratio).mean().item()
             approx_kl = max(approx_kl, 0.0)
-            clip_fraction = (torch.abs(ratio - 1) > hypers.clip_coef).float().mean().item()
+            clip_fraction = (
+                (torch.abs(ratio - 1) > hypers.clip_coef).float().mean().item()
+            )
 
         if self.wandb:
-            self.wandb.log({
-                "losses/policy_loss": pg_loss.item(),
-                "losses/value_loss": v_loss.item(),
-                "losses/entropy": entropy_loss.item(),
-                "losses/approx_kl": approx_kl,
-                "losses/clip_fraction": clip_fraction,
-                "ppo/losses": {
-                    "policy": pg_loss.item(),
-                    "value": v_loss.item(),
-                    "entropy": entropy_loss.item()
+            self.wandb.log(
+                {
+                    "losses/policy_loss": pg_loss.item(),
+                    "losses/value_loss": v_loss.item(),
+                    "losses/entropy": entropy_loss.item(),
+                    "losses/approx_kl": approx_kl,
+                    "losses/clip_fraction": clip_fraction,
+                    "ppo/losses": {
+                        "policy": pg_loss.item(),
+                        "value": v_loss.item(),
+                        "entropy": entropy_loss.item(),
+                    },
+                    "ppo/metrics": {"kl": approx_kl, "clip_fraction": clip_fraction},
                 },
-                "ppo/metrics": {
-                    "kl": approx_kl,
-                    "clip_fraction": clip_fraction
-                }
-            }, step=self.global_step)
+                step=self.global_step,
+            )
 
-        self.logger.debug(f"Optimize step: approx_kl={approx_kl}, clip_fraction={clip_fraction}")
+        self.logger.debug(
+            f"Optimize step: approx_kl={approx_kl}, clip_fraction={clip_fraction}"
+        )
         return approx_kl, clip_fraction
 
     def verify_attention_masking(self, obs):
@@ -665,31 +803,39 @@ class Trainer:
         3. Ensuring outputs are identical, proving masked values don't leak through
         """
         self.logger.debug("Verifying attention masking integrity")
-        
+
         # Get original object embeddings and mask
         with torch.no_grad():
             objects, is_agent, validity = self.agent._gather_object_embeddings(obs)
-            key_padding_mask = (validity == 0)
+            key_padding_mask = validity == 0
             original_output = self.agent.attention(objects, is_agent, key_padding_mask)
-        
+
         # Create a copy with random noise in the masked positions
         noisy_objects = objects.clone()
         if torch.any(key_padding_mask):
             # Add large random noise to masked positions
             noise = torch.randn_like(objects) * 10.0
             noisy_objects[key_padding_mask] = noise[key_padding_mask]
-            
+
             # Get output with noisy inputs
-            noisy_output = self.agent.attention(noisy_objects, is_agent, key_padding_mask)
-            
+            noisy_output = self.agent.attention(
+                noisy_objects, is_agent, key_padding_mask
+            )
+
             # Check if outputs are identical (they should be if masking works)
             diff = (original_output - noisy_output).abs().max().item()
-            
+
             if diff > 1e-5:
-                self.logger.error(f"Attention mask leakage detected! Max difference: {diff}")
+                self.logger.error(
+                    f"Attention mask leakage detected! Max difference: {diff}"
+                )
                 # Log additional diagnostics about which positions leaked
-                leaked_positions = ((original_output - noisy_output).abs() > 1e-5).sum().item()
-                self.logger.error(f"Number of positions with leakage: {leaked_positions}")
+                leaked_positions = (
+                    ((original_output - noisy_output).abs() > 1e-5).sum().item()
+                )
+                self.logger.error(
+                    f"Number of positions with leakage: {leaked_positions}"
+                )
                 return False
             else:
                 self.logger.debug("Attention masking verified: No leakage detected")
@@ -701,16 +847,20 @@ class Trainer:
     def _validate_obs(self, obs: dict) -> bool:
         expected_keys = set(self.env.observation_space.keys())
         if set(obs.keys()) != expected_keys:
-            self.logger.error(f"Observation keys mismatch. Expected {expected_keys}, got {set(obs.keys())}")
+            self.logger.error(
+                f"Observation keys mismatch. Expected {expected_keys}, got {set(obs.keys())}"
+            )
             return False
 
         for k, v in obs.items():
             expected_shape = self.env.observation_space[k].shape
             if v.shape[1:] != expected_shape:
-                self.logger.error(f"Observation shape mismatch for key {k}. "
-                                  f"Expected {expected_shape} (inside batch), got {v.shape[1:]}")
+                self.logger.error(
+                    f"Observation shape mismatch for key {k}. "
+                    f"Expected {expected_shape} (inside batch), got {v.shape[1:]}"
+                )
                 return False
-        
+
         # Now log detailed statistics
         validity_stats = {
             "agent_player_valid": obs["agent_player_valid"].sum().item(),
@@ -721,24 +871,27 @@ class Trainer:
             "opponent_permanents_valid": obs["opponent_permanents_valid"].sum().item(),
             "actions_valid": obs["actions_valid"].sum().item(),
         }
-        
+
         # Log summary
         self.logger.debug(f"Observation validity statistics:")
         for key, count in validity_stats.items():
             self.logger.debug(f"  {key}: {count}")
-        
+
         # Check for anomalies
-        if validity_stats["agent_player_valid"] < 1 or validity_stats["opponent_player_valid"] < 1:
+        if (
+            validity_stats["agent_player_valid"] < 1
+            or validity_stats["opponent_player_valid"] < 1
+        ):
             self.logger.warning(f"Missing valid players in observation!")
-        
+
         if validity_stats["actions_valid"] < 1:
             self.logger.warning(f"No valid actions in observation!")
-        
+
         # Log to wandb
         if self.wandb:
             wandb_stats = {f"observation/{k}": v for k, v in validity_stats.items()}
             self.wandb.log(wandb_stats, step=self.global_step)
-        
+
         return True
 
     def _log_system_metrics(self):
@@ -748,48 +901,59 @@ class Trainer:
         metrics = {
             "system/memory_used": psutil.Process().memory_info().rss / (1024 * 1024),
             "system/cpu_percent": psutil.cpu_percent(),
-            "system/steps_per_second": int(self.global_step / (time.time() - self.start_time))
+            "system/steps_per_second": int(
+                self.global_step / (time.time() - self.start_time)
+            ),
         }
         if torch.cuda.is_available():
-            metrics.update({
-                "system/gpu_utilization": torch.cuda.utilization(),
-                "system/gpu_memory_allocated": torch.cuda.memory_allocated() / (1024 * 1024),
-                "system/gpu_memory_reserved": torch.cuda.memory_reserved() / (1024 * 1024)
-            })
+            metrics.update(
+                {
+                    "system/gpu_utilization": torch.cuda.utilization(),
+                    "system/gpu_memory_allocated": torch.cuda.memory_allocated()
+                    / (1024 * 1024),
+                    "system/gpu_memory_reserved": torch.cuda.memory_reserved()
+                    / (1024 * 1024),
+                }
+            )
         self.wandb.log(metrics, step=self.global_step)
         self.logger.debug(f"Logged system metrics: {metrics}")
 
     def save(self) -> None:
         if self.wandb is None:
             return
-        
+
         name = self.experiment.exp_name
-        
-        timestamp = datetime.datetime.fromtimestamp(self.start_time).strftime("%Y%m%d_%H%M%S")
+
+        timestamp = datetime.datetime.fromtimestamp(self.start_time).strftime(
+            "%Y%m%d_%H%M%S"
+        )
         version_tag = f"{timestamp}_{self.global_step}"
-                
+
         # Save all relevant hyperparameters
         hypers_dict = {
-            'agent_hypers': asdict(self.agent.hypers),
-            'observation_hypers': asdict(self.env.observation_space.encoder.hypers),
-            'train_hypers': asdict(self.hypers),
+            "agent_hypers": asdict(self.agent.hypers),
+            "observation_hypers": asdict(self.env.observation_space.encoder.hypers),
+            "train_hypers": asdict(self.hypers),
         }
-        
+
         path = f"{name}.pt"
-        torch.save({
-            'model_state_dict': self.agent.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'global_step': self.global_step,
-            'hypers': hypers_dict,
-        }, path)
-        
+        torch.save(
+            {
+                "model_state_dict": self.agent.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "global_step": self.global_step,
+                "hypers": hypers_dict,
+            },
+            path,
+        )
+
         # Create and log artifact with the version tag
         artifact = wandb.Artifact(
             name=name,
             type="model",
             description=f"Model checkpoint at step {self.global_step}",
         )
-        
+
         # Add metadata for easier filtering/selection
         artifact.metadata = {
             "version": version_tag,
@@ -797,16 +961,18 @@ class Trainer:
             "step": self.global_step,
             "model_type": self.agent.__class__.__name__,
         }
-        
+
         # You can add additional tags to make it easier to filter
         if self.agent.hypers.attention_on:
             artifact.metadata["architecture"] = "attention"
-        
+
         artifact.add_file(path)
-        
+
         # Log the artifact with an alias that includes the version
-        self.wandb.log_artifact(artifact, aliases=[f"step_{self.global_step}", version_tag])
-        
+        self.wandb.log_artifact(
+            artifact, aliases=[f"step_{self.global_step}", version_tag]
+        )
+
         self.logger.info(f"Saved model with version tag: {version_tag}")
 
 
@@ -824,22 +990,29 @@ def main(cfg: DictConfig) -> None:
         train=train_config,
         reward=reward_config,
         agent=agent_config,
-        experiment=experiment_config
+        experiment=experiment_config,
     )
-    
+
     # Setup components
     experiment = Experiment(hypers.experiment, hypers)
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
-    
+
     # Create environment and agent
-    env = VectorEnv(hypers.train.num_envs, match, observation_space, reward, device=experiment.device)
+    env = VectorEnv(
+        hypers.train.num_envs,
+        match,
+        observation_space,
+        reward,
+        device=experiment.device,
+    )
     agent = Agent(observation_space, hypers.agent)
-    
+
     # Train
     trainer = Trainer(agent, experiment, env, hypers.train)
     trainer.train()
+
 
 if __name__ == "__main__":
     main()

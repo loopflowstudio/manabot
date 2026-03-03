@@ -17,28 +17,33 @@ Additional updates in this version:
 
 from enum import IntEnum
 from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
-import numpy as np
+
 import gymnasium as gym
+import numpy as np
 import torch
+
+# Local imports
+from manabot.infra.hypers import ObservationSpaceHypers
+from manabot.infra.log import getLogger
 import managym
 
-from manabot.infra.hypers import ObservationSpaceHypers
-
-from manabot.infra.log import getLogger
 
 # -----------------------------------------------------------------------------
 # Game Enums - mirror managym for validation
 # -----------------------------------------------------------------------------
 class PhaseEnum(IntEnum):
     """Mirrors managym.PhaseEnum for validation."""
+
     BEGINNING = 0
     PRECOMBAT_MAIN = 1
     COMBAT = 2
     POSTCOMBAT_MAIN = 3
     ENDING = 4
 
+
 class StepEnum(IntEnum):
     """Mirrors managym.StepEnum for validation."""
+
     BEGINNING_UNTAP = 0
     BEGINNING_UPKEEP = 1
     BEGINNING_DRAW = 2
@@ -52,16 +57,20 @@ class StepEnum(IntEnum):
     ENDING_END = 10
     ENDING_CLEANUP = 11
 
+
 class ActionEnum(IntEnum):
     """Mirrors managym.ActionEnum for validation."""
+
     PRIORITY_PLAY_LAND = 0
     PRIORITY_CAST_SPELL = 1
     PRIORITY_PASS_PRIORITY = 2
     DECLARE_ATTACKER = 3
     DECLARE_BLOCKER = 4
 
+
 class ZoneEnum(IntEnum):
     """Mirrors managym.ZoneEnum for validation."""
+
     LIBRARY = 0
     HAND = 1
     BATTLEFIELD = 2
@@ -69,6 +78,7 @@ class ZoneEnum(IntEnum):
     STACK = 4
     EXILE = 5
     COMMAND = 6
+
 
 # -----------------------------------------------------------------------------
 # Observation Encoding
@@ -79,6 +89,7 @@ class ObservationEncoder:
     along with corresponding ID and validity masks. These validity masks can be used
     later by the agent to mask out invalid slots in attention, action encoding, etc.
     """
+
     def __init__(self, hypers: ObservationSpaceHypers):
         self.hypers = hypers
         self.cards_per_player = hypers.max_cards_per_player
@@ -92,15 +103,12 @@ class ObservationEncoder:
         self.num_actions = len(ActionEnum.__members__)
 
         # Define dimensions for players, cards, permanents.
-        self.player_dim = (5 + self.num_zones) 
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6) + 1  
-        self.permanent_dim = 4 + 1  
+        self.player_dim = 5 + self.num_zones
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6) + 1
+        self.permanent_dim = 4 + 1
 
         # Action space dimension: action type + validity bit.
-        self.action_dim = (
-            self.num_actions
-            + 1  # validity bit
-        )
+        self.action_dim = self.num_actions + 1  # validity bit
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -112,9 +120,8 @@ class ObservationEncoder:
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
             # Game objects - change player shapes to include the batch dimension
-            "agent_player": (1, self.player_dim),          # Changed from (self.player_dim,)
-            "opponent_player": (1, self.player_dim),       # Changed from (self.player_dim,)
-            
+            "agent_player": (1, self.player_dim),  # Changed from (self.player_dim,)
+            "opponent_player": (1, self.player_dim),  # Changed from (self.player_dim,)
             # Rest stays the same
             "agent_cards": (self.cards_per_player, self.card_dim),
             "opponent_cards": (self.cards_per_player, self.card_dim),
@@ -130,7 +137,7 @@ class ObservationEncoder:
             "opponent_permanents_valid": (self.perms_per_player,),
             "actions_valid": (self.max_actions,),
         }
-        
+
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
         out = {}
 
@@ -153,39 +160,52 @@ class ObservationEncoder:
 
         # Game Objects
         out["agent_player"] = self._encode_player_features(obs.agent)[np.newaxis, ...]
-        out["opponent_player"] = self._encode_player_features(obs.opponent)[np.newaxis, ...]
+        out["opponent_player"] = self._encode_player_features(obs.opponent)[
+            np.newaxis, ...
+        ]
         out["agent_cards"] = self._encode_cards(obs.agent_cards)
         out["opponent_cards"] = self._encode_cards(obs.opponent_cards)
         out["agent_permanents"] = self._encode_perms(obs.agent_permanents)
         out["opponent_permanents"] = self._encode_perms(obs.opponent_permanents)
 
-        # Validity masks    
+        # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
         out["opponent_player_valid"] = np.ones((1,), dtype=np.float32)
         out["agent_cards_valid"] = out["agent_cards"][..., -1].astype(np.float32)
         out["opponent_cards_valid"] = out["opponent_cards"][..., -1].astype(np.float32)
-        out["agent_permanents_valid"] = out["agent_permanents"][..., -1].astype(np.float32)
-        out["opponent_permanents_valid"] = out["opponent_permanents"][..., -1].astype(np.float32)
+        out["agent_permanents_valid"] = out["agent_permanents"][..., -1].astype(
+            np.float32
+        )
+        out["opponent_permanents_valid"] = out["opponent_permanents"][..., -1].astype(
+            np.float32
+        )
 
-        # Actionspace   
+        # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
 
         log.debug(f"[SHAPES] agent_player: {out['agent_player'].shape}")
         log.debug(f"[SHAPES] agent_player_valid: {out['agent_player_valid'].shape}")
         log.debug(f"[SHAPES] opponent_player: {out['opponent_player'].shape}")
-        log.debug(f"[SHAPES] opponent_player_valid: {out['opponent_player_valid'].shape}")
+        log.debug(
+            f"[SHAPES] opponent_player_valid: {out['opponent_player_valid'].shape}"
+        )
         log.debug(f"[SHAPES] agent_cards: {out['agent_cards'].shape}")
         log.debug(f"[SHAPES] agent_cards_valid: {out['agent_cards_valid'].shape}")
         log.debug(f"[SHAPES] opponent_cards: {out['opponent_cards'].shape}")
         log.debug(f"[SHAPES] opponent_cards_valid: {out['opponent_cards_valid'].shape}")
         log.debug(f"[SHAPES] agent_permanents: {out['agent_permanents'].shape}")
-        log.debug(f"[SHAPES] agent_permanents_valid: {out['agent_permanents_valid'].shape}")
+        log.debug(
+            f"[SHAPES] agent_permanents_valid: {out['agent_permanents_valid'].shape}"
+        )
         log.debug(f"[SHAPES] opponent_permanents: {out['opponent_permanents'].shape}")
-        log.debug(f"[SHAPES] opponent_permanents_valid: {out['opponent_permanents_valid'].shape}")
+        log.debug(
+            f"[SHAPES] opponent_permanents_valid: {out['opponent_permanents_valid'].shape}"
+        )
         log.debug(f"[SHAPES] actions: {out['actions'].shape}")
         log.debug(f"[SHAPES] action_focus: {out['action_focus'].shape}")
         return out
+
     # -------------------------------------------------------------------------
     # Players (with validity mask support)
     # -------------------------------------------------------------------------
@@ -213,7 +233,7 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     def _encode_cards(self, cards: List[managym.Card]) -> np.ndarray:
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
-        ordered_cards = cards[:self.cards_per_player]
+        ordered_cards = cards[: self.cards_per_player]
         for i, card in enumerate(ordered_cards):
             feat[i] = self._encode_card_features(card)
             self.object_to_index[card.id] = self.current_object_index
@@ -257,7 +277,7 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     def _encode_perms(self, perms: List[managym.Permanent]) -> np.ndarray:
         feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
-        ordered_perms = perms[:self.perms_per_player]
+        ordered_perms = perms[: self.perms_per_player]
         for i, perm in enumerate(ordered_perms):
             feat[i] = self._encode_permanent_features(perm)
             self.object_to_index[perm.id] = self.current_object_index
@@ -279,7 +299,9 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
     # -------------------------------------------------------------------------
-    def _encode_actions(self, obs: managym.Observation) -> Tuple[np.ndarray, np.ndarray]:
+    def _encode_actions(
+        self, obs: managym.Observation
+    ) -> Tuple[np.ndarray, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
         valid_actions = np.zeros(self.max_actions, dtype=bool)
@@ -287,53 +309,62 @@ class ObservationEncoder:
         # We'll accumulate the focus indices for each action here.
         action_focus_indices = []  # Expected shape: (max_actions, max_focus_objects)
         if len(actions) > self.max_actions:
-            log.warning(
-                f"Action space truncated: {len(actions)} -> {self.max_actions}"
-            )
+            log.warning(f"Action space truncated: {len(actions)} -> {self.max_actions}")
         for idx, action in enumerate(actions[: self.max_actions]):
             valid_actions[idx] = True
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0
 
-            focus_ids = action.focus[:self.max_focus_objects]
+            focus_ids = action.focus[: self.max_focus_objects]
             indices = []
             for fid in focus_ids:
                 index = self.object_to_index.get(fid, -1)
                 if index == -1:
-                    log.warning(f"Invalid focus object ID {fid} for action {action_type}.")
+                    log.warning(
+                        f"Invalid focus object ID {fid} for action {action_type}."
+                    )
                 indices.append(index)
             # Pad the indices to ensure we have exactly self.max_focus_objects entries.
             if len(indices) < self.max_focus_objects:
                 indices.extend([-1] * (self.max_focus_objects - len(indices)))
             action_focus_indices.append(indices)
-        
+
         arr[..., -1] = valid_actions.astype(np.float32)
         # Pad action_focus_indices so that its shape is always (max_actions, max_focus_objects)
         unused_slots = self.max_actions - len(action_focus_indices)
         if unused_slots > 0:
             action_focus_indices.extend([[-1] * self.max_focus_objects] * unused_slots)
-        
+
         return arr, np.array(action_focus_indices, dtype=np.int32)
+
 
 class ObservationSpace(gym.spaces.Space):
     """
     Gymnasium-compatible observation space optimized for attention processing.
     """
+
     def __init__(self, hypers: ObservationSpaceHypers = ObservationSpaceHypers()):
         super().__init__(shape=None, dtype=None)
         self.encoder = ObservationEncoder(hypers)
-        self.spaces = gym.spaces.Dict({
-            name: gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float32)
-            for name, shape in self.encoder.shapes.items()
-        })
+        self.spaces = gym.spaces.Dict(
+            {
+                name: gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=shape, dtype=np.float32
+                )
+                for name, shape in self.encoder.shapes.items()
+            }
+        )
         self.shapes = self.encoder.shapes
 
     def sample(self, mask=None) -> Dict[str, np.ndarray]:
         return {name: space.sample() for name, space in self.spaces.items()}
 
     def contains(self, x: Dict[str, np.ndarray]) -> bool:
-        return all(name in x and x[name].shape == self.shapes[name] for name in self.spaces.keys())
+        return all(
+            name in x and x[name].shape == self.shapes[name]
+            for name in self.spaces.keys()
+        )
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
         return self.encoder.encode(obs)
@@ -341,10 +372,10 @@ class ObservationSpace(gym.spaces.Space):
     @property
     def shape(self) -> tuple | None:
         return None
-    
+
     def __getitem__(self, key: str) -> gym.spaces.Space:
         return self.spaces[key]
-    
+
     def keys(self) -> KeysView:
         return self.spaces.keys()
 
@@ -364,9 +395,10 @@ class ObservationSpace(gym.spaces.Space):
                 return False
         return True
 
+
 def get_agent_indices(obs: Dict[str, torch.Tensor]) -> torch.Tensor:
     """Returns a tensor of agent indices from the observation.
-    
+
     Shape: (batch_size,)
     Type: torch.int64
     """

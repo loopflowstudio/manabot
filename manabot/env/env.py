@@ -3,16 +3,21 @@ env.py
 Environment wrapper around the C++ managym.Env that conforms to the Gymnasium API.
 """
 
-import gymnasium as gym
-from gymnasium import spaces
-from typing import Optional, Any, Tuple, Dict
-import torch
-import numpy as np
+from typing import Any, Dict, Optional, Tuple
 
-import managym
-from .observation import ObservationSpace
-from .match import Match, Reward
+from gymnasium import spaces
+import gymnasium as gym
+import numpy as np
+import torch
+
+# Local imports
 from manabot.infra.log import getLogger
+import managym
+
+# Local directory imports
+from .match import Match, Reward
+from .observation import ObservationSpace
+
 
 class Env(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 30}
@@ -33,7 +38,7 @@ class Env(gym.Env):
         seed: int = 0,
         auto_reset: bool = False,
         enable_profiler: bool = False,
-        enable_behavior_tracking: bool = False
+        enable_behavior_tracking: bool = False,
     ):
         """
         Gymnasium-compatible Env wrapper around the managym.Env C++ class.
@@ -49,8 +54,15 @@ class Env(gym.Env):
         self.enable_profiler = enable_profiler
         self.enable_behavior_tracking = enable_behavior_tracking
         logger = getLogger(__name__)
-        logger.info(f"Initializing Env with seed={self.seed}, skip_trivial={self.skip_trivial}, enable_profiler={self.enable_profiler}, enable_behavior_tracking={self.enable_behavior_tracking}")
-        self._cpp_env = managym.Env(seed=self.seed, skip_trivial=self.skip_trivial, enable_profiler=self.enable_profiler, enable_behavior_tracking=self.enable_behavior_tracking)
+        logger.info(
+            f"Initializing Env with seed={self.seed}, skip_trivial={self.skip_trivial}, enable_profiler={self.enable_profiler}, enable_behavior_tracking={self.enable_behavior_tracking}"
+        )
+        self._cpp_env = managym.Env(
+            seed=self.seed,
+            skip_trivial=self.skip_trivial,
+            enable_profiler=self.enable_profiler,
+            enable_behavior_tracking=self.enable_behavior_tracking,
+        )
 
         # For when we need manabot.ObservationSpace
         self.obs_space: ObservationSpace = obs_space
@@ -63,10 +75,7 @@ class Env(gym.Env):
         self.auto_reset = auto_reset
 
     def reset(
-        self,
-        *,
-        seed: Optional[int] = None,
-        options: Optional[dict[str, Any]] = None
+        self, *, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
     ) -> tuple[dict, dict]:
         """
         Resets the environment to an initial state and returns (observation, info).
@@ -98,7 +107,7 @@ class Env(gym.Env):
     def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
         """
         Step the environment by applying `action` (int).
-        Automatically 
+        Automatically
 
         Args:
             action: Chosen action index (within our placeholder discrete space).
@@ -119,7 +128,9 @@ class Env(gym.Env):
             len(cpp_obs.action_space.actions) > self.obs_space.encoder.max_actions
         )
 
-        log.debug(f"Stepped env. Step output: reward={cpp_reward}, terminated={terminated}, truncated={truncated}")
+        log.debug(
+            f"Stepped env. Step output: reward={cpp_reward}, terminated={terminated}, truncated={truncated}"
+        )
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
             if self.auto_reset:
@@ -127,7 +138,7 @@ class Env(gym.Env):
                 cpp_obs, _ = self._cpp_env.reset(self.match.to_cpp())
                 terminated = False
                 truncated = False
-        
+
         py_obs = self.obs_space.encode(cpp_obs)
         self._last_obs = cpp_obs
         return py_obs, reward, terminated, truncated, info
@@ -146,24 +157,35 @@ class Env(gym.Env):
         return self._last_obs
 
 
-
 class VectorEnv:
     """
     Vector environment that automatically batches observations from multiple environments
-    and converts them to PyTorch tensors. The first dimension is always the number of 
+    and converts them to PyTorch tensors. The first dimension is always the number of
     environments.
     """
-    def __init__(self, num_envs: int, match: Match, observation_space: ObservationSpace, reward: Reward, device: str):
-        self._env = gym.vector.AsyncVectorEnv(
-            [lambda: Env(match, observation_space, reward, auto_reset=True) for _ in range(num_envs)],
-            shared_memory=False
 
+    def __init__(
+        self,
+        num_envs: int,
+        match: Match,
+        observation_space: ObservationSpace,
+        reward: Reward,
+        device: str,
+    ):
+        self._env = gym.vector.AsyncVectorEnv(
+            [
+                lambda: Env(match, observation_space, reward, auto_reset=True)
+                for _ in range(num_envs)
+            ],
+            shared_memory=False,
         )
         self.observation_space = observation_space
         self.num_envs = num_envs
         self.device = torch.device(device)
 
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
+    def reset(
+        self, *, seed: Optional[int] = None, options: Optional[dict] = None
+    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
         """
         Reset all environments and return batched observations as tensors.
 
@@ -174,7 +196,13 @@ class VectorEnv:
         obs_tuple, info = self._env.reset(seed=seed, options=options)
         return self._process_obs(obs_tuple), info
 
-    def step(self, actions: torch.Tensor) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Any]]:
+    def step(self, actions: torch.Tensor) -> Tuple[
+        Dict[str, torch.Tensor],
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Dict[str, Any],
+    ]:
         """
         Step all environments and return batched observations and rewards as tensors.
 
@@ -190,25 +218,31 @@ class VectorEnv:
         """
         actions_np = actions.cpu().numpy()
         obs_tuple, rewards, terminated, truncated, info = self._env.step(actions_np)
-        
+
         # Get true termination states from info arrays
-        true_terminated = info.get('true_terminated', terminated)
-        true_truncated = info.get('true_truncated', truncated)
-        
+        true_terminated = info.get("true_terminated", terminated)
+        true_truncated = info.get("true_truncated", truncated)
+
         # Convert everything to tensors
         rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        terminated_tensor = torch.tensor(true_terminated, dtype=torch.bool).to(self.device)
-        truncated_tensor = torch.tensor(true_truncated, dtype=torch.bool).to(self.device)
-        
+        terminated_tensor = torch.tensor(true_terminated, dtype=torch.bool).to(
+            self.device
+        )
+        truncated_tensor = torch.tensor(true_truncated, dtype=torch.bool).to(
+            self.device
+        )
+
         return (
             self._process_obs(obs_tuple),
             rewards_tensor,
             terminated_tensor,
             truncated_tensor,
-            info
+            info,
         )
 
-    def _process_obs(self, obs_tuple: Tuple[Dict[str, np.ndarray], ...]) -> Dict[str, torch.Tensor]:
+    def _process_obs(
+        self, obs_tuple: Tuple[Dict[str, np.ndarray], ...]
+    ) -> Dict[str, torch.Tensor]:
         """
         Convert tuple of observation dicts into dict of batched tensors.
 
@@ -221,19 +255,19 @@ class VectorEnv:
         """
         # Get keys from first observation
         keys = obs_tuple[0].keys()
-        
+
         # Initialize dict to store batched tensors
         batched = {}
-        
+
         # For each key, stack the arrays and convert to tensor
         for key in keys:
             arrays = [obs[key] for obs in obs_tuple]
             stacked = np.stack(arrays)
             batched[key] = torch.tensor(stacked, dtype=torch.float32).to(self.device)
-            
+
         return batched
-    
-    def to(self, device: str) -> 'VectorEnv':
+
+    def to(self, device: str) -> "VectorEnv":
         """
         Move the environment to the specified device.
 

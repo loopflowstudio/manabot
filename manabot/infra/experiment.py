@@ -3,23 +3,29 @@ experiment.py
 Experiment tracking and environment setup with proper config handling.
 """
 
-import os
-import time
+from dataclasses import asdict
 import logging
+import os
 from pathlib import Path
 import random
-from dataclasses import asdict
-import torch
+import time
 from typing import Optional
-import wandb
+
 import numpy as np
-from .hypers import ExperimentHypers, Hypers    
-from manabot.infra.profiler import Profiler
+import torch
+import wandb
+
+# Local imports
 import manabot.infra.log
+from manabot.infra.profiler import Profiler
+
+# Local directory imports
+from .hypers import ExperimentHypers, Hypers
 
 CODE_CONTEXT_ROOT = Path(os.getenv("CODE_CONTEXT_ROOT", str(Path.home() / "src")))
 
-def flatten_config(cfg: dict, parent_key: str = '', sep: str = '/') -> dict:
+
+def flatten_config(cfg: dict, parent_key: str = "", sep: str = "/") -> dict:
     """Flatten nested dictionary with path-like keys."""
     items = []
     for k, v in cfg.items():
@@ -30,9 +36,15 @@ def flatten_config(cfg: dict, parent_key: str = '', sep: str = '/') -> dict:
             items.append((new_key, v))
     return dict(items)
 
+
 class Experiment:
     """Experiment tracking and environment setup."""
-    def __init__(self, experiment_hypers: ExperimentHypers = ExperimentHypers(), full_hypers: Hypers = Hypers()):
+
+    def __init__(
+        self,
+        experiment_hypers: ExperimentHypers = ExperimentHypers(),
+        full_hypers: Hypers = Hypers(),
+    ):
         self.experiment_hypers = experiment_hypers
         self.full_hypers = full_hypers
         self.exp_name = experiment_hypers.exp_name
@@ -68,16 +80,18 @@ class Experiment:
         """Setup experiment tracking with wandb."""
         run_name = f"{self.exp_name}__{self.seed}__{int(time.time())}"
         run_dir = self.runs_dir / run_name
-        
+
         if self.wandb_on:
             try:
                 config = self._get_flattened_config()
-                config.update({
-                    "seed": self.seed,
-                    "device": self.device,
-                    "runs_dir": str(self.runs_dir),
-                    "code_context": str(CODE_CONTEXT_ROOT),
-                })
+                config.update(
+                    {
+                        "seed": self.seed,
+                        "device": self.device,
+                        "runs_dir": str(self.runs_dir),
+                        "code_context": str(CODE_CONTEXT_ROOT),
+                    }
+                )
                 self.wandb_run = wandb.init(
                     project=self.wandb_project_name,
                     entity=None,
@@ -96,7 +110,7 @@ class Experiment:
         """Log metrics to wandb."""
         if self.wandb_on and self.wandb_run:
             self.wandb_run.log(metrics, step=step)
-    
+
     def add_scalar(self, tag: str, value, step: int):
         """Compatibility method for tensorboard-style logging, now uses wandb."""
         if self.wandb_on and self.wandb_run:
