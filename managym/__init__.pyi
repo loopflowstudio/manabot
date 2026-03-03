@@ -5,13 +5,58 @@ from typing import Any, Dict, List, Tuple
 
 
 class Env:
-    def __init__(self, seed: int = 0, skip_trivial: bool = True, enable_profiler: bool = False, enable_behavior_tracking: bool = False) -> None: ...
-    def reset(self, player_configs: List[PlayerConfig]) -> Tuple[Observation, Dict[str, Any]]: ...
-    def step(self, action: int) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]: ...
-    def info(self) -> Dict[str, Any]: ...
-    def export_profile_baseline(self) -> str: ...
-    def compare_profile(self, baseline: str) -> str: ...
+    """Main environment class for Magic gameplay."""
 
+    def __init__(self, seed: int = 0, skip_trivial: bool = True, enable_profiler: bool = False, enable_behavior_tracking: bool = False) -> None:
+        """Initialize environment.
+
+        Args:
+            seed: Random seed for game
+            skip_trivial: Skip states with only one action
+        """
+        ...
+
+    def reset(self, player_configs: List[PlayerConfig]) -> Tuple[Observation, Dict[str, Any]]:
+        """Reset environment with new players.
+
+        Args:
+            player_configs: List of player configurations
+
+        Returns:
+            Tuple of (initial observation, info dict)
+        """
+        ...
+
+    def step(self, action: int) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]:
+        """Take an action in the game.
+
+        Args:
+            action: Index of action to take
+
+        Returns:
+            Tuple of (observation, reward, terminated, truncated, info)
+        """
+        ...
+
+    def info(self) -> Dict[str, Any]:
+        """Get information about the environment.
+
+        Returns:
+            Dictionary of environment information -- profiler and behavior stats
+        """
+        ...
+
+    def export_profile_baseline(self) -> str:
+        """Export profiler stats to a baseline string."""
+        ...
+
+    def compare_profile(self, baseline: str) -> str:
+        """Compare profiler stats against a baseline."""
+        ...
+
+# ---------------------------------------------------------------------
+# Player Config -- Used to define the match
+# ---------------------------------------------------------------------
 
 class PlayerConfig:
     def __init__(self, name: str, decklist: Dict[str, int]) -> None: ...
@@ -20,14 +65,14 @@ class PlayerConfig:
 
 
 class ZoneEnum(IntEnum):
-    LIBRARY = 0
-    HAND = 1
-    BATTLEFIELD = 2
-    GRAVEYARD = 3
-    STACK = 4
-    EXILE = 5
-    COMMAND = 6
-
+    """Zones in Magic: The Gathering where objects can exist."""
+    LIBRARY = 0      # Player's deck
+    HAND = 1         # Cards in hand
+    BATTLEFIELD = 2  # Cards in play
+    GRAVEYARD = 3    # Discard pile
+    STACK = 4        # Spells and abilities waiting to resolve
+    EXILE = 5        # Removed from game
+    COMMAND = 6      # Command zone for special cards
 
 class PhaseEnum(IntEnum):
     BEGINNING = 0

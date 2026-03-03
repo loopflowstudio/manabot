@@ -1,0 +1,83 @@
+name: Rust + Python integration
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  integration:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            managym -> target
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            pyproject.toml
+            managym/pyproject.toml
+            uv.lock
+
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'managym/pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Rust fmt check
+        working-directory: managym
+        run: cargo fmt --all -- --check
+
+      - name: Rust clippy
+        working-directory: managym
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Rust tests
+        working-directory: managym
+        run: cargo test
+
+      - name: Install Python tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv maturin pytest
+
+      - name: Install Python dependencies
+        run: |
+          uv venv .venv --python 3.12
+          source .venv/bin/activate
+          uv pip install -e .
+
+      - name: Build managym extension
+        run: |
+          source .venv/bin/activate
+          cd managym
+          maturin develop --features python
+
+      - name: Python integration tests
+        run: |
+          source .venv/bin/activate
+          pytest tests/env/ tests/agent/
+
+      - name: Enum smoke test
+        run: |
+          source .venv/bin/activate
+          python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
