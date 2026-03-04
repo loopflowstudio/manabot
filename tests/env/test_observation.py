@@ -3,7 +3,7 @@ test_observation.py
 Tests for observation encoding in manabot using minimal test configurations.
 
 This test suite verifies:
-1. Parity between Python and C++ enums for game state representation
+1. Parity between Python and managym enums for game state representation
 2. ObservationEncoder produces expected tensor shapes and keys
 3. Validity masks accurately reflect game objects
 4. Object-to-index mapping is consistent
@@ -91,7 +91,7 @@ def two_observations(
 
 
 class TestEnumParity:
-    """Verify that our Python enums match the C++ ones exactly."""
+    """Verify that our Python enums match the managym ones exactly."""
 
     @pytest.mark.parametrize(
         "py_enum, cpp_enum",

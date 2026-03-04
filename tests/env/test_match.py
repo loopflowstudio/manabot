@@ -85,12 +85,12 @@ class TestMatch:
         match1.hero_deck["Mountain"] = 20
         assert match2.hero_deck["Mountain"] != 20
 
-    def test_cpp_conversion(self, sample_match):
-        """Test conversion to C++ PlayerConfig objects."""
-        cpp_configs = sample_match.to_cpp()
-        assert len(cpp_configs) == 2
+    def test_rust_conversion(self, sample_match):
+        """Test conversion to managym PlayerConfig objects."""
+        configs = sample_match.to_rust()
+        assert len(configs) == 2
 
-        hero_config, villain_config = cpp_configs
+        hero_config, villain_config = configs
         assert hero_config.name == "gaea"
         assert dict(hero_config.decklist) == sample_match.hero_deck
         assert villain_config.name == "urza"

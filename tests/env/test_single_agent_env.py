@@ -44,7 +44,7 @@ class FakeInnerEnv:
         self._reset_result = deepcopy(reset_result)
         self._step_results = [deepcopy(step) for step in step_results]
         self.step_actions = []
-        self.last_cpp_obs = self._obs_to_cpp(self._reset_result[0])
+        self.last_raw_obs = self._obs_to_raw(self._reset_result[0])
         self.observation_space = gym.spaces.Dict(
             {
                 "agent_player": gym.spaces.Box(
@@ -65,12 +65,12 @@ class FakeInnerEnv:
         clean_obs.pop("_player_index")
         return clean_obs
 
-    def _obs_to_cpp(self, obs):
+    def _obs_to_raw(self, obs):
         return SimpleNamespace(agent=SimpleNamespace(player_index=obs["_player_index"]))
 
     def reset(self, *, seed=None, options=None):
         obs, info = deepcopy(self._reset_result)
-        self.last_cpp_obs = self._obs_to_cpp(obs)
+        self.last_raw_obs = self._obs_to_raw(obs)
         return self._strip_internal_keys(obs), info
 
     def step(self, action):
@@ -78,7 +78,7 @@ class FakeInnerEnv:
         if not self._step_results:
             raise RuntimeError("No scripted step results left")
         obs, reward, terminated, truncated, info = deepcopy(self._step_results.pop(0))
-        self.last_cpp_obs = self._obs_to_cpp(obs)
+        self.last_raw_obs = self._obs_to_raw(obs)
         return self._strip_internal_keys(obs), reward, terminated, truncated, info
 
     def close(self):
@@ -126,7 +126,7 @@ def test_reset_skips_initial_opponent_turn():
 
     obs, info = env.reset()
 
-    assert fake_inner.last_cpp_obs.agent.player_index == 0
+    assert fake_inner.last_raw_obs.agent.player_index == 0
     assert info["action_space_truncated"] is True
     assert fake_inner.step_actions == [0]
 
@@ -170,7 +170,7 @@ def test_terminal_on_opponent_turn_negates_reward():
     env.reset()
     obs, reward, terminated, truncated, info = env.step(0)
 
-    assert fake_inner.last_cpp_obs.agent.player_index == 0
+    assert fake_inner.last_raw_obs.agent.player_index == 0
     assert reward == -1.0
     assert terminated is False
     assert truncated is False
@@ -216,7 +216,7 @@ def test_terminal_flags_latched_after_post_reset_skip():
     env.reset()
     obs, reward, _, _, info = env.step(0)
 
-    assert fake_inner.last_cpp_obs.agent.player_index == 0
+    assert fake_inner.last_raw_obs.agent.player_index == 0
     assert reward == 1.0
     assert info["true_terminated"] is True
     assert info["true_truncated"] is False

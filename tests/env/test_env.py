@@ -211,7 +211,7 @@ class TestEnvironment:
         turn_counts = {}
 
         while steps < max_steps:
-            actor_idx = int(env.last_cpp_obs.agent.player_index)
+            actor_idx = int(env.last_raw_obs.agent.player_index)
             assert actor_idx in (0, 1), f"Unexpected actor index {actor_idx}"
 
             # Record the turn count.

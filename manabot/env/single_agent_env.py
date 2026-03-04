@@ -12,6 +12,12 @@ import numpy as np
 from .env import Env
 from .observation import ActionEnum
 
+_TRUNCATION_KEYS = (
+    "action_space_truncated",
+    "card_space_truncated",
+    "permanent_space_truncated",
+)
+
 
 class PassivePolicy:
     """Always pass priority when possible."""
@@ -44,6 +50,21 @@ def build_opponent_policy(name: str):
     if name == "random":
         return RandomPolicy()
     raise ValueError(f"Unsupported opponent_policy: {name}")
+
+
+def _read_truncation_flags(info: dict[str, Any]) -> dict[str, bool]:
+    return {k: bool(info.get(k, False)) for k in _TRUNCATION_KEYS}
+
+
+def _merge_truncation_flags(
+    accumulated: dict[str, bool], info: dict[str, Any]
+) -> dict[str, bool]:
+    return {k: accumulated[k] or bool(info.get(k, False)) for k in _TRUNCATION_KEYS}
+
+
+def _apply_truncation_flags(info: dict[str, Any], flags: dict[str, bool]) -> None:
+    for k, v in flags.items():
+        info[k] = v
 
 
 class SingleAgentEnv(gym.Env):
@@ -81,7 +102,7 @@ class SingleAgentEnv(gym.Env):
 
     def step(self, action: int):
         obs, reward, terminated, truncated, info = self.inner.step(action)
-        action_space_truncated = bool(info.get("action_space_truncated", False))
+        flags = _read_truncation_flags(info)
 
         if self._is_true_terminal(info):
             return self._finalize_terminal_step(
@@ -90,7 +111,7 @@ class SingleAgentEnv(gym.Env):
                 terminated=terminated,
                 truncated=truncated,
                 info=info,
-                action_space_truncated=action_space_truncated,
+                flags=flags,
             )
 
         while self._is_opponent():
@@ -98,9 +119,7 @@ class SingleAgentEnv(gym.Env):
             obs, opponent_reward, terminated, truncated, info = self.inner.step(
                 opponent_action
             )
-            action_space_truncated = action_space_truncated or bool(
-                info.get("action_space_truncated", False)
-            )
+            flags = _merge_truncation_flags(flags, info)
 
             if self._is_true_terminal(info):
                 return self._finalize_terminal_step(
@@ -109,14 +128,14 @@ class SingleAgentEnv(gym.Env):
                     terminated=terminated,
                     truncated=truncated,
                     info=info,
-                    action_space_truncated=action_space_truncated,
+                    flags=flags,
                 )
 
-        info["action_space_truncated"] = action_space_truncated
+        _apply_truncation_flags(info, flags)
         return obs, reward, terminated, truncated, info
 
     def _is_opponent(self) -> bool:
-        return int(self.inner.last_cpp_obs.agent.player_index) != self.hero_player_index
+        return int(self.inner.last_raw_obs.agent.player_index) != self.hero_player_index
 
     @staticmethod
     def _is_true_terminal(info: dict[str, Any]) -> bool:
@@ -129,27 +148,24 @@ class SingleAgentEnv(gym.Env):
         terminated: bool,
         truncated: bool,
         info: dict[str, Any],
-        action_space_truncated: bool,
+        flags: dict[str, bool],
     ):
         latched_terminated = bool(info.get("true_terminated", False))
         latched_truncated = bool(info.get("true_truncated", False))
         obs, info = self._skip_opponent(obs, info)
         info["true_terminated"] = latched_terminated
         info["true_truncated"] = latched_truncated
-        info["action_space_truncated"] = action_space_truncated or bool(
-            info.get("action_space_truncated", False)
-        )
+        flags = _merge_truncation_flags(flags, info)
+        _apply_truncation_flags(info, flags)
         return obs, reward, terminated, truncated, info
 
     def _skip_opponent(self, obs: dict[str, np.ndarray], info: dict[str, Any]):
-        action_space_truncated = bool(info.get("action_space_truncated", False))
+        flags = _read_truncation_flags(info)
         while self._is_opponent():
             opponent_action = self.opponent_policy(obs)
             obs, _, _, _, info = self.inner.step(opponent_action)
-            action_space_truncated = action_space_truncated or bool(
-                info.get("action_space_truncated", False)
-            )
-        info["action_space_truncated"] = action_space_truncated
+            flags = _merge_truncation_flags(flags, info)
+        _apply_truncation_flags(info, flags)
         return obs, info
 
     def close(self):
