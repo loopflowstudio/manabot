@@ -461,12 +461,13 @@ def determine_outcome(
 
 def _extract_life(obs: dict, player_index: int) -> Optional[float]:
     """Extract life total for a player from observation if possible."""
+    player_key = {0: "agent_player", 1: "opponent_player"}.get(player_index)
+    if player_key is None:
+        return None
+
     try:
-        # This is a simplified example - adapt based on your actual observation structure
-        if player_index == 0 and "agent_player" in obs:
-            return obs["agent_player"][0, 0]
-        elif player_index == 1 and "opponent_player" in obs:
-            return obs["opponent_player"][0, 0]
+        if player_key in obs:
+            return obs[player_key][0, 0]
     except (IndexError, KeyError):
         pass
     return None
