@@ -156,21 +156,22 @@ class ObservationEncoder:
         self.object_to_index = {}
         self.current_object_index = 0
 
+        # Game Objects
         for key, player in (
             ("agent_player", obs.agent),
             ("opponent_player", obs.opponent),
         ):
             out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
-        for key, cards, is_mine in (
-            ("agent_cards", obs.agent_cards, 1.0),
-            ("opponent_cards", obs.opponent_cards, 0.0),
+        for key, cards, is_mine, owner_label in (
+            ("agent_cards", obs.agent_cards, 1.0, "agent_cards"),
+            ("opponent_cards", obs.opponent_cards, 0.0, "opponent_cards"),
         ):
-            out[key] = self._encode_cards(cards, is_mine=is_mine)
-        for key, perms, is_mine in (
-            ("agent_permanents", obs.agent_permanents, 1.0),
-            ("opponent_permanents", obs.opponent_permanents, 0.0),
+            out[key] = self._encode_cards(cards, is_mine=is_mine, owner_label=owner_label)
+        for key, perms, is_mine, owner_label in (
+            ("agent_permanents", obs.agent_permanents, 1.0, "agent_permanents"),
+            ("opponent_permanents", obs.opponent_permanents, 0.0, "opponent_permanents"),
         ):
-            out[key] = self._encode_perms(perms, is_mine=is_mine)
+            out[key] = self._encode_perms(perms, is_mine=is_mine, owner_label=owner_label)
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -222,11 +223,15 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(self, cards: List[managym.Card], is_mine: float) -> np.ndarray:
+    def _encode_cards(
+        self, cards: List[managym.Card], is_mine: float, owner_label: str
+    ) -> np.ndarray:
         log = getLogger(__name__).getChild("encode_cards")
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
         if len(cards) > self.cards_per_player:
-            log.warning(f"Card list truncated: {len(cards)} -> {self.cards_per_player}")
+            log.warning(
+                f"Card list truncated ({owner_label}): {len(cards)} -> {self.cards_per_player}"
+            )
         ordered_cards = cards[: self.cards_per_player]
         for i, card in enumerate(ordered_cards):
             feat[i] = self._encode_card_features(card, is_mine)
@@ -270,13 +275,13 @@ class ObservationEncoder:
     # Permanents (with validity mask support)
     # -------------------------------------------------------------------------
     def _encode_perms(
-        self, perms: List[managym.Permanent], is_mine: float
+        self, perms: List[managym.Permanent], is_mine: float, owner_label: str
     ) -> np.ndarray:
         log = getLogger(__name__).getChild("encode_permanents")
         feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
         if len(perms) > self.perms_per_player:
             log.warning(
-                f"Permanent list truncated: {len(perms)} -> {self.perms_per_player}"
+                f"Permanent list truncated ({owner_label}): {len(perms)} -> {self.perms_per_player}"
             )
         ordered_perms = perms[: self.perms_per_player]
         for i, perm in enumerate(ordered_perms):

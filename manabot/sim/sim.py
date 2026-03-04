@@ -459,6 +459,20 @@ def determine_outcome(
     return GameOutcome.TIMEOUT
 
 
+def _extract_life(obs: dict, player_index: int) -> Optional[float]:
+    """Extract life total for a player from observation if possible."""
+    try:
+        # This is a simplified example - adapt based on your actual observation structure
+        if player_index == 0 and "agent_player" in obs:
+            return obs["agent_player"][0, 0]
+        elif player_index == 1 and "opponent_player" in obs:
+            return obs["opponent_player"][0, 0]
+    except (IndexError, KeyError):
+        pass
+    return None
+
+
+
 # -----------------------------------------------------------------------------
 # Main Simulation
 # -----------------------------------------------------------------------------
