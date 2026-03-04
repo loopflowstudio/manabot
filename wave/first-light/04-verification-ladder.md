@@ -95,21 +95,26 @@ python -m manabot.verify.step4_beat_random
 
 ## Available instrumentation
 
-Rollout health counters are already wired into the trainer and wandb:
+Rollout health counters are wired into the trainer and wandb:
 - `rollout/truncated_episodes` (+ `_total`)
 - `rollout/action_space_truncations` (+ `_total`)
+- `rollout/card_space_truncations` (+ `_total`)
+- `rollout/permanent_space_truncations` (+ `_total`)
 
-Truncation warnings (from stage 03) fire when observation lists exceed
-padding limits (20 cards, 15 permanents per player). These limits were
-set based on the test deck profile but haven't been stress-tested at
-scale. Step 0 should serve as initial validation — if truncation
-warnings fire during 1000+ games, bump the limit that fired in
-`ObservationSpaceHypers` before proceeding.
+The env emits per-step `info` flags (`action_space_truncated`,
+`card_space_truncated`, `permanent_space_truncated`) which
+`SingleAgentEnv` OR-accumulates across opponent steps and the trainer
+rolls up into the health counters above.
+
+Padding limits are 20 cards and 15 permanents per player
+(`ObservationSpaceHypers`). These were set based on the test deck
+profile but haven't been stress-tested at scale. Step 0 should serve
+as initial validation — if truncation counters fire during 1000+
+games, bump the limit that fired before proceeding.
 
 All truncation counters should be monitored at each ladder step. If
-`action_space_truncations` is persistent, the ladder result is
-unreliable — fix the data quality issue before interpreting the
-learning signal.
+any truncation counter is persistent, the ladder result is unreliable —
+fix the data quality issue before interpreting the learning signal.
 
 ## Done when
 
