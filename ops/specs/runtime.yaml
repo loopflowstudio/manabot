@@ -1,0 +1,3 @@
+image: ghcr.io/loopflowstudio/manabot-gpu:latest
+fallback_build: true
+log_group_prefix: /manabot
