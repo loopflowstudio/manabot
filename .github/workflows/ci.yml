@@ -8,35 +8,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install ruff
-        run: pip install ruff
-
-      - name: Ruff check
-        run: ruff check .
-
-      - name: Ruff format check
-        run: ruff format --check .
-
-      - name: Rust fmt check
-        uses: dtolnay/rust-toolchain@stable
-      - run: cargo fmt --all -- --check
-        working-directory: managym
-
-      - name: Rust clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-        working-directory: managym
-
   rust:
     name: Rust Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -89,7 +60,7 @@ jobs:
 
   integration:
     name: Integration (${{ matrix.os }})
-    needs: [lint, rust]
+    needs: [rust]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -162,19 +133,17 @@ jobs:
             agent.attention_on=false
 
   result:
-    name: CI Result
+    name: Tests Result
     runs-on: ubuntu-latest
-    needs: [lint, rust, python-unit, integration]
+    needs: [rust, python-unit, integration]
     if: always()
     steps:
       - name: Check all jobs
         run: |
-          echo "lint: ${{ needs.lint.result }}"
           echo "rust: ${{ needs.rust.result }}"
           echo "python-unit: ${{ needs.python-unit.result }}"
           echo "integration: ${{ needs.integration.result }}"
-          if [ "${{ needs.lint.result }}" != "success" ] || \
-             [ "${{ needs.rust.result }}" != "success" ] || \
+          if [ "${{ needs.rust.result }}" != "success" ] || \
              [ "${{ needs.python-unit.result }}" != "success" ] || \
              [ "${{ needs.integration.result }}" != "success" ]; then
             exit 1

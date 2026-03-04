@@ -18,12 +18,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
-import torch
 import wandb
 
 # Local imports
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import get_agent_indices
 from manabot.infra.experiment import Experiment
 from manabot.infra.hypers import ExperimentHypers, SimulationHypers
 from manabot.infra.log import getLogger
@@ -427,14 +425,14 @@ class GameStats:
 
 
 def determine_outcome(
-    info: dict, last_obs: dict, turn_count: int, max_steps: int
+    info: dict, raw_obs, turn_count: int, max_steps: int
 ) -> GameOutcome:
     """
     Determine the outcome of a game with robust fallback logic.
 
     Args:
         info: Information dictionary from environment step
-        last_obs: Last observation from environment
+        raw_obs: Raw managym.Observation (not encoded)
         turn_count: Current turn count
         max_steps: Maximum steps before timeout
 
@@ -449,39 +447,16 @@ def determine_outcome(
     if "winner" in info:
         return GameOutcome.HERO_WIN if info["winner"] == 0 else GameOutcome.VILLAIN_WIN
 
-    # Fallback: game_over and won fields in observation
-    if last_obs.get("game_over", False):
-        return (
-            GameOutcome.HERO_WIN
-            if last_obs.get("won", -1) == 0
-            else GameOutcome.VILLAIN_WIN
-        )
+    # Fallback: life totals from the raw observation
+    hero_life = raw_obs.agent.life
+    villain_life = raw_obs.opponent.life
 
-    # Fallback: Check life totals if available
-    hero_life = _extract_life(last_obs, player_index=0)
-    villain_life = _extract_life(last_obs, player_index=1)
+    if hero_life <= 0:
+        return GameOutcome.VILLAIN_WIN
+    if villain_life <= 0:
+        return GameOutcome.HERO_WIN
 
-    if hero_life is not None and villain_life is not None:
-        if hero_life <= 0:
-            return GameOutcome.VILLAIN_WIN
-        if villain_life <= 0:
-            return GameOutcome.HERO_WIN
-
-    # If we can't determine a winner, consider it a timeout
     return GameOutcome.TIMEOUT
-
-
-def _extract_life(obs: dict, player_index: int) -> Optional[float]:
-    """Extract life total for a player from observation if possible."""
-    try:
-        # This is a simplified example - adapt based on your actual observation structure
-        if player_index == 0 and "agent_player" in obs:
-            return obs["agent_player"][0, 2]  # Assuming life is at index 2
-        elif player_index == 1 and "opponent_player" in obs:
-            return obs["opponent_player"][0, 2]  # Assuming life is at index 2
-    except (IndexError, KeyError):
-        pass
-    return None
 
 
 # -----------------------------------------------------------------------------
@@ -675,15 +650,12 @@ def _simulate_game(
     turn_count = 0
 
     # Track game state
-    last_obs = obs
     last_info = info
 
     # Main game loop
     while not done and turn_count < max_steps:
-        # Get active player index from observation
-        active_player_index = get_agent_indices(
-            {k: torch.tensor(v)[None, ...] for k, v in obs.items()}
-        )[0].item()
+        # Get active player index from the raw observation.
+        active_player_index = int(env.last_raw_obs.agent.player_index)
 
         # Select the appropriate player
         player = hero_player if active_player_index == 0 else villain_player
@@ -704,7 +676,6 @@ def _simulate_game(
         try:
             new_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            last_obs = new_obs
             last_info = info
             turn_count += 1
 
@@ -721,7 +692,7 @@ def _simulate_game(
     duration = time.time() - start_time
 
     # Determine outcome
-    outcome = determine_outcome(last_info, last_obs, turn_count, max_steps)
+    outcome = determine_outcome(last_info, env.last_raw_obs, turn_count, max_steps)
 
     # Extract profiler and behavior data from the environment info
     profiler_data = last_info.get("profiler", {})

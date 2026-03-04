@@ -34,17 +34,14 @@ class Match:
         self.hero_deck = deepcopy(hypers.hero_deck)
         self.villain_deck = deepcopy(hypers.villain_deck)
 
-    def to_cpp_hero(self) -> "managym.PlayerConfig":
-        """Convert hero configuration to C++ format."""
+    def to_rust_hero(self) -> "managym.PlayerConfig":
         return managym.PlayerConfig(self.hero, self.hero_deck)
 
-    def to_cpp_villain(self) -> "managym.PlayerConfig":
-        """Convert villain configuration to C++ format."""
+    def to_rust_villain(self) -> "managym.PlayerConfig":
         return managym.PlayerConfig(self.villain, self.villain_deck)
 
-    def to_cpp(self) -> "list[managym.PlayerConfig]":
-        """Convert entire match configuration to C++ format."""
-        return [self.to_cpp_hero(), self.to_cpp_villain()]
+    def to_rust(self) -> "list[managym.PlayerConfig]":
+        return [self.to_rust_hero(), self.to_rust_villain()]
 
     def __str__(self) -> str:
         """Return a human-readable string representation of the match."""
@@ -77,7 +74,7 @@ class Reward:
     Reward policy for an environment.
 
     Hypers:
-        managym: If true, directly use the reward from the C++ managym environment.
+        managym: If true, directly use the reward from the managym engine.
         trivial: If True, return 1.0 for all rewards.
         win_reward: Reward for winning the game.
         lose_reward: Reward for losing the game.
@@ -88,17 +85,17 @@ class Reward:
 
     def compute(
         self,
-        cpp_reward: float,
+        raw_reward: float,
         _last_obs: managym.Observation,
         new_obs: managym.Observation,
     ) -> float:
         if self.hypers.managym:
-            return cpp_reward
+            return raw_reward
 
         if self.hypers.trivial:
             return 1.0
 
         if not new_obs.game_over:
-            return cpp_reward
+            return raw_reward
 
         return self.hypers.win_reward if new_obs.won else self.hypers.lose_reward

@@ -84,8 +84,10 @@ Track per-head prediction accuracy:
 
 - Auxiliary targets must not distort the policy gradient — they only
   affect the encoder through their own loss terms
-- The env (or wrapper) must expose the terminal state information
-  needed to compute targets (life totals, creature counts, game length)
+- Terminal state information (life totals, creature counts, game
+  length) is available via `env.last_raw_obs` which exposes the raw
+  `managym.Observation` — see `sim.py:determine_outcome` for the
+  access pattern (`raw_obs.agent.life`, `raw_obs.opponent.life`)
 - Auxiliary heads should be removable via config (for A/B comparison)
 - The buffer is now flat pre-allocated tensors inline in `train.py`
   (not a separate class). Auxiliary target tensors follow the same

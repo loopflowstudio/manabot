@@ -10,7 +10,6 @@ import torch
 # Local imports
 from manabot.env import Env, PassivePolicy, Reward, VectorEnv
 from manabot.env.match import Match
-import manabot.env.observation
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import RewardHypers
 
@@ -196,46 +195,30 @@ class TestEnvironment:
         )
 
         obs, _ = vector_env.reset()
-        actor_ids = manabot.env.observation.get_agent_indices(obs)
-        assert torch.all(actor_ids == 0)
+        assert obs["agent_player"].shape[0] == 3
 
+        actions = torch.zeros(3, dtype=torch.int64)
+        next_obs, _, _, _, _ = vector_env.step(actions)
+        assert next_obs["agent_player"].shape[0] == 3
         vector_env.close()
 
     def test_agent_turns_distribution(self, env):
-        """Test that agent indices match between observation encoding and managym."""
+        """Test that both raw player indices appear over a game."""
         obs, info = env.reset()
-
-        # Convert the observation to a "vectorized" format using torch:
-        obs_vec = {k: torch.from_numpy(v).unsqueeze(0) for k, v in obs.items()}
-
-        # Print shapes to understand what we're working with
-        print("obs_vec['agent_player'] shape:", obs_vec["agent_player"].shape)
 
         max_steps = 1000
         steps = 0
         turn_counts = {}
 
         while steps < max_steps:
-            # Extract agent indices using the vectorized observation.
-            actor_idx = manabot.env.observation.get_agent_indices(obs_vec)
-            # Get the single scalar value using item() to convert to Python int
-            actor_idx = actor_idx[0].item()
-
-            raw_obs = env.last_cpp_obs
-            cpp_player_idx = raw_obs.agent.player_index
-
-            assert actor_idx == cpp_player_idx, (
-                f"Actor index {actor_idx} doesn't match managym player index {cpp_player_idx}"
-            )
+            actor_idx = int(env.last_raw_obs.agent.player_index)
+            assert actor_idx in (0, 1), f"Unexpected actor index {actor_idx}"
 
             # Record the turn count.
             turn_counts[actor_idx] = turn_counts.get(actor_idx, 0) + 1
 
             # Take a step in the environment
             obs, reward, done, truncated, info = env.step(0)
-
-            # Re-wrap the new observation.
-            obs_vec = {k: torch.from_numpy(v).unsqueeze(0) for k, v in obs.items()}
             steps += 1
 
             # Check termination

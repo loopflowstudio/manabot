@@ -1,6 +1,6 @@
 """
 env.py
-Environment wrapper around the C++ managym.Env that conforms to the Gymnasium API.
+Environment wrapper around the managym Rust engine that conforms to the Gymnasium API.
 """
 
 from typing import Any, Dict, Optional, Tuple
@@ -41,10 +41,10 @@ class Env(gym.Env):
         enable_behavior_tracking: bool = False,
     ):
         """
-        Gymnasium-compatible Env wrapper around the managym.Env C++ class.
+        Gymnasium-compatible Env wrapper around the managym Rust engine.
 
         Args:
-            observation_space: The ObservationSpace (manabot.data) we use to encode C++ observations.
+            observation_space: The ObservationSpace we use to encode raw observations.
             skip_trivial: Passed to the underlying managym.Env constructor.
             render_mode: Gymnasium render mode, e.g. "human" or None.
         """
@@ -57,7 +57,7 @@ class Env(gym.Env):
         logger.info(
             f"Initializing Env with seed={self.seed}, skip_trivial={self.skip_trivial}, enable_profiler={self.enable_profiler}, enable_behavior_tracking={self.enable_behavior_tracking}"
         )
-        self._cpp_env = managym.Env(
+        self._engine = managym.Env(
             seed=self.seed,
             skip_trivial=self.skip_trivial,
             enable_profiler=self.enable_profiler,
@@ -97,12 +97,12 @@ class Env(gym.Env):
                 match = options["match"]
 
         # Get the initial managym observation
-        cpp_obs, cpp_info = self._cpp_env.reset(match.to_cpp())
-        self._last_obs = cpp_obs
+        raw_obs, raw_info = self._engine.reset(match.to_rust())
+        self._last_obs = raw_obs
         # Encode to our dictionary-of-numpy format
-        py_obs = self.obs_space.encode(cpp_obs)
+        py_obs = self.obs_space.encode(raw_obs)
 
-        return py_obs, cpp_info
+        return py_obs, raw_info
 
     def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
         """
@@ -120,40 +120,49 @@ class Env(gym.Env):
             info: Additional debug info from managym, e.g. partial game logs.
         """
         log = getLogger(__name__).getChild("step")
-        cpp_obs, cpp_reward, terminated, truncated, info = self._cpp_env.step(action)
-        reward = self.reward.compute(cpp_reward, self._last_obs, cpp_obs)
+        raw_obs, raw_reward, terminated, truncated, info = self._engine.step(action)
+        reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
         info["true_terminated"] = terminated
         info["true_truncated"] = truncated
+        encoder = self.obs_space.encoder
         info["action_space_truncated"] = (
-            len(cpp_obs.action_space.actions) > self.obs_space.encoder.max_actions
+            len(raw_obs.action_space.actions) > encoder.max_actions
+        )
+        info["card_space_truncated"] = (
+            len(raw_obs.agent_cards) > encoder.cards_per_player
+            or len(raw_obs.opponent_cards) > encoder.cards_per_player
+        )
+        info["permanent_space_truncated"] = (
+            len(raw_obs.agent_permanents) > encoder.perms_per_player
+            or len(raw_obs.opponent_permanents) > encoder.perms_per_player
         )
 
         log.debug(
-            f"Stepped env. Step output: reward={cpp_reward}, terminated={terminated}, truncated={truncated}"
+            f"Stepped env. Step output: reward={raw_reward}, terminated={terminated}, truncated={truncated}"
         )
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
             if self.auto_reset:
                 # TODO: merge infos? Hopefully we remove this code soon and use gymnasium's autoreset when its released
-                cpp_obs, _ = self._cpp_env.reset(self.match.to_cpp())
+                raw_obs, _ = self._engine.reset(self.match.to_rust())
                 terminated = False
                 truncated = False
 
-        py_obs = self.obs_space.encode(cpp_obs)
-        self._last_obs = cpp_obs
+        py_obs = self.obs_space.encode(raw_obs)
+        self._last_obs = raw_obs
         return py_obs, reward, terminated, truncated, info
 
     def render(self):
         pass
 
     def info(self) -> Dict[str, Any]:
-        return self._cpp_env.info()
+        return self._engine.info()
 
     def close(self):
         pass
 
     @property
-    def last_cpp_obs(self):
+    def last_raw_obs(self):
         return self._last_obs
 
 
