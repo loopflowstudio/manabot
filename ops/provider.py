@@ -117,8 +117,8 @@ def _load_spec(
     return spec_type(**config)
 
 
-def merge_tags(*tag_maps: dict[str, Any]) -> dict[str, str]:
-    """Merge tag dictionaries while coercing values to strings."""
+def merge_str(*tag_maps: dict[str, Any]) -> dict[str, str]:
+    """Merge dictionaries, coercing values to strings and dropping None."""
 
     merged: dict[str, str] = {}
     for tag_map in tag_maps:
@@ -130,46 +130,11 @@ def merge_tags(*tag_maps: dict[str, Any]) -> dict[str, str]:
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
-    try:
-        import yaml  # type: ignore[import-not-found]
+    import yaml
 
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if loaded is None:
-            return {}
-        if not isinstance(loaded, dict):
-            raise ValueError(f"YAML root must be mapping: {path}")
-        return loaded
-    except ModuleNotFoundError:
-        return _parse_simple_yaml(path.read_text(encoding="utf-8"))
-
-
-def _parse_simple_yaml(text: str) -> dict[str, Any]:
-    """Small YAML subset parser for flat key/value spec files."""
-
-    parsed: dict[str, Any] = {}
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" not in line:
-            raise ValueError(f"Unsupported YAML line: {raw_line}")
-        key, value = line.split(":", maxsplit=1)
-        parsed[key.strip()] = _coerce_yaml_scalar(value.strip())
-    return parsed
-
-
-def _coerce_yaml_scalar(value: str) -> Any:
-    if value in {"", "null", "Null", "NULL", "~"}:
-        return None
-    if value in {"true", "True"}:
-        return True
-    if value in {"false", "False"}:
-        return False
-
-    if value.startswith(('"', "'")) and value.endswith(('"', "'")):
-        return value[1:-1]
-
-    if value.isdigit() or (value.startswith("-") and value[1:].isdigit()):
-        return int(value)
-
-    return value
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise ValueError(f"YAML root must be mapping: {path}")
+    return loaded

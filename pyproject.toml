@@ -28,6 +28,7 @@ dev = [
 ]
 ops = [
     "boto3>=1.35.0",
+    "pyyaml>=6.0",
 ]
 
 [tool.hatch.build.targets.wheel]

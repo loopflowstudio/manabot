@@ -15,7 +15,7 @@ import time
 from typing import Any
 import urllib.request
 
-from ops.provider import CommandResult, Machine, MachineSpec, merge_tags
+from ops.provider import CommandResult, Machine, MachineSpec, merge_str
 
 
 class AWSProvider:
@@ -84,7 +84,7 @@ class AWSProvider:
 
         self.ensure_log_groups(region)
 
-        managed_tags = merge_tags(
+        managed_tags = merge_str(
             {
                 "manabot:user": self.user,
                 "manabot:managed": "true",
@@ -132,7 +132,7 @@ class AWSProvider:
         if spec.spot:
             request["InstanceMarketOptions"] = {
                 "MarketType": "spot",
-                "SpotOptions": merge_tags(
+                "SpotOptions": merge_str(
                     {
                         "SpotInstanceType": "one-time",
                         "InstanceInterruptionBehavior": "terminate",

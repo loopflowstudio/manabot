@@ -5,10 +5,17 @@ User-data script generation for sandbox and job GPU machine bootstrapping.
 
 from __future__ import annotations
 
+import shlex
+
 from ops.provider import RuntimeSpec
 
 BOOTSTRAP_MARKER = "/opt/manabot/bootstrap.v1.done"
 DEFAULT_REPO = "https://github.com/loopflowstudio/manabot.git"
+
+
+def _sq(value: str) -> str:
+    """Shell-quote a value for safe interpolation into bash scripts."""
+    return shlex.quote(value)
 
 _COMMON_BOOTSTRAP = """
   sudo mkdir -p /opt/manabot
@@ -55,9 +62,9 @@ def sandbox_user_data(
     return f"""#!/usr/bin/env bash
 set -euo pipefail
 
-MARKER={marker_path}
-REPO_URL={repo_url}
-IMAGE={runtime.image}
+MARKER={_sq(marker_path)}
+REPO_URL={_sq(repo_url)}
+IMAGE={_sq(runtime.image)}
 FALLBACK_BUILD={"1" if runtime.fallback_build else "0"}
 
 if [ ! -f "$MARKER" ]; then
@@ -95,15 +102,15 @@ def job_user_data(
     return f"""#!/usr/bin/env bash
 set -euo pipefail
 
-MARKER={marker_path}
-IMAGE={runtime.image}
+MARKER={_sq(marker_path)}
+IMAGE={_sq(runtime.image)}
 FALLBACK_BUILD={"1" if runtime.fallback_build else "0"}
-CONFIG_NAME={config_name}
-JOB_ID={job_id}
-WANDB_RUN_ID={wandb_run_id}
-AWS_REGION={region}
-LOG_GROUP={log_group}
-REPO_URL={DEFAULT_REPO}
+CONFIG_NAME={_sq(config_name)}
+JOB_ID={_sq(job_id)}
+WANDB_RUN_ID={_sq(wandb_run_id)}
+AWS_REGION={_sq(region)}
+LOG_GROUP={_sq(log_group)}
+REPO_URL={_sq(DEFAULT_REPO)}
 
 if [ ! -f "$MARKER" ]; then
 {_COMMON_BOOTSTRAP}
