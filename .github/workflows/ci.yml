@@ -56,7 +56,7 @@ jobs:
       - name: Run unit tests
         run: |
           source .venv/bin/activate
-          pytest tests/model/ tests/infra/
+          pytest tests/infra/ tests/ops/
 
   integration:
     name: Integration (${{ matrix.os }})
@@ -112,7 +112,7 @@ jobs:
       - name: Integration tests
         run: |
           source .venv/bin/activate
-          pytest tests/env/ tests/agent/
+          pytest tests/env/ tests/agent/ tests/model/
 
       - name: Enum smoke test
         run: |
@@ -123,14 +123,14 @@ jobs:
         run: |
           source .venv/bin/activate
           python manabot/model/train.py \
-            train.total_timesteps=128 \
-            train.num_envs=2 \
-            train.num_steps=8 \
-            train.update_epochs=1 \
-            train.num_minibatches=1 \
-            experiment.wandb=false \
-            experiment.profiler_enabled=false \
-            agent.attention_on=false
+            --set train.total_timesteps=128 \
+            --set train.num_envs=2 \
+            --set train.num_steps=8 \
+            --set train.update_epochs=1 \
+            --set train.num_minibatches=1 \
+            --set experiment.wandb=false \
+            --set experiment.profiler_enabled=false \
+            --set agent.attention_on=false
 
   result:
     name: Tests Result
