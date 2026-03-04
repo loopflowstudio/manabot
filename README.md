@@ -4,7 +4,7 @@ A reinforcement learning framework for [Magic: The Gathering](https://magic.wiza
 
 This repository contains both:
 - **manabot** (Python): RL training framework, Gymnasium environment wrapper, experiment tracking
-- **managym** (C++): Game engine with pybind11 Python bindings
+- **managym** (Rust): Game engine with PyO3 Python bindings
 
 ## Installation
 
@@ -13,11 +13,15 @@ This repository contains both:
 git clone git@github.com:loopflowstudio/manabot.git
 cd manabot
 
-# Install managym (C++ module)
+# Create a local environment
+uv venv .venv --python 3.12
+source .venv/bin/activate
+
+# Install managym (Rust extension)
 pip install -e managym
 
 # Install manabot
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Training
@@ -25,8 +29,7 @@ pip install -e .
 Manabot is primarily trained on Ubuntu machines in AWS and requires wandb credentials.
 
 ```bash
-# Run training
-python manabot/ppo/train.py --config-name simple
+python manabot/model/train.py --config-name simple
 ```
 
 ## Simulation
@@ -34,28 +37,25 @@ python manabot/ppo/train.py --config-name simple
 Simulation pulls models from wandb. At small scales this can be done locally on CPU machines.
 
 ```bash
-python sim/sim.py --hero attention --villain simple
+python manabot/sim/sim.py --hero attention --villain simple
 ```
 
 ## Testing
 
 ```bash
-# Python tests
-pytest tests/
-
-# C++ tests
-mkdir -p build && cd build
-cmake ..
-make run_tests
-
-# Run specific C++ tests
-./managym_test --gtest_filter=TestRegex.* --log=priority,turn,test
-
-# Rust engine tests (stage-01 migration path)
+# Rust checks
 cd managym
 cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
+cd ..
+
+# Install managym into the active venv
+pip install -e managym
+
+# Python tests (full + integration slice)
+pytest tests/
+pytest tests/env/ tests/agent/ -v
 ```
 
 ## Architecture
@@ -68,7 +68,7 @@ cargo test
    - `Match`: Game configuration (decklists, etc.)
    - `Reward`: Reward function
 
-2. **`manabot.ppo`**: PPO implementation
+2. **`manabot.model`**: PPO implementation
    - `Agent`: Shared value/policy network
    - `Trainer`: PPO trainer
 
@@ -81,15 +81,16 @@ cargo test
    - `Hypers`: Hydra config management
    - `Profiler`: Performance profiling
 
-### managym (C++)
+### managym (Rust)
 
-1. **`managym/agent/`**: RL agent API and pybind11 bindings
-2. **`managym/flow/`**: Game state progression (turns, priority, combat)
-3. **`managym/state/`**: Game state (cards, players, zones)
-4. **`managym/cardsets/`**: Card implementations
-5. **`managym/infra/`**: Logging and profiling
+1. **`managym/src/agent/`**: RL-facing API (`Env`, action spaces, observations)
+2. **`managym/src/flow/`**: Game progression (turns, priority, combat)
+3. **`managym/src/state/`**: Core game state (cards, players, zones, mana)
+4. **`managym/src/cardsets/`**: Card implementations
+5. **`managym/src/infra/`**: Logging and profiler infrastructure
+6. **`managym/src/python/`**: PyO3 bindings and Rust→Python conversions
 
-Dependencies flow: agent → flow → state → infra
+Dependencies flow: python → agent → flow → state/infra
 
 ## Style Guide
 
@@ -117,28 +118,18 @@ from manabot.env import ObservationSpace
 from .sibling import Thing
 ```
 
-### C++ (managym)
+### Rust (managym)
 
-```cpp
-// filename.h/.cpp
+```rust
+// filename.rs
 // One-line purpose of file
-//
-// EDITING INSTRUCTIONS:
-// Instructions for collaborators on how to approach editing.
 
-#include "me.h"           // Corresponding header
-#include "sibling.h"      // Same directory
-#include "managym/other.h" // Other managym headers
-#include <3rdparty.h>     // Third party
-#include <std>            // Standard library
+use crate::flow::game::Game;
+use crate::state::player::PlayerId;
 ```
 
-Objects use `struct` with single ownership via `std::unique_ptr<T>`. Other references are raw pointers.
-
-### DO NOT USE in C++
-
-- std::shared_ptr, templates/metaprogramming, macros, manual memory management
-- dynamic_cast, multiple inheritance, auto typing (strongly avoid)
+Prefer explicit types and focused modules. Keep game behavior in enums +
+`match` expressions instead of inheritance-like abstractions.
 
 ## LLM Collaboration
 

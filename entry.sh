@@ -1,6 +1,7 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "Running tests with AddressSanitizer enabled..."
-cd build
-ctest --output-on-failure
+source /app/.venv/bin/activate
+
+cargo test --manifest-path /app/managym/Cargo.toml
+pytest /app/tests/env/ /app/tests/agent/ -v
