@@ -385,9 +385,7 @@ class TestObservationEncoder:
         encoded = encoder._encode_perms(fake_perms, is_mine=1.0)
 
         assert encoded.shape == (1, encoder.permanent_dim)
-        fake_logger.warning.assert_called_once_with(
-            "Permanent list truncated: 2 -> 1"
-        )
+        fake_logger.warning.assert_called_once_with("Permanent list truncated: 2 -> 1")
 
 
 if __name__ == "__main__":
