@@ -80,6 +80,9 @@ to match the new feature dimensions. The `player_dim`, `card_dim`, and
 
 ## Constraints
 
+- Observations are now always hero-perspective — `SingleAgentEnv`
+  handles opponent stepping and returns only hero obs. The encoding
+  assumes player 0 is always the hero.
 - The encoding order must remain consistent with the object_to_index
   mapping (agent player → opponent player → agent cards → ...)
 - Validity masks must still work correctly with reduced padding

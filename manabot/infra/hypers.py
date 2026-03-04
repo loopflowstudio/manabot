@@ -6,12 +6,12 @@ This module defines a unified configuration system for all hyperparameters acros
 organizing them into logical groups while maintaining type safety and easy CLI/YAML override support.
 """
 
-from dataclasses import dataclass, field, fields
-import logging
-from typing import Dict, Any, get_type_hints, List
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict
 
 from hydra.core.config_store import ConfigStore
+
 
 @dataclass
 class ObservationSpaceHypers:
@@ -20,27 +20,35 @@ class ObservationSpaceHypers:
     max_actions: int = 10
     max_focus_objects: int = 2
 
+
 @dataclass
 class MatchHypers:
     """Parameters previously passed to the Match object."""
+
     hero: str = "gaea"
     villain: str = "urza"
-    hero_deck: Dict[str, int] = field(default_factory=lambda: {
-        "Mountain": 12,
-        "Forest": 12,
-        "Llanowar Elves": 18,
-        "Grey Ogre": 18,
-    })
-    villain_deck: Dict[str, int] = field(default_factory=lambda: {
-        "Mountain": 12,
-        "Forest": 12,
-        "Llanowar Elves": 18,
-        "Grey Ogre": 18,
-    })
+    hero_deck: Dict[str, int] = field(
+        default_factory=lambda: {
+            "Mountain": 12,
+            "Forest": 12,
+            "Llanowar Elves": 18,
+            "Grey Ogre": 18,
+        }
+    )
+    villain_deck: Dict[str, int] = field(
+        default_factory=lambda: {
+            "Mountain": 12,
+            "Forest": 12,
+            "Llanowar Elves": 18,
+            "Grey Ogre": 18,
+        }
+    )
+
 
 @dataclass
 class ExperimentHypers:
     """Configuration for experiment tracking and environment setup."""
+
     exp_name: str = "manabot"
     seed: int = 1
     torch_deterministic: bool = True
@@ -48,8 +56,9 @@ class ExperimentHypers:
     wandb: bool = True
     wandb_project_name: str = "manabot"
     runs_dir: Path = field(default_factory=lambda: Path.home() / "manabot-runs")
-    log_level: str = "INFO" 
-    profiler_enabled: bool = False 
+    log_level: str = "INFO"
+    profiler_enabled: bool = False
+
 
 @dataclass
 class AgentHypers:
@@ -58,10 +67,12 @@ class AgentHypers:
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
     attention_on: bool = True
-    
+
+
 @dataclass
 class TrainHypers:
     """Training-related hyperparameters."""
+
     total_timesteps: int = 20_000_000
     learning_rate: float = 2.5e-4
     num_envs: int = 16
@@ -78,35 +89,41 @@ class TrainHypers:
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5
     target_kl: float = float("inf")
+    opponent_policy: str = "passive"
+
 
 @dataclass
 class RewardHypers:
     trivial: bool = False
     managym: bool = False
-    win_reward: float = 100.0
-    lose_reward: float = -100.0
+    win_reward: float = 1.0
+    lose_reward: float = -1.0
+
 
 @dataclass
 class Hypers:
     """Top-level configuration that composes all hyperparameters."""
+
     observation: ObservationSpaceHypers = field(default_factory=ObservationSpaceHypers)
     match: MatchHypers = field(default_factory=MatchHypers)
     train: TrainHypers = field(default_factory=TrainHypers)
     reward: RewardHypers = field(default_factory=RewardHypers)
     agent: AgentHypers = field(default_factory=AgentHypers)
     experiment: ExperimentHypers = field(default_factory=ExperimentHypers)
-    
+
     def __post_init__(self):
-        """Validate configuration after initialization."""    
+        """Validate configuration after initialization."""
         if self.observation.max_cards_per_player < 1:
             raise ValueError("max_cards_per_player must be positive")
-            
+
         if self.observation.max_actions < 1:
             raise ValueError("max_actions must be positive")
+
 
 @dataclass
 class SimulationHypers:
     """Hyperparameters for model simulation."""
+
     hero: str = "simple"
     villain: str = "default"
     num_games: int = 100
@@ -115,13 +132,14 @@ class SimulationHypers:
     match: MatchHypers = field(default_factory=MatchHypers)  # Match configuration
     reward: RewardHypers = field(default_factory=RewardHypers)
 
+
 def initialize() -> None:
     """Register configurations with Hydra's config store."""
     cs = ConfigStore.instance()
-    
+
     # Register the main config structure
     cs.store(name="hypers", node=Hypers)
-    
+
     # Register config groups
     cs.store(group="observation", name="default", node=ObservationSpaceHypers)
     cs.store(group="match", name="default", node=MatchHypers)

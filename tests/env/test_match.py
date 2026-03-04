@@ -2,10 +2,12 @@
 test_match.py
 """
 
-import pytest
-from typing import Dict
 from types import SimpleNamespace
+from typing import Dict
 
+import pytest
+
+# Local imports
 from manabot.env.match import Match, Reward, parse_deck
 from manabot.infra.hypers import RewardHypers
 
@@ -18,8 +20,9 @@ SAMPLE_DECKS = {
         "Forest": 12,
         "Llanowar Elves": 18,
         "Grey Ogre": 18,
-    }
+    },
 }
+
 
 @pytest.fixture
 def deck_formats() -> Dict[str, str]:
@@ -28,14 +31,14 @@ def deck_formats() -> Dict[str, str]:
         "json": '{"Mountain": 12, "Forest": 12}',
         "simple": "Mountain:12,Forest:12",
         "spaced": "Mountain: 12, Forest: 12",
-        "complex": "Mountain:24,Lightning Bolt:36"
+        "complex": "Mountain:24,Lightning Bolt:36",
     }
+
 
 @pytest.fixture
 def sample_match() -> Match:
     """Create a match with a known configuration for testing."""
     return Match()
-
 
 
 class TestDeckParsing:
@@ -47,17 +50,21 @@ class TestDeckParsing:
         deck = parse_deck(deck_formats[format_name])
         assert deck == SAMPLE_DECKS["basic"], f"Failed to parse {format_name} format"
 
-    @pytest.mark.parametrize("invalid_input,expected_error", [
-        ("{invalid json}", ValueError),
-        ("Mountain,Forest", ValueError),  # Missing counts
-        ("Mountain:twelve", ValueError),  # Non-integer count
-        ("", ValueError),  # Empty string
-        ("Mountain:12:extra", ValueError),  # Too many colons
-    ])
+    @pytest.mark.parametrize(
+        "invalid_input,expected_error",
+        [
+            ("{invalid json}", ValueError),
+            ("Mountain,Forest", ValueError),  # Missing counts
+            ("Mountain:twelve", ValueError),  # Non-integer count
+            ("", ValueError),  # Empty string
+            ("Mountain:12:extra", ValueError),  # Too many colons
+        ],
+    )
     def test_invalid_formats(self, invalid_input, expected_error):
         """Test that invalid deck strings raise appropriate errors."""
         with pytest.raises(expected_error):
             parse_deck(invalid_input)
+
 
 class TestMatch:
     """Tests for match configuration and conversion."""
@@ -82,7 +89,7 @@ class TestMatch:
         """Test conversion to C++ PlayerConfig objects."""
         cpp_configs = sample_match.to_cpp()
         assert len(cpp_configs) == 2
-        
+
         hero_config, villain_config = cpp_configs
         assert hero_config.name == "gaea"
         assert dict(hero_config.decklist) == sample_match.hero_deck
@@ -99,6 +106,7 @@ def test_reward_correct_both_players(player_index):
 
     assert reward.compute(0.0, last_obs, won_obs) == 7.0
     assert reward.compute(0.0, last_obs, lost_obs) == -3.0
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
