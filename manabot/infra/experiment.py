@@ -3,7 +3,6 @@ experiment.py
 Experiment tracking and environment setup with proper config handling.
 """
 
-from dataclasses import asdict
 import logging
 import os
 from pathlib import Path
@@ -42,9 +41,11 @@ class Experiment:
 
     def __init__(
         self,
-        experiment_hypers: ExperimentHypers = ExperimentHypers(),
-        full_hypers: Hypers = Hypers(),
+        experiment_hypers: Optional[ExperimentHypers] = None,
+        full_hypers: Optional[Hypers] = None,
     ):
+        experiment_hypers = experiment_hypers or ExperimentHypers()
+        full_hypers = full_hypers or Hypers()
         self.experiment_hypers = experiment_hypers
         self.full_hypers = full_hypers
         self.exp_name = experiment_hypers.exp_name
@@ -66,15 +67,7 @@ class Experiment:
 
     def _get_flattened_config(self) -> dict:
         """Convert nested hypers to flat dict for wandb."""
-        config_dict = {
-            "observation": asdict(self.full_hypers.observation),
-            "match": asdict(self.full_hypers.match),
-            "train": asdict(self.full_hypers.train),
-            "reward": asdict(self.full_hypers.reward),
-            "agent": asdict(self.full_hypers.agent),
-            "experiment": asdict(self.full_hypers.experiment),
-        }
-        return flatten_config(config_dict)
+        return flatten_config(self.full_hypers.model_dump())
 
     def _setup_tracking(self):
         """Setup experiment tracking with wandb."""
