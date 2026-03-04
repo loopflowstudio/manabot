@@ -87,6 +87,12 @@ Track per-head prediction accuracy:
 - The env (or wrapper) must expose the terminal state information
   needed to compute targets (life totals, creature counts, game length)
 - Auxiliary heads should be removable via config (for A/B comparison)
+- The buffer is now flat pre-allocated tensors inline in `train.py`
+  (not a separate class). Auxiliary target tensors follow the same
+  pattern: `torch.zeros((num_steps, num_envs))`.
+- `final_observation` plumbing for truncation value bootstrap is
+  deferred — keep this in mind when computing episode-level targets
+  across truncation boundaries.
 
 ## Done when
 

@@ -16,7 +16,7 @@ the next.
 
 - Self-play training (comes after we can beat random)
 - Attention mechanism tuning (turn it off, prove learning without it)
-- Rust engine integration (parallel effort, this wave works with existing C++ engine)
+- Rust engine work (now on main; this wave builds on the Rust engine but doesn't modify it)
 - Distributed training / multi-GPU
 - Complex card interactions beyond vanilla creatures
 
@@ -31,9 +31,10 @@ the next.
 
 ## Risks
 
-- **Env wrapper complexity.** Wrapping the existing C++ env to auto-step
-  the opponent may introduce subtle bugs (observation alignment, done
-  signal propagation). Needs careful testing.
+- **Env wrapper complexity.** SingleAgentEnv auto-steps the opponent,
+  which can introduce subtle bugs (observation alignment, done signal
+  propagation). The wrapper exists and has tests, but edge cases may
+  surface during training.
 - **Observation changes break existing checkpoints.** Any change to the
   observation encoding invalidates saved models. Fine — we don't have
   working models anyway.
@@ -41,9 +42,9 @@ the next.
   policy that only works against passive (e.g., never learns blocking
   because it never needs to). Acceptable — that's what the "beat random"
   step is for.
-- **C++ engine bugs masked by training bugs.** Once training is correct,
-  we may discover env-side issues. The Rust rewrite will eventually
-  replace this, but we need the C++ engine to work for now.
+- **Rust engine behavior differences.** The Rust engine is on main but
+  may produce different game states than expected (card ordering, timing,
+  edge cases). Training will surface these if they exist.
 
 ## Metrics
 
