@@ -5,7 +5,13 @@ import argparse
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.model.train import run_training
 
-from .util import build_hypers, print_result, run_evaluation, suppress_truncation_logs
+from .util import (
+    MOUNTAIN_DECK,
+    build_hypers,
+    print_result,
+    run_evaluation,
+    suppress_truncation_logs,
+)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -16,24 +22,19 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     suppress_truncation_logs()
 
-    mountain_deck = {"Mountain": 20}
     hypers = build_hypers(
         experiment={
             "seed": args.seed,
             "exp_name": "verify-step2-memorization",
-            "wandb": False,
-            "device": "cpu",
         },
         train={
             "num_envs": 1,
             "total_timesteps": args.total_timesteps,
-            "opponent_policy": "passive",
         },
         match={
-            "hero_deck": mountain_deck,
-            "villain_deck": mountain_deck,
+            "hero_deck": MOUNTAIN_DECK,
+            "villain_deck": MOUNTAIN_DECK,
         },
-        agent={"attention_on": False},
     )
 
     trainer = run_training(hypers)

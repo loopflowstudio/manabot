@@ -41,17 +41,13 @@ def main(argv: list[str] | None = None) -> None:
         experiment={
             "seed": args.seed,
             "exp_name": "verify-step1-trivial-reward",
-            "wandb": False,
-            "device": "cpu",
         },
         reward={"trivial": True},
         train={
             "num_envs": args.num_envs,
             "num_steps": args.num_steps,
             "total_timesteps": total_timesteps,
-            "opponent_policy": "passive",
         },
-        agent={"attention_on": False},
     )
 
     trainer = run_training(hypers)

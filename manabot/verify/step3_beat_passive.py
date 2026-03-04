@@ -13,6 +13,7 @@ from manabot.infra import Experiment
 from manabot.model import Agent, Trainer
 
 from .util import (
+    STANDARD_DECK,
     build_hypers,
     print_result,
     run_evaluation,
@@ -63,13 +64,6 @@ def main(argv: list[str] | None = None) -> None:
         *[b - a for a, b in zip(checkpoints, checkpoints[1:])],
     ]
 
-    standard_deck = {
-        "Mountain": 12,
-        "Forest": 12,
-        "Llanowar Elves": 18,
-        "Grey Ogre": 18,
-    }
-
     metrics: dict[str, float] = {}
     eval_by_ckpt: dict[int, dict[str, float]] = {}
     agent = None
@@ -81,19 +75,15 @@ def main(argv: list[str] | None = None) -> None:
             experiment={
                 "seed": args.seed,
                 "exp_name": f"verify-step3-passive-{global_timestep}",
-                "wandb": False,
-                "device": "cpu",
             },
             train={
                 "num_envs": args.num_envs,
                 "total_timesteps": chunk_timesteps,
-                "opponent_policy": "passive",
             },
             match={
-                "hero_deck": standard_deck,
-                "villain_deck": standard_deck,
+                "hero_deck": STANDARD_DECK,
+                "villain_deck": STANDARD_DECK,
             },
-            agent={"attention_on": False},
         )
 
         agent, trainer, obs_space, match, reward = _train_chunk(agent, hypers)
@@ -111,19 +101,16 @@ def main(argv: list[str] | None = None) -> None:
         eval_by_ckpt[global_timestep] = eval_metrics
 
         prefix = f"ckpt_{global_timestep}"
-        metrics[f"{prefix}_win_rate"] = eval_metrics["win_rate"]
-        metrics[f"{prefix}_win_ci_lower"] = eval_metrics["win_ci_lower"]
-        metrics[f"{prefix}_mean_steps"] = eval_metrics["mean_steps"]
-        metrics[f"{prefix}_attack_rate"] = eval_metrics["attack_rate"]
-        metrics[f"{prefix}_action_space_truncations"] = eval_metrics[
-            "action_space_truncations"
-        ]
-        metrics[f"{prefix}_card_space_truncations"] = eval_metrics[
-            "card_space_truncations"
-        ]
-        metrics[f"{prefix}_permanent_space_truncations"] = eval_metrics[
-            "permanent_space_truncations"
-        ]
+        for key in (
+            "win_rate",
+            "win_ci_lower",
+            "mean_steps",
+            "attack_rate",
+            "action_space_truncations",
+            "card_space_truncations",
+            "permanent_space_truncations",
+        ):
+            metrics[f"{prefix}_{key}"] = eval_metrics[key]
 
     first = eval_by_ckpt[checkpoints[0]]
     final = eval_by_ckpt[checkpoints[-1]]

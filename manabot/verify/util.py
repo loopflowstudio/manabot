@@ -9,37 +9,30 @@ import numpy as np
 import torch
 
 from manabot.config.load import deep_merge
+from manabot.config.schema import TrainingConfig
 from manabot.env import Env, Match, ObservationSpace, Reward, build_opponent_policy
 from manabot.env.observation import ActionEnum
-from manabot.infra import (
-    AgentHypers,
-    ExperimentHypers,
-    Hypers,
-    MatchHypers,
-    ObservationSpaceHypers,
-    RewardHypers,
-    TrainHypers,
-)
+from manabot.infra import Hypers
 
-_TRUNCATION_KEYS = (
+TRUNCATION_INFO_KEYS = (
     "action_space_truncated",
     "card_space_truncated",
     "permanent_space_truncated",
 )
 
+STANDARD_DECK = {
+    "Mountain": 12,
+    "Forest": 12,
+    "Llanowar Elves": 18,
+    "Grey Ogre": 18,
+}
+MOUNTAIN_DECK = {"Mountain": 20}
+
 
 def build_hypers(**overrides) -> Hypers:
     """Build Hypers with verification defaults and nested overrides."""
 
-    defaults = Hypers()
-    base = {
-        "observation": asdict(defaults.observation),
-        "match": asdict(defaults.match),
-        "train": asdict(defaults.train),
-        "reward": asdict(defaults.reward),
-        "agent": asdict(defaults.agent),
-        "experiment": asdict(defaults.experiment),
-    }
+    base = asdict(Hypers())
     base["experiment"].update(
         {
             "exp_name": "verify",
@@ -58,14 +51,7 @@ def build_hypers(**overrides) -> Hypers:
         if deck_key in match_overrides:
             merged["match"][deck_key] = dict(match_overrides[deck_key])
 
-    return Hypers(
-        observation=ObservationSpaceHypers(**merged["observation"]),
-        match=MatchHypers(**merged["match"]),
-        train=TrainHypers(**merged["train"]),
-        reward=RewardHypers(**merged["reward"]),
-        agent=AgentHypers(**merged["agent"]),
-        experiment=ExperimentHypers(**merged["experiment"]),
-    )
+    return TrainingConfig.model_validate(merged).to_hypers()
 
 
 def wilson_lower_bound(wins: int, total: int, z: float = 1.96) -> float:
@@ -104,7 +90,7 @@ def _is_attack_action(obs: dict[str, np.ndarray], action_index: int) -> bool:
     return bool(obs["actions"][action_index, int(ActionEnum.DECLARE_ATTACKER)] > 0)
 
 
-def _winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
+def winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
     """Return winner player index when available, else None."""
 
     if "winner" in info:
@@ -122,6 +108,15 @@ def _winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
         return agent_idx
 
     return None
+
+
+def step_with_fallback(env: Env, action: int, fallback_action: int = 0):
+    """Step env, retrying once with fallback action when policy action errors."""
+
+    try:
+        return env.step(action)
+    except Exception:
+        return env.step(fallback_action)
 
 
 def run_evaluation(
@@ -152,7 +147,7 @@ def run_evaluation(
     game_lengths: list[int] = []
     hero_actions = 0
     hero_attack_actions = 0
-    truncation_counts = {k: 0 for k in _TRUNCATION_KEYS}
+    truncation_counts = {k: 0 for k in TRUNCATION_INFO_KEYS}
 
     was_training = bool(getattr(agent, "training", False))
     if hasattr(agent, "eval"):
@@ -178,23 +173,20 @@ def run_evaluation(
                     action = opponent(obs)
 
                 try:
-                    obs, _, terminated, truncated, info = env.step(action)
+                    obs, _, terminated, truncated, info = step_with_fallback(env, action)
                 except Exception:
-                    try:
-                        obs, _, terminated, truncated, info = env.step(0)
-                    except Exception:
-                        aborted = True
-                        info = {}
-                        break
+                    aborted = True
+                    info = {}
+                    break
                 steps += 1
-                for key in _TRUNCATION_KEYS:
+                for key in TRUNCATION_INFO_KEYS:
                     truncation_counts[key] += int(bool(info.get(key, False)))
                 done = bool(terminated or truncated)
 
             if aborted:
                 game_lengths.append(steps)
                 continue
-            winner = _winner_from_info_or_obs(info, env.last_raw_obs)
+            winner = winner_from_info_or_obs(info, env.last_raw_obs)
             if winner == 0:
                 hero_wins += 1
             game_lengths.append(steps)
