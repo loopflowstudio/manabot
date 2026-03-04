@@ -1,46 +1,73 @@
 # 03: C++ Removal and Cutover
 
-Remove the C++ managym runtime and make Rust the only maintained backend.
+Remove the C++ backend and make Rust the only maintained runtime path.
 
 ## Finish line
 
-- No `.cpp` or `.h` files in `managym/`
-- No CMake, scikit-build, or pybind11 references in the build system
-- `pip install -e managym && pytest tests/env/ tests/agent/` still passes
-- Throughput is at least parity with C++ baseline on agreed benchmark
+All four cutover gate items from the wave README are satisfied:
+1. Rust engine + binding tests green (cargo test, pytest)
+2. Throughput at least parity with C++ baseline
+3. Rust/PyO3 is the default and only managym runtime path
+4. C++ runtime/backend path and CMake-based Python module build removed
 
 ## Starting point
 
-Requires 02-pytest-green to be complete (Python tests passing against Rust).
-
-C++ source files still exist throughout `managym/`:
-- `managym/agent/` — action_space, env, behavior_tracker, observation, pybind
-- `managym/flow/` — game loop, turns, priority, combat, SBAs
-- `managym/state/` — cards, players, zones, mana
-- `managym/cardsets/` — card implementations
-- `managym/infra/` — logging, profiling, info_dict
+Depends on 02-pytest-green completing. At that point:
+- Rust engine is functionally complete (game loop, priority, combat, SBAs)
+- PyO3 binding surface matches C++ pybind.cpp exactly
+- Python tests pass against Rust backend
+- Profiler supports baseline/compare workflows
 
 ## Work needed
 
-1. **Delete C++ source.** Remove all `.cpp`, `.h` files and any remaining
-   C++ build artifacts (CMake fragments, pybind11 references).
+1. **Throughput benchmarking.** Run the agreed benchmark against both C++ and
+   Rust backends. Document results. Rust must be at least parity.
 
-2. **Clean up build config.** Ensure `managym/pyproject.toml` has no
-   residual C++ toolchain references. Verify maturin is the only build path.
+2. **C++ code removal.**
+   - Remove C++ source: `managym/agent/*.{cpp,h}`, `managym/state/*.{cpp,h}`,
+     `managym/flow/*.{cpp,h}`, `managym/infra/*.{cpp,h}`,
+     `managym/cardsets/**/*.{cpp,h}`, `managym/main.cpp` (46 files total)
+   - Remove C++ test files: `tests/agent/*.cpp`, `tests/flow/*.cpp`,
+     `tests/infra/*.cpp`, `tests/state/*.cpp`, `tests/main.cpp`,
+     `tests/managym_test.{cpp,h}` (10 files)
+   - Remove root `CMakeLists.txt`, cmake config, pybind11 dependency
+   - Clean up any C++-only CI/build scripts
 
-3. **Throughput verification.** Run the profiler baseline comparison to
-   confirm Rust is at least as fast as C++ on the standard benchmark.
-   Use `export_profile_baseline` / `compare_profile` through the Python API.
+3. **Build system cleanup.**
+   - Maturin is the only build path for the Python module
+   - `pip install -e managym` is the canonical install command
+   - Remove scikit-build references if any remain
 
-4. **Update documentation.** README references to C++ build commands
-   (`mkdir -p build && cd build && cmake ..`) need updating.
+4. **Documentation update.** README references to C++ build commands
+   (`mkdir -p build && cd build && cmake ..`) need updating. Remove
+   C++ test commands from README testing section.
 
-5. **CI update.** Verify the CI workflow doesn't reference any C++ toolchain
-   steps. It currently only runs Rust + Python gates, which is correct.
+5. **Final verification.**
+   - `cargo test` still green
+   - `pip install -e managym && pytest tests/env/ tests/agent/`
+   - Training smoke test (short PPO run)
 
 ## Risks
 
-- Deleting C++ before throughput parity is verified makes it harder to
-  benchmark. Consider recording a C++ baseline before removal.
-- Some Python code may import or reference C++ internals (logging config,
-  profiler hooks). Grep for pybind11, CMake, and C++ file references.
+- Throughput regression — Rust may be slower on specific workloads (GIL
+  overhead, allocation patterns). Profile before removing C++.
+- Missed C++ files — grep for `.cpp`, `.h`, `cmake` patterns after removal.
+  Note: C++ source is co-located alongside Rust `src/` — careful not to
+  remove the Rust code in `managym/src/`.
+- Third-party code depending on C++ headers (unlikely but check).
+
+## Done when
+
+```bash
+# No C++ source remains
+find managym/ -name "*.cpp" -o -name "*.h" -o -name "CMakeLists.txt" | wc -l
+# => 0
+
+# Rust tests
+cargo test
+
+# Python tests
+pip install -e managym && pytest tests/env/ tests/agent/
+
+# Throughput parity documented
+```
