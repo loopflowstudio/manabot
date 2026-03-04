@@ -1,40 +1,32 @@
 FROM python:3.12-slim
 
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/app/.venv/bin:/root/.cargo/bin:${PATH}"
+
 WORKDIR /app
 
-# Install system dependencies including ninja and Python development headers
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    cmake \
-    ninja-build \
+    curl \
     git \
-    python3-dev \
-    libspdlog-dev \
-    libfmt-dev \
-    libgtest-dev \
+    pkg-config \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the entire project
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
+
 COPY . .
 
-# Update git submodules (if any)
-RUN git submodule update --init --recursive
+RUN pip install --upgrade pip uv
 
-# Upgrade pip
-RUN pip install --upgrade pip
+RUN uv venv .venv --python 3.12 && \
+    . .venv/bin/activate && \
+    uv pip install -e managym && \
+    uv pip install -e .
 
-# Install the local submodule (managym) first
-RUN pip install -e managym
-
-# Install the main package; pip will automatically install dependencies from pyproject.toml
-RUN pip install -e .
-
-# Create required directories
 RUN mkdir -p ~/manabot-runs
 
-# Set environment variables
 ENV PYTHONPATH="/app:${PYTHONPATH}"
 ENV HYDRA_FULL_ERROR=1
 
-# Default command: run the training script
-CMD ["python", "manabot/scripts/train.py"]
+CMD ["python", "manabot/model/train.py", "--config-name", "simple"]
