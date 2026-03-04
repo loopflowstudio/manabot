@@ -701,19 +701,16 @@ def _simulate_game(
 
 
 def load_player(model_str: str) -> Player:
-    if model_str.lower() == "random":
+    model_name = model_str.lower()
+    if model_name == "random":
         return RandomPlayer("RandomPlayer")
-    elif model_str.lower() == "default":
+    if model_name == "default":
         return DefaultPlayer("DefaultPlayer")
-    else:
-        if ":" in model_str:
-            model, version = model_str.split(":")
-        else:
-            model = model_str
-            version = "latest"
-        return ModelPlayer(
-            f"Model_{model_str}", load_model_from_wandb(model, version, device="cpu")
-        )
+
+    model, version = model_str.split(":") if ":" in model_str else (model_str, "latest")
+    return ModelPlayer(
+        f"Model_{model_str}", load_model_from_wandb(model, version, device="cpu")
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -742,7 +739,9 @@ def run_simulation(
     simulate_models(hero_player, villain_player, sim_hypers)
 
 
-def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+def main(argv: Sequence[str] | None = None) -> None:
+    from manabot.config.load import load_sim_config
+
     parser = argparse.ArgumentParser(description="Run manabot model simulation")
     parser.add_argument("--preset", default="sim", help="Simulation preset name")
     parser.add_argument(
@@ -753,12 +752,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         metavar="KEY=VALUE",
         help="Override config values (repeatable key.path=value)",
     )
-    return parser.parse_args(list(argv) if argv is not None else None)
-
-
-def main(argv: Sequence[str] | None = None) -> None:
-    args = _parse_args(argv)
-    from manabot.config.load import load_sim_config
+    args = parser.parse_args(list(argv) if argv is not None else None)
 
     sim_hypers, experiment_hypers = load_sim_config(
         preset=args.preset, set_overrides=args.set_values

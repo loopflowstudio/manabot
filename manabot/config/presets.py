@@ -7,26 +7,6 @@ from manabot.infra import Hypers, SimulationHypers
 DEFAULT_TRAIN_PRESET = "local"
 DEFAULT_SIM_PRESET = "sim"
 
-
-def _base_training_preset() -> dict:
-    return Hypers().model_dump()
-
-
-def _sim_preset() -> dict:
-    preset = {
-        "experiment": Hypers().experiment.model_dump(),
-        "sim": SimulationHypers().model_dump(),
-    }
-    preset["experiment"].update(
-        {
-            "exp_name": "sim",
-            "wandb": False,
-            "log_level": "DEBUG",
-        }
-    )
-    return preset
-
-
 TRAIN_PRESETS = {
     "local": {
         "train": {
@@ -66,10 +46,6 @@ TRAIN_PRESETS = {
     },
 }
 
-SIM_PRESETS = {
-    "sim": _sim_preset(),
-}
-
 
 def get_training_preset(name: str) -> dict:
     if name not in TRAIN_PRESETS:
@@ -79,11 +55,22 @@ def get_training_preset(name: str) -> dict:
 
 
 def get_training_base() -> dict:
-    return deepcopy(_base_training_preset())
+    return Hypers().model_dump()
 
 
 def get_sim_preset(name: str) -> dict:
-    if name not in SIM_PRESETS:
-        available = ", ".join(sorted(SIM_PRESETS))
+    if name != DEFAULT_SIM_PRESET:
+        available = DEFAULT_SIM_PRESET
         raise ValueError(f"Unknown simulation preset '{name}'. Available: {available}")
-    return deepcopy(SIM_PRESETS[name])
+    preset = {
+        "experiment": Hypers().experiment.model_dump(),
+        "sim": SimulationHypers().model_dump(),
+    }
+    preset["experiment"].update(
+        {
+            "exp_name": DEFAULT_SIM_PRESET,
+            "wandb": False,
+            "log_level": "DEBUG",
+        }
+    )
+    return preset
