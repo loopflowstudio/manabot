@@ -1,16 +1,12 @@
 """
 hypers.py
-Centralized hyperparameter configuration using Hydra.
-
-This module defines a unified configuration system for all hyperparameters across the codebase,
-organizing them into logical groups while maintaining type safety and easy CLI/YAML override support.
+Dataclass hyperparameter schemas shared across training and simulation.
 """
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 from typing import Dict
-
-from hydra.core.config_store import ConfigStore
 
 
 @dataclass
@@ -23,7 +19,7 @@ class ObservationSpaceHypers:
 
 @dataclass
 class MatchHypers:
-    """Parameters previously passed to the Match object."""
+    """Parameters passed to the match builder."""
 
     hero: str = "gaea"
     villain: str = "urza"
@@ -47,7 +43,7 @@ class MatchHypers:
 
 @dataclass
 class ExperimentHypers:
-    """Configuration for experiment tracking and environment setup."""
+    """Configuration for experiment tracking and runtime setup."""
 
     exp_name: str = "manabot"
     seed: int = 1
@@ -55,14 +51,18 @@ class ExperimentHypers:
     device: str = "cpu"
     wandb: bool = True
     wandb_project_name: str = "manabot"
-    runs_dir: Path = field(default_factory=lambda: Path.home() / "manabot-runs")
+    runs_dir: Path = field(
+        default_factory=lambda: Path(
+            os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".manabot-runs"))
+        )
+    )
     log_level: str = "INFO"
     profiler_enabled: bool = False
 
 
 @dataclass
 class AgentHypers:
-    # Shared embedding space for GameObjects and Actions.
+    # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
@@ -102,7 +102,7 @@ class RewardHypers:
 
 @dataclass
 class Hypers:
-    """Top-level configuration that composes all hyperparameters."""
+    """Top-level training configuration."""
 
     observation: ObservationSpaceHypers = field(default_factory=ObservationSpaceHypers)
     match: MatchHypers = field(default_factory=MatchHypers)
@@ -112,10 +112,8 @@ class Hypers:
     experiment: ExperimentHypers = field(default_factory=ExperimentHypers)
 
     def __post_init__(self):
-        """Validate configuration after initialization."""
         if self.observation.max_cards_per_player < 1:
             raise ValueError("max_cards_per_player must be positive")
-
         if self.observation.max_actions < 1:
             raise ValueError("max_actions must be positive")
 
@@ -129,22 +127,11 @@ class SimulationHypers:
     num_games: int = 100
     num_threads: int = 4
     max_steps: int = 2000
-    match: MatchHypers = field(default_factory=MatchHypers)  # Match configuration
+    match: MatchHypers = field(default_factory=MatchHypers)
     reward: RewardHypers = field(default_factory=RewardHypers)
 
 
 def initialize() -> None:
-    """Register configurations with Hydra's config store."""
-    cs = ConfigStore.instance()
+    """Backward-compatible no-op kept for callers from pre-Typer runtime."""
 
-    # Register the main config structure
-    cs.store(name="hypers", node=Hypers)
-
-    # Register config groups
-    cs.store(group="observation", name="default", node=ObservationSpaceHypers)
-    cs.store(group="match", name="default", node=MatchHypers)
-    cs.store(group="train", name="default", node=TrainHypers)
-    cs.store(group="reward", name="default", node=RewardHypers)
-    cs.store(group="agent", name="default", node=AgentHypers)
-    cs.store(group="experiment", name="default", node=ExperimentHypers)
-    cs.store(group="sim", name="default", node=SimulationHypers)
+    return None

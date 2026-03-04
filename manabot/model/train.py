@@ -12,14 +12,13 @@ PPO training steps:
 This version uses CleanRL-style flat rollout tensors with shape (num_steps, num_envs, ...).
 """
 
+import argparse
 from dataclasses import asdict
 import datetime
 import time
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
-import hydra
 import numpy as np
-from omegaconf import DictConfig, OmegaConf
 import psutil
 import torch
 import torch.nn as nn
@@ -34,10 +33,7 @@ from manabot.env import (
     build_opponent_policy,
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
-import manabot.infra.hypers
 from manabot.model.agent import Agent
-
-manabot.infra.hypers.initialize()
 
 ROLLOUT_HEALTH_KEYS = (
     "truncated_episodes",
@@ -88,6 +84,7 @@ class Trainer:
         self.wandb = self.experiment.wandb_run
         self.rollout_health = self._new_rollout_health()
         self.rollout_health_update = self._new_rollout_health()
+        self.last_explained_variance = float("nan")
 
         # Initialize the profiler
         self.profiler = self.experiment.profiler
@@ -251,6 +248,7 @@ class Trainer:
                 explained_var = (
                     np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
                 )
+                self.last_explained_variance = float(explained_var)
 
                 sps = int(self.global_step / (time.time() - self.start_time))
                 if self.wandb:
@@ -844,24 +842,7 @@ class Trainer:
         self.logger.info(f"Saved model with version tag: {version_tag}")
 
 
-@hydra.main(version_base=None, config_path="../conf/model", config_name="local")
-def main(cfg: DictConfig) -> None:
-    obs_config = OmegaConf.to_object(cfg.observation)
-    train_config = OmegaConf.to_object(cfg.train)
-    reward_config = OmegaConf.to_object(cfg.reward)
-    agent_config = OmegaConf.to_object(cfg.agent)
-    experiment_config = OmegaConf.to_object(cfg.experiment)
-    match_config = OmegaConf.to_object(cfg.match)
-    hypers = Hypers(
-        observation=obs_config,
-        match=match_config,
-        train=train_config,
-        reward=reward_config,
-        agent=agent_config,
-        experiment=experiment_config,
-    )
-
-    # Setup components
+def build_training_components(hypers: Hypers) -> tuple[Experiment, VectorEnv, Agent]:
     experiment = Experiment(hypers.experiment, hypers)
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
@@ -878,10 +859,41 @@ def main(cfg: DictConfig) -> None:
         opponent_policy=opponent_policy,
     )
     agent = Agent(observation_space, hypers.agent)
+    return experiment, env, agent
 
-    # Train
+
+def run_training(hypers: Hypers) -> Trainer:
+    """Build all components for a training run and execute Trainer.train()."""
+    experiment, env, agent = build_training_components(hypers)
     trainer = Trainer(agent, experiment, env, hypers.train)
     trainer.train()
+    return trainer
+
+
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Train manabot with preset config")
+    parser.add_argument(
+        "--preset",
+        default="local",
+        help="Training preset name (local/simple/attention)",
+    )
+    parser.add_argument(
+        "--set",
+        dest="set_values",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Override config values (repeatable key.path=value)",
+    )
+    return parser.parse_args(list(argv) if argv is not None else None)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = _parse_args(argv)
+    from manabot.config.load import load_train_config
+
+    cfg = load_train_config(preset=args.preset, set_overrides=args.set_values)
+    run_training(cfg.to_hypers())
 
 
 if __name__ == "__main__":

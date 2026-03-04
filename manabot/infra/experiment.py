@@ -42,9 +42,11 @@ class Experiment:
 
     def __init__(
         self,
-        experiment_hypers: ExperimentHypers = ExperimentHypers(),
-        full_hypers: Hypers = Hypers(),
+        experiment_hypers: Optional[ExperimentHypers] = None,
+        full_hypers: Optional[Hypers] = None,
     ):
+        experiment_hypers = experiment_hypers or ExperimentHypers()
+        full_hypers = full_hypers or Hypers()
         self.experiment_hypers = experiment_hypers
         self.full_hypers = full_hypers
         self.exp_name = experiment_hypers.exp_name

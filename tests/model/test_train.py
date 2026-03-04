@@ -254,5 +254,7 @@ def test_training_loop_runs_100_steps(observation_space, experiment):
     )
 
     trainer = Trainer(agent, experiment, env, hypers)
+    assert np.isnan(trainer.last_explained_variance)
     trainer.train()
     assert trainer.global_step == 100
+    assert not np.isnan(trainer.last_explained_variance)

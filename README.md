@@ -29,7 +29,8 @@ pip install -e ".[dev]"
 Manabot is primarily trained on Ubuntu machines in AWS and requires wandb credentials.
 
 ```bash
-python manabot/model/train.py --config-name simple
+manabot train --preset simple
+# or: python manabot/model/train.py --preset simple
 ```
 
 ## Simulation
@@ -37,7 +38,8 @@ python manabot/model/train.py --config-name simple
 Simulation pulls models from wandb. At small scales this can be done locally on CPU machines.
 
 ```bash
-python manabot/sim/sim.py --hero attention --villain simple
+manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
+# or: python manabot/sim/sim.py --preset sim --set sim.num_games=10
 ```
 
 ## Testing
@@ -78,7 +80,7 @@ pytest tests/env/ tests/agent/ -v
 
 4. **`manabot.infra`**: Infrastructure
    - `Experiment`: W&B/TensorBoard tracking
-   - `Hypers`: Hydra config management
+   - `Hypers`: dataclass config model
    - `Profiler`: Performance profiling
 
 ### managym (Rust)

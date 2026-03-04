@@ -7,6 +7,7 @@ from .hypers import (
     MatchHypers,
     ObservationSpaceHypers,
     RewardHypers,
+    SimulationHypers,
     TrainHypers,
 )
 from .log import getLogger
@@ -17,6 +18,7 @@ __all__ = [
     "MatchHypers",
     "RewardHypers",
     "TrainHypers",
+    "SimulationHypers",
     "AgentHypers",
     "ObservationSpaceHypers",
     "ExperimentHypers",

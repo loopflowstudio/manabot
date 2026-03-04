@@ -9,15 +9,14 @@ This module provides:
 4. Action distribution and decision analysis
 """
 
+import argparse
 from collections import Counter, defaultdict
 from enum import Enum
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-import hydra
 import numpy as np
-from omegaconf import DictConfig, OmegaConf
 import wandb
 
 # Local imports
@@ -722,29 +721,18 @@ def load_player(model_str: str) -> Player:
 # -----------------------------------------------------------------------------
 
 
-@hydra.main(version_base=None, config_path="../conf/sim", config_name="sim")
-def main(cfg: DictConfig) -> None:
-    """
-    Hydra-powered simulation entry point.
-    Expects a configuration file (e.g. conf/sim/sim.yaml) with fields:
-      - hero: str
-      - villain: str
-      - num_games: int
-      - num_threads: int
-      - max_steps: int
-      - match: (dictionary matching MatchHypers)
-    """
-    # Convert the config to a dictionary.
-    sim_hypers = OmegaConf.to_object(cfg.sim)
-    experiment_hypers = OmegaConf.to_object(cfg.experiment)
-    assert isinstance(sim_hypers, SimulationHypers)
-    assert isinstance(experiment_hypers, ExperimentHypers)
-
-    # Initialize the logging etc
+def run_simulation(
+    sim_hypers: SimulationHypers, experiment_hypers: ExperimentHypers
+) -> None:
+    """Run a simulation sweep for hero/villain model specs."""
     _ = Experiment(experiment_hypers)
-
     logger = getLogger("manabot.sim.sim")
-    logger.info("Simulation configuration:\n" + OmegaConf.to_yaml(cfg))
+    logger.info(
+        "Simulation config: "
+        f"hero={sim_hypers.hero}, villain={sim_hypers.villain}, "
+        f"num_games={sim_hypers.num_games}, num_threads={sim_hypers.num_threads}, "
+        f"max_steps={sim_hypers.max_steps}"
+    )
 
     logger.info(f"Loading hero model: {sim_hypers.hero}")
     logger.info(f"Loading villain model: {sim_hypers.villain}")
@@ -752,6 +740,29 @@ def main(cfg: DictConfig) -> None:
     villain_player = load_player(sim_hypers.villain)
 
     simulate_models(hero_player, villain_player, sim_hypers)
+
+
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run manabot model simulation")
+    parser.add_argument("--preset", default="sim", help="Simulation preset name")
+    parser.add_argument(
+        "--set",
+        dest="set_values",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Override config values (repeatable key.path=value)",
+    )
+    return parser.parse_args(list(argv) if argv is not None else None)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = _parse_args(argv)
+    from manabot.config.load import load_sim_config
+
+    cfg = load_sim_config(preset=args.preset, set_overrides=args.set_values)
+    sim_hypers, experiment_hypers = cfg.to_hypers()
+    run_simulation(sim_hypers, experiment_hypers)
 
 
 if __name__ == "__main__":
