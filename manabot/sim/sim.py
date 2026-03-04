@@ -18,12 +18,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
-import torch
 import wandb
 
 # Local imports
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import get_agent_indices
 from manabot.infra.experiment import Experiment
 from manabot.infra.hypers import ExperimentHypers, SimulationHypers
 from manabot.infra.log import getLogger
@@ -476,9 +474,9 @@ def _extract_life(obs: dict, player_index: int) -> Optional[float]:
     try:
         # This is a simplified example - adapt based on your actual observation structure
         if player_index == 0 and "agent_player" in obs:
-            return obs["agent_player"][0, 2]  # Assuming life is at index 2
+            return obs["agent_player"][0, 0]
         elif player_index == 1 and "opponent_player" in obs:
-            return obs["opponent_player"][0, 2]  # Assuming life is at index 2
+            return obs["opponent_player"][0, 0]
     except (IndexError, KeyError):
         pass
     return None
@@ -680,10 +678,8 @@ def _simulate_game(
 
     # Main game loop
     while not done and turn_count < max_steps:
-        # Get active player index from observation
-        active_player_index = get_agent_indices(
-            {k: torch.tensor(v)[None, ...] for k, v in obs.items()}
-        )[0].item()
+        # Get active player index from the raw C++ observation.
+        active_player_index = int(env.last_cpp_obs.agent.player_index)
 
         # Select the appropriate player
         player = hero_player if active_player_index == 0 else villain_player

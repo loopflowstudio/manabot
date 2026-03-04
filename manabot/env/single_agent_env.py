@@ -94,7 +94,7 @@ class SingleAgentEnv(gym.Env):
             )
             return obs, reward, terminated, truncated, info
 
-        while self._is_opponent(obs):
+        while self._is_opponent():
             opponent_action = self.opponent_policy(obs)
             obs, opponent_reward, terminated, truncated, info = self.inner.step(
                 opponent_action
@@ -117,12 +117,12 @@ class SingleAgentEnv(gym.Env):
         info["action_space_truncated"] = action_space_truncated
         return obs, reward, terminated, truncated, info
 
-    def _is_opponent(self, obs: dict[str, np.ndarray]) -> bool:
-        return int(obs["agent_player"][0, 0]) != self.hero_player_index
+    def _is_opponent(self) -> bool:
+        return int(self.inner.last_cpp_obs.agent.player_index) != self.hero_player_index
 
     def _skip_opponent(self, obs: dict[str, np.ndarray], info: dict[str, Any]):
         action_space_truncated = bool(info.get("action_space_truncated", False))
-        while self._is_opponent(obs):
+        while self._is_opponent():
             opponent_action = self.opponent_policy(obs)
             obs, _, _, _, info = self.inner.step(opponent_action)
             action_space_truncated = action_space_truncated or bool(

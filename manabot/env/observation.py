@@ -11,8 +11,8 @@ Additional updates in this version:
 - Focus object indices are naturally gathered when encoding actions.
 - Validity masks (if provided) are passed to the GameObject Encoder, Action Encoder,
   Policy head, and multi-head attention.
-- The last element of each player, card, and permanent feature vector is reserved
-  as an is_valid flag.
+- The last element of each card and permanent feature vector is reserved as an
+  is_valid flag.
 """
 
 from enum import IntEnum
@@ -20,7 +20,6 @@ from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
 import numpy as np
-import torch
 
 # Local imports
 from manabot.infra.hypers import ObservationSpaceHypers
@@ -103,7 +102,7 @@ class ObservationEncoder:
         self.num_actions = len(ActionEnum.__members__)
 
         # Define dimensions for players, cards, permanents.
-        self.player_dim = 5 + self.num_zones
+        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps
         self.card_dim = (self.num_zones + 1 + 2 + 1 + 6) + 1
         self.permanent_dim = 4 + 1
 
@@ -159,14 +158,32 @@ class ObservationEncoder:
         self.current_object_index = 0
 
         # Game Objects
-        out["agent_player"] = self._encode_player_features(obs.agent)[np.newaxis, ...]
-        out["opponent_player"] = self._encode_player_features(obs.opponent)[
+        out["agent_player"] = self._encode_player_features(obs.agent, obs.turn)[
             np.newaxis, ...
         ]
-        out["agent_cards"] = self._encode_cards(obs.agent_cards)
-        out["opponent_cards"] = self._encode_cards(obs.opponent_cards)
-        out["agent_permanents"] = self._encode_perms(obs.agent_permanents)
-        out["opponent_permanents"] = self._encode_perms(obs.opponent_permanents)
+        out["opponent_player"] = self._encode_player_features(obs.opponent, obs.turn)[
+            np.newaxis, ...
+        ]
+        out["agent_cards"] = self._encode_cards(
+            obs.agent_cards,
+            is_mine=1.0,
+            owner_label="agent_cards",
+        )
+        out["opponent_cards"] = self._encode_cards(
+            obs.opponent_cards,
+            is_mine=0.0,
+            owner_label="opponent_cards",
+        )
+        out["agent_permanents"] = self._encode_perms(
+            obs.agent_permanents,
+            is_mine=1.0,
+            owner_label="agent_permanents",
+        )
+        out["opponent_permanents"] = self._encode_perms(
+            obs.opponent_permanents,
+            is_mine=0.0,
+            owner_label="opponent_permanents",
+        )
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -209,21 +226,28 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Players (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_player_features(self, player: managym.Player) -> np.ndarray:
+    def _encode_player_features(
+        self, player: managym.Player, turn: managym.Turn
+    ) -> np.ndarray:
         arr = np.zeros(self.player_dim, dtype=np.float32)
         i = 0
-        arr[i] = float(player.player_index)
-        i += 1
-        arr[i] = float(player.id)
-        i += 1
-        arr[i] = float(player.life)
+        arr[i] = float(player.life) / 20.0
         i += 1
         arr[i] = float(player.is_active)
         i += 1
-        arr[i] = float(player.is_agent)
-        i += 1
         for z in range(min(len(player.zone_counts), self.num_zones)):
-            arr[i + z] = float(player.zone_counts[z])
+            arr[i + z] = float(player.zone_counts[z]) / 60.0
+        i += self.num_zones
+
+        phase = int(turn.phase)
+        if 0 <= phase < self.num_phases:
+            arr[i + phase] = 1.0
+        i += self.num_phases
+
+        step = int(turn.step)
+        if 0 <= step < self.num_steps:
+            arr[i + step] = 1.0
+
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
         return arr
@@ -231,31 +255,38 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(self, cards: List[managym.Card]) -> np.ndarray:
+    def _encode_cards(
+        self, cards: List[managym.Card], is_mine: float, owner_label: str
+    ) -> np.ndarray:
+        log = getLogger(__name__).getChild("encode_cards")
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
+        if len(cards) > self.cards_per_player:
+            log.warning(
+                f"Card list truncated ({owner_label}): {len(cards)} -> {self.cards_per_player}"
+            )
         ordered_cards = cards[: self.cards_per_player]
         for i, card in enumerate(ordered_cards):
-            feat[i] = self._encode_card_features(card)
+            feat[i] = self._encode_card_features(card, is_mine)
             self.object_to_index[card.id] = self.current_object_index
             self.current_object_index += 1
         unused_slots = self.cards_per_player - len(ordered_cards)
         self.current_object_index += unused_slots
         return feat
 
-    def _encode_card_features(self, card: managym.Card) -> np.ndarray:
+    def _encode_card_features(self, card: managym.Card, is_mine: float) -> np.ndarray:
         arr = np.zeros(self.card_dim, dtype=np.float32)
         i = 0
         zone_val = int(card.zone) & 0xFF
         if 0 <= zone_val < self.num_zones:
             arr[i + zone_val] = 1.0
         i += self.num_zones
-        arr[i] = float(card.owner_id)
+        arr[i] = is_mine
         i += 1
-        arr[i] = float(card.power)
+        arr[i] = float(card.power) / 10.0
         i += 1
-        arr[i] = float(card.toughness)
+        arr[i] = float(card.toughness) / 10.0
         i += 1
-        arr[i] = float(card.mana_cost.mana_value)
+        arr[i] = float(card.mana_cost.mana_value) / 10.0
         i += 1
         arr[i] = float(card.card_types.is_land)
         i += 1
@@ -275,22 +306,31 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Permanents (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_perms(self, perms: List[managym.Permanent]) -> np.ndarray:
+    def _encode_perms(
+        self, perms: List[managym.Permanent], is_mine: float, owner_label: str
+    ) -> np.ndarray:
+        log = getLogger(__name__).getChild("encode_permanents")
         feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
+        if len(perms) > self.perms_per_player:
+            log.warning(
+                f"Permanent list truncated ({owner_label}): {len(perms)} -> {self.perms_per_player}"
+            )
         ordered_perms = perms[: self.perms_per_player]
         for i, perm in enumerate(ordered_perms):
-            feat[i] = self._encode_permanent_features(perm)
+            feat[i] = self._encode_permanent_features(perm, is_mine)
             self.object_to_index[perm.id] = self.current_object_index
             self.current_object_index += 1
         unused_slots = self.perms_per_player - len(ordered_perms)
         self.current_object_index += unused_slots
         return feat
 
-    def _encode_permanent_features(self, perm: managym.Permanent) -> np.ndarray:
+    def _encode_permanent_features(
+        self, perm: managym.Permanent, is_mine: float
+    ) -> np.ndarray:
         arr = np.zeros(self.permanent_dim, dtype=np.float32)
-        arr[0] = float(perm.controller_id)
+        arr[0] = is_mine
         arr[1] = float(perm.tapped)
-        arr[2] = float(perm.damage)
+        arr[2] = float(perm.damage) / 10.0
         arr[3] = float(perm.is_summoning_sick)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
@@ -394,14 +434,3 @@ class ObservationSpace(gym.spaces.Space):
             if self.spaces[key] != other.spaces[key]:
                 return False
         return True
-
-
-def get_agent_indices(obs: Dict[str, torch.Tensor]) -> torch.Tensor:
-    """Returns a tensor of agent indices from the observation.
-
-    Shape: (batch_size,)
-    Type: torch.int64
-    """
-    # Input shape is (batch_size, 1, features)
-    # We want the first feature for each item in the batch
-    return obs["agent_player"][:, 0, 0].to(dtype=torch.int64)

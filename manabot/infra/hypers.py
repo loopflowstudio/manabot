@@ -15,8 +15,8 @@ from hydra.core.config_store import ConfigStore
 
 @dataclass
 class ObservationSpaceHypers:
-    max_cards_per_player: int = 100
-    max_permanents_per_player: int = 50
+    max_cards_per_player: int = 20
+    max_permanents_per_player: int = 15
     max_actions: int = 10
     max_focus_objects: int = 2
 
