@@ -1,4 +1,4 @@
-"""Configuration loading and schema helpers for train/sim CLI commands."""
+"""Configuration loading and preset helpers for train/sim CLI commands."""
 
 from .load import (
     apply_set_overrides,
@@ -7,14 +7,23 @@ from .load import (
     load_train_config,
     parse_set_override,
 )
-from .schema import SimulationConfig, TrainingConfig
+from .presets import (
+    DEFAULT_SIM_PRESET,
+    DEFAULT_TRAIN_PRESET,
+    get_sim_preset,
+    get_training_base,
+    get_training_preset,
+)
 
 __all__ = [
-    "TrainingConfig",
-    "SimulationConfig",
     "apply_set_overrides",
     "deep_merge",
-    "load_train_config",
     "load_sim_config",
+    "load_train_config",
     "parse_set_override",
+    "DEFAULT_SIM_PRESET",
+    "DEFAULT_TRAIN_PRESET",
+    "get_sim_preset",
+    "get_training_base",
+    "get_training_preset",
 ]

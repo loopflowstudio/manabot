@@ -1,48 +1,49 @@
 """
 hypers.py
-Dataclass hyperparameter schemas shared across training and simulation.
+Pydantic hyperparameter schemas shared across training and simulation.
 """
 
-from dataclasses import dataclass, field
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-@dataclass
-class ObservationSpaceHypers:
+def _default_deck() -> dict[str, int]:
+    return {
+        "Mountain": 12,
+        "Forest": 12,
+        "Llanowar Elves": 18,
+        "Grey Ogre": 18,
+    }
+
+
+def _default_runs_dir() -> Path:
+    return Path(os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".manabot-runs")))
+
+
+class BaseHypersModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ObservationSpaceHypers(BaseHypersModel):
     max_cards_per_player: int = 20
     max_permanents_per_player: int = 15
     max_actions: int = 10
     max_focus_objects: int = 2
 
 
-@dataclass
-class MatchHypers:
+class MatchHypers(BaseHypersModel):
     """Parameters passed to the match builder."""
 
     hero: str = "gaea"
     villain: str = "urza"
-    hero_deck: Dict[str, int] = field(
-        default_factory=lambda: {
-            "Mountain": 12,
-            "Forest": 12,
-            "Llanowar Elves": 18,
-            "Grey Ogre": 18,
-        }
-    )
-    villain_deck: Dict[str, int] = field(
-        default_factory=lambda: {
-            "Mountain": 12,
-            "Forest": 12,
-            "Llanowar Elves": 18,
-            "Grey Ogre": 18,
-        }
-    )
+    hero_deck: dict[str, int] = Field(default_factory=_default_deck)
+    villain_deck: dict[str, int] = Field(default_factory=_default_deck)
 
 
-@dataclass
-class ExperimentHypers:
+class ExperimentHypers(BaseHypersModel):
     """Configuration for experiment tracking and runtime setup."""
 
     exp_name: str = "manabot"
@@ -51,17 +52,12 @@ class ExperimentHypers:
     device: str = "cpu"
     wandb: bool = True
     wandb_project_name: str = "manabot"
-    runs_dir: Path = field(
-        default_factory=lambda: Path(
-            os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".manabot-runs"))
-        )
-    )
+    runs_dir: Path = Field(default_factory=_default_runs_dir)
     log_level: str = "INFO"
     profiler_enabled: bool = False
 
 
-@dataclass
-class AgentHypers:
+class AgentHypers(BaseHypersModel):
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -69,8 +65,7 @@ class AgentHypers:
     attention_on: bool = True
 
 
-@dataclass
-class TrainHypers:
+class TrainHypers(BaseHypersModel):
     """Training-related hyperparameters."""
 
     total_timesteps: int = 20_000_000
@@ -91,35 +86,46 @@ class TrainHypers:
     target_kl: float = float("inf")
     opponent_policy: str = "passive"
 
+    @field_validator("target_kl", mode="before")
+    @classmethod
+    def _coerce_target_kl(cls, value: Any) -> Any:
+        if isinstance(value, str) and value.lower() in {
+            "inf",
+            "+inf",
+            "infinity",
+            "+infinity",
+        }:
+            return float("inf")
+        return value
 
-@dataclass
-class RewardHypers:
+
+class RewardHypers(BaseHypersModel):
     trivial: bool = False
     managym: bool = False
     win_reward: float = 1.0
     lose_reward: float = -1.0
 
 
-@dataclass
-class Hypers:
+class Hypers(BaseHypersModel):
     """Top-level training configuration."""
 
-    observation: ObservationSpaceHypers = field(default_factory=ObservationSpaceHypers)
-    match: MatchHypers = field(default_factory=MatchHypers)
-    train: TrainHypers = field(default_factory=TrainHypers)
-    reward: RewardHypers = field(default_factory=RewardHypers)
-    agent: AgentHypers = field(default_factory=AgentHypers)
-    experiment: ExperimentHypers = field(default_factory=ExperimentHypers)
+    observation: ObservationSpaceHypers = Field(default_factory=ObservationSpaceHypers)
+    match: MatchHypers = Field(default_factory=MatchHypers)
+    train: TrainHypers = Field(default_factory=TrainHypers)
+    reward: RewardHypers = Field(default_factory=RewardHypers)
+    agent: AgentHypers = Field(default_factory=AgentHypers)
+    experiment: ExperimentHypers = Field(default_factory=ExperimentHypers)
 
-    def __post_init__(self):
+    @model_validator(mode="after")
+    def _validate_observation_limits(self) -> "Hypers":
         if self.observation.max_cards_per_player < 1:
             raise ValueError("max_cards_per_player must be positive")
         if self.observation.max_actions < 1:
             raise ValueError("max_actions must be positive")
+        return self
 
 
-@dataclass
-class SimulationHypers:
+class SimulationHypers(BaseHypersModel):
     """Hyperparameters for model simulation."""
 
     hero: str = "simple"
@@ -127,11 +133,5 @@ class SimulationHypers:
     num_games: int = 100
     num_threads: int = 4
     max_steps: int = 2000
-    match: MatchHypers = field(default_factory=MatchHypers)
-    reward: RewardHypers = field(default_factory=RewardHypers)
-
-
-def initialize() -> None:
-    """Backward-compatible no-op kept for callers from pre-Typer runtime."""
-
-    return None
+    match: MatchHypers = Field(default_factory=MatchHypers)
+    reward: RewardHypers = Field(default_factory=RewardHypers)

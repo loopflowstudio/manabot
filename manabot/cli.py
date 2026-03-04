@@ -14,13 +14,14 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for minimal envs
 
 
 def _run_train(preset: str, set_values: list[str]) -> None:
-    cfg = load_train_config(preset=preset, set_overrides=set_values)
-    run_training(cfg.to_hypers())
+    hypers = load_train_config(preset=preset, set_overrides=set_values)
+    run_training(hypers)
 
 
 def _run_sim(preset: str, set_values: list[str]) -> None:
-    cfg = load_sim_config(preset=preset, set_overrides=set_values)
-    sim_hypers, experiment_hypers = cfg.to_hypers()
+    sim_hypers, experiment_hypers = load_sim_config(
+        preset=preset, set_overrides=set_values
+    )
     run_simulation(sim_hypers, experiment_hypers)
 
 

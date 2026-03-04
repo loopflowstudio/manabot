@@ -80,7 +80,7 @@ pytest tests/env/ tests/agent/ -v
 
 4. **`manabot.infra`**: Infrastructure
    - `Experiment`: W&B/TensorBoard tracking
-   - `Hypers`: dataclass config model
+   - `Hypers`: Pydantic config model
    - `Profiler`: Performance profiling
 
 ### managym (Rust)

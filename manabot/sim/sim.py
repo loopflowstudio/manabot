@@ -760,8 +760,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = _parse_args(argv)
     from manabot.config.load import load_sim_config
 
-    cfg = load_sim_config(preset=args.preset, set_overrides=args.set_values)
-    sim_hypers, experiment_hypers = cfg.to_hypers()
+    sim_hypers, experiment_hypers = load_sim_config(
+        preset=args.preset, set_overrides=args.set_values
+    )
     run_simulation(sim_hypers, experiment_hypers)
 
 

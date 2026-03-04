@@ -1,6 +1,5 @@
 """Shared helpers for verification ladder scripts."""
 
-from dataclasses import asdict
 import logging
 import math
 from typing import Any
@@ -9,7 +8,6 @@ import numpy as np
 import torch
 
 from manabot.config.load import deep_merge
-from manabot.config.schema import TrainingConfig
 from manabot.env import Env, Match, ObservationSpace, Reward, build_opponent_policy
 from manabot.env.observation import ActionEnum
 from manabot.infra import Hypers
@@ -32,7 +30,7 @@ MOUNTAIN_DECK = {"Mountain": 20}
 def build_hypers(**overrides) -> Hypers:
     """Build Hypers with verification defaults and nested overrides."""
 
-    base = asdict(Hypers())
+    base = Hypers().model_dump()
     base["experiment"].update(
         {
             "exp_name": "verify",
@@ -51,7 +49,7 @@ def build_hypers(**overrides) -> Hypers:
         if deck_key in match_overrides:
             merged["match"][deck_key] = dict(match_overrides[deck_key])
 
-    return TrainingConfig.model_validate(merged).to_hypers()
+    return Hypers.model_validate(merged)
 
 
 def wilson_lower_bound(wins: int, total: int, z: float = 1.96) -> float:

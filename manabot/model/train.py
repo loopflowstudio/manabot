@@ -13,7 +13,6 @@ This version uses CleanRL-style flat rollout tensors with shape (num_steps, num_
 """
 
 import argparse
-from dataclasses import asdict
 import datetime
 import time
 from typing import Any, Dict, Sequence, Tuple
@@ -797,9 +796,9 @@ class Trainer:
 
         # Save all relevant hyperparameters
         hypers_dict = {
-            "agent_hypers": asdict(self.agent.hypers),
-            "observation_hypers": asdict(self.env.observation_space.encoder.hypers),
-            "train_hypers": asdict(self.hypers),
+            "agent_hypers": self.agent.hypers.model_dump(),
+            "observation_hypers": self.env.observation_space.encoder.hypers.model_dump(),
+            "train_hypers": self.hypers.model_dump(),
         }
 
         path = f"{name}.pt"
@@ -892,8 +891,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = _parse_args(argv)
     from manabot.config.load import load_train_config
 
-    cfg = load_train_config(preset=args.preset, set_overrides=args.set_values)
-    run_training(cfg.to_hypers())
+    hypers = load_train_config(preset=args.preset, set_overrides=args.set_values)
+    run_training(hypers)
 
 
 if __name__ == "__main__":

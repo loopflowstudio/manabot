@@ -1,7 +1,6 @@
 """Built-in runtime presets for training and simulation commands."""
 
 from copy import deepcopy
-from dataclasses import asdict
 
 from manabot.infra import Hypers, SimulationHypers
 
@@ -10,13 +9,13 @@ DEFAULT_SIM_PRESET = "sim"
 
 
 def _base_training_preset() -> dict:
-    return asdict(Hypers())
+    return Hypers().model_dump()
 
 
 def _sim_preset() -> dict:
     preset = {
-        "experiment": asdict(Hypers().experiment),
-        "sim": asdict(SimulationHypers()),
+        "experiment": Hypers().experiment.model_dump(),
+        "sim": SimulationHypers().model_dump(),
     }
     preset["experiment"].update(
         {
