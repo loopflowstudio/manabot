@@ -173,7 +173,9 @@ def run_evaluation(
                     action = opponent(obs)
 
                 try:
-                    obs, _, terminated, truncated, info = step_with_fallback(env, action)
+                    obs, _, terminated, truncated, info = step_with_fallback(
+                        env, action
+                    )
                 except Exception:
                     aborted = True
                     info = {}

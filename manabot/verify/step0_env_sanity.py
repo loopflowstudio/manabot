@@ -46,7 +46,9 @@ def _run_matchup(
                 policy = hero_policy if active_player == 0 else villain_policy
                 action = policy(obs)
                 try:
-                    obs, _, terminated, truncated, info = step_with_fallback(env, action)
+                    obs, _, terminated, truncated, info = step_with_fallback(
+                        env, action
+                    )
                 except Exception:
                     aborted = True
                     info = {}
