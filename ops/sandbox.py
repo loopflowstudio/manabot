@@ -6,8 +6,8 @@ CLI for creating/resuming a tagged GPU sandbox and opening SSH.
 from __future__ import annotations
 
 if __package__ in {None, ""}:
-    import sys
     from pathlib import Path
+    import sys
 
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 

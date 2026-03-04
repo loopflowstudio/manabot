@@ -58,7 +58,7 @@ set -euo pipefail
 MARKER={marker_path}
 REPO_URL={repo_url}
 IMAGE={runtime.image}
-FALLBACK_BUILD={'1' if runtime.fallback_build else '0'}
+FALLBACK_BUILD={"1" if runtime.fallback_build else "0"}
 
 if [ ! -f "$MARKER" ]; then
 {_COMMON_BOOTSTRAP}
@@ -97,7 +97,7 @@ set -euo pipefail
 
 MARKER={marker_path}
 IMAGE={runtime.image}
-FALLBACK_BUILD={'1' if runtime.fallback_build else '0'}
+FALLBACK_BUILD={"1" if runtime.fallback_build else "0"}
 CONFIG_NAME={config_name}
 JOB_ID={job_id}
 WANDB_RUN_ID={wandb_run_id}

@@ -6,8 +6,8 @@ CLI for launching, observing, cancelling, and resuming spot GPU training jobs.
 from __future__ import annotations
 
 if __package__ in {None, ""}:
-    import sys
     from pathlib import Path
+    import sys
 
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -54,7 +54,9 @@ class JobStore:
         records = self._records()
         records[record.job_id] = record
         payload = {key: asdict(value) for key, value in records.items()}
-        self.path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        self.path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+        )
 
     def _records(self) -> dict[str, JobRecord]:
         if not self.path.exists():
@@ -86,7 +88,9 @@ class JobManager:
         self.runtime = runtime
         self.store = store or JobStore()
 
-    def launch(self, config_name: str, *, record: JobRecord | None = None) -> tuple[JobRecord, Machine]:
+    def launch(
+        self, config_name: str, *, record: JobRecord | None = None
+    ) -> tuple[JobRecord, Machine]:
         """Launch a new or resumed spot machine and start training via systemd."""
 
         active_record = record or JobRecord(
@@ -234,8 +238,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--list", action="store_true", help="List active jobs")
     parser.add_argument("--logs", metavar="JOB_ID", help="Show CloudWatch logs for job")
-    parser.add_argument("--cancel", metavar="JOB_ID", help="Terminate active job instances")
-    parser.add_argument("--resume", metavar="JOB_ID", help="Resume job from saved metadata")
+    parser.add_argument(
+        "--cancel", metavar="JOB_ID", help="Terminate active job instances"
+    )
+    parser.add_argument(
+        "--resume", metavar="JOB_ID", help="Resume job from saved metadata"
+    )
     parser.add_argument(
         "--iam-instance-profile",
         default=os.getenv("MANABOT_IAM_INSTANCE_PROFILE"),
@@ -267,7 +275,9 @@ def _validate_mode(args: argparse.Namespace) -> None:
         bool(args.resume),
     ]
     if sum(enabled) > 1:
-        raise SystemExit("Use only one of --list/--logs/--cancel/--resume per invocation")
+        raise SystemExit(
+            "Use only one of --list/--logs/--cancel/--resume per invocation"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

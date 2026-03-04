@@ -70,8 +70,12 @@ class AWSProvider:
         region = spec.region or self.default_region
         ec2 = self._client("ec2", region)
 
-        security_group_id = self.security_group_id or self._ensure_security_group(region)
-        key_name = spec.key_name or self.default_key_name or self._ensure_key_pair(region)
+        security_group_id = self.security_group_id or self._ensure_security_group(
+            region
+        )
+        key_name = (
+            spec.key_name or self.default_key_name or self._ensure_key_pair(region)
+        )
         profile_name = (
             iam_instance_profile
             or self.default_iam_instance_profile
@@ -198,7 +202,9 @@ class AWSProvider:
                 return
             time.sleep(5)
 
-        raise TimeoutError(f"SSM did not become available for {machine.id} in {timeout}s")
+        raise TimeoutError(
+            f"SSM did not become available for {machine.id} in {timeout}s"
+        )
 
     def stop(self, machine: Machine) -> None:
         """Stop a machine."""
@@ -511,7 +517,9 @@ class AWSProvider:
                 RoleName=role_name,
             )
         except self._ClientError as exc:
-            if "LimitExceeded" not in str(exc) and "EntityAlreadyExists" not in str(exc):
+            if "LimitExceeded" not in str(exc) and "EntityAlreadyExists" not in str(
+                exc
+            ):
                 self._raise_iam_error(exc)
 
         # IAM propagation window.
