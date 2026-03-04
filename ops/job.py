@@ -53,10 +53,7 @@ class JobStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         records = self._records()
         records[record.job_id] = record
-        payload = {
-            key: asdict(value)
-            for key, value in sorted(records.items(), key=lambda item: item[0])
-        }
+        payload = {key: asdict(value) for key, value in records.items()}
         self.path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
     def _records(self) -> dict[str, JobRecord]:
@@ -93,8 +90,8 @@ class JobManager:
         """Launch a new or resumed spot machine and start training via systemd."""
 
         active_record = record or JobRecord(
-            job_id=self._new_job_id(),
-            wandb_run_id=self._new_run_id(),
+            job_id=f"job-{secrets.token_hex(4)}",
+            wandb_run_id=secrets.token_hex(8),
             config_name=config_name,
             region=self.spec.region,
         )
@@ -205,16 +202,12 @@ class JobManager:
         lines.append("sudo systemctl start manabot-job.service")
         return "\n".join(lines)
 
-    def _new_job_id(self) -> str:
-        return f"job-{secrets.token_hex(4)}"
-
-    def _new_run_id(self) -> str:
-        return secrets.token_hex(8)
+    def _user(self) -> str:
+        return getattr(self.provider, "user", os.getenv("USER", "unknown"))
 
     def _base_tags(self) -> dict[str, str]:
-        user = getattr(self.provider, "user", os.getenv("USER", "unknown"))
         return {
-            "manabot:user": user,
+            "manabot:user": self._user(),
             "manabot:role": "job",
             "manabot:managed": "true",
             "manabot:region": self.spec.region,
@@ -229,8 +222,7 @@ class JobManager:
         }
 
     def _log_group(self) -> str:
-        user = getattr(self.provider, "user", os.getenv("USER", "unknown"))
-        return f"{self.runtime.log_group_prefix.rstrip('/')}/job/{user}"
+        return f"{self.runtime.log_group_prefix.rstrip('/')}/job/{self._user()}"
 
 
 def build_parser() -> argparse.ArgumentParser:

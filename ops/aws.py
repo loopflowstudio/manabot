@@ -51,7 +51,7 @@ class AWSProvider:
         self.security_group_id = security_group_id
         self.log_group_prefix = log_group_prefix.rstrip("/")
 
-        self.user, self.account_id = self._resolve_caller_identity(self.default_region)
+        self.user = self._resolve_caller_identity(self.default_region)
         self.user_slug = _slugify(self.user)
 
     # ---------------------------------------------------------------------
@@ -530,13 +530,11 @@ class AWSProvider:
     # ---------------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------------
-    def _resolve_caller_identity(self, region: str) -> tuple[str, str]:
+    def _resolve_caller_identity(self, region: str) -> str:
         sts = self._client("sts", region)
         identity = sts.get_caller_identity()
         arn = identity.get("Arn", "unknown")
-        user = _user_from_arn(arn)
-        account_id = identity.get("Account", "unknown")
-        return user, account_id
+        return _user_from_arn(arn)
 
     def _default_vpc_id(self, region: str) -> str:
         ec2 = self._client("ec2", region)
@@ -655,4 +653,4 @@ def choose_single_machine(machines: Iterable[Machine]) -> Machine | None:
     if not machine_list:
         return None
     # Instance IDs are time-ordered enough for deterministic picks in this workflow.
-    return sorted(machine_list, key=lambda machine: machine.id)[-1]
+    return max(machine_list, key=lambda machine: machine.id)

@@ -94,23 +94,27 @@ class Provider(Protocol):
 def load_machine_spec(name: str, base_dir: Path | None = None) -> MachineSpec:
     """Load machine settings from ops/specs/<name>.yaml."""
 
-    specs_dir = base_dir or Path(__file__).resolve().parent / "specs"
-    path = specs_dir / f"{name}.yaml"
-    config = _load_yaml(path)
-    if not isinstance(config, dict):
-        raise ValueError(f"Invalid machine spec file: {path}")
-    return MachineSpec(**config)
+    return _load_spec(f"{name}.yaml", MachineSpec, base_dir=base_dir)
 
 
 def load_runtime_spec(base_dir: Path | None = None) -> RuntimeSpec:
     """Load runtime settings from ops/specs/runtime.yaml."""
 
+    return _load_spec("runtime.yaml", RuntimeSpec, base_dir=base_dir)
+
+
+def _load_spec(
+    filename: str,
+    spec_type: type[MachineSpec] | type[RuntimeSpec],
+    *,
+    base_dir: Path | None = None,
+) -> MachineSpec | RuntimeSpec:
     specs_dir = base_dir or Path(__file__).resolve().parent / "specs"
-    path = specs_dir / "runtime.yaml"
+    path = specs_dir / filename
     config = _load_yaml(path)
     if not isinstance(config, dict):
-        raise ValueError(f"Invalid runtime spec file: {path}")
-    return RuntimeSpec(**config)
+        raise ValueError(f"Invalid spec file: {path}")
+    return spec_type(**config)
 
 
 def merge_tags(*tag_maps: dict[str, Any]) -> dict[str, str]:

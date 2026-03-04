@@ -56,14 +56,7 @@ class SandboxManager:
         elif machine.status in {"stopped", "stopping"}:
             machine = self.provider.start(machine)
 
-        machine = self.provider.wait_until_ready(machine, timeout=600)
-        self.provider.wait_for_ssm(machine, timeout=600)
-        self._verify_bootstrap(machine)
-
-        if not self.no_ssh:
-            self._open_ssh(machine)
-
-        return machine
+        return self._ready_for_use(machine)
 
     def status(self) -> Machine | None:
         """Return current sandbox machine, if any."""
@@ -82,12 +75,7 @@ class SandboxManager:
             return machine
 
         machine = self.provider.start(machine)
-        machine = self.provider.wait_until_ready(machine, timeout=600)
-        self.provider.wait_for_ssm(machine, timeout=600)
-        self._verify_bootstrap(machine)
-        if not self.no_ssh:
-            self._open_ssh(machine)
-        return machine
+        return self._ready_for_use(machine)
 
     def stop(self) -> None:
         """Stop an existing sandbox machine."""
@@ -129,6 +117,14 @@ class SandboxManager:
                 f"Sandbox bootstrap marker missing ({BOOTSTRAP_MARKER}). "
                 f"Command {result.command_id} status={result.status} stderr={result.stderr}"
             )
+
+    def _ready_for_use(self, machine: Machine) -> Machine:
+        machine = self.provider.wait_until_ready(machine, timeout=600)
+        self.provider.wait_for_ssm(machine, timeout=600)
+        self._verify_bootstrap(machine)
+        if not self.no_ssh:
+            self._open_ssh(machine)
+        return machine
 
     def _existing(self) -> Machine | None:
         machines = self.provider.list(self._tags())
