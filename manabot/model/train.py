@@ -42,6 +42,8 @@ manabot.infra.hypers.initialize()
 ROLLOUT_HEALTH_KEYS = (
     "truncated_episodes",
     "action_space_truncations",
+    "card_space_truncations",
+    "permanent_space_truncations",
 )
 
 
@@ -308,11 +310,14 @@ class Trainer:
             self.logger.warning(
                 f"Truncation in {n_truncated}/{self.hypers.num_envs} envs (no value bootstrap)"
             )
-        action_truncations = self._count_info_events(info, "action_space_truncated")
-        if action_truncations > 0:
-            self._increment_rollout_health(
-                "action_space_truncations", action_truncations
-            )
+        for info_key, health_key in (
+            ("action_space_truncated", "action_space_truncations"),
+            ("card_space_truncated", "card_space_truncations"),
+            ("permanent_space_truncated", "permanent_space_truncations"),
+        ):
+            count = self._count_info_events(info, info_key)
+            if count > 0:
+                self._increment_rollout_health(health_key, count)
 
         self.global_step += self.hypers.num_envs
 

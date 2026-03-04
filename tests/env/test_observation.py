@@ -3,7 +3,7 @@ test_observation.py
 Tests for observation encoding in manabot using minimal test configurations.
 
 This test suite verifies:
-1. Parity between Python and C++ enums for game state representation
+1. Parity between Python and managym enums for game state representation
 2. ObservationEncoder produces expected tensor shapes and keys
 3. Validity masks accurately reflect game objects
 4. Object-to-index mapping is consistent
@@ -91,7 +91,7 @@ def two_observations(
 
 
 class TestEnumParity:
-    """Verify that our Python enums match the C++ ones exactly."""
+    """Verify that our Python enums match the managym ones exactly."""
 
     @pytest.mark.parametrize(
         "py_enum, cpp_enum",
@@ -150,6 +150,15 @@ class TestEnumParity:
 
 class TestObservationEncoder:
     """Test the observation encoder's core functionality."""
+
+    def test_default_padding_targets_72_objects(self):
+        default_encoder = ObservationEncoder(ObservationSpaceHypers())
+        total_objects = (
+            2
+            + default_encoder.cards_per_player * 2
+            + default_encoder.perms_per_player * 2
+        )
+        assert total_objects == 72
 
     def get_expected_keys(self) -> Set[str]:
         """Get the complete set of expected keys in an encoded observation."""
@@ -220,6 +229,68 @@ class TestObservationEncoder:
                     f"Non-zero values found in invalid {key} slots: {array_slice[array_slice != 0]}"
                 )
 
+    def test_player_features_include_turn_and_are_normalized(
+        self, observation_space, observation
+    ):
+        encoded = observation_space.encode(observation)
+
+        for key, player in (
+            ("agent_player", observation.agent),
+            ("opponent_player", observation.opponent),
+        ):
+            vec = encoded[key][0]
+
+            assert vec[0] == pytest.approx(player.life / 20.0)
+            assert vec[1] == pytest.approx(float(player.is_active))
+
+            zone_slice = vec[2:9]
+            expected_zones = np.array(player.zone_counts, dtype=np.float32) / 60.0
+            np.testing.assert_allclose(zone_slice, expected_zones, atol=1e-6)
+
+            phase_slice = vec[9:14]
+            step_slice = vec[14:26]
+            assert phase_slice.sum() == pytest.approx(1.0)
+            assert step_slice.sum() == pytest.approx(1.0)
+            assert phase_slice[int(observation.turn.phase)] == pytest.approx(1.0)
+            assert step_slice[int(observation.turn.step)] == pytest.approx(1.0)
+
+    def test_card_and_permanent_features_are_partitioned_and_normalized(
+        self, observation_space, observation, hypers
+    ):
+        encoded = observation_space.encode(observation)
+
+        for i, card in enumerate(
+            observation.agent_cards[: hypers.max_cards_per_player]
+        ):
+            vec = encoded["agent_cards"][i]
+            assert vec[7] == pytest.approx(1.0)
+            assert vec[8] == pytest.approx(card.power / 10.0)
+            assert vec[9] == pytest.approx(card.toughness / 10.0)
+            assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
+
+        for i, card in enumerate(
+            observation.opponent_cards[: hypers.max_cards_per_player]
+        ):
+            vec = encoded["opponent_cards"][i]
+            assert vec[7] == pytest.approx(0.0)
+            assert vec[8] == pytest.approx(card.power / 10.0)
+            assert vec[9] == pytest.approx(card.toughness / 10.0)
+            assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
+
+        for i, perm in enumerate(
+            observation.agent_permanents[: hypers.max_permanents_per_player]
+        ):
+            vec = encoded["agent_permanents"][i]
+            assert vec[0] == pytest.approx(1.0)
+            assert vec[2] == pytest.approx(perm.damage / 10.0)
+
+        for i, perm in enumerate(
+            observation.opponent_permanents[: hypers.max_permanents_per_player]
+        ):
+            vec = encoded["opponent_permanents"][i]
+            assert vec[0] == pytest.approx(0.0)
+            assert vec[2] == pytest.approx(perm.damage / 10.0)
+
     def test_object_index_mapping(self, observation_space, observation, hypers):
         """Test that object IDs are mapped to consistent indices."""
         observation_space.encode(observation)
@@ -273,6 +344,48 @@ class TestObservationEncoder:
         assert actions.shape == (2, encoder.action_dim)
         assert action_focus.shape == (2, hypers.max_focus_objects)
         fake_logger.warning.assert_called_once_with("Action space truncated: 3 -> 2")
+
+    def test_card_space_truncation_warning(self, monkeypatch):
+        hypers = ObservationSpaceHypers(max_cards_per_player=1)
+        encoder = ObservationEncoder(hypers)
+        fake_cards = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+        fake_parent_logger = MagicMock()
+        fake_logger = MagicMock()
+        fake_parent_logger.getChild.return_value = fake_logger
+        monkeypatch.setattr(
+            "manabot.env.observation.getLogger", lambda *_: fake_parent_logger
+        )
+        monkeypatch.setattr(
+            encoder,
+            "_encode_card_features",
+            lambda *_: np.zeros(encoder.card_dim, dtype=np.float32),
+        )
+
+        encoded = encoder._encode_cards(fake_cards, is_mine=1.0)
+
+        assert encoded.shape == (1, encoder.card_dim)
+        fake_logger.warning.assert_called_once_with("Card list truncated: 2 -> 1")
+
+    def test_permanent_space_truncation_warning(self, monkeypatch):
+        hypers = ObservationSpaceHypers(max_permanents_per_player=1)
+        encoder = ObservationEncoder(hypers)
+        fake_perms = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+        fake_parent_logger = MagicMock()
+        fake_logger = MagicMock()
+        fake_parent_logger.getChild.return_value = fake_logger
+        monkeypatch.setattr(
+            "manabot.env.observation.getLogger", lambda *_: fake_parent_logger
+        )
+        monkeypatch.setattr(
+            encoder,
+            "_encode_permanent_features",
+            lambda *_: np.zeros(encoder.permanent_dim, dtype=np.float32),
+        )
+
+        encoded = encoder._encode_perms(fake_perms, is_mine=1.0)
+
+        assert encoded.shape == (1, encoder.permanent_dim)
+        fake_logger.warning.assert_called_once_with("Permanent list truncated: 2 -> 1")
 
 
 if __name__ == "__main__":
