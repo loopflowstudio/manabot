@@ -201,9 +201,7 @@ class ObservationEncoder:
         arr[0] = float(player.life) / 20.0
         arr[1] = float(player.is_active)
         zone_start = 2
-        zone_counts = np.asarray(
-            player.zone_counts[: self.num_zones], dtype=np.float32
-        )
+        zone_counts = np.asarray(player.zone_counts[: self.num_zones], dtype=np.float32)
         arr[zone_start : zone_start + len(zone_counts)] = zone_counts / 60.0
         zone_end = zone_start + self.num_zones
 
@@ -228,9 +226,7 @@ class ObservationEncoder:
         log = getLogger(__name__).getChild("encode_cards")
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
         if len(cards) > self.cards_per_player:
-            log.warning(
-                f"Card list truncated: {len(cards)} -> {self.cards_per_player}"
-            )
+            log.warning(f"Card list truncated: {len(cards)} -> {self.cards_per_player}")
         ordered_cards = cards[: self.cards_per_player]
         for i, card in enumerate(ordered_cards):
             feat[i] = self._encode_card_features(card, is_mine)

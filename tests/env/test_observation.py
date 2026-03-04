@@ -154,7 +154,9 @@ class TestObservationEncoder:
     def test_default_padding_targets_72_objects(self):
         default_encoder = ObservationEncoder(ObservationSpaceHypers())
         total_objects = (
-            2 + default_encoder.cards_per_player * 2 + default_encoder.perms_per_player * 2
+            2
+            + default_encoder.cards_per_player * 2
+            + default_encoder.perms_per_player * 2
         )
         assert total_objects == 72
 
@@ -257,7 +259,9 @@ class TestObservationEncoder:
     ):
         encoded = observation_space.encode(observation)
 
-        for i, card in enumerate(observation.agent_cards[: hypers.max_cards_per_player]):
+        for i, card in enumerate(
+            observation.agent_cards[: hypers.max_cards_per_player]
+        ):
             vec = encoded["agent_cards"][i]
             assert vec[7] == pytest.approx(1.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
@@ -381,9 +385,7 @@ class TestObservationEncoder:
         encoded = encoder._encode_perms(fake_perms, is_mine=1.0)
 
         assert encoded.shape == (1, encoder.permanent_dim)
-        fake_logger.warning.assert_called_once_with(
-            "Permanent list truncated: 2 -> 1"
-        )
+        fake_logger.warning.assert_called_once_with("Permanent list truncated: 2 -> 1")
 
 
 if __name__ == "__main__":
