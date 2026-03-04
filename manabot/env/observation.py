@@ -118,10 +118,9 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
-            # Game objects - change player shapes to include the batch dimension
-            "agent_player": (1, self.player_dim),  # Changed from (self.player_dim,)
-            "opponent_player": (1, self.player_dim),  # Changed from (self.player_dim,)
-            # Rest stays the same
+            # Game objects
+            "agent_player": (1, self.player_dim),
+            "opponent_player": (1, self.player_dim),
             "agent_cards": (self.cards_per_player, self.card_dim),
             "opponent_cards": (self.cards_per_player, self.card_dim),
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
@@ -157,70 +156,39 @@ class ObservationEncoder:
         self.object_to_index = {}
         self.current_object_index = 0
 
-        # Game Objects
-        out["agent_player"] = self._encode_player_features(obs.agent, obs.turn)[
-            np.newaxis, ...
-        ]
-        out["opponent_player"] = self._encode_player_features(obs.opponent, obs.turn)[
-            np.newaxis, ...
-        ]
-        out["agent_cards"] = self._encode_cards(
-            obs.agent_cards,
-            is_mine=1.0,
-            owner_label="agent_cards",
-        )
-        out["opponent_cards"] = self._encode_cards(
-            obs.opponent_cards,
-            is_mine=0.0,
-            owner_label="opponent_cards",
-        )
-        out["agent_permanents"] = self._encode_perms(
-            obs.agent_permanents,
-            is_mine=1.0,
-            owner_label="agent_permanents",
-        )
-        out["opponent_permanents"] = self._encode_perms(
-            obs.opponent_permanents,
-            is_mine=0.0,
-            owner_label="opponent_permanents",
-        )
+        for key, player in (
+            ("agent_player", obs.agent),
+            ("opponent_player", obs.opponent),
+        ):
+            out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
+        for key, cards, is_mine in (
+            ("agent_cards", obs.agent_cards, 1.0),
+            ("opponent_cards", obs.opponent_cards, 0.0),
+        ):
+            out[key] = self._encode_cards(cards, is_mine=is_mine)
+        for key, perms, is_mine in (
+            ("agent_permanents", obs.agent_permanents, 1.0),
+            ("opponent_permanents", obs.opponent_permanents, 0.0),
+        ):
+            out[key] = self._encode_perms(perms, is_mine=is_mine)
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
         out["opponent_player_valid"] = np.ones((1,), dtype=np.float32)
-        out["agent_cards_valid"] = out["agent_cards"][..., -1].astype(np.float32)
-        out["opponent_cards_valid"] = out["opponent_cards"][..., -1].astype(np.float32)
-        out["agent_permanents_valid"] = out["agent_permanents"][..., -1].astype(
-            np.float32
-        )
-        out["opponent_permanents_valid"] = out["opponent_permanents"][..., -1].astype(
-            np.float32
-        )
+        for key in (
+            "agent_cards",
+            "opponent_cards",
+            "agent_permanents",
+            "opponent_permanents",
+        ):
+            out[f"{key}_valid"] = out[key][..., -1].astype(np.float32)
 
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
 
-        log.debug(f"[SHAPES] agent_player: {out['agent_player'].shape}")
-        log.debug(f"[SHAPES] agent_player_valid: {out['agent_player_valid'].shape}")
-        log.debug(f"[SHAPES] opponent_player: {out['opponent_player'].shape}")
-        log.debug(
-            f"[SHAPES] opponent_player_valid: {out['opponent_player_valid'].shape}"
-        )
-        log.debug(f"[SHAPES] agent_cards: {out['agent_cards'].shape}")
-        log.debug(f"[SHAPES] agent_cards_valid: {out['agent_cards_valid'].shape}")
-        log.debug(f"[SHAPES] opponent_cards: {out['opponent_cards'].shape}")
-        log.debug(f"[SHAPES] opponent_cards_valid: {out['opponent_cards_valid'].shape}")
-        log.debug(f"[SHAPES] agent_permanents: {out['agent_permanents'].shape}")
-        log.debug(
-            f"[SHAPES] agent_permanents_valid: {out['agent_permanents_valid'].shape}"
-        )
-        log.debug(f"[SHAPES] opponent_permanents: {out['opponent_permanents'].shape}")
-        log.debug(
-            f"[SHAPES] opponent_permanents_valid: {out['opponent_permanents_valid'].shape}"
-        )
-        log.debug(f"[SHAPES] actions: {out['actions'].shape}")
-        log.debug(f"[SHAPES] action_focus: {out['action_focus'].shape}")
+        for key, value in out.items():
+            log.debug(f"[SHAPES] {key}: {value.shape}")
         return out
 
     # -------------------------------------------------------------------------
@@ -230,23 +198,24 @@ class ObservationEncoder:
         self, player: managym.Player, turn: managym.Turn
     ) -> np.ndarray:
         arr = np.zeros(self.player_dim, dtype=np.float32)
-        i = 0
-        arr[i] = float(player.life) / 20.0
-        i += 1
-        arr[i] = float(player.is_active)
-        i += 1
-        for z in range(min(len(player.zone_counts), self.num_zones)):
-            arr[i + z] = float(player.zone_counts[z]) / 60.0
-        i += self.num_zones
+        arr[0] = float(player.life) / 20.0
+        arr[1] = float(player.is_active)
+        zone_start = 2
+        zone_counts = np.asarray(
+            player.zone_counts[: self.num_zones], dtype=np.float32
+        )
+        arr[zone_start : zone_start + len(zone_counts)] = zone_counts / 60.0
+        zone_end = zone_start + self.num_zones
 
+        phase_start = zone_end
         phase = int(turn.phase)
         if 0 <= phase < self.num_phases:
-            arr[i + phase] = 1.0
-        i += self.num_phases
+            arr[phase_start + phase] = 1.0
 
+        step_start = phase_start + self.num_phases
         step = int(turn.step)
         if 0 <= step < self.num_steps:
-            arr[i + step] = 1.0
+            arr[step_start + step] = 1.0
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -255,14 +224,12 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(
-        self, cards: List[managym.Card], is_mine: float, owner_label: str
-    ) -> np.ndarray:
+    def _encode_cards(self, cards: List[managym.Card], is_mine: float) -> np.ndarray:
         log = getLogger(__name__).getChild("encode_cards")
         feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
         if len(cards) > self.cards_per_player:
             log.warning(
-                f"Card list truncated ({owner_label}): {len(cards)} -> {self.cards_per_player}"
+                f"Card list truncated: {len(cards)} -> {self.cards_per_player}"
             )
         ordered_cards = cards[: self.cards_per_player]
         for i, card in enumerate(ordered_cards):
@@ -307,13 +274,13 @@ class ObservationEncoder:
     # Permanents (with validity mask support)
     # -------------------------------------------------------------------------
     def _encode_perms(
-        self, perms: List[managym.Permanent], is_mine: float, owner_label: str
+        self, perms: List[managym.Permanent], is_mine: float
     ) -> np.ndarray:
         log = getLogger(__name__).getChild("encode_permanents")
         feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
         if len(perms) > self.perms_per_player:
             log.warning(
-                f"Permanent list truncated ({owner_label}): {len(perms)} -> {self.perms_per_player}"
+                f"Permanent list truncated: {len(perms)} -> {self.perms_per_player}"
             )
         ordered_perms = perms[: self.perms_per_player]
         for i, perm in enumerate(ordered_perms):
@@ -371,7 +338,8 @@ class ObservationEncoder:
             action_focus_indices.append(indices)
 
         arr[..., -1] = valid_actions.astype(np.float32)
-        # Pad action_focus_indices so that its shape is always (max_actions, max_focus_objects)
+        # Pad action_focus_indices so shape is always
+        # (max_actions, max_focus_objects).
         unused_slots = self.max_actions - len(action_focus_indices)
         if unused_slots > 0:
             action_focus_indices.extend([[-1] * self.max_focus_objects] * unused_slots)

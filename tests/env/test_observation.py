@@ -357,10 +357,10 @@ class TestObservationEncoder:
             lambda *_: np.zeros(encoder.card_dim, dtype=np.float32),
         )
 
-        encoded = encoder._encode_cards(fake_cards, is_mine=1.0, owner_label="agent")
+        encoded = encoder._encode_cards(fake_cards, is_mine=1.0)
 
         assert encoded.shape == (1, encoder.card_dim)
-        fake_logger.warning.assert_called_once_with("Card list truncated (agent): 2 -> 1")
+        fake_logger.warning.assert_called_once_with("Card list truncated: 2 -> 1")
 
     def test_permanent_space_truncation_warning(self, monkeypatch):
         hypers = ObservationSpaceHypers(max_permanents_per_player=1)
@@ -378,13 +378,11 @@ class TestObservationEncoder:
             lambda *_: np.zeros(encoder.permanent_dim, dtype=np.float32),
         )
 
-        encoded = encoder._encode_perms(
-            fake_perms, is_mine=1.0, owner_label="agent_permanents"
-        )
+        encoded = encoder._encode_perms(fake_perms, is_mine=1.0)
 
         assert encoded.shape == (1, encoder.permanent_dim)
         fake_logger.warning.assert_called_once_with(
-            "Permanent list truncated (agent_permanents): 2 -> 1"
+            "Permanent list truncated: 2 -> 1"
         )
 
 

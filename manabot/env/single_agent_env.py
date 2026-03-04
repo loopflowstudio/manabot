@@ -83,16 +83,15 @@ class SingleAgentEnv(gym.Env):
         obs, reward, terminated, truncated, info = self.inner.step(action)
         action_space_truncated = bool(info.get("action_space_truncated", False))
 
-        if info.get("true_terminated") or info.get("true_truncated"):
-            latched_terminated = bool(info.get("true_terminated", False))
-            latched_truncated = bool(info.get("true_truncated", False))
-            obs, info = self._skip_opponent(obs, info)
-            info["true_terminated"] = latched_terminated
-            info["true_truncated"] = latched_truncated
-            info["action_space_truncated"] = action_space_truncated or bool(
-                info.get("action_space_truncated", False)
+        if self._is_true_terminal(info):
+            return self._finalize_terminal_step(
+                obs=obs,
+                reward=reward,
+                terminated=terminated,
+                truncated=truncated,
+                info=info,
+                action_space_truncated=action_space_truncated,
             )
-            return obs, reward, terminated, truncated, info
 
         while self._is_opponent():
             opponent_action = self.opponent_policy(obs)
@@ -103,22 +102,44 @@ class SingleAgentEnv(gym.Env):
                 info.get("action_space_truncated", False)
             )
 
-            if info.get("true_terminated") or info.get("true_truncated"):
-                latched_terminated = bool(info.get("true_terminated", False))
-                latched_truncated = bool(info.get("true_truncated", False))
-                obs, info = self._skip_opponent(obs, info)
-                info["true_terminated"] = latched_terminated
-                info["true_truncated"] = latched_truncated
-                info["action_space_truncated"] = action_space_truncated or bool(
-                    info.get("action_space_truncated", False)
+            if self._is_true_terminal(info):
+                return self._finalize_terminal_step(
+                    obs=obs,
+                    reward=-opponent_reward,
+                    terminated=terminated,
+                    truncated=truncated,
+                    info=info,
+                    action_space_truncated=action_space_truncated,
                 )
-                return obs, -opponent_reward, terminated, truncated, info
 
         info["action_space_truncated"] = action_space_truncated
         return obs, reward, terminated, truncated, info
 
     def _is_opponent(self) -> bool:
         return int(self.inner.last_cpp_obs.agent.player_index) != self.hero_player_index
+
+    @staticmethod
+    def _is_true_terminal(info: dict[str, Any]) -> bool:
+        return bool(info.get("true_terminated") or info.get("true_truncated"))
+
+    def _finalize_terminal_step(
+        self,
+        obs: dict[str, np.ndarray],
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+        info: dict[str, Any],
+        action_space_truncated: bool,
+    ):
+        latched_terminated = bool(info.get("true_terminated", False))
+        latched_truncated = bool(info.get("true_truncated", False))
+        obs, info = self._skip_opponent(obs, info)
+        info["true_terminated"] = latched_terminated
+        info["true_truncated"] = latched_truncated
+        info["action_space_truncated"] = action_space_truncated or bool(
+            info.get("action_space_truncated", False)
+        )
+        return obs, reward, terminated, truncated, info
 
     def _skip_opponent(self, obs: dict[str, np.ndarray], info: dict[str, Any]):
         action_space_truncated = bool(info.get("action_space_truncated", False))
