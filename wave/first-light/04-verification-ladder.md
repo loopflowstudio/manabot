@@ -15,11 +15,12 @@ pass/fail criteria. Steps 0-3 all pass.
 (`step0_env_sanity.py` through `step4_beat_random.py`) plus shared
 helpers in `util.py` and unit tests in `tests/verify/test_util.py`.
 
-**Hydra removal is done.** Config system migrated to Typer CLI +
-Pydantic schemas (`manabot/config/schema.py`) + Python dict presets
-(`manabot/config/presets.py`) + deep-merge loader (`manabot/config/load.py`).
-CLI entrypoint in `manabot/cli.py`. `train.py` and `sim.py` updated
-to use new config. `hydra-core`/`omegaconf` removed from dependencies.
+**Config migration is done.** Hydra replaced with Typer CLI
+(`manabot/cli.py`) + Python dict presets (`manabot/config/presets.py`)
++ deep-merge loader (`manabot/config/load.py`). Hypers classes in
+`manabot/infra/hypers.py` are now Pydantic `BaseModel`s (no more
+`schema.py` or `asdict()` indirection). `train.py` and `sim.py`
+updated to use new config.
 
 **Step 0 does not pass yet.** Running `python -m manabot.verify.step0_env_sanity`
 fails on two fronts:
