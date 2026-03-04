@@ -148,6 +148,19 @@ jobs:
           source .venv/bin/activate
           python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 
+      - name: Training smoke test
+        run: |
+          source .venv/bin/activate
+          python manabot/model/train.py \
+            train.total_timesteps=128 \
+            train.num_envs=2 \
+            train.num_steps=8 \
+            train.update_epochs=1 \
+            train.num_minibatches=1 \
+            experiment.wandb=false \
+            experiment.profiler_enabled=false \
+            agent.attention_on=false
+
   result:
     name: CI Result
     runs-on: ubuntu-latest
