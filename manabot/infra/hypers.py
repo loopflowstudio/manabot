@@ -20,7 +20,7 @@ def _default_deck() -> dict[str, int]:
 
 
 def _default_runs_dir() -> Path:
-    return Path(os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".manabot-runs")))
+    return Path(os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".runs")))
 
 
 class BaseHypersModel(BaseModel):

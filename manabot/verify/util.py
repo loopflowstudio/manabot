@@ -43,13 +43,12 @@ def build_hypers(**overrides) -> Hypers:
     base["agent"]["attention_on"] = False
     base["train"]["opponent_policy"] = "passive"
 
-    merged = deep_merge(base, {k: v for k, v in overrides.items() if k != "match"})
-    if "match" in overrides:
-        match_overrides = overrides["match"]
-        if isinstance(match_overrides, dict):
-            merged["match"] = {**base["match"], **match_overrides}
-        else:
-            merged["match"] = match_overrides
+    match_overrides = overrides.pop("match", None)
+    merged = deep_merge(base, overrides)
+    if isinstance(match_overrides, dict):
+        merged["match"] = {**base["match"], **match_overrides}
+    elif match_overrides is not None:
+        merged["match"] = match_overrides
     return Hypers.model_validate(merged)
 
 

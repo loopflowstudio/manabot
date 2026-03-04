@@ -60,17 +60,19 @@ def get_training_base() -> dict:
 
 def get_sim_preset(name: str) -> dict:
     if name != DEFAULT_SIM_PRESET:
-        available = DEFAULT_SIM_PRESET
-        raise ValueError(f"Unknown simulation preset '{name}'. Available: {available}")
-    preset = {
-        "experiment": Hypers().experiment.model_dump(),
-        "sim": SimulationHypers().model_dump(),
-    }
-    preset["experiment"].update(
+        raise ValueError(
+            f"Unknown simulation preset '{name}'. Available: {DEFAULT_SIM_PRESET}"
+        )
+
+    experiment = Hypers().experiment.model_dump()
+    experiment.update(
         {
             "exp_name": DEFAULT_SIM_PRESET,
             "wandb": False,
             "log_level": "DEBUG",
         }
     )
-    return preset
+    return {
+        "experiment": experiment,
+        "sim": SimulationHypers().model_dump(),
+    }
