@@ -93,13 +93,20 @@ python -m manabot.verify.step4_beat_random
 - Steps 1-3 should complete in under 30 minutes on a laptop
 - Step 4 may take longer and is a stretch goal for this wave
 
-## Available instrumentation (from stage 01)
+## Available instrumentation
 
 Rollout health counters are already wired into the trainer and wandb:
 - `rollout/truncated_episodes` (+ `_total`)
 - `rollout/action_space_truncations` (+ `_total`)
 
-These should be monitored at each ladder step. If
+Truncation warnings (from stage 03) fire when observation lists exceed
+padding limits (20 cards, 15 permanents per player). These limits were
+set based on the test deck profile but haven't been stress-tested at
+scale. Step 0 should serve as initial validation — if truncation
+warnings fire during 1000+ games, bump the limit that fired in
+`ObservationSpaceHypers` before proceeding.
+
+All truncation counters should be monitored at each ladder step. If
 `action_space_truncations` is persistent, the ladder result is
 unreliable — fix the data quality issue before interpreting the
 learning signal.
