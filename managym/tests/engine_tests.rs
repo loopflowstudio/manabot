@@ -160,6 +160,7 @@ fn combat_damage_reduces_life() {
             ActionSpaceKind::DeclareBlocker => space.actions.len() - 1,
             // Priority: play lands and cast spells when possible, else pass
             ActionSpaceKind::Priority => 0,
+            ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => break,
         };
 

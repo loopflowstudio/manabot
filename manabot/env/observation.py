@@ -65,6 +65,7 @@ class ActionEnum(IntEnum):
     PRIORITY_PASS_PRIORITY = 2
     DECLARE_ATTACKER = 3
     DECLARE_BLOCKER = 4
+    CHOOSE_TARGET = 5
 
 
 class ZoneEnum(IntEnum):

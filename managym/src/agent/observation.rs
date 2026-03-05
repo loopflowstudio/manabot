@@ -202,8 +202,8 @@ impl Observation {
     fn populate_permanents(&mut self, game: &Game) {
         for player in game.players_starting_with_agent() {
             for card_id in game.state.zones.zone_cards(ZoneType::Battlefield, player) {
-                if let Some(perm_id) = game.state.card_to_permanent[card_id.0] {
-                    let Some(permanent) = game.state.permanents[perm_id.0].as_ref() else {
+                if let Some(perm_id) = game.state.card_to_permanent[card_id] {
+                    let Some(permanent) = game.state.permanents[perm_id].as_ref() else {
                         continue;
                     };
                     self.add_permanent(game, permanent);
@@ -218,7 +218,7 @@ impl Observation {
         card_id: crate::state::game_object::CardId,
         zone: ZoneType,
     ) {
-        let card = &game.state.cards[card_id.0];
+        let card = &game.state.cards[card_id];
         let card_data = Self::card_data(game, card, zone);
 
         if card_data.owner_id == self.agent.id {
@@ -288,10 +288,23 @@ impl Observation {
     fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
         match action {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
-                vec![game.state.cards[card.0].id]
+                vec![game.state.cards[card].id]
             }
+            Action::ChooseTarget { target, .. } => match target {
+                crate::state::game_object::Target::Player(player) => {
+                    vec![game.state.players[player.0].id]
+                }
+                crate::state::game_object::Target::Permanent(permanent) => game.state.permanents
+                    [*permanent]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default(),
+                crate::state::game_object::Target::StackSpell(card) => {
+                    vec![game.state.cards[card].id]
+                }
+            },
             Action::PassPriority { .. } => vec![],
-            Action::DeclareAttacker { permanent, .. } => game.state.permanents[permanent.0]
+            Action::DeclareAttacker { permanent, .. } => game.state.permanents[permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
                 .unwrap_or_default(),
@@ -299,11 +312,11 @@ impl Observation {
                 blocker, attacker, ..
             } => {
                 let mut focus = Vec::new();
-                if let Some(perm) = game.state.permanents[blocker.0].as_ref() {
+                if let Some(perm) = game.state.permanents[blocker].as_ref() {
                     focus.push(perm.id);
                 }
                 if let Some(attacker) = attacker {
-                    if let Some(perm) = game.state.permanents[attacker.0].as_ref() {
+                    if let Some(perm) = game.state.permanents[attacker].as_ref() {
                         focus.push(perm.id);
                     }
                 }

@@ -224,6 +224,7 @@ pub enum ActionEnum {
     PriorityPassPriority = 2,
     DeclareAttacker = 3,
     DeclareBlocker = 4,
+    ChooseTarget = 5,
 }
 
 #[cfg(feature = "python")]
@@ -239,6 +240,8 @@ impl ActionEnum {
     const DECLARE_ATTACKER: Self = Self::DeclareAttacker;
     #[classattr]
     const DECLARE_BLOCKER: Self = Self::DeclareBlocker;
+    #[classattr]
+    const CHOOSE_TARGET: Self = Self::ChooseTarget;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -258,6 +261,7 @@ impl From<ActionType> for ActionEnum {
             ActionType::PriorityPassPriority => Self::PriorityPassPriority,
             ActionType::DeclareAttacker => Self::DeclareAttacker,
             ActionType::DeclareBlocker => Self::DeclareBlocker,
+            ActionType::ChooseTarget => Self::ChooseTarget,
         }
     }
 }
@@ -271,6 +275,7 @@ pub enum ActionSpaceEnum {
     Priority = 1,
     DeclareAttacker = 2,
     DeclareBlocker = 3,
+    ChooseTarget = 4,
 }
 
 #[cfg(feature = "python")]
@@ -284,6 +289,8 @@ impl ActionSpaceEnum {
     const DECLARE_ATTACKER: Self = Self::DeclareAttacker;
     #[classattr]
     const DECLARE_BLOCKER: Self = Self::DeclareBlocker;
+    #[classattr]
+    const CHOOSE_TARGET: Self = Self::ChooseTarget;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -302,6 +309,7 @@ impl From<ActionSpaceKind> for ActionSpaceEnum {
             ActionSpaceKind::Priority => Self::Priority,
             ActionSpaceKind::DeclareAttacker => Self::DeclareAttacker,
             ActionSpaceKind::DeclareBlocker => Self::DeclareBlocker,
+            ActionSpaceKind::ChooseTarget => Self::ChooseTarget,
         }
     }
 }
