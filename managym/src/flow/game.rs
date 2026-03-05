@@ -32,7 +32,6 @@ pub struct GameState {
     pub turn: TurnState,
     pub priority: PriorityState,
     pub combat: Option<CombatState>,
-    pub mana_cache: [Option<Mana>; 2],
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
     pub card_registry: CardRegistry,
@@ -103,7 +102,6 @@ impl Game {
                 turn: TurnState::new(PlayerId(0)),
                 priority: PriorityState::default(),
                 combat: None,
-                mana_cache: [None, None],
                 rng,
                 id_gen,
                 card_registry: registry,
@@ -177,21 +175,8 @@ impl Game {
         self.can_cast_sorceries(player) && self.state.turn.lands_played < 1
     }
 
-    pub fn can_pay_mana_cost(&mut self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.cached_producible_mana(player).can_pay(cost)
-    }
-
-    pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
-        if let Some(cached) = &self.state.mana_cache[player.0] {
-            return cached.clone();
-        }
-        let mana = self.producible_mana(player);
-        self.state.mana_cache[player.0] = Some(mana.clone());
-        mana
-    }
-
-    pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.state.mana_cache[player.0] = None;
+    pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
+        self.producible_mana(player).can_pay(cost)
     }
 
     pub fn step(&mut self, action: usize) -> Result<bool, AgentError> {
@@ -447,7 +432,6 @@ impl Game {
     }
 
     fn can_player_act(&mut self, player: PlayerId) -> bool {
-        self.invalidate_mana_cache(player);
         let can_play_land = self.can_play_land(player);
         let can_cast = self.can_cast_sorceries(player);
 
@@ -477,7 +461,7 @@ impl Game {
 
             if let Some(cost) = mana_cost.as_ref() {
                 if producible.is_none() {
-                    producible = Some(self.cached_producible_mana(player));
+                    producible = Some(self.producible_mana(player));
                 }
                 if producible.as_ref().is_some_and(|m| m.can_pay(cost)) {
                     return true;
@@ -491,7 +475,6 @@ impl Game {
     }
 
     fn compute_player_actions(&mut self, player: PlayerId) -> Vec<Action> {
-        self.invalidate_mana_cache(player);
         let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
 
         let can_play_land = self.can_play_land(player);
@@ -526,7 +509,7 @@ impl Game {
             match mana_cost.as_ref() {
                 Some(cost) => {
                     if producible.is_none() {
-                        producible = Some(self.cached_producible_mana(player));
+                        producible = Some(self.producible_mana(player));
                     }
                     if producible.as_ref().is_some_and(|m| m.can_pay(cost)) {
                         actions.push(Action::CastSpell {
@@ -625,7 +608,7 @@ impl Game {
         // CR 305.2 — Track one normal land play per turn.
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
-        self.invalidate_mana_cache(player);
+
         Ok(())
     }
 
@@ -673,7 +656,7 @@ impl Game {
             for ability in &card.mana_abilities {
                 self.state.players[player.0].mana_pool.add(&ability.mana);
             }
-            self.invalidate_mana_cache(player);
+    
         }
 
         if !self.state.players[player.0].mana_pool.can_pay(cost) {
@@ -710,8 +693,6 @@ impl Game {
         if is_permanent {
             // CR 608.3 — A resolving permanent spell enters the battlefield.
             self.move_card(card, ZoneType::Battlefield);
-            let owner = self.state.cards[card.0].owner;
-            self.invalidate_mana_cache(owner);
         } else {
             // CR 608.2k — Nonpermanent spells resolve then go to graveyard.
             self.move_card(card, ZoneType::Graveyard);
@@ -736,7 +717,7 @@ impl Game {
                 permanent.untap();
             }
         }
-        self.invalidate_mana_cache(player);
+
     }
 
     fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
@@ -799,9 +780,7 @@ impl Game {
                 continue;
             };
             let card = permanent.card;
-            let controller = permanent.controller;
             self.move_card(card, ZoneType::Graveyard);
-            self.invalidate_mana_cache(controller);
         }
     }
 
