@@ -147,6 +147,7 @@ impl Mana {
     }
 
     pub fn can_pay(&self, cost: &ManaCost) -> bool {
+        // CR 106.1, 106.8 — Mana in pool must satisfy all colored/colorless components.
         if self.total() < cost.mana_value as u16 {
             return false;
         }
@@ -188,7 +189,7 @@ impl Mana {
         }
 
         let mut generic = cost.cost[Color::Generic as usize] as i32;
-        // Spend colorless first, then colored (preserve colored for future casts)
+        // CR 107.4b, 601.2h — Generic costs can be paid with any mana; spend colorless first.
         let priority = [
             Color::Colorless as usize,
             Color::White as usize,
@@ -208,6 +209,7 @@ impl Mana {
     }
 
     pub fn clear(&mut self) {
+        // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];
     }
 }
