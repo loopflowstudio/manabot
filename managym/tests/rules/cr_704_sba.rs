@@ -22,12 +22,10 @@ fn cr_704_5a_player_loses_at_zero_life() {
 fn cr_704_5b_empty_library_draw_loses_game() {
     let mut s = Scenario::new(empty_deck(), mountain_deck(), 122);
 
-    for _ in 0..200 {
-        if s.game().is_game_over() {
-            break;
-        }
-        s.advance_default_action();
-    }
+    s.advance_until(
+        |s| s.game().is_game_over(),
+        "game should end from empty library draw".to_string(),
+    );
 
     s.assert_game_over();
     s.assert_winner(1);

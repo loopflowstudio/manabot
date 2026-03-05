@@ -49,4 +49,4 @@ Defer from stage 01:
 - `docs/rules_coverage.yaml` exists and maps current rule families.
 - `managym/tests/rules/` exists with CR-cited focused tests (including negatives).
 - Existing implemented paths are CR-cited in code.
-- `cargo test -p managym` passes.
+- `cd managym && cargo test` passes.

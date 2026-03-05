@@ -29,6 +29,13 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
     ])
 }
 
+pub fn ogre_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Mountain".to_string(), 24),
+        ("Grey Ogre".to_string(), 16),
+    ])
+}
+
 pub fn ogre_only_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([("Grey Ogre".to_string(), 40)])
 }
@@ -230,6 +237,85 @@ impl Scenario {
         self.game.state.players[player].mana_pool = Mana::parse(mana);
     }
 
+    /// Play a land and cast a creature from a player's hand in their main phase.
+    /// Resolves the spell (both players pass priority) and returns with the creature on
+    /// the battlefield. Expects the player already has the named cards in hand.
+    pub fn play_land_and_cast_creature(
+        &mut self,
+        player: usize,
+        land_name: &str,
+        creature_name: &str,
+    ) {
+        self.advance_to_active_step(player, StepKind::Main);
+        self.force_card_in_hand(player, land_name);
+        self.force_card_in_hand(player, creature_name);
+        assert!(self.take_action_by_type(ActionType::PriorityPlayLand));
+        assert!(self.take_action_by_type(ActionType::PriorityCastSpell));
+        self.pass_priority();
+        self.pass_priority();
+    }
+
+    /// Set up a creature that has survived summoning sickness and is ready to attack.
+    /// Casts the creature on player 0's first turn, advances through player 1's turn,
+    /// and arrives at player 0's declare attackers step.
+    pub fn setup_attacker_ready(&mut self) {
+        self.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
+        self.advance_to_active_step(1, StepKind::Main);
+        self.advance_to_active_step(0, StepKind::DeclareAttackers);
+    }
+
+    /// Declare the first available creature as an attacker.
+    pub fn declare_attack(&mut self) {
+        let attack_index = self
+            .action_space()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: true, .. }))
+            .expect("attack action should exist");
+        self.step_action(attack_index);
+    }
+
+    /// Decline to attack with the first available creature.
+    pub fn decline_attack(&mut self) {
+        let decline_index = self
+            .action_space()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
+            .expect("decline-attack action should exist");
+        self.step_action(decline_index);
+    }
+
+    /// Assign the first available blocker to an attacker.
+    pub fn declare_block(&mut self) {
+        let block_index = self
+            .action_space()
+            .actions
+            .iter()
+            .position(|action| {
+                matches!(
+                    action,
+                    Action::DeclareBlocker {
+                        attacker: Some(_),
+                        ..
+                    }
+                )
+            })
+            .expect("block action should exist");
+        self.step_action(block_index);
+    }
+
+    /// Decline to block with the first available creature.
+    pub fn decline_block(&mut self) {
+        let decline_index = self
+            .action_space()
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
+            .expect("no-block action should exist");
+        self.step_action(decline_index);
+    }
+
     fn action_index_by_type(&self, action_type: ActionType) -> Option<usize> {
         self.action_space()
             .actions
@@ -237,7 +323,7 @@ impl Scenario {
             .position(|action| action.action_type() == action_type)
     }
 
-    fn advance_until<F>(&mut self, mut predicate: F, failure_message: String)
+    pub fn advance_until<F>(&mut self, mut predicate: F, failure_message: String)
     where
         F: FnMut(&Scenario) -> bool,
     {
