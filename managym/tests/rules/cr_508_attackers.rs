@@ -1,7 +1,4 @@
-use managym::{
-    agent::action::ActionSpaceKind,
-    flow::turn::StepKind,
-};
+use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
 
 use super::helpers::*;
 

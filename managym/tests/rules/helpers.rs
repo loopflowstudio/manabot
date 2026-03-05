@@ -7,6 +7,7 @@ use managym::{
         game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
         player::PlayerConfig,
+        target::Target,
         zone::ZoneType,
     },
     Game,
@@ -16,6 +17,10 @@ const MAX_SCENARIO_ACTIONS: usize = 20_000;
 
 pub fn mountain_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([("Mountain".to_string(), 40)])
+}
+
+pub fn island_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Island".to_string(), 40)])
 }
 
 pub fn forest_deck() -> BTreeMap<String, usize> {
@@ -30,14 +35,15 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
 }
 
 pub fn ogre_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Mountain".to_string(), 24),
-        ("Grey Ogre".to_string(), 16),
-    ])
+    BTreeMap::from([("Mountain".to_string(), 24), ("Grey Ogre".to_string(), 16)])
 }
 
 pub fn ogre_only_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([("Grey Ogre".to_string(), 40)])
+}
+
+pub fn manowar_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Island".to_string(), 24), ("Man-o'-War".to_string(), 16)])
 }
 
 pub fn empty_deck() -> BTreeMap<String, usize> {
@@ -172,6 +178,7 @@ impl Scenario {
                 .iter()
                 .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
                 .unwrap_or(space.actions.len().saturating_sub(1)),
+            ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
         };
         self.step_action(index);
@@ -314,6 +321,28 @@ impl Scenario {
             .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
             .expect("no-block action should exist");
         self.step_action(decline_index);
+    }
+
+    pub fn choose_target_named(&mut self, card_name: &str) {
+        let choose_index = self
+            .action_space()
+            .actions
+            .iter()
+            .position(|action| {
+                let Action::ChooseTarget { target, .. } = action else {
+                    return false;
+                };
+                let Target::Permanent(permanent_id) = target else {
+                    return false;
+                };
+                let Some(permanent) = self.game.state.permanents[permanent_id.0].as_ref() else {
+                    return false;
+                };
+                let card = &self.game.state.cards[permanent.card.0];
+                card.name == card_name
+            })
+            .expect("target choice for named permanent should exist");
+        self.step_action(choose_index);
     }
 
     fn action_index_by_type(&self, action_type: ActionType) -> Option<usize> {

@@ -322,6 +322,16 @@ impl Observation {
                 }
                 focus
             }
+            Action::ChooseTarget { target, .. } => match target {
+                crate::state::target::Target::Player(player) => {
+                    vec![game.state.players[player.0].id]
+                }
+                crate::state::target::Target::Permanent(permanent_id) => game.state.permanents
+                    [permanent_id.0]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default(),
+            },
         }
     }
 
