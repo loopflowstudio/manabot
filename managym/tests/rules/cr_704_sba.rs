@@ -49,7 +49,7 @@ fn cr_704_5g_lethal_damage_destroys_creature() {
         .into_iter()
         .next()
         .expect("elf should be on battlefield");
-    s.game_mut().state.permanents[elf.0]
+    s.game_mut().state.permanents[elf]
         .as_mut()
         .expect("permanent should exist")
         .damage = 1;

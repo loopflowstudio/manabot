@@ -18,7 +18,7 @@ pub enum CardType {
     Battle,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CardTypes {
     pub types: BTreeSet<CardType>,
 }
@@ -55,6 +55,14 @@ impl CardTypes {
         self.types.contains(&CardType::Instant) || self.types.contains(&CardType::Sorcery)
     }
 
+    pub fn is_instant(&self) -> bool {
+        self.types.contains(&CardType::Instant)
+    }
+
+    pub fn is_instant_speed(&self) -> bool {
+        self.is_instant()
+    }
+
     pub fn is_creature(&self) -> bool {
         self.types.contains(&CardType::Creature)
     }
@@ -89,9 +97,8 @@ pub struct ManaAbility {
     pub mana: Mana,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CardDefinition {
-    pub registry_key: ObjectId,
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,
@@ -130,10 +137,15 @@ pub struct Card {
 }
 
 impl Card {
-    pub fn from_definition(id: ObjectId, owner: PlayerId, definition: &CardDefinition) -> Self {
+    pub fn from_definition(
+        id: ObjectId,
+        owner: PlayerId,
+        registry_key: ObjectId,
+        definition: &CardDefinition,
+    ) -> Self {
         Self {
             id,
-            registry_key: definition.registry_key,
+            registry_key,
             name: definition.name.clone(),
             mana_cost: definition.mana_cost.clone(),
             colors: definition.colors(),
@@ -157,9 +169,7 @@ impl std::fmt::Display for Card {
 
 pub fn basic_land(name: &str, color: Color) -> CardDefinition {
     CardDefinition {
-        registry_key: ObjectId(0),
         name: name.to_string(),
-        mana_cost: None,
         types: CardTypes::new([CardType::Land]),
         supertypes: vec!["basic".to_string()],
         subtypes: vec![name.to_string()],
@@ -167,7 +177,6 @@ pub fn basic_land(name: &str, color: Color) -> CardDefinition {
             mana: Mana::single(color),
         }],
         text_box: format!("{{T}}: Add {{{}}}.", color.symbol()),
-        power: None,
-        toughness: None,
+        ..Default::default()
     }
 }

@@ -5,11 +5,22 @@
 Triggered abilities exist with queueing + stack placement semantics, built on
 the event system from stage 02. Validated with Man-o'-War ETB.
 
+## Context (what's already landed)
+
+Stage 02 shipped the `GameEvent` system (`Vec<GameEvent>` log on `GameState`)
+with `CardMoved`, `SpellCast`, `SpellResolved`, `SpellCountered`, `DamageDealt`,
+`LifeChanged`, `TurnStarted`, and `StepStarted` events. Events are drained via
+`drain_events()`. The `ChooseTarget` action space and single-target
+infrastructure are also in place.
+
+`game.rs` is now ~1200 lines. Consider whether trigger integration warrants
+extracting resolution logic into a separate module.
+
 ## Changes
 
 ### Trigger System
 
-- Subscribe to `GameEvent::CardMoved` for ETB detection
+- Consume `GameEvent::CardMoved` (via `drain_events()`) for ETB detection
 - Pending trigger queue with correct timing: triggers queue when event fires,
   go on stack when a player would next receive priority (CR 603.3)
 - APNAP ordering for simultaneous triggers

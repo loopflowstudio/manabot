@@ -19,11 +19,20 @@
 - rule: "CR 117 — Priority and passing"
   status: implemented_tested
   code_refs:
-    - managym/src/flow/game.rs — grant_priority, compute_player_actions, has_player_actions
-    - managym/src/flow/turn.rs — TurnManager::is_sorcery_timing
+    - managym/src/flow/game.rs — tick_priority, compute_player_actions, can_cast_sorceries, can_cast_instants
+    - managym/src/flow/priority.rs — PriorityState
   test_refs:
     - managym/tests/rules/cr_117_priority.rs
-  notes: "Active/nonactive pass loop implemented; all-pass with empty stack advances step."
+  notes: "Per-player priority holder + consecutive pass tracking, instant-speed windows, and active-player priority reset after actions."
+
+- rule: "CR 405 — Stack"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — cast_spell, resolve_top_of_stack, resolve_counterspell
+    - managym/src/state/zone.rs — stack_order
+  test_refs:
+    - managym/tests/rules/cr_405_stack.rs
+  notes: "LIFO stack resolution, stack-target selection for Counterspell, and active-player priority handoff after resolution."
 
 - rule: "CR 305 — Lands"
   status: implemented_tested
@@ -37,10 +46,18 @@
 - rule: "CR 601 (subset) — Casting Spells"
   status: implemented_tested
   code_refs:
-    - managym/src/flow/game.rs — cast_spell_action, cast_spell, resolve_top_of_stack
+    - managym/src/flow/game.rs — cast_spell_action, pending_choice_action_space, choose_target_action, legal_targets_for_spell
   test_refs:
     - managym/tests/rules/cr_601_casting.rs
-  notes: "Covers cast legality subset (timing/cost) and stack-to-resolution flow for current card pool."
+  notes: "Covers instant/sorcery timing subset, legal-target gating (CR 601.2c subset), and choose-target casting flow."
+
+- rule: "CR 608.2b (subset) — Illegal targets on resolution"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — resolve_lightning_bolt, resolve_counterspell, counter_spell
+  test_refs:
+    - managym/tests/rules/cr_608_resolution.rs
+  notes: "Single-target spells are countered by rules when their target is illegal on resolution."
 
 - rule: "CR 508 — Declare Attackers"
   status: implemented_tested
