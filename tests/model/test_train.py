@@ -20,6 +20,7 @@ from manabot.env import (
     Match,
     ObservationSpace,
     Reward,
+    RustVectorEnv,
     VectorEnv,
     build_opponent_policy,
 )
@@ -27,11 +28,13 @@ from manabot.infra import (
     AgentHypers,
     Experiment,
     ExperimentHypers,
+    Hypers,
     ObservationSpaceHypers,
     RewardHypers,
     TrainHypers,
 )
 from manabot.model import Agent, Trainer
+from manabot.model.train import build_training_components
 
 
 @contextmanager
@@ -258,3 +261,34 @@ def test_training_loop_runs_100_steps(observation_space, experiment):
     trainer.train()
     assert trainer.global_step == 100
     assert not np.isnan(trainer.last_explained_variance)
+
+
+def test_build_training_components_defaults_to_rust_env(run_dir):
+    hypers = Hypers(
+        experiment=ExperimentHypers(wandb=False, device="cpu", runs_dir=Path(run_dir)),
+        train=TrainHypers(total_timesteps=8, num_envs=2, num_steps=2),
+    )
+    experiment, env, _ = build_training_components(hypers)
+    try:
+        assert isinstance(env, RustVectorEnv)
+    finally:
+        env.close()
+        experiment.close()
+
+
+def test_build_training_components_can_use_legacy_vector_env(run_dir):
+    hypers = Hypers(
+        experiment=ExperimentHypers(wandb=False, device="cpu", runs_dir=Path(run_dir)),
+        train=TrainHypers(
+            total_timesteps=8,
+            num_envs=2,
+            num_steps=2,
+            use_rust_env=False,
+        ),
+    )
+    experiment, env, _ = build_training_components(hypers)
+    try:
+        assert isinstance(env, VectorEnv)
+    finally:
+        env.close()
+        experiment.close()

@@ -180,20 +180,43 @@ class VectorEnv:
         observation_space: ObservationSpace,
         reward: Reward,
         device: str,
+        seed: int = 0,
         opponent_policy: Optional[Any] = None,
     ):
+        env_fns = []
         if opponent_policy is None:
+            for env_index in range(num_envs):
+                env_seed = seed + env_index
 
-            def make_env():
-                return Env(match, observation_space, reward, auto_reset=True)
+                def make_env(env_seed=env_seed):
+                    return Env(
+                        match,
+                        observation_space,
+                        reward,
+                        seed=env_seed,
+                        auto_reset=True,
+                    )
+
+                env_fns.append(make_env)
         else:
             from .single_agent_env import SingleAgentEnv
 
-            def make_env():
-                return SingleAgentEnv(match, observation_space, reward, opponent_policy)
+            for env_index in range(num_envs):
+                env_seed = seed + env_index
+
+                def make_env(env_seed=env_seed):
+                    return SingleAgentEnv(
+                        match,
+                        observation_space,
+                        reward,
+                        opponent_policy,
+                        seed=env_seed,
+                    )
+
+                env_fns.append(make_env)
 
         self._env = gym.vector.AsyncVectorEnv(
-            [make_env for _ in range(num_envs)],
+            env_fns,
             shared_memory=False,
         )
         self.observation_space = observation_space

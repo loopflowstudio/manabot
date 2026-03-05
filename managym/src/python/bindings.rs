@@ -30,7 +30,7 @@ use crate::{
 pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
 
 #[cfg(feature = "python")]
-fn map_agent_err(err: AgentError) -> PyErr {
+pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
     PyAgentError::new_err(err.to_string())
 }
 
@@ -880,5 +880,6 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyActionSpace>()?;
 
     m.add_class::<PyEnv>()?;
+    crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())
 }
