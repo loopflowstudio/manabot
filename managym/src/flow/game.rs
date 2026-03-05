@@ -337,7 +337,12 @@ impl Game {
             StepKind::Draw => {
                 // CR 504.1 — Active player draws one card in the draw step.
                 let active = self.active_player();
-                self.draw_cards(active, 1);
+                // The player who goes first skips their draw on turn 1.
+                let is_first_player_first_turn =
+                    self.state.turn.turn_number == 1 && active == PlayerId(0);
+                if !is_first_player_first_turn {
+                    self.draw_cards(active, 1);
+                }
                 None
             }
             StepKind::DeclareAttackers => {
@@ -442,6 +447,7 @@ impl Game {
     }
 
     fn can_player_act(&mut self, player: PlayerId) -> bool {
+        self.invalidate_mana_cache(player);
         let can_play_land = self.can_play_land(player);
         let can_cast = self.can_cast_sorceries(player);
 
@@ -485,6 +491,7 @@ impl Game {
     }
 
     fn compute_player_actions(&mut self, player: PlayerId) -> Vec<Action> {
+        self.invalidate_mana_cache(player);
         let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
 
         let can_play_land = self.can_play_land(player);
@@ -540,7 +547,7 @@ impl Game {
     }
 
     fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        match action {
+        let result = match action {
             Action::PlayLand { player, card } => self.play_land(*player, *card),
             Action::CastSpell { player, card } => self.cast_spell_action(*player, *card),
             Action::PassPriority { .. } => {
@@ -553,7 +560,12 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
+        };
+        // Non-pass actions may change board state; re-run SBA before next action space.
+        if result.is_ok() && !matches!(action, Action::PassPriority { .. }) {
+            self.state.priority.sba_done = false;
         }
+        result
     }
 
     fn declare_attacker(

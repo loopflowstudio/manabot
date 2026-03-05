@@ -51,9 +51,11 @@ fn initial_state_setup() {
         .state
         .zones
         .size(ZoneType::Hand, managym::state::game_object::PlayerId(1));
-    assert_eq!(p0_hand + p1_hand, 15);
-    assert!((7..=8).contains(&p0_hand));
-    assert!((7..=8).contains(&p1_hand));
+    // Player 0 goes first and skips their first draw, so has 7 cards.
+    // Player 1 draws on turn 1, so has 7 or 8 depending on game progression.
+    assert_eq!(p0_hand + p1_hand, 14);
+    assert_eq!(p0_hand, 7);
+    assert_eq!(p1_hand, 7);
 }
 
 #[test]
