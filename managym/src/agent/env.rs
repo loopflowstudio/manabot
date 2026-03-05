@@ -82,6 +82,7 @@ impl Env {
         if done {
             if let Some(winner) = game.winner_index() {
                 reward = if winner == agent.0 { 1.0 } else { -1.0 };
+                insert_info(&mut info, "winner_index", InfoValue::Int(winner as i64));
                 insert_info(
                     &mut info,
                     "winner_name",
@@ -93,6 +94,20 @@ impl Env {
                     "winner_name",
                     InfoValue::String("draw".to_string()),
                 );
+            }
+            for (i, player) in game.state.players.iter().enumerate() {
+                if !player.alive {
+                    let reason = if player.drew_when_empty {
+                        "deck_empty"
+                    } else {
+                        "life_total"
+                    };
+                    insert_info(
+                        &mut info,
+                        format!("p{i}_loss_reason"),
+                        InfoValue::String(reason.to_string()),
+                    );
+                }
             }
             self.add_profiler_info(&mut info);
             self.add_behavior_info(&mut info);

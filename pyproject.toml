@@ -36,6 +36,10 @@ packages = ["manabot"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: long-running integration checks",
+    "training: runs PPO training (minutes, not seconds)",
+]
 
 [tool.ruff]
 line-length = 88

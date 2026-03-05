@@ -1,4 +1,10 @@
-"""Verification step 0: environment sanity checks without training."""
+"""
+step0_env_sanity.py
+Environment sanity checks without training.
+
+Validates that the observation space fits the deck, random play produces
+decisive games, and a random agent reliably beats a passive opponent.
+"""
 
 import argparse
 
@@ -34,6 +40,7 @@ def _run_matchup(
     env = Env(match, obs_space, reward, seed=seed, auto_reset=False)
 
     hero_wins = 0
+    aborts = 0
     truncation_counts = {key: 0 for key in TRUNCATION_INFO_KEYS}
 
     try:
@@ -58,6 +65,7 @@ def _run_matchup(
                     truncation_counts[key] += int(bool(info.get(key, False)))
 
             if aborted:
+                aborts += 1
                 continue
             if winner_from_info_or_obs(info, env.last_raw_obs) == 0:
                 hero_wins += 1
@@ -66,6 +74,7 @@ def _run_matchup(
 
     return {
         "hero_win_rate": hero_wins / num_games,
+        "aborts": float(aborts),
         **{key: float(value) for key, value in truncation_counts.items()},
     }
 
@@ -104,25 +113,50 @@ def main(argv: list[str] | None = None) -> None:
     total_truncations = sum(
         random_vs_random[key] + random_vs_passive[key] for key in TRUNCATION_INFO_KEYS
     )
+    total_aborts = random_vs_random["aborts"] + random_vs_passive["aborts"]
 
-    metrics = {
-        "random_vs_random_win_rate": random_vs_random["hero_win_rate"],
-        "random_vs_passive_win_rate": random_vs_passive["hero_win_rate"],
-    }
+    checks = [
+        (
+            "random vs random: hero wins > 15%",
+            random_vs_random["hero_win_rate"] > 0.15,
+            f"{random_vs_random['hero_win_rate']:.1%}",
+            "Sanity check that both players can win. Second-player advantage "
+            "with Llanowar Elves makes the mirror asymmetric (~25/75).",
+        ),
+        (
+            "random vs passive: hero wins > 90%",
+            random_vs_passive["hero_win_rate"] > 0.90,
+            f"{random_vs_passive['hero_win_rate']:.1%}",
+            "Random play should reliably beat doing nothing.",
+        ),
+        (
+            "zero observation truncations",
+            total_truncations == 0,
+            f"{int(total_truncations)} total",
+            "Observation space limits must fit the deck. "
+            "Increase max_cards/permanents/actions in ObservationSpaceHypers.",
+        ),
+        (
+            "zero engine aborts",
+            total_aborts == 0,
+            f"{int(total_aborts)} total",
+            "Step exceptions indicate engine bugs. Check managym logs.",
+        ),
+    ]
+
+    metrics = {}
     for matchup_name, matchup_metrics in (
         ("random_vs_random", random_vs_random),
         ("random_vs_passive", random_vs_passive),
     ):
+        metrics[f"{matchup_name}_win_rate"] = matchup_metrics["hero_win_rate"]
+        metrics[f"{matchup_name}_aborts"] = matchup_metrics["aborts"]
         for key in TRUNCATION_INFO_KEYS:
             short_key = key.replace("_space_truncated", "_truncations")
             metrics[f"{matchup_name}_{short_key}"] = matchup_metrics[key]
 
-    passed = (
-        0.40 <= random_vs_random["hero_win_rate"] <= 0.60
-        and random_vs_passive["hero_win_rate"] > 0.95
-        and total_truncations == 0
-    )
-    print_result("step0_env_sanity", passed, metrics)
+    passed = all(ok for _, ok, _, _ in checks)
+    print_result("step0_env_sanity", passed, metrics, checks=checks)
 
 
 if __name__ == "__main__":

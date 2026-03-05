@@ -91,12 +91,13 @@ def _is_attack_action(obs: dict[str, np.ndarray], action_index: int) -> bool:
 def winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
     """Return winner player index when available, else None."""
 
-    if "winner" in info:
+    if "winner_index" in info:
         try:
-            return int(info["winner"])
+            return int(info["winner_index"])
         except (TypeError, ValueError):
-            return None
+            pass
 
+    # Fallback: infer from life totals (perspective-aware).
     agent_idx = int(raw_obs.agent.player_index)
     opp_idx = int(raw_obs.opponent.player_index)
 
@@ -108,13 +109,47 @@ def winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
     return None
 
 
+def _pass_priority_fallback(env: Env) -> int | None:
+    """Return pass-priority action index for the current raw action space, if present."""
+
+    raw_obs = getattr(env, "last_raw_obs", None)
+    action_space = getattr(raw_obs, "action_space", None)
+    actions = getattr(action_space, "actions", None)
+    if actions is None:
+        return None
+
+    pass_priority_type = int(ActionEnum.PRIORITY_PASS_PRIORITY)
+    for idx, option in enumerate(actions):
+        if int(option.action_type) == pass_priority_type:
+            return idx
+    return None
+
+
 def step_with_fallback(env: Env, action: int, fallback_action: int = 0):
-    """Step env, retrying once with fallback action when policy action errors."""
+    """Step env, retrying with safer fallbacks when policy action errors."""
 
     try:
         return env.step(action)
-    except Exception:
-        return env.step(fallback_action)
+    except Exception as original_error:
+        candidates: list[int] = []
+        if fallback_action >= 0:
+            candidates.append(int(fallback_action))
+
+        pass_idx = _pass_priority_fallback(env)
+        if pass_idx is not None and pass_idx not in candidates:
+            candidates.append(pass_idx)
+
+        if 0 not in candidates:
+            candidates.append(0)
+
+        last_error = original_error
+        for candidate in candidates:
+            try:
+                return env.step(candidate)
+            except Exception as error:
+                last_error = error
+
+        raise last_error
 
 
 def run_evaluation(
@@ -213,17 +248,34 @@ def run_evaluation(
     }
 
 
-def print_result(step_name: str, passed: bool, metrics: dict[str, Any]) -> None:
-    """Print PASS/FAIL and sorted metrics in a stable format."""
+def print_result(
+    step_name: str,
+    passed: bool,
+    metrics: dict[str, Any],
+    checks: list[tuple[str, bool, str] | tuple[str, bool, str, str]] | None = None,
+) -> None:
+    """Print PASS/FAIL with check details and sorted metrics."""
 
     status = "PASS" if passed else "FAIL"
     print(f"[{status}] {step_name}")
+
+    if checks:
+        print()
+        for check in checks:
+            description, ok, detail = check[0], check[1], check[2]
+            explanation = check[3] if len(check) > 3 else None
+            mark = "ok" if ok else "FAILED"
+            print(f"  [{mark}] {description} — {detail}")
+            if not ok and explanation:
+                print(f"         {explanation}")
+        print()
+
     for key in sorted(metrics):
         value = metrics[key]
         if isinstance(value, float):
-            print(f"  - {key}: {value:.6f}")
+            print(f"  {key}: {value:.6f}")
         else:
-            print(f"  - {key}: {value}")
+            print(f"  {key}: {value}")
 
 
 def suppress_truncation_logs() -> None:

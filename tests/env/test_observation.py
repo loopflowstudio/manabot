@@ -151,14 +151,14 @@ class TestEnumParity:
 class TestObservationEncoder:
     """Test the observation encoder's core functionality."""
 
-    def test_default_padding_targets_72_objects(self):
+    def test_default_padding_targets_182_objects(self):
         default_encoder = ObservationEncoder(ObservationSpaceHypers())
         total_objects = (
             2
             + default_encoder.cards_per_player * 2
             + default_encoder.perms_per_player * 2
         )
-        assert total_objects == 72
+        assert total_objects == 182
 
     def get_expected_keys(self) -> Set[str]:
         """Get the complete set of expected keys in an encoded observation."""
