@@ -17,7 +17,7 @@ use crate::{
     },
     state::{
         card::Card,
-        game_object::{CardId, IdGenerator, PermanentId, PlayerId, Target},
+        game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId, Target},
         mana::{Mana, ManaCost},
         permanent::Permanent,
         player::{Player, PlayerConfig},
@@ -27,9 +27,9 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
-    pub cards: Vec<Card>,
-    pub permanents: Vec<Option<Permanent>>,
-    pub card_to_permanent: Vec<Option<PermanentId>>,
+    pub cards: CardVec<Card>,
+    pub permanents: PermanentVec<Option<Permanent>>,
+    pub card_to_permanent: CardVec<Option<PermanentId>>,
     pub players: [Player; 2],
     pub zones: ZoneManager,
     pub turn: TurnState,
@@ -37,7 +37,6 @@ pub struct GameState {
     pub spell_targets: HashMap<CardId, Target>,
     pub combat: Option<CombatState>,
     pub events: Vec<GameEvent>,
-    pub mana_cache: [Option<Mana>; 2],
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
     pub card_registry: CardRegistry,
@@ -74,8 +73,8 @@ impl Game {
             Player::new(id_gen.next_id(), 1, player_configs[1].name.clone()),
         ];
 
-        let mut cards = Vec::new();
-        let mut card_to_permanent = Vec::new();
+        let mut cards = CardVec::default();
+        let mut card_to_permanent = CardVec::default();
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
@@ -111,7 +110,7 @@ impl Game {
         let mut game = Self {
             state: GameState {
                 cards,
-                permanents: Vec::new(),
+                permanents: PermanentVec::default(),
                 card_to_permanent,
                 players,
                 zones,
@@ -120,7 +119,6 @@ impl Game {
                 spell_targets: HashMap::new(),
                 combat: None,
                 events: Vec::new(),
-                mana_cache: [None, None],
                 rng,
                 id_gen,
                 card_registry: registry,
@@ -507,7 +505,7 @@ impl Game {
         card_id: CardId,
         producible: &mut Option<Mana>,
     ) -> Option<Action> {
-        let card = &self.state.cards[card_id.0];
+        let card = &self.state.cards[card_id];
         if card.types.is_land() {
             return self.can_play_land(player).then_some(Action::PlayLand {
                 player,
@@ -573,25 +571,25 @@ impl Game {
                         target,
                     })
                     .collect(),
-                focus: vec![self.state.cards[card.0].id],
+                focus: vec![self.state.cards[card].id],
             }),
         }
     }
 
     fn legal_targets_for_spell(&self, card: CardId) -> Option<Vec<Target>> {
-        match self.state.cards[card.0].name.as_str() {
+        match self.state.cards[card].name.as_str() {
             "Lightning Bolt" => {
                 let mut targets = vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))];
                 for player in [PlayerId(0), PlayerId(1)] {
                     for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
-                        let Some(permanent_id) = self.state.card_to_permanent[card_id.0] else {
+                        let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
                             continue;
                         };
-                        let permanent = self.state.permanents[permanent_id.0].as_ref();
+                        let permanent = self.state.permanents[permanent_id].as_ref();
                         if permanent.is_none() {
                             continue;
                         }
-                        if self.state.cards[card_id.0].types.is_creature() {
+                        if self.state.cards[card_id].types.is_creature() {
                             targets.push(Target::Permanent(permanent_id));
                         }
                     }
@@ -652,10 +650,10 @@ impl Game {
             return Ok(());
         }
 
-        let Some(permanent) = self.state.permanents[permanent_id.0].as_mut() else {
+        let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
             return Err(AgentError("attacker permanent not found".to_string()));
         };
-        let card = &self.state.cards[permanent.card.0];
+        let card = &self.state.cards[permanent.card];
         if !permanent.can_attack(card) {
             return Err(AgentError("permanent cannot attack".to_string()));
         }
@@ -686,7 +684,7 @@ impl Game {
     }
 
     fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
-        let card_ref = &self.state.cards[card.0];
+        let card_ref = &self.state.cards[card];
         if !card_ref.types.is_land() {
             return Err(AgentError("only land cards can be played".to_string()));
         }
@@ -710,7 +708,7 @@ impl Game {
         }
 
         let (is_land, owner, is_instant_speed) = {
-            let card_ref = &self.state.cards[card.0];
+            let card_ref = &self.state.cards[card];
             (
                 card_ref.types.is_land(),
                 card_ref.owner,
@@ -784,7 +782,7 @@ impl Game {
     }
 
     fn pay_spell_cost(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
-        let Some(cost) = self.state.cards[card.0].mana_cost.clone() else {
+        let Some(cost) = self.state.cards[card].mana_cost.clone() else {
             return Ok(());
         };
         // CR 601.2f, 601.2h — Determine/pay costs as part of casting.
@@ -804,11 +802,11 @@ impl Game {
                 break;
             }
 
-            let Some(permanent) = self.state.permanents[permanent_id.0].as_mut() else {
+            let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                 continue;
             };
 
-            let card = &self.state.cards[permanent.card.0];
+            let card = &self.state.cards[permanent.card];
             if permanent.tapped || card.mana_abilities.is_empty() || !permanent.can_tap(card) {
                 continue;
             }
@@ -818,7 +816,6 @@ impl Game {
             for ability in &card.mana_abilities {
                 self.state.players[player.0].mana_pool.add(&ability.mana);
             }
-    
         }
 
         if !self.state.players[player.0].mana_pool.can_pay(cost) {
@@ -842,7 +839,7 @@ impl Game {
         card: CardId,
         target: Option<Target>,
     ) -> Result<(), AgentError> {
-        let owner = self.state.cards[card.0].owner;
+        let owner = self.state.cards[card].owner;
         if owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
@@ -862,7 +859,7 @@ impl Game {
             return;
         };
 
-        match self.state.cards[card.0].name.as_str() {
+        match self.state.cards[card].name.as_str() {
             "Lightning Bolt" => {
                 self.resolve_lightning_bolt(card);
                 return;
@@ -874,7 +871,7 @@ impl Game {
             _ => {}
         }
 
-        let is_permanent = self.state.cards[card.0].types.is_permanent();
+        let is_permanent = self.state.cards[card].types.is_permanent();
         if is_permanent {
             // CR 608.3 — A resolving permanent spell enters the battlefield.
             self.move_card(card, ZoneType::Battlefield);
@@ -948,7 +945,7 @@ impl Game {
                     return false;
                 };
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-                    && self.state.cards[permanent.card.0].types.is_creature()
+                    && self.state.cards[permanent.card].types.is_creature()
             }
             Target::StackSpell(_) => false,
         }
@@ -972,16 +969,15 @@ impl Game {
 
     fn untap_all_permanents(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            if let Some(permanent) = self.state.permanents[permanent_id.0].as_mut() {
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.untap();
             }
         }
-
     }
 
     fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            if let Some(permanent) = self.state.permanents[permanent_id.0].as_mut() {
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.summoning_sick = false;
             }
         }
@@ -1026,8 +1022,8 @@ impl Game {
             .enumerate()
             .filter_map(|(idx, perm)| perm.as_ref().map(|_| PermanentId(idx)))
         {
-            let permanent = self.state.permanents[permanent_id.0].as_ref().unwrap();
-            let card = &self.state.cards[permanent.card.0];
+            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
+            let card = &self.state.cards[permanent.card];
             // CR 704.5g — Creatures with lethal damage are destroyed.
             if permanent.has_lethal_damage(card) {
                 to_destroy.push(permanent_id);
@@ -1035,7 +1031,7 @@ impl Game {
         }
 
         for permanent_id in to_destroy {
-            let Some(permanent) = self.state.permanents[permanent_id.0].as_ref() else {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
             let card = permanent.card;
@@ -1049,11 +1045,11 @@ impl Game {
         };
 
         for (attacker_id, blockers) in &combat.attacker_to_blockers {
-            let Some(attacker) = self.state.permanents[attacker_id.0].as_ref() else {
+            let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
                 continue;
             };
             let attacker_card = attacker.card;
-            let attacker_power = self.state.cards[attacker.card.0].power.unwrap_or(0);
+            let attacker_power = self.state.cards[attacker.card].power.unwrap_or(0);
 
             if blockers.is_empty() {
                 // CR 510.1c — Unblocked attackers assign combat damage to defending player.
@@ -1064,11 +1060,11 @@ impl Game {
 
             for blocker_id in blockers {
                 // CR 510.1a — Combat damage is dealt simultaneously by attacking and blocking creatures.
-                let Some(blocker) = self.state.permanents[blocker_id.0].as_ref() else {
+                let Some(blocker) = self.state.permanents[blocker_id].as_ref() else {
                     continue;
                 };
                 let blocker_card = blocker.card;
-                let blocker_power = self.state.cards[blocker.card.0].power.unwrap_or(0);
+                let blocker_power = self.state.cards[blocker.card].power.unwrap_or(0);
                 self.apply_permanent_damage(Some(blocker_card), *attacker_id, blocker_power);
                 self.apply_permanent_damage(Some(attacker_card), *blocker_id, attacker_power);
             }
@@ -1111,7 +1107,7 @@ impl Game {
             return;
         }
 
-        if let Some(permanent) = self.state.permanents[permanent_id.0].as_mut() {
+        if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.take_damage(amount);
             self.emit(GameEvent::DamageDealt {
                 source,
@@ -1124,10 +1120,10 @@ impl Game {
     fn eligible_attackers(&self, player: PlayerId) -> Vec<PermanentId> {
         let mut out = Vec::new();
         for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id.0].as_ref() else {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = &self.state.cards[permanent.card.0];
+            let card = &self.state.cards[permanent.card];
             if permanent.can_attack(card) {
                 out.push(permanent_id);
             }
@@ -1138,10 +1134,10 @@ impl Game {
     fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {
         let mut out = Vec::new();
         for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id.0].as_ref() else {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = &self.state.cards[permanent.card.0];
+            let card = &self.state.cards[permanent.card];
             if permanent.can_block(card) {
                 out.push(permanent_id);
             }
@@ -1152,10 +1148,10 @@ impl Game {
     fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id.0].as_ref() else {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = &self.state.cards[permanent.card.0];
+            let card = &self.state.cards[permanent.card];
             total.add(&permanent.producible_mana(card));
         }
         total
@@ -1166,17 +1162,17 @@ impl Game {
             .zones
             .zone_cards(ZoneType::Battlefield, player)
             .iter()
-            .filter_map(|card| self.state.card_to_permanent[card.0])
+            .filter_map(|card| self.state.card_to_permanent[card])
             .collect()
     }
 
     fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
-        let owner = self.state.cards[card.0].owner;
+        let owner = self.state.cards[card].owner;
         let old_zone = self.state.zones.zone_of(card);
 
         if old_zone == Some(ZoneType::Battlefield) {
-            if let Some(permanent_id) = self.state.card_to_permanent[card.0].take() {
-                self.state.permanents[permanent_id.0] = None;
+            if let Some(permanent_id) = self.state.card_to_permanent[card].take() {
+                self.state.permanents[permanent_id] = None;
             }
         }
         if old_zone == Some(ZoneType::Stack) {
@@ -1188,12 +1184,12 @@ impl Game {
         if to_zone == ZoneType::Battlefield {
             let permanent_id = PermanentId(self.state.permanents.len());
             let permanent =
-                Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card.0]);
+                Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
             self.state.permanents.push(Some(permanent));
             if self.state.card_to_permanent.len() <= card.0 {
                 self.state.card_to_permanent.resize(card.0 + 1, None);
             }
-            self.state.card_to_permanent[card.0] = Some(permanent_id);
+            self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
         if let Some(from) = old_zone {

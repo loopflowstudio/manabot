@@ -263,11 +263,11 @@ impl Scenario {
             .zone_cards(ZoneType::Battlefield, PlayerId(player))
             .iter()
             .filter_map(|card_id| {
-                let card = &self.game.state.cards[card_id.0];
+                let card = &self.game.state.cards[card_id];
                 if card.name != card_name {
                     return None;
                 }
-                self.game.state.card_to_permanent[card_id.0]
+                self.game.state.card_to_permanent[card_id]
             })
             .collect()
     }

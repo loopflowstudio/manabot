@@ -16,7 +16,7 @@ fn cr_508_1_creature_can_be_declared_as_attacker() {
         .into_iter()
         .next()
         .expect("attacking elf should remain on battlefield");
-    let perm = s.game().state.permanents[elf.0]
+    let perm = s.game().state.permanents[elf]
         .as_ref()
         .expect("permanent should exist");
     assert!(perm.attacking);
@@ -53,7 +53,7 @@ fn cr_508_1_decline_attack_keeps_creature_not_attacking() {
         .into_iter()
         .next()
         .expect("elf should remain on battlefield");
-    let perm = s.game().state.permanents[elf.0]
+    let perm = s.game().state.permanents[elf]
         .as_ref()
         .expect("permanent should exist");
     assert!(!perm.attacking);
