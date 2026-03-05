@@ -1,4 +1,4 @@
-# 09: Rules-Driver Cardset Expansion
+# 11: Rules-Driver Cardset Expansion
 
 ## Finish line
 
@@ -11,8 +11,11 @@ happy-path and adversarial interactions.
   replacement.
 - For each new family, include at least one pairwise interaction test.
 - Link cards to rule families in coverage notes.
+- Validate DSL expressiveness — can all driver cards be represented
+  declaratively? Document any that require special handling.
 
 ## Done when
 
-- Each implemented family has at least one driver card + interaction test.
+- Each implemented family has at least one driver card + interaction trace test.
 - Test suite demonstrates cross-family behavior, not only isolated mechanics.
+- DSL coverage gaps (if any) documented.

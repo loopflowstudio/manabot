@@ -1,4 +1,4 @@
-# 08: Illegal Actions + Rollback Boundaries
+# 10: Illegal Actions + Rollback Boundaries
 
 ## Finish line
 
@@ -8,9 +8,10 @@ rollback/documented limits.
 ## Changes
 
 - Extend illegal-action detection for target/timing/cost invalidity.
-- Add rollback for feasible partial actions.
+- Add rollback for feasible partial actions (e.g., started casting but
+  payment failed — relevant once cost reduction/alternative costs exist).
 - Document non-rollback boundaries to avoid hidden behavior.
-- Add adversarial tests for illegal sequencing.
+- Add adversarial trace tests for illegal sequencing.
 
 ## Done when
 

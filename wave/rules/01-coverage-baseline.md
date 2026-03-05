@@ -1,52 +1,52 @@
 # 01: Coverage Baseline + Rule-Cited Test Harness
 
-## Context
-
-- User: "implemented has stages. we should identify written code and strive for tests for it all"
-- User: "i would love for comments to explicitly mention which rules code is implementing and likewise for tests"
-- Scope for this wave: two-player only; defer multiplayer.
-
 ## Finish line
 
-We can answer “what rules are implemented and tested” from repo artifacts, and
-current engine behavior has CR-cited focused Rust tests (including negative
-paths where reasonable).
+We can answer “what rules are implemented and tested” directly from repo artifacts.
+Current implemented behavior has CR-cited Rust tests with negative paths.
 
 ## Changes
 
-### 1. Coverage artifact + status ladder
+### 1) Coverage artifact
 
-Add `docs/rules_coverage.yaml` with parent-rule rollups allowed.
+Add `docs/rules_coverage.yaml` with entries:
+- `rule`
+- `status` (`not_started` | `scaffolded` | `implemented` | `implemented_tested`)
+- `code_refs`
+- `test_refs`
+- `notes`
 
-Suggested statuses:
-- `not_started`
-- `scaffolded`
-- `implemented`
-- `implemented_tested`
-- `parity_validated`
-- `documented_deviation`
+### 2) CR citation convention
 
-Each entry includes `rule`, `status`, `code_refs`, `test_refs`, `notes`.
+- Implementation comments cite rule references at enforcement points (e.g. `// CR 305.1`).
+- Rule tests use CR-cited names/comments (e.g. `cr_305_1_*`).
+- Snapshot anchor for this stage: `docs/rules/MagicCompRules-20260227.pdf`.
 
-### 2. Citation convention
+### 3) Rust-first rule harness + backfill
 
-- Code comments cite CR rules directly (`// CR 305.1, 305.2`).
-- Rule tests cite CR in name and comments (`cr_305_1_*`).
+Create `managym/tests/rules/`:
+- `helpers.rs` with a thin `ScenarioBuilder` wrapper on public `Game` APIs
+- chapter-focused files (`cr_103_*`, `cr_106_*`, `cr_117_*`, `cr_305_*`, `cr_508_*`, `cr_509_*`, `cr_510_*`, `cr_514_*`, `cr_601_*`, `cr_704_*`)
+- happy-path + negative-path coverage for each implemented family
 
-### 3. Rust-first rule test structure
+Target: ~30-40 tests.
 
-Create `managym/tests/rules/` with chapter subfolders, fixtures, and helpers for
-scenario setup and action selection.
+### 4) Explicit defers
 
-### 4. Backfill current behavior
+Defer from stage 01:
+- JSON trace ingestion format
+- `parity_validated` / `documented_deviation` statuses
+- Training baseline metrics
 
-Map and test currently implemented behavior (priority pass loop, land timing,
-combat skeleton, lethal/life/library SBA subset, cleanup damage clearing,
-invalid action index handling).
+## Maintenance contract
+
+1. `tests/rules/helpers.rs` stays thin (no duplicated game logic).
+2. Rule-test PRs update `docs/rules_coverage.yaml` in the same diff.
+3. CR citations in stage-01 artifacts reference the pinned rules snapshot.
 
 ## Done when
 
-- `docs/rules_coverage.yaml` exists and maps currently implemented families.
-- New rule tests run green under `cargo test`.
-- Existing implemented paths have CR citations in code/tests.
-- Verification command: `cargo test -p managym`.
+- `docs/rules_coverage.yaml` exists and maps current rule families.
+- `managym/tests/rules/` exists with CR-cited focused tests (including negatives).
+- Existing implemented paths are CR-cited in code.
+- `cargo test -p managym` passes.

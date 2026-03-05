@@ -85,6 +85,7 @@ impl Game {
                 zones.move_card(card, player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
+            // CR 103.4, 103.5 — Each player shuffles then draws an opening hand of seven cards.
             for _ in 0..7 {
                 if let Some(card) = zones.top(ZoneType::Library, player) {
                     zones.move_card(card, player, ZoneType::Hand);
@@ -164,12 +165,15 @@ impl Game {
     }
 
     pub fn can_cast_sorceries(&self, player: PlayerId) -> bool {
+        // CR 117.1a, 307.1 — Sorcery-speed actions are available only to the active player
+        // during a main phase with an empty stack.
         self.is_active_player(player)
             && self.state.zones.stack_order().is_empty()
             && self.state.turn.can_cast_sorceries()
     }
 
     pub fn can_play_land(&self, player: PlayerId) -> bool {
+        // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to one per turn.
         self.can_cast_sorceries(player) && self.state.turn.lands_played < 1
     }
 
@@ -277,6 +281,7 @@ impl Game {
             }
         }
 
+        // CR 106.4 — Unspent mana empties at the end of each step and phase.
         self.clear_mana_pools();
         self.on_step_end(step);
         self.state.turn.advance_step();
@@ -289,15 +294,18 @@ impl Game {
         self.state.priority.reset();
         match step {
             StepKind::BeginningOfCombat => {
+                // CR 507.1 — Beginning of combat creates/refreshes combat state.
                 self.state.combat = Some(CombatState::default());
             }
             StepKind::DeclareAttackers => {
+                // CR 508.1 — Active player declares attackers.
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 combat.attackers_to_declare = eligible;
             }
             StepKind::DeclareBlockers => {
+                // CR 509.1 — Defending player declares blockers.
                 let defender = self.non_active_player();
                 let eligible = self.eligible_blockers(defender);
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
@@ -309,6 +317,7 @@ impl Game {
 
     fn on_step_end(&mut self, step: StepKind) {
         if matches!(step, StepKind::EndOfCombat) {
+            // CR 511.3 — Creatures stop being attacking as combat ends.
             for permanent in self.state.permanents.iter_mut().flatten() {
                 permanent.attacking = false;
             }
@@ -319,12 +328,14 @@ impl Game {
     fn perform_turn_based_actions(&mut self, step: StepKind) -> Option<ActionSpace> {
         match step {
             StepKind::Untap => {
+                // CR 502.2 — Active player untaps permanents they control.
                 let active = self.active_player();
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);
                 None
             }
             StepKind::Draw => {
+                // CR 504.1 — Active player draws one card in the draw step.
                 let active = self.active_player();
                 self.draw_cards(active, 1);
                 None
@@ -378,10 +389,12 @@ impl Game {
                 })
             }
             StepKind::CombatDamage => {
+                // CR 510.1 — Assign and deal combat damage.
                 self.resolve_combat_damage();
                 None
             }
             StepKind::Cleanup => {
+                // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 None
             }
@@ -391,6 +404,7 @@ impl Game {
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {
         if !self.state.priority.sba_done {
+            // CR 117.5, 704.3 — Check state-based actions before granting priority.
             self.perform_state_based_actions();
             self.state.priority.sba_done = true;
             if self.is_game_over() {
@@ -419,6 +433,7 @@ impl Game {
 
         self.state.priority.reset();
         if !self.state.zones.stack_order().is_empty() {
+            // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
             self.resolve_top_of_stack();
             return self.tick_priority();
         }
@@ -595,6 +610,7 @@ impl Game {
             return Err(AgentError("cannot play land now".to_string()));
         }
 
+        // CR 305.2 — Track one normal land play per turn.
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
         self.invalidate_mana_cache(player);
@@ -611,6 +627,7 @@ impl Game {
         }
 
         if let Some(cost) = card_ref.mana_cost.clone() {
+            // CR 601.2f, 601.2h — Determine/pay costs as part of casting.
             self.produce_mana(player, &cost)?;
             self.spend_mana(player, &cost)?;
         }
@@ -639,6 +656,7 @@ impl Game {
                 continue;
             }
 
+            // CR 106.3 — Activate mana abilities to add mana to the mana pool.
             permanent.tap();
             for ability in &card.mana_abilities {
                 self.state.players[player.0].mana_pool.add(&ability.mana);
@@ -666,6 +684,7 @@ impl Game {
         if owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
+        // CR 601.2i — A cast spell is put onto the stack.
         self.move_card(card, ZoneType::Stack);
         Ok(())
     }
@@ -677,10 +696,12 @@ impl Game {
 
         let is_permanent = self.state.cards[card.0].types.is_permanent();
         if is_permanent {
+            // CR 608.3 — A resolving permanent spell enters the battlefield.
             self.move_card(card, ZoneType::Battlefield);
             let owner = self.state.cards[card.0].owner;
             self.invalidate_mana_cache(owner);
         } else {
+            // CR 608.2k — Nonpermanent spells resolve then go to graveyard.
             self.move_card(card, ZoneType::Graveyard);
         }
     }
@@ -733,6 +754,7 @@ impl Game {
 
     fn perform_state_based_actions(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
+            // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
             if self.state.players[player.0].life <= 0
                 || self.state.players[player.0].drew_when_empty
             {
@@ -754,6 +776,7 @@ impl Game {
         {
             let permanent = self.state.permanents[permanent_id.0].as_ref().unwrap();
             let card = &self.state.cards[permanent.card.0];
+            // CR 704.5g — Creatures with lethal damage are destroyed.
             if permanent.has_lethal_damage(card) {
                 to_destroy.push(permanent_id);
             }
@@ -782,12 +805,14 @@ impl Game {
             let attacker_power = self.state.cards[attacker.card.0].power.unwrap_or(0);
 
             if blockers.is_empty() {
+                // CR 510.1c — Unblocked attackers assign combat damage to defending player.
                 let defender = self.non_active_player();
                 self.state.players[defender.0].take_damage(attacker_power);
                 continue;
             }
 
             for blocker_id in blockers {
+                // CR 510.1a — Combat damage is dealt simultaneously by attacking and blocking creatures.
                 let Some(blocker) = self.state.permanents[blocker_id.0].as_ref() else {
                     continue;
                 };
