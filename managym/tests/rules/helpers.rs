@@ -367,10 +367,7 @@ impl Scenario {
     where
         F: FnMut(&Action) -> bool,
     {
-        self.action_space()
-            .actions
-            .iter()
-            .position(predicate)
+        self.action_space().actions.iter().position(predicate)
     }
 
     fn step_first_action_matching<F>(&mut self, predicate: F, missing_message: &str)
