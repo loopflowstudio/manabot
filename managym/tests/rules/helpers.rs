@@ -2,10 +2,9 @@ use std::collections::BTreeMap;
 
 use managym::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, ActionType},
-    flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
     state::{
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
         player::PlayerConfig,
         zone::ZoneType,
@@ -28,21 +27,6 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
         ("Forest".to_string(), 24),
         ("Llanowar Elves".to_string(), 36),
     ])
-}
-
-pub fn bolt_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Mountain".to_string(), 24),
-        ("Lightning Bolt".to_string(), 16),
-    ])
-}
-
-pub fn counterspell_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Island".to_string(), 24), ("Counterspell".to_string(), 16)])
-}
-
-pub fn ogre_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Mountain".to_string(), 24), ("Grey Ogre".to_string(), 16)])
 }
 
 pub fn ogre_only_deck() -> BTreeMap<String, usize> {
@@ -163,10 +147,6 @@ impl Scenario {
         assert_eq!(self.game.winner_index(), Some(player));
     }
 
-    pub fn drain_events(&mut self) -> Vec<GameEvent> {
-        self.game.drain_events()
-    }
-
     pub fn advance_default_action(&mut self) {
         let space = self.action_space().clone();
         let index = match space.kind {
@@ -185,7 +165,6 @@ impl Scenario {
                 .iter()
                 .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
                 .unwrap_or(space.actions.len().saturating_sub(1)),
-            ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
         };
         self.step_action(index);
@@ -231,31 +210,6 @@ impl Scenario {
             .move_card(CardId(index), PlayerId(player), ZoneType::Hand);
     }
 
-    pub fn force_cards_in_hand(&mut self, player: usize, card_name: &str, count: usize) {
-        let mut moved = 0;
-        for (index, card) in self.game.state.cards.iter().enumerate() {
-            if card.owner != PlayerId(player) || card.name != card_name {
-                continue;
-            }
-            if self.game.state.zones.zone_of(CardId(index)) == Some(ZoneType::Hand) {
-                moved += 1;
-                if moved >= count {
-                    return;
-                }
-                continue;
-            }
-            self.game
-                .state
-                .zones
-                .move_card(CardId(index), PlayerId(player), ZoneType::Hand);
-            moved += 1;
-            if moved >= count {
-                return;
-            }
-        }
-        panic!("not enough copies of {card_name} for player {player}");
-    }
-
     pub fn battlefield_permanents_named(&self, player: usize, card_name: &str) -> Vec<PermanentId> {
         self.game
             .state
@@ -263,11 +217,11 @@ impl Scenario {
             .zone_cards(ZoneType::Battlefield, PlayerId(player))
             .iter()
             .filter_map(|card_id| {
-                let card = &self.game.state.cards[card_id];
+                let card = &self.game.state.cards[card_id.0];
                 if card.name != card_name {
                     return None;
                 }
-                self.game.state.card_to_permanent[card_id]
+                self.game.state.card_to_permanent[card_id.0]
             })
             .collect()
     }
@@ -276,109 +230,14 @@ impl Scenario {
         self.game.state.players[player].mana_pool = Mana::parse(mana);
     }
 
-    pub fn choose_target(&mut self, target: Target) -> bool {
-        let Some(index) = self.action_index_where(|action| {
-            matches!(
-                action,
-                Action::ChooseTarget {
-                    target: candidate,
-                    ..
-                } if *candidate == target
-            )
-        }) else {
-            return false;
-        };
-        self.step_action(index);
-        true
-    }
-
-    /// Play a land and cast a creature from a player's hand in their main phase.
-    /// Resolves the spell (both players pass priority) and returns with the creature on
-    /// the battlefield. Expects the player already has the named cards in hand.
-    pub fn play_land_and_cast_creature(
-        &mut self,
-        player: usize,
-        land_name: &str,
-        creature_name: &str,
-    ) {
-        self.advance_to_active_step(player, StepKind::Main);
-        self.force_card_in_hand(player, land_name);
-        self.force_card_in_hand(player, creature_name);
-        assert!(self.take_action_by_type(ActionType::PriorityPlayLand));
-        assert!(self.take_action_by_type(ActionType::PriorityCastSpell));
-        self.pass_priority();
-        self.pass_priority();
-    }
-
-    /// Set up a creature that has survived summoning sickness and is ready to attack.
-    /// Casts the creature on player 0's first turn, advances through player 1's turn,
-    /// and arrives at player 0's declare attackers step.
-    pub fn setup_attacker_ready(&mut self) {
-        self.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
-        self.advance_to_active_step(1, StepKind::Main);
-        self.advance_to_active_step(0, StepKind::DeclareAttackers);
-    }
-
-    /// Declare the first available creature as an attacker.
-    pub fn declare_attack(&mut self) {
-        self.step_first_action_matching(
-            |action| matches!(action, Action::DeclareAttacker { attack: true, .. }),
-            "attack action should exist",
-        );
-    }
-
-    /// Decline to attack with the first available creature.
-    pub fn decline_attack(&mut self) {
-        self.step_first_action_matching(
-            |action| matches!(action, Action::DeclareAttacker { attack: false, .. }),
-            "decline-attack action should exist",
-        );
-    }
-
-    /// Assign the first available blocker to an attacker.
-    pub fn declare_block(&mut self) {
-        self.step_first_action_matching(
-            |action| {
-                matches!(
-                    action,
-                    Action::DeclareBlocker {
-                        attacker: Some(_),
-                        ..
-                    }
-                )
-            },
-            "block action should exist",
-        );
-    }
-
-    /// Decline to block with the first available creature.
-    pub fn decline_block(&mut self) {
-        self.step_first_action_matching(
-            |action| matches!(action, Action::DeclareBlocker { attacker: None, .. }),
-            "no-block action should exist",
-        );
-    }
-
     fn action_index_by_type(&self, action_type: ActionType) -> Option<usize> {
-        self.action_index_where(|action| action.action_type() == action_type)
+        self.action_space()
+            .actions
+            .iter()
+            .position(|action| action.action_type() == action_type)
     }
 
-    fn action_index_where<F>(&self, predicate: F) -> Option<usize>
-    where
-        F: FnMut(&Action) -> bool,
-    {
-        self.action_space().actions.iter().position(predicate)
-    }
-
-    fn step_first_action_matching<F>(&mut self, predicate: F, missing_message: &str)
-    where
-        F: FnMut(&Action) -> bool,
-    {
-        let index = self.action_index_where(predicate).expect(missing_message);
-        self.step_action(index);
-    }
-
-    pub fn advance_until<F>(&mut self, mut predicate: F, failure_message: String)
+    fn advance_until<F>(&mut self, mut predicate: F, failure_message: String)
     where
         F: FnMut(&Scenario) -> bool,
     {
