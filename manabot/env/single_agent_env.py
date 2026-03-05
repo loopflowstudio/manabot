@@ -45,6 +45,8 @@ class RandomPolicy:
 
 
 def build_opponent_policy(name: str):
+    if name == "none":
+        return None
     if name == "passive":
         return PassivePolicy()
     if name == "random":

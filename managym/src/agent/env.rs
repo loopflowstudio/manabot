@@ -1,9 +1,14 @@
 use crate::{
-    agent::{action::AgentError, behavior_tracker::BehaviorTracker, observation::Observation},
+    agent::{
+        action::{Action, AgentError},
+        behavior_tracker::BehaviorTracker,
+        observation::Observation,
+    },
     flow::game::Game,
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     state::player::PlayerConfig,
 };
+use rand::Rng;
 
 #[derive(Debug)]
 pub struct Env {
@@ -41,6 +46,10 @@ impl Env {
         let observation = Observation::new(&game);
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
+    }
+
+    pub fn set_seed(&mut self, seed: u64) {
+        self.seed = seed;
     }
 
     pub fn step(
@@ -138,6 +147,37 @@ impl Env {
         } else {
             "Profiler not enabled".to_string()
         }
+    }
+
+    pub fn pass_priority_action_index(&self) -> Result<usize, AgentError> {
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError("env.pass_priority_action_index called before reset".to_string())
+        })?;
+        let action_space = game
+            .action_space()
+            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+        if action_space.actions.is_empty() {
+            return Err(AgentError("no valid actions available".to_string()));
+        }
+        Ok(action_space
+            .actions
+            .iter()
+            .position(|action| matches!(action, Action::PassPriority { .. }))
+            .unwrap_or(0))
+    }
+
+    pub fn random_action_index(&mut self) -> Result<usize, AgentError> {
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("env.random_action_index called before reset".to_string()))?;
+        let action_space = game
+            .action_space()
+            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+        if action_space.actions.is_empty() {
+            return Err(AgentError("no valid actions available".to_string()));
+        }
+        Ok(game.state.rng.gen_range(0..action_space.actions.len()))
     }
 
     fn add_profiler_info(&self, info: &mut InfoDict) {

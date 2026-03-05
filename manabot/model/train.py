@@ -28,6 +28,7 @@ from manabot.env import (
     Match,
     ObservationSpace,
     Reward,
+    RustVectorEnv,
     VectorEnv,
     build_opponent_policy,
 )
@@ -63,7 +64,7 @@ class Trainer:
         self,
         agent: Agent,
         experiment: Experiment,
-        env: VectorEnv,
+        env: VectorEnv | RustVectorEnv,
         hypers: TrainHypers = TrainHypers(),
     ):
         self.agent = agent.to(experiment.device)
@@ -841,22 +842,34 @@ class Trainer:
         self.logger.info(f"Saved model with version tag: {version_tag}")
 
 
-def build_training_components(hypers: Hypers) -> tuple[Experiment, VectorEnv, Agent]:
+def build_training_components(
+    hypers: Hypers,
+) -> tuple[Experiment, VectorEnv | RustVectorEnv, Agent]:
     experiment = Experiment(hypers.experiment, hypers)
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
-    opponent_policy = build_opponent_policy(hypers.train.opponent_policy)
-
-    # Create environment and agent
-    env = VectorEnv(
-        hypers.train.num_envs,
-        match,
-        observation_space,
-        reward,
-        device=experiment.device,
-        opponent_policy=opponent_policy,
-    )
+    if hypers.train.use_rust_env:
+        env = RustVectorEnv(
+            hypers.train.num_envs,
+            match,
+            observation_space,
+            reward,
+            device=experiment.device,
+            seed=hypers.experiment.seed,
+            opponent_policy=hypers.train.opponent_policy,
+        )
+    else:
+        opponent_policy = build_opponent_policy(hypers.train.opponent_policy)
+        env = VectorEnv(
+            hypers.train.num_envs,
+            match,
+            observation_space,
+            reward,
+            device=experiment.device,
+            seed=hypers.experiment.seed,
+            opponent_policy=opponent_policy,
+        )
     agent = Agent(observation_space, hypers.agent)
     return experiment, env, agent
 
