@@ -34,19 +34,11 @@ impl Default for ObservationEncoderConfig {
 }
 
 impl ObservationEncoderConfig {
-    pub fn agent_cards_len(&self) -> usize {
+    pub fn cards_len(&self) -> usize {
         self.max_cards_per_player * CARD_DIM
     }
 
-    pub fn opponent_cards_len(&self) -> usize {
-        self.max_cards_per_player * CARD_DIM
-    }
-
-    pub fn agent_permanents_len(&self) -> usize {
-        self.max_permanents_per_player * PERMANENT_DIM
-    }
-
-    pub fn opponent_permanents_len(&self) -> usize {
+    pub fn permanents_len(&self) -> usize {
         self.max_permanents_per_player * PERMANENT_DIM
     }
 
@@ -112,10 +104,10 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
     let mut encoded = EncodedObservation {
         agent_player: vec![0.0; PLAYER_DIM],
         opponent_player: vec![0.0; PLAYER_DIM],
-        agent_cards: vec![0.0; config.agent_cards_len()],
-        opponent_cards: vec![0.0; config.opponent_cards_len()],
-        agent_permanents: vec![0.0; config.agent_permanents_len()],
-        opponent_permanents: vec![0.0; config.opponent_permanents_len()],
+        agent_cards: vec![0.0; config.cards_len()],
+        opponent_cards: vec![0.0; config.cards_len()],
+        agent_permanents: vec![0.0; config.permanents_len()],
+        opponent_permanents: vec![0.0; config.permanents_len()],
         actions: vec![0.0; config.actions_len()],
         action_focus: vec![-1; config.action_focus_len()],
     };
@@ -142,25 +134,21 @@ pub fn encode_into(
 ) -> Result<(), ObservationEncodeError> {
     validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
     validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
-    validate_buffer_len(
-        "agent_cards",
-        out.agent_cards.len(),
-        config.agent_cards_len(),
-    )?;
+    validate_buffer_len("agent_cards", out.agent_cards.len(), config.cards_len())?;
     validate_buffer_len(
         "opponent_cards",
         out.opponent_cards.len(),
-        config.opponent_cards_len(),
+        config.cards_len(),
     )?;
     validate_buffer_len(
         "agent_permanents",
         out.agent_permanents.len(),
-        config.agent_permanents_len(),
+        config.permanents_len(),
     )?;
     validate_buffer_len(
         "opponent_permanents",
         out.opponent_permanents.len(),
-        config.opponent_permanents_len(),
+        config.permanents_len(),
     )?;
     validate_buffer_len("actions", out.actions.len(), config.actions_len())?;
     validate_buffer_len(

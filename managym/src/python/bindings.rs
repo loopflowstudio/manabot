@@ -25,8 +25,7 @@ use crate::{
             PlayerData, TurnData,
         },
         observation_encoder::{
-            encode_into, EncodedObservationMut, ObservationEncodeError, ObservationEncoderConfig,
-            ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
+            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
     },
     flow::turn::{PhaseKind, StepKind},
@@ -40,11 +39,6 @@ pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
 #[cfg(feature = "python")]
 pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
     PyAgentError::new_err(err.to_string())
-}
-
-#[cfg(feature = "python")]
-fn map_encode_err(err: ObservationEncodeError) -> PyErr {
-    PyValueError::new_err(err.to_string())
 }
 
 #[cfg(feature = "python")]
@@ -270,56 +264,16 @@ fn fill_encoded_into_existing_buffers(
     let np = PyModule::import_bound(py, "numpy")?;
     let copyto = np.getattr("copyto")?;
     let expected = encoded_to_dict(py, encoded, config)?;
-    let float_specs: [(&str, Vec<usize>); 14] = [
-        ("agent_player", vec![1, PLAYER_DIM]),
-        ("opponent_player", vec![1, PLAYER_DIM]),
-        ("agent_cards", vec![config.max_cards_per_player, CARD_DIM]),
-        (
-            "opponent_cards",
-            vec![config.max_cards_per_player, CARD_DIM],
-        ),
-        (
-            "agent_permanents",
-            vec![config.max_permanents_per_player, PERMANENT_DIM],
-        ),
-        (
-            "opponent_permanents",
-            vec![config.max_permanents_per_player, PERMANENT_DIM],
-        ),
-        ("actions", vec![config.max_actions, ACTION_DIM]),
-        ("agent_player_valid", vec![1]),
-        ("opponent_player_valid", vec![1]),
-        ("agent_cards_valid", vec![config.max_cards_per_player]),
-        ("opponent_cards_valid", vec![config.max_cards_per_player]),
-        (
-            "agent_permanents_valid",
-            vec![config.max_permanents_per_player],
-        ),
-        (
-            "opponent_permanents_valid",
-            vec![config.max_permanents_per_player],
-        ),
-        ("actions_valid", vec![config.max_actions]),
-    ];
-
-    for (key, shape) in float_specs {
-        let target = require_numpy_array(out, key, &shape, "float32")?;
-        let source = expected
-            .get_item(key)?
-            .ok_or_else(|| PyKeyError::new_err(format!("internal key '{key}' missing")))?;
+    for (key_obj, source) in expected.iter() {
+        let key = key_obj.extract::<String>()?;
+        let dtype_name = source
+            .getattr("dtype")?
+            .getattr("name")?
+            .extract::<String>()?;
+        let shape = shape_to_vec(&source.getattr("shape")?)?;
+        let target = require_numpy_array(out, &key, &shape, &dtype_name)?;
         copyto.call1((target, source))?;
     }
-
-    let target_focus = require_numpy_array(
-        out,
-        "action_focus",
-        &[config.max_actions, config.max_focus_objects],
-        "int32",
-    )?;
-    let source_focus = expected
-        .get_item("action_focus")?
-        .ok_or_else(|| PyKeyError::new_err("internal key 'action_focus' missing"))?;
-    copyto.call1((target_focus, source_focus))?;
 
     Ok(())
 }
@@ -1394,24 +1348,8 @@ impl PyEnv {
 
         let rust_obs = Observation::from(obs);
         let config = ObservationEncoderConfig::default();
-        let mut encoded = env.encode_observation(&rust_obs);
+        let encoded = env.encode_observation(&rust_obs);
         drop(env);
-
-        let encode_result = encode_into(
-            &rust_obs,
-            &config,
-            EncodedObservationMut {
-                agent_player: &mut encoded.agent_player,
-                opponent_player: &mut encoded.opponent_player,
-                agent_cards: &mut encoded.agent_cards,
-                opponent_cards: &mut encoded.opponent_cards,
-                agent_permanents: &mut encoded.agent_permanents,
-                opponent_permanents: &mut encoded.opponent_permanents,
-                actions: &mut encoded.actions,
-                action_focus: &mut encoded.action_focus,
-            },
-        );
-        encode_result.map_err(map_encode_err)?;
 
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
