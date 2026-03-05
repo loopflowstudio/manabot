@@ -538,7 +538,7 @@ impl Game {
         match mana_cost.as_ref() {
             Some(cost) => {
                 if producible.is_none() {
-                    *producible = Some(self.cached_producible_mana(player));
+                    *producible = Some(self.producible_mana(player));
                 }
                 producible
                     .as_ref()
