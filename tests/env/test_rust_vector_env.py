@@ -13,7 +13,6 @@ def _build_envs(seed: int = 19):
     match = Match()
     observation_space = ObservationSpace()
     reward = Reward(RewardHypers())
-    policy = PassivePolicy()
     legacy = VectorEnv(
         num_envs=1,
         match=match,
@@ -21,7 +20,7 @@ def _build_envs(seed: int = 19):
         reward=reward,
         device="cpu",
         seed=seed,
-        opponent_policy=policy,
+        opponent_policy=PassivePolicy(),
     )
     rust = RustVectorEnv(
         num_envs=1,
@@ -30,7 +29,7 @@ def _build_envs(seed: int = 19):
         reward=reward,
         device="cpu",
         seed=seed,
-        opponent_policy=policy,
+        opponent_policy="passive",
     )
     return legacy, rust
 
@@ -43,7 +42,7 @@ def test_rust_vector_env_tensor_outputs():
         reward=Reward(RewardHypers()),
         device="cpu",
         seed=7,
-        opponent_policy=PassivePolicy(),
+        opponent_policy="passive",
     )
 
     obs, info = env.reset()
@@ -76,7 +75,7 @@ def test_terminal_step_returns_post_reset_observation():
         reward=Reward(RewardHypers()),
         device="cpu",
         seed=11,
-        opponent_policy=PassivePolicy(),
+        opponent_policy="passive",
     )
     env.reset()
 

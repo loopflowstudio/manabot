@@ -13,19 +13,8 @@ import managym
 from .env import add_truncation_flags, stack_encoded_observations
 from .match import Match, Reward
 from .observation import ObservationSpace
-from .single_agent_env import PassivePolicy, RandomPolicy
 
-
-def _opponent_policy_to_name(opponent_policy: Optional[Any]) -> str:
-    if opponent_policy is None:
-        return "none"
-    if isinstance(opponent_policy, str):
-        return opponent_policy
-    if isinstance(opponent_policy, PassivePolicy):
-        return "passive"
-    if isinstance(opponent_policy, RandomPolicy):
-        return "random"
-    raise ValueError(f"Unsupported opponent_policy: {type(opponent_policy)}")
+VALID_OPPONENT_POLICIES = ("none", "passive", "random")
 
 
 class RustVectorEnv:
@@ -37,11 +26,16 @@ class RustVectorEnv:
         reward: Reward,
         device: str,
         seed: int = 0,
-        opponent_policy: Optional[Any] = None,
+        opponent_policy: str = "none",
     ):
+        if opponent_policy not in VALID_OPPONENT_POLICIES:
+            raise ValueError(
+                f"Unsupported opponent_policy: {opponent_policy!r}. "
+                f"Must be one of {VALID_OPPONENT_POLICIES}"
+            )
         self._base_seed = seed
         self._skip_trivial = True
-        self._policy_name = _opponent_policy_to_name(opponent_policy)
+        self._policy_name = opponent_policy
         self._player_configs = match.to_rust()
         self.observation_space = observation_space
         self.reward = reward

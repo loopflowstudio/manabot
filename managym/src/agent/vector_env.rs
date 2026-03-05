@@ -161,7 +161,15 @@ impl VectorEnv {
         env_index: usize,
         mut obs: Observation,
     ) -> Result<Observation, AgentError> {
+        const MAX_OPPONENT_STEPS: usize = 10_000;
+        let mut steps = 0;
         while self.is_opponent_turn(&obs) {
+            steps += 1;
+            if steps > MAX_OPPONENT_STEPS {
+                return Err(AgentError(
+                    "exceeded max opponent steps without reaching hero turn".to_string(),
+                ));
+            }
             let opponent_action = self
                 .opponent_policy
                 .select_action(&mut self.envs[env_index])?;
@@ -171,6 +179,7 @@ impl VectorEnv {
             if terminated || truncated {
                 let (reset_obs, _) = self.reset_env(env_index)?;
                 obs = reset_obs;
+                steps = 0;
             }
         }
         Ok(obs)
