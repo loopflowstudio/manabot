@@ -43,12 +43,11 @@ class RustVectorEnv:
         self._skip_trivial = True
         self._policy_name = _opponent_policy_to_name(opponent_policy)
         self._player_configs = match.to_rust()
-        self._rust_env = self._build_rust_env(seed=seed)
-
         self.observation_space = observation_space
         self.reward = reward
         self.num_envs = num_envs
         self.device = torch.device(device)
+        self._rust_env = self._build_rust_env(seed=seed)
         self._last_raw_obs: list[managym.Observation] = []
 
     def _build_rust_env(self, seed: int) -> "managym.VectorEnv":
