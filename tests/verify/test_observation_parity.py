@@ -51,8 +51,12 @@ def expected_focus_indices(
         -1,
         dtype=np.int32,
     )
-    for action_index, action in enumerate(obs.action_space.actions[: hypers.max_actions]):
-        for focus_index, object_id in enumerate(action.focus[: hypers.max_focus_objects]):
+    for action_index, action in enumerate(
+        obs.action_space.actions[: hypers.max_actions]
+    ):
+        for focus_index, object_id in enumerate(
+            action.focus[: hypers.max_focus_objects]
+        ):
             out[action_index, focus_index] = object_to_index.get(object_id, -1)
 
     return out
@@ -105,7 +109,6 @@ def test_object_index_mapping_and_padded_focus_resolution():
     np.testing.assert_array_equal(encoded["action_focus"], expected_focus)
 
 
-
 def test_encode_observation_into_fills_preallocated_buffers_and_validates_contract():
     env = managym.Env(seed=5, skip_trivial=True)
     hypers = ObservationSpaceHypers()
@@ -144,7 +147,9 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
         ),
         "agent_player_valid": np.full((1,), -7.0, dtype=np.float32),
         "opponent_player_valid": np.full((1,), -7.0, dtype=np.float32),
-        "agent_cards_valid": np.full((hypers.max_cards_per_player,), -7.0, dtype=np.float32),
+        "agent_cards_valid": np.full(
+            (hypers.max_cards_per_player,), -7.0, dtype=np.float32
+        ),
         "opponent_cards_valid": np.full(
             (hypers.max_cards_per_player,),
             -7.0,
