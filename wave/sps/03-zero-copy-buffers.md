@@ -5,6 +5,26 @@
 Rust writes observations directly into pre-allocated numpy arrays.
 No Python objects created per step. No per-step memory allocation.
 
+## Context from sprint 02
+
+Sprint 02 built the Rust observation encoder with a buffer-oriented seam
+already in place:
+
+- `encode_into(obs, config, EncodedObservationMut)` writes into caller-owned
+  `&mut [f32]` / `&mut [i32]` slices — this is the function sprint 03 calls
+  to write directly into numpy memory.
+- `encode_observation_into(obs, buffers_dict)` exists as a PyO3 method that
+  validates shapes/dtypes and fills preallocated Python arrays. It uses
+  runtime numpy module calls (`np.array`, `np.copyto`) rather than the Rust
+  `numpy` crate — sprint 03 should switch to direct pointer writes via
+  `PyArray::as_slice_mut()` or `unsafe` raw pointer access for true zero-copy.
+- The encoder config defaults match `ObservationSpaceHypers`: 60 cards/player,
+  30 permanents/player, 20 actions, 2 focus objects.
+- PyO3 bindings are in `managym/src/python/bindings.rs`. The `Env` struct
+  already has `encode_observation` and `encode_observation_into` methods.
+- Observation field dimensions: player=26, card=18, permanent=5, action=7,
+  action_focus shape=(max_actions, max_focus_objects) as i32.
+
 ## Changes
 
 ### 1. Buffer protocol
@@ -38,11 +58,12 @@ class RustVectorEnv:
 `VectorEnv::step_into_buffers()`:
 - Release the GIL
 - Step all games
-- Encode observations directly into the numpy memory
+- For each env, construct `EncodedObservationMut` pointing into the
+  appropriate slice of the shared numpy buffer, then call `encode_into()`
 - Return only rewards and dones (small arrays, cheap to allocate)
 
-The observation encoding from sprint 02 is adapted to write into
-a buffer slice rather than returning a Vec.
+The `encode_into()` function from sprint 02 writes into `&mut [f32]` slices
+directly — no intermediate `Vec` allocation needed.
 
 ### 3. Remove Python encoding from hot path
 
