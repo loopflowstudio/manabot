@@ -363,14 +363,14 @@ impl Scenario {
         self.action_index_where(|action| action.action_type() == action_type)
     }
 
-    fn action_index_where<F>(&self, mut predicate: F) -> Option<usize>
+    fn action_index_where<F>(&self, predicate: F) -> Option<usize>
     where
         F: FnMut(&Action) -> bool,
     {
         self.action_space()
             .actions
             .iter()
-            .position(|action| predicate(action))
+            .position(predicate)
     }
 
     fn step_first_action_matching<F>(&mut self, predicate: F, missing_message: &str)
