@@ -1,7 +1,10 @@
 use managym::{
     agent::action::ActionType,
     flow::turn::StepKind,
-    state::game_object::{PlayerId, Target},
+    state::{
+        game_object::{PlayerId, Target},
+        zone::ZoneType,
+    },
 };
 
 use super::helpers::*;
@@ -25,17 +28,17 @@ fn cr_405_1_lifo_resolution() {
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     assert!(s.choose_target(Target::Player(PlayerId(1))));
-    assert_eq!(s.zone_size(0, managym::state::zone::ZoneType::Stack), 2);
+    assert_eq!(s.zone_size(0, ZoneType::Stack), 2);
 
     s.pass_priority();
     s.pass_priority();
     s.assert_life(1, 17);
-    assert_eq!(s.zone_size(0, managym::state::zone::ZoneType::Stack), 1);
+    assert_eq!(s.zone_size(0, ZoneType::Stack), 1);
 
     s.pass_priority();
     s.pass_priority();
     s.assert_life(1, 14);
-    assert_eq!(s.zone_size(0, managym::state::zone::ZoneType::Stack), 0);
+    assert_eq!(s.zone_size(0, ZoneType::Stack), 0);
 }
 
 /// CR 405.5 — After a spell resolves, active player gets priority.

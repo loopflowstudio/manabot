@@ -277,9 +277,15 @@ impl Scenario {
     }
 
     pub fn choose_target(&mut self, target: Target) -> bool {
-        let Some(index) = self.action_space().actions.iter().position(
-            |action| matches!(action, Action::ChooseTarget { target: candidate, .. } if *candidate == target),
-        ) else {
+        let Some(index) = self.action_index_where(|action| {
+            matches!(
+                action,
+                Action::ChooseTarget {
+                    target: candidate,
+                    ..
+                } if *candidate == target
+            )
+        }) else {
             return false;
         };
         self.step_action(index);
@@ -315,33 +321,24 @@ impl Scenario {
 
     /// Declare the first available creature as an attacker.
     pub fn declare_attack(&mut self) {
-        let attack_index = self
-            .action_space()
-            .actions
-            .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: true, .. }))
-            .expect("attack action should exist");
-        self.step_action(attack_index);
+        self.step_first_action_matching(
+            |action| matches!(action, Action::DeclareAttacker { attack: true, .. }),
+            "attack action should exist",
+        );
     }
 
     /// Decline to attack with the first available creature.
     pub fn decline_attack(&mut self) {
-        let decline_index = self
-            .action_space()
-            .actions
-            .iter()
-            .position(|action| matches!(action, Action::DeclareAttacker { attack: false, .. }))
-            .expect("decline-attack action should exist");
-        self.step_action(decline_index);
+        self.step_first_action_matching(
+            |action| matches!(action, Action::DeclareAttacker { attack: false, .. }),
+            "decline-attack action should exist",
+        );
     }
 
     /// Assign the first available blocker to an attacker.
     pub fn declare_block(&mut self) {
-        let block_index = self
-            .action_space()
-            .actions
-            .iter()
-            .position(|action| {
+        self.step_first_action_matching(
+            |action| {
                 matches!(
                     action,
                     Action::DeclareBlocker {
@@ -349,27 +346,39 @@ impl Scenario {
                         ..
                     }
                 )
-            })
-            .expect("block action should exist");
-        self.step_action(block_index);
+            },
+            "block action should exist",
+        );
     }
 
     /// Decline to block with the first available creature.
     pub fn decline_block(&mut self) {
-        let decline_index = self
-            .action_space()
-            .actions
-            .iter()
-            .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
-            .expect("no-block action should exist");
-        self.step_action(decline_index);
+        self.step_first_action_matching(
+            |action| matches!(action, Action::DeclareBlocker { attacker: None, .. }),
+            "no-block action should exist",
+        );
     }
 
     fn action_index_by_type(&self, action_type: ActionType) -> Option<usize> {
+        self.action_index_where(|action| action.action_type() == action_type)
+    }
+
+    fn action_index_where<F>(&self, mut predicate: F) -> Option<usize>
+    where
+        F: FnMut(&Action) -> bool,
+    {
         self.action_space()
             .actions
             .iter()
-            .position(|action| action.action_type() == action_type)
+            .position(|action| predicate(action))
+    }
+
+    fn step_first_action_matching<F>(&mut self, predicate: F, missing_message: &str)
+    where
+        F: FnMut(&Action) -> bool,
+    {
+        let index = self.action_index_where(predicate).expect(missing_message);
+        self.step_action(index);
     }
 
     pub fn advance_until<F>(&mut self, mut predicate: F, failure_message: String)

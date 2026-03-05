@@ -15,3 +15,13 @@ This caused `lf ops ingest` to fail. Either rename the wave directory or the wor
 The design-doc "done when" Python checks could not be run here because `pip`
 and `pytest` are not installed in this sandbox (`zsh: command not found` for
 both commands). Training smoke remains unverified in this environment.
+
+## Commit blocked by sandboxed git metadata path
+
+Attempting to commit from this worktree failed with:
+
+`fatal: Unable to create '/Users/jack/src/manabot/.git/worktrees/manabot.mtr/index.lock': Operation not permitted`
+
+The worktree's git metadata lives under `/Users/jack/src/manabot/.git/...`,
+which is outside the current writable sandbox roots. Code/test changes are
+applied locally, but commit creation is blocked in this environment.

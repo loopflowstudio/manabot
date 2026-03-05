@@ -4,7 +4,10 @@ use managym::{
         event::{DamageTarget, GameEvent},
         turn::StepKind,
     },
-    state::game_object::{CardId, PlayerId, Target},
+    state::{
+        game_object::{CardId, PlayerId, Target},
+        zone::ZoneType,
+    },
 };
 
 use super::helpers::*;
@@ -39,13 +42,13 @@ fn event_log_records_zone_changes() {
 
     assert!(events.contains(&GameEvent::CardMoved {
         card: bolt,
-        from: managym::state::zone::ZoneType::Hand,
-        to: managym::state::zone::ZoneType::Stack,
+        from: ZoneType::Hand,
+        to: ZoneType::Stack,
     }));
     assert!(events.contains(&GameEvent::CardMoved {
         card: bolt,
-        from: managym::state::zone::ZoneType::Stack,
-        to: managym::state::zone::ZoneType::Graveyard,
+        from: ZoneType::Stack,
+        to: ZoneType::Graveyard,
     }));
 }
 

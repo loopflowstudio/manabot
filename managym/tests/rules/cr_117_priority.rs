@@ -14,10 +14,7 @@ fn cr_117_3b_active_player_gets_priority_first() {
     s.advance_to_step(StepKind::Main);
 
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
-    assert_eq!(
-        s.action_space().player,
-        Some(managym::state::game_object::PlayerId(0))
-    );
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
 }
 
 /// CR 117.4 — If all players pass in succession on an empty stack, the game advances.
@@ -40,10 +37,7 @@ fn cr_117_negative_nonactive_player_has_only_pass_priority() {
     s.advance_to_active_step(0, StepKind::Main);
     s.pass_priority();
 
-    assert_eq!(
-        s.action_space().player,
-        Some(managym::state::game_object::PlayerId(1))
-    );
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
     s.assert_action_not_available(ActionType::PriorityPlayLand);
     s.assert_action_not_available(ActionType::PriorityCastSpell);
     s.assert_action_available(ActionType::PriorityPassPriority);

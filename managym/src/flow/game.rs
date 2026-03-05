@@ -475,125 +475,84 @@ impl Game {
     }
 
     fn can_player_act(&mut self, player: PlayerId) -> bool {
-        let can_play_land = self.can_play_land(player);
-        let can_cast_sorceries = self.can_cast_sorceries(player);
-        let can_cast_instants = self.can_cast_instants(player);
-
-        let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
-
-        let mut producible: Option<Mana> = None;
-
-        for card_id in hand {
-            let (is_land, is_castable, is_instant_speed, mana_cost) = {
-                let card = &self.state.cards[card_id.0];
-                (
-                    card.types.is_land(),
-                    card.types.is_castable(),
-                    card.types.is_instant_speed(),
-                    card.mana_cost.clone(),
-                )
-            };
-            if is_land {
-                if can_play_land {
-                    return true;
-                }
-                continue;
-            }
-
-            let can_cast_now = if is_instant_speed {
-                can_cast_instants
-            } else {
-                can_cast_sorceries
-            };
-            if !is_castable || !can_cast_now {
-                continue;
-            }
-            if self.spell_requires_target(card_id)
-                && self.legal_targets_for_spell(card_id).is_empty()
-            {
-                continue;
-            }
-
-            if let Some(cost) = mana_cost.as_ref() {
-                if producible.is_none() {
-                    producible = Some(self.producible_mana(player));
-                }
-                if producible.as_ref().is_some_and(|m| m.can_pay(cost)) {
-                    return true;
-                }
-            } else {
-                return true;
-            }
-        }
-
-        false
+        let mut producible = None;
+        self.state
+            .zones
+            .zone_cards(ZoneType::Hand, player)
+            .to_vec()
+            .into_iter()
+            .any(|card| {
+                self.priority_action_for_card(player, card, &mut producible)
+                    .is_some()
+            })
     }
 
     fn compute_player_actions(&mut self, player: PlayerId) -> Vec<Action> {
-        let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
-
-        let can_play_land = self.can_play_land(player);
-        let can_cast_sorceries = self.can_cast_sorceries(player);
-        let can_cast_instants = self.can_cast_instants(player);
-
         let mut actions = Vec::new();
-        let mut producible: Option<Mana> = None;
+        let mut producible = None;
 
-        for card_id in hand {
-            let (is_land, is_castable, is_instant_speed, mana_cost) = {
-                let card = &self.state.cards[card_id.0];
-                (
-                    card.types.is_land(),
-                    card.types.is_castable(),
-                    card.types.is_instant_speed(),
-                    card.mana_cost.clone(),
-                )
-            };
-            if is_land {
-                if can_play_land {
-                    actions.push(Action::PlayLand {
-                        player,
-                        card: card_id,
-                    });
-                }
-                continue;
-            }
-
-            let can_cast_now = if is_instant_speed {
-                can_cast_instants
-            } else {
-                can_cast_sorceries
-            };
-            if !is_castable || !can_cast_now {
-                continue;
-            }
-            if self.spell_requires_target(card_id)
-                && self.legal_targets_for_spell(card_id).is_empty()
-            {
-                continue;
-            }
-
-            match mana_cost.as_ref() {
-                Some(cost) => {
-                    if producible.is_none() {
-                        producible = Some(self.producible_mana(player));
-                    }
-                    if producible.as_ref().is_some_and(|m| m.can_pay(cost)) {
-                        actions.push(Action::CastSpell {
-                            player,
-                            card: card_id,
-                        });
-                    }
-                }
-                None => actions.push(Action::CastSpell {
-                    player,
-                    card: card_id,
-                }),
+        for card in self.state.zones.zone_cards(ZoneType::Hand, player).to_vec() {
+            if let Some(action) = self.priority_action_for_card(player, card, &mut producible) {
+                actions.push(action);
             }
         }
 
         actions.push(Action::PassPriority { player });
         actions
+    }
+
+    fn priority_action_for_card(
+        &mut self,
+        player: PlayerId,
+        card_id: CardId,
+        producible: &mut Option<Mana>,
+    ) -> Option<Action> {
+        let card = &self.state.cards[card_id.0];
+        if card.types.is_land() {
+            return self.can_play_land(player).then_some(Action::PlayLand {
+                player,
+                card: card_id,
+            });
+        }
+        if !card.types.is_castable() {
+            return None;
+        }
+
+        let can_cast_now = if card.types.is_instant_speed() {
+            self.can_cast_instants(player)
+        } else {
+            self.can_cast_sorceries(player)
+        };
+        if !can_cast_now {
+            return None;
+        }
+
+        if self
+            .legal_targets_for_spell(card_id)
+            .is_some_and(|targets| targets.is_empty())
+        {
+            return None;
+        }
+
+        let mana_cost = card.mana_cost.clone();
+        match mana_cost.as_ref() {
+            Some(cost) => {
+                if producible.is_none() {
+                    *producible = Some(self.cached_producible_mana(player));
+                }
+                producible
+                    .as_ref()
+                    .is_some_and(|m| m.can_pay(cost))
+                    .then_some(Action::CastSpell {
+                        player,
+                        card: card_id,
+                    })
+            }
+            None => Some(Action::CastSpell {
+                player,
+                card: card_id,
+            }),
+        }
     }
 
     fn pending_choice_action_space(&self) -> Option<ActionSpace> {
@@ -619,14 +578,7 @@ impl Game {
         }
     }
 
-    fn spell_requires_target(&self, card: CardId) -> bool {
-        matches!(
-            self.state.cards[card.0].name.as_str(),
-            "Lightning Bolt" | "Counterspell"
-        )
-    }
-
-    fn legal_targets_for_spell(&self, card: CardId) -> Vec<Target> {
+    fn legal_targets_for_spell(&self, card: CardId) -> Option<Vec<Target>> {
         match self.state.cards[card.0].name.as_str() {
             "Lightning Bolt" => {
                 let mut targets = vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))];
@@ -644,18 +596,19 @@ impl Game {
                         }
                     }
                 }
-                targets
+                Some(targets)
             }
-            "Counterspell" => self
-                .state
-                .zones
-                .stack_order()
-                .iter()
-                .rev()
-                .copied()
-                .map(Target::StackSpell)
-                .collect(),
-            _ => Vec::new(),
+            "Counterspell" => Some(
+                self.state
+                    .zones
+                    .stack_order()
+                    .iter()
+                    .rev()
+                    .copied()
+                    .map(Target::StackSpell)
+                    .collect(),
+            ),
+            _ => None,
         }
     }
 
@@ -756,13 +709,12 @@ impl Game {
             return Err(AgentError("a choice is already pending".to_string()));
         }
 
-        let (is_land, owner, is_instant_speed, mana_cost) = {
+        let (is_land, owner, is_instant_speed) = {
             let card_ref = &self.state.cards[card.0];
             (
                 card_ref.types.is_land(),
                 card_ref.owner,
                 card_ref.types.is_instant_speed(),
-                card_ref.mana_cost.clone(),
             )
         };
 
@@ -785,9 +737,8 @@ impl Game {
             ));
         }
 
-        if self.spell_requires_target(card) {
+        if let Some(legal_targets) = self.legal_targets_for_spell(card) {
             // CR 601.2c — Choose target(s) as part of casting.
-            let legal_targets = self.legal_targets_for_spell(card);
             if legal_targets.is_empty() {
                 return Err(AgentError("no legal targets".to_string()));
             }
@@ -799,11 +750,7 @@ impl Game {
             return Ok(());
         }
 
-        if let Some(cost) = mana_cost {
-            // CR 601.2f, 601.2h — Determine/pay costs as part of casting.
-            self.produce_mana(player, &cost)?;
-            self.spend_mana(player, &cost)?;
-        }
+        self.pay_spell_cost(player, card)?;
 
         self.cast_spell(player, card, None)?;
         self.state.priority.on_non_pass_action(self.active_player());
@@ -815,28 +762,34 @@ impl Game {
             player: chooser,
             card,
             legal_targets,
-        }) = self.pending_choice.clone()
+        }) = self.pending_choice.as_ref()
         else {
             return Err(AgentError("no target choice is pending".to_string()));
         };
 
-        if chooser != player {
+        if *chooser != player {
             return Err(AgentError("wrong player for target choice".to_string()));
         }
         if !legal_targets.contains(&target) {
             return Err(AgentError("target is not legal".to_string()));
         }
 
-        let cost = self.state.cards[card.0].mana_cost.clone();
-        if let Some(cost) = cost {
-            self.produce_mana(player, &cost)?;
-            self.spend_mana(player, &cost)?;
-        }
+        let card = *card;
+        self.pay_spell_cost(player, card)?;
 
         self.cast_spell(player, card, Some(target))?;
         self.pending_choice = None;
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())
+    }
+
+    fn pay_spell_cost(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
+        let Some(cost) = self.state.cards[card.0].mana_cost.clone() else {
+            return Ok(());
+        };
+        // CR 601.2f, 601.2h — Determine/pay costs as part of casting.
+        self.produce_mana(player, &cost)?;
+        self.spend_mana(player, &cost)
     }
 
     fn produce_mana(&mut self, player: PlayerId, cost: &ManaCost) -> Result<(), AgentError> {
@@ -909,15 +862,16 @@ impl Game {
             return;
         };
 
-        let card_name = self.state.cards[card.0].name.clone();
-        if card_name == "Lightning Bolt" {
-            self.resolve_lightning_bolt(card);
-            return;
-        }
-
-        if card_name == "Counterspell" {
-            self.resolve_counterspell(card);
-            return;
+        match self.state.cards[card.0].name.as_str() {
+            "Lightning Bolt" => {
+                self.resolve_lightning_bolt(card);
+                return;
+            }
+            "Counterspell" => {
+                self.resolve_counterspell(card);
+                return;
+            }
+            _ => {}
         }
 
         let is_permanent = self.state.cards[card.0].types.is_permanent();
