@@ -14,6 +14,7 @@ from manabot.env.single_agent_env import (
     PassivePolicy,
     RandomPolicy,
     SingleAgentEnv,
+    build_opponent_policy,
 )
 
 
@@ -97,6 +98,10 @@ def test_random_policy_picks_only_valid_actions():
     chosen = {policy(obs) for _ in range(100)}
     assert chosen.issubset({0, 2})
     assert chosen
+
+
+def test_build_opponent_policy_none():
+    assert build_opponent_policy("none") is None
 
 
 def test_reset_skips_initial_opponent_turn():

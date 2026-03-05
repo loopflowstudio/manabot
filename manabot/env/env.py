@@ -3,7 +3,7 @@ env.py
 Environment wrapper around the managym Rust engine that conforms to the Gymnasium API.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -17,6 +17,37 @@ import managym
 # Local directory imports
 from .match import Match, Reward
 from .observation import ObservationSpace
+
+
+def stack_encoded_observations(
+    encoded_obs: Sequence[dict[str, np.ndarray]],
+    device: torch.device,
+) -> Dict[str, torch.Tensor]:
+    keys = encoded_obs[0].keys()
+    return {
+        key: torch.tensor(
+            np.stack([obs[key] for obs in encoded_obs]), dtype=torch.float32
+        ).to(device)
+        for key in keys
+    }
+
+
+def add_truncation_flags(
+    raw_obs: managym.Observation,
+    info: dict[str, Any],
+    encoder: Any,
+) -> None:
+    info["action_space_truncated"] = (
+        len(raw_obs.action_space.actions) > encoder.max_actions
+    )
+    info["card_space_truncated"] = (
+        len(raw_obs.agent_cards) > encoder.cards_per_player
+        or len(raw_obs.opponent_cards) > encoder.cards_per_player
+    )
+    info["permanent_space_truncated"] = (
+        len(raw_obs.agent_permanents) > encoder.perms_per_player
+        or len(raw_obs.opponent_permanents) > encoder.perms_per_player
+    )
 
 
 class Env(gym.Env):
@@ -124,18 +155,7 @@ class Env(gym.Env):
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
         info["true_terminated"] = terminated
         info["true_truncated"] = truncated
-        encoder = self.obs_space.encoder
-        info["action_space_truncated"] = (
-            len(raw_obs.action_space.actions) > encoder.max_actions
-        )
-        info["card_space_truncated"] = (
-            len(raw_obs.agent_cards) > encoder.cards_per_player
-            or len(raw_obs.opponent_cards) > encoder.cards_per_player
-        )
-        info["permanent_space_truncated"] = (
-            len(raw_obs.agent_permanents) > encoder.perms_per_player
-            or len(raw_obs.opponent_permanents) > encoder.perms_per_player
-        )
+        add_truncation_flags(raw_obs, info, self.obs_space.encoder)
 
         log.debug(
             f"Stepped env. Step output: reward={raw_reward}, terminated={terminated}, truncated={truncated}"
@@ -180,20 +200,34 @@ class VectorEnv:
         observation_space: ObservationSpace,
         reward: Reward,
         device: str,
+        seed: int = 0,
         opponent_policy: Optional[Any] = None,
     ):
-        if opponent_policy is None:
-
-            def make_env():
-                return Env(match, observation_space, reward, auto_reset=True)
-        else:
+        env_fns = []
+        env_builder = Env
+        env_kwargs: dict[str, Any] = {"auto_reset": True}
+        if opponent_policy is not None:
             from .single_agent_env import SingleAgentEnv
 
-            def make_env():
-                return SingleAgentEnv(match, observation_space, reward, opponent_policy)
+            env_builder = SingleAgentEnv
+            env_kwargs = {"opponent_policy": opponent_policy}
+
+        for env_index in range(num_envs):
+            env_seed = seed + env_index
+
+            def make_env(env_seed=env_seed):
+                return env_builder(
+                    match,
+                    observation_space,
+                    reward,
+                    seed=env_seed,
+                    **env_kwargs,
+                )
+
+            env_fns.append(make_env)
 
         self._env = gym.vector.AsyncVectorEnv(
-            [make_env for _ in range(num_envs)],
+            env_fns,
             shared_memory=False,
         )
         self.observation_space = observation_space
@@ -271,13 +305,7 @@ class VectorEnv:
         Returns:
             Dict where each value is a tensor with leading dimension num_envs.
         """
-        keys = obs_tuple[0].keys()
-        return {
-            key: torch.tensor(
-                np.stack([obs[key] for obs in obs_tuple]), dtype=torch.float32
-            ).to(self.device)
-            for key in keys
-        }
+        return stack_encoded_observations(obs_tuple, self.device)
 
     def to(self, device: str) -> "VectorEnv":
         """
