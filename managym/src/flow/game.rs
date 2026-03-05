@@ -432,14 +432,7 @@ impl Game {
             }
         }
 
-        if self.state.pending_trigger_choice.is_some() {
-            if let Some(space) = self.trigger_target_action_space() {
-                return Some(space);
-            }
-            self.state.pending_trigger_choice = None;
-        }
-
-        if !self.state.pending_triggers.is_empty() {
+        if self.state.pending_trigger_choice.is_some() || !self.state.pending_triggers.is_empty() {
             if let Some(space) = self.flush_triggers() {
                 return Some(space);
             }
@@ -449,13 +442,11 @@ impl Game {
 
         while self.state.priority.pass_count < players.len() {
             let player = players[self.state.priority.pass_count];
-
-            if self.skip_trivial && !self.can_player_act(player) {
+            let actions = self.compute_player_actions(player);
+            if self.skip_trivial && actions.len() == 1 {
                 self.state.priority.pass_count += 1;
                 continue;
             }
-
-            let actions = self.compute_player_actions(player);
             return Some(ActionSpace {
                 player: Some(player),
                 kind: ActionSpaceKind::Priority,
@@ -472,49 +463,6 @@ impl Game {
         }
 
         None
-    }
-
-    fn can_player_act(&mut self, player: PlayerId) -> bool {
-        let can_play_land = self.can_play_land(player);
-        let can_cast = self.can_cast_sorceries(player);
-
-        let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
-
-        let mut producible: Option<Mana> = None;
-
-        for card_id in hand {
-            let (is_land, is_castable, mana_cost) = {
-                let card = &self.state.cards[card_id.0];
-                (
-                    card.types.is_land(),
-                    card.types.is_castable(),
-                    card.mana_cost.clone(),
-                )
-            };
-            if is_land {
-                if can_play_land {
-                    return true;
-                }
-                continue;
-            }
-
-            if !is_castable || !can_cast {
-                continue;
-            }
-
-            if let Some(cost) = mana_cost.as_ref() {
-                if producible.is_none() {
-                    producible = Some(self.cached_producible_mana(player));
-                }
-                if producible.as_ref().is_some_and(|m| m.can_pay(cost)) {
-                    return true;
-                }
-            } else {
-                return true;
-            }
-        }
-
-        false
     }
 
     fn compute_player_actions(&mut self, player: PlayerId) -> Vec<Action> {
@@ -909,19 +857,9 @@ impl Game {
             return Err(AgentError("wrong player for target selection".to_string()));
         }
 
-        let Some(ability) = self
-            .state
-            .cards
-            .get(pending_trigger.source_card.0)
-            .and_then(|card| card.abilities.get(pending_trigger.ability_index))
-        else {
+        let Some(target_spec) = self.trigger_target_spec(&pending_trigger) else {
             return Err(AgentError("triggered ability no longer exists".to_string()));
         };
-
-        let Ability::Triggered { effect, .. } = ability;
-        let Effect::ReturnToHand {
-            target: target_spec,
-        } = effect;
         if !self.is_valid_target_for_spec(target, target_spec) {
             return Err(AgentError("selected target is not legal".to_string()));
         }
@@ -930,62 +868,52 @@ impl Game {
         Ok(())
     }
 
-    fn trigger_target_action_space(&self) -> Option<ActionSpace> {
-        let pending_trigger = self.state.pending_trigger_choice.as_ref()?;
-        let ability = self
-            .state
-            .cards
-            .get(pending_trigger.source_card.0)
-            .and_then(|card| card.abilities.get(pending_trigger.ability_index))?;
-
-        let Ability::Triggered { effect, .. } = ability;
-        let Effect::ReturnToHand { target } = effect;
-        let actions = self
-            .legal_targets_for_spec(target)
-            .into_iter()
-            .map(|legal_target| Action::ChooseTarget {
-                player: pending_trigger.controller,
-                target: legal_target,
-            })
-            .collect::<Vec<_>>();
-
-        if actions.is_empty() {
-            return None;
-        }
-
-        Some(ActionSpace {
-            player: Some(pending_trigger.controller),
-            kind: ActionSpaceKind::ChooseTarget,
-            actions,
-            focus: Vec::new(),
-        })
-    }
-
     fn flush_triggers(&mut self) -> Option<ActionSpace> {
-        while let Some(trigger) = self.pop_next_pending_trigger() {
-            let Some(ability) = self
-                .state
-                .cards
-                .get(trigger.source_card.0)
-                .and_then(|card| card.abilities.get(trigger.ability_index))
-            else {
+        while let Some(trigger) = self
+            .state
+            .pending_trigger_choice
+            .take()
+            .or_else(|| self.pop_next_pending_trigger())
+        {
+            let Some(target_spec) = self.trigger_target_spec(&trigger) else {
                 continue;
             };
 
-            let Ability::Triggered { effect, .. } = ability;
-            let Effect::ReturnToHand { target } = effect;
-
-            let legal_targets = self.legal_targets_for_spec(target);
+            let legal_targets = self.legal_targets_for_spec(target_spec);
             if legal_targets.is_empty() {
                 // CR 603.3d — Triggered abilities with no legal required targets are removed.
                 continue;
             }
 
+            let controller = trigger.controller;
             self.state.pending_trigger_choice = Some(trigger);
-            return self.trigger_target_action_space();
+            return Some(ActionSpace {
+                player: Some(controller),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: legal_targets
+                    .into_iter()
+                    .map(|legal_target| Action::ChooseTarget {
+                        player: controller,
+                        target: legal_target,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            });
         }
 
         None
+    }
+
+    fn trigger_target_spec<'a>(&'a self, trigger: &PendingTrigger) -> Option<&'a TargetSpec> {
+        let ability = self
+            .state
+            .cards
+            .get(trigger.source_card.0)
+            .and_then(|card| card.abilities.get(trigger.ability_index))?;
+
+        let Ability::Triggered { effect, .. } = ability;
+        let Effect::ReturnToHand { target } = effect;
+        Some(target)
     }
 
     fn pop_next_pending_trigger(&mut self) -> Option<PendingTrigger> {
