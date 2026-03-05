@@ -4,12 +4,7 @@ use super::helpers::*;
 
 fn setup_damaged_permanent_before_ending_step(
 ) -> (Scenario, managym::state::game_object::PermanentId) {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(111)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 111);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Mountain");

@@ -6,12 +6,7 @@ use managym::{
 use super::helpers::*;
 
 fn setup_combat_with_available_blocker() -> Scenario {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(forest_elves_deck())
-        .seed(91)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), forest_elves_deck(), 91);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");

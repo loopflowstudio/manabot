@@ -9,12 +9,7 @@ use super::helpers::*;
 /// CR 106.3 — Mana abilities can be activated to produce mana used for casting.
 #[test]
 fn cr_106_3_casting_uses_mana_abilities() {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(mountain_deck())
-        .seed(3)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 3);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -55,12 +50,7 @@ fn cr_106_3_casting_uses_mana_abilities() {
 /// CR 106.4 — Unspent mana empties from players' mana pools as steps end.
 #[test]
 fn cr_106_4_mana_pool_empties_between_steps() {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(9)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 9);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.set_player_mana_pool(0, "3R");
@@ -78,12 +68,7 @@ fn cr_106_4_mana_pool_empties_between_steps() {
 /// Negative: a spell is not castable without enough producible mana.
 #[test]
 fn cr_106_negative_spell_not_available_without_mana() {
-    let mut s = Scenario::new()
-        .deck(ogre_only_deck())
-        .deck(mountain_deck())
-        .seed(15)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(ogre_only_deck(), mountain_deck(), 15);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Grey Ogre");

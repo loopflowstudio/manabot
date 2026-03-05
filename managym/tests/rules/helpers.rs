@@ -41,18 +41,16 @@ pub struct Scenario {
     game: Game,
 }
 
-pub struct ScenarioBuilder {
-    decks: Vec<BTreeMap<String, usize>>,
-    seed: u64,
-    skip_trivial: bool,
-}
-
 impl Scenario {
-    pub fn new() -> ScenarioBuilder {
-        ScenarioBuilder {
-            decks: Vec::new(),
-            seed: 1,
-            skip_trivial: false,
+    pub fn new(
+        player0_deck: BTreeMap<String, usize>,
+        player1_deck: BTreeMap<String, usize>,
+        seed: u64,
+    ) -> Scenario {
+        let p0 = PlayerConfig::new("p0", player0_deck);
+        let p1 = PlayerConfig::new("p1", player1_deck);
+        Scenario {
+            game: Game::new(vec![p0, p1], seed, false),
         }
     }
 
@@ -108,10 +106,7 @@ impl Scenario {
 
     pub fn assert_action_available(&self, action_type: ActionType) {
         assert!(
-            self.action_space()
-                .actions
-                .iter()
-                .any(|action| action.action_type() == action_type),
+            self.action_index_by_type(action_type).is_some(),
             "expected action {action_type:?} in {:?}",
             self.action_space().actions
         );
@@ -119,10 +114,7 @@ impl Scenario {
 
     pub fn assert_action_not_available(&self, action_type: ActionType) {
         assert!(
-            self.action_space()
-                .actions
-                .iter()
-                .all(|action| action.action_type() != action_type),
+            self.action_index_by_type(action_type).is_none(),
             "did not expect action {action_type:?} in {:?}",
             self.action_space().actions
         );
@@ -133,12 +125,7 @@ impl Scenario {
     }
 
     pub fn take_action_by_type(&mut self, action_type: ActionType) -> bool {
-        let Some(index) = self
-            .action_space()
-            .actions
-            .iter()
-            .position(|action| action.action_type() == action_type)
-        else {
+        let Some(index) = self.action_index_by_type(action_type) else {
             return false;
         };
         self.step_action(index);
@@ -184,42 +171,26 @@ impl Scenario {
     }
 
     pub fn advance_to_step(&mut self, target: StepKind) {
-        for _ in 0..MAX_SCENARIO_ACTIONS {
-            if self.game.is_game_over() {
-                return;
-            }
-            if self.current_step() == target {
-                return;
-            }
-            self.advance_default_action();
-        }
-        panic!("failed to reach step {target:?}");
+        self.advance_until(
+            |scenario| scenario.current_step() == target,
+            format!("failed to reach step {target:?}"),
+        );
     }
 
     pub fn advance_to_phase(&mut self, target: PhaseKind) {
-        for _ in 0..MAX_SCENARIO_ACTIONS {
-            if self.game.is_game_over() {
-                return;
-            }
-            if self.current_phase() == target {
-                return;
-            }
-            self.advance_default_action();
-        }
-        panic!("failed to reach phase {target:?}");
+        self.advance_until(
+            |scenario| scenario.current_phase() == target,
+            format!("failed to reach phase {target:?}"),
+        );
     }
 
     pub fn advance_to_active_step(&mut self, active_player: usize, target: StepKind) {
-        for _ in 0..MAX_SCENARIO_ACTIONS {
-            if self.game.is_game_over() {
-                return;
-            }
-            if self.active_player() == active_player && self.current_step() == target {
-                return;
-            }
-            self.advance_default_action();
-        }
-        panic!("failed to reach step {target:?} for player {active_player}");
+        self.advance_until(
+            |scenario| {
+                scenario.active_player() == active_player && scenario.current_step() == target
+            },
+            format!("failed to reach step {target:?} for player {active_player}"),
+        );
     }
 
     pub fn force_card_in_hand(&mut self, player: usize, card_name: &str) {
@@ -258,30 +229,24 @@ impl Scenario {
     pub fn set_player_mana_pool(&mut self, player: usize, mana: &str) {
         self.game.state.players[player].mana_pool = Mana::parse(mana);
     }
-}
 
-impl ScenarioBuilder {
-    pub fn deck(mut self, cards: BTreeMap<String, usize>) -> Self {
-        self.decks.push(cards);
-        self
+    fn action_index_by_type(&self, action_type: ActionType) -> Option<usize> {
+        self.action_space()
+            .actions
+            .iter()
+            .position(|action| action.action_type() == action_type)
     }
 
-    pub fn seed(mut self, seed: u64) -> Self {
-        self.seed = seed;
-        self
-    }
-
-    pub fn skip_trivial(mut self, skip: bool) -> Self {
-        self.skip_trivial = skip;
-        self
-    }
-
-    pub fn build(self) -> Scenario {
-        assert_eq!(self.decks.len(), 2, "scenario requires exactly two decks");
-        let p1 = PlayerConfig::new("p0", self.decks[0].clone());
-        let p2 = PlayerConfig::new("p1", self.decks[1].clone());
-        Scenario {
-            game: Game::new(vec![p1, p2], self.seed, self.skip_trivial),
+    fn advance_until<F>(&mut self, mut predicate: F, failure_message: String)
+    where
+        F: FnMut(&Scenario) -> bool,
+    {
+        for _ in 0..MAX_SCENARIO_ACTIONS {
+            if self.game.is_game_over() || predicate(self) {
+                return;
+            }
+            self.advance_default_action();
         }
+        panic!("{failure_message}");
     }
 }

@@ -5,12 +5,7 @@ use super::helpers::*;
 /// CR 704.5a — A player with 0 or less life loses the game as a state-based action.
 #[test]
 fn cr_704_5a_player_loses_at_zero_life() {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(121)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 121);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().state.players[0].life = 0;
@@ -25,12 +20,7 @@ fn cr_704_5a_player_loses_at_zero_life() {
 /// CR 704.5b — A player who attempted to draw from an empty library loses.
 #[test]
 fn cr_704_5b_empty_library_draw_loses_game() {
-    let mut s = Scenario::new()
-        .deck(empty_deck())
-        .deck(mountain_deck())
-        .seed(122)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(empty_deck(), mountain_deck(), 122);
 
     for _ in 0..200 {
         if s.game().is_game_over() {
@@ -46,12 +36,7 @@ fn cr_704_5b_empty_library_draw_loses_game() {
 /// CR 704.5g — Creature with lethal damage is destroyed.
 #[test]
 fn cr_704_5g_lethal_damage_destroys_creature() {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(mountain_deck())
-        .seed(123)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 123);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");

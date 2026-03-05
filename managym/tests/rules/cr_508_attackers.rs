@@ -6,12 +6,7 @@ use managym::{
 use super::helpers::*;
 
 fn setup_player0_elf_ready_to_attack() -> Scenario {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(forest_deck())
-        .seed(81)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), forest_deck(), 81);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -57,12 +52,7 @@ fn cr_508_1_creature_can_be_declared_as_attacker() {
 /// Negative: summoning-sick creatures are not legal attackers.
 #[test]
 fn cr_508_negative_summoning_sick_creature_not_offered_as_attacker() {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(forest_deck())
-        .seed(82)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), forest_deck(), 82);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");

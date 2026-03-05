@@ -5,12 +5,7 @@ use super::helpers::*;
 /// CR 601.2 — A legal cast at sorcery speed becomes available in main phase.
 #[test]
 fn cr_601_2_cast_spell_available_when_cost_is_payable() {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(mountain_deck())
-        .seed(61)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 61);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -23,12 +18,7 @@ fn cr_601_2_cast_spell_available_when_cost_is_payable() {
 /// CR 601.2i and 608.3 — Cast spells go to stack, then resolve to battlefield.
 #[test]
 fn cr_601_2i_spell_moves_from_stack_to_battlefield_on_resolution() {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(mountain_deck())
-        .seed(62)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 62);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -52,12 +42,7 @@ fn cr_601_2i_spell_moves_from_stack_to_battlefield_on_resolution() {
 /// CR 117.1a / 307.1 — Sorcery-speed casting is unavailable during combat.
 #[test]
 fn cr_601_negative_no_sorcery_casting_during_combat() {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(mountain_deck())
-        .seed(63)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 63);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -71,12 +56,7 @@ fn cr_601_negative_no_sorcery_casting_during_combat() {
 /// Negative: lands are played, not cast as spells.
 #[test]
 fn cr_601_negative_land_cards_are_not_cast_actions() {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(64)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 64);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.assert_action_not_available(ActionType::PriorityCastSpell);

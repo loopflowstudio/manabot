@@ -6,12 +6,7 @@ use managym::{
 use super::helpers::*;
 
 fn setup_attacking_elf_vs_empty_board() -> Scenario {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(forest_deck())
-        .seed(101)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), forest_deck(), 101);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -27,12 +22,7 @@ fn setup_attacking_elf_vs_empty_board() -> Scenario {
 }
 
 fn setup_attacking_elf_with_blocker_available() -> Scenario {
-    let mut s = Scenario::new()
-        .deck(forest_elves_deck())
-        .deck(forest_elves_deck())
-        .seed(102)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(forest_elves_deck(), forest_elves_deck(), 102);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");

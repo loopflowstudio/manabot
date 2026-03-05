@@ -8,12 +8,7 @@ use super::helpers::*;
 /// CR 117.3b — The active player receives priority first.
 #[test]
 fn cr_117_3b_active_player_gets_priority_first() {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(21)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 21);
 
     s.advance_to_step(StepKind::Main);
 
@@ -27,12 +22,7 @@ fn cr_117_3b_active_player_gets_priority_first() {
 /// CR 117.4 — If all players pass in succession on an empty stack, the game advances.
 #[test]
 fn cr_117_4_all_passes_with_empty_stack_advances_step() {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(22)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 22);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.pass_priority();
@@ -44,12 +34,7 @@ fn cr_117_4_all_passes_with_empty_stack_advances_step() {
 /// Negative: nonactive player does not get sorcery-speed actions on opponent's turn.
 #[test]
 fn cr_117_negative_nonactive_player_has_only_pass_priority() {
-    let mut s = Scenario::new()
-        .deck(mountain_deck())
-        .deck(mountain_deck())
-        .seed(23)
-        .skip_trivial(false)
-        .build();
+    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 23);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.pass_priority();
