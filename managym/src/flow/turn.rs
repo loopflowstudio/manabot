@@ -3,6 +3,7 @@ use crate::state::game_object::PlayerId;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
 pub enum PhaseKind {
+    // CR 500.1 — Turn phases in order.
     Beginning = 0,
     PrecombatMain = 1,
     Combat = 2,
@@ -13,6 +14,7 @@ pub enum PhaseKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
 pub enum StepKind {
+    // CR 501-514 — Step order for a standard two-player turn.
     Untap = 0,
     Upkeep = 1,
     Draw = 2,
@@ -28,6 +30,7 @@ pub enum StepKind {
 }
 
 pub const PHASE_STEPS: [&[StepKind]; 5] = [
+    // CR 500.1 — Structured phase/step progression.
     &[StepKind::Untap, StepKind::Upkeep, StepKind::Draw],
     &[StepKind::Main],
     &[
@@ -81,6 +84,7 @@ impl TurnState {
     }
 
     pub fn can_cast_sorceries(&self) -> bool {
+        // CR 117.1a, 307.1 — Sorcery timing is restricted to main phases.
         matches!(
             self.current_phase_kind(),
             PhaseKind::PrecombatMain | PhaseKind::PostcombatMain
@@ -88,6 +92,7 @@ impl TurnState {
     }
 
     pub fn step_has_priority(step: StepKind) -> bool {
+        // CR 502.4, 514.3a — No priority in untap or most cleanup steps.
         !matches!(step, StepKind::Untap | StepKind::Cleanup)
     }
 
@@ -108,6 +113,7 @@ impl TurnState {
 
         self.current_phase = 0;
         self.turn_number += 1;
+        // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
         self.active_player = PlayerId((self.active_player.0 + 1) % 2);
     }

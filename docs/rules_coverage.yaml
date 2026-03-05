@@ -1,0 +1,120 @@
+- rule: "CR 103 — Game Start and Opening Hands"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — Game::new (setup, shuffle, draw)
+  test_refs:
+    - managym/tests/rules/cr_103_game_start.rs
+  notes: "Two-player setup, shuffled libraries, opening hand draw of seven. Mulligans are not implemented."
+
+- rule: "CR 106 — Mana (production, payment, pool clearing)"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — produce_mana, spend_mana, clear_mana_pools
+    - managym/src/state/mana.rs — Mana::can_pay, Mana::pay
+  test_refs:
+    - managym/src/state/mana.rs
+    - managym/tests/rules/cr_106_mana.rs
+  notes: "Supports deterministic auto-tapping mana production and generic/color payment. No floating-choice UI yet."
+
+- rule: "CR 117 — Priority and passing"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — grant_priority, compute_player_actions, has_player_actions
+    - managym/src/flow/turn.rs — TurnManager::is_sorcery_timing
+  test_refs:
+    - managym/tests/rules/cr_117_priority.rs
+  notes: "Active/nonactive pass loop implemented; all-pass with empty stack advances step."
+
+- rule: "CR 305 — Lands"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — can_play_land, play_land_action
+    - managym/src/flow/turn.rs — TurnManager::new_turn (land play reset)
+  test_refs:
+    - managym/tests/rules/cr_305_lands.rs
+  notes: "One land per turn with sorcery timing; no effects that grant additional land plays."
+
+- rule: "CR 601 (subset) — Casting Spells"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — cast_spell_action, cast_spell, resolve_top_of_stack
+  test_refs:
+    - managym/tests/rules/cr_601_casting.rs
+  notes: "Covers cast legality subset (timing/cost) and stack-to-resolution flow for current card pool."
+
+- rule: "CR 508 — Declare Attackers"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — process_step (DeclareAttackers), compute_attacker_actions
+    - managym/src/state/permanent.rs — Permanent::can_attack
+  test_refs:
+    - managym/tests/rules/cr_508_attackers.rs
+  notes: "Attacker declaration is per-creature with explicit attack/decline actions."
+
+- rule: "CR 509 — Declare Blockers"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — process_step (DeclareBlockers), compute_blocker_actions
+    - managym/src/state/permanent.rs — Permanent::can_block
+  test_refs:
+    - managym/tests/rules/cr_509_blockers.rs
+  notes: "Single-block assignment flow for current combat model."
+
+- rule: "CR 510 — Combat Damage"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — process_step (CombatDamage), deal_combat_damage
+  test_refs:
+    - managym/tests/rules/cr_510_combat_damage.rs
+  notes: "Unblocked player damage and blocked creature damage are implemented for current single-step model."
+
+- rule: "CR 511 — End of Combat"
+  status: implemented
+  code_refs:
+    - managym/src/flow/game.rs — process_step (EndOfCombat)
+  test_refs: []
+  notes: "Engine clears attacking flags and combat state. Dedicated CR-cited tests not yet added."
+
+- rule: "CR 514 — Cleanup"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — process_step (Cleanup)
+    - managym/src/flow/turn.rs — TurnManager::is_no_priority_step
+  test_refs:
+    - managym/tests/rules/cr_514_cleanup.rs
+  notes: "Damage clearing and no-priority cleanup handling are covered in rule tests."
+
+- rule: "CR 704.5a — SBA: life total 0 or less"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — check_state_based_actions
+  test_refs:
+    - managym/tests/rules/cr_704_sba.rs
+  notes: "Losing at 0 or less life is enforced in SBA checks before priority."
+
+- rule: "CR 704.5b — SBA: attempted draw from empty library"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — draw_card, check_state_based_actions
+  test_refs:
+    - managym/tests/rules/cr_704_sba.rs
+    - managym/tests/engine_tests.rs
+  notes: "Draw-from-empty marks a losing condition consumed by SBA processing."
+
+- rule: "CR 704.5g — SBA: lethal damage"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/game.rs — check_state_based_actions (lethal damage branch)
+    - managym/src/state/permanent.rs — Permanent::has_lethal_damage
+  test_refs:
+    - managym/tests/rules/cr_704_sba.rs
+  notes: "Creatures with lethal marked damage are moved to graveyard during SBA checks."
+
+- rule: "CR 500-514 — Turn Structure (phase/step progression)"
+  status: implemented
+  code_refs:
+    - managym/src/flow/turn.rs — PhaseKind, StepKind, TurnManager
+    - managym/src/flow/game.rs — process_step
+  test_refs:
+    - managym/tests/engine_tests.rs
+  notes: "Phase and step machine is implemented; broad smoke coverage exists with targeted expansion ongoing."
