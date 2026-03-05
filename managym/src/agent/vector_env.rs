@@ -69,10 +69,7 @@ impl VectorEnv {
         self.player_configs = player_configs;
         let mut results = Vec::with_capacity(self.envs.len());
         for env_index in 0..self.envs.len() {
-            let (mut obs, info) = self.reset_env(env_index)?;
-            if self.opponent_policy != OpponentPolicy::None {
-                obs = self.skip_opponent_turns_until_hero(env_index, obs)?;
-            }
+            let (obs, info) = self.reset_to_hero_turn(env_index)?;
             results.push((obs, info));
         }
         Ok(results)
@@ -102,10 +99,7 @@ impl VectorEnv {
                 let terminal_truncated = out.truncated;
                 let terminal_info = out.info;
 
-                let (mut reset_obs, _) = self.reset_env(env_index)?;
-                if self.opponent_policy != OpponentPolicy::None {
-                    reset_obs = self.skip_opponent_turns_until_hero(env_index, reset_obs)?;
-                }
+                let (reset_obs, _) = self.reset_to_hero_turn(env_index)?;
 
                 out = StepResult {
                     obs: reset_obs,
@@ -137,7 +131,9 @@ impl VectorEnv {
         }
 
         while self.is_opponent_turn(&obs) {
-            let opponent_action = self.select_opponent_action(env_index)?;
+            let opponent_action = self
+                .opponent_policy
+                .select_action(&mut self.envs[env_index])?;
             let (next_obs, opponent_reward, opp_terminated, opp_truncated, opp_info) =
                 self.envs[env_index].step(opponent_action)?;
             obs = next_obs;
@@ -166,7 +162,9 @@ impl VectorEnv {
         mut obs: Observation,
     ) -> Result<Observation, AgentError> {
         while self.is_opponent_turn(&obs) {
-            let opponent_action = self.select_opponent_action(env_index)?;
+            let opponent_action = self
+                .opponent_policy
+                .select_action(&mut self.envs[env_index])?;
             let (next_obs, _, terminated, truncated, _) =
                 self.envs[env_index].step(opponent_action)?;
             obs = next_obs;
@@ -190,10 +188,15 @@ impl VectorEnv {
         env.reset(self.player_configs.clone())
     }
 
-    fn select_opponent_action(&mut self, env_index: usize) -> Result<i64, AgentError> {
-        self.opponent_policy
-            .select_action(&mut self.envs[env_index])?
-            .ok_or_else(|| AgentError("opponent policy disabled".to_string()))
+    fn reset_to_hero_turn(
+        &mut self,
+        env_index: usize,
+    ) -> Result<(Observation, InfoDict), AgentError> {
+        let (mut obs, info) = self.reset_env(env_index)?;
+        if self.opponent_policy != OpponentPolicy::None {
+            obs = self.skip_opponent_turns_until_hero(env_index, obs)?;
+        }
+        Ok((obs, info))
     }
 
     fn is_opponent_turn(&self, obs: &Observation) -> bool {

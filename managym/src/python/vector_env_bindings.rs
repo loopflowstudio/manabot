@@ -94,8 +94,7 @@ impl PyVectorEnv {
 
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyVectorEnv>()?;
-    Ok(())
+    m.add_class::<PyVectorEnv>()
 }
 
 #[cfg(feature = "python")]

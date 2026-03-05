@@ -10,6 +10,7 @@ import torch
 
 import managym
 
+from .env import add_truncation_flags, stack_encoded_observations
 from .match import Match, Reward
 from .observation import ObservationSpace
 from .single_agent_env import PassivePolicy, RandomPolicy
@@ -93,7 +94,7 @@ class RustVectorEnv:
         for env_index, (obs, raw_reward, done, cut, info) in enumerate(results):
             info_dict = dict(info)
             reward = self.reward.compute(raw_reward, self._last_raw_obs[env_index], obs)
-            self._populate_truncation_info(obs, info_dict)
+            add_truncation_flags(obs, info_dict, self.observation_space.encoder)
 
             raw_obs.append(obs)
             rewards.append(float(reward))
@@ -114,29 +115,7 @@ class RustVectorEnv:
         self, raw_obs: list[managym.Observation]
     ) -> Dict[str, torch.Tensor]:
         encoded = [self.observation_space.encode(obs) for obs in raw_obs]
-        keys = encoded[0].keys()
-        return {
-            key: torch.tensor(
-                np.stack([obs[key] for obs in encoded]), dtype=torch.float32
-            ).to(self.device)
-            for key in keys
-        }
-
-    def _populate_truncation_info(
-        self, raw_obs: managym.Observation, info: dict[str, Any]
-    ) -> None:
-        encoder = self.observation_space.encoder
-        info["action_space_truncated"] = (
-            len(raw_obs.action_space.actions) > encoder.max_actions
-        )
-        info["card_space_truncated"] = (
-            len(raw_obs.agent_cards) > encoder.cards_per_player
-            or len(raw_obs.opponent_cards) > encoder.cards_per_player
-        )
-        info["permanent_space_truncated"] = (
-            len(raw_obs.agent_permanents) > encoder.perms_per_player
-            or len(raw_obs.opponent_permanents) > encoder.perms_per_player
-        )
+        return stack_encoded_observations(encoded, self.device)
 
     def _stack_infos(self, infos: list[dict[str, Any]]) -> Dict[str, Any]:
         if not infos:

@@ -851,27 +851,16 @@ def build_training_components(
     reward = Reward(hypers.reward)
     opponent_policy = build_opponent_policy(hypers.train.opponent_policy)
 
-    # Create environment and agent
-    if hypers.train.use_rust_env:
-        env = RustVectorEnv(
-            hypers.train.num_envs,
-            match,
-            observation_space,
-            reward,
-            device=experiment.device,
-            seed=hypers.experiment.seed,
-            opponent_policy=opponent_policy,
-        )
-    else:
-        env = VectorEnv(
-            hypers.train.num_envs,
-            match,
-            observation_space,
-            reward,
-            device=experiment.device,
-            seed=hypers.experiment.seed,
-            opponent_policy=opponent_policy,
-        )
+    env_cls = RustVectorEnv if hypers.train.use_rust_env else VectorEnv
+    env = env_cls(
+        hypers.train.num_envs,
+        match,
+        observation_space,
+        reward,
+        device=experiment.device,
+        seed=hypers.experiment.seed,
+        opponent_policy=opponent_policy,
+    )
     agent = Agent(observation_space, hypers.agent)
     return experiment, env, agent
 

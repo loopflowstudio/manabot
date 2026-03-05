@@ -263,32 +263,28 @@ def test_training_loop_runs_100_steps(observation_space, experiment):
     assert not np.isnan(trainer.last_explained_variance)
 
 
-def test_build_training_components_defaults_to_rust_env(run_dir):
-    hypers = Hypers(
-        experiment=ExperimentHypers(wandb=False, device="cpu", runs_dir=Path(run_dir)),
-        train=TrainHypers(total_timesteps=8, num_envs=2, num_steps=2),
-    )
-    experiment, env, _ = build_training_components(hypers)
-    try:
-        assert isinstance(env, RustVectorEnv)
-    finally:
-        env.close()
-        experiment.close()
-
-
-def test_build_training_components_can_use_legacy_vector_env(run_dir):
+@pytest.mark.parametrize(
+    ("use_rust_env", "expected_type"),
+    [
+        pytest.param(True, RustVectorEnv, id="rust-env-default"),
+        pytest.param(False, VectorEnv, id="legacy-env"),
+    ],
+)
+def test_build_training_components_selects_env_type(
+    run_dir, use_rust_env, expected_type
+):
     hypers = Hypers(
         experiment=ExperimentHypers(wandb=False, device="cpu", runs_dir=Path(run_dir)),
         train=TrainHypers(
             total_timesteps=8,
             num_envs=2,
             num_steps=2,
-            use_rust_env=False,
+            use_rust_env=use_rust_env,
         ),
     )
     experiment, env, _ = build_training_components(hypers)
     try:
-        assert isinstance(env, VectorEnv)
+        assert isinstance(env, expected_type)
     finally:
         env.close()
         experiment.close()
