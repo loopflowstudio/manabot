@@ -290,6 +290,19 @@ impl Observation {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card.0].id]
             }
+            Action::ChooseTarget { target, .. } => match target {
+                crate::state::game_object::Target::Player(player) => {
+                    vec![game.state.players[player.0].id]
+                }
+                crate::state::game_object::Target::Permanent(permanent) => game.state.permanents
+                    [permanent.0]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default(),
+                crate::state::game_object::Target::StackSpell(card) => {
+                    vec![game.state.cards[card.0].id]
+                }
+            },
             Action::PassPriority { .. } => vec![],
             Action::DeclareAttacker { permanent, .. } => game.state.permanents[permanent.0]
                 .as_ref()

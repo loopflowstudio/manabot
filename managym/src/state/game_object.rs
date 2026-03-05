@@ -10,6 +10,13 @@ pub struct PermanentId(pub usize);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PlayerId(pub usize);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Target {
+    Player(PlayerId),
+    Permanent(PermanentId),
+    StackSpell(CardId),
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct IdGenerator {
     next_id: u32,

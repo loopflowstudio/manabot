@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use managym::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, ActionType},
+    flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         mana::Mana,
         player::PlayerConfig,
         zone::ZoneType,
@@ -29,11 +30,19 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
     ])
 }
 
-pub fn ogre_deck() -> BTreeMap<String, usize> {
+pub fn bolt_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([
         ("Mountain".to_string(), 24),
-        ("Grey Ogre".to_string(), 16),
+        ("Lightning Bolt".to_string(), 16),
     ])
+}
+
+pub fn counterspell_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Island".to_string(), 24), ("Counterspell".to_string(), 16)])
+}
+
+pub fn ogre_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Mountain".to_string(), 24), ("Grey Ogre".to_string(), 16)])
 }
 
 pub fn ogre_only_deck() -> BTreeMap<String, usize> {
@@ -154,6 +163,10 @@ impl Scenario {
         assert_eq!(self.game.winner_index(), Some(player));
     }
 
+    pub fn drain_events(&mut self) -> Vec<GameEvent> {
+        self.game.drain_events()
+    }
+
     pub fn advance_default_action(&mut self) {
         let space = self.action_space().clone();
         let index = match space.kind {
@@ -172,6 +185,7 @@ impl Scenario {
                 .iter()
                 .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
                 .unwrap_or(space.actions.len().saturating_sub(1)),
+            ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
         };
         self.step_action(index);
@@ -217,6 +231,31 @@ impl Scenario {
             .move_card(CardId(index), PlayerId(player), ZoneType::Hand);
     }
 
+    pub fn force_cards_in_hand(&mut self, player: usize, card_name: &str, count: usize) {
+        let mut moved = 0;
+        for (index, card) in self.game.state.cards.iter().enumerate() {
+            if card.owner != PlayerId(player) || card.name != card_name {
+                continue;
+            }
+            if self.game.state.zones.zone_of(CardId(index)) == Some(ZoneType::Hand) {
+                moved += 1;
+                if moved >= count {
+                    return;
+                }
+                continue;
+            }
+            self.game
+                .state
+                .zones
+                .move_card(CardId(index), PlayerId(player), ZoneType::Hand);
+            moved += 1;
+            if moved >= count {
+                return;
+            }
+        }
+        panic!("not enough copies of {card_name} for player {player}");
+    }
+
     pub fn battlefield_permanents_named(&self, player: usize, card_name: &str) -> Vec<PermanentId> {
         self.game
             .state
@@ -235,6 +274,16 @@ impl Scenario {
 
     pub fn set_player_mana_pool(&mut self, player: usize, mana: &str) {
         self.game.state.players[player].mana_pool = Mana::parse(mana);
+    }
+
+    pub fn choose_target(&mut self, target: Target) -> bool {
+        let Some(index) = self.action_space().actions.iter().position(
+            |action| matches!(action, Action::ChooseTarget { target: candidate, .. } if *candidate == target),
+        ) else {
+            return false;
+        };
+        self.step_action(index);
+        true
     }
 
     /// Play a land and cast a creature from a player's hand in their main phase.

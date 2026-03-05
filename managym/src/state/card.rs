@@ -55,6 +55,14 @@ impl CardTypes {
         self.types.contains(&CardType::Instant) || self.types.contains(&CardType::Sorcery)
     }
 
+    pub fn is_instant(&self) -> bool {
+        self.types.contains(&CardType::Instant)
+    }
+
+    pub fn is_instant_speed(&self) -> bool {
+        self.is_instant()
+    }
+
     pub fn is_creature(&self) -> bool {
         self.types.contains(&CardType::Creature)
     }

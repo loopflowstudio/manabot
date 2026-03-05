@@ -75,5 +75,31 @@ impl CardRegistry {
             power: Some(2),
             toughness: Some(2),
         });
+
+        self.register_card(CardDefinition {
+            registry_key: ObjectId(0),
+            name: "Lightning Bolt".to_string(),
+            mana_cost: Some(ManaCost::parse("R")),
+            types: CardTypes::new([CardType::Instant]),
+            supertypes: vec![],
+            subtypes: vec![],
+            mana_abilities: vec![],
+            text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
+            power: None,
+            toughness: None,
+        });
+
+        self.register_card(CardDefinition {
+            registry_key: ObjectId(0),
+            name: "Counterspell".to_string(),
+            mana_cost: Some(ManaCost::parse("UU")),
+            types: CardTypes::new([CardType::Instant]),
+            supertypes: vec![],
+            subtypes: vec![],
+            mana_abilities: vec![],
+            text_box: "Counter target spell.".to_string(),
+            power: None,
+            toughness: None,
+        });
     }
 }
