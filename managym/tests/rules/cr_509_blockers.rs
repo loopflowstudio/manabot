@@ -1,38 +1,14 @@
-use managym::{
-    agent::action::{Action, ActionSpaceKind, ActionType},
-    flow::turn::StepKind,
-};
+use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
 
 use super::helpers::*;
 
 fn setup_combat_with_available_blocker() -> Scenario {
     let mut s = Scenario::new(forest_elves_deck(), forest_elves_deck(), 91);
-
-    s.advance_to_active_step(0, StepKind::Main);
-    s.force_card_in_hand(0, "Forest");
-    s.force_card_in_hand(0, "Llanowar Elves");
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-    assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
-    s.pass_priority();
-    s.pass_priority();
-
+    s.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
     s.advance_to_active_step(1, StepKind::Main);
-    s.force_card_in_hand(1, "Forest");
-    s.force_card_in_hand(1, "Llanowar Elves");
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-    assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
-    s.pass_priority();
-    s.pass_priority();
-
+    s.play_land_and_cast_creature(1, "Forest", "Llanowar Elves");
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    let attack_index = s
-        .action_space()
-        .actions
-        .iter()
-        .position(|action| matches!(action, Action::DeclareAttacker { attack: true, .. }))
-        .expect("attack action should exist");
-    s.step_action(attack_index);
-
+    s.declare_attack();
     s.advance_to_active_step(0, StepKind::DeclareBlockers);
     s
 }
@@ -43,22 +19,7 @@ fn cr_509_1_declared_blocker_is_recorded_on_attacker() {
     let mut s = setup_combat_with_available_blocker();
 
     assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareBlocker);
-
-    let block_index = s
-        .action_space()
-        .actions
-        .iter()
-        .position(|action| {
-            matches!(
-                action,
-                Action::DeclareBlocker {
-                    attacker: Some(_),
-                    ..
-                }
-            )
-        })
-        .expect("block action should exist");
-    s.step_action(block_index);
+    s.declare_block();
 
     let combat = s
         .game()
@@ -78,14 +39,7 @@ fn cr_509_1_declared_blocker_is_recorded_on_attacker() {
 #[test]
 fn cr_509_negative_decline_block_leaves_attacker_unblocked() {
     let mut s = setup_combat_with_available_blocker();
-
-    let no_block_index = s
-        .action_space()
-        .actions
-        .iter()
-        .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
-        .expect("no-block action should exist");
-    s.step_action(no_block_index);
+    s.decline_block();
 
     let combat = s
         .game()
