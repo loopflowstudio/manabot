@@ -6,7 +6,6 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.model.train import run_training
 
 from .util import (
-    MOUNTAIN_DECK,
     build_hypers,
     print_result,
     run_evaluation,
@@ -31,10 +30,8 @@ def main(argv: list[str] | None = None) -> None:
             "num_envs": 1,
             "total_timesteps": args.total_timesteps,
         },
-        match={
-            "hero_deck": MOUNTAIN_DECK,
-            "villain_deck": MOUNTAIN_DECK,
-        },
+        # Default deck (mixed creatures + lands) gives the agent real
+        # decisions: play lands, cast elves/ogres, attack.
     )
 
     trainer = run_training(hypers)

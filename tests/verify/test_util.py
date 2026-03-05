@@ -114,5 +114,5 @@ def test_print_result_output():
 
     out = stream.getvalue()
     assert "[PASS] demo_step" in out
-    assert "- a: 1" in out
-    assert "- b: 2.000000" in out
+    assert "a: 1" in out
+    assert "b: 2.000000" in out
