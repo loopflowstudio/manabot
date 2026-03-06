@@ -165,6 +165,19 @@ class ObservationEncoder:
             "events_valid": (self.max_events,),
         }
 
+    @property
+    def dtypes(self) -> Dict[str, np.dtype]:
+        return {
+            key: np.int32 if key == "action_focus" else np.float32
+            for key in self.shapes
+        }
+
+    def allocate(self, *leading_dims: int) -> Dict[str, np.ndarray]:
+        return {
+            key: np.zeros((*leading_dims, *shape), dtype=self.dtypes[key])
+            for key, shape in self.shapes.items()
+        }
+
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
         out = {}
 
@@ -253,18 +266,14 @@ class ObservationEncoder:
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
     def _encode_cards(self, cards: List[managym.Card], is_mine: float) -> np.ndarray:
-        log = getLogger(__name__).getChild("encode_cards")
-        feat = np.zeros((self.cards_per_player, self.card_dim), dtype=np.float32)
-        if len(cards) > self.cards_per_player:
-            log.warning(f"Card list truncated: {len(cards)} -> {self.cards_per_player}")
-        ordered_cards = cards[: self.cards_per_player]
-        for i, card in enumerate(ordered_cards):
-            feat[i] = self._encode_card_features(card, is_mine)
-            self.object_to_index[card.id] = self.current_object_index
-            self.current_object_index += 1
-        unused_slots = self.cards_per_player - len(ordered_cards)
-        self.current_object_index += unused_slots
-        return feat
+        return self._encode_objects(
+            items=cards,
+            max_items=self.cards_per_player,
+            dim=self.card_dim,
+            log_name="encode_cards",
+            truncated_label="Card list",
+            encode_item=lambda card: self._encode_card_features(card, is_mine),
+        )
 
     def _encode_card_features(self, card: managym.Card, is_mine: float) -> np.ndarray:
         arr = np.zeros(self.card_dim, dtype=np.float32)
@@ -324,20 +333,14 @@ class ObservationEncoder:
     def _encode_perms(
         self, perms: List[managym.Permanent], is_mine: float
     ) -> np.ndarray:
-        log = getLogger(__name__).getChild("encode_permanents")
-        feat = np.zeros((self.perms_per_player, self.permanent_dim), dtype=np.float32)
-        if len(perms) > self.perms_per_player:
-            log.warning(
-                f"Permanent list truncated: {len(perms)} -> {self.perms_per_player}"
-            )
-        ordered_perms = perms[: self.perms_per_player]
-        for i, perm in enumerate(ordered_perms):
-            feat[i] = self._encode_permanent_features(perm, is_mine)
-            self.object_to_index[perm.id] = self.current_object_index
-            self.current_object_index += 1
-        unused_slots = self.perms_per_player - len(ordered_perms)
-        self.current_object_index += unused_slots
-        return feat
+        return self._encode_objects(
+            items=perms,
+            max_items=self.perms_per_player,
+            dim=self.permanent_dim,
+            log_name="encode_permanents",
+            truncated_label="Permanent list",
+            encode_item=lambda perm: self._encode_permanent_features(perm, is_mine),
+        )
 
     def _encode_permanent_features(
         self, perm: managym.Permanent, is_mine: float
@@ -418,6 +421,29 @@ class ObservationEncoder:
             )
             valid[i] = 1.0
         return arr, valid
+
+    def _encode_objects(
+        self,
+        items: List,
+        max_items: int,
+        dim: int,
+        log_name: str,
+        truncated_label: str,
+        encode_item,
+    ) -> np.ndarray:
+        log = getLogger(__name__).getChild(log_name)
+        feat = np.zeros((max_items, dim), dtype=np.float32)
+        if len(items) > max_items:
+            log.warning(f"{truncated_label} truncated: {len(items)} -> {max_items}")
+
+        ordered_items = items[:max_items]
+        for i, item in enumerate(ordered_items):
+            feat[i] = encode_item(item)
+            self.object_to_index[item.id] = self.current_object_index
+            self.current_object_index += 1
+
+        self.current_object_index += max_items - len(ordered_items)
+        return feat
 
 
 class ObservationSpace(gym.spaces.Space):

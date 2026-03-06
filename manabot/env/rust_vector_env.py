@@ -55,53 +55,13 @@ class RustVectorEnv:
         )
 
     def _allocate_buffers(self) -> Dict[str, np.ndarray]:
-        n = self.num_envs
-        enc = self.observation_space.encoder
-
-        return {
-            "agent_player": np.zeros((n, 1, enc.player_dim), dtype=np.float32),
-            "opponent_player": np.zeros((n, 1, enc.player_dim), dtype=np.float32),
-            "agent_cards": np.zeros(
-                (n, enc.cards_per_player, enc.card_dim),
-                dtype=np.float32,
-            ),
-            "opponent_cards": np.zeros(
-                (n, enc.cards_per_player, enc.card_dim),
-                dtype=np.float32,
-            ),
-            "agent_permanents": np.zeros(
-                (n, enc.perms_per_player, enc.permanent_dim),
-                dtype=np.float32,
-            ),
-            "opponent_permanents": np.zeros(
-                (n, enc.perms_per_player, enc.permanent_dim),
-                dtype=np.float32,
-            ),
-            "actions": np.zeros((n, enc.max_actions, enc.action_dim), dtype=np.float32),
-            "events": np.zeros((n, enc.max_events, enc.event_dim), dtype=np.float32),
-            "action_focus": np.zeros(
-                (n, enc.max_actions, enc.max_focus_objects),
-                dtype=np.int32,
-            ),
-            "agent_player_valid": np.zeros((n, 1), dtype=np.float32),
-            "opponent_player_valid": np.zeros((n, 1), dtype=np.float32),
-            "agent_cards_valid": np.zeros((n, enc.cards_per_player), dtype=np.float32),
-            "opponent_cards_valid": np.zeros(
-                (n, enc.cards_per_player), dtype=np.float32
-            ),
-            "agent_permanents_valid": np.zeros(
-                (n, enc.perms_per_player), dtype=np.float32
-            ),
-            "opponent_permanents_valid": np.zeros(
-                (n, enc.perms_per_player),
-                dtype=np.float32,
-            ),
-            "actions_valid": np.zeros((n, enc.max_actions), dtype=np.float32),
-            "events_valid": np.zeros((n, enc.max_events), dtype=np.float32),
-            "rewards": np.zeros((n,), dtype=np.float64),
-            "terminated": np.zeros((n,), dtype=np.uint8),
-            "truncated": np.zeros((n,), dtype=np.uint8),
-        }
+        buffers = self.observation_space.encoder.allocate(self.num_envs)
+        buffers.update(
+            rewards=np.zeros((self.num_envs,), dtype=np.float64),
+            terminated=np.zeros((self.num_envs,), dtype=np.uint8),
+            truncated=np.zeros((self.num_envs,), dtype=np.uint8),
+        )
+        return buffers
 
     def _build_tensor_views(self) -> None:
         self._obs_keys = tuple(self.observation_space.keys())

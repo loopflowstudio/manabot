@@ -1,7 +1,7 @@
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::{
-        event::GameEvent,
+        event::{EventEntity, GameEvent},
         game::Game,
         turn::{PhaseKind, StepKind},
     },
@@ -465,54 +465,45 @@ impl Observation {
         match event {
             GameEvent::CardMoved {
                 card, controller, ..
-            } => Self::simple_event(EventType::CardMoved, card.0, controller.0),
+            } => Self::card_event_data(EventType::CardMoved, *card, *controller),
             GameEvent::DamageDealt {
                 source,
                 target,
                 amount,
             } => {
-                let (source_kind, source_id) = match source {
-                    Some(card) => (EventEntityKind::Card as i32, card.0 as i32),
-                    None => (EventEntityKind::None as i32, -1),
-                };
-                let (target_kind, target_id) = match target {
-                    DamageTarget::Player(p) => (EventEntityKind::Player as i32, p.0 as i32),
-                    DamageTarget::Permanent(p) => {
-                        (EventEntityKind::Permanent as i32, p.0 as i32)
-                    }
-                };
-                EventData {
-                    event_type: EventType::DamageDealt as i32,
-                    source_kind,
-                    source_id,
-                    target_kind,
-                    target_id,
-                    amount: *amount as i32,
-                    controller_id: -1,
-                }
+                let source_entity = source.map(EventEntity::Card);
+                let target_entity = Some(match *target {
+                    DamageTarget::Player(p) => EventEntity::Player(p),
+                    DamageTarget::Permanent(p) => EventEntity::Permanent(p),
+                });
+                Self::build_event_data(
+                    EventType::DamageDealt,
+                    source_entity,
+                    target_entity,
+                    *amount as i32,
+                    None,
+                )
             }
-            GameEvent::LifeChanged { player, old, new } => EventData {
-                event_type: EventType::LifeChanged as i32,
-                source_kind: EventEntityKind::Player as i32,
-                source_id: player.0 as i32,
-                target_kind: EventEntityKind::Player as i32,
-                target_id: player.0 as i32,
-                amount: new - old,
-                controller_id: -1,
-            },
+            GameEvent::LifeChanged { player, old, new } => Self::build_event_data(
+                EventType::LifeChanged,
+                Some(EventEntity::Player(*player)),
+                Some(EventEntity::Player(*player)),
+                new - old,
+                None,
+            ),
             GameEvent::SpellCast { card, .. } => {
-                Self::simple_event(EventType::SpellCast, card.0, card.0)
+                Self::card_event_data(EventType::SpellCast, *card, PlayerId(0))
             }
             GameEvent::SpellResolved { card } => {
-                Self::simple_event(EventType::SpellResolved, card.0, card.0)
+                Self::card_event_data(EventType::SpellResolved, *card, PlayerId(0))
             }
             GameEvent::SpellCountered { card, .. } => {
-                Self::simple_event(EventType::SpellCountered, card.0, card.0)
+                Self::card_event_data(EventType::SpellCountered, *card, PlayerId(0))
             }
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
-            } => Self::simple_event(EventType::AbilityTriggered, source_card.0, controller.0),
+            } => Self::card_event_data(EventType::AbilityTriggered, *source_card, *controller),
             GameEvent::TurnStarted { .. } | GameEvent::StepStarted { .. } => EventData {
                 event_type: -1,
                 source_kind: EventEntityKind::None as i32,
@@ -525,15 +516,49 @@ impl Observation {
         }
     }
 
-    fn simple_event(event_type: EventType, card_id: usize, controller_idx: usize) -> EventData {
+    fn card_event_data(
+        event_type: EventType,
+        card: CardId,
+        controller: PlayerId,
+    ) -> EventData {
+        Self::build_event_data(
+            event_type,
+            Some(EventEntity::Card(card)),
+            None,
+            0,
+            Some(controller),
+        )
+    }
+
+    fn build_event_data(
+        event_type: EventType,
+        source: Option<EventEntity>,
+        target: Option<EventEntity>,
+        amount: i32,
+        controller: Option<PlayerId>,
+    ) -> EventData {
+        let (source_kind, source_id) = Self::event_entity(source);
+        let (target_kind, target_id) = Self::event_entity(target);
+
         EventData {
             event_type: event_type as i32,
-            source_kind: EventEntityKind::Card as i32,
-            source_id: card_id as i32,
-            target_kind: EventEntityKind::None as i32,
-            target_id: -1,
-            amount: 0,
-            controller_id: controller_idx as i32,
+            source_kind,
+            source_id,
+            target_kind,
+            target_id,
+            amount,
+            controller_id: controller.map_or(-1, |player| player.0 as i32),
+        }
+    }
+
+    fn event_entity(entity: Option<EventEntity>) -> (i32, i32) {
+        match entity {
+            Some(EventEntity::Card(card)) => (EventEntityKind::Card as i32, card.0 as i32),
+            Some(EventEntity::Permanent(permanent)) => {
+                (EventEntityKind::Permanent as i32, permanent.0 as i32)
+            }
+            Some(EventEntity::Player(player)) => (EventEntityKind::Player as i32, player.0 as i32),
+            None => (EventEntityKind::None as i32, -1),
         }
     }
 
