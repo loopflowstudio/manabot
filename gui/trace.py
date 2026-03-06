@@ -103,7 +103,7 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
         return []
 
     summaries: list[dict[str, Any]] = []
-    for path in sorted(target_dir.glob("*.json"), reverse=True):
+    for path in target_dir.glob("*.json"):
         try:
             with path.open("r", encoding="utf-8") as handle:
                 payload = json.load(handle)
@@ -133,24 +133,20 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
     player_state["hand"] = []
 
 
-def _redact_observation(observation: dict[str, Any], actor: str) -> None:
+def _redact_observation(observation: dict[str, Any]) -> None:
     if not isinstance(observation, dict):
         return
 
-    # Observations are actor-relative: during hero events, opponent is villain.
-    # During villain events, opponent is hero.
-    if actor in {"hero", "villain"}:
-        opponent = observation.get("opponent")
-        if isinstance(opponent, dict):
-            _redact_hand(opponent)
+    opponent = observation.get("opponent")
+    if isinstance(opponent, dict):
+        _redact_hand(opponent)
 
 
 def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
     redacted = deepcopy(payload)
 
     for event in redacted.get("events", []):
-        actor = event.get("actor", "")
-        _redact_observation(event.get("pre_observation", {}), actor)
-        _redact_observation(event.get("post_observation", {}), actor)
+        _redact_observation(event.get("pre_observation", {}))
+        _redact_observation(event.get("post_observation", {}))
 
     return redacted

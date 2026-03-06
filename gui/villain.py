@@ -33,10 +33,15 @@ def random_policy(obs: managym.Observation) -> int:
     return random.randrange(len(actions))
 
 
+POLICIES: dict[str, Callable[[managym.Observation], int]] = {
+    "passive": passive_policy,
+    "random": random_policy,
+}
+
+
 def build_villain_policy(name: str) -> Callable[[managym.Observation], int]:
     """Build a villain policy by name."""
-    if name == "passive":
-        return passive_policy
-    if name == "random":
-        return random_policy
-    raise ValueError(f"Unsupported villain_type: {name}")
+    try:
+        return POLICIES[name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported villain_type: {name}") from exc

@@ -6,6 +6,7 @@ Tiny fallback surface for environments without FastAPI installed.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 import inspect
 import re
@@ -55,7 +56,6 @@ class _Route:
     method: str
     path: str
     pattern: re.Pattern[str]
-    param_names: list[str]
     handler: Callable[..., Any]
 
 
@@ -65,7 +65,7 @@ class FastAPI:
         self.websocket_routes: dict[str, Callable[..., Any]] = {}
 
     def get(self, path: str):
-        pattern, param_names = _compile_path(path)
+        pattern = _compile_path(path)
 
         def decorator(handler: Callable[..., Any]):
             self.http_routes.append(
@@ -73,7 +73,6 @@ class FastAPI:
                     method="GET",
                     path=path,
                     pattern=pattern,
-                    param_names=param_names,
                     handler=handler,
                 )
             )
@@ -134,7 +133,7 @@ class _WebSocketSession:
         if self._loop.is_closed():
             return
 
-        with suppress_exceptions():
+        with suppress(Exception):
             asyncio.run_coroutine_threadsafe(
                 self._websocket._incoming.put(_DISCONNECT),
                 self._loop,
@@ -197,31 +196,20 @@ class TestClient:
         return _WebSocketSession(handler)
 
 
-class suppress_exceptions:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_: Any) -> bool:
-        return True
-
-
-def _compile_path(path: str) -> tuple[re.Pattern[str], list[str]]:
+def _compile_path(path: str) -> re.Pattern[str]:
     if path == "/":
-        return re.compile(r"^/$"), []
+        return re.compile(r"^/$")
 
     parts = [part for part in path.split("/") if part]
     pattern_parts: list[str] = []
-    param_names: list[str] = []
     for part in parts:
         if part.startswith("{") and part.endswith("}"):
             name = part[1:-1]
-            param_names.append(name)
             pattern_parts.append(fr"(?P<{name}>[^/]+)")
         else:
             pattern_parts.append(re.escape(part))
 
-    pattern = re.compile(r"^/" + "/".join(pattern_parts) + r"$")
-    return pattern, param_names
+    return re.compile(r"^/" + "/".join(pattern_parts) + r"$")
 
 
 def _coerce_query_params(

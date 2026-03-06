@@ -6,7 +6,6 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 from contextlib import suppress
-from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
@@ -38,6 +37,13 @@ DEFAULT_DECK = {
 
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
+ACTION_LABELS = {
+    "PRIORITY_PLAY_LAND": "Play land",
+    "PRIORITY_CAST_SPELL": "Cast spell",
+    "DECLARE_ATTACKER": "Declare attacker",
+    "DECLARE_BLOCKER": "Declare blocker",
+    "CHOOSE_TARGET": "Choose target",
+}
 
 app = FastAPI(title="manabot-gui")
 
@@ -150,49 +156,24 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
 
 
 def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
-    names: dict[int, str] = {
-        int(obs.agent.id): "agent",
-        int(obs.opponent.id): "opponent",
-    }
-
-    card_names = {
-        int(card.id): card.name
-        for card in [*obs.agent_cards, *obs.opponent_cards]
-    }
-    names.update(card_names)
-
-    for permanent in [*obs.agent_permanents, *obs.opponent_permanents]:
-        permanent_id = int(permanent.id)
-        if permanent_id in card_names:
-            names[permanent_id] = card_names[permanent_id]
-
+    names: dict[int, str] = {int(obs.agent.id): "agent", int(obs.opponent.id): "opponent"}
+    names.update({int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]})
     return names
 
 
 def _format_action(action: managym.Action, card_name: str | None, names: dict[int, str]) -> str:
     action_name = _enum_name(ActionEnum, action.action_type)
-    focus = [int(value) for value in action.focus]
-    focus_names = [names.get(value) for value in focus]
-    resolved_names = [name for name in focus_names if name]
 
     if action_name == "PRIORITY_PASS_PRIORITY":
         return "Pass priority"
-    if action_name == "PRIORITY_PLAY_LAND":
-        label = "Play land"
-    elif action_name == "PRIORITY_CAST_SPELL":
-        label = "Cast spell"
-    elif action_name == "DECLARE_ATTACKER":
-        label = "Declare attacker"
-    elif action_name == "DECLARE_BLOCKER":
-        label = "Declare blocker"
-    elif action_name == "CHOOSE_TARGET":
-        label = "Choose target"
-    else:
-        label = action_name
+    label = ACTION_LABELS.get(action_name, action_name)
 
     subject = card_name
-    if subject is None and resolved_names:
-        subject = resolved_names[0]
+    if subject is None:
+        subject = next(
+            (name for value in action.focus if (name := names.get(int(value))) is not None),
+            None,
+        )
 
     if subject is None:
         return label
@@ -233,7 +214,7 @@ def _is_hero_turn(obs: managym.Observation) -> bool:
 
 def _normalize_deck(value: Any, fallback: dict[str, int]) -> dict[str, int]:
     if value is None:
-        return deepcopy(fallback)
+        return dict(fallback)
     if not isinstance(value, dict):
         raise ValueError("Deck config must be an object of {card_name: count}.")
 
@@ -337,26 +318,34 @@ class GameSession:
         if action_index < 0 or action_index >= len(actions):
             raise ValueError(f"Action index out of range: {action_index}")
 
+        self._step_and_record(actor="hero", action_index=action_index, actions=actions)
+        self._auto_play_villain()
+        return self._wire_message()
+
+    def _step_and_record(
+        self,
+        actor: str,
+        action_index: int,
+        actions: list[dict[str, Any]],
+    ) -> None:
+        if self.env is None or self.obs is None or self.trace is None:
+            raise RuntimeError("Cannot step without an active game.")
+
         pre_observation = serialize_observation(self.obs)
         action_description = actions[action_index]["description"]
-
         next_obs, reward, _, _, _ = self.env.step(action_index)
-        post_observation = serialize_observation(next_obs)
         self.trace.events.append(
             TraceEvent(
-                actor="hero",
+                actor=actor,
                 pre_observation=pre_observation,
                 actions=actions,
                 action=action_index,
                 action_description=action_description,
                 reward=float(reward),
-                post_observation=post_observation,
+                post_observation=serialize_observation(next_obs),
             )
         )
-
         self.obs = next_obs
-        self._auto_play_villain()
-        return self._wire_message()
 
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
@@ -376,24 +365,7 @@ class GameSession:
                 raise RuntimeError(
                     f"Villain policy selected invalid action index: {action_index}"
                 )
-
-            pre_observation = serialize_observation(self.obs)
-            action_description = actions[action_index]["description"]
-
-            next_obs, reward, _, _, _ = self.env.step(action_index)
-            post_observation = serialize_observation(next_obs)
-            self.trace.events.append(
-                TraceEvent(
-                    actor="villain",
-                    pre_observation=pre_observation,
-                    actions=actions,
-                    action=action_index,
-                    action_description=action_description,
-                    reward=float(reward),
-                    post_observation=post_observation,
-                )
-            )
-            self.obs = next_obs
+            self._step_and_record(actor="villain", action_index=action_index, actions=actions)
 
     def _wire_message(self) -> dict[str, Any]:
         if self.obs is None:
