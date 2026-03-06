@@ -50,10 +50,19 @@ _COMMON_BOOTSTRAP = """
 
 _SYNC_REPO = """
   if [ -d /opt/manabot/repo/.git ]; then
+    sudo git -C /opt/manabot/repo remote set-url origin "$REPO_URL"
     sudo git -C /opt/manabot/repo fetch --all --prune
-    sudo git -C /opt/manabot/repo reset --hard origin/main
   else
     sudo git clone "$REPO_URL" /opt/manabot/repo
+    sudo git -C /opt/manabot/repo fetch --all --prune
+  fi
+
+  if sudo git -C /opt/manabot/repo show-ref --verify --quiet "refs/remotes/origin/$REPO_REF"; then
+    sudo git -C /opt/manabot/repo checkout -B "$REPO_REF" "origin/$REPO_REF"
+    sudo git -C /opt/manabot/repo reset --hard "origin/$REPO_REF"
+  else
+    sudo git -C /opt/manabot/repo checkout -B main origin/main
+    sudo git -C /opt/manabot/repo reset --hard origin/main
   fi
 """
 
@@ -62,6 +71,7 @@ def sandbox_user_data(
     runtime: RuntimeSpec,
     *,
     repo_url: str = DEFAULT_REPO,
+    repo_ref: str = "main",
     marker_path: str = BOOTSTRAP_MARKER,
 ) -> str:
     """Build cloud-init user-data for idempotent sandbox setup."""
@@ -71,6 +81,7 @@ set -euo pipefail
 
 MARKER={_sq(marker_path)}
 REPO_URL={_sq(repo_url)}
+REPO_REF={_sq(repo_ref)}
 IMAGE={_sq(runtime.image)}
 FALLBACK_BUILD={"1" if runtime.fallback_build else "0"}
 
@@ -118,6 +129,7 @@ WANDB_RUN_ID={_sq(wandb_run_id)}
 AWS_REGION={_sq(region)}
 LOG_GROUP={_sq(log_group)}
 REPO_URL={_sq(DEFAULT_REPO)}
+REPO_REF='main'
 
 if [ ! -f "$MARKER" ]; then
 {_COMMON_BOOTSTRAP}

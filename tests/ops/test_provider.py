@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ops.provider import load_machine_spec, load_runtime_spec, merge_str
+from ops.aws import _is_retryable_send_command_error
 
 
 def test_load_machine_spec_from_repo_defaults():
@@ -54,3 +55,30 @@ ami: ami-custom
     assert spec.region == "us-west-2"
     assert spec.disk_gb == 120
     assert spec.ami == "ami-custom"
+
+
+def test_retryable_send_command_error_detection():
+    class FakeClientError(Exception):
+        def __init__(self, response):
+            super().__init__("fake")
+            self.response = response
+
+    retryable = FakeClientError(
+        {
+            "Error": {
+                "Code": "InvalidInstanceId",
+                "Message": "Instances not in a valid state for account",
+            }
+        }
+    )
+    assert _is_retryable_send_command_error(retryable) is True
+
+    not_retryable = FakeClientError(
+        {
+            "Error": {
+                "Code": "InvalidInstanceId",
+                "Message": "The instance ID 'i-abc' does not exist",
+            }
+        }
+    )
+    assert _is_retryable_send_command_error(not_retryable) is False

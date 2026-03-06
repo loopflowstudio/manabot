@@ -2,5 +2,5 @@ instance_type: g5.xlarge
 region: us-west-2
 disk_gb: 100
 spot: false
-ami: ami-0233d2606cf2ca76c
+ami: ami-09078d0c6c4372f0d
 key_name: null
