@@ -50,22 +50,28 @@ leave room for PyTorch.
 
 ## Measurement
 
+Follow the wave measurement protocol (see `wave/sps/README.md`).
+
 ### Before
 
 ```bash
-python scripts/bench_breakdown.py --num-envs 16 --steps 2048
+for n in 1 16 64; do
+    python scripts/bench_breakdown.py --num-envs $n --steps 2048
+done
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048 --with-inference
 ```
 
 Record `rust_step` percentage and absolute time. This is the phase
-being parallelized.
+being parallelized. Save to wave results tracker.
 
 ### After
 
 ```bash
-# Scaling sweep
-for n in 1 4 16 64; do
+# Scaling sweep (broader range to show parallelism)
+for n in 1 4 16 64 128; do
     python scripts/bench_breakdown.py --num-envs $n --steps 2048
 done
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048 --with-inference
 ```
 
 `rust_step` time should scale sub-linearly with num_envs (near-constant
@@ -74,14 +80,26 @@ up to core count, then linear).
 ### A/B
 
 ```bash
-# Compare parallel vs sequential (if a sequential mode is available)
+# Rayon vs legacy
 python scripts/bench_ab.py --a rust --b async --num-envs 64 --rounds 5
+
+# Rayon vs single-threaded Rust (isolates this sprint's contribution)
+RAYON_NUM_THREADS=1 python scripts/bench_ab.py --a rust --b rust --num-envs 64 --rounds 5
 ```
+
+The second comparison uses `RAYON_NUM_THREADS=1` on the B side to
+measure pure parallelism gains. Rayon respects this env var natively.
+
+### Save results
+
+Update the results tracker tables in `wave/sps/README.md` with S04
+numbers. Include the scaling curve data.
 
 ### Gate
 
 - Env-only SPS > 100,000 at 16 envs
 - Near-linear SPS scaling from 1 to core_count envs
+- Training SPS measured and recorded (with inference)
 - `python -m manabot.verify.step0_env_sanity` passes
 - No data races (ThreadSanitizer clean in debug builds)
 

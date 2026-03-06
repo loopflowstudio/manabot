@@ -25,8 +25,7 @@ use crate::{
             PlayerData, TurnData,
         },
         observation_encoder::{
-            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM,
-            PLAYER_DIM,
+            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
     },
     flow::turn::{PhaseKind, StepKind},

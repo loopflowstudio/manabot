@@ -27,12 +27,18 @@ already in place:
 
 ## Changes
 
-### 1. Buffer protocol
+### 1. Two API lanes (compat + hot path)
+
+- Keep existing `VectorEnv.step()` / `reset_all()` behavior for compatibility.
+- Add `set_buffers()`, `step_into_buffers()`, `reset_all_into_buffers()` for
+  training hot path.
+- Add `get_last_info()` as explicit debug/eval API (not used in rollout loop).
+
+### 2. Buffer protocol
 
 Python allocates numpy arrays with shape `(num_envs, ...)` for each
 observation field. These are passed to Rust once via `set_buffers()`.
-Rust holds `Py<PyArray>` references (preventing GC) and obtains raw
-`*mut f32` pointers.
+Rust holds `Py<PyArray>` references (preventing GC).
 
 ```python
 class RustVectorEnv:
@@ -48,68 +54,101 @@ class RustVectorEnv:
         )
 
     def step(self, actions):
-        # Rust writes directly into self.obs arrays
-        rewards, dones = self._rust.step_into_buffers(actions)
-        return self.obs, rewards, dones
+        # Rust writes directly into pre-allocated arrays
+        self._rust.step_into_buffers(actions)
+        return self._obs_tensors, self._reward_tensor, self._done_tensor
 ```
 
-### 2. Rust buffer writer
+`set_buffers()` validates exact dtype, exact shape, C-contiguous, writable.
+
+### 3. Rust buffer writer
 
 `VectorEnv::step_into_buffers()`:
 - Release the GIL
 - Step all games
 - For each env, construct `EncodedObservationMut` pointing into the
   appropriate slice of the shared numpy buffer, then call `encode_into()`
-- Return only rewards and dones (small arrays, cheap to allocate)
+- Write rewards/terminated/truncated into pre-allocated arrays
+- Return `()`
 
 The `encode_into()` function from sprint 02 writes into `&mut [f32]` slices
 directly — no intermediate `Vec` allocation needed.
 
-### 3. Remove Python encoding from hot path
+### 4. Remove Python encoding from hot path
 
 The trainer reads `self.obs` directly — no `ObservationSpace.encode()`
 call. The Python encoder remains for debugging and parity testing.
 
-### 4. Rewards and dones as numpy
+### 5. Explicit reward + info contracts
 
-Return rewards as `np.ndarray(num_envs,)` and dones as
-`np.ndarray(num_envs,)` — also via pre-allocated buffers if the
-overhead matters, but these are small enough that allocation is fine.
+- Hot path reward is Rust raw reward only in sprint 03.
+- Observation-dependent reward shaping remains out of hot path.
+- No per-env info dict allocation in `step_into_buffers()`.
 
 ## Measurement
+
+Follow the wave measurement protocol (see `wave/sps/README.md`).
 
 ### Before
 
 ```bash
-python scripts/bench_breakdown.py --num-envs 16 --steps 2048
+# Multi-scale breakdown (env-only)
+for n in 1 16 64; do
+    python scripts/bench_breakdown.py --num-envs $n --steps 2048
+done
+
+# Training SPS baseline
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048 --with-inference
 ```
 
-Record the `encode` and `tensorize` percentages. These are the phases
-this sprint eliminates.
+Record `encode` and `tensorize` percentages. These are the phases
+this sprint eliminates. Save all numbers to the wave results tracker.
 
 ### After
 
 ```bash
-python scripts/bench_breakdown.py --num-envs 16 --steps 2048
+# Zero-copy path (the new hot path)
+for n in 1 16 64; do
+    python scripts/bench_breakdown.py --num-envs $n --steps 2048 --mode zero-copy
+done
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048 --mode zero-copy --with-inference
+
+# Legacy path for comparison (should still work, just slower)
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048 --mode legacy
 ```
 
-`encode` and `tensorize` should be gone or near-zero. `rust_step`
-should now include encoding time but be much faster than the old
-Python path.
+In zero-copy mode, `step_into_buffers` replaces the old encode/tensorize
+phases. `sync_tensors` should be negligible on CPU.
 
 ### A/B
 
 ```bash
+# Zero-copy vs legacy
 python scripts/bench_ab.py --a rust --b async --num-envs 16 --rounds 5
+
+# Zero-copy vs Python-encode (isolates this sprint's contribution)
+python scripts/bench_ab.py --a rust --b rust-python-encode --num-envs 16 --rounds 5
 ```
+
+Add a `rust-python-encode` mode to `bench_ab.py` that uses Rust stepping
+but Python-side encoding (sprint 02 behavior). This enables ablation in
+sprint 05.
+
+### Save results
+
+Update the results tracker tables in `wave/sps/README.md` with S03
+numbers for all scales measured.
 
 ### Gate
 
 - Env-only SPS > 80,000 (encode + tensorize eliminated)
+- Training SPS measured and recorded (with inference)
 - `python -m manabot.verify.step0_env_sanity` passes
 - Parity test passes (buffers produce same values as Python encoder)
+- Buffer invariant tests (dtype/shape/contiguous/writable)
 
 ## Done when
 
 Training runs end-to-end with zero-copy buffers. SPS improvement
 measured and documented. Python encoder removed from training path.
+Compatibility APIs still work for tests/debug tooling.
