@@ -17,7 +17,10 @@ def test_sandbox_user_data_includes_repo_ref():
     )
 
     assert "REPO_REF=feature/demo" in rendered
+    assert 'PYTHON_VERSION=3.13' in rendered
     assert 'checkout -B "$REPO_REF" "origin/$REPO_REF"' in rendered
+    assert '--build-arg PYTHON_VERSION="$PYTHON_VERSION"' in rendered
+    assert 'torch.cuda.is_available()' in rendered
 
 
 def test_job_user_data_pins_repo_ref_to_main():

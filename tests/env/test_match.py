@@ -108,5 +108,77 @@ def test_reward_correct_both_players(player_index):
     assert reward.compute(0.0, last_obs, lost_obs) == -3.0
 
 
+def test_reward_progress_shaping():
+    reward = Reward(
+        RewardHypers(
+            land_play_reward=1.0,
+            creature_play_reward=1.0,
+            opponent_life_loss_reward=1.0,
+        )
+    )
+    battlefield = 2
+    last_obs = SimpleNamespace(
+        agent_cards=[
+            SimpleNamespace(
+                zone=battlefield,
+                card_types=SimpleNamespace(is_land=True, is_creature=False),
+            )
+        ],
+        opponent=SimpleNamespace(life=20),
+        game_over=False,
+        won=False,
+    )
+    new_obs = SimpleNamespace(
+        agent_cards=[
+            SimpleNamespace(
+                zone=battlefield,
+                card_types=SimpleNamespace(is_land=True, is_creature=False),
+            ),
+            SimpleNamespace(
+                zone=battlefield,
+                card_types=SimpleNamespace(is_land=True, is_creature=False),
+            ),
+            SimpleNamespace(
+                zone=battlefield,
+                card_types=SimpleNamespace(is_land=False, is_creature=True),
+            ),
+        ],
+        opponent=SimpleNamespace(life=18),
+        game_over=False,
+        won=False,
+    )
+
+    assert reward.compute(0.0, last_obs, new_obs) == 4.0
+
+
+def test_reward_progress_shaping_stacks_with_terminal_reward():
+    reward = Reward(
+        RewardHypers(
+            win_reward=2.0,
+            land_play_reward=1.0,
+        )
+    )
+    battlefield = 2
+    last_obs = SimpleNamespace(
+        agent_cards=[],
+        opponent=SimpleNamespace(life=20),
+        game_over=False,
+        won=False,
+    )
+    new_obs = SimpleNamespace(
+        agent_cards=[
+            SimpleNamespace(
+                zone=battlefield,
+                card_types=SimpleNamespace(is_land=True, is_creature=False),
+            )
+        ],
+        opponent=SimpleNamespace(life=20),
+        game_over=True,
+        won=True,
+    )
+
+    assert reward.compute(0.0, last_obs, new_obs) == 3.0
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

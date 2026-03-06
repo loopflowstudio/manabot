@@ -24,6 +24,7 @@ def test_load_runtime_spec_from_repo_defaults():
 
     assert runtime.image.startswith("ghcr.io/")
     assert runtime.log_group_prefix == "/manabot"
+    assert runtime.python_version == "3.13"
 
 
 def test_merge_str_coerces_strings_and_skips_none():

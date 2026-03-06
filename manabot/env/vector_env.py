@@ -47,6 +47,10 @@ class VectorEnv:
         self._rust_env.set_buffers(self._buffers)
         self._build_tensor_views()
 
+        self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
+        self._card_land_index = self.observation_space.encoder.num_zones + 1 + 2 + 1
+        self._card_creature_index = self._card_land_index + 1
+
     def _build_rust_env(self, seed: int) -> "managym.VectorEnv":
         return managym.VectorEnv(
             num_envs=self.num_envs,
@@ -119,6 +123,10 @@ class VectorEnv:
             self._reward_tensor.fill_(1.0)
             return
 
+        shaping = self._compute_progress_shaping()
+        if shaping is not None:
+            self._reward_tensor.add_(shaping)
+
         done = self._terminated_tensor | self._truncated_tensor
         if not bool(done.any()):
             return
@@ -131,6 +139,65 @@ class VectorEnv:
         self._reward_tensor.copy_(
             torch.where(done, terminal_shaped, self._reward_tensor)
         )
+
+    def _compute_progress_shaping(self) -> torch.Tensor | None:
+        hypers = self.reward.hypers
+        if (
+            hypers.land_play_reward == 0.0
+            and hypers.creature_play_reward == 0.0
+            and hypers.opponent_life_loss_reward == 0.0
+        ):
+            return None
+
+        prev_agent_cards = self._prev_obs["agent_cards"]
+        next_agent_cards = self._obs_tensors["agent_cards"]
+        prev_opponent_player = self._prev_obs["opponent_player"]
+        next_opponent_player = self._obs_tensors["opponent_player"]
+
+        shaping = torch.zeros_like(self._reward_tensor)
+
+        if hypers.land_play_reward != 0.0:
+            land_delta = self._battlefield_card_count(
+                next_agent_cards,
+                self._card_land_index,
+            ) - self._battlefield_card_count(
+                prev_agent_cards,
+                self._card_land_index,
+            )
+            shaping += hypers.land_play_reward * torch.clamp(land_delta, min=0.0)
+
+        if hypers.creature_play_reward != 0.0:
+            creature_delta = self._battlefield_card_count(
+                next_agent_cards,
+                self._card_creature_index,
+            ) - self._battlefield_card_count(
+                prev_agent_cards,
+                self._card_creature_index,
+            )
+            shaping += hypers.creature_play_reward * torch.clamp(
+                creature_delta, min=0.0
+            )
+
+        if hypers.opponent_life_loss_reward != 0.0:
+            prev_life = prev_opponent_player[:, 0, 0]
+            next_life = next_opponent_player[:, 0, 0]
+            shaping += hypers.opponent_life_loss_reward * torch.clamp(
+                prev_life - next_life,
+                min=0.0,
+            )
+
+        shaping = shaping.masked_fill(self._terminated_tensor | self._truncated_tensor, 0.0)
+        return shaping
+
+    def _battlefield_card_count(
+        self,
+        cards: torch.Tensor,
+        type_feature_index: int,
+    ) -> torch.Tensor:
+        valid = cards[..., -1] > 0.5
+        in_battlefield = cards[..., self._battlefield_zone_index] > 0.5
+        matches_type = cards[..., type_feature_index] > 0.5
+        return (valid & in_battlefield & matches_type).float().sum(dim=1)
 
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict] = None
@@ -155,6 +222,10 @@ class VectorEnv:
         torch.Tensor,
         Dict[str, Any],
     ]:
+        self._prev_obs = {
+            "agent_cards": self._obs_tensors["agent_cards"].clone(),
+            "opponent_player": self._obs_tensors["opponent_player"].clone(),
+        }
         self._rust_env.step_into_buffers(actions.cpu().tolist())
         self._sync_tensors_from_buffers()
         self._apply_reward_policy()

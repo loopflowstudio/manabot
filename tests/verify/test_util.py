@@ -5,9 +5,12 @@ import io
 
 import pytest
 import torch
+import numpy as np
 
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.verify.util import (
+    _choice_set_name,
+    _policy_action_type_probabilities,
     build_hypers,
     print_result,
     run_evaluation,
@@ -36,6 +39,18 @@ class FirstValidAgent:
         action = valid_indices[0, 0].to(dtype=torch.int64).view(1)
         zero = torch.zeros((1,), dtype=torch.float32, device=action.device)
         return action, zero, zero, zero
+
+
+class FixedLogitAgent:
+    def __init__(self, logits: list[float]):
+        self._param = torch.nn.Parameter(torch.zeros(()))
+        self._logits = torch.tensor([logits], dtype=torch.float32)
+
+    def parameters(self):
+        return iter([self._param])
+
+    def forward(self, _obs):
+        return self._logits, torch.zeros((1,), dtype=torch.float32)
 
 
 class TestBuildHypers:
@@ -97,6 +112,16 @@ class TestRunEvaluation:
             "win_ci_lower",
             "mean_steps",
             "attack_rate",
+            "passed_when_able",
+            "could_pass",
+            "single_valid_decisions",
+            "multi_valid_decisions",
+            "pass_land_decisions",
+            "pass_land_pass_rate",
+            "pass_land_land_rate",
+            "mean_pass_prob",
+            "mean_land_prob",
+            "mean_spell_prob",
             "action_space_truncations",
             "card_space_truncations",
             "permanent_space_truncations",
@@ -105,6 +130,38 @@ class TestRunEvaluation:
         assert metrics["num_games"] == pytest.approx(2.0)
         assert 0.0 <= metrics["win_rate"] <= 1.0
         assert 0.0 <= metrics["win_ci_lower"] <= 1.0
+
+
+def test_choice_set_name_uses_action_types():
+    obs = {
+        "actions": np.zeros((4, 6), dtype=np.float32),
+        "actions_valid": np.array([1, 1, 1, 0], dtype=np.float32),
+    }
+    obs["actions"][0, 0] = 1.0
+    obs["actions"][1, 1] = 1.0
+    obs["actions"][2, 2] = 1.0
+
+    assert _choice_set_name(obs) == "land+spell+pass"
+
+
+def test_policy_action_type_probabilities_aggregate_slots():
+    obs = {
+        "actions": np.zeros((4, 6), dtype=np.float32),
+        "actions_valid": np.array([1, 1, 1, 0], dtype=np.float32),
+    }
+    obs["actions"][0, 0] = 1.0
+    obs["actions"][1, 0] = 1.0
+    obs["actions"][2, 2] = 1.0
+
+    probs = _policy_action_type_probabilities(
+        FixedLogitAgent([0.0, 0.0, 0.0, -1e8]),
+        obs,
+    )
+
+    assert probs is not None
+    assert probs["land"] == pytest.approx(2.0 / 3.0, abs=1e-5)
+    assert probs["pass"] == pytest.approx(1.0 / 3.0, abs=1e-5)
+    assert probs["spell"] == pytest.approx(0.0, abs=1e-5)
 
 
 def test_print_result_output():

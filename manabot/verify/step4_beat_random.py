@@ -3,6 +3,7 @@
 import argparse
 
 from manabot.env import Match, ObservationSpace, Reward
+from manabot.infra.metrics import MetricsDB
 from manabot.model.train import run_training
 
 from .util import (
@@ -20,6 +21,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--total-timesteps", type=int, default=10_000_000)
     parser.add_argument("--num-games", type=int, default=200)
     parser.add_argument("--num-envs", type=int, default=16)
+    parser.add_argument("--wandb", action="store_true", help="Enable wandb logging")
     args = parser.parse_args(argv)
     suppress_truncation_logs()
 
@@ -27,6 +29,7 @@ def main(argv: list[str] | None = None) -> None:
         experiment={
             "seed": args.seed,
             "exp_name": "verify-step4-random",
+            "wandb": args.wandb,
         },
         train={
             "num_envs": args.num_envs,
@@ -41,6 +44,7 @@ def main(argv: list[str] | None = None) -> None:
 
     trainer = run_training(hypers)
 
+    metrics_db = MetricsDB()
     obs_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
@@ -51,8 +55,11 @@ def main(argv: list[str] | None = None) -> None:
         reward,
         num_games=args.num_games,
         opponent_policy="random",
-        deterministic=True,
+        deterministic=False,
         seed=args.seed + 1000,
+        metrics_db=metrics_db,
+        model_name="verify-step4-random",
+        model_step=args.total_timesteps,
     )
 
     metrics = {
