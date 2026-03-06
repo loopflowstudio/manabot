@@ -8,14 +8,14 @@ import argparse
 
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward, RustVectorEnv
+from manabot.env import Match, ObservationSpace, Reward, VectorEnv
 from manabot.infra.hypers import AgentHypers, RewardHypers
 from manabot.infra.profiler import Profiler
 from manabot.model import Agent
 
 
-def build_env(num_envs: int, seed: int) -> RustVectorEnv:
-    return RustVectorEnv(
+def build_env(num_envs: int, seed: int) -> VectorEnv:
+    return VectorEnv(
         num_envs=num_envs,
         match=Match(),
         observation_space=ObservationSpace(),
@@ -85,7 +85,7 @@ def print_report(
 
     print(f"\n{'=' * 72}")
     print(
-        f"RustVectorEnv breakdown: num_envs={num_envs}, steps={total_steps}, "
+        f"VectorEnv breakdown: num_envs={num_envs}, steps={total_steps}, "
         f"inference={'on' if with_inference else 'off'}"
     )
     print(f"Total: {total_env_steps} env steps in {wall_time:.2f}s = {sps:.0f} SPS")

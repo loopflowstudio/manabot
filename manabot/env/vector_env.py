@@ -1,5 +1,5 @@
 """
-rust_vector_env.py
+vector_env.py
 Vectorized environment wrapper backed by managym.VectorEnv.
 """
 
@@ -17,7 +17,7 @@ VALID_OPPONENT_POLICIES = ("none", "passive", "random")
 OBSERVATION_BUFFER_DTYPES = {"action_focus": np.int32}
 
 
-class RustVectorEnv:
+class VectorEnv:
     def __init__(
         self,
         num_envs: int,
@@ -184,7 +184,7 @@ class RustVectorEnv:
                 stacked[key] = np.array(values, dtype=object)
         return stacked
 
-    def to(self, device: str) -> "RustVectorEnv":
+    def to(self, device: str) -> "VectorEnv":
         self.device = torch.device(device)
         self._build_tensor_views()
         self._sync_tensors_from_buffers()

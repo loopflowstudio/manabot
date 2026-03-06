@@ -36,15 +36,8 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture
 def observation_space() -> ObservationSpace:
-    """Create a minimal but complete observation space for testing."""
-    return ObservationSpace(
-        ObservationSpaceHypers(
-            max_cards_per_player=3,  # Small number for testing
-            max_permanents_per_player=2,  # Small number for testing
-            max_actions=5,  # Enough actions to test selection
-            max_focus_objects=2,  # Standard focus object count
-        )
-    )
+    """Create an observation space with default hypers (must match Rust encoder)."""
+    return ObservationSpace()
 
 
 @pytest.fixture
@@ -80,15 +73,15 @@ def real_observation(
 
     reward = Reward(RewardHypers(trivial=True))
     match = Match()
-    # Local imports
-    from manabot.env import LegacyVectorEnv
+    from manabot.env import VectorEnv
 
-    vec_env = LegacyVectorEnv(
+    vec_env = VectorEnv(
         num_envs=2,
         match=match,
         observation_space=observation_space,
         reward=reward,
         device="cpu",
+        opponent_policy="passive",
     )
     obs, _ = vec_env.reset()
     yield obs

@@ -136,9 +136,7 @@ above the current microsecond-scale step cost).
 
 This pass also changes the codebase shape:
 
-- training now always builds `RustVectorEnv`
-- `LegacyVectorEnv` remains only for historical benchmarking/parity checks
-- reusable benchmark surface is now:
-  - `scripts/bench_vector_env.py`
-  - `scripts/bench_breakdown.py`
+- training builds `VectorEnv` (the single active vector env implementation)
+- `LegacyVectorEnv` (AsyncVectorEnv wrapper) deleted
+- reusable benchmark: `scripts/bench_breakdown.py`
 - SPS wave docs under `wave/sps/` were deleted after migrating the durable story here

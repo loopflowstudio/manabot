@@ -65,8 +65,7 @@ pytest tests/env/ tests/agent/ -v
 ### manabot (Python)
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
-   - `RustVectorEnv`: active training/runtime vector env backed by `managym.VectorEnv`
-   - `LegacyVectorEnv`: benchmark-only AsyncVectorEnv wrapper kept for historical comparison
+   - `VectorEnv`: vectorized environment backed by `managym.VectorEnv`
    - `ObservationSpace`: Observation space encoding
    - `Match`: Game configuration (decklists, etc.)
    - `Reward`: Reward function

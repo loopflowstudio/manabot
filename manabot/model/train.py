@@ -28,7 +28,7 @@ from manabot.env import (
     Match,
     ObservationSpace,
     Reward,
-    RustVectorEnv,
+    VectorEnv,
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
@@ -68,7 +68,7 @@ class Trainer:
         self,
         agent: Agent,
         experiment: Experiment,
-        env: RustVectorEnv,
+        env: VectorEnv,
         hypers: TrainHypers | None = None,
     ):
         self.agent = agent.to(experiment.device)
@@ -827,12 +827,12 @@ class Trainer:
 
 def build_training_components(
     hypers: Hypers,
-) -> tuple[Experiment, RustVectorEnv, Agent]:
+) -> tuple[Experiment, VectorEnv, Agent]:
     experiment = Experiment(hypers.experiment, hypers)
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
-    env = RustVectorEnv(
+    env = VectorEnv(
         hypers.train.num_envs,
         match,
         observation_space,

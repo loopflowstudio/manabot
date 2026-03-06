@@ -20,7 +20,7 @@ from manabot.env import (
     Match,
     ObservationSpace,
     Reward,
-    RustVectorEnv,
+    VectorEnv,
 )
 from manabot.infra import (
     AgentHypers,
@@ -77,7 +77,7 @@ def experiment(run_dir):
 
 @pytest.fixture
 def trainer(observation_space, experiment):
-    env = RustVectorEnv(
+    env = VectorEnv(
         num_envs=2,
         match=Match(),
         observation_space=observation_space,
@@ -236,7 +236,7 @@ class TestPPOCorrectnessFixes:
 
 
 def test_training_loop_runs_100_steps(observation_space, experiment):
-    env = RustVectorEnv(
+    env = VectorEnv(
         num_envs=2,
         match=Match(),
         observation_space=observation_space,
@@ -261,7 +261,7 @@ def test_training_loop_runs_100_steps(observation_space, experiment):
     assert not np.isnan(trainer.last_explained_variance)
 
 
-def test_build_training_components_uses_rust_vector_env(run_dir):
+def test_build_training_components_uses_vector_env(run_dir):
     hypers = Hypers(
         experiment=ExperimentHypers(wandb=False, device="cpu", runs_dir=Path(run_dir)),
         train=TrainHypers(
@@ -272,7 +272,7 @@ def test_build_training_components_uses_rust_vector_env(run_dir):
     )
     experiment, env, _ = build_training_components(hypers)
     try:
-        assert isinstance(env, RustVectorEnv)
+        assert isinstance(env, VectorEnv)
     finally:
         env.close()
         experiment.close()
