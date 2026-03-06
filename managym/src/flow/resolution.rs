@@ -211,13 +211,6 @@ impl Game {
         self.move_card(card, ZoneType::Hand);
     }
 
-    pub(crate) fn find_spell_on_stack_index(&self, card: CardId) -> Option<usize> {
-        self.state
-            .stack_objects
-            .iter()
-            .position(|object| matches!(object, StackObject::Spell(spell) if spell.card == card))
-    }
-
     /// Check whether a game-object Target is still legal for a given TargetSpec.
     fn is_legal_target(&self, target: Target, spec: &TargetSpec) -> bool {
         match (target, spec) {

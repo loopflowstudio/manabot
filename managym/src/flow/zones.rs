@@ -6,6 +6,7 @@ use crate::{
     state::{
         game_object::{CardId, PermanentId, PlayerId},
         permanent::Permanent,
+        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -50,6 +51,10 @@ impl Game {
         }
     }
 
+    pub(crate) fn emit(&mut self, event: GameEvent) {
+        self.state.events.push(event);
+    }
+
     pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
         let owner = self.state.cards[card].owner;
         let old_zone = self.state.zones.zone_of(card);
@@ -61,6 +66,11 @@ impl Game {
                     event_controller = permanent.controller;
                 }
                 self.state.permanents[permanent_id] = None;
+            }
+        }
+        if old_zone == Some(ZoneType::Stack) {
+            if let Some(index) = self.find_spell_on_stack_index(card) {
+                self.state.stack_objects.remove(index);
             }
         }
 
@@ -84,5 +94,22 @@ impl Game {
             to: to_zone,
             controller: event_controller,
         });
+        self.process_game_events();
+
+        if let Some(from) = old_zone {
+            self.emit(GameEvent::CardMoved {
+                card,
+                from: Some(from),
+                to: to_zone,
+                controller: event_controller,
+            });
+        }
+    }
+
+    pub(crate) fn find_spell_on_stack_index(&self, card: CardId) -> Option<usize> {
+        self.state
+            .stack_objects
+            .iter()
+            .position(|object| matches!(object, StackObject::Spell(spell) if spell.card == card))
     }
 }

@@ -19,10 +19,20 @@ pub enum TriggerSource {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
-    ReturnToHand { target: TargetSpec },
-    DealDamage { amount: i32, target: TargetSpec },
-    CounterSpell { target: TargetSpec },
-    ModifyUntilEot { power_delta: i32, toughness_delta: i32 },
+    ReturnToHand {
+        target: TargetSpec,
+    },
+    DealDamage {
+        amount: i32,
+        target: TargetSpec,
+    },
+    CounterSpell {
+        target: TargetSpec,
+    },
+    ModifyUntilEot {
+        power_delta: i32,
+        toughness_delta: i32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
