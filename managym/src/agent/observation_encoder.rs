@@ -6,9 +6,9 @@ use crate::{
 };
 
 pub const PLAYER_DIM: usize = 26;
-pub const CARD_DIM: usize = 18;
+pub const CARD_DIM: usize = 29;
 pub const PERMANENT_DIM: usize = 5;
-pub const ACTION_TYPE_DIM: usize = 6;
+pub const ACTION_TYPE_DIM: usize = 7;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
@@ -379,7 +379,18 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[14] = bool_to_f32(card.card_types.is_enchantment);
     out[15] = bool_to_f32(card.card_types.is_planeswalker);
     out[16] = bool_to_f32(card.card_types.is_battle);
-    out[17] = 1.0;
+    out[17] = bool_to_f32(card.keywords.flying);
+    out[18] = bool_to_f32(card.keywords.reach);
+    out[19] = bool_to_f32(card.keywords.haste);
+    out[20] = bool_to_f32(card.keywords.vigilance);
+    out[21] = bool_to_f32(card.keywords.trample);
+    out[22] = bool_to_f32(card.keywords.first_strike);
+    out[23] = bool_to_f32(card.keywords.double_strike);
+    out[24] = bool_to_f32(card.keywords.deathtouch);
+    out[25] = bool_to_f32(card.keywords.lifelink);
+    out[26] = bool_to_f32(card.keywords.defender);
+    out[27] = bool_to_f32(card.keywords.menace);
+    out[28] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -491,8 +502,8 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, Observation, PermanentData,
-                PlayerData, TurnData,
+                ActionOption, ActionSpaceData, CardData, CardTypeData, KeywordData, Observation,
+                PermanentData, PlayerData, TurnData,
             },
         },
         flow::turn::{PhaseKind, StepKind},
@@ -545,6 +556,7 @@ mod tests {
                 make_card(111, ZoneType::Hand, true, 2, 2, 1),
                 make_card(112, ZoneType::Battlefield, true, 3, 3, 2),
             ],
+            stack_objects: vec![],
             agent_permanents: vec![make_permanent(333, true)],
             opponent: PlayerData {
                 player_index: 1,
@@ -589,6 +601,7 @@ mod tests {
                 is_kindred: false,
                 is_battle: false,
             },
+            keywords: KeywordData::default(),
             mana_cost: ManaCost {
                 cost: [0; 7],
                 mana_value,
@@ -624,9 +637,9 @@ mod tests {
         assert_eq!(encoded.opponent_player[9 + 2], 1.0);
 
         // Validity flags for populated card/permanent slots.
-        assert_eq!(encoded.agent_cards[17], 1.0);
-        assert_eq!(encoded.agent_cards[17 + 18], 1.0);
-        assert_eq!(encoded.agent_cards[17 + 18 * 2], 0.0);
+        assert_eq!(encoded.agent_cards[28], 1.0);
+        assert_eq!(encoded.agent_cards[28 + 29], 1.0);
+        assert_eq!(encoded.agent_cards[28 + 29 * 2], 0.0);
         assert_eq!(encoded.agent_permanents[4], 1.0);
         assert_eq!(encoded.agent_permanents[4 + 5], 0.0);
 

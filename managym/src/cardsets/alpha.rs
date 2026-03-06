@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    card::{basic_land, Card, CardDefinition, CardType, CardTypes, ManaAbility},
+    ability::{Effect, TargetSpec},
+    card::{
+        basic_land, ActivatedAbilityDefinition, Card, CardDefinition, CardType, CardTypes,
+        Keywords, ManaAbility,
+    },
     game_object::{IdGenerator, ObjectId, PlayerId},
     mana::{Color, Mana, ManaCost},
 };
@@ -66,6 +70,30 @@ impl CardRegistry {
         self.register_card(basic_land("Forest", Color::Green));
     }
 
+    fn register_creature(
+        &mut self,
+        name: &str,
+        mana_cost: &str,
+        subtypes: &[&str],
+        power: i32,
+        toughness: i32,
+        keywords: Keywords,
+    ) {
+        self.register_card(CardDefinition {
+            name: name.to_string(),
+            mana_cost: Some(ManaCost::parse(mana_cost)),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: subtypes
+                .iter()
+                .map(|subtype| (*subtype).to_string())
+                .collect(),
+            keywords,
+            power: Some(power),
+            toughness: Some(toughness),
+            ..Default::default()
+        });
+    }
+
     fn register_alpha(&mut self) {
         self.register_card(CardDefinition {
             name: "Llanowar Elves".to_string(),
@@ -81,20 +109,16 @@ impl CardRegistry {
             ..Default::default()
         });
 
-        self.register_card(CardDefinition {
-            name: "Grey Ogre".to_string(),
-            mana_cost: Some(ManaCost::parse("2R")),
-            types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Ogre".to_string()],
-            power: Some(2),
-            toughness: Some(2),
-            ..Default::default()
-        });
+        self.register_creature("Grey Ogre", "2R", &["Ogre"], 2, 2, Keywords::default());
 
         self.register_card(CardDefinition {
             name: "Lightning Bolt".to_string(),
             mana_cost: Some(ManaCost::parse("R")),
             types: CardTypes::new([CardType::Instant]),
+            spell_effect: Some(Effect::DealDamage {
+                amount: 3,
+                target: TargetSpec::CreatureOrPlayer,
+            }),
             text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
             ..Default::default()
         });
@@ -103,7 +127,155 @@ impl CardRegistry {
             name: "Counterspell".to_string(),
             mana_cost: Some(ManaCost::parse("UU")),
             types: CardTypes::new([CardType::Instant]),
+            spell_effect: Some(Effect::CounterSpell {
+                target: TargetSpec::Spell,
+            }),
             text_box: "Counter target spell.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_creature(
+            "Wind Drake",
+            "2U",
+            &["Drake"],
+            2,
+            2,
+            Keywords {
+                flying: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Giant Spider",
+            "3G",
+            &["Spider"],
+            2,
+            4,
+            Keywords {
+                reach: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Raging Goblin",
+            "R",
+            &["Goblin"],
+            1,
+            1,
+            Keywords {
+                haste: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Serra Angel",
+            "3WW",
+            &["Angel"],
+            4,
+            4,
+            Keywords {
+                flying: true,
+                vigilance: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Typhoid Rats",
+            "B",
+            &["Rat"],
+            1,
+            1,
+            Keywords {
+                deathtouch: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "War Mammoth",
+            "3G",
+            &["Elephant"],
+            3,
+            3,
+            Keywords {
+                trample: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Wall of Stone",
+            "1RR",
+            &["Wall"],
+            0,
+            8,
+            Keywords {
+                defender: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Boggart Brute",
+            "2R",
+            &["Goblin", "Warrior"],
+            3,
+            2,
+            Keywords {
+                menace: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Youthful Knight",
+            "1W",
+            &["Human", "Knight"],
+            2,
+            1,
+            Keywords {
+                first_strike: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Fencing Ace",
+            "1W",
+            &["Human", "Soldier"],
+            1,
+            1,
+            Keywords {
+                double_strike: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature(
+            "Healer's Hawk",
+            "W",
+            &["Bird"],
+            1,
+            1,
+            Keywords {
+                flying: true,
+                lifelink: true,
+                ..Default::default()
+            },
+        );
+        self.register_creature("Craw Wurm", "4GG", &["Wurm"], 6, 4, Keywords::default());
+        self.register_card(CardDefinition {
+            name: "Shivan Dragon".to_string(),
+            mana_cost: Some(ManaCost::parse("4RR")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".to_string()],
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("R"),
+                effect: Effect::ModifyUntilEot {
+                    power_delta: 1,
+                    toughness_delta: 0,
+                },
+            }],
+            power: Some(5),
+            toughness: Some(5),
             ..Default::default()
         });
     }

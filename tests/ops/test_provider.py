@@ -14,7 +14,7 @@ def test_load_machine_spec_from_repo_defaults():
     spec = load_machine_spec("sandbox")
 
     assert spec.instance_type == "g5.xlarge"
-    assert spec.region == "us-east-1"
+    assert spec.region == "us-west-2"
     assert spec.spot is False
 
 

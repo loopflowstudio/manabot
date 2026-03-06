@@ -88,6 +88,7 @@ class ActionEnum(IntEnum):
     DECLARE_ATTACKER = 3
     DECLARE_BLOCKER = 4
     CHOOSE_TARGET = 5
+    PRIORITY_ACTIVATE_ABILITY = 6
 
 class ActionSpaceEnum(IntEnum):
     GAME_OVER = 0
@@ -95,6 +96,16 @@ class ActionSpaceEnum(IntEnum):
     DECLARE_ATTACKER = 2
     DECLARE_BLOCKER = 3
     CHOOSE_TARGET = 4
+
+class StackObjectKindEnum(IntEnum):
+    SPELL = 0
+    ACTIVATED_ABILITY = 1
+    TRIGGERED_ABILITY = 2
+
+class StackTargetKindEnum(IntEnum):
+    PLAYER = 0
+    PERMANENT = 1
+    STACK_OBJECT = 2
 
 class ManaCost:
     cost: List[int]
@@ -114,6 +125,19 @@ class CardTypes:
     is_kindred: bool
     is_battle: bool
 
+class Keywords:
+    flying: bool
+    reach: bool
+    haste: bool
+    vigilance: bool
+    trample: bool
+    first_strike: bool
+    double_strike: bool
+    deathtouch: bool
+    lifelink: bool
+    defender: bool
+    menace: bool
+
 class Player:
     player_index: int
     id: int
@@ -131,6 +155,7 @@ class Card:
     power: int
     toughness: int
     card_types: CardTypes
+    keywords: Keywords
     mana_cost: ManaCost
 
 class Permanent:
@@ -156,6 +181,21 @@ class ActionSpace:
     actions: List[Action]
     focus: List[int]
 
+class StackTarget:
+    kind: StackTargetKindEnum
+    player_id: int | None
+    permanent_id: int | None
+    stack_object_id: int | None
+
+class StackObject:
+    stack_object_id: int
+    kind: StackObjectKindEnum
+    controller_id: int
+    source_card_registry_key: int
+    source_permanent_id: int | None
+    ability_index: int | None
+    targets: List[StackTarget]
+
 class Observation:
     game_over: bool
     won: bool
@@ -167,6 +207,7 @@ class Observation:
     opponent: Player
     opponent_cards: List[Card]
     opponent_permanents: List[Permanent]
+    stack_objects: List[StackObject]
 
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...

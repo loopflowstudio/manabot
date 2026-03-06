@@ -75,16 +75,16 @@ def test_hierarchy_percentages():
     with profiler.track("group1"):
         with profiler.track("a"):
             with profiler.track("alpha"):
-                time.sleep(0.1)
+                time.sleep(0.01)
             with profiler.track("beta"):
-                time.sleep(0.1)
+                time.sleep(0.01)
 
     # Group 2
     with profiler.track("group2"):
         with profiler.track("x"):
-            time.sleep(0.18)
+            time.sleep(0.018)
         with profiler.track("y"):
-            time.sleep(0.02)
+            time.sleep(0.002)
 
     # Get stats and print for debugging
     stats = profiler.get_stats()
@@ -148,8 +148,8 @@ def test_accumulated_timing():
     profiler = Profiler(enabled=True)
     profiler.reset()
 
-    rollout_times = [0.02, 0.01, 0.015]
-    gradient_times = [0.005, 0.003, 0.004]
+    rollout_times = [0.002, 0.001, 0.0015]
+    gradient_times = [0.0005, 0.0003, 0.0004]
     accumulated_rollout = 0.0
     accumulated_gradient = 0.0
 
@@ -167,16 +167,16 @@ def test_accumulated_timing():
         gradient_stats = stats.get("gradient")
         print(f"Iteration {i} - rollout_stats: {rollout_stats}")
         print(f"Iteration {i} - gradient_stats: {gradient_stats}")
-        assert abs(rollout_stats["total_time"] - accumulated_rollout) < 0.02, (
+        assert abs(rollout_stats["total_time"] - accumulated_rollout) < 0.005, (
             f"Iteration {i}: rollout time incorrect"
         )
-        assert abs(gradient_stats["total_time"] - accumulated_gradient) < 0.02, (
+        assert abs(gradient_stats["total_time"] - accumulated_gradient) < 0.005, (
             f"Iteration {i}: gradient time incorrect"
         )
 
     # Test live stats: start "rollout" without finishing immediately.
     with profiler.track("rollout"):
-        time.sleep(0.02)
+        time.sleep(0.002)
         stats_running = profiler.get_stats()
         running_rollout = stats_running.get("rollout", {}).get("total_time", 0)
         # The effective time (running) should be greater than the previously accumulated time.
@@ -195,10 +195,9 @@ def test_statistical_metrics():
     profiler.reset()
     durations = []
 
-    # Increase sleep durations for better resolution.
-    # Use d = 0.02 + (i % 5) * 0.005; so values cycle: 0.02, 0.025, 0.03, 0.035, 0.04 sec.
+    # Use d = 0.002 + (i % 5) * 0.0005; so values cycle: 0.002, 0.0025, 0.003, 0.0035, 0.004 sec.
     for i in range(20):
-        d = 0.02 + (i % 5) * 0.005
+        d = 0.002 + (i % 5) * 0.0005
         durations.append(d)
         with profiler.track("test_node"):
             time.sleep(d)
@@ -220,7 +219,7 @@ def test_statistical_metrics():
     print("Expected p95:", expected_p95)
     print("Profiler reported for 'test_node':", test_stats)
 
-    tol = 0.015  # Tolerance in seconds (sleep overshoot on macOS).
+    tol = 0.005  # Tolerance in seconds (sleep overshoot).
     assert abs(test_stats["min"] - expected_min) < tol, (
         f"min mismatch: expected {expected_min}, got {test_stats['min']}"
     )
@@ -249,9 +248,8 @@ def test_max_samples():
 
     iterations = max_samples * 2  # More iterations than max_samples.
     for i in range(iterations):
-        # Use a slightly longer sleep to capture nonzero durations.
         with profiler.track("sampled_node"):
-            time.sleep(0.005)
+            time.sleep(0.0005)
 
     stats = profiler.get_stats()
     node_stats = stats.get("sampled_node")
