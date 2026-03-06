@@ -254,65 +254,31 @@ impl PyVectorEnv {
         py: Python<'_>,
         player_configs: Vec<PyPlayerConfig>,
     ) -> PyResult<()> {
-        let buffers = self
-            .buffers
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
-        let config = self.config;
-        let num_threads = self.num_threads;
-        let inner = &mut self.inner;
         let configs: Vec<PlayerConfig> =
             player_configs.into_iter().map(PlayerConfig::from).collect();
-
-        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
-            py.allow_threads(|| {
-                inner.par_reset_all_into(
-                    num_threads,
-                    configs,
-                    |env_index, obs, reward, terminated, truncated| {
-                        write_buffers.write_encoded_row(
-                            env_index, obs, reward, terminated, truncated, &config,
-                        )
-                    },
-                )
-            })
-            .map_err(map_agent_err)
-        });
-        self.buffers = Some(buffers);
-        let infos = result?;
-
-        self.last_info = infos;
-        Ok(())
+        self.run_into_buffers(py, move |inner, num_threads, write_buffers, config| {
+            inner.par_reset_all_into(
+                num_threads,
+                configs,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
+        })
     }
 
     fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
-        let buffers = self
-            .buffers
-            .take()
-            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
-        let config = self.config;
-        let num_threads = self.num_threads;
-        let inner = &mut self.inner;
-
-        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
-            py.allow_threads(|| {
-                inner.par_step_into(
-                    num_threads,
-                    &actions,
-                    |env_index, obs, reward, terminated, truncated| {
-                        write_buffers.write_encoded_row(
-                            env_index, obs, reward, terminated, truncated, &config,
-                        )
-                    },
-                )
-            })
-            .map_err(map_agent_err)
-        });
-        self.buffers = Some(buffers);
-        let infos = result?;
-
-        self.last_info = infos;
-        Ok(())
+        self.run_into_buffers(py, move |inner, num_threads, write_buffers, config| {
+            inner.par_step_into(
+                num_threads,
+                &actions,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
+        })
     }
 
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
@@ -320,6 +286,37 @@ impl PyVectorEnv {
             .iter()
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
+    }
+}
+
+#[cfg(feature = "python")]
+impl PyVectorEnv {
+    fn run_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(
+                &mut VectorEnv,
+                usize,
+                SendWriteBuffers,
+                ObservationEncoderConfig,
+            ) -> Result<Vec<InfoDict>, AgentError>
+            + Send,
+    ) -> PyResult<()> {
+        let buffers = self
+            .buffers
+            .take()
+            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+        let config = self.config;
+        let num_threads = self.num_threads;
+        let inner = &mut self.inner;
+
+        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
+            py.allow_threads(|| run(inner, num_threads, write_buffers, config))
+                .map_err(map_agent_err)
+        });
+        self.buffers = Some(buffers);
+        self.last_info = result?;
+        Ok(())
     }
 }
 
@@ -509,20 +506,21 @@ impl SendObservationFieldSlices {
         env_index: usize,
         config: &ObservationEncoderConfig,
     ) -> Result<EncodedObservationMut<'_>, AgentError> {
+        let cards_len = config.cards_len();
+        let permanents_len = config.permanents_len();
+        let actions_len = config.actions_len();
+        let action_focus_len = config.action_focus_len();
+
         let agent_player_ptr = self.agent_player.row_ptr(env_index, PLAYER_DIM)?;
         let opponent_player_ptr = self.opponent_player.row_ptr(env_index, PLAYER_DIM)?;
-        let agent_cards_ptr = self.agent_cards.row_ptr(env_index, config.cards_len())?;
-        let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, config.cards_len())?;
-        let agent_permanents_ptr = self
-            .agent_permanents
-            .row_ptr(env_index, config.permanents_len())?;
+        let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
+        let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
+        let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
         let opponent_permanents_ptr = self
             .opponent_permanents
-            .row_ptr(env_index, config.permanents_len())?;
-        let actions_ptr = self.actions.row_ptr(env_index, config.actions_len())?;
-        let action_focus_ptr = self
-            .action_focus
-            .row_ptr(env_index, config.action_focus_len())?;
+            .row_ptr(env_index, permanents_len)?;
+        let actions_ptr = self.actions.row_ptr(env_index, actions_len)?;
+        let action_focus_ptr = self.action_focus.row_ptr(env_index, action_focus_len)?;
         let agent_player_valid_ptr = self.agent_player_valid.row_ptr(env_index, 1)?;
         let opponent_player_valid_ptr = self.opponent_player_valid.row_ptr(env_index, 1)?;
         let agent_cards_valid_ptr = self
@@ -545,25 +543,21 @@ impl SendObservationFieldSlices {
             // SAFETY: each call uses disjoint per-env rows.
             opponent_player: unsafe { slice::from_raw_parts_mut(opponent_player_ptr, PLAYER_DIM) },
             // SAFETY: each call uses disjoint per-env rows.
-            agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, config.cards_len()) },
+            agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },
             // SAFETY: each call uses disjoint per-env rows.
-            opponent_cards: unsafe {
-                slice::from_raw_parts_mut(opponent_cards_ptr, config.cards_len())
-            },
+            opponent_cards: unsafe { slice::from_raw_parts_mut(opponent_cards_ptr, cards_len) },
             // SAFETY: each call uses disjoint per-env rows.
             agent_permanents: unsafe {
-                slice::from_raw_parts_mut(agent_permanents_ptr, config.permanents_len())
+                slice::from_raw_parts_mut(agent_permanents_ptr, permanents_len)
             },
             // SAFETY: each call uses disjoint per-env rows.
             opponent_permanents: unsafe {
-                slice::from_raw_parts_mut(opponent_permanents_ptr, config.permanents_len())
+                slice::from_raw_parts_mut(opponent_permanents_ptr, permanents_len)
             },
             // SAFETY: each call uses disjoint per-env rows.
-            actions: unsafe { slice::from_raw_parts_mut(actions_ptr, config.actions_len()) },
+            actions: unsafe { slice::from_raw_parts_mut(actions_ptr, actions_len) },
             // SAFETY: each call uses disjoint per-env rows.
-            action_focus: unsafe {
-                slice::from_raw_parts_mut(action_focus_ptr, config.action_focus_len())
-            },
+            action_focus: unsafe { slice::from_raw_parts_mut(action_focus_ptr, action_focus_len) },
             // SAFETY: each call uses disjoint per-env rows.
             agent_player_valid: unsafe { slice::from_raw_parts_mut(agent_player_valid_ptr, 1) },
             // SAFETY: each call uses disjoint per-env rows.

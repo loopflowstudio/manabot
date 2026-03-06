@@ -67,10 +67,10 @@ impl VectorEnv {
         let seed_stride = self.seed_stride;
 
         let mut results = Vec::with_capacity(self.envs.len());
-        for env_index in 0..self.envs.len() {
+        for (env, next_seed) in self.envs.iter_mut().zip(self.next_seeds.iter_mut()) {
             let (obs, info) = Self::reset_to_hero_turn_on_env(
-                &mut self.envs[env_index],
-                &mut self.next_seeds[env_index],
+                env,
+                next_seed,
                 &player_configs,
                 opponent_policy,
                 seed_stride,
@@ -89,10 +89,15 @@ impl VectorEnv {
         let seed_stride = self.seed_stride;
 
         let mut results = Vec::with_capacity(self.envs.len());
-        for (env_index, action) in actions.iter().enumerate() {
+        for ((env, next_seed), action) in self
+            .envs
+            .iter_mut()
+            .zip(self.next_seeds.iter_mut())
+            .zip(actions.iter())
+        {
             let out = Self::step_with_autoreset_on_env(
-                &mut self.envs[env_index],
-                &mut self.next_seeds[env_index],
+                env,
+                next_seed,
                 *action,
                 &player_configs,
                 opponent_policy,
@@ -182,7 +187,7 @@ impl VectorEnv {
 
         let threads = num_threads.max(1).min(len);
         let chunk_size = len.div_ceil(threads);
-        let mut indexed_results: Vec<(usize, Result<R, AgentError>)> = Vec::with_capacity(len);
+        let mut ordered_results: Vec<Result<R, AgentError>> = Vec::with_capacity(len);
 
         thread::scope(|scope| -> Result<(), AgentError> {
             let mut handles = Vec::new();
@@ -201,7 +206,7 @@ impl VectorEnv {
                     for (offset, env) in env_chunk.iter_mut().enumerate() {
                         let env_index = start + offset;
                         let next_seed = &mut seed_chunk[offset];
-                        local.push((env_index, work_ref(env_index, env, next_seed)));
+                        local.push(work_ref(env_index, env, next_seed));
                     }
                     local
                 }));
@@ -211,20 +216,13 @@ impl VectorEnv {
                 let local = handle.join().map_err(|_| {
                     AgentError("parallel worker panicked while stepping envs".to_string())
                 })?;
-                indexed_results.extend(local);
+                ordered_results.extend(local);
             }
 
             Ok(())
         })?;
 
-        indexed_results.sort_by_key(|(env_index, _)| *env_index);
-
-        let mut results = Vec::with_capacity(len);
-        for (_, outcome) in indexed_results {
-            results.push(outcome?);
-        }
-
-        Ok(results)
+        ordered_results.into_iter().collect()
     }
 
     fn validate_player_configs(config_len: usize) -> Result<(), AgentError> {
