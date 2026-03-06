@@ -6,9 +6,10 @@ use crate::{
     },
     state::{
         card::Card,
-        game_object::{ObjectId, PlayerId},
+        game_object::{CardId, ObjectId, PlayerId, Target},
         mana::ManaCost,
         permanent::Permanent,
+        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -59,7 +60,58 @@ pub struct CardData {
     pub power: i32,
     pub toughness: i32,
     pub card_types: CardTypeData,
+    pub keywords: KeywordData,
     pub mana_cost: ManaCost,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct KeywordData {
+    pub flying: bool,
+    pub reach: bool,
+    pub haste: bool,
+    pub vigilance: bool,
+    pub trample: bool,
+    pub first_strike: bool,
+    pub double_strike: bool,
+    pub deathtouch: bool,
+    pub lifelink: bool,
+    pub defender: bool,
+    pub menace: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum StackObjectKindData {
+    Spell = 0,
+    ActivatedAbility = 1,
+    TriggeredAbility = 2,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum StackTargetKindData {
+    Player = 0,
+    Permanent = 1,
+    StackObject = 2,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StackTargetData {
+    pub kind: StackTargetKindData,
+    pub player_id: Option<i32>,
+    pub permanent_id: Option<i32>,
+    pub stack_object_id: Option<i32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StackObjectData {
+    pub stack_object_id: i32,
+    pub kind: StackObjectKindData,
+    pub controller_id: i32,
+    pub source_card_registry_key: i32,
+    pub source_permanent_id: Option<i32>,
+    pub ability_index: Option<i32>,
+    pub targets: Vec<StackTargetData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -96,6 +148,7 @@ pub struct Observation {
     pub opponent: PlayerData,
     pub opponent_cards: Vec<CardData>,
     pub opponent_permanents: Vec<PermanentData>,
+    pub stack_objects: Vec<StackObjectData>,
 }
 
 impl Observation {
@@ -154,10 +207,12 @@ impl Observation {
             opponent,
             opponent_cards: Vec::new(),
             opponent_permanents: Vec::new(),
+            stack_objects: Vec::new(),
         };
 
         obs.populate_cards(game, agent_player);
         obs.populate_permanents(game);
+        obs.populate_stack_objects(game);
         obs
     }
 
@@ -195,9 +250,9 @@ impl Observation {
             }
         }
 
-        for stack_object in game.state.stack.iter().rev() {
-            if let crate::state::stack::StackObject::Spell { card } = stack_object {
-                self.add_card(game, *card, ZoneType::Stack);
+        for stack_object in game.state.stack_objects.iter().rev() {
+            if let StackObject::Spell(spell) = stack_object {
+                self.add_card(game, spell.card, ZoneType::Stack);
             }
         }
     }
@@ -212,6 +267,13 @@ impl Observation {
                     self.add_permanent(game, permanent);
                 }
             }
+        }
+    }
+
+    fn populate_stack_objects(&mut self, game: &Game) {
+        for object in game.state.stack_objects.iter().rev() {
+            self.stack_objects
+                .push(Self::stack_object_data(game, object));
         }
     }
 
@@ -272,8 +334,82 @@ impl Observation {
                 is_kindred: card.types.is_kindred(),
                 is_battle: card.types.is_battle(),
             },
+            keywords: KeywordData {
+                flying: card.keywords.flying,
+                reach: card.keywords.reach,
+                haste: card.keywords.haste,
+                vigilance: card.keywords.vigilance,
+                trample: card.keywords.trample,
+                first_strike: card.keywords.first_strike,
+                double_strike: card.keywords.double_strike,
+                deathtouch: card.keywords.deathtouch,
+                lifelink: card.keywords.lifelink,
+                defender: card.keywords.defender,
+                menace: card.keywords.menace,
+            },
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
         }
+    }
+
+    fn stack_object_data(game: &Game, stack_object: &StackObject) -> StackObjectData {
+        StackObjectData {
+            stack_object_id: stack_object.id().0 as i32,
+            kind: match stack_object {
+                StackObject::Spell(_) => StackObjectKindData::Spell,
+                StackObject::ActivatedAbility(_) => StackObjectKindData::ActivatedAbility,
+                StackObject::TriggeredAbility(_) => StackObjectKindData::TriggeredAbility,
+            },
+            controller_id: game.state.players[stack_object.controller().0].id.0 as i32,
+            source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
+            source_permanent_id: stack_object
+                .source_permanent_object_id()
+                .map(|id| id.0 as i32),
+            ability_index: stack_object.ability_index().map(|index| index as i32),
+            targets: stack_object
+                .targets()
+                .iter()
+                .filter_map(|target| Self::stack_target_data(game, *target))
+                .collect(),
+        }
+    }
+
+    fn stack_target_data(game: &Game, target: Target) -> Option<StackTargetData> {
+        match target {
+            Target::Player(player) => Some(StackTargetData {
+                kind: StackTargetKindData::Player,
+                player_id: Some(game.state.players[player.0].id.0 as i32),
+                permanent_id: None,
+                stack_object_id: None,
+            }),
+            Target::Permanent(permanent_id) => {
+                let permanent = game.state.permanents[permanent_id].as_ref()?;
+                Some(StackTargetData {
+                    kind: StackTargetKindData::Permanent,
+                    player_id: None,
+                    permanent_id: Some(permanent.id.0 as i32),
+                    stack_object_id: None,
+                })
+            }
+            Target::StackSpell(card_id) => {
+                let stack_object_id = Self::stack_spell_object_id(game, card_id)?.0 as i32;
+                Some(StackTargetData {
+                    kind: StackTargetKindData::StackObject,
+                    player_id: None,
+                    permanent_id: None,
+                    stack_object_id: Some(stack_object_id),
+                })
+            }
+        }
+    }
+
+    fn stack_spell_object_id(game: &Game, card_id: CardId) -> Option<ObjectId> {
+        game.state
+            .stack_objects
+            .iter()
+            .find_map(|object| match object {
+                StackObject::Spell(spell) if spell.card == card_id => Some(spell.id),
+                _ => None,
+            })
     }
 
     fn zone_from_index(index: usize) -> ZoneType {
@@ -294,6 +430,10 @@ impl Observation {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]
             }
+            Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
+                .as_ref()
+                .map(|perm| vec![perm.id])
+                .unwrap_or_default(),
             Action::PassPriority { .. } => vec![],
             Action::DeclareAttacker { permanent, .. } => game.state.permanents[permanent]
                 .as_ref()
@@ -322,6 +462,9 @@ impl Observation {
                     .as_ref()
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
+                crate::state::target::Target::StackSpell(card_id) => {
+                    vec![game.state.cards[card_id].id]
+                }
             },
         }
     }
@@ -391,6 +534,19 @@ impl Observation {
                     "is_kindred": card.card_types.is_kindred,
                     "is_battle": card.card_types.is_battle,
                 },
+                "keywords": {
+                    "flying": card.keywords.flying,
+                    "reach": card.keywords.reach,
+                    "haste": card.keywords.haste,
+                    "vigilance": card.keywords.vigilance,
+                    "trample": card.keywords.trample,
+                    "first_strike": card.keywords.first_strike,
+                    "double_strike": card.keywords.double_strike,
+                    "deathtouch": card.keywords.deathtouch,
+                    "lifelink": card.keywords.lifelink,
+                    "defender": card.keywords.defender,
+                    "menace": card.keywords.menace,
+                },
                 "mana_cost": {
                     "cost": card.mana_cost.cost[..6]
                         .iter()
@@ -408,6 +564,27 @@ impl Observation {
                 "tapped": permanent.tapped,
                 "damage": permanent.damage,
                 "is_summoning_sick": permanent.is_summoning_sick,
+            })
+        }
+
+        fn stack_target_json(target: &StackTargetData) -> Value {
+            json!({
+                "kind": target.kind as i32,
+                "player_id": target.player_id,
+                "permanent_id": target.permanent_id,
+                "stack_object_id": target.stack_object_id,
+            })
+        }
+
+        fn stack_object_json(stack_object: &StackObjectData) -> Value {
+            json!({
+                "stack_object_id": stack_object.stack_object_id,
+                "kind": stack_object.kind as i32,
+                "controller_id": stack_object.controller_id,
+                "source_card_registry_key": stack_object.source_card_registry_key,
+                "source_permanent_id": stack_object.source_permanent_id,
+                "ability_index": stack_object.ability_index,
+                "targets": stack_object.targets.iter().map(stack_target_json).collect::<Vec<_>>(),
             })
         }
 
@@ -450,6 +627,11 @@ impl Observation {
                 .opponent_permanents
                 .iter()
                 .map(permanent_json)
+                .collect::<Vec<_>>(),
+            "stack_objects": self
+                .stack_objects
+                .iter()
+                .map(stack_object_json)
                 .collect::<Vec<_>>(),
         })
         .to_string()

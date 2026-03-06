@@ -1,5 +1,5 @@
 use crate::state::{
-    ability::{Ability, Effect, TargetController, TargetSpec, TriggerCondition, TriggerSource},
+    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSource},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -18,9 +18,7 @@ impl CardRegistry {
                     source: TriggerSource::This,
                 },
                 effect: Effect::ReturnToHand {
-                    target: TargetSpec::Creature {
-                        controller: TargetController::Any,
-                    },
+                    target: TargetSpec::Creature,
                 },
                 intervening_if: None,
             }],

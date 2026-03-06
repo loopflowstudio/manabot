@@ -9,20 +9,20 @@ target legality — validating real instant-speed interaction on the stack.
 
 Stage 04 (Man-o'-War) landed targeting infrastructure ahead of this stage:
 
-- `ActionSpaceKind::ChooseTarget` and `Action::ChooseTarget` exist in
-  `agent/action.rs`
-- `Target` enum (`Player | Permanent`) in `state/target.rs`
-- `StackObject` enum (`Spell | TriggeredAbility`) in `state/stack.rs`
-- `GameEvent::CardMoved` in `flow/event.rs`
-- Sequential target selection flow works for triggered abilities
+Stage 06 shipped:
+- `StackObject` enum (`Spell(CardId)` | `ActivatedAbility(ActivatedAbilityOnStack)`)
+  in `state/stack_object.rs` — the stack now handles both spells and abilities
+- Activated ability definitions on `CardDefinition` (`activated_abilities: Vec<ActivatedAbilityDefinition>`)
+- `PriorityActivateAbility` action type for ability activation
+- `resolve_top_of_stack()` pops `StackObject` in strict LIFO order, dispatching
+  to spell or ability resolution
+- Shivan Dragon firebreathing as the first activated ability (cost, stack, resolution)
+- Generic `stack_objects` observation lane with controller, source, targets, ability metadata
 
-This means stage 03 is now scoped to:
-1. Add `Effect::DealDamage` variant to the DSL
-2. Add `TargetSpec` variant for "creature or player"
-3. Wire target selection into spell casting (currently only triggered abilities
-   use `ChooseTarget`)
-4. Add Lightning Bolt to card registry
-5. Trace tests for bolt-specific interactions
+What's hardcoded now: Bolt, Counterspell, and Shivan firebreathing effects are
+implemented directly in `resolve_top_of_stack()` in `game.rs` — no declarative
+representation yet. Target metadata is stored as `HashMap<CardId, Target>`
+(single target only).
 
 ## Changes
 

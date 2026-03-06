@@ -42,7 +42,7 @@ class AWSProvider:
         self._ClientError = ClientError
         self._WaiterError = WaiterError
 
-        self.default_region = region or boto3.Session().region_name or "us-east-1"
+        self.default_region = region or boto3.Session().region_name or "us-west-2"
         self._session_cache: dict[str, Any] = {}
         self._client_cache: dict[tuple[str, str], Any] = {}
 
@@ -177,6 +177,7 @@ class AWSProvider:
         deadline = time.time() + timeout
         refreshed = self._refresh_machine(machine)
         while refreshed.public_ip is None and time.time() < deadline:
+            print("  waiting for public IP...", flush=True)
             time.sleep(5)
             refreshed = self._refresh_machine(machine)
         return refreshed
@@ -200,6 +201,7 @@ class AWSProvider:
             instances = response.get("InstanceInformationList", [])
             if instances and instances[0].get("PingStatus") == "Online":
                 return
+            print("  waiting for SSM agent...", flush=True)
             time.sleep(5)
 
         raise TimeoutError(
@@ -431,10 +433,14 @@ class AWSProvider:
             if "InvalidKeyPair.NotFound" not in str(exc):
                 raise
 
-        pubkey_path = Path.home() / ".ssh" / "id_ed25519.pub"
+        ssh_dir = Path.home() / ".ssh"
+        pubkey_path = ssh_dir / "id_ed25519.pub"
         if not pubkey_path.exists():
-            raise RuntimeError(
-                f"Missing {pubkey_path}. Set spec.key_name or create an ed25519 keypair."
+            import subprocess
+            ssh_dir.mkdir(mode=0o700, exist_ok=True)
+            subprocess.run(
+                ["ssh-keygen", "-t", "ed25519", "-f", str(ssh_dir / "id_ed25519"), "-N", ""],
+                check=True,
             )
 
         key_material = pubkey_path.read_text(encoding="utf-8").strip()
@@ -539,8 +545,23 @@ class AWSProvider:
     # Internal helpers
     # ---------------------------------------------------------------------
     def _resolve_caller_identity(self, region: str) -> str:
+        import subprocess
+        from botocore.exceptions import (
+            ClientError,
+            NoCredentialsError,
+            TokenRetrievalError,
+        )
+
         sts = self._client("sts", region)
-        identity = sts.get_caller_identity()
+        try:
+            identity = sts.get_caller_identity()
+        except (ClientError, NoCredentialsError, TokenRetrievalError):
+            # SSO token expired — try to refresh automatically
+            subprocess.run(["aws", "sso", "login"], check=True)
+            # Rebuild the client so it picks up the fresh token
+            self._client_cache.pop(("sts", region), None)
+            sts = self._client("sts", region)
+            identity = sts.get_caller_identity()
         arn = identity.get("Arn", "unknown")
         return _user_from_arn(arn)
 

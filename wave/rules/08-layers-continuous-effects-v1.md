@@ -5,6 +5,20 @@
 A practical first slice of continuous/layered effects is implemented (starting
 with P/T-relevant effects), with explicit documentation of unsupported cases.
 
+## Context from stage 06
+
+Stage 06 added `temp_power: i32` and `temp_toughness: i32` on `Permanent` for
+Shivan Dragon's firebreathing (+1/+0 until EOT). These are added to base P/T
+when computing effective stats (combat damage, lethal checks) and cleared in
+cleanup alongside damage. This is a primitive layer 7c implementation — the
+proper layer framework should subsume it, replacing ad-hoc temp modifiers with
+a structured continuous-effect system.
+
+Activated ability infrastructure exists: `ActivatedAbilityDefinition` on
+`CardDefinition` with `SelfGetsUntilEot { power_delta, toughness_delta }` effect
+kind, `PriorityActivateAbility` action, and stack-based resolution. Giant Growth
+can reuse most of this scaffolding (spell resolution applies the same effect kind).
+
 ## Changes
 
 ### Minimal Layer Framework

@@ -11,28 +11,26 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        card::Card,
-        game_object::{CardVec, IdGenerator, PermanentId, PermanentVec},
+        game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId, Target},
         mana::Mana,
-        permanent::Permanent,
-        player::Player,
-        stack::StackObject,
+        stack_object::StackObject,
         zone::ZoneManager,
     },
 };
 
 #[derive(Clone, Debug)]
 pub struct GameState {
-    pub cards: CardVec<Card>,
-    pub permanents: PermanentVec<Option<Permanent>>,
+    pub cards: CardVec<crate::state::card::Card>,
+    pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
     pub card_to_permanent: CardVec<Option<PermanentId>>,
-    pub players: [Player; 2],
+    pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
     pub turn: TurnState,
     pub priority: PriorityState,
+    pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub stack: Vec<StackObject>,
+    pub events: Vec<GameEvent>,
     pub pending_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub pending_trigger_choice: Option<PendingTrigger>,
@@ -43,10 +41,27 @@ pub struct GameState {
 }
 
 #[derive(Clone, Debug)]
+pub enum PendingChoice {
+    ChooseTarget {
+        player: PlayerId,
+        card: CardId,
+        legal_targets: Vec<Target>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CombatDamagePass {
+    FirstStrike,
+    NormalWithFirstStrike,
+    Normal,
+}
+
+#[derive(Clone, Debug)]
 pub struct Game {
     pub state: GameState,
     pub skip_trivial: bool,
     pub current_action_space: Option<ActionSpace>,
+    pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
 }

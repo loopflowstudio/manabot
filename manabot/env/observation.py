@@ -66,6 +66,7 @@ class ActionEnum(IntEnum):
     DECLARE_ATTACKER = 3
     DECLARE_BLOCKER = 4
     CHOOSE_TARGET = 5
+    PRIORITY_ACTIVATE_ABILITY = 6
 
 
 class ZoneEnum(IntEnum):
@@ -104,7 +105,7 @@ class ObservationEncoder:
 
         # Define dimensions for players, cards, permanents.
         self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6) + 1
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 11) + 1
         self.permanent_dim = 4 + 1
 
         # Action space dimension: action type + validity bit.
@@ -263,6 +264,28 @@ class ObservationEncoder:
         arr[i] = float(card.card_types.is_planeswalker)
         i += 1
         arr[i] = float(card.card_types.is_battle)
+        i += 1
+        arr[i] = float(card.keywords.flying)
+        i += 1
+        arr[i] = float(card.keywords.reach)
+        i += 1
+        arr[i] = float(card.keywords.haste)
+        i += 1
+        arr[i] = float(card.keywords.vigilance)
+        i += 1
+        arr[i] = float(card.keywords.trample)
+        i += 1
+        arr[i] = float(card.keywords.first_strike)
+        i += 1
+        arr[i] = float(card.keywords.double_strike)
+        i += 1
+        arr[i] = float(card.keywords.deathtouch)
+        i += 1
+        arr[i] = float(card.keywords.lifelink)
+        i += 1
+        arr[i] = float(card.keywords.defender)
+        i += 1
+        arr[i] = float(card.keywords.menace)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr

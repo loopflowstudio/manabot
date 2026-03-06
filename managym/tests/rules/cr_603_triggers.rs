@@ -26,8 +26,9 @@ fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) ->
     let card_id = find_owned_card(s, player, name);
     let game = s.game_mut();
     game.move_card(card_id, ZoneType::Battlefield);
-    // Drain events so the engine doesn't process ETB triggers from setup
+    // Drain events and triggers so the engine doesn't process ETB triggers from setup
     game.state.pending_events.clear();
+    game.state.pending_triggers.clear();
     game.state.card_to_permanent[card_id].expect("permanent should exist after move_card")
 }
 
@@ -107,13 +108,13 @@ fn cr_603_3_trigger_uses_stack_and_response_window() {
 
     s.choose_target_named("Man-o'-War");
 
-    assert_eq!(s.game().state.stack.len(), 1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
 
     s.pass_priority();
     assert_eq!(s.action_space().player, Some(PlayerId(1)));
-    assert_eq!(s.game().state.stack.len(), 1);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
 }
 
 /// CR 603.3b — Pending triggers are ordered APNAP when put on the stack.
@@ -203,7 +204,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
     s.pass_priority();
 
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
-    assert!(s.game().state.stack.is_empty());
+    assert!(s.game().state.stack_objects.is_empty());
     assert!(s.game().state.pending_triggers.is_empty());
     assert_eq!(
         count_cards_named(&s, 0, ZoneType::Graveyard, "Man-o'-War"),

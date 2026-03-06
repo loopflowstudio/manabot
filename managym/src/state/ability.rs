@@ -19,15 +19,36 @@ pub enum TriggerSource {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Effect {
-    ReturnToHand { target: TargetSpec },
+    ReturnToHand {
+        target: TargetSpec,
+    },
+    DealDamage {
+        amount: i32,
+        target: TargetSpec,
+    },
+    CounterSpell {
+        target: TargetSpec,
+    },
+    ModifyUntilEot {
+        power_delta: i32,
+        toughness_delta: i32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TargetSpec {
-    Creature { controller: TargetController },
+    Creature,
+    CreatureOrPlayer,
+    Spell,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TargetController {
-    Any,
+impl Effect {
+    pub fn target_spec(&self) -> Option<&TargetSpec> {
+        match self {
+            Effect::ReturnToHand { target } => Some(target),
+            Effect::DealDamage { target, .. } => Some(target),
+            Effect::CounterSpell { target } => Some(target),
+            Effect::ModifyUntilEot { .. } => None,
+        }
+    }
 }
