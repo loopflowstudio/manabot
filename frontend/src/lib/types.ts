@@ -39,6 +39,7 @@ export interface PlayerState {
   life: number;
   zone_counts: Record<string, number>;
   library_count: number;
+  hand_hidden_count?: number;
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];
@@ -68,15 +69,68 @@ export interface ActionOption {
   description: string;
 }
 
+export interface BoardActionTarget {
+  objectId: number;
+  actionIndexes: number[];
+}
+
+export interface GameLogEntry {
+  id: string;
+  actor: 'hero' | 'villain' | 'system';
+  text: string;
+  details: string[];
+}
+
+export interface TraceSummary {
+  id: string;
+  timestamp: string | null;
+  winner: number | null;
+  end_reason: string | null;
+  num_events: number;
+}
+
+export interface TraceConfig {
+  hero_deck: Record<string, number>;
+  villain_deck: Record<string, number>;
+  villain_type: string;
+  seed?: number | null;
+}
+
+export interface TraceEvent {
+  actor: 'hero' | 'villain';
+  observation: Observation;
+  actions: ActionOption[];
+  action: number;
+  action_description: string;
+  reward: number;
+}
+
+export interface Trace {
+  id?: string;
+  config: TraceConfig;
+  events: TraceEvent[];
+  final_observation: Observation;
+  winner: number | null;
+  end_reason: string;
+  timestamp: string;
+}
+
+export interface ReplayFrame {
+  observation: Observation;
+  actionDescription: string | null;
+  actor: 'hero' | 'villain' | null;
+}
+
 export type ServerMessage =
   | {
       type: 'observation';
       data: Observation;
       actions: ActionOption[];
+      log?: string[];
       session_id?: string;
       resume_token?: string;
     }
-  | { type: 'game_over'; data: Observation; winner: number | null }
+  | { type: 'game_over'; data: Observation; winner: number | null; log?: string[] }
   | { type: 'error'; message: string };
 
 export type ClientMessage =

@@ -22,6 +22,7 @@ function makeObservation(): Observation {
       life: 20,
       zone_counts: { HAND: 1, LIBRARY: 39, GRAVEYARD: 0, EXILE: 0, STACK: 0 },
       library_count: 39,
+      hand_hidden_count: 0,
       hand: [
         {
           id: 101,
@@ -56,6 +57,7 @@ function makeObservation(): Observation {
       life: 20,
       zone_counts: { HAND: 1, LIBRARY: 39, GRAVEYARD: 0, EXILE: 0, STACK: 0 },
       library_count: 39,
+      hand_hidden_count: 1,
       hand: [],
       graveyard: [],
       exile: [],
@@ -70,13 +72,31 @@ describe('GameStore', () => {
     const store = createGameStore();
     const observation = makeObservation();
 
-    store.applyObservation(observation, [{ index: 0, type: 'PRIORITY_PASS_PRIORITY', card: null, focus: [10], description: 'Pass priority' }], 'session-a', 'token-a');
+    store.applyObservation(
+      observation,
+      [{ index: 0, type: 'PRIORITY_PASS_PRIORITY', card: null, focus: [10], description: 'Pass priority' }],
+      'session-a',
+      'token-a',
+    );
 
     expect(store.observation?.turn.turn_number).toBe(1);
     expect(store.actions).toHaveLength(1);
     expect(store.sessionId).toBe('session-a');
     expect(store.resumeToken).toBe('token-a');
     expect(store.gameOver).toBe(false);
+  });
+
+  it('accumulates authoritative log entries from hero and villain actions', () => {
+    const store = createGameStore();
+    const observation = makeObservation();
+
+    store.appendHeroAction('Play land: Mountain');
+    store.applyObservation(observation, [], undefined, undefined, ['Villain: Pass priority']);
+
+    expect(store.actionLog.map((entry) => entry.text)).toEqual([
+      'Hero: Play land: Mountain',
+      'Villain: Pass priority',
+    ]);
   });
 
   it('transitions into game-over state', () => {
