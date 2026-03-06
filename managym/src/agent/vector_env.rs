@@ -142,6 +142,7 @@ impl VectorEnv {
             truncated = opp_truncated;
 
             if terminated || truncated {
+                // Zero-sum: hero reward = negated opponent terminal reward.
                 reward = -opponent_reward;
                 break;
             }
