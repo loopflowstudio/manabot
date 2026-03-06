@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    ability::{Ability, Effect, TargetController, TargetSpec, TriggerCondition, TriggerSource},
     card::{basic_land, Card, CardDefinition, CardType, CardTypes, ManaAbility},
     game_object::{IdGenerator, ObjectId, PlayerId},
     mana::{Color, Mana, ManaCost},
@@ -34,6 +33,7 @@ impl CardRegistry {
     pub fn register_all_cards(&mut self) {
         self.register_basic_lands();
         self.register_alpha();
+        self.register_visions();
     }
 
     pub fn register_card(&mut self, definition: CardDefinition) {
@@ -107,26 +107,5 @@ impl CardRegistry {
             ..Default::default()
         });
 
-        self.register_card(CardDefinition {
-            name: "Man-o'-War".to_string(),
-            mana_cost: Some(ManaCost::parse("2U")),
-            types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Jellyfish".to_string()],
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    source: TriggerSource::This,
-                },
-                effect: Effect::ReturnToHand {
-                    target: TargetSpec::Creature {
-                        controller: TargetController::Any,
-                    },
-                },
-                intervening_if: None,
-            }],
-            text_box: "When Man-o'-War enters the battlefield, return target creature to its owner's hand.".to_string(),
-            power: Some(2),
-            toughness: Some(2),
-            ..Default::default()
-        });
     }
 }

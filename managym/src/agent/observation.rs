@@ -194,8 +194,10 @@ impl Observation {
             }
         }
 
-        for card in game.state.zones.stack_order().iter().rev() {
-            self.add_card(game, *card, ZoneType::Stack);
+        for stack_object in game.state.stack.iter().rev() {
+            if let crate::state::stack::StackObject::Spell { card } = stack_object {
+                self.add_card(game, *card, ZoneType::Stack);
+            }
         }
     }
 

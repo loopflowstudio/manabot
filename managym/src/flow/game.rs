@@ -424,67 +424,72 @@ impl Game {
     }
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {
-        if !self.state.pending_events.is_empty() {
-            self.process_game_events();
-        }
-
-        if !self.state.priority.sba_done {
-            // CR 117.5, 704.3 — Check state-based actions before granting priority.
-            self.perform_state_based_actions();
-            self.state.priority.sba_done = true;
-            if self.is_game_over() {
-                return None;
+        loop {
+            if !self.state.pending_events.is_empty() {
+                self.process_game_events();
             }
-        }
 
-        if self.state.pending_trigger_choice.is_some() || !self.state.pending_triggers.is_empty() {
-            if let Some(space) = self.flush_triggers() {
-                return Some(space);
+            if !self.state.priority.sba_done {
+                // CR 117.5, 704.3 — Check state-based actions before granting priority.
+                self.perform_state_based_actions();
+                self.state.priority.sba_done = true;
+                if self.is_game_over() {
+                    return None;
+                }
             }
-        }
 
-        let players = self.players_starting_with_active();
+            if self.state.pending_trigger_choice.is_some()
+                || !self.state.pending_triggers.is_empty()
+            {
+                if let Some(space) = self.flush_triggers() {
+                    return Some(space);
+                }
+            }
 
-        while self.state.priority.pass_count < players.len() {
-            let player = players[self.state.priority.pass_count];
-            let actions = self.compute_player_actions(player);
-            if self.skip_trivial && actions.len() == 1 {
-                self.state.priority.pass_count += 1;
+            let players = self.players_starting_with_active();
+
+            while self.state.priority.pass_count < players.len() {
+                let player = players[self.state.priority.pass_count];
+                let actions = self.compute_player_actions(player);
+                if self.skip_trivial && actions.len() == 1 {
+                    self.state.priority.pass_count += 1;
+                    continue;
+                }
+                return Some(ActionSpace {
+                    player: Some(player),
+                    kind: ActionSpaceKind::Priority,
+                    actions,
+                    focus: Vec::new(),
+                });
+            }
+
+            self.state.priority.reset();
+            if !self.state.stack.is_empty() {
+                // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
+                self.resolve_top_of_stack();
                 continue;
             }
-            return Some(ActionSpace {
-                player: Some(player),
-                kind: ActionSpaceKind::Priority,
-                actions,
-                focus: Vec::new(),
-            });
-        }
 
-        self.state.priority.reset();
-        if !self.state.stack.is_empty() {
-            // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
-            self.resolve_top_of_stack();
-            return self.tick_priority();
+            return None;
         }
-
-        None
     }
 
     fn compute_player_actions(&mut self, player: PlayerId) -> Vec<Action> {
         let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
 
         let can_play_land = self.can_play_land(player);
-        let can_cast = self.can_cast_sorceries(player);
+        let can_cast_sorcery = self.can_cast_sorceries(player);
 
         let mut actions = Vec::new();
         let mut producible: Option<Mana> = None;
 
         for card_id in hand {
-            let (is_land, is_castable, mana_cost) = {
+            let (is_land, is_castable, is_instant_speed, mana_cost) = {
                 let card = &self.state.cards[card_id];
                 (
                     card.types.is_land(),
                     card.types.is_castable(),
+                    card.types.is_instant_speed(),
                     card.mana_cost.clone(),
                 )
             };
@@ -498,7 +503,12 @@ impl Game {
                 continue;
             }
 
-            if !is_castable || !can_cast {
+            if !is_castable {
+                continue;
+            }
+            // CR 117.1a — Instants can be cast any time a player has priority;
+            // sorcery-speed spells only during the active player's main phase with an empty stack.
+            if !is_instant_speed && !can_cast_sorcery {
                 continue;
             }
 
