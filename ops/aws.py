@@ -261,17 +261,30 @@ class AWSProvider:
 
         region = self._machine_region(machine)
         ssm = self._client("ssm", region)
-
-        response = ssm.send_command(
-            InstanceIds=[machine.id],
-            DocumentName="AWS-RunShellScript",
-            Parameters={"commands": [command]},
-            CloudWatchOutputConfig={"CloudWatchOutputEnabled": False},
-            TimeoutSeconds=timeout,
-        )
-        command_id = response["Command"]["CommandId"]
-
         deadline = time.time() + timeout
+
+        command_id: str | None = None
+        while time.time() < deadline:
+            try:
+                response = ssm.send_command(
+                    InstanceIds=[machine.id],
+                    DocumentName="AWS-RunShellScript",
+                    Parameters={"commands": [command]},
+                    CloudWatchOutputConfig={"CloudWatchOutputEnabled": False},
+                    TimeoutSeconds=timeout,
+                )
+                command_id = response["Command"]["CommandId"]
+                break
+            except self._ClientError as exc:
+                if _is_retryable_send_command_error(exc):
+                    time.sleep(5)
+                    continue
+                raise
+
+        if command_id is None:
+            raise TimeoutError(
+                f"Command could not be sent within {timeout}s for {machine.id}"
+            )
         terminal_states = {
             "Success",
             "Cancelled",
@@ -673,6 +686,18 @@ def _user_from_arn(arn: str) -> str:
 
 def _to_aws_tags(tags: dict[str, str]) -> list[dict[str, str]]:
     return [{"Key": key, "Value": value} for key, value in tags.items()]
+
+
+def _is_retryable_send_command_error(exc: Exception) -> bool:
+    response = getattr(exc, "response", None)
+    if not isinstance(response, dict):
+        return False
+    error = response.get("Error")
+    if not isinstance(error, dict):
+        return False
+    code = error.get("Code")
+    message = str(error.get("Message", "")).lower()
+    return code == "InvalidInstanceId" and "valid state" in message
 
 
 def choose_single_machine(machines: Iterable[Machine]) -> Machine | None:
