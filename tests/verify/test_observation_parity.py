@@ -296,8 +296,8 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
     for env_index, (obs, _) in enumerate(compat_reset):
         assert_buffer_observation_equal(buffers, env_index, encoder.encode(obs))
     np.testing.assert_allclose(buffers["rewards"], np.zeros(num_envs, dtype=np.float64))
-    np.testing.assert_array_equal(buffers["terminated"], np.zeros(num_envs, dtype=bool))
-    np.testing.assert_array_equal(buffers["truncated"], np.zeros(num_envs, dtype=bool))
+    np.testing.assert_array_equal(buffers["terminated"], np.zeros(num_envs, dtype=np.uint8))
+    np.testing.assert_array_equal(buffers["truncated"], np.zeros(num_envs, dtype=np.uint8))
 
     last_compat_step = compat_reset
     for _ in range(60):
@@ -306,8 +306,8 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
         hot.step_into_buffers(actions)
 
         expected_rewards = np.array([step[1] for step in compat_step], dtype=np.float64)
-        expected_terminated = np.array([step[2] for step in compat_step], dtype=bool)
-        expected_truncated = np.array([step[3] for step in compat_step], dtype=bool)
+        expected_terminated = np.array([step[2] for step in compat_step], dtype=np.uint8)
+        expected_truncated = np.array([step[3] for step in compat_step], dtype=np.uint8)
         np.testing.assert_allclose(buffers["rewards"], expected_rewards, atol=1e-12)
         np.testing.assert_array_equal(buffers["terminated"], expected_terminated)
         np.testing.assert_array_equal(buffers["truncated"], expected_truncated)

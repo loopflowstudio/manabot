@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 #[cfg(feature = "python")]
 use pyo3::{
-    exceptions::{PyRuntimeError, PyValueError},
+    exceptions::PyRuntimeError,
     prelude::*,
     types::{PyDict, PyList, PyModule},
 };
@@ -29,7 +29,7 @@ use crate::{
         },
     },
     flow::turn::{PhaseKind, StepKind},
-    python::convert::{info_dict_to_pydict, require_numpy_array},
+    python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     state::{mana::ManaCost, player::PlayerConfig, zone::ZoneType},
 };
 
