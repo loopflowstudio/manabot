@@ -7,7 +7,11 @@
 use std::{collections::HashMap, sync::Mutex};
 
 #[cfg(feature = "python")]
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{
+    exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError},
+    prelude::*,
+    types::{PyDict, PyList, PyModule},
+};
 #[cfg(feature = "python")]
 use serde_json::{json, Value};
 
@@ -19,6 +23,10 @@ use crate::{
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, Observation, PermanentData,
             PlayerData, TurnData,
+        },
+        observation_encoder::{
+            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM,
+            PLAYER_DIM,
         },
     },
     flow::turn::{PhaseKind, StepKind},
@@ -32,6 +40,220 @@ pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
 #[cfg(feature = "python")]
 pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
     PyAgentError::new_err(err.to_string())
+}
+
+#[cfg(feature = "python")]
+fn shape_to_vec(shape_obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
+    shape_obj.extract::<Vec<usize>>()
+}
+
+#[cfg(feature = "python")]
+fn require_numpy_array<'py>(
+    out: &Bound<'py, PyDict>,
+    key: &str,
+    expected_shape: &[usize],
+    expected_dtype_name: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    let Some(value) = out.get_item(key)? else {
+        return Err(PyKeyError::new_err(format!(
+            "output dict missing required key '{key}'"
+        )));
+    };
+
+    let dtype_name = value
+        .getattr("dtype")?
+        .getattr("name")?
+        .extract::<String>()?;
+    if dtype_name != expected_dtype_name {
+        return Err(PyTypeError::new_err(format!(
+            "output '{key}' must have dtype {expected_dtype_name}, got {dtype_name}"
+        )));
+    }
+
+    let actual_shape = shape_to_vec(&value.getattr("shape")?)?;
+    if actual_shape != expected_shape {
+        return Err(PyValueError::new_err(format!(
+            "output '{key}' must have shape {:?}, got {:?}",
+            expected_shape, actual_shape
+        )));
+    }
+
+    Ok(value)
+}
+
+#[cfg(feature = "python")]
+fn to_numpy_array_f32(
+    py: Python<'_>,
+    np: &Bound<'_, PyModule>,
+    data: &[f32],
+    shape: &[usize],
+) -> PyResult<PyObject> {
+    let array_fn = np.getattr("array")?;
+    let kwargs = PyDict::new_bound(py);
+    kwargs.set_item("dtype", np.getattr("float32")?)?;
+    let list = PyList::new_bound(py, data.iter().copied());
+    let array = array_fn.call((list,), Some(&kwargs))?;
+    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
+    Ok(reshaped.unbind())
+}
+
+#[cfg(feature = "python")]
+fn to_numpy_array_i32(
+    py: Python<'_>,
+    np: &Bound<'_, PyModule>,
+    data: &[i32],
+    shape: &[usize],
+) -> PyResult<PyObject> {
+    let array_fn = np.getattr("array")?;
+    let kwargs = PyDict::new_bound(py);
+    kwargs.set_item("dtype", np.getattr("int32")?)?;
+    let list = PyList::new_bound(py, data.iter().copied());
+    let array = array_fn.call((list,), Some(&kwargs))?;
+    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
+    Ok(reshaped.unbind())
+}
+
+#[cfg(feature = "python")]
+fn encoded_to_dict<'py>(
+    py: Python<'py>,
+    encoded: crate::agent::observation_encoder::EncodedObservation,
+    config: &ObservationEncoderConfig,
+) -> PyResult<Bound<'py, PyDict>> {
+    let np = PyModule::import_bound(py, "numpy")?;
+    let dict = PyDict::new_bound(py);
+
+    dict.set_item(
+        "agent_player",
+        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, PLAYER_DIM])?,
+    )?;
+    dict.set_item(
+        "opponent_player",
+        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, PLAYER_DIM])?,
+    )?;
+    dict.set_item(
+        "agent_cards",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_cards,
+            &[config.max_cards_per_player, CARD_DIM],
+        )?,
+    )?;
+    dict.set_item(
+        "opponent_cards",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.opponent_cards,
+            &[config.max_cards_per_player, CARD_DIM],
+        )?,
+    )?;
+    dict.set_item(
+        "agent_permanents",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_permanents,
+            &[config.max_permanents_per_player, PERMANENT_DIM],
+        )?,
+    )?;
+    dict.set_item(
+        "opponent_permanents",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.opponent_permanents,
+            &[config.max_permanents_per_player, PERMANENT_DIM],
+        )?,
+    )?;
+    dict.set_item(
+        "actions",
+        to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
+    )?;
+    dict.set_item(
+        "action_focus",
+        to_numpy_array_i32(
+            py,
+            &np,
+            &encoded.action_focus,
+            &[config.max_actions, config.max_focus_objects],
+        )?,
+    )?;
+
+    dict.set_item(
+        "agent_player_valid",
+        to_numpy_array_f32(py, &np, &encoded.agent_player_valid, &[1])?,
+    )?;
+    dict.set_item(
+        "opponent_player_valid",
+        to_numpy_array_f32(py, &np, &encoded.opponent_player_valid, &[1])?,
+    )?;
+    dict.set_item(
+        "agent_cards_valid",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_cards_valid,
+            &[config.max_cards_per_player],
+        )?,
+    )?;
+    dict.set_item(
+        "opponent_cards_valid",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.opponent_cards_valid,
+            &[config.max_cards_per_player],
+        )?,
+    )?;
+    dict.set_item(
+        "agent_permanents_valid",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_permanents_valid,
+            &[config.max_permanents_per_player],
+        )?,
+    )?;
+    dict.set_item(
+        "opponent_permanents_valid",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.opponent_permanents_valid,
+            &[config.max_permanents_per_player],
+        )?,
+    )?;
+    dict.set_item(
+        "actions_valid",
+        to_numpy_array_f32(py, &np, &encoded.actions_valid, &[config.max_actions])?,
+    )?;
+
+    Ok(dict)
+}
+
+#[cfg(feature = "python")]
+fn fill_encoded_into_existing_buffers(
+    py: Python<'_>,
+    out: &Bound<'_, PyDict>,
+    encoded: crate::agent::observation_encoder::EncodedObservation,
+    config: &ObservationEncoderConfig,
+) -> PyResult<()> {
+    let np = PyModule::import_bound(py, "numpy")?;
+    let copyto = np.getattr("copyto")?;
+    let expected = encoded_to_dict(py, encoded, config)?;
+    for (key_obj, source) in expected.iter() {
+        let key = key_obj.extract::<String>()?;
+        let dtype_name = source
+            .getattr("dtype")?
+            .getattr("name")?
+            .extract::<String>()?;
+        let shape = shape_to_vec(&source.getattr("shape")?)?;
+        let target = require_numpy_array(out, &key, &shape, &dtype_name)?;
+        copyto.call1((target, source))?;
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "python")]
@@ -91,6 +313,21 @@ impl From<ZoneType> for ZoneEnum {
 }
 
 #[cfg(feature = "python")]
+impl From<ZoneEnum> for ZoneType {
+    fn from(value: ZoneEnum) -> Self {
+        match value {
+            ZoneEnum::Library => Self::Library,
+            ZoneEnum::Hand => Self::Hand,
+            ZoneEnum::Battlefield => Self::Battlefield,
+            ZoneEnum::Graveyard => Self::Graveyard,
+            ZoneEnum::Stack => Self::Stack,
+            ZoneEnum::Exile => Self::Exile,
+            ZoneEnum::Command => Self::Command,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "PhaseEnum", eq, eq_int)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
@@ -134,6 +371,19 @@ impl From<PhaseKind> for PhaseEnum {
             PhaseKind::Combat => Self::Combat,
             PhaseKind::PostcombatMain => Self::PostcombatMain,
             PhaseKind::Ending => Self::Ending,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PhaseEnum> for PhaseKind {
+    fn from(value: PhaseEnum) -> Self {
+        match value {
+            PhaseEnum::Beginning => Self::Beginning,
+            PhaseEnum::PrecombatMain => Self::PrecombatMain,
+            PhaseEnum::Combat => Self::Combat,
+            PhaseEnum::PostcombatMain => Self::PostcombatMain,
+            PhaseEnum::Ending => Self::Ending,
         }
     }
 }
@@ -215,6 +465,26 @@ impl From<StepKind> for StepEnum {
 }
 
 #[cfg(feature = "python")]
+impl From<StepEnum> for StepKind {
+    fn from(value: StepEnum) -> Self {
+        match value {
+            StepEnum::BeginningUntap => Self::Untap,
+            StepEnum::BeginningUpkeep => Self::Upkeep,
+            StepEnum::BeginningDraw => Self::Draw,
+            StepEnum::PrecombatMainStep => Self::Main,
+            StepEnum::CombatBegin => Self::BeginningOfCombat,
+            StepEnum::CombatDeclareAttackers => Self::DeclareAttackers,
+            StepEnum::CombatDeclareBlockers => Self::DeclareBlockers,
+            StepEnum::CombatDamage => Self::CombatDamage,
+            StepEnum::CombatEnd => Self::EndOfCombat,
+            StepEnum::PostcombatMainStep => Self::PostcombatMain,
+            StepEnum::EndingEnd => Self::End,
+            StepEnum::EndingCleanup => Self::Cleanup,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "ActionEnum", eq, eq_int)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
@@ -267,6 +537,20 @@ impl From<ActionType> for ActionEnum {
 }
 
 #[cfg(feature = "python")]
+impl From<ActionEnum> for ActionType {
+    fn from(value: ActionEnum) -> Self {
+        match value {
+            ActionEnum::PriorityPlayLand => Self::PriorityPlayLand,
+            ActionEnum::PriorityCastSpell => Self::PriorityCastSpell,
+            ActionEnum::PriorityPassPriority => Self::PriorityPassPriority,
+            ActionEnum::DeclareAttacker => Self::DeclareAttacker,
+            ActionEnum::DeclareBlocker => Self::DeclareBlocker,
+            ActionEnum::ChooseTarget => Self::ChooseTarget,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "ActionSpaceEnum", eq, eq_int)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
@@ -310,6 +594,19 @@ impl From<ActionSpaceKind> for ActionSpaceEnum {
             ActionSpaceKind::DeclareAttacker => Self::DeclareAttacker,
             ActionSpaceKind::DeclareBlocker => Self::DeclareBlocker,
             ActionSpaceKind::ChooseTarget => Self::ChooseTarget,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<ActionSpaceEnum> for ActionSpaceKind {
+    fn from(value: ActionSpaceEnum) -> Self {
+        match value {
+            ActionSpaceEnum::GameOver => Self::GameOver,
+            ActionSpaceEnum::Priority => Self::Priority,
+            ActionSpaceEnum::DeclareAttacker => Self::DeclareAttacker,
+            ActionSpaceEnum::DeclareBlocker => Self::DeclareBlocker,
+            ActionSpaceEnum::ChooseTarget => Self::ChooseTarget,
         }
     }
 }
@@ -376,6 +673,25 @@ impl From<PlayerData> for PyPlayer {
 }
 
 #[cfg(feature = "python")]
+impl From<PyPlayer> for PlayerData {
+    fn from(value: PyPlayer) -> Self {
+        let mut zone_counts = [0_i32; 7];
+        for (index, out) in zone_counts.iter_mut().enumerate() {
+            *out = value.zone_counts.get(index).copied().unwrap_or(0);
+        }
+
+        Self {
+            player_index: value.player_index,
+            id: value.id,
+            is_agent: value.is_agent,
+            is_active: value.is_active,
+            life: value.life,
+            zone_counts,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Turn")]
 #[derive(Clone)]
 pub struct PyTurn {
@@ -396,6 +712,19 @@ impl From<TurnData> for PyTurn {
     fn from(value: TurnData) -> Self {
         Self {
             turn_number: value.turn_number as i32,
+            phase: value.phase.into(),
+            step: value.step.into(),
+            active_player_id: value.active_player_id,
+            agent_player_id: value.agent_player_id,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyTurn> for TurnData {
+    fn from(value: PyTurn) -> Self {
+        Self {
+            turn_number: value.turn_number.max(0) as u32,
             phase: value.phase.into(),
             step: value.step.into(),
             active_player_id: value.active_player_id,
@@ -455,6 +784,26 @@ impl From<CardTypeData> for PyCardTypes {
 }
 
 #[cfg(feature = "python")]
+impl From<PyCardTypes> for CardTypeData {
+    fn from(value: PyCardTypes) -> Self {
+        Self {
+            is_castable: value.is_castable,
+            is_permanent: value.is_permanent,
+            is_non_land_permanent: value.is_non_land_permanent,
+            is_non_creature_permanent: value.is_non_creature_permanent,
+            is_spell: value.is_spell,
+            is_creature: value.is_creature,
+            is_land: value.is_land,
+            is_planeswalker: value.is_planeswalker,
+            is_enchantment: value.is_enchantment,
+            is_artifact: value.is_artifact,
+            is_kindred: value.is_kindred,
+            is_battle: value.is_battle,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "ManaCost")]
 #[derive(Clone)]
 pub struct PyManaCost {
@@ -471,6 +820,21 @@ impl From<ManaCost> for PyManaCost {
             cost: value.cost[..6].iter().map(|v| i32::from(*v)).collect(),
             mana_value: i32::from(value.mana_value),
         }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyManaCost> for ManaCost {
+    fn from(value: PyManaCost) -> Self {
+        let mut cost = [0_u8; 7];
+        for (index, amount) in value.cost.iter().take(6).enumerate() {
+            let clamped = (*amount).clamp(0, u8::MAX as i32) as u8;
+            cost[index] = clamped;
+        }
+        cost[6] = 0;
+        let mana_value = value.mana_value.clamp(0, u8::MAX as i32) as u8;
+
+        Self { cost, mana_value }
     }
 }
 
@@ -499,6 +863,22 @@ pub struct PyCard {
 #[cfg(feature = "python")]
 impl From<CardData> for PyCard {
     fn from(value: CardData) -> Self {
+        Self {
+            zone: value.zone.into(),
+            owner_id: value.owner_id,
+            id: value.id,
+            registry_key: value.registry_key,
+            power: value.power,
+            toughness: value.toughness,
+            card_types: value.card_types.into(),
+            mana_cost: value.mana_cost.into(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyCard> for CardData {
+    fn from(value: PyCard) -> Self {
         Self {
             zone: value.zone.into(),
             owner_id: value.owner_id,
@@ -542,6 +922,19 @@ impl From<PermanentData> for PyPermanent {
 }
 
 #[cfg(feature = "python")]
+impl From<PyPermanent> for PermanentData {
+    fn from(value: PyPermanent) -> Self {
+        Self {
+            id: value.id,
+            controller_id: value.controller_id,
+            tapped: value.tapped,
+            damage: value.damage,
+            is_summoning_sick: value.is_summoning_sick,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Action")]
 #[derive(Clone)]
 pub struct PyAction {
@@ -554,6 +947,16 @@ pub struct PyAction {
 #[cfg(feature = "python")]
 impl From<ActionOption> for PyAction {
     fn from(value: ActionOption) -> Self {
+        Self {
+            action_type: value.action_type.into(),
+            focus: value.focus,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyAction> for ActionOption {
+    fn from(value: PyAction) -> Self {
         Self {
             action_type: value.action_type.into(),
             focus: value.focus,
@@ -579,6 +982,17 @@ impl From<ActionSpaceData> for PyActionSpace {
         Self {
             action_space_type: value.action_space_type.into(),
             actions: value.actions.into_iter().map(PyAction::from).collect(),
+            focus: value.focus,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyActionSpace> for ActionSpaceData {
+    fn from(value: PyActionSpace) -> Self {
+        Self {
+            action_space_type: value.action_space_type.into(),
+            actions: value.actions.into_iter().map(ActionOption::from).collect(),
             focus: value.focus,
         }
     }
@@ -631,6 +1045,36 @@ impl From<Observation> for PyObservation {
                 .opponent_permanents
                 .into_iter()
                 .map(PyPermanent::from)
+                .collect(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyObservation> for Observation {
+    fn from(value: PyObservation) -> Self {
+        Self {
+            game_over: value.game_over,
+            won: value.won,
+            turn: value.turn.into(),
+            action_space: value.action_space.into(),
+            agent: value.agent.into(),
+            agent_cards: value.agent_cards.into_iter().map(CardData::from).collect(),
+            agent_permanents: value
+                .agent_permanents
+                .into_iter()
+                .map(PermanentData::from)
+                .collect(),
+            opponent: value.opponent.into(),
+            opponent_cards: value
+                .opponent_cards
+                .into_iter()
+                .map(CardData::from)
+                .collect(),
+            opponent_permanents: value
+                .opponent_permanents
+                .into_iter()
+                .map(PermanentData::from)
                 .collect(),
         }
     }
@@ -854,6 +1298,38 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(env.compare_profile(&baseline))
+    }
+
+    fn encode_observation(&self, py: Python<'_>, obs: PyObservation) -> PyResult<PyObject> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let rust_obs = Observation::from(obs);
+        let config = ObservationEncoderConfig::default();
+        let encoded = env.encode_observation(&rust_obs);
+        drop(env);
+        let out = encoded_to_dict(py, encoded, &config)?;
+        Ok(out.into_any().unbind())
+    }
+
+    fn encode_observation_into(
+        &self,
+        py: Python<'_>,
+        obs: PyObservation,
+        out: Bound<'_, PyDict>,
+    ) -> PyResult<()> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+
+        let rust_obs = Observation::from(obs);
+        let config = ObservationEncoderConfig::default();
+        let encoded = env.encode_observation(&rust_obs);
+        drop(env);
+
+        fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
 }
 
