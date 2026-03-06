@@ -1,0 +1,5 @@
+flow: ship-wave
+area:
+  - gui/
+  - manabot/env/
+direction: []

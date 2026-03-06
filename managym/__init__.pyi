@@ -127,6 +127,7 @@ class Card:
     owner_id: int
     id: int
     registry_key: int
+    name: str
     power: int
     toughness: int
     card_types: CardTypes

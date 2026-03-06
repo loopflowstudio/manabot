@@ -811,6 +811,8 @@ pub struct PyCard {
     #[pyo3(get, set)]
     pub registry_key: i32,
     #[pyo3(get, set)]
+    pub name: String,
+    #[pyo3(get, set)]
     pub power: i32,
     #[pyo3(get, set)]
     pub toughness: i32,
@@ -828,6 +830,7 @@ impl From<CardData> for PyCard {
             owner_id: value.owner_id,
             id: value.id,
             registry_key: value.registry_key,
+            name: value.name,
             power: value.power,
             toughness: value.toughness,
             card_types: value.card_types.into(),
@@ -844,6 +847,7 @@ impl From<PyCard> for CardData {
             owner_id: value.owner_id,
             id: value.id,
             registry_key: value.registry_key,
+            name: value.name,
             power: value.power,
             toughness: value.toughness,
             card_types: value.card_types.into(),
@@ -1092,6 +1096,7 @@ impl PyObservation {
             json!({
                 "id": card.id,
                 "registry_key": card.registry_key,
+                "name": card.name,
                 "zone": card.zone as i32,
                 "owner_id": card.owner_id,
                 "power": card.power,
