@@ -4,7 +4,9 @@
 
 ## What to build
 
-Replace text-only card rendering (from Stage 2) with actual card images from Scryfall. Cards in hand, on the battlefield, in the graveyard — all show their art. Tapped permanents rotate 90 degrees. Hover shows full-size card.
+Replace text-only card rendering in the frontend shell (`frontend/src/routes/+page.svelte`) with actual card images from Scryfall. Cards in hand, on the battlefield, in the graveyard — all show their art. Tapped permanents already rotate 90 degrees via CSS. Hover shows full-size card.
+
+The frontend is a SvelteKit 5 + TypeScript app in `frontend/`. Types are in `frontend/src/lib/types.ts`. Cards use `CardState.name` for display; permanents use `PermanentState.name`.
 
 ## Key functions
 

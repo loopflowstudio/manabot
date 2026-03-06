@@ -13,3 +13,9 @@ requires-python = ">=3.10"
 features = ["python"]
 module-name = "managym._managym"
 python-source = ".."
+zip64 = true
+exclude = [
+  "managym/target/**",
+  "managym/.venv/**",
+  "managym/__pycache__/**",
+]

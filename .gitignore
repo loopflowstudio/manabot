@@ -13,3 +13,7 @@ target/
 .venv/
 .uv-cache/
 gui/traces/*.json
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+frontend/.vite/
