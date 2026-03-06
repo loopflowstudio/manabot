@@ -77,7 +77,7 @@
       </div>
       <button
         class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-        on:click={() => sendNewGame()}
+        on:click={sendNewGame}
       >
         New Game
       </button>
@@ -238,7 +238,7 @@
                 </p>
                 <button
                   class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-                  on:click={() => sendNewGame()}
+                  on:click={sendNewGame}
                 >
                   Play Again
                 </button>
@@ -274,7 +274,7 @@
         <p class="mb-4 text-lg">Start a game to begin.</p>
         <button
           class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-          on:click={() => sendNewGame()}
+          on:click={sendNewGame}
         >
           New Game
         </button>
