@@ -5,6 +5,15 @@
 SBA handling is expanded beyond the current subset and reliably integrated
 with trigger/priority loops, including simultaneous-loss edge cases.
 
+## Context from stage 06
+
+Stage 06 added `deathtouch_damage: bool` tracking on `Permanent` — set in
+`apply_permanent_damage()` when source has deathtouch, checked in
+`has_lethal_damage()` (any damage >= 1 is lethal), cleared in `clear_damage()`.
+Already integrated into SBA 704.5h checks. Also added `temp_power`/`temp_toughness`
+on `Permanent` for firebreathing buffs cleared in cleanup — relevant for 0-toughness
+SBA if negative temp modifiers are ever introduced.
+
 ## Changes
 
 ### Expand SBA checks
