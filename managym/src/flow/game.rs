@@ -9,7 +9,7 @@ use crate::{
     cardsets::alpha::CardRegistry,
     flow::{
         combat::CombatState,
-        event::GameEvent,
+        event::{DamageTarget, GameEvent},
         priority::PriorityState,
         trigger::PendingTrigger,
         turn::{StepKind, TurnState},
@@ -17,12 +17,14 @@ use crate::{
     state::{
         ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSource},
         card::Card,
-        game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId},
+        game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId, Target},
         mana::{Mana, ManaCost},
         permanent::Permanent,
         player::{Player, PlayerConfig},
-        stack::StackObject,
-        target::Target,
+        stack_object::{
+            ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
+        },
+        target::Target as ActionTarget,
         zone::{ZoneManager, ZoneType},
     },
 };
@@ -36,9 +38,10 @@ pub struct GameState {
     pub zones: ZoneManager,
     pub turn: TurnState,
     pub priority: PriorityState,
+    pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub stack: Vec<StackObject>,
+    pub events: Vec<GameEvent>,
     pub pending_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub pending_trigger_choice: Option<PendingTrigger>,
@@ -49,10 +52,27 @@ pub struct GameState {
 }
 
 #[derive(Clone, Debug)]
+pub enum PendingChoice {
+    ChooseTarget {
+        player: PlayerId,
+        card: CardId,
+        legal_targets: Vec<Target>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CombatDamagePass {
+    FirstStrike,
+    NormalWithFirstStrike,
+    Normal,
+}
+
+#[derive(Clone, Debug)]
 pub struct Game {
     pub state: GameState,
     pub skip_trivial: bool,
     pub current_action_space: Option<ActionSpace>,
+    pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
 }
@@ -112,9 +132,10 @@ impl Game {
                 zones,
                 turn: TurnState::new(PlayerId(0)),
                 priority: PriorityState::default(),
+                stack_objects: Vec::new(),
                 combat: None,
                 mana_cache: [None, None],
-                stack: Vec::new(),
+                events: Vec::new(),
                 pending_events: Vec::new(),
                 pending_triggers: Vec::new(),
                 pending_trigger_choice: None,
@@ -125,6 +146,7 @@ impl Game {
             },
             skip_trivial,
             current_action_space: None,
+            pending_choice: None,
             skip_trivial_count: 0,
             trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],
         };
@@ -164,6 +186,10 @@ impl Game {
         [agent, PlayerId((agent.0 + 1) % 2)]
     }
 
+    pub fn next_player(&self, player: PlayerId) -> PlayerId {
+        PlayerId((player.0 + 1) % 2)
+    }
+
     pub fn is_active_player(&self, player: PlayerId) -> bool {
         player == self.active_player()
     }
@@ -183,8 +209,13 @@ impl Game {
         // CR 117.1a, 307.1 — Sorcery-speed actions are available only to the active player
         // during a main phase with an empty stack.
         self.is_active_player(player)
-            && self.state.stack.is_empty()
+            && self.state.stack_objects.is_empty()
             && self.state.turn.can_cast_sorceries()
+    }
+
+    pub fn can_cast_instants(&self, _player: PlayerId) -> bool {
+        // CR 117.1a — Any player with priority may cast an instant.
+        true
     }
 
     pub fn can_play_land(&self, player: PlayerId) -> bool {
@@ -192,21 +223,8 @@ impl Game {
         self.can_cast_sorceries(player) && self.state.turn.lands_played < 1
     }
 
-    pub fn can_pay_mana_cost(&mut self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.cached_producible_mana(player).can_pay(cost)
-    }
-
-    pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
-        if let Some(cached) = &self.state.mana_cache[player.0] {
-            return cached.clone();
-        }
-        let mana = self.producible_mana(player);
-        self.state.mana_cache[player.0] = Some(mana.clone());
-        mana
-    }
-
-    pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.state.mana_cache[player.0] = None;
+    pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
+        self.producible_mana(player).can_pay(cost)
     }
 
     pub fn step(&mut self, action: usize) -> Result<bool, AgentError> {
@@ -232,7 +250,6 @@ impl Game {
             self.current_action_space = Some(action_space);
             return Err(error);
         }
-        self.state.priority.sba_done = false;
 
         let game_over = self.tick();
         if game_over {
@@ -248,6 +265,10 @@ impl Game {
         while !self.is_game_over() {
             let _ = self.step(0);
         }
+    }
+
+    pub fn drain_events(&mut self) -> Vec<GameEvent> {
+        std::mem::take(&mut self.state.events)
     }
 
     fn tick(&mut self) -> bool {
@@ -301,13 +322,18 @@ impl Game {
         self.clear_mana_pools();
         self.on_step_end(step);
         self.state.turn.advance_step();
-        self.state.priority.reset();
 
         None
     }
 
     fn on_step_start(&mut self, step: StepKind) {
-        self.state.priority.reset();
+        self.state.priority.start_round(self.active_player());
+        if step == StepKind::Untap {
+            self.emit(GameEvent::TurnStarted {
+                player: self.active_player(),
+            });
+        }
+        self.emit(GameEvent::StepStarted { step });
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
@@ -386,15 +412,21 @@ impl Game {
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
-                let blocker = combat.blockers_to_declare.pop()?;
+                let Some(blocker) = combat.blockers_to_declare.pop() else {
+                    self.cleanup_illegal_menace_blocks();
+                    return None;
+                };
+                let attackers = combat.attackers.clone();
 
-                let mut actions = Vec::with_capacity(combat.attackers.len() + 1);
-                for attacker in &combat.attackers {
-                    actions.push(Action::DeclareBlocker {
-                        player: defending,
-                        blocker,
-                        attacker: Some(*attacker),
-                    });
+                let mut actions = Vec::with_capacity(attackers.len() + 1);
+                for attacker in &attackers {
+                    if self.blocker_can_block_attacker(blocker, *attacker) {
+                        actions.push(Action::DeclareBlocker {
+                            player: defending,
+                            blocker,
+                            attacker: Some(*attacker),
+                        });
+                    }
                 }
                 actions.push(Action::DeclareBlocker {
                     player: defending,
@@ -417,6 +449,7 @@ impl Game {
             StepKind::Cleanup => {
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
+                self.clear_temporary_modifiers();
                 None
             }
             _ => None,
@@ -425,8 +458,8 @@ impl Game {
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {
         loop {
-            if !self.state.pending_events.is_empty() {
-                self.process_game_events();
+            if let Some(choice_space) = self.pending_choice_action_space() {
+                return Some(choice_space);
             }
 
             if !self.state.priority.sba_done {
@@ -438,6 +471,7 @@ impl Game {
                 }
             }
 
+            // CR 603.3 — Flush pending triggers before granting priority.
             if self.state.pending_trigger_choice.is_some()
                 || !self.state.pending_triggers.is_empty()
             {
@@ -446,101 +480,252 @@ impl Game {
                 }
             }
 
-            let players = self.players_starting_with_active();
-
-            while self.state.priority.pass_count < players.len() {
-                let player = players[self.state.priority.pass_count];
-                let actions = self.compute_player_actions(player);
-                if self.skip_trivial && actions.len() == 1 {
-                    self.state.priority.pass_count += 1;
+            if self.state.priority.consecutive_passes >= self.state.players.len() {
+                self.state.priority.start_round(self.active_player());
+                if !self.state.stack_objects.is_empty() {
+                    // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
+                    self.resolve_top_of_stack();
+                    self.state.priority.on_non_pass_action(self.active_player());
                     continue;
                 }
-                return Some(ActionSpace {
-                    player: Some(player),
-                    kind: ActionSpaceKind::Priority,
-                    actions,
-                    focus: Vec::new(),
-                });
+                return None;
             }
 
-            self.state.priority.reset();
-            if !self.state.stack.is_empty() {
-                // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
-                self.resolve_top_of_stack();
+            let player = self.state.priority.holder;
+
+            if self.skip_trivial && !self.can_player_act(player) {
+                let next = self.next_player(player);
+                self.state.priority.on_pass(next);
                 continue;
             }
 
-            return None;
+            let actions = self.compute_player_actions(player);
+            return Some(ActionSpace {
+                player: Some(player),
+                kind: ActionSpaceKind::Priority,
+                actions,
+                focus: Vec::new(),
+            });
         }
     }
 
+    fn can_player_act(&mut self, player: PlayerId) -> bool {
+        let mut producible = None;
+        self.state
+            .zones
+            .zone_cards(ZoneType::Hand, player)
+            .to_vec()
+            .into_iter()
+            .any(|card| {
+                self.priority_action_for_card(player, card, &mut producible)
+                    .is_some()
+            })
+            || self
+                .priority_activate_ability_actions(player, &mut producible)
+                .into_iter()
+                .next()
+                .is_some()
+    }
+
     fn compute_player_actions(&mut self, player: PlayerId) -> Vec<Action> {
-        let hand = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
-
-        let can_play_land = self.can_play_land(player);
-        let can_cast_sorcery = self.can_cast_sorceries(player);
-
         let mut actions = Vec::new();
-        let mut producible: Option<Mana> = None;
+        let mut producible = None;
 
-        for card_id in hand {
-            let (is_land, is_castable, is_instant_speed, mana_cost) = {
-                let card = &self.state.cards[card_id];
-                (
-                    card.types.is_land(),
-                    card.types.is_castable(),
-                    card.types.is_instant_speed(),
-                    card.mana_cost.clone(),
-                )
-            };
-            if is_land {
-                if can_play_land {
-                    actions.push(Action::PlayLand {
-                        player,
-                        card: card_id,
-                    });
-                }
-                continue;
-            }
-
-            if !is_castable {
-                continue;
-            }
-            // CR 117.1a — Instants can be cast any time a player has priority;
-            // sorcery-speed spells only during the active player's main phase with an empty stack.
-            if !is_instant_speed && !can_cast_sorcery {
-                continue;
-            }
-
-            match mana_cost.as_ref() {
-                Some(cost) => {
-                    if producible.is_none() {
-                        producible = Some(self.cached_producible_mana(player));
-                    }
-                    if producible.as_ref().is_some_and(|m| m.can_pay(cost)) {
-                        actions.push(Action::CastSpell {
-                            player,
-                            card: card_id,
-                        });
-                    }
-                }
-                None => actions.push(Action::CastSpell {
-                    player,
-                    card: card_id,
-                }),
+        for card in self.state.zones.zone_cards(ZoneType::Hand, player).to_vec() {
+            if let Some(action) = self.priority_action_for_card(player, card, &mut producible) {
+                actions.push(action);
             }
         }
 
+        actions.extend(self.priority_activate_ability_actions(player, &mut producible));
         actions.push(Action::PassPriority { player });
         actions
     }
 
+    fn priority_activate_ability_actions(
+        &mut self,
+        player: PlayerId,
+        producible: &mut Option<Mana>,
+    ) -> Vec<Action> {
+        let mut actions = Vec::new();
+        for permanent_id in self.battlefield_permanents(player) {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+                continue;
+            };
+            let card = &self.state.cards[permanent.card];
+            for (ability_index, ability) in card.activated_abilities.iter().enumerate() {
+                if producible.is_none() {
+                    *producible = Some(self.producible_mana(player));
+                }
+                if producible
+                    .as_ref()
+                    .is_some_and(|mana| mana.can_pay(&ability.mana_cost))
+                {
+                    actions.push(Action::ActivateAbility {
+                        player,
+                        permanent: permanent_id,
+                        ability_index,
+                    });
+                }
+            }
+        }
+        actions
+    }
+
+    fn priority_action_for_card(
+        &mut self,
+        player: PlayerId,
+        card_id: CardId,
+        producible: &mut Option<Mana>,
+    ) -> Option<Action> {
+        let card = &self.state.cards[card_id];
+        if card.types.is_land() {
+            return self.can_play_land(player).then_some(Action::PlayLand {
+                player,
+                card: card_id,
+            });
+        }
+        if !card.types.is_castable() {
+            return None;
+        }
+
+        let can_cast_now = if card.types.is_instant_speed() {
+            self.can_cast_instants(player)
+        } else {
+            self.can_cast_sorceries(player)
+        };
+        if !can_cast_now {
+            return None;
+        }
+
+        if self
+            .legal_targets_for_spell(card_id)
+            .is_some_and(|targets| targets.is_empty())
+        {
+            return None;
+        }
+
+        let mana_cost = card.mana_cost.clone();
+        match mana_cost.as_ref() {
+            Some(cost) => {
+                if producible.is_none() {
+                    *producible = Some(self.producible_mana(player));
+                }
+                producible
+                    .as_ref()
+                    .is_some_and(|m| m.can_pay(cost))
+                    .then_some(Action::CastSpell {
+                        player,
+                        card: card_id,
+                    })
+            }
+            None => Some(Action::CastSpell {
+                player,
+                card: card_id,
+            }),
+        }
+    }
+
+    fn pending_choice_action_space(&self) -> Option<ActionSpace> {
+        let choice = self.pending_choice.as_ref()?;
+        match choice {
+            PendingChoice::ChooseTarget {
+                player,
+                card,
+                legal_targets,
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: legal_targets
+                    .iter()
+                    .copied()
+                    .map(|target| Action::ChooseTarget {
+                        player: *player,
+                        target: match target {
+                            Target::Player(p) => ActionTarget::Player(p),
+                            Target::Permanent(p) => ActionTarget::Permanent(p),
+                            Target::StackSpell(_) => return Action::PassPriority { player: *player },
+                        },
+                    })
+                    .collect(),
+                focus: vec![self.state.cards[card].id],
+            }),
+        }
+    }
+
+    fn legal_targets_for_spell(&self, card: CardId) -> Option<Vec<Target>> {
+        match self.state.cards[card].name.as_str() {
+            "Lightning Bolt" => {
+                let mut targets = vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))];
+                for player in [PlayerId(0), PlayerId(1)] {
+                    for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
+                        let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
+                            continue;
+                        };
+                        let permanent = self.state.permanents[permanent_id].as_ref();
+                        if permanent.is_none() {
+                            continue;
+                        }
+                        if self.state.cards[card_id].types.is_creature() {
+                            targets.push(Target::Permanent(permanent_id));
+                        }
+                    }
+                }
+                Some(targets)
+            }
+            "Counterspell" => Some(
+                self.state
+                    .stack_objects
+                    .iter()
+                    .rev()
+                    .filter_map(|object| match object {
+                        StackObject::Spell(spell) => Some(Target::StackSpell(spell.card)),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
+
     fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        match action {
-            Action::PlayLand { player, card } => self.play_land(*player, *card),
+        let result = match action {
+            Action::PlayLand { player, card } => {
+                self.play_land(*player, *card)?;
+                self.state.priority.on_non_pass_action(self.active_player());
+                Ok(())
+            }
             Action::CastSpell { player, card } => self.cast_spell_action(*player, *card),
-            Action::PassPriority { .. } => {
-                self.state.priority.pass_priority();
+            Action::ActivateAbility {
+                player,
+                permanent,
+                ability_index,
+            } => self.activate_ability_action(*player, *permanent, *ability_index),
+            Action::ChooseTarget { player, target } => {
+                if self.pending_choice.is_some() {
+                    self.choose_target_action(
+                        *player,
+                        match *target {
+                            ActionTarget::Player(p) => Target::Player(p),
+                            ActionTarget::Permanent(p) => Target::Permanent(p),
+                        },
+                    )
+                } else {
+                    self.choose_trigger_target(
+                        *player,
+                        match *target {
+                            ActionTarget::Player(p) => Target::Player(p),
+                            ActionTarget::Permanent(p) => Target::Permanent(p),
+                        },
+                    )
+                }
+            }
+            Action::PassPriority { player } => {
+                if self.state.priority.holder != *player {
+                    return Err(AgentError("player does not have priority".to_string()));
+                }
+                let next = self.next_player(*player);
+                self.state.priority.on_pass(next);
                 Ok(())
             }
             Action::DeclareAttacker {
@@ -549,8 +734,12 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
-            Action::ChooseTarget { player, target } => self.choose_target(*player, *target),
+        };
+        // Non-pass actions may change board state; re-run SBA before next action space.
+        if result.is_ok() && !matches!(action, Action::PassPriority { .. }) {
+            self.state.priority.sba_done = false;
         }
+        result
     }
 
     fn declare_attacker(
@@ -571,7 +760,7 @@ impl Game {
         }
 
         let controller = permanent.controller;
-        permanent.attack();
+        permanent.attack_with_card(card);
         self.invalidate_mana_cache(controller);
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
@@ -586,6 +775,11 @@ impl Game {
         attacker: Option<PermanentId>,
     ) -> Result<(), AgentError> {
         if let Some(attacker_id) = attacker {
+            if !self.blocker_can_block_attacker(blocker, attacker_id) {
+                return Err(AgentError(
+                    "block declaration is illegal for this attacker/blocker pair".to_string(),
+                ));
+            }
             if let Some(combat) = self.state.combat.as_mut() {
                 combat
                     .attacker_to_blockers
@@ -613,25 +807,130 @@ impl Game {
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
         self.invalidate_mana_cache(player);
+
         Ok(())
     }
 
     fn cast_spell_action(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
-        let card_ref = &self.state.cards[card];
-        if card_ref.types.is_land() {
+        if self.pending_choice.is_some() {
+            return Err(AgentError("a choice is already pending".to_string()));
+        }
+
+        let (is_land, owner, is_instant_speed) = {
+            let card_ref = &self.state.cards[card];
+            (
+                card_ref.types.is_land(),
+                card_ref.owner,
+                card_ref.types.is_instant_speed(),
+            )
+        };
+
+        if is_land {
             return Err(AgentError("land cards cannot be cast".to_string()));
         }
-        if card_ref.owner != player {
+        if owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
-
-        if let Some(cost) = card_ref.mana_cost.clone() {
-            // CR 601.2f, 601.2h — Determine/pay costs as part of casting.
-            self.produce_mana(player, &cost)?;
-            self.spend_mana(player, &cost)?;
+        if self.state.priority.holder != player {
+            return Err(AgentError("player does not have priority".to_string()));
+        }
+        if is_instant_speed {
+            if !self.can_cast_instants(player) {
+                return Err(AgentError("cannot cast instant now".to_string()));
+            }
+        } else if !self.can_cast_sorceries(player) {
+            return Err(AgentError(
+                "cannot cast sorcery-speed spell now".to_string(),
+            ));
         }
 
-        self.cast_spell(player, card)
+        if let Some(legal_targets) = self.legal_targets_for_spell(card) {
+            // CR 601.2c — Choose target(s) as part of casting.
+            if legal_targets.is_empty() {
+                return Err(AgentError("no legal targets".to_string()));
+            }
+            self.pending_choice = Some(PendingChoice::ChooseTarget {
+                player,
+                card,
+                legal_targets,
+            });
+            return Ok(());
+        }
+
+        self.pay_spell_cost(player, card)?;
+
+        self.cast_spell(player, card, None)?;
+        self.state.priority.on_non_pass_action(self.active_player());
+        Ok(())
+    }
+
+    fn choose_target_action(&mut self, player: PlayerId, target: Target) -> Result<(), AgentError> {
+        let Some(PendingChoice::ChooseTarget {
+            player: chooser,
+            card,
+            legal_targets,
+        }) = self.pending_choice.as_ref()
+        else {
+            return Err(AgentError("no target choice is pending".to_string()));
+        };
+
+        if *chooser != player {
+            return Err(AgentError("wrong player for target choice".to_string()));
+        }
+        if !legal_targets.contains(&target) {
+            return Err(AgentError("target is not legal".to_string()));
+        }
+
+        let card = *card;
+        self.pay_spell_cost(player, card)?;
+
+        self.cast_spell(player, card, Some(target))?;
+        self.pending_choice = None;
+        self.state.priority.on_non_pass_action(self.active_player());
+        Ok(())
+    }
+
+    fn choose_trigger_target(
+        &mut self,
+        player: PlayerId,
+        target: Target,
+    ) -> Result<(), AgentError> {
+        let pending_trigger = self
+            .state
+            .pending_trigger_choice
+            .take()
+            .ok_or_else(|| AgentError("no pending target choice".to_string()))?;
+
+        if pending_trigger.controller != player {
+            return Err(AgentError("wrong player for target selection".to_string()));
+        }
+
+        let action_target = match target {
+            Target::Player(p) => ActionTarget::Player(p),
+            Target::Permanent(p) => ActionTarget::Permanent(p),
+            Target::StackSpell(_) => {
+                return Err(AgentError("invalid target for triggered ability".to_string()));
+            }
+        };
+
+        let Some(target_spec) = self.trigger_target_spec(&pending_trigger) else {
+            return Err(AgentError("triggered ability no longer exists".to_string()));
+        };
+        if !self.is_valid_target_for_spec(action_target, target_spec) {
+            return Err(AgentError("selected target is not legal".to_string()));
+        }
+
+        self.place_triggered_ability_on_stack(pending_trigger, Some(target));
+        Ok(())
+    }
+
+    fn pay_spell_cost(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
+        let Some(cost) = self.state.cards[card].mana_cost.clone() else {
+            return Ok(());
+        };
+        // CR 601.2f, 601.2h — Determine/pay costs as part of casting.
+        self.produce_mana(player, &cost)?;
+        self.spend_mana(player, &cost)
     }
 
     fn produce_mana(&mut self, player: PlayerId, cost: &ManaCost) -> Result<(), AgentError> {
@@ -678,15 +977,84 @@ impl Game {
         Ok(())
     }
 
-    fn cast_spell(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
+    fn activate_ability_action(
+        &mut self,
+        player: PlayerId,
+        permanent_id: PermanentId,
+        ability_index: usize,
+    ) -> Result<(), AgentError> {
+        if self.state.priority.holder != player {
+            return Err(AgentError("player does not have priority".to_string()));
+        }
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return Err(AgentError("source permanent does not exist".to_string()));
+        };
+        if permanent.controller != player {
+            return Err(AgentError(
+                "source permanent is not controlled by player".to_string(),
+            ));
+        }
+        if self.state.zones.zone_of(permanent.card) != Some(ZoneType::Battlefield) {
+            return Err(AgentError(
+                "source permanent must be on battlefield".to_string(),
+            ));
+        }
+
+        let source_permanent_object_id = permanent.id;
+        let source_card = permanent.card;
+        let source_card_registry_key = self.state.cards[source_card].registry_key;
+        let Some(ability) = self.state.cards[source_card]
+            .activated_abilities
+            .get(ability_index)
+            .cloned()
+        else {
+            return Err(AgentError("invalid ability index".to_string()));
+        };
+
+        self.produce_mana(player, &ability.mana_cost)?;
+        self.spend_mana(player, &ability.mana_cost)?;
+
+        let stack_object = StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            id: self.state.id_gen.next_id(),
+            controller: player,
+            source_card_registry_key,
+            source_card,
+            source_permanent_object_id,
+            ability_index,
+            targets: Vec::new(),
+        });
+        self.state.stack_objects.push(stack_object);
+        self.state.priority.on_non_pass_action(self.active_player());
+        Ok(())
+    }
+
+    fn cast_spell(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        target: Option<Target>,
+    ) -> Result<(), AgentError> {
         let owner = self.state.cards[card].owner;
         if owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
         // CR 601.2i — A cast spell is put onto the stack.
         self.move_card(card, ZoneType::Stack);
-        self.state.stack.push(StackObject::Spell { card });
+        let targets = target.into_iter().collect();
+        let stack_object = StackObject::Spell(SpellOnStack {
+            id: self.state.id_gen.next_id(),
+            card,
+            controller: player,
+            source_card_registry_key: self.state.cards[card].registry_key,
+            targets,
+        });
+        self.state.stack_objects.push(stack_object);
+        self.emit(GameEvent::SpellCast { card, target });
         Ok(())
+    }
+
+    pub(crate) fn emit(&mut self, event: GameEvent) {
+        self.state.events.push(event);
     }
 
     pub fn clear_mana_pools(&mut self) {
@@ -698,6 +1066,12 @@ impl Game {
     fn clear_damage(&mut self) {
         for permanent in self.state.permanents.iter_mut().flatten() {
             permanent.clear_damage();
+        }
+    }
+
+    fn clear_temporary_modifiers(&mut self) {
+        for permanent in self.state.permanents.iter_mut().flatten() {
+            permanent.clear_temporary_modifiers();
         }
     }
 
@@ -781,37 +1155,221 @@ impl Game {
             return;
         };
 
-        for (attacker_id, blockers) in &combat.attacker_to_blockers {
-            let Some(attacker) = self.state.permanents[*attacker_id].as_ref() else {
-                continue;
-            };
-            let attacker_power = self.state.cards[attacker.card].power.unwrap_or(0);
-
-            if blockers.is_empty() {
-                // CR 510.1c — Unblocked attackers assign combat damage to defending player.
-                let defender = self.non_active_player();
-                self.state.players[defender.0].take_damage(attacker_power);
-                continue;
+        let has_first_or_double_strike = self.combat_has_first_or_double_strike(&combat);
+        if has_first_or_double_strike {
+            self.resolve_combat_damage_pass(&combat, CombatDamagePass::FirstStrike);
+            self.perform_state_based_actions();
+            if !self.is_game_over() {
+                self.resolve_combat_damage_pass(&combat, CombatDamagePass::NormalWithFirstStrike);
             }
-
-            for blocker_id in blockers {
-                // CR 510.1a — Combat damage is dealt simultaneously by attacking and blocking creatures.
-                let Some(blocker) = self.state.permanents[*blocker_id].as_ref() else {
-                    continue;
-                };
-                let blocker_power = self.state.cards[blocker.card].power.unwrap_or(0);
-                self.apply_permanent_damage(*attacker_id, blocker_power);
-                self.apply_permanent_damage(*blocker_id, attacker_power);
-            }
+        } else {
+            self.resolve_combat_damage_pass(&combat, CombatDamagePass::Normal);
         }
 
         self.state.combat = Some(combat);
     }
 
-    fn apply_permanent_damage(&mut self, permanent_id: PermanentId, amount: i32) {
+    fn combat_has_first_or_double_strike(&self, combat: &CombatState) -> bool {
+        for attacker_id in &combat.attackers {
+            let Some(attacker) = self.state.permanents[*attacker_id].as_ref() else {
+                continue;
+            };
+            let keywords = &self.state.cards[attacker.card].keywords;
+            if keywords.first_strike || keywords.double_strike {
+                return true;
+            }
+        }
+        for blockers in combat.attacker_to_blockers.values() {
+            for blocker_id in blockers {
+                let Some(blocker) = self.state.permanents[*blocker_id].as_ref() else {
+                    continue;
+                };
+                let keywords = &self.state.cards[blocker.card].keywords;
+                if keywords.first_strike || keywords.double_strike {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn resolve_combat_damage_pass(&mut self, combat: &CombatState, pass: CombatDamagePass) {
+        let defender = self.non_active_player();
+
+        for attacker_id in combat.attackers.iter().copied() {
+            let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
+                continue;
+            };
+            let attacker_card_id = attacker.card;
+            let attacker_card = &self.state.cards[attacker_card_id];
+            if !self.creature_deals_damage_in_pass(attacker_card, pass) {
+                continue;
+            }
+
+            let attacker_power = attacker.effective_power(attacker_card).max(0);
+            let attacker_has_trample = attacker_card.keywords.trample;
+            let attacker_has_deathtouch = attacker_card.keywords.deathtouch;
+
+            let declared_blockers = combat
+                .attacker_to_blockers
+                .get(&attacker_id)
+                .cloned()
+                .unwrap_or_default();
+            let was_blocked = !declared_blockers.is_empty();
+            let blockers: Vec<PermanentId> = declared_blockers
+                .iter()
+                .copied()
+                .filter(|blocker_id| self.state.permanents[*blocker_id].is_some())
+                .collect();
+
+            if !was_blocked {
+                self.apply_player_damage(Some(attacker_card_id), defender, attacker_power);
+                continue;
+            }
+
+            for blocker_id in &blockers {
+                let Some(blocker) = self.state.permanents[*blocker_id].as_ref() else {
+                    continue;
+                };
+                let blocker_card = &self.state.cards[blocker.card];
+                if !self.creature_deals_damage_in_pass(blocker_card, pass) {
+                    continue;
+                }
+                let blocker_power = blocker.effective_power(blocker_card).max(0);
+                self.apply_permanent_damage(Some(blocker.card), attacker_id, blocker_power);
+            }
+
+            let mut remaining_damage = attacker_power;
+            for blocker_id in blockers {
+                if remaining_damage <= 0 {
+                    break;
+                }
+                let Some(blocker) = self.state.permanents[blocker_id].as_ref() else {
+                    continue;
+                };
+                let blocker_card = &self.state.cards[blocker.card];
+                let blocker_toughness = blocker.effective_toughness(blocker_card);
+                let needed_damage = (blocker_toughness - blocker.damage).max(0);
+                let lethal = if needed_damage == 0 {
+                    0
+                } else if attacker_has_deathtouch {
+                    1
+                } else {
+                    needed_damage
+                };
+                let assigned = remaining_damage.min(lethal);
+                self.apply_permanent_damage(Some(attacker_card_id), blocker_id, assigned);
+                remaining_damage -= assigned;
+            }
+
+            if attacker_has_trample && remaining_damage > 0 {
+                self.apply_player_damage(Some(attacker_card_id), defender, remaining_damage);
+            }
+        }
+    }
+
+    fn creature_deals_damage_in_pass(&self, card: &Card, pass: CombatDamagePass) -> bool {
+        let has_first = card.keywords.first_strike;
+        let has_double = card.keywords.double_strike;
+        match pass {
+            CombatDamagePass::FirstStrike => has_first || has_double,
+            CombatDamagePass::NormalWithFirstStrike => !has_first || has_double,
+            CombatDamagePass::Normal => true,
+        }
+    }
+
+    pub(crate) fn apply_player_damage(
+        &mut self,
+        source: Option<CardId>,
+        player: PlayerId,
+        amount: i32,
+    ) {
+        if amount <= 0 {
+            return;
+        }
+        let lifelink_controller = source.and_then(|card| {
+            self.source_has_lifelink(card)
+                .then_some(self.state.cards[card].owner)
+        });
+
+        let Some(player_state) = self.state.players.get_mut(player.0) else {
+            return;
+        };
+        let old_life = player_state.life;
+        player_state.take_damage(amount);
+        let new_life = player_state.life;
+
+        self.emit(GameEvent::DamageDealt {
+            source,
+            target: DamageTarget::Player(player),
+            amount: amount as u32,
+        });
+        self.emit(GameEvent::LifeChanged {
+            player,
+            old: old_life,
+            new: new_life,
+        });
+
+        if let Some(controller) = lifelink_controller {
+            self.gain_life(controller, amount);
+        }
+    }
+
+    pub(crate) fn apply_permanent_damage(
+        &mut self,
+        source: Option<CardId>,
+        permanent_id: PermanentId,
+        amount: i32,
+    ) {
+        if amount <= 0 {
+            return;
+        }
+        let source_has_deathtouch = source.is_some_and(|card| self.source_has_deathtouch(card));
+        let lifelink_controller = source.and_then(|card| {
+            self.source_has_lifelink(card)
+                .then_some(self.state.cards[card].owner)
+        });
+
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.take_damage(amount);
+            if source_has_deathtouch {
+                permanent.deathtouch_damage = true;
+            }
+            self.emit(GameEvent::DamageDealt {
+                source,
+                target: DamageTarget::Permanent(permanent_id),
+                amount: amount as u32,
+            });
         }
+
+        if let Some(controller) = lifelink_controller {
+            self.gain_life(controller, amount);
+        }
+    }
+
+    fn source_has_lifelink(&self, source: CardId) -> bool {
+        self.state.cards[source].keywords.lifelink
+    }
+
+    fn source_has_deathtouch(&self, source: CardId) -> bool {
+        self.state.cards[source].keywords.deathtouch
+    }
+
+    fn gain_life(&mut self, player: PlayerId, amount: i32) {
+        if amount <= 0 {
+            return;
+        }
+        let Some(player_state) = self.state.players.get_mut(player.0) else {
+            return;
+        };
+        let old_life = player_state.life;
+        player_state.life += amount;
+        let new_life = player_state.life;
+        self.emit(GameEvent::LifeChanged {
+            player,
+            old: old_life,
+            new: new_life,
+        });
     }
 
     fn eligible_attackers(&self, player: PlayerId) -> Vec<PermanentId> {
@@ -842,6 +1400,54 @@ impl Game {
         out
     }
 
+    fn blocker_can_block_attacker(
+        &self,
+        blocker_id: PermanentId,
+        attacker_id: PermanentId,
+    ) -> bool {
+        let Some(blocker) = self.state.permanents[blocker_id].as_ref() else {
+            return false;
+        };
+        let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
+            return false;
+        };
+        let blocker_card = &self.state.cards[blocker.card];
+        let attacker_card = &self.state.cards[attacker.card];
+
+        if !blocker.can_block(blocker_card) {
+            return false;
+        }
+
+        if attacker_card.keywords.flying
+            && !(blocker_card.keywords.flying || blocker_card.keywords.reach)
+        {
+            return false;
+        }
+
+        true
+    }
+
+    fn cleanup_illegal_menace_blocks(&mut self) {
+        let Some(combat) = self.state.combat.as_mut() else {
+            return;
+        };
+        for attacker_id in combat.attackers.clone() {
+            let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
+                continue;
+            };
+            let attacker_card = &self.state.cards[attacker.card];
+            if !attacker_card.keywords.menace {
+                continue;
+            }
+            let Some(blockers) = combat.attacker_to_blockers.get_mut(&attacker_id) else {
+                continue;
+            };
+            if blockers.len() == 1 {
+                blockers.clear();
+            }
+        }
+    }
+
     fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         for permanent_id in self.battlefield_permanents(player) {
@@ -854,6 +1460,19 @@ impl Game {
         total
     }
 
+    fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
+        if let Some(cached) = &self.state.mana_cache[player.0] {
+            return cached.clone();
+        }
+        let mana = self.producible_mana(player);
+        self.state.mana_cache[player.0] = Some(mana.clone());
+        mana
+    }
+
+    pub(crate) fn invalidate_mana_cache(&mut self, player: PlayerId) {
+        self.state.mana_cache[player.0] = None;
+    }
+
     fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.state
             .zones
@@ -861,28 +1480,6 @@ impl Game {
             .iter()
             .filter_map(|card| self.state.card_to_permanent[card])
             .collect()
-    }
-
-    fn choose_target(&mut self, player: PlayerId, target: Target) -> Result<(), AgentError> {
-        let pending_trigger = self
-            .state
-            .pending_trigger_choice
-            .take()
-            .ok_or_else(|| AgentError("no pending target choice".to_string()))?;
-
-        if pending_trigger.controller != player {
-            return Err(AgentError("wrong player for target selection".to_string()));
-        }
-
-        let Some(target_spec) = self.trigger_target_spec(&pending_trigger) else {
-            return Err(AgentError("triggered ability no longer exists".to_string()));
-        };
-        if !self.is_valid_target_for_spec(target, target_spec) {
-            return Err(AgentError("selected target is not legal".to_string()));
-        }
-
-        self.place_triggered_ability_on_stack(pending_trigger, Some(target));
-        Ok(())
     }
 
     fn flush_triggers(&mut self) -> Option<ActionSpace> {
@@ -957,16 +1554,25 @@ impl Game {
         trigger: PendingTrigger,
         target: Option<Target>,
     ) {
-        self.state.stack.push(StackObject::TriggeredAbility {
-            source_card: trigger.source_card,
-            ability_index: trigger.ability_index,
-            controller: trigger.controller,
-            target,
-        });
-        self.state.priority.reset();
+        let source_card_registry_key = self.state.cards[trigger.source_card].registry_key;
+        let targets = target.into_iter().collect();
+        self.state
+            .stack_objects
+            .push(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+                id: self.state.id_gen.next_id(),
+                controller: trigger.controller,
+                source_card: trigger.source_card,
+                source_card_registry_key,
+                ability_index: trigger.ability_index,
+                targets,
+            }));
+        self.state.priority.start_round(self.active_player());
     }
 
-    pub(crate) fn legal_targets_for_spec(&self, target_spec: &TargetSpec) -> Vec<Target> {
+    pub(crate) fn legal_targets_for_spec(
+        &self,
+        target_spec: &TargetSpec,
+    ) -> Vec<ActionTarget> {
         match target_spec {
             TargetSpec::Creature { .. } => {
                 let mut out = Vec::new();
@@ -977,7 +1583,7 @@ impl Game {
                         };
                         let card = &self.state.cards[card_id];
                         if card.types.is_creature() {
-                            out.push(Target::Permanent(permanent_id));
+                            out.push(ActionTarget::Permanent(permanent_id));
                         }
                     }
                 }
@@ -988,11 +1594,11 @@ impl Game {
 
     pub(crate) fn is_valid_target_for_spec(
         &self,
-        target: Target,
+        target: ActionTarget,
         target_spec: &TargetSpec,
     ) -> bool {
         match (target, target_spec) {
-            (Target::Permanent(permanent_id), TargetSpec::Creature { .. }) => {
+            (ActionTarget::Permanent(permanent_id), TargetSpec::Creature { .. }) => {
                 let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                     return false;
                 };
@@ -1014,6 +1620,7 @@ impl Game {
                     to,
                     controller,
                 } => self.check_triggers_for_card_moved(card, from, to, controller),
+                _ => {}
             }
         }
     }
@@ -1096,6 +1703,11 @@ impl Game {
                 self.state.permanents[permanent_id] = None;
             }
         }
+        if old_zone == Some(ZoneType::Stack) {
+            if let Some(index) = self.find_spell_on_stack_index(card) {
+                self.state.stack_objects.remove(index);
+            }
+        }
 
         self.state.zones.move_card(card, owner, to_zone);
 
@@ -1117,5 +1729,15 @@ impl Game {
             to: to_zone,
             controller: event_controller,
         });
+        self.process_game_events();
+
+        if let Some(from) = old_zone {
+            self.emit(GameEvent::CardMoved {
+                card,
+                from: Some(from),
+                to: to_zone,
+                controller: event_controller,
+            });
+        }
     }
 }

@@ -6,6 +6,7 @@ use managym::{
     state::{
         game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
+        permanent::Permanent,
         player::PlayerConfig,
         target::Target,
         zone::ZoneType,
@@ -44,6 +45,76 @@ pub fn ogre_only_deck() -> BTreeMap<String, usize> {
 
 pub fn manowar_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([("Island".to_string(), 24), ("Man-o'-War".to_string(), 16)])
+}
+
+pub fn wind_drake_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Island".to_string(), 24), ("Wind Drake".to_string(), 16)])
+}
+
+pub fn giant_spider_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Forest".to_string(), 24), ("Giant Spider".to_string(), 16)])
+}
+
+pub fn raging_goblin_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Mountain".to_string(), 24),
+        ("Raging Goblin".to_string(), 16),
+    ])
+}
+
+pub fn serra_angel_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Plains".to_string(), 24), ("Serra Angel".to_string(), 16)])
+}
+
+pub fn typhoid_rats_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Swamp".to_string(), 24), ("Typhoid Rats".to_string(), 16)])
+}
+
+pub fn war_mammoth_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Forest".to_string(), 24), ("War Mammoth".to_string(), 16)])
+}
+
+pub fn wall_of_stone_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Mountain".to_string(), 24),
+        ("Wall of Stone".to_string(), 16),
+    ])
+}
+
+pub fn boggart_brute_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Mountain".to_string(), 24),
+        ("Boggart Brute".to_string(), 16),
+    ])
+}
+
+pub fn youthful_knight_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Plains".to_string(), 24),
+        ("Youthful Knight".to_string(), 16),
+    ])
+}
+
+pub fn fencing_ace_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Plains".to_string(), 24), ("Fencing Ace".to_string(), 16)])
+}
+
+pub fn hawk_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Plains".to_string(), 24),
+        ("Healer's Hawk".to_string(), 16),
+    ])
+}
+
+pub fn craw_wurm_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([("Forest".to_string(), 24), ("Craw Wurm".to_string(), 16)])
+}
+
+pub fn shivan_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Mountain".to_string(), 24),
+        ("Shivan Dragon".to_string(), 16),
+    ])
 }
 
 pub fn empty_deck() -> BTreeMap<String, usize> {
@@ -240,6 +311,65 @@ impl Scenario {
                 self.game.state.card_to_permanent[*card_id]
             })
             .collect()
+    }
+
+    pub fn force_permanent_on_battlefield(
+        &mut self,
+        player: usize,
+        card_name: &str,
+    ) -> PermanentId {
+        let mut chosen_card_id = None;
+        let mut existing_battlefield_permanent = None;
+        for (index, card) in self.game.state.cards.iter().enumerate() {
+            if card.owner != PlayerId(player) || card.name != card_name {
+                continue;
+            }
+            let card_id = CardId(index);
+            if self.game.state.zones.zone_of(card_id) == Some(ZoneType::Battlefield) {
+                if let Some(permanent_id) = self.game.state.card_to_permanent[card_id] {
+                    if existing_battlefield_permanent.is_none() {
+                        existing_battlefield_permanent = Some(permanent_id);
+                    }
+                    continue;
+                }
+            }
+            chosen_card_id = Some(card_id);
+            break;
+        }
+
+        let Some(card_id) = chosen_card_id else {
+            if let Some(permanent_id) = existing_battlefield_permanent {
+                return permanent_id;
+            }
+            panic!("card {card_name} not found for player {player}");
+        };
+
+        if self.game.state.zones.zone_of(card_id) == Some(ZoneType::Battlefield) {
+            if let Some(permanent_id) = self.game.state.card_to_permanent[card_id] {
+                return permanent_id;
+            }
+        } else {
+            self.game
+                .state
+                .zones
+                .move_card(card_id, PlayerId(player), ZoneType::Battlefield);
+        }
+
+        let permanent_id = PermanentId(self.game.state.permanents.len());
+        let permanent = Permanent::new(
+            self.game.state.id_gen.next_id(),
+            card_id,
+            &self.game.state.cards[card_id],
+        );
+        self.game.state.permanents.push(Some(permanent));
+        if self.game.state.card_to_permanent.len() <= card_id.0 {
+            self.game
+                .state
+                .card_to_permanent
+                .resize(card_id.0 + 1, None);
+        }
+        self.game.state.card_to_permanent[card_id] = Some(permanent_id);
+        permanent_id
     }
 
     pub fn set_player_mana_pool(&mut self, player: usize, mana: &str) {

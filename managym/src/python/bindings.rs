@@ -21,8 +21,9 @@ use crate::{
         action::{ActionSpaceKind, ActionType, AgentError},
         env::Env,
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, Observation, PermanentData,
-            PlayerData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, KeywordData, Observation,
+            PermanentData, PlayerData, StackObjectData, StackObjectKindData, StackTargetData,
+            StackTargetKindData, TurnData,
         },
         observation_encoder::{
             ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
@@ -455,6 +456,7 @@ pub enum ActionEnum {
     DeclareAttacker = 3,
     DeclareBlocker = 4,
     ChooseTarget = 5,
+    PriorityActivateAbility = 6,
 }
 
 #[cfg(feature = "python")]
@@ -472,6 +474,8 @@ impl ActionEnum {
     const DECLARE_BLOCKER: Self = Self::DeclareBlocker;
     #[classattr]
     const CHOOSE_TARGET: Self = Self::ChooseTarget;
+    #[classattr]
+    const PRIORITY_ACTIVATE_ABILITY: Self = Self::PriorityActivateAbility;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -492,6 +496,7 @@ impl From<ActionType> for ActionEnum {
             ActionType::DeclareAttacker => Self::DeclareAttacker,
             ActionType::DeclareBlocker => Self::DeclareBlocker,
             ActionType::ChooseTarget => Self::ChooseTarget,
+            ActionType::PriorityActivateAbility => Self::PriorityActivateAbility,
         }
     }
 }
@@ -567,6 +572,82 @@ impl From<ActionSpaceEnum> for ActionSpaceKind {
             ActionSpaceEnum::DeclareAttacker => Self::DeclareAttacker,
             ActionSpaceEnum::DeclareBlocker => Self::DeclareBlocker,
             ActionSpaceEnum::ChooseTarget => Self::ChooseTarget,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "StackObjectKindEnum", eq, eq_int)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum StackObjectKindEnum {
+    Spell = 0,
+    ActivatedAbility = 1,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl StackObjectKindEnum {
+    #[classattr]
+    const SPELL: Self = Self::Spell;
+    #[classattr]
+    const ACTIVATED_ABILITY: Self = Self::ActivatedAbility;
+
+    fn __int__(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __index__(&self) -> i32 {
+        *self as i32
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<StackObjectKindData> for StackObjectKindEnum {
+    fn from(value: StackObjectKindData) -> Self {
+        match value {
+            StackObjectKindData::Spell => Self::Spell,
+            StackObjectKindData::ActivatedAbility => Self::ActivatedAbility,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "StackTargetKindEnum", eq, eq_int)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum StackTargetKindEnum {
+    Player = 0,
+    Permanent = 1,
+    StackObject = 2,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl StackTargetKindEnum {
+    #[classattr]
+    const PLAYER: Self = Self::Player;
+    #[classattr]
+    const PERMANENT: Self = Self::Permanent;
+    #[classattr]
+    const STACK_OBJECT: Self = Self::StackObject;
+
+    fn __int__(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __index__(&self) -> i32 {
+        *self as i32
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<StackTargetKindData> for StackTargetKindEnum {
+    fn from(value: StackTargetKindData) -> Self {
+        match value {
+            StackTargetKindData::Player => Self::Player,
+            StackTargetKindData::Permanent => Self::Permanent,
+            StackTargetKindData::StackObject => Self::StackObject,
         }
     }
 }
@@ -764,6 +845,53 @@ impl From<PyCardTypes> for CardTypeData {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "Keywords")]
+#[derive(Clone)]
+pub struct PyKeywords {
+    #[pyo3(get, set)]
+    pub flying: bool,
+    #[pyo3(get, set)]
+    pub reach: bool,
+    #[pyo3(get, set)]
+    pub haste: bool,
+    #[pyo3(get, set)]
+    pub vigilance: bool,
+    #[pyo3(get, set)]
+    pub trample: bool,
+    #[pyo3(get, set)]
+    pub first_strike: bool,
+    #[pyo3(get, set)]
+    pub double_strike: bool,
+    #[pyo3(get, set)]
+    pub deathtouch: bool,
+    #[pyo3(get, set)]
+    pub lifelink: bool,
+    #[pyo3(get, set)]
+    pub defender: bool,
+    #[pyo3(get, set)]
+    pub menace: bool,
+}
+
+#[cfg(feature = "python")]
+impl From<KeywordData> for PyKeywords {
+    fn from(value: KeywordData) -> Self {
+        Self {
+            flying: value.flying,
+            reach: value.reach,
+            haste: value.haste,
+            vigilance: value.vigilance,
+            trample: value.trample,
+            first_strike: value.first_strike,
+            double_strike: value.double_strike,
+            deathtouch: value.deathtouch,
+            lifelink: value.lifelink,
+            defender: value.defender,
+            menace: value.menace,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "ManaCost")]
 #[derive(Clone)]
 pub struct PyManaCost {
@@ -817,6 +945,8 @@ pub struct PyCard {
     #[pyo3(get, set)]
     pub card_types: PyCardTypes,
     #[pyo3(get, set)]
+    pub keywords: PyKeywords,
+    #[pyo3(get, set)]
     pub mana_cost: PyManaCost,
 }
 
@@ -831,6 +961,7 @@ impl From<CardData> for PyCard {
             power: value.power,
             toughness: value.toughness,
             card_types: value.card_types.into(),
+            keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
         }
     }
@@ -959,6 +1090,67 @@ impl From<PyActionSpace> for ActionSpaceData {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "StackTarget")]
+#[derive(Clone)]
+pub struct PyStackTarget {
+    #[pyo3(get, set)]
+    pub kind: StackTargetKindEnum,
+    #[pyo3(get, set)]
+    pub player_id: Option<i32>,
+    #[pyo3(get, set)]
+    pub permanent_id: Option<i32>,
+    #[pyo3(get, set)]
+    pub stack_object_id: Option<i32>,
+}
+
+#[cfg(feature = "python")]
+impl From<StackTargetData> for PyStackTarget {
+    fn from(value: StackTargetData) -> Self {
+        Self {
+            kind: value.kind.into(),
+            player_id: value.player_id,
+            permanent_id: value.permanent_id,
+            stack_object_id: value.stack_object_id,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "StackObject")]
+#[derive(Clone)]
+pub struct PyStackObject {
+    #[pyo3(get, set)]
+    pub stack_object_id: i32,
+    #[pyo3(get, set)]
+    pub kind: StackObjectKindEnum,
+    #[pyo3(get, set)]
+    pub controller_id: i32,
+    #[pyo3(get, set)]
+    pub source_card_registry_key: i32,
+    #[pyo3(get, set)]
+    pub source_permanent_id: Option<i32>,
+    #[pyo3(get, set)]
+    pub ability_index: Option<i32>,
+    #[pyo3(get, set)]
+    pub targets: Vec<PyStackTarget>,
+}
+
+#[cfg(feature = "python")]
+impl From<StackObjectData> for PyStackObject {
+    fn from(value: StackObjectData) -> Self {
+        Self {
+            stack_object_id: value.stack_object_id,
+            kind: value.kind.into(),
+            controller_id: value.controller_id,
+            source_card_registry_key: value.source_card_registry_key,
+            source_permanent_id: value.source_permanent_id,
+            ability_index: value.ability_index,
+            targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Observation")]
 #[derive(Clone)]
 pub struct PyObservation {
@@ -982,6 +1174,8 @@ pub struct PyObservation {
     pub opponent_cards: Vec<PyCard>,
     #[pyo3(get, set)]
     pub opponent_permanents: Vec<PyPermanent>,
+    #[pyo3(get, set)]
+    pub stack_objects: Vec<PyStackObject>,
 }
 
 #[cfg(feature = "python")]
@@ -1005,6 +1199,11 @@ impl From<Observation> for PyObservation {
                 .opponent_permanents
                 .into_iter()
                 .map(PyPermanent::from)
+                .collect(),
+            stack_objects: value
+                .stack_objects
+                .into_iter()
+                .map(PyStackObject::from)
                 .collect(),
         }
     }
@@ -1110,6 +1309,19 @@ impl PyObservation {
                     "is_kindred": card.card_types.is_kindred,
                     "is_battle": card.card_types.is_battle,
                 },
+                "keywords": {
+                    "flying": card.keywords.flying,
+                    "reach": card.keywords.reach,
+                    "haste": card.keywords.haste,
+                    "vigilance": card.keywords.vigilance,
+                    "trample": card.keywords.trample,
+                    "first_strike": card.keywords.first_strike,
+                    "double_strike": card.keywords.double_strike,
+                    "deathtouch": card.keywords.deathtouch,
+                    "lifelink": card.keywords.lifelink,
+                    "defender": card.keywords.defender,
+                    "menace": card.keywords.menace,
+                },
                 "mana_cost": {
                     "cost": card.mana_cost.cost,
                     "mana_value": card.mana_cost.mana_value,
@@ -1124,6 +1336,27 @@ impl PyObservation {
                 "tapped": permanent.tapped,
                 "damage": permanent.damage,
                 "is_summoning_sick": permanent.is_summoning_sick,
+            })
+        }
+
+        fn stack_target_json(target: &PyStackTarget) -> Value {
+            json!({
+                "kind": target.kind as i32,
+                "player_id": target.player_id,
+                "permanent_id": target.permanent_id,
+                "stack_object_id": target.stack_object_id,
+            })
+        }
+
+        fn stack_object_json(stack_object: &PyStackObject) -> Value {
+            json!({
+                "stack_object_id": stack_object.stack_object_id,
+                "kind": stack_object.kind as i32,
+                "controller_id": stack_object.controller_id,
+                "source_card_registry_key": stack_object.source_card_registry_key,
+                "source_permanent_id": stack_object.source_permanent_id,
+                "ability_index": stack_object.ability_index,
+                "targets": stack_object.targets.iter().map(stack_target_json).collect::<Vec<_>>(),
             })
         }
 
@@ -1164,6 +1397,11 @@ impl PyObservation {
                 .opponent_permanents
                 .iter()
                 .map(permanent_json)
+                .collect::<Vec<_>>(),
+            "stack_objects": self
+                .stack_objects
+                .iter()
+                .map(stack_object_json)
                 .collect::<Vec<_>>(),
         })
         .to_string()
@@ -1303,6 +1541,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<StepEnum>()?;
     m.add_class::<ActionEnum>()?;
     m.add_class::<ActionSpaceEnum>()?;
+    m.add_class::<StackObjectKindEnum>()?;
+    m.add_class::<StackTargetKindEnum>()?;
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_class::<PyObservation>()?;
@@ -1310,10 +1550,13 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTurn>()?;
     m.add_class::<PyCard>()?;
     m.add_class::<PyCardTypes>()?;
+    m.add_class::<PyKeywords>()?;
     m.add_class::<PyManaCost>()?;
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyAction>()?;
     m.add_class::<PyActionSpace>()?;
+    m.add_class::<PyStackTarget>()?;
+    m.add_class::<PyStackObject>()?;
 
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
