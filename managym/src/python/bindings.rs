@@ -25,7 +25,8 @@ use crate::{
             PlayerData, TurnData,
         },
         observation_encoder::{
-            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
+            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM,
+            PLAYER_DIM,
         },
     },
     flow::turn::{PhaseKind, StepKind},
@@ -179,52 +180,29 @@ fn encoded_to_dict<'py>(
         )?,
     )?;
 
-    let agent_player_valid = vec![1.0_f32];
-    let opponent_player_valid = vec![1.0_f32];
-    let agent_cards_valid = encoded
-        .agent_cards
-        .chunks_exact(CARD_DIM)
-        .map(|row| row[CARD_DIM - 1])
-        .collect::<Vec<_>>();
-    let opponent_cards_valid = encoded
-        .opponent_cards
-        .chunks_exact(CARD_DIM)
-        .map(|row| row[CARD_DIM - 1])
-        .collect::<Vec<_>>();
-    let agent_permanents_valid = encoded
-        .agent_permanents
-        .chunks_exact(PERMANENT_DIM)
-        .map(|row| row[PERMANENT_DIM - 1])
-        .collect::<Vec<_>>();
-    let opponent_permanents_valid = encoded
-        .opponent_permanents
-        .chunks_exact(PERMANENT_DIM)
-        .map(|row| row[PERMANENT_DIM - 1])
-        .collect::<Vec<_>>();
-    let actions_valid = encoded
-        .actions
-        .chunks_exact(ACTION_DIM)
-        .map(|row| row[ACTION_DIM - 1])
-        .collect::<Vec<_>>();
-
     dict.set_item(
         "agent_player_valid",
-        to_numpy_array_f32(py, &np, &agent_player_valid, &[1])?,
+        to_numpy_array_f32(py, &np, &encoded.agent_player_valid, &[1])?,
     )?;
     dict.set_item(
         "opponent_player_valid",
-        to_numpy_array_f32(py, &np, &opponent_player_valid, &[1])?,
+        to_numpy_array_f32(py, &np, &encoded.opponent_player_valid, &[1])?,
     )?;
     dict.set_item(
         "agent_cards_valid",
-        to_numpy_array_f32(py, &np, &agent_cards_valid, &[config.max_cards_per_player])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_cards_valid,
+            &[config.max_cards_per_player],
+        )?,
     )?;
     dict.set_item(
         "opponent_cards_valid",
         to_numpy_array_f32(
             py,
             &np,
-            &opponent_cards_valid,
+            &encoded.opponent_cards_valid,
             &[config.max_cards_per_player],
         )?,
     )?;
@@ -233,7 +211,7 @@ fn encoded_to_dict<'py>(
         to_numpy_array_f32(
             py,
             &np,
-            &agent_permanents_valid,
+            &encoded.agent_permanents_valid,
             &[config.max_permanents_per_player],
         )?,
     )?;
@@ -242,13 +220,13 @@ fn encoded_to_dict<'py>(
         to_numpy_array_f32(
             py,
             &np,
-            &opponent_permanents_valid,
+            &encoded.opponent_permanents_valid,
             &[config.max_permanents_per_player],
         )?,
     )?;
     dict.set_item(
         "actions_valid",
-        to_numpy_array_f32(py, &np, &actions_valid, &[config.max_actions])?,
+        to_numpy_array_f32(py, &np, &encoded.actions_valid, &[config.max_actions])?,
     )?;
 
     Ok(dict)

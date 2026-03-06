@@ -61,6 +61,13 @@ pub struct EncodedObservation {
     pub opponent_permanents: Vec<f32>,
     pub actions: Vec<f32>,
     pub action_focus: Vec<i32>,
+    pub agent_player_valid: Vec<f32>,
+    pub opponent_player_valid: Vec<f32>,
+    pub agent_cards_valid: Vec<f32>,
+    pub opponent_cards_valid: Vec<f32>,
+    pub agent_permanents_valid: Vec<f32>,
+    pub opponent_permanents_valid: Vec<f32>,
+    pub actions_valid: Vec<f32>,
 }
 
 pub struct EncodedObservationMut<'a> {
@@ -72,6 +79,13 @@ pub struct EncodedObservationMut<'a> {
     pub opponent_permanents: &'a mut [f32],
     pub actions: &'a mut [f32],
     pub action_focus: &'a mut [i32],
+    pub agent_player_valid: &'a mut [f32],
+    pub opponent_player_valid: &'a mut [f32],
+    pub agent_cards_valid: &'a mut [f32],
+    pub opponent_cards_valid: &'a mut [f32],
+    pub agent_permanents_valid: &'a mut [f32],
+    pub opponent_permanents_valid: &'a mut [f32],
+    pub actions_valid: &'a mut [f32],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,6 +124,13 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         opponent_permanents: vec![0.0; config.permanents_len()],
         actions: vec![0.0; config.actions_len()],
         action_focus: vec![-1; config.action_focus_len()],
+        agent_player_valid: vec![0.0; 1],
+        opponent_player_valid: vec![0.0; 1],
+        agent_cards_valid: vec![0.0; config.max_cards_per_player],
+        opponent_cards_valid: vec![0.0; config.max_cards_per_player],
+        agent_permanents_valid: vec![0.0; config.max_permanents_per_player],
+        opponent_permanents_valid: vec![0.0; config.max_permanents_per_player],
+        actions_valid: vec![0.0; config.max_actions],
     };
 
     let out = EncodedObservationMut {
@@ -121,6 +142,13 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         opponent_permanents: &mut encoded.opponent_permanents,
         actions: &mut encoded.actions,
         action_focus: &mut encoded.action_focus,
+        agent_player_valid: &mut encoded.agent_player_valid,
+        opponent_player_valid: &mut encoded.opponent_player_valid,
+        agent_cards_valid: &mut encoded.agent_cards_valid,
+        opponent_cards_valid: &mut encoded.opponent_cards_valid,
+        agent_permanents_valid: &mut encoded.agent_permanents_valid,
+        opponent_permanents_valid: &mut encoded.opponent_permanents_valid,
+        actions_valid: &mut encoded.actions_valid,
     };
 
     encode_into(obs, config, out).expect("internal encode buffer lengths are always valid");
@@ -156,6 +184,29 @@ pub fn encode_into(
         out.action_focus.len(),
         config.action_focus_len(),
     )?;
+    validate_buffer_len("agent_player_valid", out.agent_player_valid.len(), 1)?;
+    validate_buffer_len("opponent_player_valid", out.opponent_player_valid.len(), 1)?;
+    validate_buffer_len(
+        "agent_cards_valid",
+        out.agent_cards_valid.len(),
+        config.max_cards_per_player,
+    )?;
+    validate_buffer_len(
+        "opponent_cards_valid",
+        out.opponent_cards_valid.len(),
+        config.max_cards_per_player,
+    )?;
+    validate_buffer_len(
+        "agent_permanents_valid",
+        out.agent_permanents_valid.len(),
+        config.max_permanents_per_player,
+    )?;
+    validate_buffer_len(
+        "opponent_permanents_valid",
+        out.opponent_permanents_valid.len(),
+        config.max_permanents_per_player,
+    )?;
+    validate_buffer_len("actions_valid", out.actions_valid.len(), config.max_actions)?;
 
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
@@ -165,6 +216,13 @@ pub fn encode_into(
     out.opponent_permanents.fill(0.0);
     out.actions.fill(0.0);
     out.action_focus.fill(-1);
+    out.agent_player_valid.fill(0.0);
+    out.opponent_player_valid.fill(0.0);
+    out.agent_cards_valid.fill(0.0);
+    out.opponent_cards_valid.fill(0.0);
+    out.agent_permanents_valid.fill(0.0);
+    out.opponent_permanents_valid.fill(0.0);
+    out.actions_valid.fill(0.0);
 
     let mut object_to_index: HashMap<i32, i32> = HashMap::new();
     let mut current_object_index: i32 = 0;
@@ -176,6 +234,8 @@ pub fn encode_into(
         &mut object_to_index,
         &mut current_object_index,
     );
+    out.agent_player_valid[0] = 1.0;
+
     encode_player_features(
         &obs.opponent,
         &obs.turn,
@@ -183,12 +243,14 @@ pub fn encode_into(
         &mut object_to_index,
         &mut current_object_index,
     );
+    out.opponent_player_valid[0] = 1.0;
 
     encode_cards(
         &obs.agent_cards,
         1.0,
         config.max_cards_per_player,
         out.agent_cards,
+        out.agent_cards_valid,
         &mut object_to_index,
         &mut current_object_index,
     );
@@ -197,6 +259,7 @@ pub fn encode_into(
         0.0,
         config.max_cards_per_player,
         out.opponent_cards,
+        out.opponent_cards_valid,
         &mut object_to_index,
         &mut current_object_index,
     );
@@ -206,6 +269,7 @@ pub fn encode_into(
         1.0,
         config.max_permanents_per_player,
         out.agent_permanents,
+        out.agent_permanents_valid,
         &mut object_to_index,
         &mut current_object_index,
     );
@@ -214,6 +278,7 @@ pub fn encode_into(
         0.0,
         config.max_permanents_per_player,
         out.opponent_permanents,
+        out.opponent_permanents_valid,
         &mut object_to_index,
         &mut current_object_index,
     );
@@ -223,6 +288,7 @@ pub fn encode_into(
         config.max_actions,
         config.max_focus_objects,
         out.actions,
+        out.actions_valid,
         out.action_focus,
         &object_to_index,
     );
@@ -278,6 +344,7 @@ fn encode_cards(
     is_mine: f32,
     max_cards: usize,
     out: &mut [f32],
+    out_valid: &mut [f32],
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
@@ -288,6 +355,7 @@ fn encode_cards(
         let start = i * CARD_DIM;
         let end = start + CARD_DIM;
         encode_card_features(card, is_mine, &mut out[start..end]);
+        out_valid[i] = 1.0;
         object_to_index.insert(card.id, *current_object_index);
         *current_object_index += 1;
         encoded_count += 1;
@@ -319,6 +387,7 @@ fn encode_permanents(
     is_mine: f32,
     max_permanents: usize,
     out: &mut [f32],
+    out_valid: &mut [f32],
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
@@ -329,6 +398,7 @@ fn encode_permanents(
         let start = i * PERMANENT_DIM;
         let end = start + PERMANENT_DIM;
         encode_permanent_features(permanent, is_mine, &mut out[start..end]);
+        out_valid[i] = 1.0;
         object_to_index.insert(permanent.id, *current_object_index);
         *current_object_index += 1;
         encoded_count += 1;
@@ -350,6 +420,7 @@ fn encode_actions(
     max_actions: usize,
     max_focus_objects: usize,
     out_actions: &mut [f32],
+    out_valid: &mut [f32],
     out_focus: &mut [i32],
     object_to_index: &HashMap<i32, i32>,
 ) {
@@ -369,6 +440,7 @@ fn encode_actions(
             row[action_type_index] = 1.0;
         }
         row[ACTION_DIM - 1] = 1.0;
+        out_valid[action_index] = 1.0;
 
         let focus_start = action_index * max_focus_objects;
         for (focus_index, focus_id) in action.focus.iter().take(max_focus_objects).enumerate() {
@@ -427,7 +499,10 @@ mod tests {
         state::{mana::ManaCost, zone::ZoneType},
     };
 
-    use super::{encode, encode_into, EncodedObservationMut, ObservationEncoderConfig};
+    use super::{
+        encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
+        PERMANENT_DIM, PLAYER_DIM,
+    };
 
     fn sample_observation() -> Observation {
         Observation {
@@ -566,6 +641,15 @@ mod tests {
 
         // Unknown focus IDs map to -1.
         assert_eq!(encoded.action_focus[4], -1);
+
+        // Validity vectors match populated slots.
+        assert_eq!(encoded.agent_player_valid, vec![1.0]);
+        assert_eq!(encoded.opponent_player_valid, vec![1.0]);
+        assert_eq!(encoded.agent_cards_valid, vec![1.0, 1.0, 0.0]);
+        assert_eq!(encoded.opponent_cards_valid, vec![1.0, 0.0, 0.0]);
+        assert_eq!(encoded.agent_permanents_valid, vec![1.0, 0.0]);
+        assert_eq!(encoded.opponent_permanents_valid, vec![1.0, 0.0]);
+        assert_eq!(encoded.actions_valid, vec![1.0, 1.0, 1.0]);
     }
 
     #[test]
@@ -579,13 +663,20 @@ mod tests {
         };
 
         let mut agent_player = vec![0.0; 1];
-        let mut opponent_player = vec![0.0; 26];
-        let mut agent_cards = vec![0.0; 2 * 18];
-        let mut opponent_cards = vec![0.0; 2 * 18];
-        let mut agent_permanents = vec![0.0; 5];
-        let mut opponent_permanents = vec![0.0; 5];
-        let mut actions = vec![0.0; 2 * 7];
+        let mut opponent_player = vec![0.0; PLAYER_DIM];
+        let mut agent_cards = vec![0.0; 2 * CARD_DIM];
+        let mut opponent_cards = vec![0.0; 2 * CARD_DIM];
+        let mut agent_permanents = vec![0.0; PERMANENT_DIM];
+        let mut opponent_permanents = vec![0.0; PERMANENT_DIM];
+        let mut actions = vec![0.0; 2 * ACTION_DIM];
         let mut action_focus = vec![-1; 2 * 2];
+        let mut agent_player_valid = vec![0.0; 1];
+        let mut opponent_player_valid = vec![0.0; 1];
+        let mut agent_cards_valid = vec![0.0; 2];
+        let mut opponent_cards_valid = vec![0.0; 2];
+        let mut agent_permanents_valid = vec![0.0; 1];
+        let mut opponent_permanents_valid = vec![0.0; 1];
+        let mut actions_valid = vec![0.0; 2];
 
         let out = EncodedObservationMut {
             agent_player: &mut agent_player,
@@ -596,6 +687,13 @@ mod tests {
             opponent_permanents: &mut opponent_permanents,
             actions: &mut actions,
             action_focus: &mut action_focus,
+            agent_player_valid: &mut agent_player_valid,
+            opponent_player_valid: &mut opponent_player_valid,
+            agent_cards_valid: &mut agent_cards_valid,
+            opponent_cards_valid: &mut opponent_cards_valid,
+            agent_permanents_valid: &mut agent_permanents_valid,
+            opponent_permanents_valid: &mut opponent_permanents_valid,
+            actions_valid: &mut actions_valid,
         };
 
         let err = encode_into(&obs, &config, out).expect_err("invalid length must fail");
