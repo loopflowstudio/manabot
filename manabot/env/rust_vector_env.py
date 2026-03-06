@@ -14,6 +14,7 @@ from .match import Match, Reward
 from .observation import ObservationSpace
 
 VALID_OPPONENT_POLICIES = ("none", "passive", "random")
+OBSERVATION_BUFFER_DTYPES = {"action_focus": np.int32}
 
 
 class RustVectorEnv:
@@ -73,16 +74,17 @@ class RustVectorEnv:
         self._truncated_cpu_view = torch.from_numpy(self._buffers["truncated"])
 
         self._obs_tensors = {}
-        for key in self._obs_keys:
-            cpu_view = self._obs_cpu_views[key]
-            if self.device.type == "cpu" and key != "action_focus":
+        for key, cpu_view in self._obs_cpu_views.items():
+            tensor_dtype = torch.float32 if key == "action_focus" else cpu_view.dtype
+            if self.device.type == "cpu" and cpu_view.dtype == tensor_dtype:
                 self._obs_tensors[key] = cpu_view
-            else:
-                self._obs_tensors[key] = torch.empty(
-                    cpu_view.shape,
-                    dtype=torch.float32 if key == "action_focus" else cpu_view.dtype,
-                    device=self.device,
-                )
+                continue
+
+            self._obs_tensors[key] = torch.empty(
+                cpu_view.shape,
+                dtype=tensor_dtype,
+                device=self.device,
+            )
 
         self._terminated_tensor = torch.empty(
             self.num_envs, dtype=torch.bool, device=self.device

@@ -1,5 +1,5 @@
 # Local directory imports
-from .env import Env, LegacyVectorEnv, VectorEnv
+from .env import Env, LegacyVectorEnv
 from .match import Match, Reward
 from .observation import ObservationSpace
 from .rust_vector_env import RustVectorEnv
@@ -15,7 +15,6 @@ __all__ = [
     "LegacyVectorEnv",
     "Match",
     "RustVectorEnv",
-    "VectorEnv",
     "Reward",
     "ObservationSpace",
     "SingleAgentEnv",

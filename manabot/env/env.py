@@ -114,10 +114,7 @@ class Env(gym.Env):
         # Gymnasium requires calling this for seeding (if you use self.np_random)
         super().reset(seed=seed)
 
-        match = self.match
-        if options:
-            if "match" in options:
-                match = options["match"]
+        match = self.match if not options else options.get("match", self.match)
 
         # Get the initial managym observation
         raw_obs, raw_info = self._engine.reset(match.to_rust())
@@ -312,5 +309,3 @@ class LegacyVectorEnv:
         """Close the environment."""
         self._env.close()
 
-
-VectorEnv = LegacyVectorEnv
