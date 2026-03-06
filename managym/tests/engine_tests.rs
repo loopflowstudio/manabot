@@ -158,9 +158,9 @@ fn combat_damage_reduces_life() {
                 .unwrap_or(0),
             // During block declaration, don't block (last action)
             ActionSpaceKind::DeclareBlocker => space.actions.len() - 1,
+            ActionSpaceKind::ChooseTarget => 0,
             // Priority: play lands and cast spells when possible, else pass
             ActionSpaceKind::Priority => 0,
-            ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => break,
         };
 

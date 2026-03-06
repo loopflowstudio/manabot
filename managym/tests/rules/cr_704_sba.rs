@@ -11,7 +11,6 @@ fn cr_704_5a_player_loses_at_zero_life() {
     s.game_mut().state.players[0].life = 0;
 
     s.pass_priority();
-    s.pass_priority();
 
     s.assert_game_over();
     s.assert_winner(1);

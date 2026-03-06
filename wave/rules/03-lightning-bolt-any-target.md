@@ -1,82 +1,78 @@
-# 03: Declarative Effect DSL + Targeting Expansion
+# 03: Lightning Bolt (Targeting + Instant Interaction)
 
 ## Finish line
 
-Declarative effect DSL exists and executes Lightning Bolt (and future cards)
-generically. Targeting model expands beyond the single-target infrastructure
-already landed in stage 02.
+Lightning Bolt is implemented with declarative effect DSL and engine-side
+target legality — validating real instant-speed interaction on the stack.
 
-## Context (what's already landed)
+## Prerequisites already landed
 
-Stage 02 shipped:
-- Single-target infrastructure (`Target::Player | Permanent | StackSpell`)
-- `ChooseTarget` action space + pending cast flow (CR 601.2c)
-- Lightning Bolt and Counterspell with real target selection at cast time
-- `GameEvent` enum and emission log (`Vec<GameEvent>` on `GameState`)
-- Priority/stack response windows with instant-speed casting
-- CR-cited tests for CR 117/405/601/608
+Stage 04 (Man-o'-War) landed targeting infrastructure ahead of this stage:
 
-What's hardcoded now: Bolt and Counterspell effects are implemented directly in
-`resolve_top_of_stack()` in `game.rs` — no declarative representation yet.
-Target metadata is stored as `HashMap<CardId, Target>` (single target only).
+- `ActionSpaceKind::ChooseTarget` and `Action::ChooseTarget` exist in
+  `agent/action.rs`
+- `Target` enum (`Player | Permanent`) in `state/target.rs`
+- `StackObject` enum (`Spell | TriggeredAbility`) in `state/stack.rs`
+- `GameEvent::CardMoved` in `flow/event.rs`
+- Sequential target selection flow works for triggered abilities
+
+This means stage 03 is now scoped to:
+1. Add `Effect::DealDamage` variant to the DSL
+2. Add `TargetSpec` variant for "creature or player"
+3. Wire target selection into spell casting (currently only triggered abilities
+   use `ChooseTarget`)
+4. Add Lightning Bolt to card registry
+5. Trace tests for bolt-specific interactions
 
 ## Changes
 
-### Declarative Effect DSL (initial)
+### Declarative Effect DSL Extension
 
-Introduce the effect representation model. Lightning Bolt is the first card
-to use it:
+Add damage effect to the existing `Effect` enum in `state/ability.rs`:
 
 ```rust
-Effect::Damage {
-    amount: Value::Fixed(3),
-    target: TargetSpec::Any {
-        filter: Filter::Or(Filter::Creature, Filter::Player),
-        count: 1,
-    },
-    source: Source::This,
+Effect::DealDamage {
+    amount: u32,
+    target: TargetSpec,
 }
 ```
 
-The DSL is declarative — the engine interprets effect trees generically.
-Design with observation-encoding in mind (effect trees will be flattened into
-features in stage 12).
+Add `TargetSpec::CreatureOrPlayer` (or extend existing `TargetSpec::Creature`
+to a more general filter model).
 
-Migrate Bolt and Counterspell from hardcoded resolution to DSL-driven
-resolution. This validates the DSL against cards that already work.
+### Spell Targeting
 
-### Broader Target Classes
+Spells with targets need the same `ChooseTarget` flow that triggered abilities
+already use. When casting a targeted spell:
+1. Agent chooses `CastSpell { card: bolt }`
+2. Engine presents `ChooseTarget` with legal targets
+3. Agent picks a target
+4. Spell goes on stack with target attached
 
-Extend targeting beyond single-target:
-- `TargetSpec` with `count` field for required vs optional targets
-- Target filters: creature, player, spell-on-stack, any-target
-- Legal target computation driven by `TargetSpec` rather than per-card checks
+This reuses the existing `ChooseTarget` action space. The main work is wiring
+`CastSpell` to check for targets on the spell's effect and present the
+targeting step before the spell goes on the stack.
 
 ### Card Registry
 
-Generalize card definition to include declarative effects. Lightning Bolt
-becomes the template for effect-bearing cards.
+Add Lightning Bolt (R, Instant, "Deal 3 damage to any target").
 
 ### Trace Tests
 
-- Bolt with declarative DSL resolves identically to hardcoded version
-- Legal/illegal target filtering via `TargetSpec`
-- Negative: can't cast bolt with no legal targets (already tested, verify DSL path)
+- Legal/illegal targets (creature on battlefield, player, not own creature if
+  no legal — actually any target is legal for Bolt)
+- Stack resolution ordering (bolt in response to bolt)
+- Lethal player/creature outcomes
+- Negative: can't cast bolt with no legal targets (edge case: only if
+  literally no creatures or players — unlikely but test it)
 
 ### Training smoke test
 
-Agent beats random with bolt-heavy decks. Verify no regression from DSL migration.
-
-## Alternatives considered
-
-From stage 02 design doc:
-- Auto-target approach was rejected in favor of real target selection (now landed).
-- Full generalized multi-target was deferred — extend here if needed for new cards.
-- Event subscribers (pub-sub) deferred — Vec log is sufficient until triggers consume it.
+Agent beats random with bolt-heavy decks. Track action space size increase.
 
 ## Done when
 
-- Declarative effect DSL exists and executes Bolt + Counterspell correctly.
-- `TargetSpec`-driven target legality replaces per-card target checks.
-- Existing CR-cited tests continue to pass (no regressions from DSL migration).
+- Bolt castable at instant speed via sequential target selection.
+- `Effect::DealDamage` exists and resolves correctly.
+- Trace tests covering targeting and stack interaction pass.
 - Training smoke test passes.

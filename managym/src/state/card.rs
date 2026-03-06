@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::{
+    ability::Ability,
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
 };
@@ -104,6 +105,7 @@ pub struct CardDefinition {
     pub types: CardTypes,
     pub supertypes: Vec<String>,
     pub subtypes: Vec<String>,
+    pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
     pub text_box: String,
     pub power: Option<i32>,
@@ -129,6 +131,7 @@ pub struct Card {
     pub types: CardTypes,
     pub supertypes: Vec<String>,
     pub subtypes: Vec<String>,
+    pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
     pub text_box: String,
     pub power: Option<i32>,
@@ -152,6 +155,7 @@ impl Card {
             types: definition.types.clone(),
             supertypes: definition.supertypes.clone(),
             subtypes: definition.subtypes.clone(),
+            abilities: definition.abilities.clone(),
             mana_abilities: definition.mana_abilities.clone(),
             text_box: definition.text_box.clone(),
             power: definition.power,
@@ -173,6 +177,7 @@ pub fn basic_land(name: &str, color: Color) -> CardDefinition {
         types: CardTypes::new([CardType::Land]),
         supertypes: vec!["basic".to_string()],
         subtypes: vec![name.to_string()],
+        abilities: vec![],
         mana_abilities: vec![ManaAbility {
             mana: Mana::single(color),
         }],

@@ -22,10 +22,9 @@ pub struct ZoneManager {
     hand: [Vec<CardId>; 2],
     battlefield: [Vec<CardId>; 2],
     graveyard: [Vec<CardId>; 2],
-    stack_by_owner: [Vec<CardId>; 2],
+    stack: [Vec<CardId>; 2],
     exile: [Vec<CardId>; 2],
     command: [Vec<CardId>; 2],
-    stack_order: Vec<CardId>,
     card_zones: Vec<Option<ZoneType>>,
 }
 
@@ -36,10 +35,9 @@ impl Default for ZoneManager {
             hand: array::from_fn(|_| Vec::new()),
             battlefield: array::from_fn(|_| Vec::new()),
             graveyard: array::from_fn(|_| Vec::new()),
-            stack_by_owner: array::from_fn(|_| Vec::new()),
+            stack: array::from_fn(|_| Vec::new()),
             exile: array::from_fn(|_| Vec::new()),
             command: array::from_fn(|_| Vec::new()),
-            stack_order: Vec::new(),
             card_zones: Vec::new(),
         }
     }
@@ -67,10 +65,7 @@ impl ZoneManager {
             ZoneType::Hand => Self::remove_card_in_place(&mut self.hand[idx], card),
             ZoneType::Battlefield => Self::remove_card_in_place(&mut self.battlefield[idx], card),
             ZoneType::Graveyard => Self::remove_card_in_place(&mut self.graveyard[idx], card),
-            ZoneType::Stack => {
-                Self::remove_card_in_place(&mut self.stack_by_owner[idx], card);
-                Self::remove_card_in_place(&mut self.stack_order, card);
-            }
+            ZoneType::Stack => Self::remove_card_in_place(&mut self.stack[idx], card),
             ZoneType::Exile => Self::remove_card_in_place(&mut self.exile[idx], card),
             ZoneType::Command => Self::remove_card_in_place(&mut self.command[idx], card),
         }
@@ -83,10 +78,7 @@ impl ZoneManager {
             ZoneType::Hand => self.hand[idx].push(card),
             ZoneType::Battlefield => self.battlefield[idx].push(card),
             ZoneType::Graveyard => self.graveyard[idx].push(card),
-            ZoneType::Stack => {
-                self.stack_by_owner[idx].push(card);
-                self.stack_order.push(card);
-            }
+            ZoneType::Stack => self.stack[idx].push(card),
             ZoneType::Exile => self.exile[idx].push(card),
             ZoneType::Command => self.command[idx].push(card),
         }
@@ -99,17 +91,6 @@ impl ZoneManager {
         }
         self.insert_to_zone(card, owner, to_zone);
         self.card_zones[card.0] = Some(to_zone);
-    }
-
-    pub fn push_stack(&mut self, card: CardId, owner: PlayerId) {
-        self.move_card(card, owner, ZoneType::Stack);
-    }
-
-    pub fn pop_stack(&mut self, owner: PlayerId) -> Option<CardId> {
-        let card = self.stack_order.pop()?;
-        Self::remove_card_in_place(&mut self.stack_by_owner[owner.0], card);
-        self.card_zones[card.0] = None;
-        Some(card)
     }
 
     pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<CardId> {
@@ -126,10 +107,7 @@ impl ZoneManager {
     }
 
     pub fn total_size(&self, zone: ZoneType) -> usize {
-        match zone {
-            ZoneType::Stack => self.stack_order.len(),
-            _ => self.size(zone, PlayerId(0)) + self.size(zone, PlayerId(1)),
-        }
+        self.size(zone, PlayerId(0)) + self.size(zone, PlayerId(1))
     }
 
     pub fn zone_cards(&self, zone: ZoneType, player: PlayerId) -> &Vec<CardId> {
@@ -139,7 +117,7 @@ impl ZoneManager {
             ZoneType::Hand => &self.hand[idx],
             ZoneType::Battlefield => &self.battlefield[idx],
             ZoneType::Graveyard => &self.graveyard[idx],
-            ZoneType::Stack => &self.stack_by_owner[idx],
+            ZoneType::Stack => &self.stack[idx],
             ZoneType::Exile => &self.exile[idx],
             ZoneType::Command => &self.command[idx],
         }
@@ -152,14 +130,10 @@ impl ZoneManager {
             ZoneType::Hand => &mut self.hand[idx],
             ZoneType::Battlefield => &mut self.battlefield[idx],
             ZoneType::Graveyard => &mut self.graveyard[idx],
-            ZoneType::Stack => &mut self.stack_by_owner[idx],
+            ZoneType::Stack => &mut self.stack[idx],
             ZoneType::Exile => &mut self.exile[idx],
             ZoneType::Command => &mut self.command[idx],
         }
-    }
-
-    pub fn stack_order(&self) -> &Vec<CardId> {
-        &self.stack_order
     }
 
     pub fn shuffle<R: rand::Rng + ?Sized>(
