@@ -242,7 +242,7 @@ impl Observation {
             opponent_cards: Vec::new(),
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
-            recent_events: recent_events.iter().map(Self::event_data).collect(),
+            recent_events: recent_events.iter().filter_map(Self::event_data).collect(),
         };
 
         obs.populate_cards(game, agent_player);
@@ -460,12 +460,12 @@ impl Observation {
         }
     }
 
-    fn event_data(event: &GameEvent) -> EventData {
+    fn event_data(event: &GameEvent) -> Option<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
             GameEvent::CardMoved {
                 card, controller, ..
-            } => Self::card_event_data(EventType::CardMoved, *card, *controller),
+            } => Some(Self::card_event_data(EventType::CardMoved, *card, *controller)),
             GameEvent::DamageDealt {
                 source,
                 target,
@@ -476,43 +476,35 @@ impl Observation {
                     DamageTarget::Player(p) => EventEntity::Player(p),
                     DamageTarget::Permanent(p) => EventEntity::Permanent(p),
                 });
-                Self::build_event_data(
+                Some(Self::build_event_data(
                     EventType::DamageDealt,
                     source_entity,
                     target_entity,
                     *amount as i32,
                     None,
-                )
+                ))
             }
-            GameEvent::LifeChanged { player, old, new } => Self::build_event_data(
+            GameEvent::LifeChanged { player, old, new } => Some(Self::build_event_data(
                 EventType::LifeChanged,
                 Some(EventEntity::Player(*player)),
                 Some(EventEntity::Player(*player)),
                 new - old,
                 None,
-            ),
+            )),
             GameEvent::SpellCast { card, .. } => {
-                Self::card_event_data(EventType::SpellCast, *card, PlayerId(0))
+                Some(Self::card_event_data(EventType::SpellCast, *card, PlayerId(0)))
             }
             GameEvent::SpellResolved { card } => {
-                Self::card_event_data(EventType::SpellResolved, *card, PlayerId(0))
+                Some(Self::card_event_data(EventType::SpellResolved, *card, PlayerId(0)))
             }
             GameEvent::SpellCountered { card, .. } => {
-                Self::card_event_data(EventType::SpellCountered, *card, PlayerId(0))
+                Some(Self::card_event_data(EventType::SpellCountered, *card, PlayerId(0)))
             }
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
-            } => Self::card_event_data(EventType::AbilityTriggered, *source_card, *controller),
-            GameEvent::TurnStarted { .. } | GameEvent::StepStarted { .. } => EventData {
-                event_type: -1,
-                source_kind: EventEntityKind::None as i32,
-                source_id: -1,
-                target_kind: EventEntityKind::None as i32,
-                target_id: -1,
-                amount: 0,
-                controller_id: -1,
-            },
+            } => Some(Self::card_event_data(EventType::AbilityTriggered, *source_card, *controller)),
+            GameEvent::TurnStarted { .. } | GameEvent::StepStarted { .. } => None,
         }
     }
 

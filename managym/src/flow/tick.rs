@@ -117,11 +117,13 @@ impl Game {
     fn on_step_start(&mut self, step: StepKind) {
         self.state.priority.start_round(self.active_player());
         if step == StepKind::Untap {
-            self.emit(GameEvent::TurnStarted {
-                player: self.active_player(),
-            });
+            self.state
+                .events
+                .push(GameEvent::TurnStarted {
+                    player: self.active_player(),
+                });
         }
-        self.emit(GameEvent::StepStarted { step });
+        self.state.events.push(GameEvent::StepStarted { step });
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
@@ -270,7 +272,7 @@ impl Game {
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
                 self.state.priority.start_round(self.active_player());
-                if !self.state.stack_objects.is_empty() {
+                if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
                     self.state.priority.on_non_pass_action(self.active_player());

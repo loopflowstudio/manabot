@@ -122,17 +122,16 @@ impl Game {
         target: Option<Target>,
     ) {
         let source_card_registry_key = self.state.cards[trigger.source_card].registry_key;
+        let id = self.state.id_gen.next_id();
         let targets = target.into_iter().collect();
-        self.state
-            .stack_objects
-            .push(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
-                id: self.state.id_gen.next_id(),
-                controller: trigger.controller,
-                source_card: trigger.source_card,
-                source_card_registry_key,
-                ability_index: trigger.ability_index,
-                targets,
-            }));
+        self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            id,
+            controller: trigger.controller,
+            source_card: trigger.source_card,
+            source_card_registry_key,
+            ability_index: trigger.ability_index,
+            targets,
+        }));
         self.emit(GameEvent::AbilityTriggered {
             source_card: trigger.source_card,
             controller: trigger.controller,
