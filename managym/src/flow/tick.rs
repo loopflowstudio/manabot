@@ -43,6 +43,7 @@ impl Game {
                 self.trackers[winner].on_game_won();
             }
         }
+        self.assert_stack_consistent();
 
         Ok(game_over)
     }

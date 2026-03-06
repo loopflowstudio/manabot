@@ -7,7 +7,6 @@ use crate::{
     state::{
         game_object::{CardId, PlayerId},
         mana::ManaCost,
-        stack::StackObject,
         zone::ZoneType,
     },
 };
@@ -77,8 +76,7 @@ impl Game {
             return Err(AgentError("card does not belong to player".to_string()));
         }
         // CR 601.2i — A cast spell is put onto the stack.
-        self.move_card(card, ZoneType::Stack);
-        self.state.stack.push(StackObject::Spell { card });
+        self.push_spell_to_stack(card);
         Ok(())
     }
 }

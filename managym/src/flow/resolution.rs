@@ -11,7 +11,7 @@ use crate::{
 
 impl Game {
     pub(crate) fn resolve_top_of_stack(&mut self) {
-        let Some(stack_object) = self.state.stack.pop() else {
+        let Some(stack_object) = self.pop_stack() else {
             return;
         };
 
