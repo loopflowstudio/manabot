@@ -393,6 +393,7 @@ struct SendSlice<T> {
 // The GIL is released before use (py.allow_threads), and each env index
 // writes to disjoint rows, so no aliasing occurs.
 unsafe impl<T> Send for SendSlice<T> {}
+#[cfg(feature = "python")]
 unsafe impl<T> Sync for SendSlice<T> {}
 
 #[cfg(feature = "python")]
