@@ -4,7 +4,7 @@
 
 ## What to build
 
-Frontend replay UI that consumes the trace API (shipped in Stage 1).
+Frontend replay UI that consumes the trace API (shipped in `gui/server.py`). Reuses the board rendering from `frontend/src/routes/+page.svelte` — either by extracting a shared `GameBoard` component or adding a replay mode to the existing page.
 
 ## Backend contract (shipped in Stage 1)
 
@@ -36,7 +36,7 @@ interface ReplayState {
 ## Key components
 
 - Trace list page: fetch `/api/traces`, show summary table, click to open replay
-- Replay viewer: reuses `GameBoard` from Stage 2, fed observations from trace events
+- Replay viewer: reuses board rendering from `+page.svelte`, fed observations from trace events
 - Timeline controls: play/pause, step forward/back, speed slider
 - Step backward is array indexing (no reverse computation)
 - Auto-play advances on timer, pauses on game-over
