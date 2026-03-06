@@ -34,6 +34,7 @@ class VectorEnv:
         seed: int = 0,
         skip_trivial: bool = True,
         opponent_policy: str = "none",
+        num_threads: int | None = None,
     ) -> None: ...
     def reset_all(
         self, player_configs: List[PlayerConfig]
