@@ -106,73 +106,40 @@ noted otherwise. Fill in after each sprint ships.
 
 ### Env-only SPS (no inference)
 
-| num_envs | Baseline | S01 (Rust env + zero-copy) | S02 (Rayon) | S03 (final) |
-|----------|----------|---------------------------|-------------|-------------|
-| 1        |          |                           |             |             |
-| 16       | ~19,000  |                           |             |             |
-| 64       |          |                           |             |             |
-| 128      |          |                           |             |             |
+| num_envs | Baseline (AsyncVectorEnv) | S01 (Rust env + zero-copy) |
+|----------|---------------------------|---------------------------|
+| 1        |                           | ~82,000                    |
+| 16       | ~19,000                   | ~189,000                   |
+| 64       | ~19,000                   | ~189,000                   |
+| 128      |                           | ~225,000                   |
+| 256      |                           | ~205,000                   |
 
 ### Training SPS (with inference)
 
-| num_envs | Baseline | S01 | S02 | S03 |
-|----------|----------|-----|-----|-----|
-| 16       | ~3,300   |     |     |     |
-| 64       |          |     |     |     |
+| num_envs | Baseline | S01 |
+|----------|----------|-----|
+| 16       | ~3,300   |     |
+| 64       |          |     |
 
 ### Time breakdown (env-only, 16 envs)
 
-| Phase      | Baseline | S01   | S02   | S03   |
-|------------|----------|-------|-------|-------|
-| encode     | 77%      |       |       |       |
-| tensorize  | 12%      |       |       |       |
-| rust_step  | 7%       |       |       |       |
-| unpack     | 3%       |       |       |       |
+| Phase             | Baseline | S01   |
+|-------------------|----------|-------|
+| encode            | 77%      | —     |
+| tensorize         | 12%      | —     |
+| rust_step         | 7%       | —     |
+| unpack            | 3%       | —     |
+| step_into_buffers | —        | 97%   |
+| sync_tensors      | —        | 1.3%  |
 
-### A/B comparisons
+### Rayon parallelism (investigated, removed)
 
-| Sprint | A config | B config | A SPS | B SPS | Delta | p-value |
-|--------|----------|----------|-------|-------|-------|---------|
-|        |          |          |       |       |       |         |
-
-## Ablation protocol (sprint 03)
-
-At wave end, measure each optimization in isolation to attribute SPS
-gains. The ablation uses `bench_ab.py` to compare configurations
-pairwise:
-
-```bash
-# 1. Rust env vs legacy AsyncVectorEnv (full wave impact)
-python scripts/bench_ab.py --a rust --b async --num-envs 16 --rounds 5
-
-# 2. Rust env with zero-copy vs Rust env without (sprint 03 impact)
-#    Requires a "rust-python-encode" mode that uses Rust stepping
-#    but Python-side encoding (sprint 02 behavior).
-python scripts/bench_ab.py --a rust --b rust-python-encode --num-envs 16 --rounds 5
-
-# 3. Rayon on vs off (sprint 02 impact)
-#    Requires a "rust-single-thread" mode or RAYON_NUM_THREADS=1.
-RAYON_NUM_THREADS=1 python scripts/bench_ab.py --a rust --b rust --num-envs 64 --rounds 5
-
-# 4. Scaling curve: measure SPS at 1, 4, 16, 64, 128 envs
-for n in 1 4 16 64 128; do
-    python scripts/bench_ab.py --a rust --b async --num-envs $n --rounds 3
-done
-```
-
-The ablation requires two things built during the wave:
-- A `rust-python-encode` bench mode (Python encode path kept for parity
-  testing — wire it into `bench_ab.py` as a mode)
-- `RAYON_NUM_THREADS=1` support (Rayon respects this env var natively)
-
-Record ablation results in a final table:
-
-| Configuration           | SPS (16 envs) | SPS (64 envs) | vs baseline |
-|-------------------------|---------------|---------------|-------------|
-| Baseline (AsyncVectorEnv) |             |               | 1.0x        |
-| S01: Rust env + zero-copy |             |               |             |
-| S02: + Rayon              |             |               |             |
-| S03: final (cleaned)      |             |               |             |
+Parallel stepping via rayon was implemented and benchmarked. At current
+per-env step costs (~4.4µs), thread distribution overhead exceeds the
+compute saved. Multi-threading was **performance-neutral to slightly
+negative** across all env counts tested (1–256). Removed in favor of
+sequential iteration. Can revisit when per-step cost increases (more
+complex cards, heavier observation encoding).
 
 ## Metrics
 

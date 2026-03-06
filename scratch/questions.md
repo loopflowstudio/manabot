@@ -1,9 +1,11 @@
 # Open Questions / Assumptions
 
-1. **`std::thread` instead of Rayon.**
-   Rayon crate was unavailable offline. Parallel stepping uses scoped
-   `std::thread` workers. Public API (`num_threads` + `RAYON_NUM_THREADS`
-   env var) is unchanged — swapping to Rayon later is mechanical.
+1. **Parallel stepping removed.**
+   Both `std::thread::scope` and rayon were benchmarked. Per-env step
+   cost (~4.4µs) is too low for thread overhead to break even —
+   multi-threading was performance-neutral to slightly negative across
+   1–256 envs. Sequential `for_each_env` is simpler and equally fast.
+   Revisit when per-step cost grows (complex cards, heavier encoding).
 
 2. **Python verification incomplete.**
    Rust tests pass (`cargo test`, clippy). Python tests (`pytest`,

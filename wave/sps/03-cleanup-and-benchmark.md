@@ -5,8 +5,7 @@
 ## Context from shipped sprints
 
 - **Zero-copy buffers (S01):** `PyBuffer` protocol with `mutable_slice_from_buffer()` for raw `&mut [f32]` access. Key files: `vector_env_bindings.rs` (`ObservationFieldSlices`, `WriteBuffers`), `rust_vector_env.py` (pre-allocated numpy buffers).
-- **Parallel stepping (S02):** Uses scoped `std::thread` workers, not Rayon (crate unavailable in offline sandbox). `SendSlice` wraps raw buffer pointers for cross-thread use. Thread count precedence: explicit `num_threads` > `RAYON_NUM_THREADS` env var > auto (`max(1, min(num_envs, available_parallelism - 1))`). `Env` is confirmed `Send`. Swapping to Rayon later requires no Python API changes.
-- **Thread count tuning unknown.** Auto default uses `std::thread::available_parallelism()` (logical cores, not physical). Whether `-1 core` is optimal under CPU inference remains empirical — measure during benchmarking.
+- **Parallel stepping (S02, removed):** Rayon and `std::thread` parallelism were both implemented and benchmarked. Per-env step cost (~4.4µs) is too low for threading overhead to break even — multi-threading was performance-neutral to slightly negative across 1–256 envs. Removed in favor of sequential `for_each_env`. `SendSlice` remains for GIL-release safety (`py.allow_threads`). Parallelism can be revisited when per-step cost grows.
 - **Python-side verification was blocked** in S02 (no pytest, pip too old for editable installs). Python tests need to run during this sprint.
 
 ## Current state
@@ -41,8 +40,7 @@ Fill in the final column of all results tracker tables.
 
 ### 3. Ablation
 
-Run the ablation protocol from `wave/sps/README.md` to attribute
-gains to each sprint. This isolates individual contributions:
+Run A/B comparisons to attribute gains:
 
 ```bash
 # Full wave impact: Rust vs AsyncVectorEnv
@@ -52,18 +50,11 @@ python scripts/bench_ab.py --a rust --b async --num-envs 64 --rounds 5
 # Zero-copy contribution: Rust encode vs Python-side encoding
 python scripts/bench_ab.py --a rust --b rust-python-encode --num-envs 16 --rounds 5
 
-# Parallelism contribution: multi-thread vs single-thread
-# Note: implementation uses std::thread but respects RAYON_NUM_THREADS env var
-RAYON_NUM_THREADS=1 python scripts/bench_ab.py --a rust --b rust --num-envs 16 --rounds 5
-RAYON_NUM_THREADS=1 python scripts/bench_ab.py --a rust --b rust --num-envs 64 --rounds 5
-
 # Scaling curve
 for n in 1 4 16 64 128; do
     python scripts/bench_ab.py --a rust --b async --num-envs $n --rounds 3
 done
 ```
-
-Fill in the ablation table in `wave/sps/README.md`.
 
 ### 4. Python verification
 

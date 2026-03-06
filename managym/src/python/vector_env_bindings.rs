@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::{cmp, env, slice};
+use std::slice;
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -63,7 +63,6 @@ struct ObservationBuffers {
 #[pyclass(name = "VectorEnv")]
 pub struct PyVectorEnv {
     inner: VectorEnv,
-    num_threads: usize,
     config: ObservationEncoderConfig,
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
@@ -74,20 +73,17 @@ pub struct PyVectorEnv {
 #[pymethods]
 impl PyVectorEnv {
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none", num_threads=None))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none"))]
     fn new(
         num_envs: usize,
         seed: u64,
         skip_trivial: bool,
         opponent_policy: &str,
-        num_threads: Option<usize>,
     ) -> PyResult<Self> {
         let policy = parse_opponent_policy(opponent_policy)?;
-        let thread_count = resolve_num_threads(num_envs, num_threads)?;
 
         Ok(Self {
             inner: VectorEnv::new(num_envs, seed, skip_trivial, policy),
-            num_threads: thread_count,
             config: ObservationEncoderConfig::default(),
             num_envs,
             buffers: None,
@@ -256,9 +252,8 @@ impl PyVectorEnv {
     ) -> PyResult<()> {
         let configs: Vec<PlayerConfig> =
             player_configs.into_iter().map(PlayerConfig::from).collect();
-        self.run_into_buffers(py, move |inner, num_threads, write_buffers, config| {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.par_reset_all_into(
-                num_threads,
                 configs,
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
@@ -269,9 +264,8 @@ impl PyVectorEnv {
     }
 
     fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
-        self.run_into_buffers(py, move |inner, num_threads, write_buffers, config| {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.par_step_into(
-                num_threads,
                 &actions,
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
@@ -296,7 +290,6 @@ impl PyVectorEnv {
         py: Python<'_>,
         run: impl FnOnce(
                 &mut VectorEnv,
-                usize,
                 SendWriteBuffers,
                 ObservationEncoderConfig,
             ) -> Result<Vec<InfoDict>, AgentError>
@@ -307,11 +300,10 @@ impl PyVectorEnv {
             .take()
             .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
         let config = self.config;
-        let num_threads = self.num_threads;
         let inner = &mut self.inner;
 
         let result = with_send_write_buffers(py, &buffers, |write_buffers| {
-            py.allow_threads(|| run(inner, num_threads, write_buffers, config))
+            py.allow_threads(|| run(inner, write_buffers, config))
                 .map_err(map_agent_err)
         });
         self.buffers = Some(buffers);
@@ -335,59 +327,6 @@ fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
             "unsupported opponent_policy: {value}"
         ))),
     }
-}
-
-#[cfg(feature = "python")]
-fn resolve_num_threads(num_envs: usize, num_threads: Option<usize>) -> PyResult<usize> {
-    if let Some(value) = num_threads {
-        return validate_positive_thread_count(value, "num_threads");
-    }
-
-    if let Some(value) = parse_rayon_num_threads_env()? {
-        return Ok(value);
-    }
-
-    Ok(auto_thread_count(num_envs))
-}
-
-#[cfg(feature = "python")]
-fn parse_rayon_num_threads_env() -> PyResult<Option<usize>> {
-    match env::var("RAYON_NUM_THREADS") {
-        Ok(value) => {
-            let parsed = value.parse::<usize>().map_err(|_| {
-                PyValueError::new_err(format!(
-                    "RAYON_NUM_THREADS must be a positive integer, got '{value}'"
-                ))
-            })?;
-            Ok(Some(validate_positive_thread_count(
-                parsed,
-                "RAYON_NUM_THREADS",
-            )?))
-        }
-        Err(env::VarError::NotPresent) => Ok(None),
-        Err(env::VarError::NotUnicode(_)) => Err(PyValueError::new_err(
-            "RAYON_NUM_THREADS must be valid UTF-8",
-        )),
-    }
-}
-
-#[cfg(feature = "python")]
-fn validate_positive_thread_count(value: usize, source: &str) -> PyResult<usize> {
-    if value == 0 {
-        return Err(PyValueError::new_err(format!(
-            "{source} must be greater than 0"
-        )));
-    }
-    Ok(value)
-}
-
-#[cfg(feature = "python")]
-fn auto_thread_count(num_envs: usize) -> usize {
-    let reserved_for_host = std::thread::available_parallelism()
-        .map(|count| count.get())
-        .unwrap_or(1)
-        .saturating_sub(1);
-    cmp::min(num_envs, reserved_for_host).max(1)
 }
 
 #[cfg(feature = "python")]

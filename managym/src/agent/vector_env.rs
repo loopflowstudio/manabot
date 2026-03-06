@@ -3,7 +3,6 @@ use crate::{
     infra::profiler::InfoDict,
     state::player::PlayerConfig,
 };
-use std::thread;
 
 const HERO_PLAYER_INDEX: i32 = 0;
 
@@ -26,12 +25,7 @@ pub struct VectorEnv {
 }
 
 impl VectorEnv {
-    pub fn new(
-        num_envs: usize,
-        seed: u64,
-        skip_trivial: bool,
-        opponent_policy: OpponentPolicy,
-    ) -> Self {
+    pub fn new(num_envs: usize, seed: u64, skip_trivial: bool, opponent_policy: OpponentPolicy) -> Self {
         let envs = (0..num_envs)
             .map(|idx| Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false))
             .collect();
@@ -111,12 +105,11 @@ impl VectorEnv {
 
     pub fn par_reset_all_into<F>(
         &mut self,
-        num_threads: usize,
         player_configs: Vec<PlayerConfig>,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
-        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError> + Sync,
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
         Self::validate_player_configs(player_configs.len())?;
         self.player_configs = player_configs;
@@ -125,7 +118,7 @@ impl VectorEnv {
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
-        self.parallelize_envs(num_threads, |env_index, env, next_seed| {
+        self.for_each_env(|env_index, env, next_seed| {
             let (obs, info) = Self::reset_to_hero_turn_on_env(
                 env,
                 next_seed,
@@ -140,12 +133,11 @@ impl VectorEnv {
 
     pub fn par_step_into<F>(
         &mut self,
-        num_threads: usize,
         actions: &[i64],
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
-        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError> + Sync,
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
         self.validate_actions_len(actions.len())?;
         self.validate_ready_for_step()?;
@@ -154,7 +146,7 @@ impl VectorEnv {
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
-        self.parallelize_envs(num_threads, |env_index, env, next_seed| {
+        self.for_each_env(|env_index, env, next_seed| {
             let action = actions[env_index];
             let result = Self::step_with_autoreset_on_env(
                 env,
@@ -175,54 +167,16 @@ impl VectorEnv {
         })
     }
 
-    fn parallelize_envs<R, F>(&mut self, num_threads: usize, work: F) -> Result<Vec<R>, AgentError>
+    fn for_each_env<R, F>(&mut self, work: F) -> Result<Vec<R>, AgentError>
     where
-        R: Send,
-        F: Fn(usize, &mut Env, &mut u64) -> Result<R, AgentError> + Sync,
+        F: Fn(usize, &mut Env, &mut u64) -> Result<R, AgentError>,
     {
-        let len = self.envs.len();
-        if len == 0 {
-            return Ok(Vec::new());
-        }
-
-        let threads = num_threads.max(1).min(len);
-        let chunk_size = len.div_ceil(threads);
-        let mut ordered_results: Vec<Result<R, AgentError>> = Vec::with_capacity(len);
-
-        thread::scope(|scope| -> Result<(), AgentError> {
-            let mut handles = Vec::new();
-
-            for (chunk_index, (env_chunk, seed_chunk)) in self
-                .envs
-                .chunks_mut(chunk_size)
-                .zip(self.next_seeds.chunks_mut(chunk_size))
-                .enumerate()
-            {
-                let start = chunk_index * chunk_size;
-                let work_ref = &work;
-
-                handles.push(scope.spawn(move || {
-                    let mut local = Vec::with_capacity(env_chunk.len());
-                    for (offset, env) in env_chunk.iter_mut().enumerate() {
-                        let env_index = start + offset;
-                        let next_seed = &mut seed_chunk[offset];
-                        local.push(work_ref(env_index, env, next_seed));
-                    }
-                    local
-                }));
-            }
-
-            for handle in handles {
-                let local = handle.join().map_err(|_| {
-                    AgentError("parallel worker panicked while stepping envs".to_string())
-                })?;
-                ordered_results.extend(local);
-            }
-
-            Ok(())
-        })?;
-
-        ordered_results.into_iter().collect()
+        self.envs
+            .iter_mut()
+            .zip(self.next_seeds.iter_mut())
+            .enumerate()
+            .map(|(env_index, (env, next_seed))| work(env_index, env, next_seed))
+            .collect()
     }
 
     fn validate_player_configs(config_len: usize) -> Result<(), AgentError> {
@@ -479,7 +433,6 @@ mod tests {
 
         let reset_infos = env
             .par_reset_all_into(
-                2,
                 sample_player_configs(),
                 |_, obs, reward, terminated, truncated| {
                     assert_eq!(obs.agent.player_index, 0);
@@ -493,7 +446,7 @@ mod tests {
         assert_eq!(reset_infos.len(), 3);
 
         let step_infos = env
-            .par_step_into(2, &[0, 0, 0], |_, _, _, _, _| Ok(()))
+            .par_step_into(&[0, 0, 0], |_, _, _, _, _| Ok(()))
             .expect("parallel step should succeed");
         assert_eq!(step_infos.len(), 3);
     }
@@ -501,11 +454,11 @@ mod tests {
     #[test]
     fn parallel_errors_are_returned_in_index_order() {
         let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::Passive);
-        env.par_reset_all_into(2, sample_player_configs(), |_, _, _, _, _| Ok(()))
+        env.par_reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
             .expect("parallel reset should succeed");
 
         let err = env
-            .par_step_into(2, &[0, 0, 0], |env_index, _, _, _, _| {
+            .par_step_into(&[0, 0, 0], |env_index, _, _, _, _| {
                 if env_index >= 1 {
                     return Err(AgentError(format!("env error {env_index}")));
                 }
