@@ -76,8 +76,8 @@ def allocate_vector_buffers(
         ),
         "actions_valid": np.zeros((num_envs, hypers.max_actions), dtype=np.float32),
         "rewards": np.zeros((num_envs,), dtype=np.float64),
-        "terminated": np.zeros((num_envs,), dtype=bool),
-        "truncated": np.zeros((num_envs,), dtype=bool),
+        "terminated": np.zeros((num_envs,), dtype=np.uint8),
+        "truncated": np.zeros((num_envs,), dtype=np.uint8),
     }
 
 

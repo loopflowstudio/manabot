@@ -97,8 +97,8 @@ class RustVectorEnv:
             ),
             "actions_valid": np.zeros((n, enc.max_actions), dtype=np.float32),
             "rewards": np.zeros((n,), dtype=np.float64),
-            "terminated": np.zeros((n,), dtype=bool),
-            "truncated": np.zeros((n,), dtype=bool),
+            "terminated": np.zeros((n,), dtype=np.uint8),
+            "truncated": np.zeros((n,), dtype=np.uint8),
         }
 
     def _build_tensor_views(self) -> None:
@@ -122,23 +122,11 @@ class RustVectorEnv:
                     device=self.device,
                 )
 
-        self._terminated_tensor = (
-            self._terminated_cpu_view
-            if self.device.type == "cpu"
-            else torch.empty(
-                self.num_envs,
-                dtype=torch.bool,
-                device=self.device,
-            )
+        self._terminated_tensor = torch.empty(
+            self.num_envs, dtype=torch.bool, device=self.device
         )
-        self._truncated_tensor = (
-            self._truncated_cpu_view
-            if self.device.type == "cpu"
-            else torch.empty(
-                self.num_envs,
-                dtype=torch.bool,
-                device=self.device,
-            )
+        self._truncated_tensor = torch.empty(
+            self.num_envs, dtype=torch.bool, device=self.device
         )
 
         self._reward_tensor = torch.empty(
@@ -156,10 +144,8 @@ class RustVectorEnv:
 
         self._reward_tensor.copy_(self._reward_cpu_view)
 
-        if self._terminated_tensor.data_ptr() != self._terminated_cpu_view.data_ptr():
-            self._terminated_tensor.copy_(self._terminated_cpu_view)
-        if self._truncated_tensor.data_ptr() != self._truncated_cpu_view.data_ptr():
-            self._truncated_tensor.copy_(self._truncated_cpu_view)
+        self._terminated_tensor.copy_(self._terminated_cpu_view)
+        self._truncated_tensor.copy_(self._truncated_cpu_view)
 
     def _apply_reward_policy(self) -> None:
         if self.reward.hypers.managym:

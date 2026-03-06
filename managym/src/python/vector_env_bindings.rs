@@ -2,12 +2,12 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::{slice, sync::Mutex};
+use std::slice;
 
 #[cfg(feature = "python")]
 use pyo3::{
     buffer::{Element, PyBuffer},
-    exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError},
+    exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyAny, PyDict, PyModule},
 };
@@ -26,7 +26,7 @@ use crate::{
     infra::profiler::InfoDict,
     python::{
         bindings::{map_agent_err, PyObservation, PyPlayerConfig},
-        convert::info_dict_to_pydict,
+        convert::{info_dict_to_pydict, require_numpy_array},
     },
     state::player::PlayerConfig,
 };
@@ -61,7 +61,7 @@ struct ObservationBuffers {
 #[cfg(feature = "python")]
 #[pyclass(name = "VectorEnv")]
 pub struct PyVectorEnv {
-    inner: Mutex<VectorEnv>,
+    inner: VectorEnv,
     config: ObservationEncoderConfig,
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
@@ -81,7 +81,7 @@ impl PyVectorEnv {
     ) -> PyResult<Self> {
         let policy = parse_opponent_policy(opponent_policy)?;
         Ok(Self {
-            inner: Mutex::new(VectorEnv::new(num_envs, seed, skip_trivial, policy)),
+            inner: VectorEnv::new(num_envs, seed, skip_trivial, policy),
             config: ObservationEncoderConfig::default(),
             num_envs,
             buffers: None,
@@ -94,12 +94,8 @@ impl PyVectorEnv {
         py: Python<'_>,
         player_configs: Vec<PyPlayerConfig>,
     ) -> PyResult<Vec<PyResetResult>> {
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("vector env lock poisoned"))?;
         let configs = player_configs.into_iter().map(PlayerConfig::from).collect();
-        let results = env.reset_all(configs).map_err(map_agent_err)?;
+        let results = self.inner.reset_all(configs).map_err(map_agent_err)?;
         self.last_info = results.iter().map(|(_, info)| info.clone()).collect();
 
         Ok(results
@@ -112,11 +108,7 @@ impl PyVectorEnv {
     }
 
     fn step(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<Vec<PyStepResult>> {
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("vector env lock poisoned"))?;
-        let results = env.step(&actions).map_err(map_agent_err)?;
+        let results = self.inner.step(&actions).map_err(map_agent_err)?;
         self.last_info = results.iter().map(|result| result.info.clone()).collect();
 
         Ok(results
@@ -245,8 +237,8 @@ impl PyVectorEnv {
             )?
             .unbind(),
             rewards: require_numpy_array(&buffers, "rewards", &[n], "float64")?.unbind(),
-            terminated: require_numpy_array(&buffers, "terminated", &[n], "bool")?.unbind(),
-            truncated: require_numpy_array(&buffers, "truncated", &[n], "bool")?.unbind(),
+            terminated: require_numpy_array(&buffers, "terminated", &[n], "uint8")?.unbind(),
+            truncated: require_numpy_array(&buffers, "truncated", &[n], "uint8")?.unbind(),
         });
         Ok(())
     }
@@ -261,14 +253,9 @@ impl PyVectorEnv {
             .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
 
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("vector env lock poisoned"))?;
         let configs: Vec<PlayerConfig> =
             player_configs.into_iter().map(PlayerConfig::from).collect();
-        let results = env.reset_all(configs).map_err(map_agent_err)?;
-        drop(env);
+        let results = self.inner.reset_all(configs).map_err(map_agent_err)?;
 
         self.last_info = results.iter().map(|(_, info)| info.clone()).collect();
         write_reset_results_into_buffers(py, buffers, &self.config, &results)
@@ -280,12 +267,7 @@ impl PyVectorEnv {
             .as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
 
-        let mut env = self
-            .inner
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("vector env lock poisoned"))?;
-        let results = env.step(&actions).map_err(map_agent_err)?;
-        drop(env);
+        let results = self.inner.step(&actions).map_err(map_agent_err)?;
 
         self.last_info = results.iter().map(|result| result.info.clone()).collect();
         write_step_results_into_buffers(py, buffers, &self.config, &results)
@@ -314,60 +296,6 @@ fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
             "unsupported opponent_policy: {value}"
         ))),
     }
-}
-
-#[cfg(feature = "python")]
-fn shape_to_vec(shape_obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
-    shape_obj.extract::<Vec<usize>>()
-}
-
-#[cfg(feature = "python")]
-fn require_numpy_array<'py>(
-    buffers: &Bound<'py, PyDict>,
-    key: &str,
-    expected_shape: &[usize],
-    expected_dtype_name: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let Some(value) = buffers.get_item(key)? else {
-        return Err(PyKeyError::new_err(format!(
-            "buffers missing required key '{key}'"
-        )));
-    };
-
-    let dtype_name = value
-        .getattr("dtype")?
-        .getattr("name")?
-        .extract::<String>()?;
-    if dtype_name != expected_dtype_name {
-        return Err(PyTypeError::new_err(format!(
-            "buffer '{key}' must have dtype {expected_dtype_name}, got {dtype_name}"
-        )));
-    }
-
-    let shape = shape_to_vec(&value.getattr("shape")?)?;
-    if shape != expected_shape {
-        return Err(PyValueError::new_err(format!(
-            "buffer '{key}' must have shape {:?}, got {:?}",
-            expected_shape, shape
-        )));
-    }
-
-    let flags = value.getattr("flags")?;
-    let c_contiguous = flags.getattr("c_contiguous")?.extract::<bool>()?;
-    if !c_contiguous {
-        return Err(PyValueError::new_err(format!(
-            "buffer '{key}' must be C-contiguous"
-        )));
-    }
-
-    let writable = flags.getattr("writeable")?.extract::<bool>()?;
-    if !writable {
-        return Err(PyValueError::new_err(format!(
-            "buffer '{key}' must be writable"
-        )));
-    }
-
-    Ok(value)
 }
 
 #[cfg(feature = "python")]
@@ -528,15 +456,15 @@ impl ObservationFieldSlices<'_> {
 }
 
 #[cfg(feature = "python")]
-struct WriteBuffers<'a, 'py> {
+struct WriteBuffers<'a> {
     fields: ObservationFieldSlices<'a>,
     rewards: &'a mut [f64],
-    terminated: &'py Bound<'py, PyAny>,
-    truncated: &'py Bound<'py, PyAny>,
+    terminated: &'a mut [u8],
+    truncated: &'a mut [u8],
 }
 
 #[cfg(feature = "python")]
-impl WriteBuffers<'_, '_> {
+impl WriteBuffers<'_> {
     fn encode_observation(
         &mut self,
         env_index: usize,
@@ -558,17 +486,25 @@ impl WriteBuffers<'_, '_> {
             .rewards
             .get_mut(env_index)
             .ok_or_else(|| PyValueError::new_err("reward buffer out of bounds"))? = reward;
-        self.terminated.set_item(env_index, terminated)?;
-        self.truncated.set_item(env_index, truncated)?;
+        *self
+            .terminated
+            .get_mut(env_index)
+            .ok_or_else(|| PyValueError::new_err("terminated buffer out of bounds"))? =
+            terminated as u8;
+        *self
+            .truncated
+            .get_mut(env_index)
+            .ok_or_else(|| PyValueError::new_err("truncated buffer out of bounds"))? =
+            truncated as u8;
         Ok(())
     }
 }
 
 #[cfg(feature = "python")]
-fn with_write_buffers<'py, R>(
-    py: Python<'py>,
-    buffers: &'py ObservationBuffers,
-    f: impl FnOnce(WriteBuffers<'_, 'py>) -> PyResult<R>,
+fn with_write_buffers<R>(
+    py: Python<'_>,
+    buffers: &ObservationBuffers,
+    f: impl FnOnce(WriteBuffers<'_>) -> PyResult<R>,
 ) -> PyResult<R> {
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
@@ -654,12 +590,16 @@ fn with_write_buffers<'py, R>(
         actions_valid: mutable_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?,
     };
     let rewards = mutable_slice_from_buffer(py, &rewards_buffer, "rewards")?;
+    let terminated_buffer = typed_numpy_buffer::<u8>(py, &buffers.terminated, "terminated")?;
+    let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
+    let terminated = mutable_slice_from_buffer(py, &terminated_buffer, "terminated")?;
+    let truncated = mutable_slice_from_buffer(py, &truncated_buffer, "truncated")?;
 
     f(WriteBuffers {
         fields: field_slices,
         rewards,
-        terminated: buffers.terminated.bind(py),
-        truncated: buffers.truncated.bind(py),
+        terminated,
+        truncated,
     })
 }
 

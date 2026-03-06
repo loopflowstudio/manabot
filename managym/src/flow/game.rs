@@ -570,7 +570,9 @@ impl Game {
             return Err(AgentError("permanent cannot attack".to_string()));
         }
 
+        let controller = permanent.controller;
         permanent.attack();
+        self.invalidate_mana_cache(controller);
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
             combat.attacker_to_blockers.entry(permanent_id).or_default();

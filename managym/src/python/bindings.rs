@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 #[cfg(feature = "python")]
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError},
+    exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyList, PyModule},
 };
@@ -29,7 +29,7 @@ use crate::{
         },
     },
     flow::turn::{PhaseKind, StepKind},
-    python::convert::info_dict_to_pydict,
+    python::convert::{info_dict_to_pydict, require_numpy_array},
     state::{mana::ManaCost, player::PlayerConfig, zone::ZoneType},
 };
 
@@ -39,45 +39,6 @@ pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
 #[cfg(feature = "python")]
 pub(crate) fn map_agent_err(err: AgentError) -> PyErr {
     PyAgentError::new_err(err.to_string())
-}
-
-#[cfg(feature = "python")]
-fn shape_to_vec(shape_obj: &Bound<'_, PyAny>) -> PyResult<Vec<usize>> {
-    shape_obj.extract::<Vec<usize>>()
-}
-
-#[cfg(feature = "python")]
-fn require_numpy_array<'py>(
-    out: &Bound<'py, PyDict>,
-    key: &str,
-    expected_shape: &[usize],
-    expected_dtype_name: &str,
-) -> PyResult<Bound<'py, PyAny>> {
-    let Some(value) = out.get_item(key)? else {
-        return Err(PyKeyError::new_err(format!(
-            "output dict missing required key '{key}'"
-        )));
-    };
-
-    let dtype_name = value
-        .getattr("dtype")?
-        .getattr("name")?
-        .extract::<String>()?;
-    if dtype_name != expected_dtype_name {
-        return Err(PyTypeError::new_err(format!(
-            "output '{key}' must have dtype {expected_dtype_name}, got {dtype_name}"
-        )));
-    }
-
-    let actual_shape = shape_to_vec(&value.getattr("shape")?)?;
-    if actual_shape != expected_shape {
-        return Err(PyValueError::new_err(format!(
-            "output '{key}' must have shape {:?}, got {:?}",
-            expected_shape, actual_shape
-        )));
-    }
-
-    Ok(value)
 }
 
 #[cfg(feature = "python")]
