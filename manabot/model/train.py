@@ -31,7 +31,6 @@ from manabot.env import (
     VectorEnv,
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
-from manabot.infra.metrics import MetricsDB
 from manabot.model.agent import Agent
 from manabot.verify.util import run_evaluation
 
@@ -94,9 +93,6 @@ class Trainer:
 
         # Initialize the profiler
         self.profiler = self.experiment.profiler
-
-        # Metrics DB for eval logging
-        self.metrics_db = MetricsDB()
 
         # Store env components for eval
         self._obs_space = env.observation_space
@@ -351,9 +347,6 @@ class Trainer:
             opponent_policy=hypers.opponent_policy,
             deterministic=False,
             seed=self.experiment.seed + self.global_step,
-            metrics_db=self.metrics_db,
-            model_name=self.experiment.exp_name,
-            model_step=self.global_step,
         )
 
         self.logger.info(

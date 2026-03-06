@@ -3,9 +3,9 @@
 from contextlib import redirect_stdout
 import io
 
+import numpy as np
 import pytest
 import torch
-import numpy as np
 
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.verify.util import (

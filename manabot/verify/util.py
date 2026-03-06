@@ -1,5 +1,8 @@
-"""Shared helpers for verification ladder scripts."""
+"""Shared helpers for verification and first-light experiment runs."""
 
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
 import logging
 import math
 from typing import Any
@@ -11,7 +14,6 @@ from manabot.config.load import deep_merge
 from manabot.env import Env, Match, ObservationSpace, Reward, build_opponent_policy
 from manabot.env.observation import ActionEnum
 from manabot.infra import Hypers
-from manabot.infra.metrics import MetricsDB
 
 TRUNCATION_INFO_KEYS = (
     "action_space_truncated",
@@ -35,6 +37,39 @@ STANDARD_DECK = {
     "Grey Ogre": 18,
 }
 MOUNTAIN_DECK = {"Mountain": 20}
+
+
+@dataclass(frozen=True)
+class EvaluationActionRecord:
+    """One hero decision captured during evaluation."""
+
+    game_index: int
+    step: int
+    player: int
+    action_type: str
+    choice_set: str
+    is_trivial: bool
+    num_valid_actions: int
+    attack_available: bool
+    land_available: bool
+    spell_available: bool
+    pass_available: bool
+    pass_prob: float | None
+    land_prob: float | None
+    spell_prob: float | None
+    attack_prob: float | None
+
+    def to_row(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class EvaluationArtifacts:
+    """Aggregated evaluation output plus optional detailed diagnostics."""
+
+    metrics: dict[str, float]
+    choice_sets: dict[str, dict[str, float]]
+    actions: list[EvaluationActionRecord]
 
 
 def build_hypers(**overrides) -> Hypers:
@@ -92,7 +127,11 @@ def _select_agent_action(agent, obs: dict[str, np.ndarray], deterministic: bool)
     return int(action.item())
 
 
-def _is_action_type(obs: dict[str, np.ndarray], action_index: int, action_type: ActionEnum) -> bool:
+def _is_action_type(
+    obs: dict[str, np.ndarray],
+    action_index: int,
+    action_type: ActionEnum,
+) -> bool:
     if action_index < 0 or action_index >= obs["actions"].shape[0]:
         return False
     return bool(obs["actions"][action_index, int(action_type)] > 0)
@@ -116,11 +155,12 @@ def _is_pass_action(obs: dict[str, np.ndarray], action_index: int) -> bool:
 
 def _action_type_available(obs: dict[str, np.ndarray], action_type: ActionEnum) -> bool:
     """Check if any valid action in the observation has the given type."""
+
     actions = obs["actions"]
     valid = obs["actions_valid"]
     col = int(action_type)
-    for i in range(actions.shape[0]):
-        if valid[i] > 0 and actions[i, col] > 0:
+    for index in range(actions.shape[0]):
+        if valid[index] > 0 and actions[index, col] > 0:
             return True
     return False
 
@@ -165,7 +205,10 @@ def _priority_choice_name(obs: dict[str, np.ndarray]) -> str:
     return "+".join(parts) if parts else "none"
 
 
-def _policy_action_type_probabilities(agent, obs: dict[str, np.ndarray]) -> dict[str, float] | None:
+def _policy_action_type_probabilities(
+    agent,
+    obs: dict[str, np.ndarray],
+) -> dict[str, float] | None:
     if not hasattr(agent, "forward"):
         return None
 
@@ -184,21 +227,22 @@ def _policy_action_type_probabilities(agent, obs: dict[str, np.ndarray]) -> dict
 
     probs = torch.softmax(logits[0], dim=-1).detach().cpu().numpy()
     action_probs = {name: 0.0 for name in ACTION_TYPE_SHORT_NAMES.values()}
-    for idx in _valid_action_indices(obs):
+    for index in _valid_action_indices(obs):
         for action_type, short_name in ACTION_TYPE_SHORT_NAMES.items():
-            if obs["actions"][idx, int(action_type)] > 0:
-                action_probs[short_name] += float(probs[idx])
+            if obs["actions"][index, int(action_type)] > 0:
+                action_probs[short_name] += float(probs[index])
     return action_probs
 
 
 def _action_type_name(obs: dict[str, np.ndarray], action_index: int) -> str:
     """Get the action type name for a chosen action."""
+
     if action_index < 0 or action_index >= obs["actions"].shape[0]:
         return "unknown"
     action_vec = obs["actions"][action_index]
-    for ae in ActionEnum:
-        if ae.value < len(action_vec) and action_vec[ae.value] > 0:
-            return ACTION_TYPE_SHORT_NAMES.get(ae, ae.name.lower())
+    for action_enum in ActionEnum:
+        if action_enum.value < len(action_vec) and action_vec[action_enum.value] > 0:
+            return ACTION_TYPE_SHORT_NAMES.get(action_enum, action_enum.name.lower())
     return "unknown"
 
 
@@ -211,7 +255,6 @@ def winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
         except (TypeError, ValueError):
             pass
 
-    # Fallback: infer from life totals (perspective-aware).
     agent_idx = int(raw_obs.agent.player_index)
     opp_idx = int(raw_obs.opponent.player_index)
 
@@ -224,7 +267,7 @@ def winner_from_info_or_obs(info: dict[str, Any], raw_obs) -> int | None:
 
 
 def _pass_priority_fallback(env: Env) -> int | None:
-    """Return pass-priority action index for the current raw action space, if present."""
+    """Return a pass-priority action index for the current raw action space."""
 
     raw_obs = getattr(env, "last_raw_obs", None)
     action_space = getattr(raw_obs, "action_space", None)
@@ -233,9 +276,9 @@ def _pass_priority_fallback(env: Env) -> int | None:
         return None
 
     pass_priority_type = int(ActionEnum.PRIORITY_PASS_PRIORITY)
-    for idx, option in enumerate(actions):
+    for index, option in enumerate(actions):
         if int(option.action_type) == pass_priority_type:
-            return idx
+            return index
     return None
 
 
@@ -266,25 +309,18 @@ def step_with_fallback(env: Env, action: int, fallback_action: int = 0):
         raise last_error
 
 
-def run_evaluation(
+def _run_evaluation_internal(
     agent,
     obs_space: ObservationSpace,
     match: Match,
     reward: Reward,
     *,
-    num_games: int = 100,
-    opponent_policy: str = "passive",
-    deterministic: bool = False,
-    seed: int = 0,
-    metrics_db: MetricsDB | None = None,
-    model_name: str = "",
-    model_step: int = 0,
-) -> dict[str, float]:
-    """Run evaluation games and return win/CI/length/action/truncation metrics.
-
-    If metrics_db is provided, logs per-game and per-action data to DuckDB.
-    """
-
+    num_games: int,
+    opponent_policy: str,
+    deterministic: bool,
+    seed: int,
+    capture_actions: bool,
+) -> EvaluationArtifacts:
     env = Env(
         match,
         obs_space,
@@ -295,15 +331,6 @@ def run_evaluation(
         enable_behavior_tracking=False,
     )
     opponent = build_opponent_policy(opponent_policy)
-
-    sim_id = None
-    if metrics_db:
-        sim_id = metrics_db.start_sim(
-            model_name=model_name,
-            model_step=model_step,
-            opponent=opponent_policy,
-            num_games=num_games,
-        )
 
     hero_wins = 0
     game_lengths: list[int] = []
@@ -322,15 +349,16 @@ def run_evaluation(
     pass_land_passes = 0
     pass_land_land_plays = 0
     pass_land_spell_casts = 0
-    priority_choice_counts = {
-        "land": 0,
-        "spell": 0,
-        "pass": 0,
-        "land+spell": 0,
-        "land+pass": 0,
-        "spell+pass": 0,
-        "land+spell+pass": 0,
-        "none": 0,
+    choice_set_counts: dict[str, float] = {}
+    priority_choice_counts: dict[str, float] = {
+        "land": 0.0,
+        "spell": 0.0,
+        "pass": 0.0,
+        "land+spell": 0.0,
+        "land+pass": 0.0,
+        "spell+pass": 0.0,
+        "land+spell+pass": 0.0,
+        "none": 0.0,
     }
     prob_sum_count = 0
     prob_sums = {name: 0.0 for name in ACTION_TYPE_SHORT_NAMES.values()}
@@ -340,7 +368,8 @@ def run_evaluation(
     land_prob_when_land_available = 0.0
     pass_prob_when_pass_land = 0.0
     land_prob_when_pass_land = 0.0
-    truncation_counts = {k: 0 for k in TRUNCATION_INFO_KEYS}
+    truncation_counts = {key: 0 for key in TRUNCATION_INFO_KEYS}
+    captured_actions: list[EvaluationActionRecord] = []
 
     was_training = bool(getattr(agent, "training", False))
     if hasattr(agent, "eval"):
@@ -355,16 +384,14 @@ def run_evaluation(
             game_hero_attacks = 0
             game_hero_actions = 0
             game_could_attack = 0
-            game_land_plays = 0
-            game_could_land = 0
-            game_spell_casts = 0
-            game_could_spell = 0
 
             while not done:
                 active_player = int(env.last_raw_obs.agent.player_index)
                 if active_player == 0:
                     action = _select_agent_action(
-                        agent, obs, deterministic=deterministic
+                        agent,
+                        obs,
+                        deterministic=deterministic,
                     )
                     is_attack = _is_attack_action(obs, action)
                     is_pass = _is_pass_action(obs, action)
@@ -374,18 +401,19 @@ def run_evaluation(
                     has_pass = _pass_available(obs)
                     has_land = _land_available(obs)
                     has_spell = _spell_available(obs)
-                    num_valid = int((_valid_action_indices(obs)).shape[0])
+                    num_valid = int(_valid_action_indices(obs).shape[0])
                     choice_set = _choice_set_name(obs)
                     priority_choice = _priority_choice_name(obs)
                     is_trivial = num_valid <= 1
+
+                    choice_set_counts[choice_set] = choice_set_counts.get(choice_set, 0.0) + 1.0
                     if is_trivial:
                         single_valid_decisions += 1
                     else:
                         multi_valid_decisions += 1
-                    if priority_choice in priority_choice_counts:
-                        priority_choice_counts[priority_choice] += 1
-                    else:
-                        priority_choice_counts[priority_choice] = 1
+                    priority_choice_counts[priority_choice] = (
+                        priority_choice_counts.get(priority_choice, 0.0) + 1.0
+                    )
 
                     game_hero_actions += 1
                     hero_actions += 1
@@ -400,16 +428,12 @@ def run_evaluation(
                     if has_pass:
                         hero_could_pass += 1
                     if is_land:
-                        game_land_plays += 1
                         hero_land_plays += 1
                     if has_land:
-                        game_could_land += 1
                         hero_could_land += 1
                     if is_spell:
-                        game_spell_casts += 1
                         hero_spell_casts += 1
                     if has_spell:
-                        game_could_spell += 1
                         hero_could_spell += 1
 
                     if has_pass and has_land:
@@ -435,49 +459,47 @@ def run_evaluation(
                             pass_prob_when_pass_land += action_type_probs["pass"]
                             land_prob_when_pass_land += action_type_probs["land"]
 
-                    if metrics_db and sim_id:
-                        metrics_db.log_action(
-                            sim_id=sim_id,
-                            game_index=game_index,
-                            step=steps,
-                            player=0,
-                            action_type=_action_type_name(obs, action),
-                            choice_set=choice_set,
-                            is_trivial=is_trivial,
-                            is_attack=is_attack,
-                            attack_available=has_attack,
-                            pass_available=has_pass,
-                            land_available=has_land,
-                            spell_available=has_spell,
-                            pass_prob=(
-                                action_type_probs["pass"]
-                                if action_type_probs is not None
-                                else None
-                            ),
-                            land_prob=(
-                                action_type_probs["land"]
-                                if action_type_probs is not None
-                                else None
-                            ),
-                            spell_prob=(
-                                action_type_probs["spell"]
-                                if action_type_probs is not None
-                                else None
-                            ),
-                            attack_prob=(
-                                action_type_probs["attack"]
-                                if action_type_probs is not None
-                                else None
-                            ),
-                            num_valid_actions=num_valid,
+                    if capture_actions:
+                        captured_actions.append(
+                            EvaluationActionRecord(
+                                game_index=game_index,
+                                step=steps,
+                                player=0,
+                                action_type=_action_type_name(obs, action),
+                                choice_set=choice_set,
+                                is_trivial=is_trivial,
+                                num_valid_actions=num_valid,
+                                attack_available=has_attack,
+                                land_available=has_land,
+                                spell_available=has_spell,
+                                pass_available=has_pass,
+                                pass_prob=(
+                                    action_type_probs["pass"]
+                                    if action_type_probs is not None
+                                    else None
+                                ),
+                                land_prob=(
+                                    action_type_probs["land"]
+                                    if action_type_probs is not None
+                                    else None
+                                ),
+                                spell_prob=(
+                                    action_type_probs["spell"]
+                                    if action_type_probs is not None
+                                    else None
+                                ),
+                                attack_prob=(
+                                    action_type_probs["attack"]
+                                    if action_type_probs is not None
+                                    else None
+                                ),
+                            )
                         )
                 else:
                     action = opponent(obs)
 
                 try:
-                    obs, _, terminated, truncated, info = step_with_fallback(
-                        env, action
-                    )
+                    obs, _, terminated, truncated, info = step_with_fallback(env, action)
                 except Exception:
                     aborted = True
                     info = {}
@@ -487,28 +509,12 @@ def run_evaluation(
                     truncation_counts[key] += int(bool(info.get(key, False)))
                 done = bool(terminated or truncated)
 
-            if aborted:
-                outcome = "aborted"
-            else:
+            if not aborted:
                 winner = winner_from_info_or_obs(info, env.last_raw_obs)
                 if winner == 0:
                     hero_wins += 1
-                    outcome = "hero_win"
-                else:
-                    outcome = "villain_win"
 
             game_lengths.append(steps)
-
-            if metrics_db and sim_id:
-                metrics_db.log_game(
-                    sim_id=sim_id,
-                    game_index=game_index,
-                    outcome=outcome,
-                    steps=steps,
-                    hero_attacks=game_hero_attacks,
-                    hero_actions=game_hero_actions,
-                    could_attack=game_could_attack,
-                )
     finally:
         env.close()
         if hasattr(agent, "train") and was_training:
@@ -516,22 +522,33 @@ def run_evaluation(
 
     win_rate = hero_wins / num_games if num_games > 0 else 0.0
     attack_rate = hero_attack_actions / hero_actions if hero_actions > 0 else 0.0
-    passed_when_able = hero_pass_actions / hero_could_pass if hero_could_pass > 0 else 0.0
+    passed_when_able = (
+        hero_pass_actions / hero_could_pass if hero_could_pass > 0 else 0.0
+    )
     attacked_when_able = (
         hero_attack_actions / hero_could_attack if hero_could_attack > 0 else 0.0
     )
     landed_when_able = hero_land_plays / hero_could_land if hero_could_land > 0 else 0.0
     cast_when_able = hero_spell_casts / hero_could_spell if hero_could_spell > 0 else 0.0
-    pass_land_pass_rate = pass_land_passes / pass_land_decisions if pass_land_decisions > 0 else 0.0
+    pass_land_pass_rate = (
+        pass_land_passes / pass_land_decisions if pass_land_decisions > 0 else 0.0
+    )
     pass_land_land_rate = (
-        pass_land_land_plays / pass_land_decisions if pass_land_decisions > 0 else 0.0
+        pass_land_land_plays / pass_land_decisions
+        if pass_land_decisions > 0
+        else 0.0
     )
     pass_land_spell_rate = (
-        pass_land_spell_casts / pass_land_decisions if pass_land_decisions > 0 else 0.0
+        pass_land_spell_casts / pass_land_decisions
+        if pass_land_decisions > 0
+        else 0.0
     )
     mean_pass_prob = prob_sums["pass"] / prob_sum_count if prob_sum_count > 0 else 0.0
     mean_land_prob = prob_sums["land"] / prob_sum_count if prob_sum_count > 0 else 0.0
     mean_spell_prob = prob_sums["spell"] / prob_sum_count if prob_sum_count > 0 else 0.0
+    mean_attack_prob = (
+        prob_sums["attack"] / prob_sum_count if prob_sum_count > 0 else 0.0
+    )
     mean_pass_prob_when_land_available = (
         pass_prob_when_land_available / land_available_prob_count
         if land_available_prob_count > 0
@@ -553,15 +570,7 @@ def run_evaluation(
         else 0.0
     )
 
-    if metrics_db and sim_id:
-        metrics_db.finish_sim(
-            sim_id=sim_id,
-            win_rate=win_rate,
-            attack_rate=attack_rate,
-            mean_steps=float(np.mean(game_lengths)) if game_lengths else 0.0,
-        )
-
-    return {
+    metrics = {
         "num_games": float(num_games),
         "wins": float(hero_wins),
         "win_rate": win_rate,
@@ -570,6 +579,7 @@ def run_evaluation(
         "attack_rate": attack_rate,
         "passed_when_able": passed_when_able,
         "could_pass": float(hero_could_pass),
+        "pass_count": float(hero_pass_actions),
         "attacked_when_able": attacked_when_able,
         "could_attack": float(hero_could_attack),
         "landed_when_able": landed_when_able,
@@ -587,6 +597,7 @@ def run_evaluation(
         "mean_pass_prob": mean_pass_prob,
         "mean_land_prob": mean_land_prob,
         "mean_spell_prob": mean_spell_prob,
+        "mean_attack_prob": mean_attack_prob,
         "mean_pass_prob_when_land_available": mean_pass_prob_when_land_available,
         "mean_land_prob_when_land_available": mean_land_prob_when_land_available,
         "mean_pass_prob_when_pass_land": mean_pass_prob_when_pass_land,
@@ -597,7 +608,9 @@ def run_evaluation(
         "priority_choice_land_spell": float(priority_choice_counts["land+spell"]),
         "priority_choice_land_pass": float(priority_choice_counts["land+pass"]),
         "priority_choice_spell_pass": float(priority_choice_counts["spell+pass"]),
-        "priority_choice_land_spell_pass": float(priority_choice_counts["land+spell+pass"]),
+        "priority_choice_land_spell_pass": float(
+            priority_choice_counts["land+spell+pass"]
+        ),
         "priority_choice_none": float(priority_choice_counts["none"]),
         "action_space_truncations": float(truncation_counts["action_space_truncated"]),
         "card_space_truncations": float(truncation_counts["card_space_truncated"]),
@@ -605,6 +618,67 @@ def run_evaluation(
             truncation_counts["permanent_space_truncated"]
         ),
     }
+    return EvaluationArtifacts(
+        metrics=metrics,
+        choice_sets={
+            "all": dict(sorted(choice_set_counts.items())),
+            "priority": dict(sorted(priority_choice_counts.items())),
+        },
+        actions=captured_actions,
+    )
+
+
+def capture_evaluation(
+    agent,
+    obs_space: ObservationSpace,
+    match: Match,
+    reward: Reward,
+    *,
+    num_games: int = 100,
+    opponent_policy: str = "passive",
+    deterministic: bool = False,
+    seed: int = 0,
+    capture_actions: bool = False,
+) -> EvaluationArtifacts:
+    """Run evaluation games and return metrics plus optional detailed artifacts."""
+
+    return _run_evaluation_internal(
+        agent,
+        obs_space,
+        match,
+        reward,
+        num_games=num_games,
+        opponent_policy=opponent_policy,
+        deterministic=deterministic,
+        seed=seed,
+        capture_actions=capture_actions,
+    )
+
+
+def run_evaluation(
+    agent,
+    obs_space: ObservationSpace,
+    match: Match,
+    reward: Reward,
+    *,
+    num_games: int = 100,
+    opponent_policy: str = "passive",
+    deterministic: bool = False,
+    seed: int = 0,
+) -> dict[str, float]:
+    """Run evaluation games and return aggregate metrics only."""
+
+    return capture_evaluation(
+        agent,
+        obs_space,
+        match,
+        reward,
+        num_games=num_games,
+        opponent_policy=opponent_policy,
+        deterministic=deterministic,
+        seed=seed,
+        capture_actions=False,
+    ).metrics
 
 
 def print_result(
