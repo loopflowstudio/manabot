@@ -89,6 +89,13 @@ decisions, keep the most recent. Pad with zeroed EventData if fewer.
 If the Rust-side `ObservationEncoder` exists, add event encoding there
 too. Same shape as the Python encoder.
 
+## Prior work
+
+Sprints 01 (decompose game.rs) and 02 (stack/zone unification) are
+shipped. `game.rs` is now 52 lines. Stack mutations go through
+coordination methods in `flow/zones.rs` with a debug invariant after
+every `step()`.
+
 ## Done when
 
 - Stepping through a game produces events in the observation
