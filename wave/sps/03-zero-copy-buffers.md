@@ -76,12 +76,38 @@ Return rewards as `np.ndarray(num_envs,)` and dones as
 `np.ndarray(num_envs,)` — also via pre-allocated buffers if the
 overhead matters, but these are small enough that allocation is fine.
 
-## Verification
+## Measurement
 
-- Parity test still passes (buffers produce same values as Python encoder)
-- Training SPS measured before/after
-- Verification ladder passes
-- Memory profiling: no per-step allocations in steady state
+### Before
+
+```bash
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048
+```
+
+Record the `encode` and `tensorize` percentages. These are the phases
+this sprint eliminates.
+
+### After
+
+```bash
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048
+```
+
+`encode` and `tensorize` should be gone or near-zero. `rust_step`
+should now include encoding time but be much faster than the old
+Python path.
+
+### A/B
+
+```bash
+python scripts/bench_ab.py --a rust --b async --num-envs 16 --rounds 5
+```
+
+### Gate
+
+- Env-only SPS > 80,000 (encode + tensorize eliminated)
+- `python -m manabot.verify.step0_env_sanity` passes
+- Parity test passes (buffers produce same values as Python encoder)
 
 ## Done when
 
