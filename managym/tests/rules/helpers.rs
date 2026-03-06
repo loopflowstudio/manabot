@@ -114,6 +114,14 @@ pub fn shivan_deck() -> BTreeMap<String, usize> {
     land_plus_spell_deck("Mountain", "Shivan Dragon")
 }
 
+pub fn bolt_deck() -> BTreeMap<String, usize> {
+    land_plus_spell_deck("Mountain", "Lightning Bolt")
+}
+
+pub fn counterspell_deck() -> BTreeMap<String, usize> {
+    land_plus_spell_deck("Island", "Counterspell")
+}
+
 pub fn empty_deck() -> BTreeMap<String, usize> {
     BTreeMap::new()
 }
@@ -292,6 +300,28 @@ impl Scenario {
             .state
             .zones
             .move_card(CardId(index), PlayerId(player), ZoneType::Hand);
+    }
+
+    pub fn force_cards_in_hand(&mut self, player: usize, card_name: &str, count: usize) {
+        for _ in 0..count {
+            self.force_card_in_hand(player, card_name);
+        }
+    }
+
+    pub fn choose_target(&mut self, target: managym::state::game_object::Target) -> bool {
+        use managym::state::game_object::Target as GameTarget;
+        let action_target = match target {
+            GameTarget::Player(p) => Target::Player(p),
+            GameTarget::Permanent(p) => Target::Permanent(p),
+            GameTarget::StackSpell(c) => Target::StackSpell(c),
+        };
+        let Some(index) = self.action_space().actions.iter().position(|action| {
+            matches!(action, Action::ChooseTarget { target: t, .. } if *t == action_target)
+        }) else {
+            return false;
+        };
+        self.step_action(index);
+        true
     }
 
     pub fn battlefield_permanents_named(&self, player: usize, card_name: &str) -> Vec<PermanentId> {

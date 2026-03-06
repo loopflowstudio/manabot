@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::{
-    ability::Ability,
+    ability::{Ability, Effect},
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
 };
@@ -114,17 +114,9 @@ pub struct Keywords {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ActivatedAbilityEffect {
-    SelfGetsUntilEot {
-        power_delta: i32,
-        toughness_delta: i32,
-    },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActivatedAbilityDefinition {
     pub mana_cost: ManaCost,
-    pub effect: ActivatedAbilityEffect,
+    pub effect: Effect,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -137,6 +129,7 @@ pub struct CardDefinition {
     pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+    pub spell_effect: Option<Effect>,
     pub keywords: Keywords,
     pub text_box: String,
     pub power: Option<i32>,
@@ -165,6 +158,7 @@ pub struct Card {
     pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+    pub spell_effect: Option<Effect>,
     pub keywords: Keywords,
     pub text_box: String,
     pub power: Option<i32>,
@@ -191,6 +185,7 @@ impl Card {
             abilities: definition.abilities.clone(),
             mana_abilities: definition.mana_abilities.clone(),
             activated_abilities: definition.activated_abilities.clone(),
+            spell_effect: definition.spell_effect.clone(),
             keywords: definition.keywords.clone(),
             text_box: definition.text_box.clone(),
             power: definition.power,

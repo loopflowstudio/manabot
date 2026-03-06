@@ -14,6 +14,7 @@ use crate::{
         turn::{StepKind, TurnState},
     },
     state::{
+        ability::{Ability, TargetSpec, TriggerCondition, TriggerSource},
         card::Card,
         game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId, Target},
         mana::{Mana, ManaCost},
@@ -643,9 +644,7 @@ impl Game {
                         target: match target {
                             Target::Player(p) => ActionTarget::Player(p),
                             Target::Permanent(p) => ActionTarget::Permanent(p),
-                            Target::StackSpell(_) => {
-                                return Action::PassPriority { player: *player }
-                            }
+                            Target::StackSpell(c) => ActionTarget::StackSpell(c),
                         },
                     })
                     .collect(),
@@ -655,16 +654,20 @@ impl Game {
     }
 
     fn legal_targets_for_spell(&self, card: CardId) -> Option<Vec<Target>> {
-        match self.state.cards[card].name.as_str() {
-            "Lightning Bolt" => {
+        let spec = self.state.cards[card].spell_effect.as_ref()?.target_spec()?;
+        Some(self.legal_targets_for_target_spec(spec))
+    }
+
+    fn legal_targets_for_target_spec(&self, spec: &TargetSpec) -> Vec<Target> {
+        match spec {
+            TargetSpec::CreatureOrPlayer => {
                 let mut targets = vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))];
                 for player in [PlayerId(0), PlayerId(1)] {
                     for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
                         let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
                             continue;
                         };
-                        let permanent = self.state.permanents[permanent_id].as_ref();
-                        if permanent.is_none() {
+                        if self.state.permanents[permanent_id].is_none() {
                             continue;
                         }
                         if self.state.cards[card_id].types.is_creature() {
@@ -672,20 +675,35 @@ impl Game {
                         }
                     }
                 }
-                Some(targets)
+                targets
             }
-            "Counterspell" => Some(
-                self.state
-                    .stack_objects
-                    .iter()
-                    .rev()
-                    .filter_map(|object| match object {
-                        StackObject::Spell(spell) => Some(Target::StackSpell(spell.card)),
-                        _ => None,
-                    })
-                    .collect(),
-            ),
-            _ => None,
+            TargetSpec::Creature => {
+                let mut targets = Vec::new();
+                for player in [PlayerId(0), PlayerId(1)] {
+                    for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
+                        let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
+                            continue;
+                        };
+                        if self.state.permanents[permanent_id].is_none() {
+                            continue;
+                        }
+                        if self.state.cards[card_id].types.is_creature() {
+                            targets.push(Target::Permanent(permanent_id));
+                        }
+                    }
+                }
+                targets
+            }
+            TargetSpec::Spell => self
+                .state
+                .stack_objects
+                .iter()
+                .rev()
+                .filter_map(|object| match object {
+                    StackObject::Spell(spell) => Some(Target::StackSpell(spell.card)),
+                    _ => None,
+                })
+                .collect(),
         }
     }
 
@@ -703,22 +721,17 @@ impl Game {
                 ability_index,
             } => self.activate_ability_action(*player, *permanent, *ability_index),
             Action::ChooseTarget { player, target } => {
+                let target = match *target {
+                    ActionTarget::Player(p) => Target::Player(p),
+                    ActionTarget::Permanent(p) => Target::Permanent(p),
+                    ActionTarget::StackSpell(c) => Target::StackSpell(c),
+                };
                 if self.pending_choice.is_some() {
-                    self.choose_target_action(
-                        *player,
-                        match *target {
-                            ActionTarget::Player(p) => Target::Player(p),
-                            ActionTarget::Permanent(p) => Target::Permanent(p),
-                        },
-                    )
+                    self.choose_target_action(*player, target)
+                } else if self.state.pending_trigger_choice.is_some() {
+                    self.choose_trigger_target(*player, target)
                 } else {
-                    self.choose_trigger_target(
-                        *player,
-                        match *target {
-                            ActionTarget::Player(p) => Target::Player(p),
-                            ActionTarget::Permanent(p) => Target::Permanent(p),
-                        },
-                    )
+                    Err(AgentError("no pending target choice".to_string()))
                 }
             }
             Action::PassPriority { player } => {
@@ -1515,8 +1528,7 @@ impl Game {
             .and_then(|card| card.abilities.get(trigger.ability_index))?;
 
         let Ability::Triggered { effect, .. } = ability;
-        let Effect::ReturnToHand { target } = effect;
-        Some(target)
+        effect.target_spec()
     }
 
     fn pop_next_pending_trigger(&mut self) -> Option<PendingTrigger> {
@@ -1560,20 +1572,30 @@ impl Game {
 
     pub(crate) fn legal_targets_for_spec(&self, target_spec: &TargetSpec) -> Vec<ActionTarget> {
         match target_spec {
-            TargetSpec::Creature { .. } => {
+            TargetSpec::Creature | TargetSpec::CreatureOrPlayer => {
                 let mut out = Vec::new();
+                if matches!(target_spec, TargetSpec::CreatureOrPlayer) {
+                    out.push(ActionTarget::Player(PlayerId(0)));
+                    out.push(ActionTarget::Player(PlayerId(1)));
+                }
                 for player in [PlayerId(0), PlayerId(1)] {
                     for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
                         let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
                             continue;
                         };
-                        let card = &self.state.cards[card_id];
-                        if card.types.is_creature() {
+                        if self.state.permanents[permanent_id].is_none() {
+                            continue;
+                        }
+                        if self.state.cards[card_id].types.is_creature() {
                             out.push(ActionTarget::Permanent(permanent_id));
                         }
                     }
                 }
                 out
+            }
+            TargetSpec::Spell => {
+                // Triggered abilities don't target spells, but handle it for completeness.
+                Vec::new()
             }
         }
     }
@@ -1584,7 +1606,11 @@ impl Game {
         target_spec: &TargetSpec,
     ) -> bool {
         match (target, target_spec) {
-            (ActionTarget::Permanent(permanent_id), TargetSpec::Creature { .. }) => {
+            (ActionTarget::Player(_), TargetSpec::CreatureOrPlayer) => true,
+            (
+                ActionTarget::Permanent(permanent_id),
+                TargetSpec::Creature | TargetSpec::CreatureOrPlayer,
+            ) => {
                 let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                     return false;
                 };

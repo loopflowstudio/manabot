@@ -54,7 +54,10 @@ class SandboxManager:
         if machine is None:
             machine = self._create()
         elif machine.status in {"stopped", "stopping"}:
+            print(f"Starting stopped instance {machine.id}...")
             machine = self.provider.start(machine)
+        else:
+            print(f"Found existing instance {machine.id} ({machine.status})")
 
         return self._ready_for_use(machine)
 
@@ -96,32 +99,48 @@ class SandboxManager:
         self.provider.terminate(machine)
 
     def _create(self) -> Machine:
+        print(f"Creating {self.spec.instance_type} in {self.spec.region}...")
         user_data = sandbox_user_data(
             self.runtime,
             repo_url=self.repo_url,
         )
-        return self.provider.create(
+        machine = self.provider.create(
             self.spec,
             tags=self._tags(),
             user_data=user_data,
         )
+        print(f"Created instance {machine.id}")
+        return machine
 
-    def _verify_bootstrap(self, machine: Machine) -> None:
-        result = self.provider.run_command(
-            machine,
-            f"test -f {BOOTSTRAP_MARKER} && echo READY || echo MISSING",
-            timeout=120,
-        )
-        if "READY" not in result.stdout:
-            raise RuntimeError(
-                f"Sandbox bootstrap marker missing ({BOOTSTRAP_MARKER}). "
-                f"Command {result.command_id} status={result.status} stderr={result.stderr}"
+    def _verify_bootstrap(self, machine: Machine, timeout: int = 600) -> None:
+        import time
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            result = self.provider.run_command(
+                machine,
+                f"test -f {BOOTSTRAP_MARKER} && echo READY || echo MISSING",
+                timeout=120,
             )
+            if "READY" in result.stdout:
+                return
+            print("  waiting for bootstrap to finish...", flush=True)
+            time.sleep(10)
+
+        raise RuntimeError(
+            f"Bootstrap did not complete within {timeout}s ({BOOTSTRAP_MARKER}). "
+            f"Last command {result.command_id} status={result.status} stderr={result.stderr}"
+        )
 
     def _ready_for_use(self, machine: Machine) -> Machine:
+        print(f"Waiting for {machine.id} to be running...")
         machine = self.provider.wait_until_ready(machine, timeout=600)
+        print(f"Instance running, ip={machine.public_ip or 'pending'}")
+        print("Waiting for SSM agent...")
         self.provider.wait_for_ssm(machine, timeout=600)
+        print("SSM online. Verifying bootstrap...")
         self._verify_bootstrap(machine)
+        print("Bootstrap verified.")
         if not self.no_ssh:
             self._open_ssh(machine)
         return machine
