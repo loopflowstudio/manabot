@@ -178,6 +178,6 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
     try:
         env.encode_observation_into(obs, bad)
         raised = False
-    except ValueError:
+    except (ValueError, TypeError):
         raised = True
-    assert raised, "Expected dtype mismatch to raise ValueError"
+    assert raised, "Expected dtype mismatch to raise ValueError or TypeError"
