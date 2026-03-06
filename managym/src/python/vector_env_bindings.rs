@@ -15,13 +15,14 @@ use pyo3::{
 #[cfg(feature = "python")]
 use crate::{
     agent::{
+        action::AgentError,
         observation::Observation,
         observation_encoder::{
             encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
             PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
-        vector_env::{StepResult, VectorEnv},
+        vector_env::VectorEnv,
     },
     infra::profiler::InfoDict,
     python::{
@@ -80,6 +81,7 @@ impl PyVectorEnv {
         opponent_policy: &str,
     ) -> PyResult<Self> {
         let policy = parse_opponent_policy(opponent_policy)?;
+
         Ok(Self {
             inner: VectorEnv::new(num_envs, seed, skip_trivial, policy),
             config: ObservationEncoderConfig::default(),
@@ -248,29 +250,29 @@ impl PyVectorEnv {
         py: Python<'_>,
         player_configs: Vec<PyPlayerConfig>,
     ) -> PyResult<()> {
-        let buffers = self
-            .buffers
-            .as_ref()
-            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
-
         let configs: Vec<PlayerConfig> =
             player_configs.into_iter().map(PlayerConfig::from).collect();
-        let results = self.inner.reset_all(configs).map_err(map_agent_err)?;
-
-        self.last_info = results.iter().map(|(_, info)| info.clone()).collect();
-        write_reset_results_into_buffers(py, buffers, &self.config, &results)
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.reset_all_into(
+                configs,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
+        })
     }
 
     fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
-        let buffers = self
-            .buffers
-            .as_ref()
-            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
-
-        let results = self.inner.step(&actions).map_err(map_agent_err)?;
-
-        self.last_info = results.iter().map(|result| result.info.clone()).collect();
-        write_step_results_into_buffers(py, buffers, &self.config, &results)
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.step_into(
+                &actions,
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
+        })
     }
 
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
@@ -278,6 +280,35 @@ impl PyVectorEnv {
             .iter()
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
+    }
+}
+
+#[cfg(feature = "python")]
+impl PyVectorEnv {
+    fn run_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(
+                &mut VectorEnv,
+                SendWriteBuffers,
+                ObservationEncoderConfig,
+            ) -> Result<Vec<InfoDict>, AgentError>
+            + Send,
+    ) -> PyResult<()> {
+        let buffers = self
+            .buffers
+            .take()
+            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+        let config = self.config;
+        let inner = &mut self.inner;
+
+        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
+            py.allow_threads(|| run(inner, write_buffers, config))
+                .map_err(map_agent_err)
+        });
+        self.buffers = Some(buffers);
+        self.last_info = result?;
+        Ok(())
     }
 }
 
@@ -314,27 +345,6 @@ fn mutable_slice_from_buffer<'py, T: Element>(
 }
 
 #[cfg(feature = "python")]
-fn row_mut<'a, T>(
-    data: &'a mut [T],
-    row_index: usize,
-    row_len: usize,
-    field: &'static str,
-) -> PyResult<&'a mut [T]> {
-    let start = row_index
-        .checked_mul(row_len)
-        .ok_or_else(|| PyValueError::new_err(format!("overflow while indexing '{field}'")))?;
-    let end = start
-        .checked_add(row_len)
-        .ok_or_else(|| PyValueError::new_err(format!("overflow while indexing '{field}'")))?;
-    let total_len = data.len();
-    data.get_mut(start..end).ok_or_else(|| {
-        PyValueError::new_err(format!(
-            "row {row_index} for '{field}' out of bounds (row_len={row_len}, total={total_len})"
-        ))
-    })
-}
-
-#[cfg(feature = "python")]
 fn typed_numpy_buffer<'py, T: Element>(
     py: Python<'py>,
     array: &'py Py<PyAny>,
@@ -345,166 +355,246 @@ fn typed_numpy_buffer<'py, T: Element>(
 }
 
 #[cfg(feature = "python")]
-struct ObservationFieldSlices<'a> {
-    agent_player: &'a mut [f32],
-    opponent_player: &'a mut [f32],
-    agent_cards: &'a mut [f32],
-    opponent_cards: &'a mut [f32],
-    agent_permanents: &'a mut [f32],
-    opponent_permanents: &'a mut [f32],
-    actions: &'a mut [f32],
-    action_focus: &'a mut [i32],
-    agent_player_valid: &'a mut [f32],
-    opponent_player_valid: &'a mut [f32],
-    agent_cards_valid: &'a mut [f32],
-    opponent_cards_valid: &'a mut [f32],
-    agent_permanents_valid: &'a mut [f32],
-    opponent_permanents_valid: &'a mut [f32],
-    actions_valid: &'a mut [f32],
+fn send_slice_from_buffer<'py, T: Element>(
+    py: Python<'py>,
+    buffer: &'py PyBuffer<T>,
+    key: &'static str,
+) -> PyResult<SendSlice<T>> {
+    let data = mutable_slice_from_buffer(py, buffer, key)?;
+    Ok(SendSlice::from_mut_slice(data, key))
 }
 
 #[cfg(feature = "python")]
-impl ObservationFieldSlices<'_> {
+#[derive(Clone, Copy)]
+struct SendSlice<T> {
+    ptr: *mut T,
+    len: usize,
+    field: &'static str,
+}
+
+#[cfg(feature = "python")]
+// SAFETY: SendSlice wraps a raw pointer into a Python-owned numpy buffer.
+// The GIL is released before use (py.allow_threads), and each env index
+// writes to disjoint rows, so no aliasing occurs.
+unsafe impl<T> Send for SendSlice<T> {}
+unsafe impl<T> Sync for SendSlice<T> {}
+
+#[cfg(feature = "python")]
+impl<T> SendSlice<T> {
+    fn from_mut_slice(data: &mut [T], field: &'static str) -> Self {
+        Self {
+            ptr: data.as_mut_ptr(),
+            len: data.len(),
+            field,
+        }
+    }
+
+    fn row_ptr(&self, row_index: usize, row_len: usize) -> Result<*mut T, AgentError> {
+        let start = row_index
+            .checked_mul(row_len)
+            .ok_or_else(|| AgentError(format!("overflow while indexing '{}'", self.field)))?;
+        let end = start
+            .checked_add(row_len)
+            .ok_or_else(|| AgentError(format!("overflow while indexing '{}'", self.field)))?;
+
+        if end > self.len {
+            return Err(AgentError(format!(
+                "row {row_index} for '{}' out of bounds (row_len={row_len}, total={})",
+                self.field, self.len
+            )));
+        }
+
+        // SAFETY: bounds are checked above.
+        Ok(unsafe { self.ptr.add(start) })
+    }
+
+    fn element_ptr(&self, index: usize) -> Result<*mut T, AgentError> {
+        if index >= self.len {
+            return Err(AgentError(format!(
+                "index {index} for '{}' out of bounds (total={})",
+                self.field, self.len
+            )));
+        }
+        // SAFETY: bounds are checked above.
+        Ok(unsafe { self.ptr.add(index) })
+    }
+}
+
+#[cfg(feature = "python")]
+#[derive(Clone, Copy)]
+struct SendObservationFieldSlices {
+    agent_player: SendSlice<f32>,
+    opponent_player: SendSlice<f32>,
+    agent_cards: SendSlice<f32>,
+    opponent_cards: SendSlice<f32>,
+    agent_permanents: SendSlice<f32>,
+    opponent_permanents: SendSlice<f32>,
+    actions: SendSlice<f32>,
+    action_focus: SendSlice<i32>,
+    agent_player_valid: SendSlice<f32>,
+    opponent_player_valid: SendSlice<f32>,
+    agent_cards_valid: SendSlice<f32>,
+    opponent_cards_valid: SendSlice<f32>,
+    agent_permanents_valid: SendSlice<f32>,
+    opponent_permanents_valid: SendSlice<f32>,
+    actions_valid: SendSlice<f32>,
+}
+
+#[cfg(feature = "python")]
+impl SendObservationFieldSlices {
     fn encoded_row_mut(
-        &mut self,
+        &self,
         env_index: usize,
         config: &ObservationEncoderConfig,
-    ) -> PyResult<EncodedObservationMut<'_>> {
+    ) -> Result<EncodedObservationMut<'_>, AgentError> {
+        let cards_len = config.cards_len();
+        let permanents_len = config.permanents_len();
+        let actions_len = config.actions_len();
+        let action_focus_len = config.action_focus_len();
+
+        let agent_player_ptr = self.agent_player.row_ptr(env_index, PLAYER_DIM)?;
+        let opponent_player_ptr = self.opponent_player.row_ptr(env_index, PLAYER_DIM)?;
+        let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
+        let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
+        let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
+        let opponent_permanents_ptr = self
+            .opponent_permanents
+            .row_ptr(env_index, permanents_len)?;
+        let actions_ptr = self.actions.row_ptr(env_index, actions_len)?;
+        let action_focus_ptr = self.action_focus.row_ptr(env_index, action_focus_len)?;
+        let agent_player_valid_ptr = self.agent_player_valid.row_ptr(env_index, 1)?;
+        let opponent_player_valid_ptr = self.opponent_player_valid.row_ptr(env_index, 1)?;
+        let agent_cards_valid_ptr = self
+            .agent_cards_valid
+            .row_ptr(env_index, config.max_cards_per_player)?;
+        let opponent_cards_valid_ptr = self
+            .opponent_cards_valid
+            .row_ptr(env_index, config.max_cards_per_player)?;
+        let agent_permanents_valid_ptr = self
+            .agent_permanents_valid
+            .row_ptr(env_index, config.max_permanents_per_player)?;
+        let opponent_permanents_valid_ptr = self
+            .opponent_permanents_valid
+            .row_ptr(env_index, config.max_permanents_per_player)?;
+        let actions_valid_ptr = self.actions_valid.row_ptr(env_index, config.max_actions)?;
+
         Ok(EncodedObservationMut {
-            agent_player: row_mut(self.agent_player, env_index, PLAYER_DIM, "agent_player")?,
-            opponent_player: row_mut(
-                self.opponent_player,
-                env_index,
-                PLAYER_DIM,
-                "opponent_player",
-            )?,
-            agent_cards: row_mut(
-                self.agent_cards,
-                env_index,
-                config.cards_len(),
-                "agent_cards",
-            )?,
-            opponent_cards: row_mut(
-                self.opponent_cards,
-                env_index,
-                config.cards_len(),
-                "opponent_cards",
-            )?,
-            agent_permanents: row_mut(
-                self.agent_permanents,
-                env_index,
-                config.permanents_len(),
-                "agent_permanents",
-            )?,
-            opponent_permanents: row_mut(
-                self.opponent_permanents,
-                env_index,
-                config.permanents_len(),
-                "opponent_permanents",
-            )?,
-            actions: row_mut(self.actions, env_index, config.actions_len(), "actions")?,
-            action_focus: row_mut(
-                self.action_focus,
-                env_index,
-                config.action_focus_len(),
-                "action_focus",
-            )?,
-            agent_player_valid: row_mut(
-                self.agent_player_valid,
-                env_index,
-                1,
-                "agent_player_valid",
-            )?,
-            opponent_player_valid: row_mut(
-                self.opponent_player_valid,
-                env_index,
-                1,
-                "opponent_player_valid",
-            )?,
-            agent_cards_valid: row_mut(
-                self.agent_cards_valid,
-                env_index,
-                config.max_cards_per_player,
-                "agent_cards_valid",
-            )?,
-            opponent_cards_valid: row_mut(
-                self.opponent_cards_valid,
-                env_index,
-                config.max_cards_per_player,
-                "opponent_cards_valid",
-            )?,
-            agent_permanents_valid: row_mut(
-                self.agent_permanents_valid,
-                env_index,
-                config.max_permanents_per_player,
-                "agent_permanents_valid",
-            )?,
-            opponent_permanents_valid: row_mut(
-                self.opponent_permanents_valid,
-                env_index,
-                config.max_permanents_per_player,
-                "opponent_permanents_valid",
-            )?,
-            actions_valid: row_mut(
-                self.actions_valid,
-                env_index,
-                config.max_actions,
-                "actions_valid",
-            )?,
+            // SAFETY: each call uses disjoint per-env rows.
+            agent_player: unsafe { slice::from_raw_parts_mut(agent_player_ptr, PLAYER_DIM) },
+            // SAFETY: each call uses disjoint per-env rows.
+            opponent_player: unsafe { slice::from_raw_parts_mut(opponent_player_ptr, PLAYER_DIM) },
+            // SAFETY: each call uses disjoint per-env rows.
+            agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },
+            // SAFETY: each call uses disjoint per-env rows.
+            opponent_cards: unsafe { slice::from_raw_parts_mut(opponent_cards_ptr, cards_len) },
+            // SAFETY: each call uses disjoint per-env rows.
+            agent_permanents: unsafe {
+                slice::from_raw_parts_mut(agent_permanents_ptr, permanents_len)
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            opponent_permanents: unsafe {
+                slice::from_raw_parts_mut(opponent_permanents_ptr, permanents_len)
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            actions: unsafe { slice::from_raw_parts_mut(actions_ptr, actions_len) },
+            // SAFETY: each call uses disjoint per-env rows.
+            action_focus: unsafe { slice::from_raw_parts_mut(action_focus_ptr, action_focus_len) },
+            // SAFETY: each call uses disjoint per-env rows.
+            agent_player_valid: unsafe { slice::from_raw_parts_mut(agent_player_valid_ptr, 1) },
+            // SAFETY: each call uses disjoint per-env rows.
+            opponent_player_valid: unsafe {
+                slice::from_raw_parts_mut(opponent_player_valid_ptr, 1)
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            agent_cards_valid: unsafe {
+                slice::from_raw_parts_mut(agent_cards_valid_ptr, config.max_cards_per_player)
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            opponent_cards_valid: unsafe {
+                slice::from_raw_parts_mut(opponent_cards_valid_ptr, config.max_cards_per_player)
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            agent_permanents_valid: unsafe {
+                slice::from_raw_parts_mut(
+                    agent_permanents_valid_ptr,
+                    config.max_permanents_per_player,
+                )
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            opponent_permanents_valid: unsafe {
+                slice::from_raw_parts_mut(
+                    opponent_permanents_valid_ptr,
+                    config.max_permanents_per_player,
+                )
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            actions_valid: unsafe {
+                slice::from_raw_parts_mut(actions_valid_ptr, config.max_actions)
+            },
         })
     }
 }
 
 #[cfg(feature = "python")]
-struct WriteBuffers<'a> {
-    fields: ObservationFieldSlices<'a>,
-    rewards: &'a mut [f64],
-    terminated: &'a mut [u8],
-    truncated: &'a mut [u8],
+#[derive(Clone, Copy)]
+struct SendWriteBuffers {
+    fields: SendObservationFieldSlices,
+    rewards: SendSlice<f64>,
+    terminated: SendSlice<u8>,
+    truncated: SendSlice<u8>,
 }
 
 #[cfg(feature = "python")]
-impl WriteBuffers<'_> {
+impl SendWriteBuffers {
     fn encode_observation(
-        &mut self,
+        &self,
         env_index: usize,
         observation: &Observation,
         config: &ObservationEncoderConfig,
-    ) -> PyResult<()> {
+    ) -> Result<(), AgentError> {
         let out = self.fields.encoded_row_mut(env_index, config)?;
-        encode_into(observation, config, out).map_err(|err| PyValueError::new_err(err.to_string()))
+        encode_into(observation, config, out).map_err(|err| AgentError(err.to_string()))
     }
 
     fn write_step_state(
-        &mut self,
+        &self,
         env_index: usize,
         reward: f64,
         terminated: bool,
         truncated: bool,
-    ) -> PyResult<()> {
-        *self
-            .rewards
-            .get_mut(env_index)
-            .ok_or_else(|| PyValueError::new_err("reward buffer out of bounds"))? = reward;
-        *self
-            .terminated
-            .get_mut(env_index)
-            .ok_or_else(|| PyValueError::new_err("terminated buffer out of bounds"))? =
-            terminated as u8;
-        *self
-            .truncated
-            .get_mut(env_index)
-            .ok_or_else(|| PyValueError::new_err("truncated buffer out of bounds"))? =
-            truncated as u8;
+    ) -> Result<(), AgentError> {
+        let reward_ptr = self.rewards.element_ptr(env_index)?;
+        let terminated_ptr = self.terminated.element_ptr(env_index)?;
+        let truncated_ptr = self.truncated.element_ptr(env_index)?;
+
+        // SAFETY: each env index is written at most once per step/reset call.
+        unsafe {
+            *reward_ptr = reward;
+            *terminated_ptr = terminated as u8;
+            *truncated_ptr = truncated as u8;
+        }
         Ok(())
+    }
+
+    fn write_encoded_row(
+        &self,
+        env_index: usize,
+        observation: &Observation,
+        reward: f64,
+        terminated: bool,
+        truncated: bool,
+        config: &ObservationEncoderConfig,
+    ) -> Result<(), AgentError> {
+        self.encode_observation(env_index, observation, config)?;
+        self.write_step_state(env_index, reward, terminated, truncated)
     }
 }
 
 #[cfg(feature = "python")]
-fn with_write_buffers<R>(
+fn with_send_write_buffers<R>(
     py: Python<'_>,
     buffers: &ObservationBuffers,
-    f: impl FnOnce(WriteBuffers<'_>) -> PyResult<R>,
+    f: impl FnOnce(SendWriteBuffers) -> PyResult<R>,
 ) -> PyResult<R> {
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
@@ -539,103 +629,59 @@ fn with_write_buffers<R>(
     let actions_valid_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.actions_valid, "actions_valid")?;
     let rewards_buffer = typed_numpy_buffer::<f64>(py, &buffers.rewards, "rewards")?;
+    let terminated_buffer = typed_numpy_buffer::<u8>(py, &buffers.terminated, "terminated")?;
+    let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
 
-    let field_slices = ObservationFieldSlices {
-        agent_player: mutable_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
-        opponent_player: mutable_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?,
-        agent_cards: mutable_slice_from_buffer(py, &agent_cards_buffer, "agent_cards")?,
-        opponent_cards: mutable_slice_from_buffer(py, &opponent_cards_buffer, "opponent_cards")?,
-        agent_permanents: mutable_slice_from_buffer(
-            py,
-            &agent_permanents_buffer,
-            "agent_permanents",
-        )?,
-        opponent_permanents: mutable_slice_from_buffer(
+    let field_slices = SendObservationFieldSlices {
+        agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
+        opponent_player: send_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?,
+        agent_cards: send_slice_from_buffer(py, &agent_cards_buffer, "agent_cards")?,
+        opponent_cards: send_slice_from_buffer(py, &opponent_cards_buffer, "opponent_cards")?,
+        agent_permanents: send_slice_from_buffer(py, &agent_permanents_buffer, "agent_permanents")?,
+        opponent_permanents: send_slice_from_buffer(
             py,
             &opponent_permanents_buffer,
             "opponent_permanents",
         )?,
-        actions: mutable_slice_from_buffer(py, &actions_buffer, "actions")?,
-        action_focus: mutable_slice_from_buffer(py, &action_focus_buffer, "action_focus")?,
-        agent_player_valid: mutable_slice_from_buffer(
+        actions: send_slice_from_buffer(py, &actions_buffer, "actions")?,
+        action_focus: send_slice_from_buffer(py, &action_focus_buffer, "action_focus")?,
+        agent_player_valid: send_slice_from_buffer(
             py,
             &agent_player_valid_buffer,
             "agent_player_valid",
         )?,
-        opponent_player_valid: mutable_slice_from_buffer(
+        opponent_player_valid: send_slice_from_buffer(
             py,
             &opponent_player_valid_buffer,
             "opponent_player_valid",
         )?,
-        agent_cards_valid: mutable_slice_from_buffer(
+        agent_cards_valid: send_slice_from_buffer(
             py,
             &agent_cards_valid_buffer,
             "agent_cards_valid",
         )?,
-        opponent_cards_valid: mutable_slice_from_buffer(
+        opponent_cards_valid: send_slice_from_buffer(
             py,
             &opponent_cards_valid_buffer,
             "opponent_cards_valid",
         )?,
-        agent_permanents_valid: mutable_slice_from_buffer(
+        agent_permanents_valid: send_slice_from_buffer(
             py,
             &agent_permanents_valid_buffer,
             "agent_permanents_valid",
         )?,
-        opponent_permanents_valid: mutable_slice_from_buffer(
+        opponent_permanents_valid: send_slice_from_buffer(
             py,
             &opponent_permanents_valid_buffer,
             "opponent_permanents_valid",
         )?,
-        actions_valid: mutable_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?,
+        actions_valid: send_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?,
     };
-    let rewards = mutable_slice_from_buffer(py, &rewards_buffer, "rewards")?;
-    let terminated_buffer = typed_numpy_buffer::<u8>(py, &buffers.terminated, "terminated")?;
-    let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
-    let terminated = mutable_slice_from_buffer(py, &terminated_buffer, "terminated")?;
-    let truncated = mutable_slice_from_buffer(py, &truncated_buffer, "truncated")?;
 
-    f(WriteBuffers {
+    f(SendWriteBuffers {
         fields: field_slices,
-        rewards,
-        terminated,
-        truncated,
-    })
-}
-
-#[cfg(feature = "python")]
-fn write_step_results_into_buffers(
-    py: Python<'_>,
-    buffers: &ObservationBuffers,
-    config: &ObservationEncoderConfig,
-    results: &[StepResult],
-) -> PyResult<()> {
-    with_write_buffers(py, buffers, |mut write_buffers| {
-        for (env_index, result) in results.iter().enumerate() {
-            write_buffers.encode_observation(env_index, &result.obs, config)?;
-            write_buffers.write_step_state(
-                env_index,
-                result.reward,
-                result.terminated,
-                result.truncated,
-            )?;
-        }
-        Ok(())
-    })
-}
-
-#[cfg(feature = "python")]
-fn write_reset_results_into_buffers(
-    py: Python<'_>,
-    buffers: &ObservationBuffers,
-    config: &ObservationEncoderConfig,
-    results: &[(Observation, InfoDict)],
-) -> PyResult<()> {
-    with_write_buffers(py, buffers, |mut write_buffers| {
-        for (env_index, (obs, _)) in results.iter().enumerate() {
-            write_buffers.encode_observation(env_index, obs, config)?;
-            write_buffers.write_step_state(env_index, 0.0, false, false)?;
-        }
-        Ok(())
+        rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
+        terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
+        truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
     })
 }
