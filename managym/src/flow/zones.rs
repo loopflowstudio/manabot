@@ -52,6 +52,7 @@ impl Game {
     }
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
+        self.state.observation_events.push(event.clone());
         self.state.events.push(event);
     }
 
@@ -88,21 +89,16 @@ impl Game {
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
-        self.state.pending_events.push(GameEvent::CardMoved {
+        let event = GameEvent::CardMoved {
             card,
             from: old_zone,
             to: to_zone,
             controller: event_controller,
-        });
+        };
+        self.state.emit_event(event.clone());
         self.process_game_events();
-
-        if let Some(from) = old_zone {
-            self.emit(GameEvent::CardMoved {
-                card,
-                from: Some(from),
-                to: to_zone,
-                controller: event_controller,
-            });
+        if old_zone.is_some() {
+            self.state.events.push(event);
         }
     }
 

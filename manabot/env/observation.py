@@ -81,6 +81,27 @@ class ZoneEnum(IntEnum):
     COMMAND = 6
 
 
+class EventTypeEnum(IntEnum):
+    """Mirrors managym.EventTypeEnum for validation."""
+
+    CARD_MOVED = 0
+    DAMAGE_DEALT = 1
+    LIFE_CHANGED = 2
+    SPELL_CAST = 3
+    SPELL_RESOLVED = 4
+    SPELL_COUNTERED = 5
+    ABILITY_TRIGGERED = 6
+
+
+class EventEntityKindEnum(IntEnum):
+    """Mirrors managym.EventEntityKindEnum for validation."""
+
+    NONE = 0
+    CARD = 1
+    PERMANENT = 2
+    PLAYER = 3
+
+
 # -----------------------------------------------------------------------------
 # Observation Encoding
 # -----------------------------------------------------------------------------
@@ -97,16 +118,20 @@ class ObservationEncoder:
         self.perms_per_player = hypers.max_permanents_per_player
         self.max_actions = hypers.max_actions
         self.max_focus_objects = hypers.max_focus_objects
+        self.max_events = hypers.max_events
 
         self.num_phases = len(PhaseEnum.__members__)
         self.num_steps = len(StepEnum.__members__)
         self.num_zones = len(ZoneEnum.__members__)
         self.num_actions = len(ActionEnum.__members__)
+        self.num_event_types = len(EventTypeEnum.__members__)
+        self.num_event_entity_kinds = len(EventEntityKindEnum.__members__)
 
         # Define dimensions for players, cards, permanents.
         self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps
         self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 11) + 1
         self.permanent_dim = 4 + 1
+        self.event_dim = 7
 
         # Action space dimension: action type + validity bit.
         self.action_dim = self.num_actions + 1  # validity bit
@@ -128,6 +153,7 @@ class ObservationEncoder:
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
             "opponent_permanents": (self.perms_per_player, self.permanent_dim),
             "actions": (self.max_actions, self.action_dim),
+            "events": (self.max_events, self.event_dim),
             "action_focus": (self.max_actions, self.max_focus_objects),
             "agent_player_valid": (1,),
             "opponent_player_valid": (1,),
@@ -136,6 +162,7 @@ class ObservationEncoder:
             "agent_permanents_valid": (self.perms_per_player,),
             "opponent_permanents_valid": (self.perms_per_player,),
             "actions_valid": (self.max_actions,),
+            "events_valid": (self.max_events,),
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
@@ -188,6 +215,7 @@ class ObservationEncoder:
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
+        out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
@@ -365,6 +393,31 @@ class ObservationEncoder:
             action_focus_indices.extend([[-1] * self.max_focus_objects] * unused_slots)
 
         return arr, np.array(action_focus_indices, dtype=np.int32)
+
+    def _encode_events(
+        self, events: List[managym.EventData]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        log = getLogger(__name__).getChild("encode_events")
+        arr = np.zeros((self.max_events, self.event_dim), dtype=np.float32)
+        valid = np.zeros((self.max_events,), dtype=np.float32)
+        if len(events) > self.max_events:
+            log.warning(f"Event list truncated: {len(events)} -> {self.max_events}")
+        ordered_events = events[-self.max_events :]
+        for i, event in enumerate(ordered_events):
+            arr[i] = np.array(
+                [
+                    float(int(event.event_type)),
+                    float(int(event.source_kind)),
+                    float(event.source_id),
+                    float(int(event.target_kind)),
+                    float(event.target_id),
+                    float(event.amount),
+                    float(event.controller_id),
+                ],
+                dtype=np.float32,
+            )
+            valid[i] = 1.0
+        return arr, valid
 
 
 class ObservationSpace(gym.spaces.Space):

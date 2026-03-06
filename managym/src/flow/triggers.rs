@@ -133,6 +133,10 @@ impl Game {
                 ability_index: trigger.ability_index,
                 targets,
             }));
+        self.emit(GameEvent::AbilityTriggered {
+            source_card: trigger.source_card,
+            controller: trigger.controller,
+        });
         self.state.priority.start_round(self.active_player());
     }
 

@@ -21,12 +21,12 @@ use crate::{
         action::{ActionSpaceKind, ActionType, AgentError},
         env::Env,
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, KeywordData, Observation,
-            PermanentData, PlayerData, StackObjectData, StackObjectKindData, StackTargetData,
-            StackTargetKindData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, EventEntityKind,
+            EventType, KeywordData, Observation, PermanentData, PlayerData, StackObjectData,
+            StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{
-            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
+            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
     },
     flow::turn::{PhaseKind, StepKind},
@@ -132,6 +132,10 @@ fn encoded_to_dict<'py>(
         to_numpy_array_f32(py, &np, &encoded.actions, &[config.max_actions, ACTION_DIM])?,
     )?;
     dict.set_item(
+        "events",
+        to_numpy_array_f32(py, &np, &encoded.events, &[config.max_events, EVENT_DIM])?,
+    )?;
+    dict.set_item(
         "action_focus",
         to_numpy_array_i32(
             py,
@@ -188,6 +192,10 @@ fn encoded_to_dict<'py>(
     dict.set_item(
         "actions_valid",
         to_numpy_array_f32(py, &np, &encoded.actions_valid, &[config.max_actions])?,
+    )?;
+    dict.set_item(
+        "events_valid",
+        to_numpy_array_f32(py, &np, &encoded.events_valid, &[config.max_events])?,
     )?;
 
     Ok(dict)
@@ -526,6 +534,79 @@ pub enum ActionSpaceEnum {
     DeclareAttacker = 2,
     DeclareBlocker = 3,
     ChooseTarget = 4,
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "EventTypeEnum", eq, eq_int)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum EventTypeEnum {
+    CardMoved = EventType::CardMoved as i32,
+    DamageDealt = EventType::DamageDealt as i32,
+    LifeChanged = EventType::LifeChanged as i32,
+    SpellCast = EventType::SpellCast as i32,
+    SpellResolved = EventType::SpellResolved as i32,
+    SpellCountered = EventType::SpellCountered as i32,
+    AbilityTriggered = EventType::AbilityTriggered as i32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl EventTypeEnum {
+    #[classattr]
+    const CARD_MOVED: Self = Self::CardMoved;
+    #[classattr]
+    const DAMAGE_DEALT: Self = Self::DamageDealt;
+    #[classattr]
+    const LIFE_CHANGED: Self = Self::LifeChanged;
+    #[classattr]
+    const SPELL_CAST: Self = Self::SpellCast;
+    #[classattr]
+    const SPELL_RESOLVED: Self = Self::SpellResolved;
+    #[classattr]
+    const SPELL_COUNTERED: Self = Self::SpellCountered;
+    #[classattr]
+    const ABILITY_TRIGGERED: Self = Self::AbilityTriggered;
+
+    fn __int__(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __index__(&self) -> i32 {
+        *self as i32
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "EventEntityKindEnum", eq, eq_int)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum EventEntityKindEnum {
+    None = EventEntityKind::None as i32,
+    Card = EventEntityKind::Card as i32,
+    Permanent = EventEntityKind::Permanent as i32,
+    Player = EventEntityKind::Player as i32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl EventEntityKindEnum {
+    #[classattr]
+    const NONE: Self = Self::None;
+    #[classattr]
+    const CARD: Self = Self::Card;
+    #[classattr]
+    const PERMANENT: Self = Self::Permanent;
+    #[classattr]
+    const PLAYER: Self = Self::Player;
+
+    fn __int__(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __index__(&self) -> i32 {
+        *self as i32
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1087,6 +1168,74 @@ pub struct PyAction {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "EventData")]
+#[derive(Clone)]
+pub struct PyEventData {
+    #[pyo3(get, set)]
+    pub event_type: EventTypeEnum,
+    #[pyo3(get, set)]
+    pub source_kind: EventEntityKindEnum,
+    #[pyo3(get, set)]
+    pub source_id: i32,
+    #[pyo3(get, set)]
+    pub target_kind: EventEntityKindEnum,
+    #[pyo3(get, set)]
+    pub target_id: i32,
+    #[pyo3(get, set)]
+    pub amount: i32,
+    #[pyo3(get, set)]
+    pub controller_id: i32,
+}
+
+#[cfg(feature = "python")]
+impl From<EventData> for PyEventData {
+    fn from(value: EventData) -> Self {
+        Self {
+            event_type: match value.event_type {
+                x if x == EventType::CardMoved as i32 => EventTypeEnum::CardMoved,
+                x if x == EventType::DamageDealt as i32 => EventTypeEnum::DamageDealt,
+                x if x == EventType::LifeChanged as i32 => EventTypeEnum::LifeChanged,
+                x if x == EventType::SpellCast as i32 => EventTypeEnum::SpellCast,
+                x if x == EventType::SpellResolved as i32 => EventTypeEnum::SpellResolved,
+                x if x == EventType::SpellCountered as i32 => EventTypeEnum::SpellCountered,
+                _ => EventTypeEnum::AbilityTriggered,
+            },
+            source_kind: match value.source_kind {
+                x if x == EventEntityKind::Card as i32 => EventEntityKindEnum::Card,
+                x if x == EventEntityKind::Permanent as i32 => EventEntityKindEnum::Permanent,
+                x if x == EventEntityKind::Player as i32 => EventEntityKindEnum::Player,
+                _ => EventEntityKindEnum::None,
+            },
+            source_id: value.source_id,
+            target_kind: match value.target_kind {
+                x if x == EventEntityKind::Card as i32 => EventEntityKindEnum::Card,
+                x if x == EventEntityKind::Permanent as i32 => EventEntityKindEnum::Permanent,
+                x if x == EventEntityKind::Player as i32 => EventEntityKindEnum::Player,
+                _ => EventEntityKindEnum::None,
+            },
+            target_id: value.target_id,
+            amount: value.amount,
+            controller_id: value.controller_id,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyEventData> for EventData {
+    fn from(value: PyEventData) -> Self {
+        Self {
+            event_type: value.event_type as i32,
+            source_kind: value.source_kind as i32,
+            source_id: value.source_id,
+            target_kind: value.target_kind as i32,
+            target_id: value.target_id,
+            amount: value.amount,
+            controller_id: value.controller_id,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 impl From<ActionOption> for PyAction {
     fn from(value: ActionOption) -> Self {
         Self {
@@ -1258,6 +1407,8 @@ pub struct PyObservation {
     pub opponent_permanents: Vec<PyPermanent>,
     #[pyo3(get, set)]
     pub stack_objects: Vec<PyStackObject>,
+    #[pyo3(get, set)]
+    pub recent_events: Vec<PyEventData>,
 }
 
 #[cfg(feature = "python")]
@@ -1286,6 +1437,11 @@ impl From<Observation> for PyObservation {
                 .stack_objects
                 .into_iter()
                 .map(PyStackObject::from)
+                .collect(),
+            recent_events: value
+                .recent_events
+                .into_iter()
+                .map(PyEventData::from)
                 .collect(),
         }
     }
@@ -1321,6 +1477,11 @@ impl From<PyObservation> for Observation {
                 .stack_objects
                 .into_iter()
                 .map(StackObjectData::from)
+                .collect(),
+            recent_events: value
+                .recent_events
+                .into_iter()
+                .map(EventData::from)
                 .collect(),
         }
     }
@@ -1491,6 +1652,21 @@ impl PyObservation {
                 .iter()
                 .map(stack_object_json)
                 .collect::<Vec<_>>(),
+            "recent_events": self
+                .recent_events
+                .iter()
+                .map(|event| {
+                    json!({
+                        "event_type": event.event_type as i32,
+                        "source_kind": event.source_kind as i32,
+                        "source_id": event.source_id,
+                        "target_kind": event.target_kind as i32,
+                        "target_id": event.target_id,
+                        "amount": event.amount,
+                        "controller_id": event.controller_id,
+                    })
+                })
+                .collect::<Vec<_>>(),
         })
         .to_string()
     }
@@ -1631,6 +1807,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ActionSpaceEnum>()?;
     m.add_class::<StackObjectKindEnum>()?;
     m.add_class::<StackTargetKindEnum>()?;
+    m.add_class::<EventTypeEnum>()?;
+    m.add_class::<EventEntityKindEnum>()?;
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_class::<PyObservation>()?;
@@ -1645,6 +1823,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyActionSpace>()?;
     m.add_class::<PyStackTarget>()?;
     m.add_class::<PyStackObject>()?;
+    m.add_class::<PyEventData>()?;
 
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;

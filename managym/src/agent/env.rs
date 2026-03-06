@@ -46,8 +46,9 @@ impl Env {
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
         let _scope = self.profiler.track("env_reset");
-        let game = Game::new(player_configs, self.seed, self.skip_trivial);
-        let observation = Observation::new(&game);
+        let mut game = Game::new(player_configs, self.seed, self.skip_trivial);
+        let events = game.take_observation_events();
+        let observation = Observation::new(&game, &events);
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
     }
@@ -88,7 +89,8 @@ impl Env {
         };
 
         let done = game.step(action)?;
-        let observation = Observation::new(game);
+        let events = game.take_observation_events();
+        let observation = Observation::new(game, &events);
 
         let mut reward = 0.0;
         let mut info = empty_info_dict();

@@ -34,12 +34,10 @@ impl Game {
             let target = spell.targets.first().copied();
             if let Some(target_spec) = effect.target_spec() {
                 let Some(target) = target else {
-                    // CR 608.2b — Targeted spells with no target are countered.
                     self.counter_spell(card, None);
                     return;
                 };
                 if !self.is_legal_target(target, target_spec) {
-                    // CR 608.2b — Targeted spells with illegal targets are countered.
                     self.counter_spell(card, None);
                     return;
                 }
@@ -53,12 +51,10 @@ impl Game {
 
         let is_permanent = self.state.cards[card].types.is_permanent();
         if is_permanent {
-            // CR 608.3 — A resolving permanent spell enters the battlefield.
             self.move_card(card, ZoneType::Battlefield);
             let owner = self.state.cards[card].owner;
             self.invalidate_mana_cache(owner);
         } else {
-            // CR 608.2k — Nonpermanent spells resolve then go to graveyard.
             self.move_card(card, ZoneType::Graveyard);
         }
         self.emit(GameEvent::SpellResolved { card });

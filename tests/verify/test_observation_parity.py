@@ -52,6 +52,10 @@ def allocate_vector_buffers(
             (num_envs, hypers.max_actions, encoder.action_dim),
             dtype=np.float32,
         ),
+        "events": np.zeros(
+            (num_envs, hypers.max_events, encoder.event_dim),
+            dtype=np.float32,
+        ),
         "action_focus": np.zeros(
             (num_envs, hypers.max_actions, hypers.max_focus_objects),
             dtype=np.int32,
@@ -75,6 +79,7 @@ def allocate_vector_buffers(
             dtype=np.float32,
         ),
         "actions_valid": np.zeros((num_envs, hypers.max_actions), dtype=np.float32),
+        "events_valid": np.zeros((num_envs, hypers.max_events), dtype=np.float32),
         "rewards": np.zeros((num_envs,), dtype=np.float64),
         "terminated": np.zeros((num_envs,), dtype=np.uint8),
         "truncated": np.zeros((num_envs,), dtype=np.uint8),
@@ -223,6 +228,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
             dtype=np.float32,
         ),
         "actions": np.full((hypers.max_actions, 7), -7.0, dtype=np.float32),
+        "events": np.full((hypers.max_events, 7), -7.0, dtype=np.float32),
         "action_focus": np.full(
             (hypers.max_actions, hypers.max_focus_objects),
             -7,
@@ -251,6 +257,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
             dtype=np.float32,
         ),
         "actions_valid": np.full((hypers.max_actions,), -7.0, dtype=np.float32),
+        "events_valid": np.full((hypers.max_events,), -7.0, dtype=np.float32),
     }
 
     env.encode_observation_into(obs, out)

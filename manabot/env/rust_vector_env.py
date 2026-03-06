@@ -78,6 +78,7 @@ class RustVectorEnv:
                 dtype=np.float32,
             ),
             "actions": np.zeros((n, enc.max_actions, enc.action_dim), dtype=np.float32),
+            "events": np.zeros((n, enc.max_events, enc.event_dim), dtype=np.float32),
             "action_focus": np.zeros(
                 (n, enc.max_actions, enc.max_focus_objects),
                 dtype=np.int32,
@@ -96,6 +97,7 @@ class RustVectorEnv:
                 dtype=np.float32,
             ),
             "actions_valid": np.zeros((n, enc.max_actions), dtype=np.float32),
+            "events_valid": np.zeros((n, enc.max_events), dtype=np.float32),
             "rewards": np.zeros((n,), dtype=np.float64),
             "terminated": np.zeros((n,), dtype=np.uint8),
             "truncated": np.zeros((n,), dtype=np.uint8),

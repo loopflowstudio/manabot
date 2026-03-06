@@ -1,6 +1,7 @@
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::{
+        event::GameEvent,
         game::Game,
         turn::{PhaseKind, StepKind},
     },
@@ -123,6 +124,38 @@ pub struct PermanentData {
     pub is_summoning_sick: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum EventType {
+    CardMoved = 0,
+    DamageDealt = 1,
+    LifeChanged = 2,
+    SpellCast = 3,
+    SpellResolved = 4,
+    SpellCountered = 5,
+    AbilityTriggered = 6,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum EventEntityKind {
+    None = 0,
+    Card = 1,
+    Permanent = 2,
+    Player = 3,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventData {
+    pub event_type: i32,
+    pub source_kind: i32,
+    pub source_id: i32,
+    pub target_kind: i32,
+    pub target_id: i32,
+    pub amount: i32,
+    pub controller_id: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionOption {
     pub action_type: ActionType,
@@ -149,10 +182,11 @@ pub struct Observation {
     pub opponent_cards: Vec<CardData>,
     pub opponent_permanents: Vec<PermanentData>,
     pub stack_objects: Vec<StackObjectData>,
+    pub recent_events: Vec<EventData>,
 }
 
 impl Observation {
-    pub fn new(game: &Game) -> Self {
+    pub fn new(game: &Game, recent_events: &[GameEvent]) -> Self {
         let agent_player = game.agent_player();
         let opponent_player = PlayerId((agent_player.0 + 1) % 2);
 
@@ -208,6 +242,7 @@ impl Observation {
             opponent_cards: Vec::new(),
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
+            recent_events: recent_events.iter().map(Self::event_data).collect(),
         };
 
         obs.populate_cards(game, agent_player);
@@ -425,6 +460,83 @@ impl Observation {
         }
     }
 
+    fn event_data(event: &GameEvent) -> EventData {
+        use crate::flow::event::DamageTarget;
+        match event {
+            GameEvent::CardMoved {
+                card, controller, ..
+            } => Self::simple_event(EventType::CardMoved, card.0, controller.0),
+            GameEvent::DamageDealt {
+                source,
+                target,
+                amount,
+            } => {
+                let (source_kind, source_id) = match source {
+                    Some(card) => (EventEntityKind::Card as i32, card.0 as i32),
+                    None => (EventEntityKind::None as i32, -1),
+                };
+                let (target_kind, target_id) = match target {
+                    DamageTarget::Player(p) => (EventEntityKind::Player as i32, p.0 as i32),
+                    DamageTarget::Permanent(p) => {
+                        (EventEntityKind::Permanent as i32, p.0 as i32)
+                    }
+                };
+                EventData {
+                    event_type: EventType::DamageDealt as i32,
+                    source_kind,
+                    source_id,
+                    target_kind,
+                    target_id,
+                    amount: *amount as i32,
+                    controller_id: -1,
+                }
+            }
+            GameEvent::LifeChanged { player, old, new } => EventData {
+                event_type: EventType::LifeChanged as i32,
+                source_kind: EventEntityKind::Player as i32,
+                source_id: player.0 as i32,
+                target_kind: EventEntityKind::Player as i32,
+                target_id: player.0 as i32,
+                amount: new - old,
+                controller_id: -1,
+            },
+            GameEvent::SpellCast { card, .. } => {
+                Self::simple_event(EventType::SpellCast, card.0, card.0)
+            }
+            GameEvent::SpellResolved { card } => {
+                Self::simple_event(EventType::SpellResolved, card.0, card.0)
+            }
+            GameEvent::SpellCountered { card, .. } => {
+                Self::simple_event(EventType::SpellCountered, card.0, card.0)
+            }
+            GameEvent::AbilityTriggered {
+                source_card,
+                controller,
+            } => Self::simple_event(EventType::AbilityTriggered, source_card.0, controller.0),
+            GameEvent::TurnStarted { .. } | GameEvent::StepStarted { .. } => EventData {
+                event_type: -1,
+                source_kind: EventEntityKind::None as i32,
+                source_id: -1,
+                target_kind: EventEntityKind::None as i32,
+                target_id: -1,
+                amount: 0,
+                controller_id: -1,
+            },
+        }
+    }
+
+    fn simple_event(event_type: EventType, card_id: usize, controller_idx: usize) -> EventData {
+        EventData {
+            event_type: event_type as i32,
+            source_kind: EventEntityKind::Card as i32,
+            source_id: card_id as i32,
+            target_kind: EventEntityKind::None as i32,
+            target_id: -1,
+            amount: 0,
+            controller_id: controller_idx as i32,
+        }
+    }
+
     fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
         match action {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
@@ -633,6 +745,17 @@ impl Observation {
                 .iter()
                 .map(stack_object_json)
                 .collect::<Vec<_>>(),
+            "recent_events": self.recent_events.iter().map(|event| {
+                json!({
+                    "event_type": event.event_type,
+                    "source_kind": event.source_kind,
+                    "source_id": event.source_id,
+                    "target_kind": event.target_kind,
+                    "target_id": event.target_id,
+                    "amount": event.amount,
+                    "controller_id": event.controller_id,
+                })
+            }).collect::<Vec<_>>(),
         })
         .to_string()
     }

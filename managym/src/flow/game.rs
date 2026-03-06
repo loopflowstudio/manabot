@@ -32,6 +32,7 @@ pub struct GameState {
     pub mana_cache: [Option<Mana>; 2],
     pub events: Vec<GameEvent>,
     pub pending_events: Vec<GameEvent>,
+    pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub pending_trigger_choice: Option<PendingTrigger>,
     pub trigger_enqueue_counter: u64,
@@ -64,4 +65,17 @@ pub struct Game {
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
+}
+
+impl GameState {
+    pub fn emit_event(&mut self, event: GameEvent) {
+        self.pending_events.push(event.clone());
+        self.observation_events.push(event);
+    }
+}
+
+impl Game {
+    pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
+        std::mem::take(&mut self.state.observation_events)
+    }
 }
