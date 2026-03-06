@@ -1,4 +1,4 @@
-// runtime.rs
+// tick.rs
 // Game loop: step, tick, turn_tick, tick_priority, and turn-based actions.
 
 use crate::{

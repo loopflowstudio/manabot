@@ -1,4 +1,4 @@
-// casting.rs
+// play.rs
 // Spell casting and land plays.
 
 use crate::{

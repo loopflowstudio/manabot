@@ -1,5 +1,5 @@
 pub mod action;
-pub mod casting;
+pub mod play;
 pub mod combat;
 pub mod combat_actions;
 pub mod damage;
@@ -9,7 +9,7 @@ pub mod identity;
 pub mod mana;
 pub mod priority;
 pub mod resolution;
-pub mod runtime;
+pub mod tick;
 pub mod sba;
 pub mod setup;
 pub mod trigger;

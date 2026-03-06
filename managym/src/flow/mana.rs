@@ -5,9 +5,8 @@ use crate::{
     agent::action::AgentError,
     flow::game::Game,
     state::{
-        game_object::{PermanentId, PlayerId},
+        game_object::PlayerId,
         mana::{Mana, ManaCost},
-        zone::ZoneType,
     },
 };
 
@@ -89,12 +88,9 @@ impl Game {
         total
     }
 
-    pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
-        self.state
-            .zones
-            .zone_cards(ZoneType::Battlefield, player)
-            .iter()
-            .filter_map(|card| self.state.card_to_permanent[card])
-            .collect()
+    pub(crate) fn clear_mana_pools(&mut self) {
+        for player in &mut self.state.players {
+            player.mana_pool.clear();
+        }
     }
 }
