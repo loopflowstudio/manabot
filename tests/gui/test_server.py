@@ -3,14 +3,13 @@ test_server.py
 WebSocket integration tests for the GUI backend server.
 """
 
-import json
 from datetime import timedelta
+import json
 
 from fastapi.testclient import TestClient
 
 # Local imports
-from gui import trace as trace_store
-from gui import server
+from gui import server, trace as trace_store
 from gui.server import app
 
 

@@ -514,7 +514,9 @@ def _response_with_session(
     return response
 
 
-async def _attach_session_websocket(record: SessionRecord, websocket: WebSocket) -> None:
+async def _attach_session_websocket(
+    record: SessionRecord, websocket: WebSocket
+) -> None:
     previous_websocket = record.websocket
     record.websocket = websocket
     record.touch()
