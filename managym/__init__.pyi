@@ -107,6 +107,21 @@ class StackTargetKindEnum(IntEnum):
     PERMANENT = 1
     STACK_OBJECT = 2
 
+class EventTypeEnum(IntEnum):
+    CARD_MOVED = 0
+    DAMAGE_DEALT = 1
+    LIFE_CHANGED = 2
+    SPELL_CAST = 3
+    SPELL_RESOLVED = 4
+    SPELL_COUNTERED = 5
+    ABILITY_TRIGGERED = 6
+
+class EventEntityKindEnum(IntEnum):
+    NONE = 0
+    CARD = 1
+    PERMANENT = 2
+    PLAYER = 3
+
 class ManaCost:
     cost: List[int]
     mana_value: int
@@ -196,6 +211,15 @@ class StackObject:
     ability_index: int | None
     targets: List[StackTarget]
 
+class EventData:
+    event_type: EventTypeEnum
+    source_kind: EventEntityKindEnum
+    source_id: int
+    target_kind: EventEntityKindEnum
+    target_id: int
+    amount: int
+    controller_id: int
+
 class Observation:
     game_over: bool
     won: bool
@@ -208,6 +232,7 @@ class Observation:
     opponent_cards: List[Card]
     opponent_permanents: List[Permanent]
     stack_objects: List[StackObject]
+    recent_events: List[EventData]
 
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...

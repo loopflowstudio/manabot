@@ -20,6 +20,8 @@ import pytest
 
 # Local imports
 from manabot.env.observation import (
+    EventEntityKindEnum,
+    EventTypeEnum,
     ObservationEncoder,
     ObservationSpace,
     ObservationSpaceHypers,
@@ -147,6 +149,36 @@ class TestEnumParity:
     def test_step_enum(self, py_enum, cpp_enum):
         assert int(cpp_enum) == py_enum
 
+    @pytest.mark.parametrize(
+        "py_enum, cpp_enum",
+        [
+            (EventTypeEnum.CARD_MOVED, managym.EventTypeEnum.CARD_MOVED),
+            (EventTypeEnum.DAMAGE_DEALT, managym.EventTypeEnum.DAMAGE_DEALT),
+            (EventTypeEnum.LIFE_CHANGED, managym.EventTypeEnum.LIFE_CHANGED),
+            (EventTypeEnum.SPELL_CAST, managym.EventTypeEnum.SPELL_CAST),
+            (EventTypeEnum.SPELL_RESOLVED, managym.EventTypeEnum.SPELL_RESOLVED),
+            (EventTypeEnum.SPELL_COUNTERED, managym.EventTypeEnum.SPELL_COUNTERED),
+            (
+                EventTypeEnum.ABILITY_TRIGGERED,
+                managym.EventTypeEnum.ABILITY_TRIGGERED,
+            ),
+        ],
+    )
+    def test_event_type_enum(self, py_enum, cpp_enum):
+        assert int(cpp_enum) == py_enum
+
+    @pytest.mark.parametrize(
+        "py_enum, cpp_enum",
+        [
+            (EventEntityKindEnum.NONE, managym.EventEntityKindEnum.NONE),
+            (EventEntityKindEnum.CARD, managym.EventEntityKindEnum.CARD),
+            (EventEntityKindEnum.PERMANENT, managym.EventEntityKindEnum.PERMANENT),
+            (EventEntityKindEnum.PLAYER, managym.EventEntityKindEnum.PLAYER),
+        ],
+    )
+    def test_event_entity_kind_enum(self, py_enum, cpp_enum):
+        assert int(cpp_enum) == py_enum
+
 
 class TestObservationEncoder:
     """Test the observation encoder's core functionality."""
@@ -182,6 +214,9 @@ class TestObservationEncoder:
             "actions",
             "actions_valid",
             "action_focus",
+            # Events
+            "events",
+            "events_valid",
         }
 
     def test_encode_observation(self, observation_space, observation):
@@ -220,6 +255,7 @@ class TestObservationEncoder:
             "opponent_cards",
             "agent_permanents",
             "opponent_permanents",
+            "events",
         ]:
             valid_key = f"{key}_valid"
             invalid = ~encoded[valid_key].astype(bool)
@@ -322,6 +358,30 @@ class TestObservationEncoder:
         # All indices should be either -1 (no focus) or within valid range
         valid = (focus == -1) | ((focus >= 0) & (focus < total_objects))
         assert valid.all(), f"Invalid focus indices found: {focus[~valid]}"
+
+    def test_event_features_round_trip(self, observation_space, observation, hypers):
+        encoded = observation_space.encode(observation)
+        events = observation.recent_events[-hypers.max_events :]
+        valid_count = min(len(observation.recent_events), hypers.max_events)
+
+        assert int(encoded["events_valid"].sum()) == valid_count
+        for i, event in enumerate(events):
+            np.testing.assert_allclose(
+                encoded["events"][i],
+                np.array(
+                    [
+                        float(int(event.event_type)),
+                        float(int(event.source_kind)),
+                        float(event.source_id),
+                        float(int(event.target_kind)),
+                        float(event.target_id),
+                        float(event.amount),
+                        float(event.controller_id),
+                    ],
+                    dtype=np.float32,
+                ),
+                atol=1e-6,
+            )
 
     def test_action_space_truncation_warning(self, monkeypatch):
         hypers = ObservationSpaceHypers(max_actions=2, max_focus_objects=2)

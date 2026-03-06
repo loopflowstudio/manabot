@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use managym::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, ActionType},
+    flow::event::GameEvent,
     flow::turn::{PhaseKind, StepKind},
     state::{
         game_object::{CardId, PermanentId, PlayerId},
@@ -149,6 +150,10 @@ impl Scenario {
 
     pub fn game_mut(&mut self) -> &mut Game {
         &mut self.game
+    }
+
+    pub fn drain_events(&mut self) -> Vec<GameEvent> {
+        self.game.take_observation_events()
     }
 
     pub fn action_space(&self) -> &ActionSpace {

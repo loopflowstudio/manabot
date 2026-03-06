@@ -26,59 +26,13 @@ def allocate_vector_buffers(
     hypers: ObservationSpaceHypers,
 ) -> dict[str, np.ndarray]:
     encoder = ObservationEncoder(hypers)
-    return {
-        "agent_player": np.zeros((num_envs, 1, encoder.player_dim), dtype=np.float32),
-        "opponent_player": np.zeros(
-            (num_envs, 1, encoder.player_dim),
-            dtype=np.float32,
-        ),
-        "agent_cards": np.zeros(
-            (num_envs, hypers.max_cards_per_player, encoder.card_dim),
-            dtype=np.float32,
-        ),
-        "opponent_cards": np.zeros(
-            (num_envs, hypers.max_cards_per_player, encoder.card_dim),
-            dtype=np.float32,
-        ),
-        "agent_permanents": np.zeros(
-            (num_envs, hypers.max_permanents_per_player, encoder.permanent_dim),
-            dtype=np.float32,
-        ),
-        "opponent_permanents": np.zeros(
-            (num_envs, hypers.max_permanents_per_player, encoder.permanent_dim),
-            dtype=np.float32,
-        ),
-        "actions": np.zeros(
-            (num_envs, hypers.max_actions, encoder.action_dim),
-            dtype=np.float32,
-        ),
-        "action_focus": np.zeros(
-            (num_envs, hypers.max_actions, hypers.max_focus_objects),
-            dtype=np.int32,
-        ),
-        "agent_player_valid": np.zeros((num_envs, 1), dtype=np.float32),
-        "opponent_player_valid": np.zeros((num_envs, 1), dtype=np.float32),
-        "agent_cards_valid": np.zeros(
-            (num_envs, hypers.max_cards_per_player),
-            dtype=np.float32,
-        ),
-        "opponent_cards_valid": np.zeros(
-            (num_envs, hypers.max_cards_per_player),
-            dtype=np.float32,
-        ),
-        "agent_permanents_valid": np.zeros(
-            (num_envs, hypers.max_permanents_per_player),
-            dtype=np.float32,
-        ),
-        "opponent_permanents_valid": np.zeros(
-            (num_envs, hypers.max_permanents_per_player),
-            dtype=np.float32,
-        ),
-        "actions_valid": np.zeros((num_envs, hypers.max_actions), dtype=np.float32),
-        "rewards": np.zeros((num_envs,), dtype=np.float64),
-        "terminated": np.zeros((num_envs,), dtype=np.uint8),
-        "truncated": np.zeros((num_envs,), dtype=np.uint8),
-    }
+    buffers = encoder.allocate(num_envs)
+    buffers.update(
+        rewards=np.zeros((num_envs,), dtype=np.float64),
+        terminated=np.zeros((num_envs,), dtype=np.uint8),
+        truncated=np.zeros((num_envs,), dtype=np.uint8),
+    )
+    return buffers
 
 
 def assert_buffer_observation_equal(
@@ -223,6 +177,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
             dtype=np.float32,
         ),
         "actions": np.full((hypers.max_actions, 7), -7.0, dtype=np.float32),
+        "events": np.full((hypers.max_events, 7), -7.0, dtype=np.float32),
         "action_focus": np.full(
             (hypers.max_actions, hypers.max_focus_objects),
             -7,
@@ -251,6 +206,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
             dtype=np.float32,
         ),
         "actions_valid": np.full((hypers.max_actions,), -7.0, dtype=np.float32),
+        "events_valid": np.full((hypers.max_events,), -7.0, dtype=np.float32),
     }
 
     env.encode_observation_into(obs, out)

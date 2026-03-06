@@ -32,6 +32,7 @@ class ObservationSpaceHypers(BaseHypersModel):
     max_permanents_per_player: int = 30
     max_actions: int = 20
     max_focus_objects: int = 2
+    max_events: int = 32
 
 
 class MatchHypers(BaseHypersModel):
@@ -123,6 +124,8 @@ class Hypers(BaseHypersModel):
             raise ValueError("max_cards_per_player must be positive")
         if self.observation.max_actions < 1:
             raise ValueError("max_actions must be positive")
+        if self.observation.max_events < 1:
+            raise ValueError("max_events must be positive")
         return self
 
 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt};
 
 use crate::{
-    agent::observation::{CardData, Observation, PermanentData, PlayerData, TurnData},
+    agent::observation::{CardData, EventData, Observation, PermanentData, PlayerData, TurnData},
     flow::turn::{PhaseKind, StepKind},
 };
 
@@ -10,6 +10,7 @@ pub const CARD_DIM: usize = 29;
 pub const PERMANENT_DIM: usize = 5;
 pub const ACTION_TYPE_DIM: usize = 7;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
+pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
 pub const STEP_DIM: usize = 12;
@@ -20,6 +21,7 @@ pub struct ObservationEncoderConfig {
     pub max_permanents_per_player: usize,
     pub max_actions: usize,
     pub max_focus_objects: usize,
+    pub max_events: usize,
 }
 
 impl Default for ObservationEncoderConfig {
@@ -29,6 +31,7 @@ impl Default for ObservationEncoderConfig {
             max_permanents_per_player: 30,
             max_actions: 20,
             max_focus_objects: 2,
+            max_events: 32,
         }
     }
 }
@@ -49,6 +52,10 @@ impl ObservationEncoderConfig {
     pub fn action_focus_len(&self) -> usize {
         self.max_actions * self.max_focus_objects
     }
+
+    pub fn events_len(&self) -> usize {
+        self.max_events * EVENT_DIM
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,6 +67,7 @@ pub struct EncodedObservation {
     pub agent_permanents: Vec<f32>,
     pub opponent_permanents: Vec<f32>,
     pub actions: Vec<f32>,
+    pub events: Vec<f32>,
     pub action_focus: Vec<i32>,
     pub agent_player_valid: Vec<f32>,
     pub opponent_player_valid: Vec<f32>,
@@ -68,6 +76,7 @@ pub struct EncodedObservation {
     pub agent_permanents_valid: Vec<f32>,
     pub opponent_permanents_valid: Vec<f32>,
     pub actions_valid: Vec<f32>,
+    pub events_valid: Vec<f32>,
 }
 
 pub struct EncodedObservationMut<'a> {
@@ -78,6 +87,7 @@ pub struct EncodedObservationMut<'a> {
     pub agent_permanents: &'a mut [f32],
     pub opponent_permanents: &'a mut [f32],
     pub actions: &'a mut [f32],
+    pub events: &'a mut [f32],
     pub action_focus: &'a mut [i32],
     pub agent_player_valid: &'a mut [f32],
     pub opponent_player_valid: &'a mut [f32],
@@ -86,6 +96,7 @@ pub struct EncodedObservationMut<'a> {
     pub agent_permanents_valid: &'a mut [f32],
     pub opponent_permanents_valid: &'a mut [f32],
     pub actions_valid: &'a mut [f32],
+    pub events_valid: &'a mut [f32],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +134,7 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         agent_permanents: vec![0.0; config.permanents_len()],
         opponent_permanents: vec![0.0; config.permanents_len()],
         actions: vec![0.0; config.actions_len()],
+        events: vec![0.0; config.events_len()],
         action_focus: vec![-1; config.action_focus_len()],
         agent_player_valid: vec![0.0; 1],
         opponent_player_valid: vec![0.0; 1],
@@ -131,6 +143,7 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         agent_permanents_valid: vec![0.0; config.max_permanents_per_player],
         opponent_permanents_valid: vec![0.0; config.max_permanents_per_player],
         actions_valid: vec![0.0; config.max_actions],
+        events_valid: vec![0.0; config.max_events],
     };
 
     let out = EncodedObservationMut {
@@ -141,6 +154,7 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         agent_permanents: &mut encoded.agent_permanents,
         opponent_permanents: &mut encoded.opponent_permanents,
         actions: &mut encoded.actions,
+        events: &mut encoded.events,
         action_focus: &mut encoded.action_focus,
         agent_player_valid: &mut encoded.agent_player_valid,
         opponent_player_valid: &mut encoded.opponent_player_valid,
@@ -149,6 +163,7 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         agent_permanents_valid: &mut encoded.agent_permanents_valid,
         opponent_permanents_valid: &mut encoded.opponent_permanents_valid,
         actions_valid: &mut encoded.actions_valid,
+        events_valid: &mut encoded.events_valid,
     };
 
     encode_into(obs, config, out).expect("internal encode buffer lengths are always valid");
@@ -184,6 +199,7 @@ pub fn encode_into(
         out.action_focus.len(),
         config.action_focus_len(),
     )?;
+    validate_buffer_len("events", out.events.len(), config.events_len())?;
     validate_buffer_len("agent_player_valid", out.agent_player_valid.len(), 1)?;
     validate_buffer_len("opponent_player_valid", out.opponent_player_valid.len(), 1)?;
     validate_buffer_len(
@@ -207,6 +223,7 @@ pub fn encode_into(
         config.max_permanents_per_player,
     )?;
     validate_buffer_len("actions_valid", out.actions_valid.len(), config.max_actions)?;
+    validate_buffer_len("events_valid", out.events_valid.len(), config.max_events)?;
 
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
@@ -215,6 +232,7 @@ pub fn encode_into(
     out.agent_permanents.fill(0.0);
     out.opponent_permanents.fill(0.0);
     out.actions.fill(0.0);
+    out.events.fill(0.0);
     out.action_focus.fill(-1);
     out.agent_player_valid.fill(0.0);
     out.opponent_player_valid.fill(0.0);
@@ -223,6 +241,7 @@ pub fn encode_into(
     out.agent_permanents_valid.fill(0.0);
     out.opponent_permanents_valid.fill(0.0);
     out.actions_valid.fill(0.0);
+    out.events_valid.fill(0.0);
 
     let mut object_to_index: HashMap<i32, i32> = HashMap::new();
     let mut current_object_index: i32 = 0;
@@ -291,6 +310,12 @@ pub fn encode_into(
         out.actions_valid,
         out.action_focus,
         &object_to_index,
+    );
+    encode_events(
+        &obs.recent_events,
+        config.max_events,
+        out.events,
+        out.events_valid,
     );
 
     Ok(())
@@ -461,6 +486,22 @@ fn encode_actions(
     }
 }
 
+fn encode_events(events: &[EventData], max_events: usize, out: &mut [f32], out_valid: &mut [f32]) {
+    let start_index = events.len().saturating_sub(max_events);
+    for (event_index, event) in events.iter().skip(start_index).enumerate() {
+        let row_start = event_index * EVENT_DIM;
+        let row = &mut out[row_start..row_start + EVENT_DIM];
+        row[0] = event.event_type as f32;
+        row[1] = event.source_kind as f32;
+        row[2] = event.source_id as f32;
+        row[3] = event.target_kind as f32;
+        row[4] = event.target_id as f32;
+        row[5] = event.amount as f32;
+        row[6] = event.controller_id as f32;
+        out_valid[event_index] = 1.0;
+    }
+}
+
 fn phase_index(phase: PhaseKind) -> usize {
     match phase {
         PhaseKind::Beginning => 0,
@@ -502,7 +543,7 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, KeywordData, Observation,
+                ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData, Observation,
                 PermanentData, PlayerData, TurnData,
             },
         },
@@ -512,7 +553,7 @@ mod tests {
 
     use super::{
         encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
-        PERMANENT_DIM, PLAYER_DIM,
+        EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
     };
 
     fn sample_observation() -> Observation {
@@ -568,6 +609,26 @@ mod tests {
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
+            recent_events: vec![
+                EventData {
+                    event_type: 3,
+                    source_kind: 1,
+                    source_id: 112,
+                    target_kind: 0,
+                    target_id: -1,
+                    amount: 0,
+                    controller_id: 10,
+                },
+                EventData {
+                    event_type: 2,
+                    source_kind: 3,
+                    source_id: 20,
+                    target_kind: 3,
+                    target_id: 20,
+                    amount: -3,
+                    controller_id: -1,
+                },
+            ],
         }
     }
 
@@ -627,6 +688,7 @@ mod tests {
             max_permanents_per_player: 2,
             max_actions: 3,
             max_focus_objects: 2,
+            max_events: 2,
         };
 
         let encoded = encode(&obs, &config);
@@ -664,6 +726,9 @@ mod tests {
         assert_eq!(encoded.agent_permanents_valid, vec![1.0, 0.0]);
         assert_eq!(encoded.opponent_permanents_valid, vec![1.0, 0.0]);
         assert_eq!(encoded.actions_valid, vec![1.0, 1.0, 1.0]);
+        assert_eq!(encoded.events_valid, vec![1.0, 1.0]);
+        assert_eq!(encoded.events[0], 3.0);
+        assert_eq!(encoded.events[EVENT_DIM], 2.0);
     }
 
     #[test]
@@ -674,6 +739,7 @@ mod tests {
             max_permanents_per_player: 1,
             max_actions: 2,
             max_focus_objects: 2,
+            max_events: 1,
         };
 
         let mut agent_player = vec![0.0; 1];
@@ -683,6 +749,7 @@ mod tests {
         let mut agent_permanents = vec![0.0; PERMANENT_DIM];
         let mut opponent_permanents = vec![0.0; PERMANENT_DIM];
         let mut actions = vec![0.0; 2 * ACTION_DIM];
+        let mut events = vec![0.0; EVENT_DIM];
         let mut action_focus = vec![-1; 2 * 2];
         let mut agent_player_valid = vec![0.0; 1];
         let mut opponent_player_valid = vec![0.0; 1];
@@ -691,6 +758,7 @@ mod tests {
         let mut agent_permanents_valid = vec![0.0; 1];
         let mut opponent_permanents_valid = vec![0.0; 1];
         let mut actions_valid = vec![0.0; 2];
+        let mut events_valid = vec![0.0; 1];
 
         let out = EncodedObservationMut {
             agent_player: &mut agent_player,
@@ -700,6 +768,7 @@ mod tests {
             agent_permanents: &mut agent_permanents,
             opponent_permanents: &mut opponent_permanents,
             actions: &mut actions,
+            events: &mut events,
             action_focus: &mut action_focus,
             agent_player_valid: &mut agent_player_valid,
             opponent_player_valid: &mut opponent_player_valid,
@@ -708,6 +777,7 @@ mod tests {
             agent_permanents_valid: &mut agent_permanents_valid,
             opponent_permanents_valid: &mut opponent_permanents_valid,
             actions_valid: &mut actions_valid,
+            events_valid: &mut events_valid,
         };
 
         let err = encode_into(&obs, &config, out).expect_err("invalid length must fail");

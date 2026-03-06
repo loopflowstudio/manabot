@@ -12,4 +12,5 @@ pub mod cr_602_activated_abilities;
 pub mod cr_603_triggers;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;
+pub mod event_observations;
 pub mod helpers;

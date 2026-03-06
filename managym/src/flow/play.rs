@@ -10,7 +10,7 @@ use crate::{
     state::{
         game_object::{CardId, PlayerId, Target},
         mana::ManaCost,
-        stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject},
+        stack_object::{ActivatedAbilityOnStack, StackObject},
         zone::ZoneType,
     },
 };
@@ -20,7 +20,7 @@ impl Game {
         // CR 117.1a, 307.1 — Sorcery-speed actions are available only to the active player
         // during a main phase with an empty stack.
         self.is_active_player(player)
-            && self.state.stack_objects.is_empty()
+            && self.stack_is_empty()
             && self.state.turn.can_cast_sorceries()
     }
 
@@ -169,16 +169,7 @@ impl Game {
             return Err(AgentError("card does not belong to player".to_string()));
         }
         // CR 601.2i — A cast spell is put onto the stack.
-        self.move_card(card, ZoneType::Stack);
-        let targets = target.into_iter().collect();
-        let stack_object = StackObject::Spell(SpellOnStack {
-            id: self.state.id_gen.next_id(),
-            card,
-            controller: player,
-            source_card_registry_key: self.state.cards[card].registry_key,
-            targets,
-        });
-        self.state.stack_objects.push(stack_object);
+        self.push_spell_to_stack(card, player, target);
         self.emit(GameEvent::SpellCast { card, target });
         Ok(())
     }
@@ -220,16 +211,16 @@ impl Game {
         self.produce_mana(player, &ability.mana_cost)?;
         self.spend_mana(player, &ability.mana_cost)?;
 
-        let stack_object = StackObject::ActivatedAbility(ActivatedAbilityOnStack {
-            id: self.state.id_gen.next_id(),
+        let id = self.state.id_gen.next_id();
+        self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            id,
             controller: player,
             source_card_registry_key,
             source_card,
             source_permanent_object_id,
             ability_index,
             targets: Vec::new(),
-        });
-        self.state.stack_objects.push(stack_object);
+        }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())
     }

@@ -75,7 +75,7 @@ fn cr_602_multiple_activations_stack_and_accumulate() {
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
 
-    let observation = Observation::new(s.game());
+    let observation = Observation::new(s.game(), &[]);
     assert_eq!(observation.stack_objects.len(), 2);
     assert_eq!(
         observation.stack_objects[0].kind,
@@ -170,7 +170,7 @@ fn cr_602_observation_exposes_stack_object_metadata_for_ability() {
     let controller_id = s.game().state.players[0].id.0 as i32;
 
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
-    let observation = Observation::new(s.game());
+    let observation = Observation::new(s.game(), &[]);
 
     assert_eq!(observation.stack_objects.len(), 1);
     let stack_object = &observation.stack_objects[0];

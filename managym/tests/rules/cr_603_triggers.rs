@@ -29,6 +29,7 @@ fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) ->
     // Drain events and triggers so the engine doesn't process ETB triggers from setup
     game.state.pending_events.clear();
     game.state.pending_triggers.clear();
+    game.state.observation_events.clear();
     game.state.card_to_permanent[card_id].expect("permanent should exist after move_card")
 }
 

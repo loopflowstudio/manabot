@@ -79,6 +79,7 @@ impl Game {
                 mana_cache: [None, None],
                 events: Vec::new(),
                 pending_events: Vec::new(),
+                observation_events: Vec::new(),
                 pending_triggers: Vec::new(),
                 pending_trigger_choice: None,
                 trigger_enqueue_counter: 0,

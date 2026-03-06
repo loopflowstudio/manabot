@@ -6,6 +6,13 @@ use crate::{
     },
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventEntity {
+    Card(CardId),
+    Permanent(PermanentId),
+    Player(PlayerId),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GameEvent {
     CardMoved {
@@ -34,6 +41,10 @@ pub enum GameEvent {
     SpellCountered {
         card: CardId,
         by: Option<CardId>,
+    },
+    AbilityTriggered {
+        source_card: CardId,
+        controller: PlayerId,
     },
     TurnStarted {
         player: PlayerId,

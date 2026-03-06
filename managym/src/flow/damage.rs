@@ -1,5 +1,5 @@
 // damage.rs
-// Damage application and clearing.
+// Damage application, life changes, and cleanup.
 
 use crate::{
     flow::{
