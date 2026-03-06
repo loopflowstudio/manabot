@@ -412,7 +412,7 @@ fn typed_numpy_buffer<'py, T: Element>(
     array: &'py Py<PyAny>,
     key: &'static str,
 ) -> PyResult<PyBuffer<T>> {
-    PyBuffer::<T>::get_bound(&array.bind(py))
+    PyBuffer::<T>::get_bound(array.bind(py))
         .map_err(|err| PyTypeError::new_err(format!("invalid buffer '{key}': {err}")))
 }
 
@@ -443,92 +443,82 @@ impl ObservationFieldSlices<'_> {
         config: &ObservationEncoderConfig,
     ) -> PyResult<EncodedObservationMut<'_>> {
         Ok(EncodedObservationMut {
-            agent_player: row_mut(
-                &mut self.agent_player,
-                env_index,
-                PLAYER_DIM,
-                "agent_player",
-            )?,
+            agent_player: row_mut(self.agent_player, env_index, PLAYER_DIM, "agent_player")?,
             opponent_player: row_mut(
-                &mut self.opponent_player,
+                self.opponent_player,
                 env_index,
                 PLAYER_DIM,
                 "opponent_player",
             )?,
             agent_cards: row_mut(
-                &mut self.agent_cards,
+                self.agent_cards,
                 env_index,
                 config.cards_len(),
                 "agent_cards",
             )?,
             opponent_cards: row_mut(
-                &mut self.opponent_cards,
+                self.opponent_cards,
                 env_index,
                 config.cards_len(),
                 "opponent_cards",
             )?,
             agent_permanents: row_mut(
-                &mut self.agent_permanents,
+                self.agent_permanents,
                 env_index,
                 config.permanents_len(),
                 "agent_permanents",
             )?,
             opponent_permanents: row_mut(
-                &mut self.opponent_permanents,
+                self.opponent_permanents,
                 env_index,
                 config.permanents_len(),
                 "opponent_permanents",
             )?,
-            actions: row_mut(
-                &mut self.actions,
-                env_index,
-                config.actions_len(),
-                "actions",
-            )?,
+            actions: row_mut(self.actions, env_index, config.actions_len(), "actions")?,
             action_focus: row_mut(
-                &mut self.action_focus,
+                self.action_focus,
                 env_index,
                 config.action_focus_len(),
                 "action_focus",
             )?,
             agent_player_valid: row_mut(
-                &mut self.agent_player_valid,
+                self.agent_player_valid,
                 env_index,
                 1,
                 "agent_player_valid",
             )?,
             opponent_player_valid: row_mut(
-                &mut self.opponent_player_valid,
+                self.opponent_player_valid,
                 env_index,
                 1,
                 "opponent_player_valid",
             )?,
             agent_cards_valid: row_mut(
-                &mut self.agent_cards_valid,
+                self.agent_cards_valid,
                 env_index,
                 config.max_cards_per_player,
                 "agent_cards_valid",
             )?,
             opponent_cards_valid: row_mut(
-                &mut self.opponent_cards_valid,
+                self.opponent_cards_valid,
                 env_index,
                 config.max_cards_per_player,
                 "opponent_cards_valid",
             )?,
             agent_permanents_valid: row_mut(
-                &mut self.agent_permanents_valid,
+                self.agent_permanents_valid,
                 env_index,
                 config.max_permanents_per_player,
                 "agent_permanents_valid",
             )?,
             opponent_permanents_valid: row_mut(
-                &mut self.opponent_permanents_valid,
+                self.opponent_permanents_valid,
                 env_index,
                 config.max_permanents_per_player,
                 "opponent_permanents_valid",
             )?,
             actions_valid: row_mut(
-                &mut self.actions_valid,
+                self.actions_valid,
                 env_index,
                 config.max_actions,
                 "actions_valid",
