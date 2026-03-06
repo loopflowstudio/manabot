@@ -115,30 +115,41 @@ class SandboxManager:
     def _verify_bootstrap(self, machine: Machine, timeout: int = 600) -> None:
         import time
 
+        if not machine.public_ip:
+            raise RuntimeError(f"Instance {machine.id} has no public IP for bootstrap check")
+
         deadline = time.time() + timeout
         while time.time() < deadline:
-            result = self.provider.run_command(
-                machine,
-                f"test -f {BOOTSTRAP_MARKER} && echo READY || echo MISSING",
-                timeout=120,
-            )
-            if "READY" in result.stdout:
-                return
+            try:
+                result = subprocess.run(
+                    [
+                        "ssh",
+                        "-o", "StrictHostKeyChecking=no",
+                        "-o", "ConnectTimeout=5",
+                        "-o", "BatchMode=yes",
+                        f"{self.ssh_user}@{machine.public_ip}",
+                        f"test -f {BOOTSTRAP_MARKER} && echo READY || echo MISSING",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if "READY" in result.stdout:
+                    return
+            except (subprocess.TimeoutExpired, OSError):
+                pass
             print("  waiting for bootstrap to finish...", flush=True)
             time.sleep(10)
 
         raise RuntimeError(
-            f"Bootstrap did not complete within {timeout}s ({BOOTSTRAP_MARKER}). "
-            f"Last command {result.command_id} status={result.status} stderr={result.stderr}"
+            f"Bootstrap did not complete within {timeout}s ({BOOTSTRAP_MARKER})."
         )
 
     def _ready_for_use(self, machine: Machine) -> Machine:
         print(f"Waiting for {machine.id} to be running...")
         machine = self.provider.wait_until_ready(machine, timeout=600)
         print(f"Instance running, ip={machine.public_ip or 'pending'}")
-        print("Waiting for SSM agent...")
-        self.provider.wait_for_ssm(machine, timeout=600)
-        print("SSM online. Verifying bootstrap...")
+        print("Verifying bootstrap...")
         self._verify_bootstrap(machine)
         print("Bootstrap verified.")
         if not self.no_ssh:
