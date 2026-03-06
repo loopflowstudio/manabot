@@ -6,11 +6,90 @@ use crate::{
     state::{
         game_object::{CardId, PermanentId, PlayerId},
         permanent::Permanent,
+        stack::StackObject,
+        target::Target,
         zone::ZoneType,
     },
 };
 
 impl Game {
+    pub(crate) fn push_spell_to_stack(&mut self, card: CardId) {
+        self.move_card(card, ZoneType::Stack);
+        self.state.stack.push(StackObject::Spell { card });
+    }
+
+    pub(crate) fn push_triggered_to_stack(
+        &mut self,
+        source_card: CardId,
+        ability_index: usize,
+        controller: PlayerId,
+        target: Option<Target>,
+    ) {
+        self.state.stack.push(StackObject::TriggeredAbility {
+            source_card,
+            ability_index,
+            controller,
+            target,
+        });
+    }
+
+    pub(crate) fn pop_stack(&mut self) -> Option<StackObject> {
+        self.state.stack.pop()
+    }
+
+    pub(crate) fn stack_is_empty(&self) -> bool {
+        self.state.stack.is_empty()
+    }
+
+    pub(crate) fn assert_stack_consistent(&self) {
+        #[cfg(debug_assertions)]
+        {
+            use std::collections::{BTreeMap, HashSet};
+
+            let zone_spell_cards: Vec<CardId> = self
+                .state
+                .zones
+                .zone_cards(ZoneType::Stack, PlayerId(0))
+                .iter()
+                .chain(self.state.zones.zone_cards(ZoneType::Stack, PlayerId(1)))
+                .copied()
+                .collect();
+
+            let stack_spell_cards: Vec<CardId> = self
+                .state
+                .stack
+                .iter()
+                .filter_map(|stack_object| match stack_object {
+                    StackObject::Spell { card } => Some(*card),
+                    StackObject::TriggeredAbility { .. } => None,
+                })
+                .collect();
+
+            let mut seen = HashSet::new();
+            for card in &stack_spell_cards {
+                assert!(
+                    seen.insert(*card),
+                    "duplicate spell card on stack: {card:?} in {stack_spell_cards:?}"
+                );
+            }
+
+            let mut zone_spell_counts = BTreeMap::new();
+            for card in &zone_spell_cards {
+                *zone_spell_counts.entry(*card).or_insert(0_usize) += 1;
+            }
+
+            let mut stack_spell_counts = BTreeMap::new();
+            for card in &stack_spell_cards {
+                *stack_spell_counts.entry(*card).or_insert(0_usize) += 1;
+            }
+
+            assert_eq!(
+                zone_spell_counts, stack_spell_counts,
+                "stack/zone spell mismatch: zone={zone_spell_cards:?}, stack={stack_spell_cards:?}"
+            );
+        }
+    }
+
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.state
             .zones

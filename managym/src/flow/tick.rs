@@ -43,6 +43,7 @@ impl Game {
                 self.trackers[winner].on_game_won();
             }
         }
+        self.assert_stack_consistent();
 
         Ok(game_over)
     }
@@ -267,7 +268,7 @@ impl Game {
             }
 
             self.state.priority.reset();
-            if !self.state.stack.is_empty() {
+            if !self.stack_is_empty() {
                 // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                 self.resolve_top_of_stack();
                 continue;

@@ -7,7 +7,6 @@ use crate::{
     state::{
         ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSource},
         game_object::{CardId, PlayerId},
-        stack::StackObject,
         target::Target,
         zone::ZoneType,
     },
@@ -112,12 +111,12 @@ impl Game {
         trigger: PendingTrigger,
         target: Option<Target>,
     ) {
-        self.state.stack.push(StackObject::TriggeredAbility {
-            source_card: trigger.source_card,
-            ability_index: trigger.ability_index,
-            controller: trigger.controller,
+        self.push_triggered_to_stack(
+            trigger.source_card,
+            trigger.ability_index,
+            trigger.controller,
             target,
-        });
+        );
         self.state.priority.reset();
     }
 
