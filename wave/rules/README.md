@@ -45,7 +45,6 @@ Two innovations distinguish this from other MTG engine efforts:
 - RL instability from larger action spaces and longer horizons.
 - Ambiguous rule ownership without explicit CR citations.
 - DSL design locks in too early before enough cards exercise it.
-- `game.rs` monolith (882 lines) resists event system integration.
 
 ## Metrics
 
