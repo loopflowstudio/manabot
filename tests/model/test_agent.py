@@ -36,15 +36,8 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture
 def observation_space() -> ObservationSpace:
-    """Create a minimal but complete observation space for testing."""
-    return ObservationSpace(
-        ObservationSpaceHypers(
-            max_cards_per_player=3,  # Small number for testing
-            max_permanents_per_player=2,  # Small number for testing
-            max_actions=5,  # Enough actions to test selection
-            max_focus_objects=2,  # Standard focus object count
-        )
-    )
+    """Create an observation space with default hypers (must match Rust encoder)."""
+    return ObservationSpace()
 
 
 @pytest.fixture
@@ -68,7 +61,7 @@ def real_observation(
     observation_space: ObservationSpace,
 ) -> Generator[Dict[str, torch.Tensor], None, None]:
     """
-    Create a real observation using a VectorEnv and the actual manabot observation encoder.
+    Create a real observation using a vector env and the real observation encoder.
 
     Returns a dictionary of torch.Tensors with a batch dimension (here, batch_size=2)
     as produced by the real environment.
@@ -80,7 +73,6 @@ def real_observation(
 
     reward = Reward(RewardHypers(trivial=True))
     match = Match()
-    # Local imports
     from manabot.env import VectorEnv
 
     vec_env = VectorEnv(
@@ -89,6 +81,7 @@ def real_observation(
         observation_space=observation_space,
         reward=reward,
         device="cpu",
+        opponent_policy="passive",
     )
     obs, _ = vec_env.reset()
     yield obs

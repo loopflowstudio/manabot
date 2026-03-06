@@ -3,12 +3,11 @@ env.py
 Environment wrapper around the managym Rust engine that conforms to the Gymnasium API.
 """
 
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-import torch
 
 # Local imports
 from manabot.infra.log import getLogger
@@ -17,19 +16,6 @@ import managym
 # Local directory imports
 from .match import Match, Reward
 from .observation import ObservationSpace
-
-
-def stack_encoded_observations(
-    encoded_obs: Sequence[dict[str, np.ndarray]],
-    device: torch.device,
-) -> Dict[str, torch.Tensor]:
-    keys = encoded_obs[0].keys()
-    return {
-        key: torch.tensor(
-            np.stack([obs[key] for obs in encoded_obs]), dtype=torch.float32
-        ).to(device)
-        for key in keys
-    }
 
 
 def add_truncation_flags(
@@ -58,14 +44,6 @@ class Env(gym.Env):
         match: Match,
         obs_space: ObservationSpace,
         reward: Reward,
-        # Whether to automatically reset the environment when it terminates/truncates.
-        # If False, the environment will not be reset until the agent calls reset().
-        # If True, when a terminated/truncated event occurs, the environment returns:
-        # - the post-reset observation,
-        # - the pre-reset reward,
-        # - false, # terminate is never true so that AsyncVectorEnv doesnt call reset()
-        # - false, # truncated is never true so that AsyncVectorEnv doesnt call reset()
-        # - info["true_terminated"]: true
         seed: int = 0,
         auto_reset: bool = False,
         enable_profiler: bool = False,
@@ -122,10 +100,7 @@ class Env(gym.Env):
         # Gymnasium requires calling this for seeding (if you use self.np_random)
         super().reset(seed=seed)
 
-        match = self.match
-        if options:
-            if "match" in options:
-                match = options["match"]
+        match = self.match if not options else options.get("match", self.match)
 
         # Get the initial managym observation
         raw_obs, raw_info = self._engine.reset(match.to_rust())
@@ -163,7 +138,6 @@ class Env(gym.Env):
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
             if self.auto_reset:
-                # TODO: merge infos? Hopefully we remove this code soon and use gymnasium's autoreset when its released
                 raw_obs, _ = self._engine.reset(self.match.to_rust())
                 terminated = False
                 truncated = False
@@ -184,142 +158,3 @@ class Env(gym.Env):
     @property
     def last_raw_obs(self):
         return self._last_obs
-
-
-class VectorEnv:
-    """
-    Vector environment that automatically batches observations from multiple environments
-    and converts them to PyTorch tensors. The first dimension is always the number of
-    environments.
-    """
-
-    def __init__(
-        self,
-        num_envs: int,
-        match: Match,
-        observation_space: ObservationSpace,
-        reward: Reward,
-        device: str,
-        seed: int = 0,
-        opponent_policy: Optional[Any] = None,
-    ):
-        env_fns = []
-        env_builder = Env
-        env_kwargs: dict[str, Any] = {"auto_reset": True}
-        if opponent_policy is not None:
-            from .single_agent_env import SingleAgentEnv
-
-            env_builder = SingleAgentEnv
-            env_kwargs = {"opponent_policy": opponent_policy}
-
-        for env_index in range(num_envs):
-            env_seed = seed + env_index
-
-            def make_env(env_seed=env_seed):
-                return env_builder(
-                    match,
-                    observation_space,
-                    reward,
-                    seed=env_seed,
-                    **env_kwargs,
-                )
-
-            env_fns.append(make_env)
-
-        self._env = gym.vector.AsyncVectorEnv(
-            env_fns,
-            shared_memory=False,
-        )
-        self.observation_space = observation_space
-        self.num_envs = num_envs
-        self.device = torch.device(device)
-
-    def reset(
-        self, *, seed: Optional[int] = None, options: Optional[dict] = None
-    ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
-        """
-        Reset all environments and return batched observations as tensors.
-
-        Returns:
-            observations: Dict where each value is a tensor with shape (num_envs, ...)
-            info: Dict of additional information
-        """
-        obs_tuple, info = self._env.reset(seed=seed, options=options)
-        return self._process_obs(obs_tuple), info
-
-    def step(
-        self, actions: torch.Tensor
-    ) -> Tuple[
-        Dict[str, torch.Tensor],
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        Dict[str, Any],
-    ]:
-        """
-        Step all environments and return batched observations and rewards as tensors.
-
-        Args:
-            actions: Tensor of shape (num_envs,) containing action indices
-
-        Returns:
-            observations: Dict where each value is a tensor with shape (num_envs, ...)
-            rewards: Tensor of shape (num_envs,)
-            terminated: Tensor of shape (num_envs,) containing true termination state
-            truncated: Tensor of shape (num_envs,) containing true truncation state
-            info: Dict of additional information
-        """
-        actions_np = actions.cpu().numpy()
-        obs_tuple, rewards, terminated, truncated, info = self._env.step(actions_np)
-
-        # Get true termination states from info arrays
-        true_terminated = info.get("true_terminated", terminated)
-        true_truncated = info.get("true_truncated", truncated)
-
-        # Convert everything to tensors
-        rewards_tensor = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        terminated_tensor = torch.tensor(true_terminated, dtype=torch.bool).to(
-            self.device
-        )
-        truncated_tensor = torch.tensor(true_truncated, dtype=torch.bool).to(
-            self.device
-        )
-
-        return (
-            self._process_obs(obs_tuple),
-            rewards_tensor,
-            terminated_tensor,
-            truncated_tensor,
-            info,
-        )
-
-    def _process_obs(
-        self, obs_tuple: tuple[dict[str, np.ndarray], ...]
-    ) -> Dict[str, torch.Tensor]:
-        """
-        Convert tuple of per-env observation dicts into dict of batched tensors.
-
-        AsyncVectorEnv with shared_memory=False returns a tuple of dicts,
-        one per sub-environment.
-
-        Returns:
-            Dict where each value is a tensor with leading dimension num_envs.
-        """
-        return stack_encoded_observations(obs_tuple, self.device)
-
-    def to(self, device: str) -> "VectorEnv":
-        """
-        Move the environment to the specified device.
-
-        Args:
-            device: The target device (e.g., "cpu", "cuda")
-
-        Returns:
-            self for chaining
-        """
-        self.device = torch.device(device)
-        return self
-
-    def close(self):
-        """Close the environment."""
-        self._env.close()

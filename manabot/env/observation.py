@@ -451,9 +451,9 @@ class ObservationSpace(gym.spaces.Space):
     Gymnasium-compatible observation space optimized for attention processing.
     """
 
-    def __init__(self, hypers: ObservationSpaceHypers = ObservationSpaceHypers()):
+    def __init__(self, hypers: ObservationSpaceHypers | None = None):
         super().__init__(shape=None, dtype=None)
-        self.encoder = ObservationEncoder(hypers)
+        self.encoder = ObservationEncoder(hypers or ObservationSpaceHypers())
         self.spaces = gym.spaces.Dict(
             {
                 name: gym.spaces.Box(

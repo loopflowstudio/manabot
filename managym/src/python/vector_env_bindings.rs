@@ -269,25 +269,19 @@ impl PyVectorEnv {
         let configs: Vec<PlayerConfig> =
             player_configs.into_iter().map(PlayerConfig::from).collect();
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_all_into(
-                configs,
-                |env_index, obs, reward, terminated, truncated| {
-                    write_buffers
-                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                },
-            )
+            inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
+                write_buffers
+                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+            })
         })
     }
 
     fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.step_into(
-                &actions,
-                |env_index, obs, reward, terminated, truncated| {
-                    write_buffers
-                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-                },
-            )
+            inner.step_into(&actions, |env_index, obs, reward, terminated, truncated| {
+                write_buffers
+                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+            })
         })
     }
 

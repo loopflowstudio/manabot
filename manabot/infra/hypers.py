@@ -86,7 +86,6 @@ class TrainHypers(BaseHypersModel):
     max_grad_norm: float = 0.5
     target_kl: float = float("inf")
     opponent_policy: str = "passive"
-    use_rust_env: bool = True
 
     @field_validator("target_kl", mode="before")
     @classmethod
