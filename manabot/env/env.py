@@ -308,4 +308,3 @@ class LegacyVectorEnv:
     def close(self):
         """Close the environment."""
         self._env.close()
-

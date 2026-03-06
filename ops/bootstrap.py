@@ -17,6 +17,7 @@ def _sq(value: str) -> str:
     """Shell-quote a value for safe interpolation into bash scripts."""
     return shlex.quote(value)
 
+
 _COMMON_BOOTSTRAP = """
   sudo mkdir -p /opt/manabot
 

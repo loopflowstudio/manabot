@@ -25,7 +25,12 @@ pub struct VectorEnv {
 }
 
 impl VectorEnv {
-    pub fn new(num_envs: usize, seed: u64, skip_trivial: bool, opponent_policy: OpponentPolicy) -> Self {
+    pub fn new(
+        num_envs: usize,
+        seed: u64,
+        skip_trivial: bool,
+        opponent_policy: OpponentPolicy,
+    ) -> Self {
         let envs = (0..num_envs)
             .map(|idx| Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false))
             .collect();
@@ -131,11 +136,7 @@ impl VectorEnv {
         })
     }
 
-    pub fn step_into<F>(
-        &mut self,
-        actions: &[i64],
-        write: F,
-    ) -> Result<Vec<InfoDict>, AgentError>
+    pub fn step_into<F>(&mut self, actions: &[i64], write: F) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {

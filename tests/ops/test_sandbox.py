@@ -14,7 +14,9 @@ from tests.ops.conftest import FakeProvider, make_runtime_spec, make_sandbox_spe
 
 def test_sandbox_up_creates_when_missing():
     provider = FakeProvider()
-    manager = SandboxManager(provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True)
+    manager = SandboxManager(
+        provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True
+    )
 
     machine = manager.up()
 
@@ -38,7 +40,9 @@ def test_sandbox_up_starts_existing_stopped_machine():
     )
     provider.machines[existing.id] = existing
 
-    manager = SandboxManager(provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True)
+    manager = SandboxManager(
+        provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True
+    )
     machine = manager.up()
 
     assert machine.id == "i-existing"
@@ -48,7 +52,9 @@ def test_sandbox_up_starts_existing_stopped_machine():
 
 def test_sandbox_stop_and_terminate_are_noops_when_missing():
     provider = FakeProvider()
-    manager = SandboxManager(provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True)
+    manager = SandboxManager(
+        provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True
+    )
 
     manager.stop()
     manager.terminate()
@@ -71,7 +77,9 @@ def test_sandbox_stop_and_terminate_operate_on_existing_machine():
         },
     )
     provider.machines[existing.id] = existing
-    manager = SandboxManager(provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True)
+    manager = SandboxManager(
+        provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True
+    )
 
     manager.stop()
     manager.terminate()

@@ -24,7 +24,9 @@ from manabot.infra.hypers import RewardHypers
 VALID_BACKENDS = ("rust", "legacy")
 
 
-def build_env(backend: str, num_envs: int, seed: int) -> RustVectorEnv | LegacyVectorEnv:
+def build_env(
+    backend: str, num_envs: int, seed: int
+) -> RustVectorEnv | LegacyVectorEnv:
     match = Match()
     observation_space = ObservationSpace()
     reward = Reward(RewardHypers())
@@ -66,7 +68,9 @@ def measure_sps(env: Any, total_steps: int) -> float:
     return (total_steps * env.num_envs) / elapsed
 
 
-def run_backend(backend: str, num_envs: int, total_steps: int, rounds: int, seed: int) -> None:
+def run_backend(
+    backend: str, num_envs: int, total_steps: int, rounds: int, seed: int
+) -> None:
     samples = []
     for round_index in range(rounds):
         round_seed = seed + round_index * 1000
