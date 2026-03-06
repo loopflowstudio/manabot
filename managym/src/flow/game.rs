@@ -248,6 +248,7 @@ impl Game {
             self.current_action_space = Some(action_space);
             return Err(error);
         }
+        self.state.priority.sba_done = false;
 
         let game_over = self.tick();
         if game_over {
@@ -642,7 +643,9 @@ impl Game {
                         target: match target {
                             Target::Player(p) => ActionTarget::Player(p),
                             Target::Permanent(p) => ActionTarget::Permanent(p),
-                            Target::StackSpell(_) => return Action::PassPriority { player: *player },
+                            Target::StackSpell(_) => {
+                                return Action::PassPriority { player: *player }
+                            }
                         },
                     })
                     .collect(),
@@ -687,7 +690,7 @@ impl Game {
     }
 
     fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        let result = match action {
+        match action {
             Action::PlayLand { player, card } => {
                 self.play_land(*player, *card)?;
                 self.state.priority.on_non_pass_action(self.active_player());
@@ -732,12 +735,7 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
-        };
-        // Non-pass actions may change board state; re-run SBA before next action space.
-        if result.is_ok() && !matches!(action, Action::PassPriority { .. }) {
-            self.state.priority.sba_done = false;
         }
-        result
     }
 
     fn declare_attacker(
@@ -907,7 +905,9 @@ impl Game {
             Target::Player(p) => ActionTarget::Player(p),
             Target::Permanent(p) => ActionTarget::Permanent(p),
             Target::StackSpell(_) => {
-                return Err(AgentError("invalid target for triggered ability".to_string()));
+                return Err(AgentError(
+                    "invalid target for triggered ability".to_string(),
+                ));
             }
         };
 
@@ -1458,15 +1458,6 @@ impl Game {
         total
     }
 
-    fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
-        if let Some(cached) = &self.state.mana_cache[player.0] {
-            return cached.clone();
-        }
-        let mana = self.producible_mana(player);
-        self.state.mana_cache[player.0] = Some(mana.clone());
-        mana
-    }
-
     pub(crate) fn invalidate_mana_cache(&mut self, player: PlayerId) {
         self.state.mana_cache[player.0] = None;
     }
@@ -1567,10 +1558,7 @@ impl Game {
         self.state.priority.start_round(self.active_player());
     }
 
-    pub(crate) fn legal_targets_for_spec(
-        &self,
-        target_spec: &TargetSpec,
-    ) -> Vec<ActionTarget> {
+    pub(crate) fn legal_targets_for_spec(&self, target_spec: &TargetSpec) -> Vec<ActionTarget> {
         match target_spec {
             TargetSpec::Creature { .. } => {
                 let mut out = Vec::new();
@@ -1611,14 +1599,14 @@ impl Game {
     fn process_game_events(&mut self) {
         let events = std::mem::take(&mut self.state.pending_events);
         for event in events {
-            match event {
-                GameEvent::CardMoved {
-                    card,
-                    from,
-                    to,
-                    controller,
-                } => self.check_triggers_for_card_moved(card, from, to, controller),
-                _ => {}
+            if let GameEvent::CardMoved {
+                card,
+                from,
+                to,
+                controller,
+            } = event
+            {
+                self.check_triggers_for_card_moved(card, from, to, controller);
             }
         }
     }

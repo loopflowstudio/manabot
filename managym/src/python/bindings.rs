@@ -511,6 +511,7 @@ impl From<ActionEnum> for ActionType {
             ActionEnum::DeclareAttacker => Self::DeclareAttacker,
             ActionEnum::DeclareBlocker => Self::DeclareBlocker,
             ActionEnum::ChooseTarget => Self::ChooseTarget,
+            ActionEnum::PriorityActivateAbility => Self::PriorityActivateAbility,
         }
     }
 }
@@ -613,6 +614,16 @@ impl From<StackObjectKindData> for StackObjectKindEnum {
 }
 
 #[cfg(feature = "python")]
+impl From<StackObjectKindEnum> for StackObjectKindData {
+    fn from(value: StackObjectKindEnum) -> Self {
+        match value {
+            StackObjectKindEnum::Spell => Self::Spell,
+            StackObjectKindEnum::ActivatedAbility => Self::ActivatedAbility,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "StackTargetKindEnum", eq, eq_int)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
@@ -648,6 +659,17 @@ impl From<StackTargetKindData> for StackTargetKindEnum {
             StackTargetKindData::Player => Self::Player,
             StackTargetKindData::Permanent => Self::Permanent,
             StackTargetKindData::StackObject => Self::StackObject,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<StackTargetKindEnum> for StackTargetKindData {
+    fn from(value: StackTargetKindEnum) -> Self {
+        match value {
+            StackTargetKindEnum::Player => Self::Player,
+            StackTargetKindEnum::Permanent => Self::Permanent,
+            StackTargetKindEnum::StackObject => Self::StackObject,
         }
     }
 }
@@ -982,7 +1004,27 @@ impl From<PyCard> for CardData {
             power: value.power,
             toughness: value.toughness,
             card_types: value.card_types.into(),
+            keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyKeywords> for KeywordData {
+    fn from(value: PyKeywords) -> Self {
+        Self {
+            flying: value.flying,
+            reach: value.reach,
+            haste: value.haste,
+            vigilance: value.vigilance,
+            trample: value.trample,
+            first_strike: value.first_strike,
+            double_strike: value.double_strike,
+            deathtouch: value.deathtouch,
+            lifelink: value.lifelink,
+            defender: value.defender,
+            menace: value.menace,
         }
     }
 }
@@ -1120,6 +1162,18 @@ impl From<StackTargetData> for PyStackTarget {
 }
 
 #[cfg(feature = "python")]
+impl From<PyStackTarget> for StackTargetData {
+    fn from(value: PyStackTarget) -> Self {
+        Self {
+            kind: value.kind.into(),
+            player_id: value.player_id,
+            permanent_id: value.permanent_id,
+            stack_object_id: value.stack_object_id,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "StackObject")]
 #[derive(Clone)]
 pub struct PyStackObject {
@@ -1150,6 +1204,25 @@ impl From<StackObjectData> for PyStackObject {
             source_permanent_id: value.source_permanent_id,
             ability_index: value.ability_index,
             targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyStackObject> for StackObjectData {
+    fn from(value: PyStackObject) -> Self {
+        Self {
+            stack_object_id: value.stack_object_id,
+            kind: value.kind.into(),
+            controller_id: value.controller_id,
+            source_card_registry_key: value.source_card_registry_key,
+            source_permanent_id: value.source_permanent_id,
+            ability_index: value.ability_index,
+            targets: value
+                .targets
+                .into_iter()
+                .map(StackTargetData::from)
+                .collect(),
         }
     }
 }
@@ -1238,6 +1311,11 @@ impl From<PyObservation> for Observation {
                 .opponent_permanents
                 .into_iter()
                 .map(PermanentData::from)
+                .collect(),
+            stack_objects: value
+                .stack_objects
+                .into_iter()
+                .map(StackObjectData::from)
                 .collect(),
         }
     }

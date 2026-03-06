@@ -491,8 +491,8 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, Observation, PermanentData,
-                PlayerData, TurnData,
+                ActionOption, ActionSpaceData, CardData, CardTypeData, KeywordData, Observation,
+                PermanentData, PlayerData, TurnData,
             },
         },
         flow::turn::{PhaseKind, StepKind},
@@ -545,6 +545,7 @@ mod tests {
                 make_card(111, ZoneType::Hand, true, 2, 2, 1),
                 make_card(112, ZoneType::Battlefield, true, 3, 3, 2),
             ],
+            stack_objects: vec![],
             agent_permanents: vec![make_permanent(333, true)],
             opponent: PlayerData {
                 player_index: 1,
@@ -589,6 +590,7 @@ mod tests {
                 is_kindred: false,
                 is_battle: false,
             },
+            keywords: KeywordData::default(),
             mana_cost: ManaCost {
                 cost: [0; 7],
                 mana_value,

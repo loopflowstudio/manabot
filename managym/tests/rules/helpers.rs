@@ -50,13 +50,6 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
     ])
 }
 
-pub fn bolt_deck() -> BTreeMap<String, usize> {
-    land_plus_spell_deck("Mountain", "Lightning Bolt")
-}
-
-pub fn counterspell_deck() -> BTreeMap<String, usize> {
-    land_plus_spell_deck("Island", "Counterspell")
-}
 pub fn ogre_deck() -> BTreeMap<String, usize> {
     land_plus_spell_deck("Mountain", "Grey Ogre")
 }
