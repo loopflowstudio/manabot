@@ -19,7 +19,7 @@ use crate::{
         observation::Observation,
         observation_encoder::{
             encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
-            PERMANENT_DIM, PLAYER_DIM,
+            EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
         vector_env::VectorEnv,
@@ -46,6 +46,7 @@ struct ObservationBuffers {
     agent_permanents: Py<PyAny>,
     opponent_permanents: Py<PyAny>,
     actions: Py<PyAny>,
+    events: Py<PyAny>,
     action_focus: Py<PyAny>,
     agent_player_valid: Py<PyAny>,
     opponent_player_valid: Py<PyAny>,
@@ -54,6 +55,7 @@ struct ObservationBuffers {
     agent_permanents_valid: Py<PyAny>,
     opponent_permanents_valid: Py<PyAny>,
     actions_valid: Py<PyAny>,
+    events_valid: Py<PyAny>,
     rewards: Py<PyAny>,
     terminated: Py<PyAny>,
     truncated: Py<PyAny>,
@@ -182,6 +184,13 @@ impl PyVectorEnv {
                 "float32",
             )?
             .unbind(),
+            events: require_numpy_array(
+                &buffers,
+                "events",
+                &[n, c.max_events, EVENT_DIM],
+                "float32",
+            )?
+            .unbind(),
             action_focus: require_numpy_array(
                 &buffers,
                 "action_focus",
@@ -235,6 +244,13 @@ impl PyVectorEnv {
                 &buffers,
                 "actions_valid",
                 &[n, c.max_actions],
+                "float32",
+            )?
+            .unbind(),
+            events_valid: require_numpy_array(
+                &buffers,
+                "events_valid",
+                &[n, c.max_events],
                 "float32",
             )?
             .unbind(),
@@ -430,6 +446,7 @@ struct SendObservationFieldSlices {
     agent_permanents: SendSlice<f32>,
     opponent_permanents: SendSlice<f32>,
     actions: SendSlice<f32>,
+    events: SendSlice<f32>,
     action_focus: SendSlice<i32>,
     agent_player_valid: SendSlice<f32>,
     opponent_player_valid: SendSlice<f32>,
@@ -438,6 +455,7 @@ struct SendObservationFieldSlices {
     agent_permanents_valid: SendSlice<f32>,
     opponent_permanents_valid: SendSlice<f32>,
     actions_valid: SendSlice<f32>,
+    events_valid: SendSlice<f32>,
 }
 
 #[cfg(feature = "python")]
@@ -477,6 +495,8 @@ impl SendObservationFieldSlices {
             .opponent_permanents_valid
             .row_ptr(env_index, config.max_permanents_per_player)?;
         let actions_valid_ptr = self.actions_valid.row_ptr(env_index, config.max_actions)?;
+        let events_ptr = self.events.row_ptr(env_index, config.events_len())?;
+        let events_valid_ptr = self.events_valid.row_ptr(env_index, config.max_events)?;
 
         Ok(EncodedObservationMut {
             // SAFETY: each call uses disjoint per-env rows.
@@ -497,6 +517,8 @@ impl SendObservationFieldSlices {
             },
             // SAFETY: each call uses disjoint per-env rows.
             actions: unsafe { slice::from_raw_parts_mut(actions_ptr, actions_len) },
+            // SAFETY: each call uses disjoint per-env rows.
+            events: unsafe { slice::from_raw_parts_mut(events_ptr, config.events_len()) },
             // SAFETY: each call uses disjoint per-env rows.
             action_focus: unsafe { slice::from_raw_parts_mut(action_focus_ptr, action_focus_len) },
             // SAFETY: each call uses disjoint per-env rows.
@@ -530,6 +552,10 @@ impl SendObservationFieldSlices {
             // SAFETY: each call uses disjoint per-env rows.
             actions_valid: unsafe {
                 slice::from_raw_parts_mut(actions_valid_ptr, config.max_actions)
+            },
+            // SAFETY: each call uses disjoint per-env rows.
+            events_valid: unsafe {
+                slice::from_raw_parts_mut(events_valid_ptr, config.max_events)
             },
         })
     }
@@ -607,6 +633,7 @@ fn with_send_write_buffers<R>(
     let opponent_permanents_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_permanents, "opponent_permanents")?;
     let actions_buffer = typed_numpy_buffer::<f32>(py, &buffers.actions, "actions")?;
+    let events_buffer = typed_numpy_buffer::<f32>(py, &buffers.events, "events")?;
     let action_focus_buffer = typed_numpy_buffer::<i32>(py, &buffers.action_focus, "action_focus")?;
     let agent_player_valid_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.agent_player_valid, "agent_player_valid")?;
@@ -628,6 +655,7 @@ fn with_send_write_buffers<R>(
     )?;
     let actions_valid_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.actions_valid, "actions_valid")?;
+    let events_valid_buffer = typed_numpy_buffer::<f32>(py, &buffers.events_valid, "events_valid")?;
     let rewards_buffer = typed_numpy_buffer::<f64>(py, &buffers.rewards, "rewards")?;
     let terminated_buffer = typed_numpy_buffer::<u8>(py, &buffers.terminated, "terminated")?;
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
@@ -644,6 +672,7 @@ fn with_send_write_buffers<R>(
             "opponent_permanents",
         )?,
         actions: send_slice_from_buffer(py, &actions_buffer, "actions")?,
+        events: send_slice_from_buffer(py, &events_buffer, "events")?,
         action_focus: send_slice_from_buffer(py, &action_focus_buffer, "action_focus")?,
         agent_player_valid: send_slice_from_buffer(
             py,
@@ -676,6 +705,7 @@ fn with_send_write_buffers<R>(
             "opponent_permanents_valid",
         )?,
         actions_valid: send_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?,
+        events_valid: send_slice_from_buffer(py, &events_valid_buffer, "events_valid")?,
     };
 
     f(SendWriteBuffers {

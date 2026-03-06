@@ -4,9 +4,9 @@
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
-        stack_object::StackObject,
+        stack_object::{SpellOnStack, StackObject},
         zone::ZoneType,
     },
 };
@@ -52,7 +52,40 @@ impl Game {
     }
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
+        self.state.pending_events.push(event.clone());
+        self.state.observation_events.push(event.clone());
         self.state.events.push(event);
+    }
+
+    pub(crate) fn push_spell_to_stack(
+        &mut self,
+        card: CardId,
+        controller: PlayerId,
+        target: Option<Target>,
+    ) {
+        self.move_card(card, ZoneType::Stack);
+        let targets = target.into_iter().collect();
+        self.state
+            .stack_objects
+            .push(StackObject::Spell(SpellOnStack {
+                id: self.state.id_gen.next_id(),
+                card,
+                controller,
+                source_card_registry_key: self.state.cards[card].registry_key,
+                targets,
+            }));
+    }
+
+    pub(crate) fn push_to_stack(&mut self, stack_object: StackObject) {
+        self.state.stack_objects.push(stack_object);
+    }
+
+    pub(crate) fn pop_stack(&mut self) -> Option<StackObject> {
+        self.state.stack_objects.pop()
+    }
+
+    pub(crate) fn stack_is_empty(&self) -> bool {
+        self.state.stack_objects.is_empty()
     }
 
     pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
@@ -88,22 +121,14 @@ impl Game {
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
-        self.state.pending_events.push(GameEvent::CardMoved {
+        let event = GameEvent::CardMoved {
             card,
             from: old_zone,
             to: to_zone,
             controller: event_controller,
-        });
+        };
+        self.emit(event);
         self.process_game_events();
-
-        if let Some(from) = old_zone {
-            self.emit(GameEvent::CardMoved {
-                card,
-                from: Some(from),
-                to: to_zone,
-                controller: event_controller,
-            });
-        }
     }
 
     pub(crate) fn assert_stack_consistent(&self) {
