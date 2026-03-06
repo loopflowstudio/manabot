@@ -5,30 +5,21 @@
 `AsyncVectorEnv` path removed. `RustVectorEnv` is the only env
 backend. Full benchmark published. Verification ladder passes.
 
-## Context from previous sprints
+## Current state
 
-- `RustVectorEnv` (`manabot/env/rust_vector_env.py`) uses zero-copy buffers
-  via `set_buffers()` / `step_into_buffers()` / `reset_all_into_buffers()`.
-- The compat path (`VectorEnv.step()` / `reset_all()`) still exists in
-  `managym/src/python/vector_env_bindings.rs` — returns `PyObservation` +
-  info dicts. Used by some tests.
-- `get_last_info()` provides debug/eval info access outside the hot path.
+- `VectorEnv` (`manabot/env/env.py`) is already the Rust-backed implementation
+  using `managym.VectorEnv` via `step_into()` / `reset_into()` with pre-allocated
+  numpy buffers.
+- `AsyncVectorEnv` references remain only as comments (env.py:35-36, train.py:461).
+- The single-env `Env` class still exists for tests and simulation — it stays.
 - Python `ObservationSpace.encode()` still exists for parity testing.
 
 ## Changes
 
-### 1. Remove AsyncVectorEnv path
+### 1. Remove stale AsyncVectorEnv references
 
-- Delete `manabot/env/env.py` `VectorEnv` class (the `AsyncVectorEnv`
-  wrapper)
-- Remove `gymnasium.vector` dependency from training
-- Update `__init__.py` exports
-
-### 2. Simplify trainer
-
-- `Trainer` uses `RustVectorEnv` directly, no env backend flag
-- Remove observation encoding from the rollout loop (Rust does it)
-- Rollout step is: `actions = agent(obs)` → `obs, rewards, dones = env.step(actions)`
+Clean up comments referencing AsyncVectorEnv in `env.py` and `train.py`.
+Remove any dead code paths related to subprocess-based vectorization.
 
 ### 3. Final benchmark
 
