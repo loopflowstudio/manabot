@@ -1066,7 +1066,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
+    pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
         let owner = self.state.cards[card.0].owner;
         let old_zone = self.state.zones.zone_of(card);
         let mut event_controller = owner;

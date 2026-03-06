@@ -3,7 +3,6 @@ use managym::{
     flow::{trigger::PendingTrigger, turn::StepKind},
     state::{
         game_object::{CardId, PermanentId, PlayerId},
-        permanent::Permanent,
         zone::ZoneType,
     },
 };
@@ -25,25 +24,11 @@ fn find_owned_card(s: &Scenario, player: usize, name: &str) -> CardId {
 
 fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) -> PermanentId {
     let card_id = find_owned_card(s, player, name);
-    let player_id = PlayerId(player);
-
     let game = s.game_mut();
-    game.state
-        .zones
-        .move_card(card_id, player_id, ZoneType::Battlefield);
-
-    let permanent_id = PermanentId(game.state.permanents.len());
-    let permanent = Permanent::new(
-        game.state.id_gen.next_id(),
-        card_id,
-        &game.state.cards[card_id.0],
-    );
-    game.state.permanents.push(Some(permanent));
-    if game.state.card_to_permanent.len() <= card_id.0 {
-        game.state.card_to_permanent.resize(card_id.0 + 1, None);
-    }
-    game.state.card_to_permanent[card_id.0] = Some(permanent_id);
-    permanent_id
+    game.move_card(card_id, ZoneType::Battlefield);
+    // Drain events so the engine doesn't process ETB triggers from setup
+    game.state.pending_events.clear();
+    game.state.card_to_permanent[card_id.0].expect("permanent should exist after move_card")
 }
 
 fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) -> usize {

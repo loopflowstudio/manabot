@@ -178,6 +178,8 @@ impl Scenario {
                 .iter()
                 .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
                 .unwrap_or(space.actions.len().saturating_sub(1)),
+            // Picks first legal target arbitrarily — tests that care about targeting
+            // should use choose_target_named or explicit action selection instead.
             ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
         };
