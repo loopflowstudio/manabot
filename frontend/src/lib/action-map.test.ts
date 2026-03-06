@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  actionIndexesForTarget,
   buildClickableTargets,
   filterActionsForTarget,
   focusIdsForActionIndexes,
@@ -12,21 +11,18 @@ const actions: ActionOption[] = [
   {
     index: 0,
     type: 'PRIORITY_CAST_SPELL',
-    card: 'Grey Ogre',
     focus: [101],
     description: 'Cast spell: Grey Ogre',
   },
   {
     index: 1,
     type: 'PRIORITY_PLAY_LAND',
-    card: 'Mountain',
     focus: [102],
     description: 'Play land: Mountain',
   },
   {
     index: 2,
     type: 'DECLARE_ATTACKER',
-    card: 'Grey Ogre',
     focus: [201, 301],
     description: 'Declare attacker: Grey Ogre',
   },
@@ -36,9 +32,9 @@ describe('action-map helpers', () => {
   it('builds clickable target maps for focused objects', () => {
     const targets = buildClickableTargets(actions);
 
-    expect(actionIndexesForTarget(targets, 101)).toEqual([0]);
-    expect(actionIndexesForTarget(targets, 201)).toEqual([2]);
-    expect(actionIndexesForTarget(targets, 999)).toEqual([]);
+    expect(targets.get(101)).toEqual([0]);
+    expect(targets.get(201)).toEqual([2]);
+    expect(targets.get(999)).toBeUndefined();
   });
 
   it('filters actions when a board target is selected', () => {

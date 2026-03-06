@@ -64,21 +64,14 @@ export interface Observation {
 export interface ActionOption {
   index: number;
   type: string;
-  card: string | null;
   focus: number[];
   description: string;
-}
-
-export interface BoardActionTarget {
-  objectId: number;
-  actionIndexes: number[];
 }
 
 export interface GameLogEntry {
   id: string;
   actor: 'hero' | 'villain' | 'system';
   text: string;
-  details: string[];
 }
 
 export interface TraceSummary {

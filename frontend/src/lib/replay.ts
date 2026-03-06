@@ -1,4 +1,3 @@
-import { createLogEntry } from './log';
 import type { GameLogEntry, ReplayFrame, Trace } from './types';
 
 export function buildReplayFrames(trace: Trace): ReplayFrame[] {
@@ -36,11 +35,9 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
 }
 
 export function replayLogEntries(trace: Trace): GameLogEntry[] {
-  return trace.events.map((event, index) =>
-    createLogEntry(
-      `replay-${index}`,
-      event.actor,
-      `${event.actor === 'hero' ? 'Hero' : 'Villain'}: ${event.action_description}`,
-    ),
-  );
+  return trace.events.map((event, index) => ({
+    id: `replay-${index}`,
+    actor: event.actor,
+    text: `${event.actor === 'hero' ? 'Hero' : 'Villain'}: ${event.action_description}`,
+  }));
 }

@@ -26,12 +26,16 @@
     gameStore.selectedTargetId,
   );
   $: highlightedActionIndexes = new Set(
-    hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId)?.actionIndexes ?? [],
+    hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? [],
   );
+
+  function targetActionIndexes(objectId: number): number[] {
+    return clickableTargets.get(objectId) ?? [];
+  }
 
   function restoreFocus(): void {
     if (gameStore.selectedTargetId !== null) {
-      const actionIndexes = clickableTargets.get(gameStore.selectedTargetId)?.actionIndexes ?? [];
+      const actionIndexes = targetActionIndexes(gameStore.selectedTargetId);
       gameStore.setFocus(focusIdsForActionIndexes(gameStore.actions, actionIndexes));
       return;
     }
@@ -63,7 +67,7 @@
   }
 
   function handleBoardTargetSelect(objectId: number): void {
-    const actionIndexes = clickableTargets.get(objectId)?.actionIndexes ?? [];
+    const actionIndexes = targetActionIndexes(objectId);
     const matchingActions = gameStore.actions.filter((action) => actionIndexes.includes(action.index));
 
     if (matchingActions.length === 1) {
@@ -82,7 +86,7 @@
       return;
     }
 
-    const actionIndexes = clickableTargets.get(objectId)?.actionIndexes ?? [];
+    const actionIndexes = targetActionIndexes(objectId);
     gameStore.setFocus(focusIdsForActionIndexes(gameStore.actions, actionIndexes));
   }
 </script>

@@ -1,4 +1,4 @@
-import type { GameLogEntry, Observation, PermanentState } from './types';
+import type { Observation, PermanentState } from './types';
 
 function playerLabel(side: 'agent' | 'opponent'): string {
   return side === 'agent' ? 'Hero' : 'Villain';
@@ -89,13 +89,4 @@ export function deriveObservationNotes(
   }
 
   return notes;
-}
-
-export function createLogEntry(
-  id: string,
-  actor: GameLogEntry['actor'],
-  text: string,
-  details: string[] = [],
-): GameLogEntry {
-  return { id, actor, text, details };
 }

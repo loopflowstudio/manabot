@@ -74,7 +74,7 @@ describe('GameStore', () => {
 
     store.applyObservation(
       observation,
-      [{ index: 0, type: 'PRIORITY_PASS_PRIORITY', card: null, focus: [10], description: 'Pass priority' }],
+      [{ index: 0, type: 'PRIORITY_PASS_PRIORITY', focus: [10], description: 'Pass priority' }],
       'session-a',
       'token-a',
     );

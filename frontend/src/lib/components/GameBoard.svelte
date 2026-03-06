@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BoardActionTarget, Observation } from '$lib/types';
+  import type { Observation } from '$lib/types';
 
   import HoverPreview from './HoverPreview.svelte';
   import PermanentRow from './PermanentRow.svelte';
@@ -7,7 +7,7 @@
 
   export let observation: Observation;
   export let focusedIds = new Set<number>();
-  export let clickableTargets: Map<number, BoardActionTarget> | undefined = undefined;
+  export let clickableTargets: Map<number, number[]> | undefined = undefined;
   export let onSelectTarget: ((objectId: number) => void) | undefined = undefined;
   export let onHoverTarget: ((objectId: number | null) => void) | undefined = undefined;
   export let winner: number | null | undefined = undefined;
@@ -17,10 +17,7 @@
   let previewName: string | null = null;
   let previewPower: number | null = null;
   let previewToughness: number | null = null;
-
-  function stackCards() {
-    return [...observation.opponent.stack, ...observation.agent.stack];
-  }
+  $: stackCards = [...observation.opponent.stack, ...observation.agent.stack];
 
   function setPreview(
     card: { name: string | null; power: number | null; toughness: number | null } | null,
@@ -81,11 +78,11 @@
     onPreviewCard={setPreview}
   />
 
-  {#if stackCards().length > 0}
+  {#if stackCards.length > 0}
     <section class="rounded border border-indigo-500/40 bg-indigo-900/20 p-3">
       <h3 class="mb-2 text-xs uppercase tracking-wide text-indigo-200">Stack</h3>
       <div class="flex flex-wrap gap-2 text-xs text-slate-100">
-        {#each stackCards() as card}
+        {#each stackCards as card}
           <button
             type="button"
             class={`rounded border px-3 py-2 text-left ${focusedIds.has(card.id) ? 'border-blue-400 bg-slate-800' : 'border-indigo-400/50 bg-slate-900/80'}`}

@@ -1,4 +1,4 @@
-import { createLogEntry, deriveObservationNotes } from './log';
+import { deriveObservationNotes } from './log';
 import type {
   ActionOption,
   ConnectionState,
@@ -60,8 +60,8 @@ export class GameStore {
       this.resumeToken = resumeToken;
     }
 
-    this.appendVillainLog(log);
-    this.appendDerivedNotes(previous, observation);
+    this.appendLogLines('villain', log);
+    this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
   applyGameOver(
@@ -80,36 +80,22 @@ export class GameStore {
     this.clearFocus();
     this.clearSelectedTarget();
 
-    this.appendVillainLog(log);
-    this.appendDerivedNotes(previous, observation);
+    this.appendLogLines('villain', log);
+    this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
   prepareForNewGame(): void {
-    this.observation = null;
-    this.actions = [];
-    this.gameOver = false;
+    this.resetMatchState();
     this.errorMessage = null;
     this.resumeFailed = false;
-    this.winner = null;
-    this.focusIds = new Set();
-    this.selectedTargetId = null;
-    this.actionLog = [];
-    this.logSequence = 0;
   }
 
   markResumeFailed(message: string): void {
-    this.observation = null;
-    this.actions = [];
-    this.gameOver = false;
-    this.winner = null;
-    this.actionLog = [];
-    this.clearFocus();
-    this.clearSelectedTarget();
+    this.resetMatchState();
     this.resumeFailed = true;
     this.errorMessage = message;
     this.sessionId = null;
     this.resumeToken = null;
-    this.logSequence = 0;
   }
 
   appendHeroAction(description: string): void {
@@ -135,39 +121,34 @@ export class GameStore {
     this.setFocus([]);
   }
 
-  private appendVillainLog(log: string[]): void {
-    if (log.length === 0) {
-      return;
-    }
-
-    this.actionLog = [
-      ...this.actionLog,
-      ...log.map((line) => this.createEntry('villain', line)),
-    ];
+  private resetMatchState(): void {
+    this.observation = null;
+    this.actions = [];
+    this.gameOver = false;
+    this.winner = null;
+    this.actionLog = [];
+    this.clearFocus();
+    this.clearSelectedTarget();
+    this.logSequence = 0;
   }
 
-  private appendDerivedNotes(
-    previous: Observation | null,
-    observation: Observation,
-  ): void {
-    const notes = deriveObservationNotes(previous, observation);
-    if (notes.length === 0) {
+  private appendLogLines(actor: GameLogEntry['actor'], lines: string[]): void {
+    if (lines.length === 0) {
       return;
     }
 
     this.actionLog = [
       ...this.actionLog,
-      ...notes.map((note) => this.createEntry('system', note)),
+      ...lines.map((line) => this.createEntry(actor, line)),
     ];
   }
 
   private createEntry(
     actor: GameLogEntry['actor'],
     text: string,
-    details: string[] = [],
   ): GameLogEntry {
     this.logSequence += 1;
-    return createLogEntry(`log-${this.logSequence}`, actor, text, details);
+    return { id: `log-${this.logSequence}`, actor, text };
   }
 }
 

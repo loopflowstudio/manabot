@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BoardActionTarget, CardState, PlayerState } from '$lib/types';
+  import type { CardState, PlayerState } from '$lib/types';
 
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
@@ -8,7 +8,7 @@
   export let player: PlayerState;
   export let opponent = false;
   export let focusedIds = new Set<number>();
-  export let clickableTargets: Map<number, BoardActionTarget> | undefined = undefined;
+  export let clickableTargets: Map<number, number[]> | undefined = undefined;
   export let onSelectTarget: ((objectId: number) => void) | undefined = undefined;
   export let onHoverTarget: ((objectId: number | null) => void) | undefined = undefined;
   export let onPreviewCard:
@@ -16,10 +16,6 @@
     | undefined = undefined;
 
   $: hiddenHandCount = player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length;
-
-  function isClickable(cardId: number): boolean {
-    return clickableTargets?.has(cardId) ?? false;
-  }
 
   function preview(card: CardState): void {
     onPreviewCard?.({
@@ -58,10 +54,10 @@
               power={card.types.is_creature ? card.power : null}
               toughness={card.types.is_creature ? card.toughness : null}
               focused={focusedIds.has(card.id)}
-              clickable={isClickable(card.id)}
+              clickable={clickableTargets?.has(card.id) ?? false}
               onSelect={() => onSelectTarget?.(card.id)}
               onHoverStart={() => {
-                onHoverTarget?.(isClickable(card.id) ? card.id : null);
+                onHoverTarget?.(clickableTargets?.has(card.id) ? card.id : null);
                 preview(card);
               }}
               onHoverEnd={() => {

@@ -221,7 +221,6 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
             {
                 "index": index,
                 "type": _enum_name(ActionEnum, action.action_type),
-                "card": card_name,
                 "focus": focus,
                 "description": _format_action(action, card_name, names),
             }

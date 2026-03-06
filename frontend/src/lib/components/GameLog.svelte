@@ -26,13 +26,6 @@
       {#each entries as entry}
         <div class={`rounded border px-3 py-2 text-sm ${entry.id === activeEntryId ? 'border-blue-400 bg-slate-900' : 'border-slate-700 bg-slate-900/60'}`}>
           <div class={`font-medium ${actorClass(entry.actor)}`}>{entry.text}</div>
-          {#if entry.details.length > 0}
-            <ul class="mt-1 list-disc space-y-1 pl-4 text-xs text-slate-400">
-              {#each entry.details as detail}
-                <li>{detail}</li>
-              {/each}
-            </ul>
-          {/if}
         </div>
       {/each}
     {/if}

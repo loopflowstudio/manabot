@@ -1,21 +1,17 @@
 <script lang="ts">
-  import type { BoardActionTarget, PermanentState } from '$lib/types';
+  import type { PermanentState } from '$lib/types';
 
   import Card from './Card.svelte';
 
   export let label: string;
   export let permanents: PermanentState[] = [];
   export let focusedIds = new Set<number>();
-  export let clickableTargets: Map<number, BoardActionTarget> | undefined = undefined;
+  export let clickableTargets: Map<number, number[]> | undefined = undefined;
   export let onSelectTarget: ((objectId: number) => void) | undefined = undefined;
   export let onHoverTarget: ((objectId: number | null) => void) | undefined = undefined;
   export let onPreviewCard:
     | ((card: { name: string | null; power: number | null; toughness: number | null } | null) => void)
     | undefined = undefined;
-
-  function isClickable(permanentId: number): boolean {
-    return clickableTargets?.has(permanentId) ?? false;
-  }
 </script>
 
 <div class="min-h-24">
@@ -31,13 +27,13 @@
         power={permanent.power}
         toughness={permanent.toughness}
         focused={focusedIds.has(permanent.id)}
-        clickable={isClickable(permanent.id)}
+        clickable={clickableTargets?.has(permanent.id) ?? false}
         tapped={permanent.tapped}
         dimmed={permanent.summoning_sick}
         damage={permanent.damage}
         onSelect={() => onSelectTarget?.(permanent.id)}
         onHoverStart={() => {
-          onHoverTarget?.(isClickable(permanent.id) ? permanent.id : null);
+          onHoverTarget?.(clickableTargets?.has(permanent.id) ? permanent.id : null);
           onPreviewCard?.({
             name: permanent.name,
             power: permanent.power,

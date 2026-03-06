@@ -36,10 +36,6 @@ export class ReplayStore {
     this.errorMessage = null;
   }
 
-  currentFrame(): ReplayFrame | null {
-    return this.frames[this.currentFrameIndex] ?? null;
-  }
-
   setFrame(index: number): void {
     if (this.frames.length === 0) {
       this.currentFrameIndex = 0;
