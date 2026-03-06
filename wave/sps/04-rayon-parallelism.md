@@ -6,90 +6,81 @@
 GIL is released during the parallel section. Linear scaling up to
 available cores.
 
-## Context from sprint 03
+## Current state
 
-Sprint 03 built zero-copy buffer writes. Key details that affect this sprint:
+The architecture was simplified in the latest iteration. Key details:
 
-- **Buffer access uses `pyo3::buffer::PyBuffer`** (not the `rust-numpy` crate,
-  which was unavailable in the sandboxed build). `ObservationBuffers` stores
-  `Py<PyAny>` references. `with_write_buffers()` acquires `PyBuffer` handles
-  and creates `&mut [f32]` slices via `mutable_slice_from_buffer()`.
+- **`PyVectorEnv`** is a `#[pyclass]` struct owning `Vec<EnvSlot>` directly —
+  no Mutex wrapper. PyO3's `&mut self` methods guarantee exclusive access.
 
-- **GIL is NOT released during stepping.** The current implementation holds the
-  GIL for both game stepping and buffer encoding. `Python::allow_threads`
-  requires the closure to be `Ungil` (i.e. `Send`), but `MutexGuard<VectorEnv>`
-  is not `Send`. Sprint 03 works around this by `drop(env)` before encoding,
-  but stepping itself still holds the GIL.
+- **Buffer writes use Python `__setitem__`** calls (via `PyAny::set_item`),
+  not raw pointer access. Correctness-focused but serializes on the GIL.
+  To parallelize, buffer access must move to raw pointers (via `numpy` crate
+  or `PyBuffer` protocol) so writes can happen inside `allow_threads`.
 
-- **Buffer write path**: `step_into_buffers` → lock env → `env.step(&actions)`
-  → drop lock → `write_step_results_into_buffers` → `with_write_buffers` →
-  `encode_into` per env. The encoding loop is sequential over envs.
+- **`ObservationEncoder`** (in `vector_env.rs`) encodes observations into
+  `EncodedObservation` structs (owned `Vec<f32>` fields), which are then
+  written into numpy buffers one field at a time.
 
-- **`ObservationFieldSlices`** holds `&mut [f32]` / `&mut [i32]` for all 15
-  observation fields. `encoded_row_mut()` returns an `EncodedObservationMut`
-  pointing into the appropriate slice for a given env index.
+- **Stepping is fully sequential**: `step_into` iterates `envs` with a for
+  loop. Each env step + encode + buffer write happens in sequence.
 
-- **Key files**: `managym/src/python/vector_env_bindings.rs` (buffer protocol),
-  `manabot/env/rust_vector_env.py` (Python wrapper).
+- **Key files**: `managym/src/python/vector_env.rs` (PyVectorEnv, encoder,
+  buffer writes), `manabot/env/env.py` (Python VectorEnv wrapper).
+
+- **`num_threads`** is accepted and validated but unused.
 
 ## Changes
 
-### 1. Restructure ownership for GIL release
+### 1. Switch buffer writes to raw pointers
 
-The `Mutex<VectorEnv>` pattern prevents `allow_threads` because
-`MutexGuard` is not `Send`. Options:
+Before parallelizing, buffer writes must bypass the GIL. Options:
 
-- **Extract games into a `Vec` before `allow_threads`**: Lock, take the
-  games vec out (replace with empty), release lock, step in
-  `allow_threads`, put games back.
-- **Use `UnsafeCell` or raw pointer**: More complex but avoids the
-  lock/unlock dance. Document safety invariant (single-threaded access
-  from Python).
-- **Remove the `Mutex` entirely**: `PyVectorEnv` is `#[pyclass]` with
-  `&mut self` methods — PyO3 already guarantees exclusive access. The
-  Mutex may be unnecessary.
+- **Add `numpy` crate** (`numpy = "0.24"`): provides `PyArray` types with
+  `as_slice_mut()` for raw access. Extract pointers while GIL is held,
+  pass them into `allow_threads`.
+- **Use `PyBuffer` protocol**: `pyo3::buffer::PyBuffer` gives raw pointer
+  access without an extra crate dependency. More verbose but works.
 
-Pick the simplest approach that compiles and is safe.
+Either way: extract raw `*mut f32` / `*mut bool` / `*mut i32` pointers
+from numpy arrays while holding the GIL, validate shapes/dtypes/contiguity,
+then write directly inside `allow_threads`.
 
 ### 2. Rayon integration
 
 Add `rayon` dependency to `managym/Cargo.toml`.
 
 ```rust
-// Inside allow_threads:
-// Step all games in parallel
-self.envs
-    .par_iter_mut()
-    .zip(actions.par_iter())
-    .for_each(|(env, &action)| {
-        env.step(action);
+fn step_into(&mut self, py: Python<'_>, actions, obs_buffers, ...) -> PyResult<()> {
+    // Extract raw buffer pointers while holding GIL
+    let buf_ptrs = extract_buffer_pointers(py, &obs_buffers)?;
+
+    py.allow_threads(|| {
+        self.thread_pool.install(|| {
+            self.envs.par_iter_mut()
+                .zip(actions_slice.par_iter())
+                .enumerate()
+                .for_each(|(i, (slot, &action))| {
+                    // Step game
+                    let result = slot.env.step(action);
+                    // Encode + write directly into buffer slice i
+                    encode_into_buffer_slice(&result, &buf_ptrs, i);
+                });
+        });
     });
+    Ok(())
+}
 ```
 
-Game stepping is embarrassingly parallel — each game is independent.
+Each env writes to a disjoint slice — no synchronization needed.
+Wrap raw pointer + offset in a `BufferSlice` struct that implements
+`Send` and documents the safety invariant.
 
-### 3. Buffer writes after parallel stepping
+### 3. Thread count configuration
 
-Two options for encoding after parallel stepping:
-
-- **Sequential encoding (simpler)**: Step all games in parallel (GIL
-  released), then encode sequentially with GIL held (current pattern).
-  This parallelizes the expensive part (game stepping) without changing
-  the buffer write path.
-
-- **Parallel encoding (more complex)**: Use `SendSlice` wrappers around
-  raw pointers to make buffer slices `Send`, then encode in the same
-  Rayon parallel section. Requires `unsafe` for the pointer wrappers
-  but buffer slices are disjoint per env.
-
-Start with sequential encoding. Profile to see if encoding is a
-bottleneck before adding parallel encoding complexity.
-
-### 4. Thread count configuration
-
-Rayon respects `RAYON_NUM_THREADS` env var natively. No code needed
-for configuration. For training on many-core machines, users can set
-this to leave room for PyTorch.
+Use a dedicated Rayon `ThreadPool`. Default:
+`max(1, min(num_envs, num_cpus::get_physical().saturating_sub(1)))`.
+Honor the existing `num_threads` constructor parameter.
 
 ## Measurement
 
