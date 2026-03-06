@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ops.provider import load_machine_spec, load_runtime_spec, merge_str
 from ops.aws import _is_retryable_send_command_error
+from ops.provider import load_machine_spec, load_runtime_spec, merge_str
 
 
 def test_load_machine_spec_from_repo_defaults():

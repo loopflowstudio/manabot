@@ -333,8 +333,7 @@ def recommend_next_step(
     )
     land_chain_ok = (
         float(final["landed_when_able"]) >= max(0.35, baseline_landed - 0.05)
-        and float(final["pass_land_land_rate"])
-        > float(final["pass_land_pass_rate"])
+        and float(final["pass_land_land_rate"]) > float(final["pass_land_pass_rate"])
         and float(final["mean_land_prob_when_pass_land"])
         > float(final["mean_pass_prob_when_pass_land"])
     )
@@ -369,15 +368,21 @@ def recommend_next_step(
     elif not win_signal_ok:
         recommendation = "Stay in first-light: random-opponent win signal is too weak"
     elif not land_chain_ok:
-        recommendation = "Stay in first-light: pass-collapse still dominates land decisions"
+        recommendation = (
+            "Stay in first-light: pass-collapse still dominates land decisions"
+        )
     else:
         recommendation = "Stay in first-light: creature-play signal remains weak"
 
-    return recommendation, reasons, {
-        "win_signal_ok": win_signal_ok,
-        "land_chain_ok": land_chain_ok,
-        "spell_chain_ok": spell_chain_ok,
-    }
+    return (
+        recommendation,
+        reasons,
+        {
+            "win_signal_ok": win_signal_ok,
+            "land_chain_ok": land_chain_ok,
+            "spell_chain_ok": spell_chain_ok,
+        },
+    )
 
 
 def _format_percent(value: float | None) -> str:
@@ -447,12 +452,12 @@ def render_report(store: VerifyStore, run_id: int) -> tuple[str, dict[str, Any]]
                 f"pass {_format_percent(float(final['pass_land_pass_rate'])) if final else 'n/a'}"
             ),
             (
-                "- Final spell opportunity count: "
-                f"{float(final['could_spell']):.0f}" if final else "- Final spell opportunity count: n/a"
+                f"- Final spell opportunity count: {float(final['could_spell']):.0f}"
+                if final
+                else "- Final spell opportunity count: n/a"
             ),
             (
-                "- Final explained variance: "
-                f"{float(final['explained_variance']):.3f}"
+                f"- Final explained variance: {float(final['explained_variance']):.3f}"
                 if final and final["explained_variance"] is not None
                 else "- Final explained variance: n/a"
             ),

@@ -1,22 +1,20 @@
 """Diagnose initial policy behavior: does a fresh agent play lands/spells?"""
 
 import torch
-import numpy as np
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import ActionEnum
 from manabot.infra import Hypers
 from manabot.model.agent import Agent
 from manabot.verify.util import (
     STANDARD_DECK,
-    _select_agent_action,
     _action_type_name,
-    _land_available,
-    _spell_available,
     _attack_available,
+    _is_attack_action,
     _is_land_action,
     _is_spell_action,
-    _is_attack_action,
+    _land_available,
+    _select_agent_action,
+    _spell_available,
     step_with_fallback,
 )
 
@@ -33,15 +31,25 @@ reward = Reward(hypers.reward)
 agent = Agent(obs_space, hypers.agent)
 agent.eval()
 
-env = Env(match, obs_space, reward, seed=42, auto_reset=False,
-          enable_profiler=False, enable_behavior_tracking=False)
+env = Env(
+    match,
+    obs_space,
+    reward,
+    seed=42,
+    auto_reset=False,
+    enable_profiler=False,
+    enable_behavior_tracking=False,
+)
 
 num_games = 20
 totals = {
     "hero_actions": 0,
-    "land_available": 0, "land_played": 0,
-    "spell_available": 0, "spell_cast": 0,
-    "attack_available": 0, "attack_declared": 0,
+    "land_available": 0,
+    "land_played": 0,
+    "spell_available": 0,
+    "spell_cast": 0,
+    "attack_available": 0,
+    "attack_declared": 0,
 }
 
 # Also track first 5 actions per game to see what's happening
@@ -82,12 +90,18 @@ for g in range(num_games):
 
             if len(game_log) < 8:
                 avail = []
-                if has_land: avail.append("land")
-                if has_spell: avail.append("spell")
-                if has_attack: avail.append("attack")
-                game_log.append(f"  step {steps}: chose={action_name}, available=[{','.join(avail)}]")
+                if has_land:
+                    avail.append("land")
+                if has_spell:
+                    avail.append("spell")
+                if has_attack:
+                    avail.append("attack")
+                game_log.append(
+                    f"  step {steps}: chose={action_name}, available=[{','.join(avail)}]"
+                )
         else:
             from manabot.env import build_opponent_policy
+
             opponent = build_opponent_policy("random")
             action = opponent(obs)
 
@@ -109,14 +123,23 @@ print("\n--- Totals across {} games ---".format(num_games))
 print(f"Hero actions: {totals['hero_actions']}")
 for key in ["land", "spell", "attack"]:
     avail = totals[f"{key}_available"]
-    took = totals[f"{key}_{'played' if key == 'land' else 'cast' if key == 'spell' else 'declared'}"]
+    took = totals[
+        f"{key}_{'played' if key == 'land' else 'cast' if key == 'spell' else 'declared'}"
+    ]
     rate = took / avail if avail > 0 else 0
     print(f"  {key}: available={avail}, took={took}, rate={rate:.2%}")
 
 # Also check: what do the raw logits look like for a typical decision?
 print("\n--- Sample logits for first decision ---")
-env2 = Env(match, obs_space, reward, seed=99, auto_reset=False,
-           enable_profiler=False, enable_behavior_tracking=False)
+env2 = Env(
+    match,
+    obs_space,
+    reward,
+    seed=99,
+    auto_reset=False,
+    enable_profiler=False,
+    enable_behavior_tracking=False,
+)
 obs, _ = env2.reset(seed=99)
 
 device = torch.device("cpu")
@@ -133,7 +156,7 @@ print(f"  Value estimate: {value.item():.4f}")
 # Check valid actions and their types with logits
 valid = obs["actions_valid"]
 actions = obs["actions"]
-print(f"\n  Valid actions (with raw logits):")
+print("\n  Valid actions (with raw logits):")
 for i in range(actions.shape[0]):
     if valid[i] > 0:
         name = _action_type_name(obs, i)
@@ -141,7 +164,7 @@ for i in range(actions.shape[0]):
         print(f"    [{i}] {name:30s}  logit={logit:+.4f}  features={actions[i][:6]}")
 
 # Sample 20 stochastic actions to see distribution
-print(f"\n  Stochastic sampling (20 draws):")
+print("\n  Stochastic sampling (20 draws):")
 action_counts = {}
 for _ in range(20):
     a, _, _, _ = agent.get_action_and_value(tensor_obs, deterministic=False)

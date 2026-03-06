@@ -211,16 +211,25 @@ def test_detect_local_repo_ref_prefers_environment(monkeypatch):
 
 def test_sandbox_sync_repo_and_env_uses_uv_and_builds_runtime_image():
     provider = FakeProvider()
-    manager = SandboxManager(provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True)
+    manager = SandboxManager(
+        provider, make_sandbox_spec(), make_runtime_spec(), no_ssh=True
+    )
 
     manager.up()
 
-    sync_commands = [command for command in provider.run_commands if "uv sync" in command]
+    sync_commands = [
+        command for command in provider.run_commands if "uv sync" in command
+    ]
     assert len(sync_commands) == 1
     sync_command = sync_commands[0]
-    assert 'PYTHON_VERSION=3.13' in sync_command
+    assert "PYTHON_VERSION=3.13" in sync_command
     assert 'uv python install "$PYTHON_VERSION"' in sync_command
-    assert 'uv sync --frozen --extra dev --extra ops --python "$PYTHON_VERSION"' in sync_command
-    assert 'uv pip install --python .venv/bin/python --no-deps -e managym' in sync_command
+    assert (
+        'uv sync --frozen --extra dev --extra ops --python "$PYTHON_VERSION"'
+        in sync_command
+    )
+    assert (
+        "uv pip install --python .venv/bin/python --no-deps -e managym" in sync_command
+    )
     assert 'docker build --build-arg PYTHON_VERSION="$PYTHON_VERSION"' in sync_command
     assert 'docker run --rm --gpus all "$IMAGE" python -c' in sync_command

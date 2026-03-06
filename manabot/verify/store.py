@@ -317,7 +317,9 @@ class VerifyStore:
         self.con.commit()
         return run_id
 
-    def update_run_status(self, run_id: int, status: str, notes: str | None = None) -> None:
+    def update_run_status(
+        self, run_id: int, status: str, notes: str | None = None
+    ) -> None:
         self.con.execute(
             "UPDATE runs SET status = ?, notes = COALESCE(?, notes) WHERE id = ?",
             (status, notes, run_id),
@@ -456,8 +458,7 @@ class VerifyStore:
         if result is None:
             raise KeyError(f"Unknown run_id={run_id}")
         return {
-            field: json.loads(result[f"{field}_json"])
-            for field in RUN_CONFIG_FIELDS
+            field: json.loads(result[f"{field}_json"]) for field in RUN_CONFIG_FIELDS
         }
 
     def get_evaluations(self, run_id: int) -> list[dict[str, Any]]:
@@ -467,7 +468,9 @@ class VerifyStore:
         ).fetchall()
         return [self._row_to_dict(row) for row in rows if row is not None]
 
-    def get_evaluation_choice_sets(self, evaluation_id: int) -> dict[str, dict[str, float]]:
+    def get_evaluation_choice_sets(
+        self, evaluation_id: int
+    ) -> dict[str, dict[str, float]]:
         rows = self.con.execute(
             """
             SELECT scope, choice_set, count

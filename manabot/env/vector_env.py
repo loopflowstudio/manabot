@@ -186,7 +186,9 @@ class VectorEnv:
                 min=0.0,
             )
 
-        shaping = shaping.masked_fill(self._terminated_tensor | self._truncated_tensor, 0.0)
+        shaping = shaping.masked_fill(
+            self._terminated_tensor | self._truncated_tensor, 0.0
+        )
         return shaping
 
     def _battlefield_card_count(

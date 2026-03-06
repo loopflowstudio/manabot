@@ -376,7 +376,9 @@ class Trainer:
                     "eval/could_attack": eval_metrics["could_attack"],
                     "eval/could_land": eval_metrics["could_land"],
                     "eval/could_spell": eval_metrics["could_spell"],
-                    "eval/single_valid_decisions": eval_metrics["single_valid_decisions"],
+                    "eval/single_valid_decisions": eval_metrics[
+                        "single_valid_decisions"
+                    ],
                     "eval/multi_valid_decisions": eval_metrics["multi_valid_decisions"],
                     "eval/pass_land_decisions": eval_metrics["pass_land_decisions"],
                     "eval/pass_land_pass_rate": eval_metrics["pass_land_pass_rate"],

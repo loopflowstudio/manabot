@@ -180,7 +180,9 @@ def test_recommend_next_step_blocks_weak_win_signal():
         ),
     )
 
-    assert recommendation == "Stay in first-light: random-opponent win signal is too weak"
+    assert (
+        recommendation == "Stay in first-light: random-opponent win signal is too weak"
+    )
     assert heuristic["win_signal_ok"] is False
 
 

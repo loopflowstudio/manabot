@@ -117,11 +117,9 @@ impl Game {
     fn on_step_start(&mut self, step: StepKind) {
         self.state.priority.start_round(self.active_player());
         if step == StepKind::Untap {
-            self.state
-                .events
-                .push(GameEvent::TurnStarted {
-                    player: self.active_player(),
-                });
+            self.state.events.push(GameEvent::TurnStarted {
+                player: self.active_player(),
+            });
         }
         self.state.events.push(GameEvent::StepStarted { step });
         match step {

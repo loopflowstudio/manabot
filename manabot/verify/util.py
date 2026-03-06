@@ -403,7 +403,9 @@ def _run_evaluation_internal(
                     priority_choice = _priority_choice_name(obs)
                     is_trivial = num_valid <= 1
 
-                    choice_set_counts[choice_set] = choice_set_counts.get(choice_set, 0.0) + 1.0
+                    choice_set_counts[choice_set] = (
+                        choice_set_counts.get(choice_set, 0.0) + 1.0
+                    )
                     if is_trivial:
                         single_valid_decisions += 1
                     else:
@@ -496,7 +498,9 @@ def _run_evaluation_internal(
                     action = opponent(obs)
 
                 try:
-                    obs, _, terminated, truncated, info = step_with_fallback(env, action)
+                    obs, _, terminated, truncated, info = step_with_fallback(
+                        env, action
+                    )
                 except Exception:
                     aborted = True
                     info = {}
@@ -526,19 +530,17 @@ def _run_evaluation_internal(
         hero_attack_actions / hero_could_attack if hero_could_attack > 0 else 0.0
     )
     landed_when_able = hero_land_plays / hero_could_land if hero_could_land > 0 else 0.0
-    cast_when_able = hero_spell_casts / hero_could_spell if hero_could_spell > 0 else 0.0
+    cast_when_able = (
+        hero_spell_casts / hero_could_spell if hero_could_spell > 0 else 0.0
+    )
     pass_land_pass_rate = (
         pass_land_passes / pass_land_decisions if pass_land_decisions > 0 else 0.0
     )
     pass_land_land_rate = (
-        pass_land_land_plays / pass_land_decisions
-        if pass_land_decisions > 0
-        else 0.0
+        pass_land_land_plays / pass_land_decisions if pass_land_decisions > 0 else 0.0
     )
     pass_land_spell_rate = (
-        pass_land_spell_casts / pass_land_decisions
-        if pass_land_decisions > 0
-        else 0.0
+        pass_land_spell_casts / pass_land_decisions if pass_land_decisions > 0 else 0.0
     )
     mean_pass_prob = prob_sums["pass"] / prob_sum_count if prob_sum_count > 0 else 0.0
     mean_land_prob = prob_sums["land"] / prob_sum_count if prob_sum_count > 0 else 0.0

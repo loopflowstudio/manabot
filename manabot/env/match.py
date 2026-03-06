@@ -129,9 +129,7 @@ class Reward:
                 - self._count_battlefield_creatures(last_obs.agent_cards),
             )
 
-        if (
-            self.hypers.opponent_life_loss_reward != 0.0
-        ):
+        if self.hypers.opponent_life_loss_reward != 0.0:
             reward += self.hypers.opponent_life_loss_reward * max(
                 0,
                 last_obs.opponent.life - new_obs.opponent.life,
