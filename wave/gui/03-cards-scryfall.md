@@ -12,11 +12,9 @@ function scryfallImageUrl(cardName: string, size: "small" | "normal" | "large" =
   return `https://api.scryfall.com/cards/named?format=image&exact=${encodeURIComponent(cardName)}&version=${size}`
 }
 
-// Card component with image, tap state, selection highlight
-function Card({ card, tapped, selected, onClick }: CardProps): JSX.Element
-
-// Card back for hidden cards (opponent's hand, library)
-function CardBack(): JSX.Element
+// Svelte components:
+// Card.svelte — card with image, tap state, selection highlight
+// CardBack.svelte — hidden cards (opponent's hand, library)
 ```
 
 ## Constraints

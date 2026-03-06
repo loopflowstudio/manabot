@@ -1,8 +1,8 @@
-# Stage 2: Frontend shell — React app with WebSocket and board layout
+# Stage 2: Frontend shell — SvelteKit app with WebSocket and board layout
 
 ## What to build
 
-A React + TypeScript app that connects to the backend WebSocket, renders the game board, and lets the player select actions. No card images yet — just structured layout with card names, types, and stats as text.
+A SvelteKit + TypeScript app that connects to the backend WebSocket, renders the game board, and lets the player select actions. No card images yet — just structured layout with card names, types, and stats as text.
 
 ## Data structures
 
@@ -74,8 +74,8 @@ interface ActionOption {
 
 ## Constraints
 
-- Use Vite for build tooling
-- WebSocket hook manages connection lifecycle (connect, reconnect, message parsing)
+- SvelteKit with Vite (built-in)
+- WebSocket store manages connection lifecycle (connect, reconnect, message parsing)
 - State updates replace the full game state on each observation (no incremental patching)
 - Action panel highlights which cards/permanents are relevant to each action (using focus objects)
 

@@ -1,6 +1,6 @@
 ## Vision
 
-A web-based GUI for managym that lets you play Magic games interactively and replay recorded simulations. React + TypeScript frontend, FastAPI + WebSocket backend, Scryfall card images.
+A web-based GUI for managym that lets you play Magic games interactively and replay recorded simulations. SvelteKit + TypeScript frontend, FastAPI + WebSocket backend, Scryfall card images.
 
 Two primary modes:
 - **Play**: Human vs passive/random opponent (human vs human later)
