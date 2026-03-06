@@ -1,10 +1,6 @@
-# 04: Rayon Parallelism
+# 02: Rayon Parallelism
 
-## Finish line
-
-`VectorEnv::step_into_buffers()` steps N games in parallel using Rayon.
-GIL is released during the parallel section. Linear scaling up to
-available cores.
+**Finish line:** `PyVectorEnv::step_into()` steps N games in parallel using Rayon with GIL released. Linear scaling up to available cores.
 
 ## Current state
 
