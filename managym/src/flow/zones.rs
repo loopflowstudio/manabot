@@ -37,22 +37,28 @@ impl Game {
         self.state.stack.pop()
     }
 
-    pub(crate) fn stack_is_empty(&self) -> bool {
-        self.state.stack.is_empty()
-    }
-
     pub(crate) fn assert_stack_consistent(&self) {
         #[cfg(debug_assertions)]
         {
             use std::collections::{BTreeMap, HashSet};
 
-            let zone_spell_cards: Vec<CardId> = self
-                .state
-                .zones
-                .zone_cards(ZoneType::Stack, PlayerId(0))
-                .iter()
-                .chain(self.state.zones.zone_cards(ZoneType::Stack, PlayerId(1)))
-                .copied()
+            fn card_counts(cards: &[CardId]) -> BTreeMap<CardId, usize> {
+                let mut counts = BTreeMap::new();
+                for card in cards {
+                    *counts.entry(*card).or_insert(0_usize) += 1;
+                }
+                counts
+            }
+
+            let zone_spell_cards: Vec<CardId> = [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(|player| {
+                    self.state
+                        .zones
+                        .zone_cards(ZoneType::Stack, player)
+                        .iter()
+                        .copied()
+                })
                 .collect();
 
             let stack_spell_cards: Vec<CardId> = self
@@ -73,18 +79,9 @@ impl Game {
                 );
             }
 
-            let mut zone_spell_counts = BTreeMap::new();
-            for card in &zone_spell_cards {
-                *zone_spell_counts.entry(*card).or_insert(0_usize) += 1;
-            }
-
-            let mut stack_spell_counts = BTreeMap::new();
-            for card in &stack_spell_cards {
-                *stack_spell_counts.entry(*card).or_insert(0_usize) += 1;
-            }
-
             assert_eq!(
-                zone_spell_counts, stack_spell_counts,
+                card_counts(&zone_spell_cards),
+                card_counts(&stack_spell_cards),
                 "stack/zone spell mismatch: zone={zone_spell_cards:?}, stack={stack_spell_cards:?}"
             );
         }

@@ -16,7 +16,7 @@ impl Game {
         // CR 117.1a, 307.1 — Sorcery-speed actions are available only to the active player
         // during a main phase with an empty stack.
         self.is_active_player(player)
-            && self.stack_is_empty()
+            && self.state.stack.is_empty()
             && self.state.turn.can_cast_sorceries()
     }
 
