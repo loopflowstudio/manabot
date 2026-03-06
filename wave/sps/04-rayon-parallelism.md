@@ -48,13 +48,42 @@ Default to `num_cpus::get()` or a configurable value. For training
 on machines with many cores, may want to limit Rayon threads to
 leave room for PyTorch.
 
-## Verification
+## Measurement
 
-- Benchmark: `num_envs=1` vs `num_envs=16` vs `num_envs=64` SPS
-- Verify linear scaling up to core count
-- Training produces same learning curves
-- No data races (run under ThreadSanitizer in debug builds)
-- Verification ladder passes
+### Before
+
+```bash
+python scripts/bench_breakdown.py --num-envs 16 --steps 2048
+```
+
+Record `rust_step` percentage and absolute time. This is the phase
+being parallelized.
+
+### After
+
+```bash
+# Scaling sweep
+for n in 1 4 16 64; do
+    python scripts/bench_breakdown.py --num-envs $n --steps 2048
+done
+```
+
+`rust_step` time should scale sub-linearly with num_envs (near-constant
+up to core count, then linear).
+
+### A/B
+
+```bash
+# Compare parallel vs sequential (if a sequential mode is available)
+python scripts/bench_ab.py --a rust --b async --num-envs 64 --rounds 5
+```
+
+### Gate
+
+- Env-only SPS > 100,000 at 16 envs
+- Near-linear SPS scaling from 1 to core_count envs
+- `python -m manabot.verify.step0_env_sanity` passes
+- No data races (ThreadSanitizer clean in debug builds)
 
 ## Done when
 
