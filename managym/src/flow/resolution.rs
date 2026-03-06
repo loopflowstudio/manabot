@@ -1,8 +1,7 @@
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
-        ability::{Ability, Effect},
-        card::ActivatedAbilityEffect,
+        ability::{Ability, Effect, TargetSpec},
         game_object::{CardId, PermanentId, Target},
         stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject},
         target::Target as ActionTarget,
@@ -29,16 +28,27 @@ impl Game {
 
     fn resolve_spell_object(&mut self, spell: SpellOnStack) {
         let card = spell.card;
-        match self.state.cards[card].name.as_str() {
-            "Lightning Bolt" => {
-                self.resolve_lightning_bolt(&spell);
-                return;
+        let spell_effect = self.state.cards[card].spell_effect.clone();
+
+        if let Some(effect) = spell_effect {
+            let target = spell.targets.first().copied();
+            if let Some(target_spec) = effect.target_spec() {
+                let Some(target) = target else {
+                    // CR 608.2b — Targeted spells with no target are countered.
+                    self.counter_spell(card, None);
+                    return;
+                };
+                if !self.is_legal_target(target, target_spec) {
+                    // CR 608.2b — Targeted spells with illegal targets are countered.
+                    self.counter_spell(card, None);
+                    return;
+                }
             }
-            "Counterspell" => {
-                self.resolve_counterspell(&spell);
-                return;
-            }
-            _ => {}
+
+            self.execute_spell_effect(&effect, target, card);
+            self.move_card(card, ZoneType::Graveyard);
+            self.emit(GameEvent::SpellResolved { card });
+            return;
         }
 
         let is_permanent = self.state.cards[card].types.is_permanent();
@@ -49,49 +59,6 @@ impl Game {
             // CR 608.2k — Nonpermanent spells resolve then go to graveyard.
             self.move_card(card, ZoneType::Graveyard);
         }
-        self.emit(GameEvent::SpellResolved { card });
-    }
-
-    fn resolve_lightning_bolt(&mut self, spell: &SpellOnStack) {
-        let card = spell.card;
-        let Some(target) = spell.targets.first().copied() else {
-            self.counter_spell(card, None);
-            return;
-        };
-
-        if !self.is_legal_target_for_bolt(target) {
-            // CR 608.2b — Spells with illegal targets are countered by game rules.
-            self.counter_spell(card, None);
-            return;
-        }
-
-        match target {
-            Target::Player(player) => self.apply_player_damage(Some(card), player, 3),
-            Target::Permanent(permanent) => self.apply_permanent_damage(Some(card), permanent, 3),
-            Target::StackSpell(_) => {
-                self.counter_spell(card, None);
-                return;
-            }
-        }
-
-        self.move_card(card, ZoneType::Graveyard);
-        self.emit(GameEvent::SpellResolved { card });
-    }
-
-    fn resolve_counterspell(&mut self, spell: &SpellOnStack) {
-        let card = spell.card;
-        let Some(Target::StackSpell(target_spell)) = spell.targets.first().copied() else {
-            self.counter_spell(card, None);
-            return;
-        };
-
-        if self.find_spell_on_stack_index(target_spell).is_none() {
-            self.counter_spell(card, None);
-            return;
-        }
-
-        self.counter_spell(target_spell, Some(card));
-        self.move_card(card, ZoneType::Graveyard);
         self.emit(GameEvent::SpellResolved { card });
     }
 
@@ -108,29 +75,27 @@ impl Game {
         let Some(source_permanent_id) = self.state.card_to_permanent[ability.source_card] else {
             return;
         };
-        let Some(source_permanent) = self.state.permanents[source_permanent_id].as_mut() else {
+        let Some(source_permanent) = self.state.permanents[source_permanent_id].as_ref() else {
             return;
         };
         if source_permanent.id != ability.source_permanent_object_id {
             return;
         }
 
-        let Some(ability_definition) = self.state.cards[ability.source_card]
+        let Some(effect) = self.state.cards[ability.source_card]
             .activated_abilities
             .get(ability.ability_index)
+            .map(|def| def.effect.clone())
         else {
             return;
         };
 
-        match ability_definition.effect {
-            ActivatedAbilityEffect::SelfGetsUntilEot {
-                power_delta,
-                toughness_delta,
-            } => {
-                source_permanent.temp_power += power_delta;
-                source_permanent.temp_toughness += toughness_delta;
-            }
-        }
+        let action_target = ability.targets.first().and_then(|t| match t {
+            Target::Player(p) => Some(ActionTarget::Player(*p)),
+            Target::Permanent(p) => Some(ActionTarget::Permanent(*p)),
+            Target::StackSpell(_) => None,
+        });
+        self.execute_effect(&effect, action_target, Some(ability.source_card));
     }
 
     fn resolve_triggered_ability(
@@ -167,25 +132,73 @@ impl Game {
             Target::Permanent(p) => Some(ActionTarget::Permanent(p)),
             Target::StackSpell(_) => None,
         });
-        self.execute_effect(&effect, action_target);
+        self.execute_effect(&effect, action_target, Some(source_card));
     }
 
-    fn execute_effect(&mut self, effect: &Effect, target: Option<ActionTarget>) {
+    /// Execute a spell effect, with access to the raw Target (needed for StackSpell targets).
+    fn execute_spell_effect(&mut self, effect: &Effect, target: Option<Target>, source: CardId) {
         match effect {
-            Effect::ReturnToHand {
-                target: target_spec,
-            } => {
-                let Some(chosen_target) = target else {
+            Effect::CounterSpell { .. } => {
+                let Some(Target::StackSpell(target_spell)) = target else {
                     return;
                 };
-                // CR 608.2b — Revalidate target legality on resolution.
-                if !self.is_valid_target_for_spec(chosen_target, target_spec) {
+                self.counter_spell(target_spell, Some(source));
+            }
+            _ => {
+                let action_target = target.map(|t| match t {
+                    Target::Player(p) => ActionTarget::Player(p),
+                    Target::Permanent(p) => ActionTarget::Permanent(p),
+                    Target::StackSpell(c) => ActionTarget::StackSpell(c),
+                });
+                self.execute_effect(effect, action_target, Some(source));
+            }
+        }
+    }
+
+    fn execute_effect(
+        &mut self,
+        effect: &Effect,
+        target: Option<ActionTarget>,
+        source: Option<CardId>,
+    ) {
+        match effect {
+            Effect::ReturnToHand { target: spec } => {
+                let Some(chosen) = target else { return };
+                if !self.is_valid_target_for_spec(chosen, spec) {
                     return;
                 }
-
-                if let ActionTarget::Permanent(permanent_id) = chosen_target {
+                if let ActionTarget::Permanent(permanent_id) = chosen {
                     self.return_permanent_to_owner_hand(permanent_id);
                 }
+            }
+            Effect::DealDamage { amount, .. } => {
+                let Some(chosen) = target else { return };
+                match chosen {
+                    ActionTarget::Player(player) => {
+                        self.apply_player_damage(source, player, *amount);
+                    }
+                    ActionTarget::Permanent(permanent_id) => {
+                        self.apply_permanent_damage(source, permanent_id, *amount);
+                    }
+                    ActionTarget::StackSpell(_) => {}
+                }
+            }
+            Effect::CounterSpell { .. } => {
+                // Handled by execute_spell_effect — should not reach here.
+            }
+            Effect::ModifyUntilEot {
+                power_delta,
+                toughness_delta,
+            } => {
+                let Some(source_card) = source else { return };
+                let Some(perm_id) = self.state.card_to_permanent[source_card] else {
+                    return;
+                };
+                let Some(permanent) = self.state.permanents[perm_id].as_mut() else {
+                    return;
+                };
+                permanent.temp_power += power_delta;
+                permanent.temp_toughness += toughness_delta;
             }
         }
     }
@@ -194,7 +207,6 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
         };
-
         let card = permanent.card;
         self.move_card(card, ZoneType::Hand);
     }
@@ -206,14 +218,15 @@ impl Game {
             .position(|object| matches!(object, StackObject::Spell(spell) if spell.card == card))
     }
 
-    fn is_legal_target_for_bolt(&self, target: Target) -> bool {
-        match target {
-            Target::Player(player) => self.state.players.get(player.0).is_some(),
-            Target::Permanent(permanent_id) => {
+    /// Check whether a game-object Target is still legal for a given TargetSpec.
+    fn is_legal_target(&self, target: Target, spec: &TargetSpec) -> bool {
+        match (target, spec) {
+            (Target::Player(_), TargetSpec::CreatureOrPlayer) => true,
+            (Target::Permanent(perm_id), TargetSpec::CreatureOrPlayer | TargetSpec::Creature) => {
                 let Some(permanent) = self
                     .state
                     .permanents
-                    .get(permanent_id.0)
+                    .get(perm_id.0)
                     .and_then(|p| p.as_ref())
                 else {
                     return false;
@@ -221,7 +234,10 @@ impl Game {
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
                     && self.state.cards[permanent.card].types.is_creature()
             }
-            Target::StackSpell(_) => false,
+            (Target::StackSpell(card_id), TargetSpec::Spell) => {
+                self.find_spell_on_stack_index(card_id).is_some()
+            }
+            _ => false,
         }
     }
 }

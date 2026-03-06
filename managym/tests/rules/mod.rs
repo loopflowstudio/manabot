@@ -2,6 +2,7 @@ pub mod cr_103_game_start;
 pub mod cr_106_mana;
 pub mod cr_117_priority;
 pub mod cr_305_lands;
+pub mod cr_405_stack;
 pub mod cr_508_attackers;
 pub mod cr_509_blockers;
 pub mod cr_510_combat_damage;

@@ -100,6 +100,7 @@ class ActionSpaceEnum(IntEnum):
 class StackObjectKindEnum(IntEnum):
     SPELL = 0
     ACTIVATED_ABILITY = 1
+    TRIGGERED_ABILITY = 2
 
 class StackTargetKindEnum(IntEnum):
     PLAYER = 0

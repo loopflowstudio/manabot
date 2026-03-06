@@ -84,13 +84,15 @@ fn cr_405_counterspell_targets_stack_object() {
     s.pass_priority();
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
-    let stack_target = s
+    let bolt_card = s
         .game()
         .state
-        .zones
-        .stack_order()
-        .last()
-        .copied()
+        .stack_objects
+        .iter()
+        .find_map(|obj| match obj {
+            managym::state::stack_object::StackObject::Spell(spell) => Some(spell.card),
+            _ => None,
+        })
         .expect("bolt should be on stack");
-    assert!(s.choose_target(Target::StackSpell(stack_target)));
+    assert!(s.choose_target(Target::StackSpell(bolt_card)));
 }
