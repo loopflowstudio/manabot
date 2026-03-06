@@ -113,18 +113,26 @@ def _serialize_player(
     cards: list[managym.Card],
     permanents: list[managym.Permanent],
 ) -> dict[str, Any]:
-    cards_by_id = {int(card.id): card for card in cards}
-
     grouped_cards: dict[str, list[dict[str, Any]]] = {
         "HAND": [],
         "GRAVEYARD": [],
         "EXILE": [],
         "STACK": [],
     }
+    battlefield_cards: list[managym.Card] = []
     for card in cards:
         zone_name = _enum_name(ZoneEnum, card.zone)
-        if zone_name in grouped_cards:
+        if zone_name == "BATTLEFIELD":
+            battlefield_cards.append(card)
+        elif zone_name in grouped_cards:
             grouped_cards[zone_name].append(_serialize_card(card))
+
+    # Permanents and battlefield cards correspond 1:1 in order.
+    # Fall back to None if the lists don't align.
+    serialized_permanents = []
+    for i, permanent in enumerate(permanents):
+        card = battlefield_cards[i] if i < len(battlefield_cards) else None
+        serialized_permanents.append(_serialize_permanent(permanent, card))
 
     zone_counts = {
         _enum_name(ZoneEnum, index): int(count)
@@ -143,10 +151,7 @@ def _serialize_player(
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
         "stack": grouped_cards["STACK"],
-        "battlefield": [
-            _serialize_permanent(permanent, cards_by_id.get(int(permanent.id)))
-            for permanent in permanents
-        ],
+        "battlefield": serialized_permanents,
     }
 
 
