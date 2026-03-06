@@ -407,185 +407,291 @@ fn row_mut<'a, T>(
 }
 
 #[cfg(feature = "python")]
+fn typed_numpy_buffer<'py, T: Element>(
+    py: Python<'py>,
+    array: &'py Py<PyAny>,
+    key: &'static str,
+) -> PyResult<PyBuffer<T>> {
+    PyBuffer::<T>::get_bound(&array.bind(py))
+        .map_err(|err| PyTypeError::new_err(format!("invalid buffer '{key}': {err}")))
+}
+
+#[cfg(feature = "python")]
+struct ObservationFieldSlices<'a> {
+    agent_player: &'a mut [f32],
+    opponent_player: &'a mut [f32],
+    agent_cards: &'a mut [f32],
+    opponent_cards: &'a mut [f32],
+    agent_permanents: &'a mut [f32],
+    opponent_permanents: &'a mut [f32],
+    actions: &'a mut [f32],
+    action_focus: &'a mut [i32],
+    agent_player_valid: &'a mut [f32],
+    opponent_player_valid: &'a mut [f32],
+    agent_cards_valid: &'a mut [f32],
+    opponent_cards_valid: &'a mut [f32],
+    agent_permanents_valid: &'a mut [f32],
+    opponent_permanents_valid: &'a mut [f32],
+    actions_valid: &'a mut [f32],
+}
+
+#[cfg(feature = "python")]
+impl ObservationFieldSlices<'_> {
+    fn encoded_row_mut(
+        &mut self,
+        env_index: usize,
+        config: &ObservationEncoderConfig,
+    ) -> PyResult<EncodedObservationMut<'_>> {
+        Ok(EncodedObservationMut {
+            agent_player: row_mut(
+                &mut self.agent_player,
+                env_index,
+                PLAYER_DIM,
+                "agent_player",
+            )?,
+            opponent_player: row_mut(
+                &mut self.opponent_player,
+                env_index,
+                PLAYER_DIM,
+                "opponent_player",
+            )?,
+            agent_cards: row_mut(
+                &mut self.agent_cards,
+                env_index,
+                config.cards_len(),
+                "agent_cards",
+            )?,
+            opponent_cards: row_mut(
+                &mut self.opponent_cards,
+                env_index,
+                config.cards_len(),
+                "opponent_cards",
+            )?,
+            agent_permanents: row_mut(
+                &mut self.agent_permanents,
+                env_index,
+                config.permanents_len(),
+                "agent_permanents",
+            )?,
+            opponent_permanents: row_mut(
+                &mut self.opponent_permanents,
+                env_index,
+                config.permanents_len(),
+                "opponent_permanents",
+            )?,
+            actions: row_mut(
+                &mut self.actions,
+                env_index,
+                config.actions_len(),
+                "actions",
+            )?,
+            action_focus: row_mut(
+                &mut self.action_focus,
+                env_index,
+                config.action_focus_len(),
+                "action_focus",
+            )?,
+            agent_player_valid: row_mut(
+                &mut self.agent_player_valid,
+                env_index,
+                1,
+                "agent_player_valid",
+            )?,
+            opponent_player_valid: row_mut(
+                &mut self.opponent_player_valid,
+                env_index,
+                1,
+                "opponent_player_valid",
+            )?,
+            agent_cards_valid: row_mut(
+                &mut self.agent_cards_valid,
+                env_index,
+                config.max_cards_per_player,
+                "agent_cards_valid",
+            )?,
+            opponent_cards_valid: row_mut(
+                &mut self.opponent_cards_valid,
+                env_index,
+                config.max_cards_per_player,
+                "opponent_cards_valid",
+            )?,
+            agent_permanents_valid: row_mut(
+                &mut self.agent_permanents_valid,
+                env_index,
+                config.max_permanents_per_player,
+                "agent_permanents_valid",
+            )?,
+            opponent_permanents_valid: row_mut(
+                &mut self.opponent_permanents_valid,
+                env_index,
+                config.max_permanents_per_player,
+                "opponent_permanents_valid",
+            )?,
+            actions_valid: row_mut(
+                &mut self.actions_valid,
+                env_index,
+                config.max_actions,
+                "actions_valid",
+            )?,
+        })
+    }
+}
+
+#[cfg(feature = "python")]
+struct WriteBuffers<'a, 'py> {
+    fields: ObservationFieldSlices<'a>,
+    rewards: &'a mut [f64],
+    terminated: &'py Bound<'py, PyAny>,
+    truncated: &'py Bound<'py, PyAny>,
+}
+
+#[cfg(feature = "python")]
+impl WriteBuffers<'_, '_> {
+    fn encode_observation(
+        &mut self,
+        env_index: usize,
+        observation: &Observation,
+        config: &ObservationEncoderConfig,
+    ) -> PyResult<()> {
+        let out = self.fields.encoded_row_mut(env_index, config)?;
+        encode_into(observation, config, out).map_err(|err| PyValueError::new_err(err.to_string()))
+    }
+
+    fn write_step_state(
+        &mut self,
+        env_index: usize,
+        reward: f64,
+        terminated: bool,
+        truncated: bool,
+    ) -> PyResult<()> {
+        *self
+            .rewards
+            .get_mut(env_index)
+            .ok_or_else(|| PyValueError::new_err("reward buffer out of bounds"))? = reward;
+        self.terminated.set_item(env_index, terminated)?;
+        self.truncated.set_item(env_index, truncated)?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "python")]
+fn with_write_buffers<'py, R>(
+    py: Python<'py>,
+    buffers: &'py ObservationBuffers,
+    f: impl FnOnce(WriteBuffers<'_, 'py>) -> PyResult<R>,
+) -> PyResult<R> {
+    let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
+    let opponent_player_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
+    let agent_cards_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_cards, "agent_cards")?;
+    let opponent_cards_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.opponent_cards, "opponent_cards")?;
+    let agent_permanents_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.agent_permanents, "agent_permanents")?;
+    let opponent_permanents_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.opponent_permanents, "opponent_permanents")?;
+    let actions_buffer = typed_numpy_buffer::<f32>(py, &buffers.actions, "actions")?;
+    let action_focus_buffer = typed_numpy_buffer::<i32>(py, &buffers.action_focus, "action_focus")?;
+    let agent_player_valid_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.agent_player_valid, "agent_player_valid")?;
+    let opponent_player_valid_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.opponent_player_valid, "opponent_player_valid")?;
+    let agent_cards_valid_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.agent_cards_valid, "agent_cards_valid")?;
+    let opponent_cards_valid_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.opponent_cards_valid, "opponent_cards_valid")?;
+    let agent_permanents_valid_buffer = typed_numpy_buffer::<f32>(
+        py,
+        &buffers.agent_permanents_valid,
+        "agent_permanents_valid",
+    )?;
+    let opponent_permanents_valid_buffer = typed_numpy_buffer::<f32>(
+        py,
+        &buffers.opponent_permanents_valid,
+        "opponent_permanents_valid",
+    )?;
+    let actions_valid_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.actions_valid, "actions_valid")?;
+    let rewards_buffer = typed_numpy_buffer::<f64>(py, &buffers.rewards, "rewards")?;
+
+    let field_slices = ObservationFieldSlices {
+        agent_player: mutable_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
+        opponent_player: mutable_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?,
+        agent_cards: mutable_slice_from_buffer(py, &agent_cards_buffer, "agent_cards")?,
+        opponent_cards: mutable_slice_from_buffer(py, &opponent_cards_buffer, "opponent_cards")?,
+        agent_permanents: mutable_slice_from_buffer(
+            py,
+            &agent_permanents_buffer,
+            "agent_permanents",
+        )?,
+        opponent_permanents: mutable_slice_from_buffer(
+            py,
+            &opponent_permanents_buffer,
+            "opponent_permanents",
+        )?,
+        actions: mutable_slice_from_buffer(py, &actions_buffer, "actions")?,
+        action_focus: mutable_slice_from_buffer(py, &action_focus_buffer, "action_focus")?,
+        agent_player_valid: mutable_slice_from_buffer(
+            py,
+            &agent_player_valid_buffer,
+            "agent_player_valid",
+        )?,
+        opponent_player_valid: mutable_slice_from_buffer(
+            py,
+            &opponent_player_valid_buffer,
+            "opponent_player_valid",
+        )?,
+        agent_cards_valid: mutable_slice_from_buffer(
+            py,
+            &agent_cards_valid_buffer,
+            "agent_cards_valid",
+        )?,
+        opponent_cards_valid: mutable_slice_from_buffer(
+            py,
+            &opponent_cards_valid_buffer,
+            "opponent_cards_valid",
+        )?,
+        agent_permanents_valid: mutable_slice_from_buffer(
+            py,
+            &agent_permanents_valid_buffer,
+            "agent_permanents_valid",
+        )?,
+        opponent_permanents_valid: mutable_slice_from_buffer(
+            py,
+            &opponent_permanents_valid_buffer,
+            "opponent_permanents_valid",
+        )?,
+        actions_valid: mutable_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?,
+    };
+    let rewards = mutable_slice_from_buffer(py, &rewards_buffer, "rewards")?;
+
+    f(WriteBuffers {
+        fields: field_slices,
+        rewards,
+        terminated: buffers.terminated.bind(py),
+        truncated: buffers.truncated.bind(py),
+    })
+}
+
+#[cfg(feature = "python")]
 fn write_step_results_into_buffers(
     py: Python<'_>,
     buffers: &ObservationBuffers,
     config: &ObservationEncoderConfig,
     results: &[StepResult],
 ) -> PyResult<()> {
-    let agent_player_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_player.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'agent_player': {err}")))?;
-    let opponent_player_buffer = PyBuffer::<f32>::get_bound(&buffers.opponent_player.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'opponent_player': {err}")))?;
-    let agent_cards_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_cards.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'agent_cards': {err}")))?;
-    let opponent_cards_buffer = PyBuffer::<f32>::get_bound(&buffers.opponent_cards.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'opponent_cards': {err}")))?;
-    let agent_permanents_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_permanents.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'agent_permanents': {err}")))?;
-    let opponent_permanents_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_permanents.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_permanents': {err}"))
-        })?;
-    let actions_buffer = PyBuffer::<f32>::get_bound(&buffers.actions.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'actions': {err}")))?;
-    let action_focus_buffer = PyBuffer::<i32>::get_bound(&buffers.action_focus.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'action_focus': {err}")))?;
-    let agent_player_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.agent_player_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'agent_player_valid': {err}"))
-        })?;
-    let opponent_player_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_player_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_player_valid': {err}"))
-        })?;
-    let agent_cards_valid_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_cards_valid.bind(py))
-        .map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'agent_cards_valid': {err}"))
-        })?;
-    let opponent_cards_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_cards_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_cards_valid': {err}"))
-        })?;
-    let agent_permanents_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.agent_permanents_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'agent_permanents_valid': {err}"))
-        })?;
-    let opponent_permanents_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_permanents_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_permanents_valid': {err}"))
-        })?;
-    let actions_valid_buffer = PyBuffer::<f32>::get_bound(&buffers.actions_valid.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'actions_valid': {err}")))?;
-    let rewards_buffer = PyBuffer::<f64>::get_bound(&buffers.rewards.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'rewards': {err}")))?;
-
-    let mut agent_player = mutable_slice_from_buffer(py, &agent_player_buffer, "agent_player")?;
-    let mut opponent_player =
-        mutable_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?;
-    let mut agent_cards = mutable_slice_from_buffer(py, &agent_cards_buffer, "agent_cards")?;
-    let mut opponent_cards =
-        mutable_slice_from_buffer(py, &opponent_cards_buffer, "opponent_cards")?;
-    let mut agent_permanents =
-        mutable_slice_from_buffer(py, &agent_permanents_buffer, "agent_permanents")?;
-    let mut opponent_permanents =
-        mutable_slice_from_buffer(py, &opponent_permanents_buffer, "opponent_permanents")?;
-    let mut actions = mutable_slice_from_buffer(py, &actions_buffer, "actions")?;
-    let mut action_focus = mutable_slice_from_buffer(py, &action_focus_buffer, "action_focus")?;
-    let mut agent_player_valid =
-        mutable_slice_from_buffer(py, &agent_player_valid_buffer, "agent_player_valid")?;
-    let mut opponent_player_valid =
-        mutable_slice_from_buffer(py, &opponent_player_valid_buffer, "opponent_player_valid")?;
-    let mut agent_cards_valid =
-        mutable_slice_from_buffer(py, &agent_cards_valid_buffer, "agent_cards_valid")?;
-    let mut opponent_cards_valid =
-        mutable_slice_from_buffer(py, &opponent_cards_valid_buffer, "opponent_cards_valid")?;
-    let mut agent_permanents_valid =
-        mutable_slice_from_buffer(py, &agent_permanents_valid_buffer, "agent_permanents_valid")?;
-    let mut opponent_permanents_valid = mutable_slice_from_buffer(
-        py,
-        &opponent_permanents_valid_buffer,
-        "opponent_permanents_valid",
-    )?;
-    let mut actions_valid = mutable_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?;
-    let rewards = mutable_slice_from_buffer(py, &rewards_buffer, "rewards")?;
-    let terminated = buffers.terminated.bind(py);
-    let truncated = buffers.truncated.bind(py);
-
-    for (env_index, result) in results.iter().enumerate() {
-        let out = EncodedObservationMut {
-            agent_player: row_mut(&mut agent_player, env_index, PLAYER_DIM, "agent_player")?,
-            opponent_player: row_mut(
-                &mut opponent_player,
+    with_write_buffers(py, buffers, |mut write_buffers| {
+        for (env_index, result) in results.iter().enumerate() {
+            write_buffers.encode_observation(env_index, &result.obs, config)?;
+            write_buffers.write_step_state(
                 env_index,
-                PLAYER_DIM,
-                "opponent_player",
-            )?,
-            agent_cards: row_mut(
-                &mut agent_cards,
-                env_index,
-                config.cards_len(),
-                "agent_cards",
-            )?,
-            opponent_cards: row_mut(
-                &mut opponent_cards,
-                env_index,
-                config.cards_len(),
-                "opponent_cards",
-            )?,
-            agent_permanents: row_mut(
-                &mut agent_permanents,
-                env_index,
-                config.permanents_len(),
-                "agent_permanents",
-            )?,
-            opponent_permanents: row_mut(
-                &mut opponent_permanents,
-                env_index,
-                config.permanents_len(),
-                "opponent_permanents",
-            )?,
-            actions: row_mut(&mut actions, env_index, config.actions_len(), "actions")?,
-            action_focus: row_mut(
-                &mut action_focus,
-                env_index,
-                config.action_focus_len(),
-                "action_focus",
-            )?,
-            agent_player_valid: row_mut(
-                &mut agent_player_valid,
-                env_index,
-                1,
-                "agent_player_valid",
-            )?,
-            opponent_player_valid: row_mut(
-                &mut opponent_player_valid,
-                env_index,
-                1,
-                "opponent_player_valid",
-            )?,
-            agent_cards_valid: row_mut(
-                &mut agent_cards_valid,
-                env_index,
-                config.max_cards_per_player,
-                "agent_cards_valid",
-            )?,
-            opponent_cards_valid: row_mut(
-                &mut opponent_cards_valid,
-                env_index,
-                config.max_cards_per_player,
-                "opponent_cards_valid",
-            )?,
-            agent_permanents_valid: row_mut(
-                &mut agent_permanents_valid,
-                env_index,
-                config.max_permanents_per_player,
-                "agent_permanents_valid",
-            )?,
-            opponent_permanents_valid: row_mut(
-                &mut opponent_permanents_valid,
-                env_index,
-                config.max_permanents_per_player,
-                "opponent_permanents_valid",
-            )?,
-            actions_valid: row_mut(
-                &mut actions_valid,
-                env_index,
-                config.max_actions,
-                "actions_valid",
-            )?,
-        };
-        encode_into(&result.obs, config, out)
-            .map_err(|err| PyValueError::new_err(err.to_string()))?;
-
-        *rewards
-            .get_mut(env_index)
-            .ok_or_else(|| PyValueError::new_err("reward buffer out of bounds"))? = result.reward;
-        terminated.set_item(env_index, result.terminated)?;
-        truncated.set_item(env_index, result.truncated)?;
-    }
-
-    Ok(())
+                result.reward,
+                result.terminated,
+                result.truncated,
+            )?;
+        }
+        Ok(())
+    })
 }
 
 #[cfg(feature = "python")]
@@ -595,176 +701,11 @@ fn write_reset_results_into_buffers(
     config: &ObservationEncoderConfig,
     results: &[(Observation, InfoDict)],
 ) -> PyResult<()> {
-    let agent_player_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_player.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'agent_player': {err}")))?;
-    let opponent_player_buffer = PyBuffer::<f32>::get_bound(&buffers.opponent_player.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'opponent_player': {err}")))?;
-    let agent_cards_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_cards.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'agent_cards': {err}")))?;
-    let opponent_cards_buffer = PyBuffer::<f32>::get_bound(&buffers.opponent_cards.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'opponent_cards': {err}")))?;
-    let agent_permanents_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_permanents.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'agent_permanents': {err}")))?;
-    let opponent_permanents_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_permanents.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_permanents': {err}"))
-        })?;
-    let actions_buffer = PyBuffer::<f32>::get_bound(&buffers.actions.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'actions': {err}")))?;
-    let action_focus_buffer = PyBuffer::<i32>::get_bound(&buffers.action_focus.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'action_focus': {err}")))?;
-    let agent_player_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.agent_player_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'agent_player_valid': {err}"))
-        })?;
-    let opponent_player_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_player_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_player_valid': {err}"))
-        })?;
-    let agent_cards_valid_buffer = PyBuffer::<f32>::get_bound(&buffers.agent_cards_valid.bind(py))
-        .map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'agent_cards_valid': {err}"))
-        })?;
-    let opponent_cards_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_cards_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_cards_valid': {err}"))
-        })?;
-    let agent_permanents_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.agent_permanents_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'agent_permanents_valid': {err}"))
-        })?;
-    let opponent_permanents_valid_buffer =
-        PyBuffer::<f32>::get_bound(&buffers.opponent_permanents_valid.bind(py)).map_err(|err| {
-            PyTypeError::new_err(format!("invalid buffer 'opponent_permanents_valid': {err}"))
-        })?;
-    let actions_valid_buffer = PyBuffer::<f32>::get_bound(&buffers.actions_valid.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'actions_valid': {err}")))?;
-    let rewards_buffer = PyBuffer::<f64>::get_bound(&buffers.rewards.bind(py))
-        .map_err(|err| PyTypeError::new_err(format!("invalid buffer 'rewards': {err}")))?;
-
-    let mut agent_player = mutable_slice_from_buffer(py, &agent_player_buffer, "agent_player")?;
-    let mut opponent_player =
-        mutable_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?;
-    let mut agent_cards = mutable_slice_from_buffer(py, &agent_cards_buffer, "agent_cards")?;
-    let mut opponent_cards =
-        mutable_slice_from_buffer(py, &opponent_cards_buffer, "opponent_cards")?;
-    let mut agent_permanents =
-        mutable_slice_from_buffer(py, &agent_permanents_buffer, "agent_permanents")?;
-    let mut opponent_permanents =
-        mutable_slice_from_buffer(py, &opponent_permanents_buffer, "opponent_permanents")?;
-    let mut actions = mutable_slice_from_buffer(py, &actions_buffer, "actions")?;
-    let mut action_focus = mutable_slice_from_buffer(py, &action_focus_buffer, "action_focus")?;
-    let mut agent_player_valid =
-        mutable_slice_from_buffer(py, &agent_player_valid_buffer, "agent_player_valid")?;
-    let mut opponent_player_valid =
-        mutable_slice_from_buffer(py, &opponent_player_valid_buffer, "opponent_player_valid")?;
-    let mut agent_cards_valid =
-        mutable_slice_from_buffer(py, &agent_cards_valid_buffer, "agent_cards_valid")?;
-    let mut opponent_cards_valid =
-        mutable_slice_from_buffer(py, &opponent_cards_valid_buffer, "opponent_cards_valid")?;
-    let mut agent_permanents_valid =
-        mutable_slice_from_buffer(py, &agent_permanents_valid_buffer, "agent_permanents_valid")?;
-    let mut opponent_permanents_valid = mutable_slice_from_buffer(
-        py,
-        &opponent_permanents_valid_buffer,
-        "opponent_permanents_valid",
-    )?;
-    let mut actions_valid = mutable_slice_from_buffer(py, &actions_valid_buffer, "actions_valid")?;
-    let rewards = mutable_slice_from_buffer(py, &rewards_buffer, "rewards")?;
-    let terminated = buffers.terminated.bind(py);
-    let truncated = buffers.truncated.bind(py);
-
-    for (env_index, (obs, _info)) in results.iter().enumerate() {
-        let out = EncodedObservationMut {
-            agent_player: row_mut(&mut agent_player, env_index, PLAYER_DIM, "agent_player")?,
-            opponent_player: row_mut(
-                &mut opponent_player,
-                env_index,
-                PLAYER_DIM,
-                "opponent_player",
-            )?,
-            agent_cards: row_mut(
-                &mut agent_cards,
-                env_index,
-                config.cards_len(),
-                "agent_cards",
-            )?,
-            opponent_cards: row_mut(
-                &mut opponent_cards,
-                env_index,
-                config.cards_len(),
-                "opponent_cards",
-            )?,
-            agent_permanents: row_mut(
-                &mut agent_permanents,
-                env_index,
-                config.permanents_len(),
-                "agent_permanents",
-            )?,
-            opponent_permanents: row_mut(
-                &mut opponent_permanents,
-                env_index,
-                config.permanents_len(),
-                "opponent_permanents",
-            )?,
-            actions: row_mut(&mut actions, env_index, config.actions_len(), "actions")?,
-            action_focus: row_mut(
-                &mut action_focus,
-                env_index,
-                config.action_focus_len(),
-                "action_focus",
-            )?,
-            agent_player_valid: row_mut(
-                &mut agent_player_valid,
-                env_index,
-                1,
-                "agent_player_valid",
-            )?,
-            opponent_player_valid: row_mut(
-                &mut opponent_player_valid,
-                env_index,
-                1,
-                "opponent_player_valid",
-            )?,
-            agent_cards_valid: row_mut(
-                &mut agent_cards_valid,
-                env_index,
-                config.max_cards_per_player,
-                "agent_cards_valid",
-            )?,
-            opponent_cards_valid: row_mut(
-                &mut opponent_cards_valid,
-                env_index,
-                config.max_cards_per_player,
-                "opponent_cards_valid",
-            )?,
-            agent_permanents_valid: row_mut(
-                &mut agent_permanents_valid,
-                env_index,
-                config.max_permanents_per_player,
-                "agent_permanents_valid",
-            )?,
-            opponent_permanents_valid: row_mut(
-                &mut opponent_permanents_valid,
-                env_index,
-                config.max_permanents_per_player,
-                "opponent_permanents_valid",
-            )?,
-            actions_valid: row_mut(
-                &mut actions_valid,
-                env_index,
-                config.max_actions,
-                "actions_valid",
-            )?,
-        };
-        encode_into(obs, config, out).map_err(|err| PyValueError::new_err(err.to_string()))?;
-
-        *rewards
-            .get_mut(env_index)
-            .ok_or_else(|| PyValueError::new_err("reward buffer out of bounds"))? = 0.0;
-        terminated.set_item(env_index, false)?;
-        truncated.set_item(env_index, false)?;
-    }
-
-    Ok(())
+    with_write_buffers(py, buffers, |mut write_buffers| {
+        for (env_index, (obs, _)) in results.iter().enumerate() {
+            write_buffers.encode_observation(env_index, obs, config)?;
+            write_buffers.write_step_state(env_index, 0.0, false, false)?;
+        }
+        Ok(())
+    })
 }

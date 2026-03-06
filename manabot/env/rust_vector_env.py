@@ -110,38 +110,36 @@ class RustVectorEnv:
         self._terminated_cpu_view = torch.from_numpy(self._buffers["terminated"])
         self._truncated_cpu_view = torch.from_numpy(self._buffers["truncated"])
 
-        if self.device.type == "cpu":
-            self._obs_tensors = {
-                key: (
-                    self._obs_cpu_views[key]
-                    if key != "action_focus"
-                    else torch.empty_like(self._obs_cpu_views[key], dtype=torch.float32)
-                )
-                for key in self._obs_keys
-            }
-            self._terminated_tensor = self._terminated_cpu_view
-            self._truncated_tensor = self._truncated_cpu_view
-        else:
-            self._obs_tensors = {
-                key: torch.empty(
-                    self._obs_cpu_views[key].shape,
-                    dtype=torch.float32
-                    if key == "action_focus"
-                    else self._obs_cpu_views[key].dtype,
+        self._obs_tensors = {}
+        for key in self._obs_keys:
+            cpu_view = self._obs_cpu_views[key]
+            if self.device.type == "cpu" and key != "action_focus":
+                self._obs_tensors[key] = cpu_view
+            else:
+                self._obs_tensors[key] = torch.empty(
+                    cpu_view.shape,
+                    dtype=torch.float32 if key == "action_focus" else cpu_view.dtype,
                     device=self.device,
                 )
-                for key in self._obs_keys
-            }
-            self._terminated_tensor = torch.empty(
+
+        self._terminated_tensor = (
+            self._terminated_cpu_view
+            if self.device.type == "cpu"
+            else torch.empty(
                 self.num_envs,
                 dtype=torch.bool,
                 device=self.device,
             )
-            self._truncated_tensor = torch.empty(
+        )
+        self._truncated_tensor = (
+            self._truncated_cpu_view
+            if self.device.type == "cpu"
+            else torch.empty(
                 self.num_envs,
                 dtype=torch.bool,
                 device=self.device,
             )
+        )
 
         self._reward_tensor = torch.empty(
             self.num_envs,
@@ -151,15 +149,16 @@ class RustVectorEnv:
 
     def _sync_tensors_from_buffers(self) -> None:
         for key in self._obs_keys:
-            if key == "action_focus":
-                self._obs_tensors[key].copy_(self._obs_cpu_views[key])
-            elif self.device.type != "cpu":
-                self._obs_tensors[key].copy_(self._obs_cpu_views[key])
+            src = self._obs_cpu_views[key]
+            dst = self._obs_tensors[key]
+            if dst.data_ptr() != src.data_ptr():
+                dst.copy_(src)
 
         self._reward_tensor.copy_(self._reward_cpu_view)
 
-        if self.device.type != "cpu":
+        if self._terminated_tensor.data_ptr() != self._terminated_cpu_view.data_ptr():
             self._terminated_tensor.copy_(self._terminated_cpu_view)
+        if self._truncated_tensor.data_ptr() != self._truncated_cpu_view.data_ptr():
             self._truncated_tensor.copy_(self._truncated_cpu_view)
 
     def _apply_reward_policy(self) -> None:
