@@ -9,29 +9,29 @@
   import type { Trace, TraceSummary } from '$lib/types';
 
   const replayStore = createReplayStore();
-  let playbackTimer: ReturnType<typeof setInterval> | null = null;
+
+  function clearPlaybackTimer(): void {
+    if (activeTimer !== null) {
+      clearInterval(activeTimer);
+      activeTimer = null;
+    }
+  }
+
+  let activeTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
     void loadTraces();
   });
 
-  onDestroy(() => {
-    if (playbackTimer !== null) {
-      clearInterval(playbackTimer);
-    }
-  });
+  onDestroy(clearPlaybackTimer);
 
-  $: {
-    if (playbackTimer !== null) {
-      clearInterval(playbackTimer);
-      playbackTimer = null;
-    }
-
-    if (replayStore.playing) {
-      playbackTimer = setInterval(() => {
-        replayStore.tick();
-      }, Math.max(1000 / replayStore.speed, 100));
-    }
+  $: if (replayStore.playing) {
+    clearPlaybackTimer();
+    activeTimer = setInterval(() => {
+      replayStore.tick();
+    }, Math.max(1000 / replayStore.speed, 100));
+  } else {
+    clearPlaybackTimer();
   }
 
   $: currentFrame = replayStore.frames[replayStore.currentFrameIndex] ?? null;
