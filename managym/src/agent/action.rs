@@ -1,4 +1,7 @@
-use crate::state::game_object::{CardId, ObjectId, PermanentId, PlayerId, Target};
+use crate::state::{
+    game_object::{CardId, ObjectId, PermanentId, PlayerId},
+    target::Target,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(i32)]
@@ -21,10 +24,6 @@ pub enum Action {
         player: PlayerId,
         card: CardId,
     },
-    ChooseTarget {
-        player: PlayerId,
-        target: Target,
-    },
     PassPriority {
         player: PlayerId,
     },
@@ -38,6 +37,10 @@ pub enum Action {
         blocker: PermanentId,
         attacker: Option<PermanentId>,
     },
+    ChooseTarget {
+        player: PlayerId,
+        target: Target,
+    },
 }
 
 impl Action {
@@ -45,10 +48,10 @@ impl Action {
         match self {
             Action::PlayLand { .. } => ActionType::PriorityPlayLand,
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
-            Action::ChooseTarget { .. } => ActionType::ChooseTarget,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,
             Action::DeclareAttacker { .. } => ActionType::DeclareAttacker,
             Action::DeclareBlocker { .. } => ActionType::DeclareBlocker,
+            Action::ChooseTarget { .. } => ActionType::ChooseTarget,
         }
     }
 }

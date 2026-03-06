@@ -33,6 +33,7 @@ impl CardRegistry {
     pub fn register_all_cards(&mut self) {
         self.register_basic_lands();
         self.register_alpha();
+        self.register_visions();
     }
 
     pub fn register_card(&mut self, definition: CardDefinition) {
@@ -105,5 +106,6 @@ impl CardRegistry {
             text_box: "Counter target spell.".to_string(),
             ..Default::default()
         });
+
     }
 }
