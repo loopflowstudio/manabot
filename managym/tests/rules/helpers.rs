@@ -16,8 +16,23 @@ use managym::{
 
 const MAX_SCENARIO_ACTIONS: usize = 20_000;
 
+fn deck(entries: &[(&str, usize)]) -> BTreeMap<String, usize> {
+    entries
+        .iter()
+        .map(|(name, qty)| ((*name).to_string(), *qty))
+        .collect()
+}
+
+fn mono_land_deck(land_name: &str) -> BTreeMap<String, usize> {
+    deck(&[(land_name, 40)])
+}
+
+fn land_plus_spell_deck(land_name: &str, spell_name: &str) -> BTreeMap<String, usize> {
+    deck(&[(land_name, 24), (spell_name, 16)])
+}
+
 pub fn mountain_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Mountain".to_string(), 40)])
+    mono_land_deck("Mountain")
 }
 
 pub fn island_deck() -> BTreeMap<String, usize> {
@@ -25,7 +40,7 @@ pub fn island_deck() -> BTreeMap<String, usize> {
 }
 
 pub fn forest_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Forest".to_string(), 40)])
+    mono_land_deck("Forest")
 }
 
 pub fn forest_elves_deck() -> BTreeMap<String, usize> {
@@ -35,8 +50,15 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
     ])
 }
 
+pub fn bolt_deck() -> BTreeMap<String, usize> {
+    land_plus_spell_deck("Mountain", "Lightning Bolt")
+}
+
+pub fn counterspell_deck() -> BTreeMap<String, usize> {
+    land_plus_spell_deck("Island", "Counterspell")
+}
 pub fn ogre_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Mountain".to_string(), 24), ("Grey Ogre".to_string(), 16)])
+    land_plus_spell_deck("Mountain", "Grey Ogre")
 }
 
 pub fn ogre_only_deck() -> BTreeMap<String, usize> {
@@ -48,73 +70,55 @@ pub fn manowar_deck() -> BTreeMap<String, usize> {
 }
 
 pub fn wind_drake_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Island".to_string(), 24), ("Wind Drake".to_string(), 16)])
+    land_plus_spell_deck("Island", "Wind Drake")
 }
 
 pub fn giant_spider_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Forest".to_string(), 24), ("Giant Spider".to_string(), 16)])
+    land_plus_spell_deck("Forest", "Giant Spider")
 }
 
 pub fn raging_goblin_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Mountain".to_string(), 24),
-        ("Raging Goblin".to_string(), 16),
-    ])
+    land_plus_spell_deck("Mountain", "Raging Goblin")
 }
 
 pub fn serra_angel_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Plains".to_string(), 24), ("Serra Angel".to_string(), 16)])
+    land_plus_spell_deck("Plains", "Serra Angel")
 }
 
 pub fn typhoid_rats_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Swamp".to_string(), 24), ("Typhoid Rats".to_string(), 16)])
+    land_plus_spell_deck("Swamp", "Typhoid Rats")
 }
 
 pub fn war_mammoth_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Forest".to_string(), 24), ("War Mammoth".to_string(), 16)])
+    land_plus_spell_deck("Forest", "War Mammoth")
 }
 
 pub fn wall_of_stone_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Mountain".to_string(), 24),
-        ("Wall of Stone".to_string(), 16),
-    ])
+    land_plus_spell_deck("Mountain", "Wall of Stone")
 }
 
 pub fn boggart_brute_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Mountain".to_string(), 24),
-        ("Boggart Brute".to_string(), 16),
-    ])
+    land_plus_spell_deck("Mountain", "Boggart Brute")
 }
 
 pub fn youthful_knight_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Plains".to_string(), 24),
-        ("Youthful Knight".to_string(), 16),
-    ])
+    land_plus_spell_deck("Plains", "Youthful Knight")
 }
 
 pub fn fencing_ace_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Plains".to_string(), 24), ("Fencing Ace".to_string(), 16)])
+    land_plus_spell_deck("Plains", "Fencing Ace")
 }
 
 pub fn hawk_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Plains".to_string(), 24),
-        ("Healer's Hawk".to_string(), 16),
-    ])
+    land_plus_spell_deck("Plains", "Healer's Hawk")
 }
 
 pub fn craw_wurm_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Forest".to_string(), 24), ("Craw Wurm".to_string(), 16)])
+    land_plus_spell_deck("Forest", "Craw Wurm")
 }
 
 pub fn shivan_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([
-        ("Mountain".to_string(), 24),
-        ("Shivan Dragon".to_string(), 16),
-    ])
+    land_plus_spell_deck("Mountain", "Shivan Dragon")
 }
 
 pub fn empty_deck() -> BTreeMap<String, usize> {
