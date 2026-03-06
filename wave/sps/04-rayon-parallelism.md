@@ -2,51 +2,94 @@
 
 ## Finish line
 
-`VectorEnv::step()` steps N games in parallel using Rayon. GIL is
-released during the parallel section. Linear scaling up to available
-cores.
+`VectorEnv::step_into_buffers()` steps N games in parallel using Rayon.
+GIL is released during the parallel section. Linear scaling up to
+available cores.
+
+## Context from sprint 03
+
+Sprint 03 built zero-copy buffer writes. Key details that affect this sprint:
+
+- **Buffer access uses `pyo3::buffer::PyBuffer`** (not the `rust-numpy` crate,
+  which was unavailable in the sandboxed build). `ObservationBuffers` stores
+  `Py<PyAny>` references. `with_write_buffers()` acquires `PyBuffer` handles
+  and creates `&mut [f32]` slices via `mutable_slice_from_buffer()`.
+
+- **GIL is NOT released during stepping.** The current implementation holds the
+  GIL for both game stepping and buffer encoding. `Python::allow_threads`
+  requires the closure to be `Ungil` (i.e. `Send`), but `MutexGuard<VectorEnv>`
+  is not `Send`. Sprint 03 works around this by `drop(env)` before encoding,
+  but stepping itself still holds the GIL.
+
+- **Buffer write path**: `step_into_buffers` → lock env → `env.step(&actions)`
+  → drop lock → `write_step_results_into_buffers` → `with_write_buffers` →
+  `encode_into` per env. The encoding loop is sequential over envs.
+
+- **`ObservationFieldSlices`** holds `&mut [f32]` / `&mut [i32]` for all 15
+  observation fields. `encoded_row_mut()` returns an `EncodedObservationMut`
+  pointing into the appropriate slice for a given env index.
+
+- **Key files**: `managym/src/python/vector_env_bindings.rs` (buffer protocol),
+  `manabot/env/rust_vector_env.py` (Python wrapper).
 
 ## Changes
 
-### 1. Rayon integration
+### 1. Restructure ownership for GIL release
+
+The `Mutex<VectorEnv>` pattern prevents `allow_threads` because
+`MutexGuard` is not `Send`. Options:
+
+- **Extract games into a `Vec` before `allow_threads`**: Lock, take the
+  games vec out (replace with empty), release lock, step in
+  `allow_threads`, put games back.
+- **Use `UnsafeCell` or raw pointer**: More complex but avoids the
+  lock/unlock dance. Document safety invariant (single-threaded access
+  from Python).
+- **Remove the `Mutex` entirely**: `PyVectorEnv` is `#[pyclass]` with
+  `&mut self` methods — PyO3 already guarantees exclusive access. The
+  Mutex may be unnecessary.
+
+Pick the simplest approach that compiles and is safe.
+
+### 2. Rayon integration
 
 Add `rayon` dependency to `managym/Cargo.toml`.
 
 ```rust
-fn step_into_buffers(&mut self, actions: &[i64], /* buffer ptrs */) {
-    // Each game writes to its own slice — no synchronization needed.
-    self.envs
-        .par_iter_mut()
-        .zip(actions.par_iter())
-        .enumerate()
-        .for_each(|(i, (env, &action))| {
-            let result = env.step(action);
-            // Write observation into buffer[i] slice
-            encode_into_buffer(result, buffer_slice(i));
-        });
-}
+// Inside allow_threads:
+// Step all games in parallel
+self.envs
+    .par_iter_mut()
+    .zip(actions.par_iter())
+    .for_each(|(env, &action)| {
+        env.step(action);
+    });
 ```
 
-### 2. GIL release
+Game stepping is embarrassingly parallel — each game is independent.
 
-PyO3's `py.allow_threads(|| { ... })` around the Rayon parallel
-section. The GIL is held only for the PyO3 boundary crossing, not
-during game stepping.
+### 3. Buffer writes after parallel stepping
 
-### 3. Buffer safety
+Two options for encoding after parallel stepping:
 
-Each game writes to a disjoint slice of the output buffer. No mutex
-needed. The buffer pointers are `Send` (raw `*mut f32` with known
-disjoint ranges).
+- **Sequential encoding (simpler)**: Step all games in parallel (GIL
+  released), then encode sequentially with GIL held (current pattern).
+  This parallelizes the expensive part (game stepping) without changing
+  the buffer write path.
 
-Wrap the raw pointer + offset in a `BufferSlice` struct that
-implements `Send` and documents the safety invariant.
+- **Parallel encoding (more complex)**: Use `SendSlice` wrappers around
+  raw pointers to make buffer slices `Send`, then encode in the same
+  Rayon parallel section. Requires `unsafe` for the pointer wrappers
+  but buffer slices are disjoint per env.
+
+Start with sequential encoding. Profile to see if encoding is a
+bottleneck before adding parallel encoding complexity.
 
 ### 4. Thread count configuration
 
-Default to `num_cpus::get()` or a configurable value. For training
-on machines with many cores, may want to limit Rayon threads to
-leave room for PyTorch.
+Rayon respects `RAYON_NUM_THREADS` env var natively. No code needed
+for configuration. For training on many-core machines, users can set
+this to leave room for PyTorch.
 
 ## Measurement
 

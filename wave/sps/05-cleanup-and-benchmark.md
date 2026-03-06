@@ -5,6 +5,16 @@
 `AsyncVectorEnv` path removed. `RustVectorEnv` is the only env
 backend. Full benchmark published. Verification ladder passes.
 
+## Context from previous sprints
+
+- `RustVectorEnv` (`manabot/env/rust_vector_env.py`) uses zero-copy buffers
+  via `set_buffers()` / `step_into_buffers()` / `reset_all_into_buffers()`.
+- The compat path (`VectorEnv.step()` / `reset_all()`) still exists in
+  `managym/src/python/vector_env_bindings.rs` — returns `PyObservation` +
+  info dicts. Used by some tests.
+- `get_last_info()` provides debug/eval info access outside the hot path.
+- Python `ObservationSpace.encode()` still exists for parity testing.
+
 ## Changes
 
 ### 1. Remove AsyncVectorEnv path

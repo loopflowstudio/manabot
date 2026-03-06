@@ -49,8 +49,8 @@ dead code and publishes final numbers.
 ## Goals
 
 1. Rust VectorEnv that owns N games and steps them in one call (done)
-2. Rust-side observation encoding that matches Python's output exactly
-3. Zero-copy buffer writes — Rust writes directly into Python numpy arrays
+2. Rust-side observation encoding that matches Python's output exactly (done)
+3. Zero-copy buffer writes — Rust writes directly into Python numpy arrays (done)
 4. Rayon parallelism for stepping games within a single Rust call
 5. 10x env-only SPS improvement on same hardware
 
