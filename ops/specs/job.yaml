@@ -3,5 +3,5 @@ region: us-west-2
 disk_gb: 50
 spot: true
 max_spot_price: "1.50"
-ami: ami-0233d2606cf2ca76c
+ami: ami-09078d0c6c4372f0d
 key_name: null
