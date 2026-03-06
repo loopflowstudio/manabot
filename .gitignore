@@ -12,3 +12,4 @@ target/
 .lf/prompts/
 .venv/
 .uv-cache/
+gui/traces/*.json

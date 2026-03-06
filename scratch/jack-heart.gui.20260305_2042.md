@@ -8,7 +8,7 @@ Who benefits: developers debugging card behavior, anyone wanting to play against
 
 ## Approach
 
-FastAPI WebSocket server that wraps `managym.Env` directly (not the training wrappers). One WebSocket connection = one game session. The server auto-plays villain turns and sends observations only when it's the hero's turn to act (or on game over). Every game is recorded as a trace (JSON).
+FastAPI WebSocket server that wraps `managym.Env` directly (not the training wrappers). One WebSocket connection = one game session. The server auto-plays villain turns and sends observations only when it's the hero's turn to act (or on game over). Every game is recorded as a trace (JSON), including each internal action event (hero + villain) for high-fidelity replay/debugging.
 
 ### Architecture
 
@@ -30,23 +30,50 @@ gui/
   villain.py        # passive_policy, random_policy (operate on raw obs)
 tests/gui/
   test_server.py    # WebSocket integration tests
+  test_trace_api.py # Replay API integration tests
 ```
 
 ### Rust change: expose card names
 
-The PyO3 `Card` binding exposes `registry_key: int` but not `name: str`. The Rust `Card` struct has `name: String`. Add `pub name: String` to `PyCard` in `bindings.rs` — ~5 lines of Rust. Without this, the GUI can only show card IDs, which is useless for human play.
+The PyO3 `Card` binding exposes `registry_key: int` but not `name: str`. The Rust `Card` struct has `name: String`. Add `name` end-to-end in the observation model:
 
-Also add `name` to the `toJSON()` card serialization for trace readability.
+- `managym/src/agent/observation.rs` (`CardData` + `card_json`)
+- `managym/src/python/bindings.rs` (`PyCard` + conversion + `toJSON()`)
+- `managym/__init__.pyi` (`Card.name: str`)
+
+Without this, the GUI can only show card IDs, which is useless for human play.
 
 ### Data flow
 
 1. Client sends `{"type": "new_game", "config": {...}}`
 2. Server creates `managym.Env`, calls `env.reset([hero_config, villain_config])`
 3. If villain acts first, auto-play villain until hero's turn
-4. Send `{"type": "observation", ...}` with serialized game state + available actions
-5. Client sends `{"type": "action", "index": N}`
-6. Server calls `env.step(N)`, auto-plays villain, sends next observation
-7. On game over, send `{"type": "game_over", ...}`, save trace
+4. Record every internal engine step in trace events (including villain auto-steps)
+5. Send `{"type": "observation", ...}` with serialized game state + available actions
+6. Client sends `{"type": "action", "index": N}`
+7. Server calls `env.step(N)`, auto-plays villain, emits next hero decision point
+8. On game over, send `{"type": "game_over", ...}`, finalize trace and save
+
+Live client updates remain hero-only. Event-level fidelity is trace-only (for replay/debug).
+
+### Reliability/safety constraints
+
+- Reject actions when no active session exists, and when index is out of range.
+- Auto-play loop uses a hard step cap per request (fails with explicit error instead of infinite loop).
+- On disconnect: close env, save partial trace with `end_reason="disconnect"`.
+- Server-side exception boundary always sends `{"type":"error"}` before closing socket.
+
+### Trace fidelity model
+
+Trace captures one event per engine step:
+
+- `actor`: `"hero"` or `"villain"`
+- pre-step observation + actions
+- selected action index (+ description snapshot)
+- immediate reward from `env.step`
+- post-step observation
+
+This preserves villain decisions and intermediate combat/stack transitions that are invisible in hero-only snapshots.
 
 ### Villain policies
 
@@ -78,8 +105,8 @@ def serialize_observation(obs: managym.Observation) -> dict:
         "won": obs.won,
         "turn": {
             "turn_number": obs.turn.turn_number,
-            "phase": PhaseEnum(obs.turn.phase).name,
-            "step": StepEnum(obs.turn.step).name,
+            "phase": PhaseEnum(int(obs.turn.phase)).name,
+            "step": StepEnum(int(obs.turn.step)).name,
             "active_player_id": obs.turn.active_player_id,
         },
         "agent": serialize_player(obs.agent, obs.agent_cards, obs.agent_permanents),
@@ -94,13 +121,15 @@ def describe_actions(obs: managym.Observation) -> list[dict]:
         card_name = card_names.get(action.focus[0]) if action.focus else None
         results.append({
             "index": i,
-            "type": ActionEnum(action.action_type).name,
+            "type": ActionEnum(int(action.action_type)).name,
             "card": card_name,
             "focus": list(action.focus),
             "description": _format_action(action, card_name),
         })
     return results
 ```
+
+Use Python `IntEnum`s from `manabot.env.observation` for naming (`PhaseEnum`, `StepEnum`, `ActionEnum`). PyO3 enum objects do not expose `.name`.
 
 ### Trace format
 
@@ -113,21 +142,47 @@ class GameConfig:
     seed: int | None = None
 
 @dataclass
-class TraceStep:
-    observation: dict       # serialized observation
-    actions: list[dict]     # available actions with descriptions
-    action: int | None      # action taken (None for final obs)
-    reward: float | None
+class TraceEvent:
+    actor: str              # "hero" | "villain"
+    pre_observation: dict
+    actions: list[dict]
+    action: int
+    action_description: str
+    reward: float
+    post_observation: dict
 
 @dataclass
 class Trace:
     config: GameConfig
-    steps: list[TraceStep]
+    events: list[TraceEvent]
+    final_observation: dict
     winner: int | None      # 0 = hero, 1 = villain, None = draw/truncated
+    end_reason: str          # "game_over" | "disconnect" | "error"
     timestamp: str          # ISO 8601
 ```
 
 Traces saved as `gui/traces/{timestamp}_{hero_vs_villain}.json`.
+
+### Replay API (included now)
+
+```python
+@app.get("/api/traces")
+async def list_traces() -> list[dict]:
+    # [{"id","timestamp","winner","end_reason","num_events"}]
+
+@app.get("/api/traces/{trace_id}")
+async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict:
+    # redacted trace by default; full trace when reveal_hidden=true
+```
+
+Trace ID is filename stem. Endpoints are read-only and local-file backed (`gui/traces/`).
+Reject path traversal by requiring `trace_id` to match filename stem (`^[A-Za-z0-9_.-]+$`) before path join.
+
+`reveal_hidden=false` (default) redacts hidden zones in replay payloads:
+- hero-hand details are hidden during villain-turn events
+- villain-hand details are hidden during hero-turn events
+
+`reveal_hidden=true` returns full debug trace.
 
 ### WebSocket protocol
 
@@ -150,10 +205,10 @@ Hardcode a default deck for quick start (the simple training deck from MatchHype
 
 ```python
 DEFAULT_DECK = {
-    "Mountain": 12, "Forest": 12,
-    "Llanowar Elves": 8, "Grey Ogre": 8,
-    "Lightning Bolt": 8, "Counterspell": 0,
-    "Plains": 6, "Island": 6,
+    "Mountain": 12,
+    "Forest": 12,
+    "Llanowar Elves": 18,
+    "Grey Ogre": 18,
 }
 ```
 
@@ -178,7 +233,11 @@ If `new_game` omits deck config, use defaults for both players.
 
 4. **Auto-play villain in the step loop.** Same pattern as `SingleAgentEnv._skip_opponent()` but operating on raw observations. The human only ever sees their own decision points.
 
-5. **Traces record serialized observations, not raw.** Traces should be self-contained and human-readable. Storing the serialized dict (with card names and action descriptions) means traces are useful without access to the card registry.
+5. **Traces are event-level, not hero-turn snapshots.** This preserves true action history for replay/debugging and Stage 5 game log derivation.
+
+6. **Replay API ships in this stage.** We expose read-only trace listing/loading now so Stage 2 frontend can wire replay UI without backend redesign.
+
+7. **Traces are stored with full engine perspective, but replay supports hide/reveal.** API defaults to redacted (`reveal_hidden=false`) and can return full debug payload (`reveal_hidden=true`).
 
 ## Scope
 
@@ -187,14 +246,17 @@ If `new_game` omits deck config, use defaults for both players.
 - `managym.Env` → JSON observation serialization with card names
 - Human-readable action descriptions
 - Auto-play villain (passive/random policies on raw obs)
-- Game trace recording to `gui/traces/`
+- Event-level game trace recording to `gui/traces/`
+- Replay API: `GET /api/traces`, `GET /api/traces/{trace_id}?reveal_hidden=true|false`
 - Rust change: add `name` field to `PyCard`
-- Integration test: start game, play actions, verify trace
+- Add Python dependencies: `fastapi`, `uvicorn`, and test dependency `httpx`
+- Integration tests:
+  - WebSocket: start game, play actions, verify hero-only protocol + trace output
+  - HTTP: list traces, fetch redacted trace, fetch revealed trace
 
 **Out of scope:**
 - Frontend / UI (Stage 2)
 - Card images / Scryfall (Stage 3)
-- Trace replay endpoint (Stage 4)
 - Trained model opponents
 - Human vs human multiplayer
 - Deck builder / card database
@@ -213,6 +275,9 @@ pytest tests/gui/test_server.py -v
 
 # Trace file written after game completion
 ls gui/traces/*.json
+
+# Replay API returns trace summaries + full trace payload
+pytest tests/gui/test_trace_api.py -v
 ```
 
 Advancing wave goals:

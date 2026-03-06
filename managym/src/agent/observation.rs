@@ -55,6 +55,7 @@ pub struct CardData {
     pub owner_id: i32,
     pub id: i32,
     pub registry_key: i32,
+    pub name: String,
     pub power: i32,
     pub toughness: i32,
     pub card_types: CardTypeData,
@@ -254,6 +255,7 @@ impl Observation {
             owner_id: game.state.players[card.owner.0].id.0 as i32,
             id: card.id.0 as i32,
             registry_key: card.registry_key.0 as i32,
+            name: card.name.clone(),
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
             card_types: CardTypeData {
@@ -370,6 +372,7 @@ impl Observation {
             json!({
                 "id": card.id,
                 "registry_key": card.registry_key,
+                "name": card.name,
                 "zone": card.zone as i32,
                 "owner_id": card.owner_id,
                 "power": card.power,
