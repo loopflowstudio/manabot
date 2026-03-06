@@ -4,43 +4,37 @@
 
 ## Current state
 
-The architecture was simplified in the latest iteration. Key details:
-
-- **`PyVectorEnv`** is a `#[pyclass]` struct owning `Vec<EnvSlot>` directly —
+- **`PyVectorEnv`** is a `#[pyclass]` struct owning a `VectorEnv` directly —
   no Mutex wrapper. PyO3's `&mut self` methods guarantee exclusive access.
 
-- **Buffer writes use Python `__setitem__`** calls (via `PyAny::set_item`),
-  not raw pointer access. Correctness-focused but serializes on the GIL.
-  To parallelize, buffer access must move to raw pointers (via `numpy` crate
-  or `PyBuffer` protocol) so writes can happen inside `allow_threads`.
+- **Buffer writes use `PyBuffer` protocol** with `mutable_slice_from_buffer()`
+  for raw `&mut [f32]` access. Zero-copy is already in place. However, the
+  `PyBuffer` handles and slices have lifetimes tied to the GIL — they are not
+  `Send` and cannot cross into `allow_threads` as-is.
 
-- **`ObservationEncoder`** (in `vector_env.rs`) encodes observations into
-  `EncodedObservation` structs (owned `Vec<f32>` fields), which are then
-  written into numpy buffers one field at a time.
+- **`encode_into`** writes observations directly into buffer slices. Pure Rust,
+  no GIL dependency.
 
-- **Stepping is fully sequential**: `step_into` iterates `envs` with a for
-  loop. Each env step + encode + buffer write happens in sequence.
+- **Stepping is fully sequential**: `step_into_buffers` iterates envs with a
+  for loop inside `with_write_buffers`. Each env step + encode + buffer write
+  happens in sequence.
 
-- **Key files**: `managym/src/python/vector_env.rs` (PyVectorEnv, encoder,
-  buffer writes), `manabot/env/env.py` (Python VectorEnv wrapper).
-
-- **`num_threads`** is accepted and validated but unused.
+- **Key files**: `managym/src/python/vector_env_bindings.rs` (PyVectorEnv,
+  buffer writes), `manabot/env/rust_vector_env.py` (Python wrapper).
 
 ## Changes
 
-### 1. Switch buffer writes to raw pointers
+### 1. Make buffer pointers Send-able
 
-Before parallelizing, buffer writes must bypass the GIL. Options:
+Buffer writes already use `PyBuffer` with raw `&mut [f32]` slices. But these
+slices have lifetimes tied to `PyBuffer` and aren't `Send`. For Rayon:
 
-- **Add `numpy` crate** (`numpy = "0.24"`): provides `PyArray` types with
-  `as_slice_mut()` for raw access. Extract pointers while GIL is held,
-  pass them into `allow_threads`.
-- **Use `PyBuffer` protocol**: `pyo3::buffer::PyBuffer` gives raw pointer
-  access without an extra crate dependency. More verbose but works.
-
-Either way: extract raw `*mut f32` / `*mut bool` / `*mut i32` pointers
-from numpy arrays while holding the GIL, validate shapes/dtypes/contiguity,
-then write directly inside `allow_threads`.
+- Extract raw `*mut f32` / `*mut i32` / `*mut f64` / `*mut u8` pointers
+  while GIL is held (from the existing `mutable_slice_from_buffer`)
+- Wrap in a `SendSlice(*mut T, usize)` struct that implements `Send + Sync`
+- Safety invariant: each env writes to a disjoint row, pointers valid for
+  duration of `allow_threads`, `ObservationBuffers` holds `Py<PyAny>` refs
+  preventing GC
 
 ### 2. Rayon integration
 
@@ -122,7 +116,7 @@ measure pure parallelism gains. Rayon respects this env var natively.
 
 ### Save results
 
-Update the results tracker tables in `wave/sps/README.md` with S04
+Update the results tracker tables in `wave/sps/README.md` with S02
 numbers. Include the scaling curve data.
 
 ### Gate

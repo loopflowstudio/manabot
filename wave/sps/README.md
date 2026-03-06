@@ -42,9 +42,9 @@ Time breakdown (with inference):
 ```
 
 The bottleneck depends on context. Without inference, Python encoding
-dominates. With inference, torch dominates. Sprints 02-03 target the
-encoding path. Sprint 04 targets the Rust step path. Sprint 05 removes
-dead code and publishes final numbers.
+dominates. With inference, torch dominates. Sprints 01-01 shipped the
+in-process Rust vector env with zero-copy buffers. Sprint 02 adds Rayon
+parallelism. Sprint 03 removes dead code and publishes final numbers.
 
 ## Goals
 
@@ -108,28 +108,28 @@ noted otherwise. Fill in after each sprint ships.
 
 ### Env-only SPS (no inference)
 
-| num_envs | Baseline | S02 (Rust encode) | S03 (zero-copy) | S04 (Rayon) | S05 (final) |
-|----------|----------|-------------------|-----------------|-------------|-------------|
-| 1        |          |                   |                 |             |             |
-| 16       | ~19,000  |                   |                 |             |             |
-| 64       |          |                   |                 |             |             |
-| 128      |          |                   |                 |             |             |
+| num_envs | Baseline | S01 (Rust env + zero-copy) | S02 (Rayon) | S03 (final) |
+|----------|----------|---------------------------|-------------|-------------|
+| 1        |          |                           |             |             |
+| 16       | ~19,000  |                           |             |             |
+| 64       |          |                           |             |             |
+| 128      |          |                           |             |             |
 
 ### Training SPS (with inference)
 
-| num_envs | Baseline | S02 | S03 | S04 | S05 |
-|----------|----------|-----|-----|-----|-----|
-| 16       | ~3,300   |     |     |     |     |
-| 64       |          |     |     |     |     |
+| num_envs | Baseline | S01 | S02 | S03 |
+|----------|----------|-----|-----|-----|
+| 16       | ~3,300   |     |     |     |
+| 64       |          |     |     |     |
 
 ### Time breakdown (env-only, 16 envs)
 
-| Phase      | Baseline | S02   | S03   | S04   | S05   |
-|------------|----------|-------|-------|-------|-------|
-| encode     | 77%      |       |       |       |       |
-| tensorize  | 12%      |       |       |       |       |
-| rust_step  | 7%       |       |       |       |       |
-| unpack     | 3%       |       |       |       |       |
+| Phase      | Baseline | S01   | S02   | S03   |
+|------------|----------|-------|-------|-------|
+| encode     | 77%      |       |       |       |
+| tensorize  | 12%      |       |       |       |
+| rust_step  | 7%       |       |       |       |
+| unpack     | 3%       |       |       |       |
 
 ### A/B comparisons
 
@@ -137,7 +137,7 @@ noted otherwise. Fill in after each sprint ships.
 |--------|----------|----------|-------|-------|-------|---------|
 |        |          |          |       |       |       |         |
 
-## Ablation protocol (sprint 05)
+## Ablation protocol (sprint 03)
 
 At wave end, measure each optimization in isolation to attribute SPS
 gains. The ablation uses `bench_ab.py` to compare configurations
@@ -152,7 +152,7 @@ python scripts/bench_ab.py --a rust --b async --num-envs 16 --rounds 5
 #    but Python-side encoding (sprint 02 behavior).
 python scripts/bench_ab.py --a rust --b rust-python-encode --num-envs 16 --rounds 5
 
-# 3. Rayon on vs off (sprint 04 impact)
+# 3. Rayon on vs off (sprint 02 impact)
 #    Requires a "rust-single-thread" mode or RAYON_NUM_THREADS=1.
 RAYON_NUM_THREADS=1 python scripts/bench_ab.py --a rust --b rust --num-envs 64 --rounds 5
 
@@ -163,8 +163,8 @@ done
 ```
 
 The ablation requires two things built during the wave:
-- A `rust-python-encode` bench mode (sprint 03 keeps the Python encode
-  path for parity testing — wire it into `bench_ab.py` as a mode)
+- A `rust-python-encode` bench mode (Python encode path kept for parity
+  testing — wire it into `bench_ab.py` as a mode)
 - `RAYON_NUM_THREADS=1` support (Rayon respects this env var natively)
 
 Record ablation results in a final table:
@@ -172,10 +172,9 @@ Record ablation results in a final table:
 | Configuration           | SPS (16 envs) | SPS (64 envs) | vs baseline |
 |-------------------------|---------------|---------------|-------------|
 | Baseline (AsyncVectorEnv) |             |               | 1.0x        |
-| S02: Rust encode          |             |               |             |
-| S03: + zero-copy          |             |               |             |
-| S04: + Rayon              |             |               |             |
-| S05: final (cleaned)      |             |               |             |
+| S01: Rust env + zero-copy |             |               |             |
+| S02: + Rayon              |             |               |             |
+| S03: final (cleaned)      |             |               |             |
 
 ## Metrics
 
