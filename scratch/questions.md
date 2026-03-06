@@ -1,1 +1,0 @@
-- For interaction trace tests that require keyword combinations not present in the card pool (trample+deathtouch and double strike+trample), tests mutate the relevant card's `keywords` flags in-game to validate engine rules behavior without adding extra cards beyond the design scope.
