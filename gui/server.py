@@ -221,7 +221,6 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
             {
                 "index": index,
                 "type": _enum_name(ActionEnum, action.action_type),
-                "card": card_name,
                 "focus": focus,
                 "description": _format_action(action, card_name, names),
             }
@@ -301,6 +300,7 @@ class GameSession:
         self.trace: Trace | None = None
         self.trace_id: str | None = None
         self._trace_saved = False
+        self._pending_villain_log: list[str] = []
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -328,6 +328,7 @@ class GameSession:
         )
         self._trace_saved = False
         self.trace_id = None
+        self._pending_villain_log = []
 
         self._auto_play_villain()
         return self._wire_message()
@@ -370,6 +371,8 @@ class GameSession:
         observation = serialize_observation(self.obs)
         action_description = actions[action_index]["description"]
         next_obs, reward, _, _, _ = self.env.step(action_index)
+        if actor == "villain":
+            self._pending_villain_log.append(f"Villain: {action_description}")
         self.trace.events.append(
             TraceEvent(
                 actor=actor,
@@ -404,24 +407,36 @@ class GameSession:
                 actor="villain", action_index=action_index, actions=actions
             )
 
+    def _drain_pending_villain_log(self) -> list[str]:
+        pending = list(self._pending_villain_log)
+        self._pending_villain_log = []
+        return pending
+
     def _wire_message(self) -> dict[str, Any]:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
         data = serialize_observation(self.obs)
+        log = self._drain_pending_villain_log()
         if self.obs.game_over:
             self._finalize_trace(end_reason="game_over")
-            return {
+            payload = {
                 "type": "game_over",
                 "data": data,
                 "winner": _winner_for_hero(self.obs),
             }
+            if log:
+                payload["log"] = log
+            return payload
 
-        return {
+        payload = {
             "type": "observation",
             "data": data,
             "actions": describe_actions(self.obs),
         }
+        if log:
+            payload["log"] = log
+        return payload
 
     def _finalize_trace(self, end_reason: str) -> None:
         if self.trace is None or self.obs is None:
