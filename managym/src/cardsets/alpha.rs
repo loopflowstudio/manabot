@@ -106,6 +106,5 @@ impl CardRegistry {
             text_box: "Counter target spell.".to_string(),
             ..Default::default()
         });
-
     }
 }

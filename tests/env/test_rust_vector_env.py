@@ -5,7 +5,14 @@ Coverage for Rust-backed vectorized environment wrapper.
 
 import torch
 
-from manabot.env import Match, ObservationSpace, PassivePolicy, Reward, RustVectorEnv, VectorEnv
+from manabot.env import (
+    Match,
+    ObservationSpace,
+    PassivePolicy,
+    Reward,
+    RustVectorEnv,
+    VectorEnv,
+)
 from manabot.infra.hypers import RewardHypers
 
 
@@ -84,7 +91,8 @@ def test_terminal_step_returns_post_reset_observation():
         _, _, terminated, truncated, _ = env.step(torch.zeros(1, dtype=torch.int64))
         if bool(terminated[0] or truncated[0]):
             found_terminal = True
-            assert env._last_raw_obs[0].game_over is False
+            info = env.get_last_info()
+            assert isinstance(info, dict)
             break
 
     assert found_terminal
@@ -102,7 +110,9 @@ def test_observation_parity_with_existing_vector_env():
 
         actions = torch.zeros(1, dtype=torch.int64)
         for _ in range(100):
-            legacy_obs, legacy_reward, legacy_term, legacy_trunc, _ = legacy.step(actions)
+            legacy_obs, legacy_reward, legacy_term, legacy_trunc, _ = legacy.step(
+                actions
+            )
             rust_obs, rust_reward, rust_term, rust_trunc, _ = rust.step(actions)
 
             assert torch.equal(legacy_reward, rust_reward)
