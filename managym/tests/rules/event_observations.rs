@@ -1,10 +1,10 @@
 use managym::{
     agent::action::ActionType,
     flow::{
-        event::{EventEntity, GameEvent},
+        event::{DamageTarget, GameEvent},
         turn::StepKind,
     },
-    state::{game_object::PlayerId, stack::StackObject, zone::ZoneType},
+    state::{game_object::PlayerId, stack_object::StackObject, zone::ZoneType},
 };
 
 use super::helpers::*;
@@ -28,11 +28,11 @@ fn cast_llanowar_elves(
     let elf = s
         .game()
         .state
-        .stack
+        .stack_objects
         .last()
         .and_then(|stack_object| match stack_object {
-            StackObject::Spell { card } => Some(*card),
-            StackObject::TriggeredAbility { .. } => None,
+            StackObject::Spell(spell) => Some(spell.card),
+            _ => None,
         })
         .expect("elf should be on stack");
     s.pass_priority();
@@ -87,12 +87,9 @@ fn spell_events_are_observable_for_creature_spells() {
 
     assert!(events.contains(&GameEvent::SpellCast {
         card: elf,
-        controller: PlayerId(0),
+        target: None,
     }));
-    assert!(events.contains(&GameEvent::SpellResolved {
-        card: elf,
-        controller: PlayerId(0),
-    }));
+    assert!(events.contains(&GameEvent::SpellResolved { card: elf }));
     assert!(events.contains(&GameEvent::CardMoved {
         card: elf,
         from: Some(ZoneType::Hand),
@@ -133,16 +130,24 @@ fn combat_damage_emits_damage_and_life_change_events() {
     s.advance_to_active_step(0, StepKind::CombatDamage);
     let events = s.drain_events();
 
+    // Find the attacker's card to use as source
+    let attacker_card = s
+        .game()
+        .state
+        .permanents[attacker]
+        .as_ref()
+        .map(|p| p.card)
+        .expect("attacker permanent should exist");
+
     assert!(events.contains(&GameEvent::DamageDealt {
-        source: Some(EventEntity::Permanent(attacker)),
-        target: EventEntity::Player(PlayerId(1)),
+        source: Some(attacker_card),
+        target: DamageTarget::Player(PlayerId(1)),
         amount: 1,
-        controller: Some(PlayerId(0)),
     }));
     assert!(events.contains(&GameEvent::LifeChanged {
         player: PlayerId(1),
-        old_life: 20,
-        new_life: 19,
+        old: 20,
+        new: 19,
     }));
 }
 
