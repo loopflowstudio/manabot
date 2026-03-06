@@ -3,7 +3,17 @@
 
   import { gameStore } from '$lib/game.svelte';
   import { connect, disconnect, sendAction, sendNewGame } from '$lib/socket.svelte';
-  import type { ActionOption, CardState, PermanentState, PlayerState } from '$lib/types';
+  import type { CardState, PermanentState, PlayerState } from '$lib/types';
+
+  const CARD_TYPE_LABELS: Array<[keyof CardState['types'], string]> = [
+    ['is_land', 'Land'],
+    ['is_creature', 'Creature'],
+    ['is_spell', 'Spell'],
+    ['is_artifact', 'Artifact'],
+    ['is_enchantment', 'Enchantment'],
+    ['is_planeswalker', 'Planeswalker'],
+    ['is_battle', 'Battle'],
+  ];
 
   onMount(() => {
     connect();
@@ -13,42 +23,14 @@
   });
 
   function formatTypes(card: CardState): string {
-    const types: string[] = [];
-    if (card.types.is_land) {
-      types.push('Land');
-    }
-    if (card.types.is_creature) {
-      types.push('Creature');
-    }
-    if (card.types.is_spell) {
-      types.push('Spell');
-    }
-    if (card.types.is_artifact) {
-      types.push('Artifact');
-    }
-    if (card.types.is_enchantment) {
-      types.push('Enchantment');
-    }
-    if (card.types.is_planeswalker) {
-      types.push('Planeswalker');
-    }
-    if (card.types.is_battle) {
-      types.push('Battle');
-    }
-
-    return types.join(' · ') || 'Card';
+    const labels = CARD_TYPE_LABELS
+      .filter(([key]) => card.types[key])
+      .map(([, label]) => label);
+    return labels.join(' · ') || 'Card';
   }
 
   function hasFocus(id: number): boolean {
     return gameStore.focusIds.has(id);
-  }
-
-  function showFocus(action: ActionOption): void {
-    gameStore.setFocus(action.focus);
-  }
-
-  function clearFocus(): void {
-    gameStore.clearFocus();
   }
 
   function stackCards(): CardState[] {
@@ -95,7 +77,7 @@
       </div>
       <button
         class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-        on:click={() => sendNewGame()}
+        on:click={sendNewGame}
       >
         New Game
       </button>
@@ -256,7 +238,7 @@
                 </p>
                 <button
                   class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-                  on:click={() => sendNewGame()}
+                  on:click={sendNewGame}
                 >
                   Play Again
                 </button>
@@ -274,8 +256,8 @@
               {#each gameStore.actions as action}
                 <button
                   class="w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-left text-sm transition hover:border-blue-400 hover:bg-slate-800"
-                  on:mouseenter={() => showFocus(action)}
-                  on:mouseleave={clearFocus}
+                  on:mouseenter={() => gameStore.setFocus(action.focus)}
+                  on:mouseleave={() => gameStore.clearFocus()}
                   on:click={() => sendAction(action.index)}
                   disabled={gameStore.gameOver}
                 >
@@ -292,7 +274,7 @@
         <p class="mb-4 text-lg">Start a game to begin.</p>
         <button
           class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-          on:click={() => sendNewGame()}
+          on:click={sendNewGame}
         >
           New Game
         </button>

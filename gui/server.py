@@ -54,13 +54,10 @@ class SessionRecord:
     resume_token: str
     game: "GameSession"
     websocket: WebSocket | None = None
-    last_seen_at: datetime = field(default_factory=_now_utc)
     expires_at: datetime = field(default_factory=lambda: _now_utc() + SESSION_TTL)
 
     def touch(self) -> None:
-        now = _now_utc()
-        self.last_seen_at = now
-        self.expires_at = now + SESSION_TTL
+        self.expires_at = _now_utc() + SESSION_TTL
 
 
 SESSION_REGISTRY: dict[str, SessionRecord] = {}
@@ -451,23 +448,15 @@ def _error_message(message: str) -> dict[str, str]:
     return {"type": "error", "message": message}
 
 
-def _new_session_id() -> str:
-    return secrets.token_urlsafe(12)
-
-
-def _new_resume_token() -> str:
-    return secrets.token_urlsafe(24)
-
-
 def _create_session_record() -> SessionRecord:
     while True:
-        session_id = _new_session_id()
+        session_id = secrets.token_urlsafe(12)
         if session_id not in SESSION_REGISTRY:
             break
 
     record = SessionRecord(
         session_id=session_id,
-        resume_token=_new_resume_token(),
+        resume_token=secrets.token_urlsafe(24),
         game=GameSession(),
     )
     SESSION_REGISTRY[session_id] = record
@@ -534,6 +523,21 @@ async def _attach_session_websocket(record: SessionRecord, websocket: WebSocket)
             await previous_websocket.close(code=4000)
 
 
+async def _get_or_create_attached_session(
+    attached_session_id: str | None,
+    websocket: WebSocket,
+) -> SessionRecord:
+    if attached_session_id is not None:
+        existing = SESSION_REGISTRY.get(attached_session_id)
+        if existing is not None:
+            await _attach_session_websocket(existing, websocket)
+            return existing
+
+    record = _create_session_record()
+    await _attach_session_websocket(record, websocket)
+    return record
+
+
 def _detach_session_websocket(session_id: str, websocket: WebSocket) -> None:
     record = SESSION_REGISTRY.get(session_id)
     if record is None:
@@ -565,17 +569,11 @@ async def play_socket(websocket: WebSocket) -> None:
 
                 message_type = request.get("type")
                 if message_type == "new_game":
-                    if (
-                        attached_session_id is None
-                        or attached_session_id not in SESSION_REGISTRY
-                    ):
-                        record = _create_session_record()
-                        await _attach_session_websocket(record, websocket)
-                        attached_session_id = record.session_id
-                    else:
-                        record = SESSION_REGISTRY[attached_session_id]
-                        await _attach_session_websocket(record, websocket)
-
+                    record = await _get_or_create_attached_session(
+                        attached_session_id,
+                        websocket,
+                    )
+                    attached_session_id = record.session_id
                     response = record.game.new_game(request.get("config", {}))
                     record.touch()
                     response = _response_with_session(response, record)

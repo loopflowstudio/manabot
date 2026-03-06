@@ -15,18 +15,9 @@ from gui.server import app
 
 
 def _pick_action(actions: list[dict]) -> int:
+    preferred_action_types = {*server.ACTION_LABELS, "PRIORITY_PASS_PRIORITY"}
     for action in actions:
-        if action["type"] in {
-            "PRIORITY_PLAY_LAND",
-            "PRIORITY_CAST_SPELL",
-            "DECLARE_ATTACKER",
-            "DECLARE_BLOCKER",
-            "CHOOSE_TARGET",
-        }:
-            return int(action["index"])
-
-    for action in actions:
-        if action["type"] == "PRIORITY_PASS_PRIORITY":
+        if action["type"] in preferred_action_types:
             return int(action["index"])
 
     return int(actions[0]["index"])

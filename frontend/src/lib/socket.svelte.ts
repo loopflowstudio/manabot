@@ -4,6 +4,7 @@ import { gameStore } from './game.svelte';
 import type { ClientMessage, ServerMessage } from './types';
 
 const RESUME_STORAGE_KEY = 'manabot.gui.resume';
+const VALID_SERVER_TYPES = new Set(['observation', 'game_over', 'error']);
 
 interface ResumeCredentials {
   session_id: string;
@@ -52,11 +53,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return null;
     }
 
-    const message = parsed as { type?: string };
-    if (!message.type) {
-      return null;
-    }
-    if (message.type !== 'observation' && message.type !== 'game_over' && message.type !== 'error') {
+    const messageType = (parsed as { type?: unknown }).type;
+    if (typeof messageType !== 'string' || !VALID_SERVER_TYPES.has(messageType)) {
       return null;
     }
     return parsed as ServerMessage;
@@ -95,20 +93,15 @@ class GameSocketController {
       this.reconnectAttempts = 0;
       gameStore.setConnection('connected');
 
-      const queuedNewGame = this.outboundQueue.some((message) => message.type === 'new_game');
-      let attemptedResume = false;
-      if (!queuedNewGame) {
+      if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
         if (credentials) {
           this.pendingResume = true;
-          attemptedResume = true;
           this.send({ type: 'resume', ...credentials });
+          return;
         }
       }
-
-      if (!attemptedResume) {
-        this.flushQueue();
-      }
+      this.flushQueue();
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
@@ -148,12 +141,7 @@ class GameSocketController {
 
   sendNewGame(config?: Record<string, unknown>): void {
     gameStore.prepareForNewGame();
-
-    if (config) {
-      this.send({ type: 'new_game', config });
-    } else {
-      this.send({ type: 'new_game' });
-    }
+    this.send(config ? { type: 'new_game', config } : { type: 'new_game' });
   }
 
   sendAction(index: number): void {

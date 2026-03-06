@@ -48,7 +48,7 @@ export class GameStore {
     this.winner = winner;
     this.errorMessage = null;
     this.resumeFailed = false;
-    this.focusIds = new Set();
+    this.clearFocus();
   }
 
   prepareForNewGame(): void {
@@ -63,14 +63,9 @@ export class GameStore {
     this.actions = [];
     this.gameOver = false;
     this.winner = null;
-    this.focusIds = new Set();
+    this.clearFocus();
     this.resumeFailed = true;
     this.errorMessage = message;
-    this.sessionId = null;
-    this.resumeToken = null;
-  }
-
-  clearSession(): void {
     this.sessionId = null;
     this.resumeToken = null;
   }
@@ -80,7 +75,7 @@ export class GameStore {
   }
 
   clearFocus(): void {
-    this.focusIds = new Set();
+    this.setFocus([]);
   }
 }
 
