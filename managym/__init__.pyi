@@ -3,6 +3,8 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
+
 class Env:
     def __init__(
         self,
@@ -20,6 +22,10 @@ class Env:
     def info(self) -> Dict[str, Any]: ...
     def export_profile_baseline(self) -> str: ...
     def compare_profile(self, baseline: str) -> str: ...
+    def encode_observation(self, obs: Observation) -> Dict[str, np.ndarray]: ...
+    def encode_observation_into(
+        self, obs: Observation, out: Dict[str, np.ndarray]
+    ) -> None: ...
 
 class PlayerConfig:
     def __init__(self, name: str, decklist: Dict[str, int]) -> None: ...
@@ -62,12 +68,14 @@ class ActionEnum(IntEnum):
     PRIORITY_PASS_PRIORITY = 2
     DECLARE_ATTACKER = 3
     DECLARE_BLOCKER = 4
+    CHOOSE_TARGET = 5
 
 class ActionSpaceEnum(IntEnum):
     GAME_OVER = 0
     PRIORITY = 1
     DECLARE_ATTACKER = 2
     DECLARE_BLOCKER = 3
+    CHOOSE_TARGET = 4
 
 class ManaCost:
     cost: List[int]

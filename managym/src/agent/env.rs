@@ -3,6 +3,10 @@ use crate::{
         action::{Action, AgentError},
         behavior_tracker::BehaviorTracker,
         observation::Observation,
+        observation_encoder::{
+            encode, encode_into, EncodedObservation, EncodedObservationMut, ObservationEncodeError,
+            ObservationEncoderConfig,
+        },
     },
     flow::game::Game,
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
@@ -131,6 +135,18 @@ impl Env {
         self.add_profiler_info(&mut info);
         self.add_behavior_info(&mut info);
         info
+    }
+
+    pub fn encode_observation(&self, observation: &Observation) -> EncodedObservation {
+        encode(observation, &ObservationEncoderConfig::default())
+    }
+
+    pub fn encode_observation_into(
+        &self,
+        observation: &Observation,
+        out: EncodedObservationMut<'_>,
+    ) -> Result<(), ObservationEncodeError> {
+        encode_into(observation, &ObservationEncoderConfig::default(), out)
     }
 
     pub fn export_profile_baseline(&self) -> String {
