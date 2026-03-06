@@ -32,6 +32,10 @@ impl Game {
         [agent, PlayerId((agent.0 + 1) % 2)]
     }
 
+    pub fn next_player(&self, player: PlayerId) -> PlayerId {
+        PlayerId((player.0 + 1) % 2)
+    }
+
     pub fn is_active_player(&self, player: PlayerId) -> bool {
         player == self.active_player()
     }
