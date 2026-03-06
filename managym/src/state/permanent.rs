@@ -92,10 +92,6 @@ impl Permanent {
         self.damage += amount;
     }
 
-    pub fn attack(&mut self) {
-        self.attacking = true;
-    }
-
     pub fn attack_with_card(&mut self, card: &Card) {
         self.attacking = true;
         if !card.keywords.vigilance {
