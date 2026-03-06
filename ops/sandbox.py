@@ -115,28 +115,17 @@ class SandboxManager:
     def _verify_bootstrap(self, machine: Machine, timeout: int = 600) -> None:
         import time
 
-        if not machine.public_ip:
-            raise RuntimeError(f"Instance {machine.id} has no public IP for bootstrap check")
-
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                result = subprocess.run(
-                    [
-                        "ssh",
-                        "-o", "StrictHostKeyChecking=no",
-                        "-o", "ConnectTimeout=5",
-                        "-o", "BatchMode=yes",
-                        f"{self.ssh_user}@{machine.public_ip}",
-                        f"test -f {BOOTSTRAP_MARKER} && echo READY || echo MISSING",
-                    ],
-                    capture_output=True,
-                    text=True,
+                result = self.provider.run_command(
+                    machine,
+                    f"test -f {BOOTSTRAP_MARKER} && echo READY || echo MISSING",
                     timeout=30,
                 )
                 if "READY" in result.stdout:
                     return
-            except (subprocess.TimeoutExpired, OSError):
+            except (TimeoutError, OSError):
                 pass
             print("  waiting for bootstrap to finish...", flush=True)
             time.sleep(10)

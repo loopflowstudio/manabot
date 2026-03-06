@@ -106,6 +106,56 @@ impl Game {
         }
     }
 
+    pub(crate) fn assert_stack_consistent(&self) {
+        #[cfg(debug_assertions)]
+        {
+            use std::collections::{BTreeMap, HashSet};
+
+            fn card_counts(cards: &[CardId]) -> BTreeMap<CardId, usize> {
+                let mut counts = BTreeMap::new();
+                for card in cards {
+                    *counts.entry(*card).or_insert(0_usize) += 1;
+                }
+                counts
+            }
+
+            let zone_spell_cards: Vec<CardId> = [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(|player| {
+                    self.state
+                        .zones
+                        .zone_cards(ZoneType::Stack, player)
+                        .iter()
+                        .copied()
+                })
+                .collect();
+
+            let stack_spell_cards: Vec<CardId> = self
+                .state
+                .stack_objects
+                .iter()
+                .filter_map(|stack_object| match stack_object {
+                    StackObject::Spell(spell) => Some(spell.card),
+                    _ => None,
+                })
+                .collect();
+
+            let mut seen = HashSet::new();
+            for card in &stack_spell_cards {
+                assert!(
+                    seen.insert(*card),
+                    "duplicate spell card on stack: {card:?} in {stack_spell_cards:?}"
+                );
+            }
+
+            assert_eq!(
+                card_counts(&zone_spell_cards),
+                card_counts(&stack_spell_cards),
+                "stack/zone spell mismatch: zone={zone_spell_cards:?}, stack={stack_spell_cards:?}"
+            );
+        }
+    }
+
     pub(crate) fn find_spell_on_stack_index(&self, card: CardId) -> Option<usize> {
         self.state
             .stack_objects
