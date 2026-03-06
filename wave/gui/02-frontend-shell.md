@@ -1,16 +1,55 @@
-# Stage 2: Frontend shell — SvelteKit app with WebSocket and board layout
+# 02: Frontend Shell
+
+**Finish line:** A SvelteKit app in the browser connects to the backend WebSocket, renders the board as text, and a human can play a full game to completion by clicking actions.
 
 ## What to build
 
-A SvelteKit + TypeScript app that connects to the backend WebSocket, renders the game board, and lets the player select actions. No card images yet — just structured layout with card names, types, and stats as text.
+SvelteKit + TypeScript app that connects to the Stage 1 WebSocket server (`/ws/play`), renders game state, and lets the player select actions. No card images yet — card names, types, and stats as text.
 
-## Data structures
+## Backend contract (shipped in Stage 1)
+
+The backend is in `gui/server.py`. Key details:
+
+**WebSocket protocol** — connect to `ws://localhost:8000/ws/play`:
+
+Client sends:
+```json
+{"type": "new_game", "config": {"hero_deck": {...}, "villain_deck": {...}, "villain_type": "passive"}}
+{"type": "action", "index": 3}
+```
+
+Server sends:
+```json
+{"type": "observation", "data": {<serialized obs>}, "actions": [<action descriptions>]}
+{"type": "game_over", "data": {<serialized obs>}, "winner": 0}
+{"type": "error", "message": "..."}
+```
+
+Observation `data` shape (from `serialize_observation` in `gui/server.py`):
+```json
+{
+  "game_over": false,
+  "won": false,
+  "turn": {"turn_number": 1, "phase": "PRECOMBAT_MAIN", "step": "...", "active_player_id": 0},
+  "agent": {"life": 20, "hand": [...], "battlefield": [...], "graveyard": [...], "library_count": 40},
+  "opponent": {"life": 20, "hand": [...], "battlefield": [...], "graveyard": [...], "library_count": 40}
+}
+```
+
+Action descriptions shape:
+```json
+{"index": 0, "type": "PRIORITY_CAST_SPELL", "card": "Grey Ogre", "focus": [42], "description": "Cast spell: Grey Ogre"}
+```
+
+Config can be omitted in `new_game` — server uses a default deck (Mountain/Forest/Llanowar Elves/Grey Ogre).
+
+## Frontend data structures
 
 ```typescript
 interface GameState {
-  turn: { turn_number: number; phase: string; step: string; active_player: string }
-  hero: PlayerState
-  villain: PlayerState
+  turn: { turn_number: number; phase: string; step: string; active_player_id: number }
+  agent: PlayerState
+  opponent: PlayerState
   actions: ActionOption[]
   gameOver: boolean
   winner: number | null
@@ -18,17 +57,17 @@ interface GameState {
 
 interface PlayerState {
   life: number
-  hand: CardState[]        // only hero sees own hand contents
+  hand: CardState[]
   battlefield: PermanentState[]
   graveyard: CardState[]
   library_count: number
 }
 
 interface CardState {
-  id: number
+  object_id: number
   name: string
-  mana_cost: string       // e.g. "2R"
-  types: string[]          // e.g. ["Creature"]
+  registry_key: number
+  types: string[]
   power: number | null
   toughness: number | null
 }
@@ -41,9 +80,10 @@ interface PermanentState extends CardState {
 
 interface ActionOption {
   index: number
-  type: string             // "play_land", "cast_spell", "pass_priority", etc.
-  card: string | null      // card name if relevant
-  description: string      // human-readable
+  type: string
+  card: string | null
+  focus: number[]
+  description: string
 }
 ```
 
@@ -52,24 +92,23 @@ interface ActionOption {
 ```
 <App>
   <GameBoard>
-    <PlayerArea side="villain">     // top
+    <PlayerArea side="opponent">     // top
       <LifeTotal>
       <Zone type="hand" hidden>     // show card backs + count
       <Zone type="graveyard">
     </PlayerArea>
     <Battlefield>                   // center
-      <PermanentRow side="villain">
-      <PermanentRow side="hero">
+      <PermanentRow side="opponent">
+      <PermanentRow side="agent">
     </Battlefield>
-    <PlayerArea side="hero">        // bottom
+    <PlayerArea side="agent">        // bottom
       <Zone type="hand">           // show actual cards
       <Zone type="graveyard">
       <LifeTotal>
     </PlayerArea>
   </GameBoard>
   <ActionPanel actions={actions} onSelect={sendAction} />
-  <GameLog entries={log} />
-</GameBoard>
+</App>
 ```
 
 ## Constraints
@@ -77,7 +116,8 @@ interface ActionOption {
 - SvelteKit with Vite (built-in)
 - WebSocket store manages connection lifecycle (connect, reconnect, message parsing)
 - State updates replace the full game state on each observation (no incremental patching)
-- Action panel highlights which cards/permanents are relevant to each action (using focus objects)
+- Action panel highlights which cards/permanents are relevant to each action (using focus IDs)
+- Backend uses `_mini_fastapi.py` fallback if `fastapi` isn't installed — either `pip install fastapi uvicorn` or run via `uvicorn gui.server:app`
 
 ## Done when
 

@@ -1,8 +1,10 @@
-# Stage 3: Card rendering with Scryfall images
+# 03: Card Rendering with Scryfall Images
+
+**Finish line:** Every card in the browser shows its Scryfall art. Tapped permanents are rotated. Hovering shows a larger preview.
 
 ## What to build
 
-Replace text-only card rendering with actual card images from Scryfall. Cards in hand, on the battlefield, in the graveyard — all show their art. Tapped permanents rotate 90 degrees. Hover shows full-size card.
+Replace text-only card rendering (from Stage 2) with actual card images from Scryfall. Cards in hand, on the battlefield, in the graveyard — all show their art. Tapped permanents rotate 90 degrees. Hover shows full-size card.
 
 ## Key functions
 

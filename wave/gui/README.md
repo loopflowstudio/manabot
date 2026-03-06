@@ -1,3 +1,5 @@
+# GUI
+
 ## Vision
 
 A web-based GUI for managym that lets you play Magic games interactively and replay recorded simulations. SvelteKit + TypeScript frontend, FastAPI + WebSocket backend, Scryfall card images.
@@ -8,11 +10,18 @@ Two primary modes:
 
 The card pool is tiny (5 basic lands, Llanowar Elves, Grey Ogre, Lightning Bolt, Counterspell) which keeps the rendering surface small.
 
-### Not here
-- Trained model opponents (requires loading model weights, wandb integration)
-- Deck builder / card database browser
-- Mobile-optimized layout
-- Multiplayer networking (human vs human over the internet)
+Not here: trained model opponents, deck builder, mobile layout, multiplayer networking.
+
+## Strategy
+
+The backend (WebSocket server, observation serialization, trace recording, replay API) is built on raw `managym.Env` — not the RL training wrappers — so the frontend gets card names, zone structure, and human-readable action descriptions directly. One WebSocket connection = one game session. Villain turns are auto-played server-side; the client only sees hero decision points.
+
+Key architectural decisions:
+- **Raw Env, not training wrappers.** Card names, zones, game structure — not flattened numpy arrays.
+- **Card `name` exposed in PyO3 bindings.** Small Rust change that permanently solves the card identity problem.
+- **Event-level traces.** Every engine step (hero + villain) is recorded for replay fidelity.
+- **Replay API ships with the backend.** Frontend stages can wire replay without backend redesign.
+- **`_mini_fastapi.py` fallback.** Server works without installing FastAPI (offline/sandbox environments).
 
 ## Goals
 
@@ -24,9 +33,8 @@ The card pool is tiny (5 basic lands, Llanowar Elves, Grey Ogre, Lightning Bolt,
 
 ## Risks
 
-- managym observations are designed for RL (numeric IDs, encoded types) not display — need to bridge from raw obs to human-readable state. The `last_raw_obs` on the Rust Env has card names but we need to verify what's accessible through PyO3
 - Scryfall rate limits (10 req/sec) — mitigated by browser caching and tiny card pool
-- WebSocket state management for human vs human (two concurrent connections to same game) — deferred to later stage
+- WebSocket state management for human vs human (two concurrent connections to same game) — deferred
 - The observation doesn't include the opponent's hand contents (hidden info) — need to verify the GUI correctly shows only public information
 
 ## Metrics

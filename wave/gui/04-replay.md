@@ -1,10 +1,28 @@
-# Stage 4: Trace replay
+# 04: Trace Replay
+
+**Finish line:** A replay mode in the frontend loads a recorded trace and lets you step through it with timeline controls. Same board rendering as live play.
 
 ## What to build
 
-A replay mode that loads a recorded trace and lets you step through it. Timeline controls: play/pause, step forward/back, speed slider. Same board rendering as live play.
+Frontend replay UI that consumes the trace API (shipped in Stage 1).
 
-## Data structures
+## Backend contract (shipped in Stage 1)
+
+Replay API endpoints already exist in `gui/server.py`:
+
+```
+GET /api/traces
+  → [{"id", "timestamp", "winner", "end_reason", "num_events"}, ...]
+
+GET /api/traces/{trace_id}?reveal_hidden=false
+  → full Trace object (events redacted by default, reveal_hidden=true for debug)
+```
+
+Trace events contain `pre_observation`, `actions`, `action` (index chosen), `action_description`, `reward`, `post_observation`, and `actor` ("hero"/"villain"). Observations use the same shape as the live WebSocket protocol.
+
+Traces are saved to `gui/traces/` as JSON. The `MANABOT_GUI_TRACES_DIR` env var overrides the directory.
+
+## Frontend data structures
 
 ```typescript
 interface ReplayState {
@@ -15,30 +33,17 @@ interface ReplayState {
 }
 ```
 
-## Key functions
+## Key components
 
-```python
-# Backend: replay endpoint
-@app.post("/api/traces")
-async def list_traces() -> list[TraceSummary]: ...
+- Trace list page: fetch `/api/traces`, show summary table, click to open replay
+- Replay viewer: reuses `GameBoard` from Stage 2, fed observations from trace events
+- Timeline controls: play/pause, step forward/back, speed slider
+- Step backward is array indexing (no reverse computation)
+- Auto-play advances on timer, pauses on game-over
 
-@app.get("/api/traces/{trace_id}")
-async def get_trace(trace_id: str) -> Trace: ...
-```
+## Future: sim.py trace recording
 
-```typescript
-// Frontend: replay controls
-function ReplayControls({ state, onStep, onPlay, onPause, onSpeed }: ReplayProps)
-function useReplay(trace: Trace): ReplayState  // hook managing playback timer
-```
-
-## Constraints
-
-- Replay uses the same GameBoard component as live play — just fed observations from the trace instead of the WebSocket
-- Step backward is just indexing into the trace array (no reverse computation)
-- Auto-play advances on a timer, pauses on game-over
-- Backend serves traces from `gui/traces/` directory
-- Also record traces from sim.py runs (add a flag/hook to the simulation code)
+Also record traces from `sim.py` runs (add a flag/hook to the simulation code) so RL games can be replayed.
 
 ## Done when
 

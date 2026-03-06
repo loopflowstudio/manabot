@@ -1,8 +1,12 @@
-# Stage 5: Polish — game modes, game log, UX
+# 05: Polish — Game Modes, Game Log, UX
+
+**Finish line:** Opponent type is selectable, a game log sidebar narrates what happened each step, and phase/mana/action-highlight UX is polished.
 
 ## What to build
 
-Round out the experience: human vs random opponent, game log sidebar showing what happened each step, visual feedback for actions, and general UX polish.
+Round out the experience: opponent selection, game log sidebar, visual feedback for actions, and general UX polish.
+
+The backend already supports `villain_type` in the `new_game` config (`"passive"` or `"random"`). Trace events include `action_description` which can seed the game log. Phase/step names come through as strings in the observation.
 
 ## Features
 
