@@ -4,6 +4,7 @@ use crate::state::game_object::PlayerId;
 pub struct PriorityState {
     pub holder: PlayerId,
     pub consecutive_passes: usize,
+    pub pass_count: usize,
     pub sba_done: bool,
 }
 
@@ -12,6 +13,7 @@ impl Default for PriorityState {
         Self {
             holder: PlayerId(0),
             consecutive_passes: 0,
+            pass_count: 0,
             sba_done: false,
         }
     }
@@ -22,6 +24,17 @@ impl PriorityState {
         self.holder = active;
         self.consecutive_passes = 0;
         self.sba_done = false;
+    }
+
+    pub fn reset(&mut self) {
+        self.pass_count = 0;
+        self.consecutive_passes = 0;
+        self.sba_done = false;
+    }
+
+    pub fn pass_priority(&mut self) {
+        self.pass_count += 1;
+        self.consecutive_passes += 1;
     }
 
     pub fn on_pass(&mut self, next: PlayerId) {

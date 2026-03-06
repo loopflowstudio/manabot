@@ -233,11 +233,11 @@ impl Scenario {
             .zone_cards(ZoneType::Battlefield, PlayerId(player))
             .iter()
             .filter_map(|card_id| {
-                let card = &self.game.state.cards[card_id.0];
+                let card = &self.game.state.cards[*card_id];
                 if card.name != card_name {
                     return None;
                 }
-                self.game.state.card_to_permanent[card_id.0]
+                self.game.state.card_to_permanent[*card_id]
             })
             .collect()
     }
@@ -337,10 +337,10 @@ impl Scenario {
                 let Target::Permanent(permanent_id) = target else {
                     return false;
                 };
-                let Some(permanent) = self.game.state.permanents[permanent_id.0].as_ref() else {
+                let Some(permanent) = self.game.state.permanents[*permanent_id].as_ref() else {
                     return false;
                 };
-                let card = &self.game.state.cards[permanent.card.0];
+                let card = &self.game.state.cards[permanent.card];
                 card.name == card_name
             })
             .expect("target choice for named permanent should exist");

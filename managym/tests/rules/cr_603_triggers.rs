@@ -28,7 +28,7 @@ fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) ->
     game.move_card(card_id, ZoneType::Battlefield);
     // Drain events so the engine doesn't process ETB triggers from setup
     game.state.pending_events.clear();
-    game.state.card_to_permanent[card_id.0].expect("permanent should exist after move_card")
+    game.state.card_to_permanent[card_id].expect("permanent should exist after move_card")
 }
 
 fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) -> usize {
@@ -37,7 +37,7 @@ fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) ->
         .zones
         .zone_cards(zone, PlayerId(player))
         .iter()
-        .filter(|card_id| s.game().state.cards[card_id.0].name == name)
+        .filter(|card_id| s.game().state.cards[*card_id].name == name)
         .count()
 }
 
@@ -162,7 +162,7 @@ fn cr_608_2b_trigger_with_illegal_target_does_nothing() {
         .into_iter()
         .next()
         .expect("man-o'-war should be on battlefield");
-    s.game_mut().state.permanents[target.0]
+    s.game_mut().state.permanents[target]
         .as_mut()
         .expect("target permanent should still exist")
         .damage = 2;
@@ -187,7 +187,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
     let mut s = Scenario::new(manowar_deck(), island_deck(), 85);
 
     let dying_permanent = put_owned_card_on_battlefield(&mut s, 0, "Man-o'-War");
-    s.game_mut().state.permanents[dying_permanent.0]
+    s.game_mut().state.permanents[dying_permanent]
         .as_mut()
         .expect("dying permanent should exist")
         .damage = 2;

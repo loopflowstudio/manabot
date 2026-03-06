@@ -8,8 +8,14 @@ use crate::state::{
 };
 
 #[derive(Clone, Debug)]
+struct RegisteredCard {
+    registry_key: ObjectId,
+    definition: CardDefinition,
+}
+
+#[derive(Clone, Debug)]
 pub struct CardRegistry {
-    cards: BTreeMap<String, CardDefinition>,
+    cards: BTreeMap<String, RegisteredCard>,
     registry_key_gen: IdGenerator,
 }
 
@@ -30,14 +36,26 @@ impl CardRegistry {
         self.register_alpha();
     }
 
-    pub fn register_card(&mut self, mut card: CardDefinition) {
-        card.registry_key = self.registry_key_gen.next_id();
-        self.cards.insert(card.name.clone(), card);
+    pub fn register_card(&mut self, definition: CardDefinition) {
+        let registry_key = self.registry_key_gen.next_id();
+        let name = definition.name.clone();
+        self.cards.insert(
+            name,
+            RegisteredCard {
+                registry_key,
+                definition,
+            },
+        );
     }
 
     pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
-        let definition = self.cards.get(name)?;
-        Some(Card::from_definition(object_id, owner, definition))
+        let registered = self.cards.get(name)?;
+        Some(Card::from_definition(
+            object_id,
+            owner,
+            registered.registry_key,
+            &registered.definition,
+        ))
     }
 
     fn register_basic_lands(&mut self) {
@@ -50,41 +68,49 @@ impl CardRegistry {
 
     fn register_alpha(&mut self) {
         self.register_card(CardDefinition {
-            registry_key: ObjectId(0),
             name: "Llanowar Elves".to_string(),
             mana_cost: Some(ManaCost::parse("G")),
             types: CardTypes::new([CardType::Creature]),
-            supertypes: vec![],
             subtypes: vec!["Elf".to_string(), "Druid".to_string()],
-            abilities: vec![],
             mana_abilities: vec![ManaAbility {
                 mana: Mana::single(Color::Green),
             }],
             text_box: "{T}: Add {G}.".to_string(),
             power: Some(1),
             toughness: Some(1),
+            ..Default::default()
         });
 
         self.register_card(CardDefinition {
-            registry_key: ObjectId(0),
             name: "Grey Ogre".to_string(),
             mana_cost: Some(ManaCost::parse("2R")),
             types: CardTypes::new([CardType::Creature]),
-            supertypes: vec![],
             subtypes: vec!["Ogre".to_string()],
-            abilities: vec![],
-            mana_abilities: vec![],
-            text_box: "".to_string(),
             power: Some(2),
             toughness: Some(2),
+            ..Default::default()
         });
 
         self.register_card(CardDefinition {
-            registry_key: ObjectId(0),
+            name: "Lightning Bolt".to_string(),
+            mana_cost: Some(ManaCost::parse("R")),
+            types: CardTypes::new([CardType::Instant]),
+            text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Counterspell".to_string(),
+            mana_cost: Some(ManaCost::parse("UU")),
+            types: CardTypes::new([CardType::Instant]),
+            text_box: "Counter target spell.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
             name: "Man-o'-War".to_string(),
             mana_cost: Some(ManaCost::parse("2U")),
             types: CardTypes::new([CardType::Creature]),
-            supertypes: vec![],
             subtypes: vec!["Jellyfish".to_string()],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {
@@ -97,10 +123,10 @@ impl CardRegistry {
                 },
                 intervening_if: None,
             }],
-            mana_abilities: vec![],
             text_box: "When Man-o'-War enters the battlefield, return target creature to its owner's hand.".to_string(),
             power: Some(2),
             toughness: Some(2),
+            ..Default::default()
         });
     }
 }

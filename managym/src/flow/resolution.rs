@@ -17,11 +17,11 @@ impl Game {
 
         match stack_object {
             StackObject::Spell { card } => {
-                let is_permanent = self.state.cards[card.0].types.is_permanent();
+                let is_permanent = self.state.cards[card].types.is_permanent();
                 if is_permanent {
                     // CR 608.3 — A resolving permanent spell enters the battlefield.
                     self.move_card(card, ZoneType::Battlefield);
-                    let owner = self.state.cards[card.0].owner;
+                    let owner = self.state.cards[card].owner;
                     self.invalidate_mana_cache(owner);
                 } else {
                     // CR 608.2k — Nonpermanent spells resolve then go to graveyard.
@@ -90,7 +90,7 @@ impl Game {
     }
 
     fn return_permanent_to_owner_hand(&mut self, permanent_id: PermanentId) {
-        let Some(permanent) = self.state.permanents[permanent_id.0].as_ref() else {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return;
         };
 
