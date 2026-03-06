@@ -1,9 +1,6 @@
-# 05: Cleanup and Benchmark
+# 03: Cleanup and Benchmark
 
-## Finish line
-
-`AsyncVectorEnv` path removed. `RustVectorEnv` is the only env
-backend. Full benchmark published. Verification ladder passes.
+**Finish line:** Stale `AsyncVectorEnv` references removed. SPS benchmark published showing 10x+ improvement over first-light baseline (~1,600 SPS).
 
 ## Current state
 
