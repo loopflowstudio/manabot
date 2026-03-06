@@ -35,8 +35,9 @@ Key architectural decisions:
 
 - Scryfall rate limits (10 req/sec) — mitigated by browser caching and tiny card pool
 - WebSocket state management for human vs human (two concurrent connections to same game) — deferred
-- The observation doesn't include the opponent's hand contents (hidden info) — need to verify the GUI correctly shows only public information
+- The observation doesn't include the opponent's hand contents (hidden info) — the shared board renders opponent hand backs from counts; a later pass could redact hidden hand contents server-side
 - Session resume protocol assumptions: session-expiration traces finalize with `end_reason = "session_expired"`; resume failures return `type: "error"` keeping socket open; `session_id`/`resume_token` only attached to `observation` responses, not `game_over`
+- Mana pool display blocked on Rust/PyO3 bindings not exposing mana pool state
 
 ## Metrics
 

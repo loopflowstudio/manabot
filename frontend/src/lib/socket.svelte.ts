@@ -186,6 +186,7 @@ class GameSocketController {
         message.actions,
         message.session_id,
         message.resume_token,
+        message.log ?? [],
       );
       if (message.session_id && message.resume_token) {
         saveResumeCredentials({
@@ -199,7 +200,7 @@ class GameSocketController {
 
     if (message.type === 'game_over') {
       this.pendingResume = false;
-      gameStore.applyGameOver(message.data, message.winner);
+      gameStore.applyGameOver(message.data, message.winner, message.log ?? []);
       this.flushQueue();
       return;
     }
