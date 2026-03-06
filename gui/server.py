@@ -156,12 +156,19 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
 
 
 def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
-    names: dict[int, str] = {int(obs.agent.id): "agent", int(obs.opponent.id): "opponent"}
-    names.update({int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]})
+    names: dict[int, str] = {
+        int(obs.agent.id): "agent",
+        int(obs.opponent.id): "opponent",
+    }
+    names.update(
+        {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
+    )
     return names
 
 
-def _format_action(action: managym.Action, card_name: str | None, names: dict[int, str]) -> str:
+def _format_action(
+    action: managym.Action, card_name: str | None, names: dict[int, str]
+) -> str:
     action_name = _enum_name(ActionEnum, action.action_type)
 
     if action_name == "PRIORITY_PASS_PRIORITY":
@@ -171,7 +178,11 @@ def _format_action(action: managym.Action, card_name: str | None, names: dict[in
     subject = card_name
     if subject is None:
         subject = next(
-            (name for value in action.focus if (name := names.get(int(value))) is not None),
+            (
+                name
+                for value in action.focus
+                if (name := names.get(int(value))) is not None
+            ),
             None,
         )
 
@@ -365,7 +376,9 @@ class GameSession:
                 raise RuntimeError(
                     f"Villain policy selected invalid action index: {action_index}"
                 )
-            self._step_and_record(actor="villain", action_index=action_index, actions=actions)
+            self._step_and_record(
+                actor="villain", action_index=action_index, actions=actions
+            )
 
     def _wire_message(self) -> dict[str, Any]:
         if self.obs is None:

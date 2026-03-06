@@ -54,14 +54,18 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
                 assert payload["type"] == "observation"
                 seen_observation_messages += 1
                 assert payload["data"]["agent"]["player_index"] == 0
-                assert payload["actions"], "Expected hero actions when observation is emitted"
+                assert payload["actions"], (
+                    "Expected hero actions when observation is emitted"
+                )
 
                 action_index = _pick_action(payload["actions"])
                 websocket.send_json({"type": "action", "index": action_index})
                 payload = websocket.receive_json()
 
                 max_steps -= 1
-                assert max_steps > 0, "Game did not complete within expected step budget"
+                assert max_steps > 0, (
+                    "Game did not complete within expected step budget"
+                )
 
             assert payload["winner"] in {0, 1, None}
 

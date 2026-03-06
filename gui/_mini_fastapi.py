@@ -205,7 +205,7 @@ def _compile_path(path: str) -> re.Pattern[str]:
     for part in parts:
         if part.startswith("{") and part.endswith("}"):
             name = part[1:-1]
-            pattern_parts.append(fr"(?P<{name}>[^/]+)")
+            pattern_parts.append(rf"(?P<{name}>[^/]+)")
         else:
             pattern_parts.append(re.escape(part))
 
