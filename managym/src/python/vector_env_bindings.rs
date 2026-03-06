@@ -253,7 +253,7 @@ impl PyVectorEnv {
         let configs: Vec<PlayerConfig> =
             player_configs.into_iter().map(PlayerConfig::from).collect();
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.par_reset_all_into(
+            inner.reset_all_into(
                 configs,
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
@@ -265,7 +265,7 @@ impl PyVectorEnv {
 
     fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.par_step_into(
+            inner.step_into(
                 &actions,
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
@@ -373,8 +373,10 @@ struct SendSlice<T> {
 }
 
 #[cfg(feature = "python")]
+// SAFETY: SendSlice wraps a raw pointer into a Python-owned numpy buffer.
+// The GIL is released before use (py.allow_threads), and each env index
+// writes to disjoint rows, so no aliasing occurs.
 unsafe impl<T> Send for SendSlice<T> {}
-#[cfg(feature = "python")]
 unsafe impl<T> Sync for SendSlice<T> {}
 
 #[cfg(feature = "python")]

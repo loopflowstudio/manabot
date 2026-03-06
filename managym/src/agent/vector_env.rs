@@ -103,7 +103,7 @@ impl VectorEnv {
         Ok(results)
     }
 
-    pub fn par_reset_all_into<F>(
+    pub fn reset_all_into<F>(
         &mut self,
         player_configs: Vec<PlayerConfig>,
         write: F,
@@ -131,7 +131,7 @@ impl VectorEnv {
         })
     }
 
-    pub fn par_step_into<F>(
+    pub fn step_into<F>(
         &mut self,
         actions: &[i64],
         write: F,
@@ -428,11 +428,11 @@ mod tests {
     }
 
     #[test]
-    fn parallel_entrypoints_step_and_reset() {
+    fn step_into_and_reset_all_into() {
         let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Passive);
 
         let reset_infos = env
-            .par_reset_all_into(
+            .reset_all_into(
                 sample_player_configs(),
                 |_, obs, reward, terminated, truncated| {
                     assert_eq!(obs.agent.player_index, 0);
@@ -442,29 +442,29 @@ mod tests {
                     Ok(())
                 },
             )
-            .expect("parallel reset should succeed");
+            .expect("reset_all_into should succeed");
         assert_eq!(reset_infos.len(), 3);
 
         let step_infos = env
-            .par_step_into(&[0, 0, 0], |_, _, _, _, _| Ok(()))
-            .expect("parallel step should succeed");
+            .step_into(&[0, 0, 0], |_, _, _, _, _| Ok(()))
+            .expect("step_into should succeed");
         assert_eq!(step_infos.len(), 3);
     }
 
     #[test]
-    fn parallel_errors_are_returned_in_index_order() {
+    fn step_into_errors_are_returned_in_index_order() {
         let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::Passive);
-        env.par_reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
-            .expect("parallel reset should succeed");
+        env.reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
+            .expect("reset_all_into should succeed");
 
         let err = env
-            .par_step_into(&[0, 0, 0], |env_index, _, _, _, _| {
+            .step_into(&[0, 0, 0], |env_index, _, _, _, _| {
                 if env_index >= 1 {
                     return Err(AgentError(format!("env error {env_index}")));
                 }
                 Ok(())
             })
-            .expect_err("parallel step should fail");
+            .expect_err("step_into should fail");
         assert_eq!(err.0, "env error 1");
     }
 }
