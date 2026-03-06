@@ -58,14 +58,6 @@ class Env(gym.Env):
         match: Match,
         obs_space: ObservationSpace,
         reward: Reward,
-        # Whether to automatically reset the environment when it terminates/truncates.
-        # If False, the environment will not be reset until the agent calls reset().
-        # If True, when a terminated/truncated event occurs, the environment returns:
-        # - the post-reset observation,
-        # - the pre-reset reward,
-        # - false, # terminate is never true so that AsyncVectorEnv doesnt call reset()
-        # - false, # truncated is never true so that AsyncVectorEnv doesnt call reset()
-        # - info["true_terminated"]: true
         seed: int = 0,
         auto_reset: bool = False,
         enable_profiler: bool = False,
@@ -163,7 +155,6 @@ class Env(gym.Env):
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
             if self.auto_reset:
-                # TODO: merge infos? Hopefully we remove this code soon and use gymnasium's autoreset when its released
                 raw_obs, _ = self._engine.reset(self.match.to_rust())
                 terminated = False
                 truncated = False
@@ -186,11 +177,11 @@ class Env(gym.Env):
         return self._last_obs
 
 
-class VectorEnv:
+class LegacyVectorEnv:
     """
-    Vector environment that automatically batches observations from multiple environments
-    and converts them to PyTorch tensors. The first dimension is always the number of
-    environments.
+    Benchmark-only AsyncVectorEnv wrapper kept for historical SPS comparison.
+
+    Active training/runtime code should use RustVectorEnv instead.
     """
 
     def __init__(
@@ -299,15 +290,12 @@ class VectorEnv:
         """
         Convert tuple of per-env observation dicts into dict of batched tensors.
 
-        AsyncVectorEnv with shared_memory=False returns a tuple of dicts,
-        one per sub-environment.
-
         Returns:
             Dict where each value is a tensor with leading dimension num_envs.
         """
         return stack_encoded_observations(obs_tuple, self.device)
 
-    def to(self, device: str) -> "VectorEnv":
+    def to(self, device: str) -> "LegacyVectorEnv":
         """
         Move the environment to the specified device.
 
@@ -323,3 +311,6 @@ class VectorEnv:
     def close(self):
         """Close the environment."""
         self._env.close()
+
+
+VectorEnv = LegacyVectorEnv

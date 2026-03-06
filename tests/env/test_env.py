@@ -8,7 +8,7 @@ import pytest
 import torch
 
 # Local imports
-from manabot.env import Env, PassivePolicy, Reward, VectorEnv
+from manabot.env import Env, LegacyVectorEnv, PassivePolicy, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import RewardHypers
@@ -54,9 +54,9 @@ def env(sample_match, observation_space, reward) -> Env:
 
 
 @pytest.fixture
-def vector_env(sample_match, observation_space, reward) -> VectorEnv:
+def vector_env(sample_match, observation_space, reward) -> LegacyVectorEnv:
     """Create a vectorized environment for testing."""
-    return VectorEnv(
+    return LegacyVectorEnv(
         num_envs=7,
         match=sample_match,
         observation_space=observation_space,
@@ -185,7 +185,7 @@ class TestEnvironment:
         vector_env.close()
 
     def test_vectorenv_single_agent_mode(self, sample_match, observation_space, reward):
-        vector_env = VectorEnv(
+        vector_env = LegacyVectorEnv(
             num_envs=3,
             match=sample_match,
             observation_space=observation_space,

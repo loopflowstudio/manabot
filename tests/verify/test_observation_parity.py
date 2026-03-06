@@ -149,35 +149,44 @@ def test_object_index_mapping_and_padded_focus_resolution():
 def test_encode_observation_into_fills_preallocated_buffers_and_validates_contract():
     env = managym.Env(seed=5, skip_trivial=True)
     hypers = ObservationSpaceHypers()
+    encoder = ObservationEncoder(hypers)
     obs, _ = env.reset(make_player_configs())
 
     expected = env.encode_observation(obs)
 
     out = {
-        "agent_player": np.full((1, 26), -7.0, dtype=np.float32),
-        "opponent_player": np.full((1, 26), -7.0, dtype=np.float32),
+        "agent_player": np.full((1, encoder.player_dim), -7.0, dtype=np.float32),
+        "opponent_player": np.full((1, encoder.player_dim), -7.0, dtype=np.float32),
         "agent_cards": np.full(
-            (hypers.max_cards_per_player, 18),
+            (hypers.max_cards_per_player, encoder.card_dim),
             -7.0,
             dtype=np.float32,
         ),
         "opponent_cards": np.full(
-            (hypers.max_cards_per_player, 18),
+            (hypers.max_cards_per_player, encoder.card_dim),
             -7.0,
             dtype=np.float32,
         ),
         "agent_permanents": np.full(
-            (hypers.max_permanents_per_player, 5),
+            (hypers.max_permanents_per_player, encoder.permanent_dim),
             -7.0,
             dtype=np.float32,
         ),
         "opponent_permanents": np.full(
-            (hypers.max_permanents_per_player, 5),
+            (hypers.max_permanents_per_player, encoder.permanent_dim),
             -7.0,
             dtype=np.float32,
         ),
-        "actions": np.full((hypers.max_actions, 7), -7.0, dtype=np.float32),
-        "events": np.full((hypers.max_events, 7), -7.0, dtype=np.float32),
+        "actions": np.full(
+            (hypers.max_actions, encoder.action_dim),
+            -7.0,
+            dtype=np.float32,
+        ),
+        "events": np.full(
+            (hypers.max_events, encoder.event_dim),
+            -7.0,
+            dtype=np.float32,
+        ),
         "action_focus": np.full(
             (hypers.max_actions, hypers.max_focus_objects),
             -7,
@@ -215,7 +224,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
         np.testing.assert_allclose(out[key], expected_value, atol=1e-6)
 
     bad = dict(out)
-    bad["actions"] = np.zeros((hypers.max_actions, 7), dtype=np.float64)
+    bad["actions"] = np.zeros((hypers.max_actions, encoder.action_dim), dtype=np.float64)
     try:
         env.encode_observation_into(obs, bad)
         raised = False

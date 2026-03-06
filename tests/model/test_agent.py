@@ -68,7 +68,7 @@ def real_observation(
     observation_space: ObservationSpace,
 ) -> Generator[Dict[str, torch.Tensor], None, None]:
     """
-    Create a real observation using a VectorEnv and the actual manabot observation encoder.
+    Create a real observation using a vector env and the real observation encoder.
 
     Returns a dictionary of torch.Tensors with a batch dimension (here, batch_size=2)
     as produced by the real environment.
@@ -81,9 +81,9 @@ def real_observation(
     reward = Reward(RewardHypers(trivial=True))
     match = Match()
     # Local imports
-    from manabot.env import VectorEnv
+    from manabot.env import LegacyVectorEnv
 
-    vec_env = VectorEnv(
+    vec_env = LegacyVectorEnv(
         num_envs=2,
         match=match,
         observation_space=observation_space,

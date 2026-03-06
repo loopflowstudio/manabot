@@ -3,11 +3,21 @@
 import numpy as np
 import pytest
 
-from manabot.env import Env, Match, ObservationSpace, PassivePolicy, RandomPolicy, Reward
+from manabot.env import (
+    Env,
+    Match,
+    ObservationSpace,
+    PassivePolicy,
+    RandomPolicy,
+    Reward,
+)
 from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
 from manabot.verify.step0_env_sanity import _run_matchup
-from manabot.verify.util import TRUNCATION_INFO_KEYS, build_hypers, winner_from_info_or_obs
-
+from manabot.verify.util import (
+    TRUNCATION_INFO_KEYS,
+    build_hypers,
+    winner_from_info_or_obs,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures

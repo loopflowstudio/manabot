@@ -29,8 +29,6 @@ from manabot.env import (
     ObservationSpace,
     Reward,
     RustVectorEnv,
-    VectorEnv,
-    build_opponent_policy,
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
@@ -64,7 +62,7 @@ class Trainer:
         self,
         agent: Agent,
         experiment: Experiment,
-        env: VectorEnv | RustVectorEnv,
+        env: RustVectorEnv,
         hypers: TrainHypers = TrainHypers(),
     ):
         self.agent = agent.to(experiment.device)
@@ -459,10 +457,9 @@ class Trainer:
     def _count_info_events(self, info: Dict[str, Any], key: str) -> int:
         """Count truthy events in a vectorized env info dict.
 
-        Gymnasium's AsyncVectorEnv stores per-env values under `key` and an
-        autoreset mask under `_key`.  The mask indicates which entries come
-        from the most recent step (True) vs. stale post-reset values (False).
-        We only count events where the mask is True.
+        The Rust vector env returns stacked arrays directly. The legacy
+        benchmark wrapper also adds Gymnasium-style autoreset masks under
+        `_key`; when present we honor them to avoid counting stale values.
         """
         if key not in info:
             return 0
@@ -844,32 +841,20 @@ class Trainer:
 
 def build_training_components(
     hypers: Hypers,
-) -> tuple[Experiment, VectorEnv | RustVectorEnv, Agent]:
+) -> tuple[Experiment, RustVectorEnv, Agent]:
     experiment = Experiment(hypers.experiment, hypers)
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
-    if hypers.train.use_rust_env:
-        env = RustVectorEnv(
-            hypers.train.num_envs,
-            match,
-            observation_space,
-            reward,
-            device=experiment.device,
-            seed=hypers.experiment.seed,
-            opponent_policy=hypers.train.opponent_policy,
-        )
-    else:
-        opponent_policy = build_opponent_policy(hypers.train.opponent_policy)
-        env = VectorEnv(
-            hypers.train.num_envs,
-            match,
-            observation_space,
-            reward,
-            device=experiment.device,
-            seed=hypers.experiment.seed,
-            opponent_policy=opponent_policy,
-        )
+    env = RustVectorEnv(
+        hypers.train.num_envs,
+        match,
+        observation_space,
+        reward,
+        device=experiment.device,
+        seed=hypers.experiment.seed,
+        opponent_policy=hypers.train.opponent_policy,
+    )
     agent = Agent(observation_space, hypers.agent)
     return experiment, env, agent
 

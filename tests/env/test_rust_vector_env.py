@@ -6,12 +6,12 @@ Coverage for Rust-backed vectorized environment wrapper.
 import torch
 
 from manabot.env import (
+    LegacyVectorEnv,
     Match,
     ObservationSpace,
-    PassivePolicy,
     Reward,
     RustVectorEnv,
-    VectorEnv,
+    build_opponent_policy,
 )
 from manabot.infra.hypers import RewardHypers
 
@@ -20,14 +20,14 @@ def _build_envs(seed: int = 19):
     match = Match()
     observation_space = ObservationSpace()
     reward = Reward(RewardHypers())
-    legacy = VectorEnv(
+    legacy = LegacyVectorEnv(
         num_envs=1,
         match=match,
         observation_space=observation_space,
         reward=reward,
         device="cpu",
         seed=seed,
-        opponent_policy=PassivePolicy(),
+        opponent_policy=build_opponent_policy("passive"),
     )
     rust = RustVectorEnv(
         num_envs=1,
