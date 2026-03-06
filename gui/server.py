@@ -6,8 +6,10 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 from contextlib import suppress
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import secrets
 from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -38,6 +40,30 @@ ACTION_LABELS = {
 }
 
 app = FastAPI(title="manabot-gui")
+SESSION_TTL = timedelta(minutes=15)
+SESSION_EXPIRED_END_REASON = "session_expired"
+
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@dataclass
+class SessionRecord:
+    session_id: str
+    resume_token: str
+    game: "GameSession"
+    websocket: WebSocket | None = None
+    last_seen_at: datetime = field(default_factory=_now_utc)
+    expires_at: datetime = field(default_factory=lambda: _now_utc() + SESSION_TTL)
+
+    def touch(self) -> None:
+        now = _now_utc()
+        self.last_seen_at = now
+        self.expires_at = now + SESSION_TTL
+
+
+SESSION_REGISTRY: dict[str, SessionRecord] = {}
 
 
 def _enum_name(enum_type, value: Any) -> str:
@@ -276,7 +302,7 @@ class GameSession:
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
-            self.close(end_reason="disconnect")
+            self.close(end_reason="new_game")
 
         config = _parse_game_config(raw_config)
         self.villain_policy = build_villain_policy(config.villain_type)
@@ -323,6 +349,11 @@ class GameSession:
 
         self._step_and_record(actor="hero", action_index=action_index, actions=actions)
         self._auto_play_villain()
+        return self._wire_message()
+
+    def current_message(self) -> dict[str, Any]:
+        if self.obs is None:
+            raise ValueError("No active game session. Send new_game first.")
         return self._wire_message()
 
     def _step_and_record(
@@ -420,30 +451,157 @@ def _error_message(message: str) -> dict[str, str]:
     return {"type": "error", "message": message}
 
 
+def _new_session_id() -> str:
+    return secrets.token_urlsafe(12)
+
+
+def _new_resume_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
+def _create_session_record() -> SessionRecord:
+    while True:
+        session_id = _new_session_id()
+        if session_id not in SESSION_REGISTRY:
+            break
+
+    record = SessionRecord(
+        session_id=session_id,
+        resume_token=_new_resume_token(),
+        game=GameSession(),
+    )
+    SESSION_REGISTRY[session_id] = record
+    return record
+
+
+def _drop_session(session_id: str, end_reason: str) -> None:
+    record = SESSION_REGISTRY.pop(session_id, None)
+    if record is None:
+        return
+    record.game.close(end_reason=end_reason)
+    record.websocket = None
+
+
+def _cleanup_expired_sessions() -> None:
+    now = _now_utc()
+    expired_ids = [
+        session_id
+        for session_id, record in SESSION_REGISTRY.items()
+        if record.expires_at <= now
+    ]
+    for session_id in expired_ids:
+        _drop_session(session_id, end_reason=SESSION_EXPIRED_END_REASON)
+
+
+def _session_from_resume(
+    raw_session_id: Any,
+    raw_resume_token: Any,
+) -> SessionRecord:
+    if not isinstance(raw_session_id, str) or not raw_session_id:
+        raise ValueError("resume messages require a non-empty 'session_id'.")
+    if not isinstance(raw_resume_token, str) or not raw_resume_token:
+        raise ValueError("resume messages require a non-empty 'resume_token'.")
+
+    record = SESSION_REGISTRY.get(raw_session_id)
+    if record is None:
+        raise ValueError("Session not found or expired. Start a new game.")
+    if record.resume_token != raw_resume_token:
+        raise ValueError("Invalid resume credentials. Start a new game.")
+    if record.expires_at <= _now_utc():
+        _drop_session(raw_session_id, end_reason=SESSION_EXPIRED_END_REASON)
+        raise ValueError("Session has expired. Start a new game.")
+    return record
+
+
+def _response_with_session(
+    response: dict[str, Any],
+    record: SessionRecord,
+) -> dict[str, Any]:
+    if response.get("type") == "observation":
+        payload = dict(response)
+        payload["session_id"] = record.session_id
+        payload["resume_token"] = record.resume_token
+        return payload
+    return response
+
+
+async def _attach_session_websocket(record: SessionRecord, websocket: WebSocket) -> None:
+    previous_websocket = record.websocket
+    record.websocket = websocket
+    record.touch()
+    if previous_websocket is not None and previous_websocket is not websocket:
+        with suppress(Exception):
+            await previous_websocket.close(code=4000)
+
+
+def _detach_session_websocket(session_id: str, websocket: WebSocket) -> None:
+    record = SESSION_REGISTRY.get(session_id)
+    if record is None:
+        return
+    if record.websocket is websocket:
+        record.websocket = None
+        record.touch()
+
+
 @app.websocket("/ws/play")
 async def play_socket(websocket: WebSocket) -> None:
+    _cleanup_expired_sessions()
     await websocket.accept()
-    session = GameSession()
+    attached_session_id: str | None = None
 
     try:
         while True:
             try:
                 request = await websocket.receive_json()
             except WebSocketDisconnect:
-                session.close(end_reason="disconnect")
+                if attached_session_id is not None:
+                    _detach_session_websocket(attached_session_id, websocket)
                 raise
 
+            _cleanup_expired_sessions()
             try:
                 if not isinstance(request, dict):
                     raise ValueError("WebSocket payload must be a JSON object.")
 
                 message_type = request.get("type")
                 if message_type == "new_game":
-                    response = session.new_game(request.get("config", {}))
+                    if (
+                        attached_session_id is None
+                        or attached_session_id not in SESSION_REGISTRY
+                    ):
+                        record = _create_session_record()
+                        await _attach_session_websocket(record, websocket)
+                        attached_session_id = record.session_id
+                    else:
+                        record = SESSION_REGISTRY[attached_session_id]
+                        await _attach_session_websocket(record, websocket)
+
+                    response = record.game.new_game(request.get("config", {}))
+                    record.touch()
+                    response = _response_with_session(response, record)
                 elif message_type == "action":
                     if "index" not in request:
                         raise ValueError("action messages require an 'index' field.")
-                    response = session.hero_action(request.get("index"))
+                    if attached_session_id is None:
+                        raise ValueError("No active game session. Send new_game first.")
+
+                    record = SESSION_REGISTRY.get(attached_session_id)
+                    if record is None:
+                        attached_session_id = None
+                        raise ValueError("Session expired. Start a new game.")
+
+                    response = record.game.hero_action(request.get("index"))
+                    record.touch()
+                    response = _response_with_session(response, record)
+                elif message_type == "resume":
+                    record = _session_from_resume(
+                        request.get("session_id"),
+                        request.get("resume_token"),
+                    )
+                    await _attach_session_websocket(record, websocket)
+                    attached_session_id = record.session_id
+                    response = record.game.current_message()
+                    response = _response_with_session(response, record)
                 else:
                     raise ValueError(f"Unsupported message type: {message_type}")
             except ValueError as exc:
@@ -454,7 +612,8 @@ async def play_socket(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     except Exception as exc:
-        session.close(end_reason="error")
+        if attached_session_id is not None:
+            _drop_session(attached_session_id, end_reason="error")
         with suppress(Exception):
             await websocket.send_json(_error_message(str(exc)))
         with suppress(Exception):
