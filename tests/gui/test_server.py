@@ -5,10 +5,7 @@ WebSocket integration tests for the GUI backend server.
 
 import json
 
-try:
-    from fastapi.testclient import TestClient
-except ModuleNotFoundError:  # pragma: no cover - fallback when fastapi is unavailable
-    from gui._mini_fastapi import TestClient
+from fastapi.testclient import TestClient
 
 # Local imports
 from gui import trace as trace_store

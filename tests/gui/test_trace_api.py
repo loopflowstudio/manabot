@@ -5,10 +5,7 @@ Integration tests for trace listing/loading replay endpoints.
 
 import json
 
-try:
-    from fastapi.testclient import TestClient
-except ModuleNotFoundError:  # pragma: no cover - fallback when fastapi is unavailable
-    from gui._mini_fastapi import TestClient
+from fastapi.testclient import TestClient
 
 # Local imports
 from gui import trace as trace_store
@@ -26,7 +23,7 @@ def _write_trace(path, trace_id: str, timestamp: str) -> None:
         "events": [
             {
                 "actor": "hero",
-                "pre_observation": {
+                "observation": {
                     "agent": {"hand": [{"name": "Mountain"}]},
                     "opponent": {"hand": [{"name": "Forest"}]},
                 },
@@ -40,14 +37,10 @@ def _write_trace(path, trace_id: str, timestamp: str) -> None:
                 "action": 0,
                 "action_description": "Pass priority",
                 "reward": 0.0,
-                "post_observation": {
-                    "agent": {"hand": [{"name": "Mountain"}]},
-                    "opponent": {"hand": [{"name": "Forest"}]},
-                },
             },
             {
                 "actor": "villain",
-                "pre_observation": {
+                "observation": {
                     "agent": {"hand": [{"name": "Forest"}]},
                     "opponent": {"hand": [{"name": "Mountain"}]},
                 },
@@ -61,10 +54,6 @@ def _write_trace(path, trace_id: str, timestamp: str) -> None:
                 "action": 0,
                 "action_description": "Pass priority",
                 "reward": 0.0,
-                "post_observation": {
-                    "agent": {"hand": [{"name": "Forest"}]},
-                    "opponent": {"hand": [{"name": "Mountain"}]},
-                },
             },
         ],
         "final_observation": {"game_over": True, "agent": {"hand": []}},
@@ -96,17 +85,17 @@ def test_trace_api_list_and_get_with_redaction(monkeypatch, tmp_path):
         redacted_payload = redacted.json()
 
         hero_event = redacted_payload["events"][0]
-        assert hero_event["pre_observation"]["opponent"]["hand"] == []
-        assert hero_event["pre_observation"]["opponent"]["hand_hidden_count"] == 1
+        assert hero_event["observation"]["opponent"]["hand"] == []
+        assert hero_event["observation"]["opponent"]["hand_hidden_count"] == 1
 
         villain_event = redacted_payload["events"][1]
-        assert villain_event["pre_observation"]["opponent"]["hand"] == []
-        assert villain_event["pre_observation"]["opponent"]["hand_hidden_count"] == 1
+        assert villain_event["observation"]["opponent"]["hand"] == []
+        assert villain_event["observation"]["opponent"]["hand_hidden_count"] == 1
 
         revealed = client.get("/api/traces/trace_a?reveal_hidden=true")
         assert revealed.status_code == 200
         revealed_payload = revealed.json()
-        assert revealed_payload["events"][0]["pre_observation"]["opponent"]["hand"] == [
+        assert revealed_payload["events"][0]["observation"]["opponent"]["hand"] == [
             {"name": "Forest"}
         ]
 

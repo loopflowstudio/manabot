@@ -29,12 +29,11 @@ class GameConfig:
 @dataclass
 class TraceEvent:
     actor: str
-    pre_observation: dict[str, Any]
+    observation: dict[str, Any]
     actions: list[dict[str, Any]]
     action: int
     action_description: str
     reward: float
-    post_observation: dict[str, Any]
 
 
 @dataclass
@@ -146,7 +145,8 @@ def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
     redacted = deepcopy(payload)
 
     for event in redacted.get("events", []):
-        _redact_observation(event.get("pre_observation", {}))
-        _redact_observation(event.get("post_observation", {}))
+        _redact_observation(event.get("observation", {}))
+
+    _redact_observation(redacted.get("final_observation", {}))
 
     return redacted

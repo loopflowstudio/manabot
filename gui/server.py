@@ -10,15 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Callable
 
-try:
-    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-except ModuleNotFoundError:  # pragma: no cover - local fallback for offline envs
-    from ._mini_fastapi import (  # type: ignore[assignment]
-        FastAPI,
-        HTTPException,
-        WebSocket,
-        WebSocketDisconnect,
-    )
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 # Local imports
 from manabot.env.observation import ActionEnum, PhaseEnum, StepEnum, ZoneEnum
@@ -342,18 +334,17 @@ class GameSession:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
 
-        pre_observation = serialize_observation(self.obs)
+        observation = serialize_observation(self.obs)
         action_description = actions[action_index]["description"]
         next_obs, reward, _, _, _ = self.env.step(action_index)
         self.trace.events.append(
             TraceEvent(
                 actor=actor,
-                pre_observation=pre_observation,
+                observation=observation,
                 actions=actions,
                 action=action_index,
                 action_description=action_description,
                 reward=float(reward),
-                post_observation=serialize_observation(next_obs),
             )
         )
         self.obs = next_obs
