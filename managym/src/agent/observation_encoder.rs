@@ -572,6 +572,7 @@ mod tests {
             owner_id: if mine { 10 } else { 20 },
             id,
             registry_key: id,
+            name: format!("Card {id}"),
             power,
             toughness,
             card_types: CardTypeData {
