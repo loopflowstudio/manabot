@@ -450,9 +450,18 @@ class AWSProvider:
         pubkey_path = ssh_dir / "id_ed25519.pub"
         if not pubkey_path.exists():
             import subprocess
+
             ssh_dir.mkdir(mode=0o700, exist_ok=True)
             subprocess.run(
-                ["ssh-keygen", "-t", "ed25519", "-f", str(ssh_dir / "id_ed25519"), "-N", ""],
+                [
+                    "ssh-keygen",
+                    "-t",
+                    "ed25519",
+                    "-f",
+                    str(ssh_dir / "id_ed25519"),
+                    "-N",
+                    "",
+                ],
                 check=True,
             )
 
@@ -559,6 +568,7 @@ class AWSProvider:
     # ---------------------------------------------------------------------
     def _resolve_caller_identity(self, region: str) -> str:
         import subprocess
+
         from botocore.exceptions import (
             ClientError,
             NoCredentialsError,

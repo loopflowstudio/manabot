@@ -28,9 +28,7 @@ from manabot.env import (
     Match,
     ObservationSpace,
     Reward,
-    RustVectorEnv,
     VectorEnv,
-    build_opponent_policy,
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
@@ -40,6 +38,12 @@ ROLLOUT_HEALTH_KEYS = (
     "action_space_truncations",
     "card_space_truncations",
     "permanent_space_truncations",
+)
+
+ROLLOUT_INFO_KEYS = (
+    ("action_space_truncated", "action_space_truncations"),
+    ("card_space_truncated", "card_space_truncations"),
+    ("permanent_space_truncated", "permanent_space_truncations"),
 )
 
 
@@ -64,18 +68,18 @@ class Trainer:
         self,
         agent: Agent,
         experiment: Experiment,
-        env: VectorEnv | RustVectorEnv,
-        hypers: TrainHypers = TrainHypers(),
+        env: VectorEnv,
+        hypers: TrainHypers | None = None,
     ):
         self.agent = agent.to(experiment.device)
         self.experiment = experiment
         self.env = env
-        self.hypers = hypers
+        self.hypers = hypers or TrainHypers()
         self.global_step = 0
 
         self.optimizer = torch.optim.Adam(
             self.agent.parameters(),
-            lr=hypers.learning_rate,
+            lr=self.hypers.learning_rate,
             eps=1e-5,
         )
 
@@ -125,7 +129,7 @@ class Trainer:
                     current_lr = self.optimizer.param_groups[0]["lr"]
                     self.logger.info(f"Update {update}: LR = {current_lr}")
 
-                self._reset_rollout_health_update()
+                self.rollout_health_update = self._new_rollout_health()
                 (
                     obs_buf,
                     actions_buf,
@@ -308,11 +312,7 @@ class Trainer:
             self.logger.warning(
                 f"Truncation in {n_truncated}/{self.hypers.num_envs} envs (no value bootstrap)"
             )
-        for info_key, health_key in (
-            ("action_space_truncated", "action_space_truncations"),
-            ("card_space_truncated", "card_space_truncations"),
-            ("permanent_space_truncated", "permanent_space_truncations"),
-        ):
+        for info_key, health_key in ROLLOUT_INFO_KEYS:
             count = self._count_info_events(info, info_key)
             if count > 0:
                 self._increment_rollout_health(health_key, count)
@@ -424,10 +424,6 @@ class Trainer:
             flattened_values,
         )
 
-    def _reset_rollout_health_update(self) -> None:
-        for key in ROLLOUT_HEALTH_KEYS:
-            self.rollout_health_update[key] = 0
-
     def _new_rollout_health(self) -> Dict[str, int]:
         return {key: 0 for key in ROLLOUT_HEALTH_KEYS}
 
@@ -457,29 +453,16 @@ class Trainer:
         return np.arange(actual_batch_size), minibatch_size
 
     def _count_info_events(self, info: Dict[str, Any], key: str) -> int:
-        """Count truthy events in a vectorized env info dict.
-
-        Gymnasium's AsyncVectorEnv stores per-env values under `key` and an
-        autoreset mask under `_key`.  The mask indicates which entries come
-        from the most recent step (True) vs. stale post-reset values (False).
-        We only count events where the mask is True.
-        """
+        """Count truthy events in a stacked Rust vector-env info dict."""
         if key not in info:
             return 0
-        events = info[key]
-        autoreset_mask = info.get(f"_{key}")
 
-        events_arr = np.asarray(events)
-        if events_arr.dtype == np.object_:
-            events_arr = np.array([bool(v) for v in events_arr], dtype=bool)
+        events = np.asarray(info[key])
+        if events.dtype == np.object_:
+            events = np.array([bool(value) for value in events], dtype=bool)
         else:
-            events_arr = events_arr.astype(bool, copy=False)
-
-        if autoreset_mask is not None:
-            mask_arr = np.asarray(autoreset_mask).astype(bool, copy=False)
-            if events_arr.shape == mask_arr.shape:
-                events_arr = events_arr[mask_arr]
-        return int(np.count_nonzero(events_arr))
+            events = events.astype(bool, copy=False)
+        return int(np.count_nonzero(events))
 
     def _log_rollout_health(self, update: int) -> None:
         rollout_parts = [
@@ -844,32 +827,20 @@ class Trainer:
 
 def build_training_components(
     hypers: Hypers,
-) -> tuple[Experiment, VectorEnv | RustVectorEnv, Agent]:
+) -> tuple[Experiment, VectorEnv, Agent]:
     experiment = Experiment(hypers.experiment, hypers)
     observation_space = ObservationSpace(hypers.observation)
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
-    if hypers.train.use_rust_env:
-        env = RustVectorEnv(
-            hypers.train.num_envs,
-            match,
-            observation_space,
-            reward,
-            device=experiment.device,
-            seed=hypers.experiment.seed,
-            opponent_policy=hypers.train.opponent_policy,
-        )
-    else:
-        opponent_policy = build_opponent_policy(hypers.train.opponent_policy)
-        env = VectorEnv(
-            hypers.train.num_envs,
-            match,
-            observation_space,
-            reward,
-            device=experiment.device,
-            seed=hypers.experiment.seed,
-            opponent_policy=opponent_policy,
-        )
+    env = VectorEnv(
+        hypers.train.num_envs,
+        match,
+        observation_space,
+        reward,
+        device=experiment.device,
+        seed=hypers.experiment.seed,
+        opponent_policy=hypers.train.opponent_policy,
+    )
     agent = Agent(observation_space, hypers.agent)
     return experiment, env, agent
 

@@ -8,7 +8,7 @@ import pytest
 import torch
 
 # Local imports
-from manabot.env import Env, PassivePolicy, Reward, VectorEnv
+from manabot.env import Env, VectorEnv, PassivePolicy, Reward
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import RewardHypers
@@ -62,6 +62,7 @@ def vector_env(sample_match, observation_space, reward) -> VectorEnv:
         observation_space=observation_space,
         reward=reward,
         device="cpu",
+        opponent_policy="passive",
     )
 
 
@@ -191,7 +192,7 @@ class TestEnvironment:
             observation_space=observation_space,
             reward=reward,
             device="cpu",
-            opponent_policy=PassivePolicy(),
+            opponent_policy="passive",
         )
 
         obs, _ = vector_env.reset()
