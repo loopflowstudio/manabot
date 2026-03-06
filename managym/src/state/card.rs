@@ -99,6 +99,35 @@ pub struct ManaAbility {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Keywords {
+    pub flying: bool,
+    pub reach: bool,
+    pub haste: bool,
+    pub vigilance: bool,
+    pub trample: bool,
+    pub first_strike: bool,
+    pub double_strike: bool,
+    pub deathtouch: bool,
+    pub lifelink: bool,
+    pub defender: bool,
+    pub menace: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActivatedAbilityEffect {
+    SelfGetsUntilEot {
+        power_delta: i32,
+        toughness_delta: i32,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivatedAbilityDefinition {
+    pub mana_cost: ManaCost,
+    pub effect: ActivatedAbilityEffect,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CardDefinition {
     pub name: String,
     pub mana_cost: Option<ManaCost>,
@@ -107,6 +136,8 @@ pub struct CardDefinition {
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
+    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+    pub keywords: Keywords,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
@@ -133,6 +164,8 @@ pub struct Card {
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
+    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
+    pub keywords: Keywords,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
@@ -157,6 +190,8 @@ impl Card {
             subtypes: definition.subtypes.clone(),
             abilities: definition.abilities.clone(),
             mana_abilities: definition.mana_abilities.clone(),
+            activated_abilities: definition.activated_abilities.clone(),
+            keywords: definition.keywords.clone(),
             text_box: definition.text_box.clone(),
             power: definition.power,
             toughness: definition.toughness,

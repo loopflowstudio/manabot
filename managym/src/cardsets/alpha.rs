@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    card::{basic_land, Card, CardDefinition, CardType, CardTypes, ManaAbility},
+    card::{
+        basic_land, ActivatedAbilityDefinition, ActivatedAbilityEffect, Card, CardDefinition,
+        CardType, CardTypes, Keywords, ManaAbility,
+    },
     game_object::{IdGenerator, ObjectId, PlayerId},
     mana::{Color, Mana, ManaCost},
 };
@@ -104,6 +107,193 @@ impl CardRegistry {
             mana_cost: Some(ManaCost::parse("UU")),
             types: CardTypes::new([CardType::Instant]),
             text_box: "Counter target spell.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Wind Drake".to_string(),
+            mana_cost: Some(ManaCost::parse("2U")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Drake".to_string()],
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            power: Some(2),
+            toughness: Some(2),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Giant Spider".to_string(),
+            mana_cost: Some(ManaCost::parse("3G")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spider".to_string()],
+            keywords: Keywords {
+                reach: true,
+                ..Default::default()
+            },
+            power: Some(2),
+            toughness: Some(4),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Raging Goblin".to_string(),
+            mana_cost: Some(ManaCost::parse("R")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".to_string()],
+            keywords: Keywords {
+                haste: true,
+                ..Default::default()
+            },
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Serra Angel".to_string(),
+            mana_cost: Some(ManaCost::parse("3WW")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Angel".to_string()],
+            keywords: Keywords {
+                flying: true,
+                vigilance: true,
+                ..Default::default()
+            },
+            power: Some(4),
+            toughness: Some(4),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Typhoid Rats".to_string(),
+            mana_cost: Some(ManaCost::parse("B")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rat".to_string()],
+            keywords: Keywords {
+                deathtouch: true,
+                ..Default::default()
+            },
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "War Mammoth".to_string(),
+            mana_cost: Some(ManaCost::parse("3G")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elephant".to_string()],
+            keywords: Keywords {
+                trample: true,
+                ..Default::default()
+            },
+            power: Some(3),
+            toughness: Some(3),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Wall of Stone".to_string(),
+            mana_cost: Some(ManaCost::parse("1RR")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wall".to_string()],
+            keywords: Keywords {
+                defender: true,
+                ..Default::default()
+            },
+            power: Some(0),
+            toughness: Some(8),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Boggart Brute".to_string(),
+            mana_cost: Some(ManaCost::parse("2R")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".to_string(), "Warrior".to_string()],
+            keywords: Keywords {
+                menace: true,
+                ..Default::default()
+            },
+            power: Some(3),
+            toughness: Some(2),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Youthful Knight".to_string(),
+            mana_cost: Some(ManaCost::parse("1W")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".to_string(), "Knight".to_string()],
+            keywords: Keywords {
+                first_strike: true,
+                ..Default::default()
+            },
+            power: Some(2),
+            toughness: Some(1),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Fencing Ace".to_string(),
+            mana_cost: Some(ManaCost::parse("1W")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".to_string(), "Soldier".to_string()],
+            keywords: Keywords {
+                double_strike: true,
+                ..Default::default()
+            },
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Healer's Hawk".to_string(),
+            mana_cost: Some(ManaCost::parse("W")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".to_string()],
+            keywords: Keywords {
+                flying: true,
+                lifelink: true,
+                ..Default::default()
+            },
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Craw Wurm".to_string(),
+            mana_cost: Some(ManaCost::parse("4GG")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wurm".to_string()],
+            power: Some(6),
+            toughness: Some(4),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Shivan Dragon".to_string(),
+            mana_cost: Some(ManaCost::parse("4RR")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".to_string()],
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("R"),
+                effect: ActivatedAbilityEffect::SelfGetsUntilEot {
+                    power_delta: 1,
+                    toughness_delta: 0,
+                },
+            }],
+            power: Some(5),
+            toughness: Some(5),
             ..Default::default()
         });
     }

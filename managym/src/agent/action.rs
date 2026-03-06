@@ -12,6 +12,7 @@ pub enum ActionType {
     DeclareAttacker = 3,
     DeclareBlocker = 4,
     ChooseTarget = 5,
+    PriorityActivateAbility = 6,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -23,6 +24,11 @@ pub enum Action {
     CastSpell {
         player: PlayerId,
         card: CardId,
+    },
+    ActivateAbility {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
     },
     PassPriority {
         player: PlayerId,
@@ -48,6 +54,7 @@ impl Action {
         match self {
             Action::PlayLand { .. } => ActionType::PriorityPlayLand,
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
+            Action::ActivateAbility { .. } => ActionType::PriorityActivateAbility,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,
             Action::DeclareAttacker { .. } => ActionType::DeclareAttacker,
             Action::DeclareBlocker { .. } => ActionType::DeclareBlocker,
