@@ -83,6 +83,7 @@ pub struct KeywordData {
 pub enum StackObjectKindData {
     Spell = 0,
     ActivatedAbility = 1,
+    TriggeredAbility = 2,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -353,9 +354,8 @@ impl Observation {
             stack_object_id: stack_object.id().0 as i32,
             kind: match stack_object {
                 StackObject::Spell(_) => StackObjectKindData::Spell,
-                StackObject::ActivatedAbility(_) | StackObject::TriggeredAbility(_) => {
-                    StackObjectKindData::ActivatedAbility
-                }
+                StackObject::ActivatedAbility(_) => StackObjectKindData::ActivatedAbility,
+                StackObject::TriggeredAbility(_) => StackObjectKindData::TriggeredAbility,
             },
             controller_id: game.state.players[stack_object.controller().0].id.0 as i32,
             source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
@@ -460,6 +460,9 @@ impl Observation {
                     .as_ref()
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
+                crate::state::target::Target::StackSpell(card_id) => {
+                    vec![game.state.cards[card_id].id]
+                }
             },
         }
     }

@@ -1,7 +1,7 @@
 instance_type: g5.xlarge
-region: us-east-1
+region: us-west-2
 disk_gb: 50
 spot: true
 max_spot_price: "1.50"
-ami: ami-REPLACE_WITH_DLAMI
+ami: ami-0233d2606cf2ca76c
 key_name: null

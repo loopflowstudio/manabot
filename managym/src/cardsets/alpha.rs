@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
+    ability::{Effect, TargetSpec},
     card::{
-        basic_land, ActivatedAbilityDefinition, ActivatedAbilityEffect, Card, CardDefinition,
-        CardType, CardTypes, Keywords, ManaAbility,
+        basic_land, ActivatedAbilityDefinition, Card, CardDefinition, CardType, CardTypes,
+        Keywords, ManaAbility,
     },
     game_object::{IdGenerator, ObjectId, PlayerId},
     mana::{Color, Mana, ManaCost},
@@ -114,6 +115,10 @@ impl CardRegistry {
             name: "Lightning Bolt".to_string(),
             mana_cost: Some(ManaCost::parse("R")),
             types: CardTypes::new([CardType::Instant]),
+            spell_effect: Some(Effect::DealDamage {
+                amount: 3,
+                target: TargetSpec::CreatureOrPlayer,
+            }),
             text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
             ..Default::default()
         });
@@ -122,6 +127,9 @@ impl CardRegistry {
             name: "Counterspell".to_string(),
             mana_cost: Some(ManaCost::parse("UU")),
             types: CardTypes::new([CardType::Instant]),
+            spell_effect: Some(Effect::CounterSpell {
+                target: TargetSpec::Spell,
+            }),
             text_box: "Counter target spell.".to_string(),
             ..Default::default()
         });
@@ -261,7 +269,7 @@ impl CardRegistry {
             },
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("R"),
-                effect: ActivatedAbilityEffect::SelfGetsUntilEot {
+                effect: Effect::ModifyUntilEot {
                     power_delta: 1,
                     toughness_delta: 0,
                 },

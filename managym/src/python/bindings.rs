@@ -584,6 +584,7 @@ impl From<ActionSpaceEnum> for ActionSpaceKind {
 pub enum StackObjectKindEnum {
     Spell = 0,
     ActivatedAbility = 1,
+    TriggeredAbility = 2,
 }
 
 #[cfg(feature = "python")]
@@ -591,6 +592,8 @@ pub enum StackObjectKindEnum {
 impl StackObjectKindEnum {
     #[classattr]
     const SPELL: Self = Self::Spell;
+    #[classattr]
+    const TRIGGERED_ABILITY: Self = Self::TriggeredAbility;
     #[classattr]
     const ACTIVATED_ABILITY: Self = Self::ActivatedAbility;
 
@@ -609,6 +612,7 @@ impl From<StackObjectKindData> for StackObjectKindEnum {
         match value {
             StackObjectKindData::Spell => Self::Spell,
             StackObjectKindData::ActivatedAbility => Self::ActivatedAbility,
+            StackObjectKindData::TriggeredAbility => Self::TriggeredAbility,
         }
     }
 }
@@ -619,6 +623,7 @@ impl From<StackObjectKindEnum> for StackObjectKindData {
         match value {
             StackObjectKindEnum::Spell => Self::Spell,
             StackObjectKindEnum::ActivatedAbility => Self::ActivatedAbility,
+            StackObjectKindEnum::TriggeredAbility => Self::TriggeredAbility,
         }
     }
 }
