@@ -6,8 +6,7 @@ from manabot.env import (
     Match,
     ObservationSpace,
     Reward,
-    VectorEnv,
-    build_opponent_policy,
+    RustVectorEnv,
 )
 from manabot.infra import Experiment
 from manabot.model import Agent, Trainer
@@ -26,13 +25,13 @@ def _train_chunk(agent: Agent | None, hypers):
     match = Match(hypers.match)
     reward = Reward(hypers.reward)
     experiment = Experiment(hypers.experiment, hypers)
-    env = VectorEnv(
+    env = RustVectorEnv(
         hypers.train.num_envs,
         match,
         obs_space,
         reward,
         device=experiment.device,
-        opponent_policy=build_opponent_policy(hypers.train.opponent_policy),
+        opponent_policy=hypers.train.opponent_policy,
     )
     agent = agent or Agent(obs_space, hypers.agent)
     trainer = Trainer(agent, experiment, env, hypers.train)

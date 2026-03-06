@@ -20,14 +20,20 @@ backend. Full benchmark published. Verification ladder passes.
 - Remove observation encoding from the rollout loop (Rust does it)
 - Rollout step is: `actions = agent(obs)` → `obs, rewards, dones = env.step(actions)`
 
-### 3. Benchmark suite
+### 3. Final benchmark
 
-`manabot/verify/benchmark_sps.py`:
-- Measure raw env SPS (step without agent inference)
-- Measure training SPS (full rollout + gradient)
-- Sweep num_envs: 1, 4, 16, 64, 128
-- Report: SPS, CPU utilization, memory usage
-- Compare against first-light baseline
+Run the full measurement protocol from `wave/sps/README.md`:
+
+```bash
+# Breakdown at multiple scales
+for n in 1 4 16 64 128; do
+    python scripts/bench_breakdown.py --num-envs $n --steps 2048
+    python scripts/bench_breakdown.py --num-envs $n --steps 2048 --with-inference
+done
+```
+
+Publish results in a table: num_envs vs env-only SPS vs training SPS.
+Compare against the baseline numbers in the wave README.
 
 ### 4. Documentation
 
@@ -43,4 +49,4 @@ Update README training section with new SPS numbers.
 ## Done when
 
 One env backend, clean codebase, published benchmark showing 10x+
-improvement. Wave complete.
+improvement over the baseline in the wave README. Wave complete.
