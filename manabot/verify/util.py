@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import logging
 import math
 from typing import Any
@@ -59,9 +59,6 @@ class EvaluationActionRecord:
     spell_prob: float | None
     attack_prob: float | None
 
-    def to_row(self) -> dict[str, Any]:
-        return asdict(self)
-
 
 @dataclass(frozen=True)
 class EvaluationArtifacts:
@@ -109,17 +106,26 @@ def wilson_lower_bound(wins: int, total: int, z: float = 1.96) -> float:
     return max(0.0, (center - margin) / denom)
 
 
-def _select_agent_action(agent, obs: dict[str, np.ndarray], deterministic: bool) -> int:
-    device = torch.device("cpu")
+def _agent_device(agent) -> torch.device:
     try:
-        device = next(agent.parameters()).device
+        return next(agent.parameters()).device
     except (AttributeError, StopIteration, TypeError):
-        device = torch.device("cpu")
+        return torch.device("cpu")
 
-    tensor_obs = {
-        k: torch.as_tensor(v, dtype=torch.float32, device=device).unsqueeze(0)
-        for k, v in obs.items()
+
+def _tensor_observation(
+    obs: dict[str, np.ndarray],
+    *,
+    device: torch.device,
+) -> dict[str, torch.Tensor]:
+    return {
+        key: torch.as_tensor(value, dtype=torch.float32, device=device).unsqueeze(0)
+        for key, value in obs.items()
     }
+
+
+def _select_agent_action(agent, obs: dict[str, np.ndarray], deterministic: bool) -> int:
+    tensor_obs = _tensor_observation(obs, device=_agent_device(agent))
     action, _, _, _ = agent.get_action_and_value(
         tensor_obs,
         deterministic=deterministic,
@@ -212,16 +218,7 @@ def _policy_action_type_probabilities(
     if not hasattr(agent, "forward"):
         return None
 
-    device = torch.device("cpu")
-    try:
-        device = next(agent.parameters()).device
-    except (AttributeError, StopIteration, TypeError):
-        device = torch.device("cpu")
-
-    tensor_obs = {
-        k: torch.as_tensor(v, dtype=torch.float32, device=device).unsqueeze(0)
-        for k, v in obs.items()
-    }
+    tensor_obs = _tensor_observation(obs, device=_agent_device(agent))
     with torch.no_grad():
         logits, _ = agent.forward(tensor_obs)
 

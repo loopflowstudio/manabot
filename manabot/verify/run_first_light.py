@@ -9,7 +9,8 @@ from typing import Sequence
 from .first_light import MODE_PRESETS, resolve_run_config, run_first_light
 
 
-def _add_common_args(parser: argparse.ArgumentParser) -> None:
+def _build_common_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--db", default=".runs/verify.sqlite")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--label")
@@ -43,6 +44,7 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--report", action="store_true")
     parser.add_argument("--report-path")
+    return parser
 
 
 def _build_config(args: argparse.Namespace, *, evaluation_only: bool = False):
@@ -85,18 +87,20 @@ def _print_summary(summary: dict) -> None:
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    _add_common_args(parser)
+    common = _build_common_parser()
+    parser = argparse.ArgumentParser(description=__doc__, parents=[common])
 
     subparsers = parser.add_subparsers(dest="command")
-    train_parser = subparsers.add_parser("train", help="Run the full harness")
-    _add_common_args(train_parser)
-    eval_parser = subparsers.add_parser(
+    subparsers.add_parser(
+        "train",
+        help="Run the full harness",
+        parents=[common],
+    )
+    subparsers.add_parser(
         "eval",
         help="Record an evaluation-only run with no training",
+        parents=[common],
     )
-    _add_common_args(eval_parser)
-
     return parser.parse_args(list(argv) if argv is not None else None)
 
 

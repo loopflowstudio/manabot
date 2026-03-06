@@ -22,16 +22,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = _parse_args(argv)
     output = Path(args.output) if args.output else default_report_path(args.run_id)
 
-    store = VerifyStore(args.db)
-    try:
+    with VerifyStore(args.db) as store:
         markdown, written_path, _ = write_report(
             store,
             run_id=args.run_id,
             output_path=output,
             report_kind="summary",
         )
-    finally:
-        store.close()
 
     if written_path is not None:
         print(f"Wrote {written_path}")

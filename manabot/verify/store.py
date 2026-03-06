@@ -11,6 +11,76 @@ from typing import Any
 
 from .util import EvaluationArtifacts
 
+RUN_CONFIG_FIELDS = (
+    "experiment",
+    "train",
+    "reward",
+    "agent",
+    "match",
+    "observation",
+)
+
+EVALUATION_METRIC_FIELDS = (
+    "win_rate",
+    "win_ci_lower",
+    "mean_steps",
+    "attack_rate",
+    "attacked_when_able",
+    "landed_when_able",
+    "cast_when_able",
+    "passed_when_able",
+    "could_attack",
+    "could_land",
+    "could_spell",
+    "could_pass",
+    "land_plays",
+    "spell_casts",
+    "pass_count",
+    "single_valid_decisions",
+    "multi_valid_decisions",
+    "pass_land_decisions",
+    "pass_land_pass_rate",
+    "pass_land_land_rate",
+    "pass_land_spell_rate",
+    "mean_pass_prob",
+    "mean_land_prob",
+    "mean_spell_prob",
+    "mean_attack_prob",
+    "mean_pass_prob_when_land_available",
+    "mean_land_prob_when_land_available",
+    "mean_pass_prob_when_pass_land",
+    "mean_land_prob_when_pass_land",
+    "action_space_truncations",
+    "card_space_truncations",
+    "permanent_space_truncations",
+)
+
+EVALUATION_ACTION_FIELDS = (
+    "game_index",
+    "step",
+    "player",
+    "action_type",
+    "choice_set",
+    "is_trivial",
+    "num_valid_actions",
+    "attack_available",
+    "land_available",
+    "spell_available",
+    "pass_available",
+    "pass_prob",
+    "land_prob",
+    "spell_prob",
+    "attack_prob",
+)
+
+BOOLEAN_ACTION_FIELDS = {
+    "is_trivial",
+    "attack_available",
+    "land_available",
+    "spell_available",
+    "pass_available",
+}
+
 
 def _default_db_path() -> Path:
     runs_dir = Path(os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".runs")))
@@ -45,6 +115,12 @@ class VerifyStore:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA foreign_keys=ON")
         self._create_schema()
+
+    def __enter__(self) -> VerifyStore:
+        return self
+
+    def __exit__(self, _exc_type, _exc, _tb) -> None:
+        self.close()
 
     def close(self) -> None:
         self.con.close()
@@ -236,15 +312,7 @@ class VerifyStore:
                 agent_json, match_json, observation_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                run_id,
-                self._json_blob(configs["experiment"]),
-                self._json_blob(configs["train"]),
-                self._json_blob(configs["reward"]),
-                self._json_blob(configs["agent"]),
-                self._json_blob(configs["match"]),
-                self._json_blob(configs["observation"]),
-            ),
+            (run_id, *(self._json_blob(configs[field]) for field in RUN_CONFIG_FIELDS)),
         )
         self.con.commit()
         return run_id
@@ -271,6 +339,7 @@ class VerifyStore:
         retain_actions: bool = False,
     ) -> int:
         metrics = artifacts.metrics
+        metric_values = tuple(metrics[field] for field in EVALUATION_METRIC_FIELDS)
         cursor = self.con.execute(
             """
             INSERT INTO evaluations (
@@ -297,38 +366,7 @@ class VerifyStore:
                 opponent_policy,
                 num_games,
                 int(deterministic),
-                metrics["win_rate"],
-                metrics["win_ci_lower"],
-                metrics["mean_steps"],
-                metrics["attack_rate"],
-                metrics["attacked_when_able"],
-                metrics["landed_when_able"],
-                metrics["cast_when_able"],
-                metrics["passed_when_able"],
-                metrics["could_attack"],
-                metrics["could_land"],
-                metrics["could_spell"],
-                metrics["could_pass"],
-                metrics["land_plays"],
-                metrics["spell_casts"],
-                metrics["pass_count"],
-                metrics["single_valid_decisions"],
-                metrics["multi_valid_decisions"],
-                metrics["pass_land_decisions"],
-                metrics["pass_land_pass_rate"],
-                metrics["pass_land_land_rate"],
-                metrics["pass_land_spell_rate"],
-                metrics["mean_pass_prob"],
-                metrics["mean_land_prob"],
-                metrics["mean_spell_prob"],
-                metrics["mean_attack_prob"],
-                metrics["mean_pass_prob_when_land_available"],
-                metrics["mean_land_prob_when_land_available"],
-                metrics["mean_pass_prob_when_pass_land"],
-                metrics["mean_land_prob_when_pass_land"],
-                metrics["action_space_truncations"],
-                metrics["card_space_truncations"],
-                metrics["permanent_space_truncations"],
+                *metric_values,
                 explained_variance,
             ),
         )
@@ -361,21 +399,12 @@ class VerifyStore:
                 [
                     (
                         evaluation_id,
-                        action.game_index,
-                        action.step,
-                        action.player,
-                        action.action_type,
-                        action.choice_set,
-                        int(action.is_trivial),
-                        action.num_valid_actions,
-                        int(action.attack_available),
-                        int(action.land_available),
-                        int(action.spell_available),
-                        int(action.pass_available),
-                        action.pass_prob,
-                        action.land_prob,
-                        action.spell_prob,
-                        action.attack_prob,
+                        *(
+                            int(getattr(action, field))
+                            if field in BOOLEAN_ACTION_FIELDS
+                            else getattr(action, field)
+                            for field in EVALUATION_ACTION_FIELDS
+                        ),
                     )
                     for action in artifacts.actions
                 ],
@@ -427,12 +456,8 @@ class VerifyStore:
         if result is None:
             raise KeyError(f"Unknown run_id={run_id}")
         return {
-            "experiment": json.loads(result["experiment_json"]),
-            "train": json.loads(result["train_json"]),
-            "reward": json.loads(result["reward_json"]),
-            "agent": json.loads(result["agent_json"]),
-            "match": json.loads(result["match_json"]),
-            "observation": json.loads(result["observation_json"]),
+            field: json.loads(result[f"{field}_json"])
+            for field in RUN_CONFIG_FIELDS
         }
 
     def get_evaluations(self, run_id: int) -> list[dict[str, Any]]:

@@ -48,6 +48,14 @@ DELTA_METRICS = (
     "mean_land_prob_when_pass_land",
 )
 
+FIRST_LIGHT_REWARD = {
+    "win_reward": 1.0,
+    "lose_reward": -1.0,
+    "land_play_reward": 0.03,
+    "creature_play_reward": 0.06,
+    "opponent_life_loss_reward": 0.01,
+}
+
 
 @dataclass(frozen=True)
 class FirstLightRunConfig:
@@ -138,13 +146,7 @@ def build_first_light_hypers(
             "opponent_policy": config.opponent_policy,
             "eval_num_games": config.eval_num_games,
         },
-        reward={
-            "win_reward": 1.0,
-            "lose_reward": -1.0,
-            "land_play_reward": 0.03,
-            "creature_play_reward": 0.06,
-            "opponent_life_loss_reward": 0.01,
-        },
+        reward=FIRST_LIGHT_REWARD,
         match={
             "hero_deck": STANDARD_DECK,
             "villain_deck": STANDARD_DECK,
@@ -213,6 +215,59 @@ def _train_chunk(
     trainer = Trainer(learner, experiment, env, hypers.train)
     trainer.train()
     return learner, trainer
+
+
+def _serialized_hypers(hypers) -> dict[str, Any]:
+    return {
+        "experiment": hypers.experiment.model_dump(mode="json"),
+        "train": hypers.train.model_dump(mode="json"),
+        "reward": hypers.reward.model_dump(mode="json"),
+        "agent": hypers.agent.model_dump(mode="json"),
+        "match": hypers.match.model_dump(mode="json"),
+        "observation": hypers.observation.model_dump(mode="json"),
+    }
+
+
+def _record_evaluation(
+    store: VerifyStore,
+    *,
+    run_id: int,
+    kind: str,
+    step: int,
+    agent,
+    observation_space: ObservationSpace,
+    match: Match,
+    reward: Reward,
+    num_games: int,
+    opponent_policy: str,
+    seed: int,
+    capture_actions: bool,
+    explained_variance: float | None = None,
+    update_index: int | None = None,
+) -> None:
+    artifacts = capture_evaluation(
+        agent,
+        observation_space,
+        match,
+        reward,
+        num_games=num_games,
+        opponent_policy=opponent_policy,
+        deterministic=False,
+        seed=seed,
+        capture_actions=capture_actions,
+    )
+    store.record_evaluation(
+        run_id=run_id,
+        kind=kind,
+        step=step,
+        update_index=update_index,
+        opponent_policy=opponent_policy,
+        num_games=num_games,
+        deterministic=False,
+        artifacts=artifacts,
+        explained_variance=explained_variance,
+        retain_actions=capture_actions,
+    )
 
 
 def summarize_run(store: VerifyStore, run_id: int) -> dict[str, Any]:
@@ -458,7 +513,6 @@ def default_report_path(run_id: int) -> Path:
 def run_first_light(config: FirstLightRunConfig) -> dict[str, Any]:
     """Execute a first-light run and persist all results to SQLite."""
 
-    store = VerifyStore(config.db)
     git = collect_git_metadata()
     initial_hypers = build_first_light_hypers(
         config,
@@ -466,158 +520,128 @@ def run_first_light(config: FirstLightRunConfig) -> dict[str, Any]:
         seed=config.seed,
         exp_name_suffix="bootstrap",
     )
-    run_id = store.create_run(
-        label=config.label,
-        status="running",
-        mode=config.mode,
-        seed=config.seed,
-        git_commit=git["git_commit"],
-        git_branch=git["git_branch"],
-        tree_dirty=git["tree_dirty"],
-        recipe_name=FIRST_LIGHT_RECIPE_NAME,
-        opponent_policy=config.opponent_policy,
-        num_envs=config.num_envs,
-        num_steps=config.num_steps,
-        total_timesteps=config.total_timesteps,
-        eval_interval=config.eval_interval,
-        eval_num_games=config.eval_num_games,
-        baseline_auto=config.baseline,
-        notes=config.notes,
-        configs={
-            "experiment": initial_hypers.experiment.model_dump(mode="json"),
-            "train": initial_hypers.train.model_dump(mode="json"),
-            "reward": initial_hypers.reward.model_dump(mode="json"),
-            "agent": initial_hypers.agent.model_dump(mode="json"),
-            "match": initial_hypers.match.model_dump(mode="json"),
-            "observation": initial_hypers.observation.model_dump(mode="json"),
-        },
-    )
-
-    try:
-        observation_space = ObservationSpace(initial_hypers.observation)
-        match = Match(initial_hypers.match)
-        reward = Reward(initial_hypers.reward)
-
-        if config.baseline:
-            baseline_agent = Agent(observation_space, initial_hypers.agent)
-            baseline = capture_evaluation(
-                baseline_agent,
-                observation_space,
-                match,
-                reward,
-                num_games=config.eval_num_games,
-                opponent_policy=config.opponent_policy,
-                deterministic=False,
-                seed=config.seed,
-                capture_actions=True,
-            )
-            store.record_evaluation(
-                run_id=run_id,
-                kind="baseline",
-                step=0,
-                update_index=0,
-                opponent_policy=config.opponent_policy,
-                num_games=config.eval_num_games,
-                deterministic=False,
-                artifacts=baseline,
-                retain_actions=True,
-            )
-
-        trained_agent: Agent | None = None
-        last_explained_variance: float | None = None
-        previous_step = 0
-
-        for checkpoint_step in checkpoint_steps(
-            config.total_timesteps,
-            config.eval_interval,
-        ):
-            chunk_hypers = build_first_light_hypers(
-                config,
-                total_timesteps=checkpoint_step - previous_step,
-                seed=config.seed + checkpoint_step,
-                exp_name_suffix=f"ckpt-{checkpoint_step}",
-            )
-            trained_agent, trainer = _train_chunk(trained_agent, chunk_hypers)
-            last_explained_variance = trainer.last_explained_variance
-            checkpoint = capture_evaluation(
-                trained_agent,
-                observation_space,
-                match,
-                reward,
-                num_games=config.eval_num_games,
-                opponent_policy=config.opponent_policy,
-                deterministic=False,
-                seed=config.seed + 10_000 + checkpoint_step,
-                capture_actions=False,
-            )
-            store.record_evaluation(
-                run_id=run_id,
-                kind="checkpoint",
-                step=checkpoint_step,
-                update_index=step_to_update_index(config, checkpoint_step),
-                opponent_policy=config.opponent_policy,
-                num_games=config.eval_num_games,
-                deterministic=False,
-                artifacts=checkpoint,
-                explained_variance=last_explained_variance,
-                retain_actions=False,
-            )
-            previous_step = checkpoint_step
-
-        if config.total_timesteps > previous_step:
-            final_hypers = build_first_light_hypers(
-                config,
-                total_timesteps=config.total_timesteps - previous_step,
-                seed=config.seed + config.total_timesteps,
-                exp_name_suffix="final",
-            )
-            trained_agent, trainer = _train_chunk(trained_agent, final_hypers)
-            last_explained_variance = trainer.last_explained_variance
-
-        if trained_agent is None:
-            trained_agent = Agent(observation_space, initial_hypers.agent)
-
-        final = capture_evaluation(
-            trained_agent,
-            observation_space,
-            match,
-            reward,
-            num_games=config.eval_num_games,
+    with VerifyStore(config.db) as store:
+        run_id = store.create_run(
+            label=config.label,
+            status="running",
+            mode=config.mode,
+            seed=config.seed,
+            git_commit=git["git_commit"],
+            git_branch=git["git_branch"],
+            tree_dirty=git["tree_dirty"],
+            recipe_name=FIRST_LIGHT_RECIPE_NAME,
             opponent_policy=config.opponent_policy,
-            deterministic=False,
-            seed=config.seed + 20_000 + config.total_timesteps,
-            capture_actions=True,
+            num_envs=config.num_envs,
+            num_steps=config.num_steps,
+            total_timesteps=config.total_timesteps,
+            eval_interval=config.eval_interval,
+            eval_num_games=config.eval_num_games,
+            baseline_auto=config.baseline,
+            notes=config.notes,
+            configs=_serialized_hypers(initial_hypers),
         )
-        store.record_evaluation(
-            run_id=run_id,
-            kind="final",
-            step=config.total_timesteps,
-            update_index=step_to_update_index(config, config.total_timesteps),
-            opponent_policy=config.opponent_policy,
-            num_games=config.eval_num_games,
-            deterministic=False,
-            artifacts=final,
-            explained_variance=last_explained_variance,
-            retain_actions=True,
-        )
-        store.update_run_status(run_id, "completed")
 
-        report_path = None
-        if config.report:
-            report_path = config.report_path or default_report_path(run_id)
-            write_report(
+        try:
+            observation_space = ObservationSpace(initial_hypers.observation)
+            match = Match(initial_hypers.match)
+            reward = Reward(initial_hypers.reward)
+
+            if config.baseline:
+                _record_evaluation(
+                    store,
+                    run_id=run_id,
+                    kind="baseline",
+                    step=0,
+                    agent=Agent(observation_space, initial_hypers.agent),
+                    observation_space=observation_space,
+                    match=match,
+                    reward=reward,
+                    num_games=config.eval_num_games,
+                    opponent_policy=config.opponent_policy,
+                    seed=config.seed,
+                    capture_actions=True,
+                    update_index=0,
+                )
+
+            trained_agent: Agent | None = None
+            last_explained_variance: float | None = None
+            previous_step = 0
+
+            for checkpoint_step in checkpoint_steps(
+                config.total_timesteps,
+                config.eval_interval,
+            ):
+                chunk_hypers = build_first_light_hypers(
+                    config,
+                    total_timesteps=checkpoint_step - previous_step,
+                    seed=config.seed + checkpoint_step,
+                    exp_name_suffix=f"ckpt-{checkpoint_step}",
+                )
+                trained_agent, trainer = _train_chunk(trained_agent, chunk_hypers)
+                last_explained_variance = trainer.last_explained_variance
+                _record_evaluation(
+                    store,
+                    run_id=run_id,
+                    kind="checkpoint",
+                    step=checkpoint_step,
+                    agent=trained_agent,
+                    observation_space=observation_space,
+                    match=match,
+                    reward=reward,
+                    num_games=config.eval_num_games,
+                    opponent_policy=config.opponent_policy,
+                    seed=config.seed + 10_000 + checkpoint_step,
+                    capture_actions=False,
+                    explained_variance=last_explained_variance,
+                    update_index=step_to_update_index(config, checkpoint_step),
+                )
+                previous_step = checkpoint_step
+
+            if config.total_timesteps > previous_step:
+                final_hypers = build_first_light_hypers(
+                    config,
+                    total_timesteps=config.total_timesteps - previous_step,
+                    seed=config.seed + config.total_timesteps,
+                    exp_name_suffix="final",
+                )
+                trained_agent, trainer = _train_chunk(trained_agent, final_hypers)
+                last_explained_variance = trainer.last_explained_variance
+
+            if trained_agent is None:
+                trained_agent = Agent(observation_space, initial_hypers.agent)
+
+            _record_evaluation(
                 store,
                 run_id=run_id,
-                output_path=report_path,
-                report_kind="decision" if config.mode == "decision" else "summary",
+                kind="final",
+                step=config.total_timesteps,
+                agent=trained_agent,
+                observation_space=observation_space,
+                match=match,
+                reward=reward,
+                num_games=config.eval_num_games,
+                opponent_policy=config.opponent_policy,
+                seed=config.seed + 20_000 + config.total_timesteps,
+                capture_actions=True,
+                explained_variance=last_explained_variance,
+                update_index=step_to_update_index(config, config.total_timesteps),
             )
+            store.update_run_status(run_id, "completed")
 
-        summary = summarize_run(store, run_id)
-        summary["run_id"] = run_id
-        summary["report_path"] = str(report_path) if report_path else None
-        return summary
-    except Exception as exc:
-        store.update_run_status(run_id, "failed", notes=str(exc))
-        raise
-    finally:
-        store.close()
+            report_path = None
+            if config.report:
+                report_path = config.report_path or default_report_path(run_id)
+                write_report(
+                    store,
+                    run_id=run_id,
+                    output_path=report_path,
+                    report_kind="decision" if config.mode == "decision" else "summary",
+                )
+
+            summary = summarize_run(store, run_id)
+            summary["run_id"] = run_id
+            summary["report_path"] = str(report_path) if report_path else None
+            return summary
+        except Exception as exc:
+            store.update_run_status(run_id, "failed", notes=str(exc))
+            raise
