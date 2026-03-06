@@ -1,26 +1,37 @@
 # 04: Spell Effect Observations
 
-## Finish line
-
-The agent can distinguish spells by what they do. Lightning Bolt is
-observable as "deal 3 damage to any target." Counterspell is observable
-as "counter target spell." Creatures and lands with no spell effects
-have a null marker.
+**Finish line:** The agent can distinguish spells by what they do.
+Lightning Bolt is observable as "deal 3 damage to any target."
+Counterspell is observable as "counter target spell." Creatures and lands
+with no spell effects have a null marker.
 
 ## Context
 
-The agent can already see keywords on cards (flying, deathtouch, etc.)
-via `KeywordData`, and stack objects with their targets via
-`StackObjectData`. But for spells in hand, the agent sees only card
-stats (P/T, mana cost, type flags) — it can't see *what a spell does*
-before deciding to cast it.
+The agent sees card stats (P/T, mana cost, type flags) and — since
+sprint 03 — game events (damage dealt, spells cast, life changes). But
+for spells in hand, the agent can't see *what a spell does* before
+deciding to cast it. Two Lightning Bolts and two random 1-mana instants
+look identical in the observation.
 
-Two Lightning Bolts and two random 1-mana instants look identical in the
-observation. The agent has to learn effects purely from observed outcomes.
+Sprint 03 established the event observation pipeline: `GameEvent`
+variants, dual-drain accumulator (`emit_event` → `pending_events` +
+`observation_events`), `EventData` in `Observation`, and matching
+Rust/Python encoders with `EVENT_DIM = 7` and configurable `max_events`
+(default 32). Schema enums `EventType` and `EventEntityKind` are
+`#[repr(i32)]` with stable discriminants.
 
-This doesn't require migrating spell resolution to the Effect enum.
-Spell resolution can stay string-matched for now. We're just annotating
-card definitions with metadata that the observation can read.
+This sprint adds static spell metadata to the observation — what spells
+do, not what happened.
+
+## Codebase state
+
+- `CardData` (observation.rs:54) has 9 fields: zone, owner_id, id,
+  registry_key, name, power, toughness, card_types, mana_cost
+- `CARD_DIM = 18` (observation_encoder.rs:9)
+- No `KeywordData` struct exists yet — keywords are not currently
+  observable. Sprint 04 does not add keyword observability.
+- `TargetSpec` exists in `state/ability.rs`
+- Card definitions live in `cardsets/` (e.g., `cardsets/visions.rs`)
 
 ## Changes
 
@@ -35,8 +46,6 @@ pub enum SpellEffectHint {
     None,
     DealDamage { amount: u8 },
     CounterSpell,
-    // Future variants added as cards are added — these are observation
-    // hints, not execution logic. No game.rs changes needed.
 }
 ```
 
@@ -51,57 +60,36 @@ pub struct CardDefinition {
 
 ### 3. Annotate existing cards
 
-In `cardsets/alpha.rs`:
-
-```rust
-// Lightning Bolt
-CardDefinition {
-    spell_effect: SpellEffectHint::DealDamage { amount: 3 },
-    ..
-}
-
-// Counterspell
-CardDefinition {
-    spell_effect: SpellEffectHint::CounterSpell,
-    ..
-}
-
-// Grey Ogre, Llanowar Elves, lands — all SpellEffectHint::None (default)
-```
+In `cardsets/`:
+- Lightning Bolt → `SpellEffectHint::DealDamage { amount: 3 }`
+- Counterspell → `SpellEffectHint::CounterSpell`
+- All creatures, lands → `SpellEffectHint::None` (default)
 
 ### 4. Observation encoding
 
-In `agent/observation.rs`, add to `CardData`:
+Add to `CardData`:
 
 ```rust
 pub struct CardData {
     // existing...
-    pub spell_effect_type: i32,    // SpellEffectHint discriminant (0=None, 1=DealDamage, 2=CounterSpell)
-    pub spell_effect_amount: i32,  // numeric parameter (e.g. 3 for bolt), 0 otherwise
+    pub spell_effect_type: i32,    // 0=None, 1=DealDamage, 2=CounterSpell
+    pub spell_effect_amount: i32,  // e.g. 3 for bolt, 0 otherwise
+    pub target_type: i32,          // -1=no target, maps from TargetSpec
 }
 ```
 
-### 5. Python bindings
+`CARD_DIM` increases from 18 to 21 (3 new features).
 
-- `PyCard` gains `spell_effect_type` and `spell_effect_amount` fields
-- ObservationEncoder adds 2 features to the card feature vector
-- Card feature dimension increases from 18 to 20
+### 5. Python bindings and encoder
 
-### 6. Target type observation
+- `PyCard` gains `spell_effect_type`, `spell_effect_amount`, `target_type`
+- Python `ObservationEncoder.card_dim` increases to match
+- `_encode_card_features` encodes the new fields
 
-Also add target spec information so the agent can see what a spell
-targets before casting:
+### 6. Rust observation encoder
 
-```rust
-pub struct CardData {
-    // existing + spell_effect fields...
-    pub target_type: i32,  // -1=no target, 0=AnyCreatureOrPlayer, 1=SpellOnStack, etc.
-}
-```
-
-This mirrors `TargetSpec` from `state/ability.rs` but as an observation
-field. The agent can see that Lightning Bolt targets "any creature or
-player" while Counterspell targets "spell on stack."
+`encode_card_features` in `observation_encoder.rs` encodes the 3 new
+fields. `CARD_DIM` constant updated.
 
 ## Done when
 
@@ -110,4 +98,5 @@ player" while Counterspell targets "spell on stack."
 - `CardData` for Grey Ogre has `spell_effect_type=0, spell_effect_amount=0`
 - Python observation includes the new fields
 - `cargo test` and `pytest tests/env/` pass
-- Card feature dimension documented in encoder config
+- `CARD_DIM` updated in both Rust and Python encoders
+- Rust and Python card feature shapes match

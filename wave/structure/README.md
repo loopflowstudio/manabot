@@ -9,9 +9,8 @@ mechanics.
 
 This wave was motivated by a comparative analysis against XMage, Forge,
 Magarena, and MageZero. The key finding: our RL interface and state model
-are ahead of the field, but `game.rs` is a god object, the stack has a
-dual-tracking desync risk, and the agent can't see what happened between
-its decisions or what spells do.
+are ahead of the field, but the agent can't see what spells do before
+casting them.
 
 ### Not here
 
@@ -22,26 +21,28 @@ its decisions or what spells do.
 - New keywords or mechanics
 - Changes to training, PPO, or model architecture
 
+## Strategy
+
+Sprints 01-03 are shipped: `game.rs` decomposed to 66 lines, stack/zone
+unification with debug invariants, and event observations (dual-drain
+accumulator, `EventData` in observations, matching Rust/Python encoders).
+
+The remaining sprint (04) adds static spell metadata — what spells do,
+not what happened. This is orthogonal to the event system and touches
+only card definitions, observation structs, and encoders.
+
 ## Goals
 
-1. No method in `game.rs` knows a card name.
-2. Stack membership is tracked in exactly one place.
-3. The agent sees recent game events in its observation.
-4. The agent can distinguish spells by what they do, not just their stats.
-5. All existing tests pass unchanged after every sprint.
+1. The agent can distinguish spells by what they do, not just their stats.
+2. All existing tests pass unchanged after every sprint.
 
 ## Risks
 
-- **Decomposing game.rs** is mechanical but tedious. Risk of introducing
-  bugs through mis-scoped `pub` visibility or broken imports.
-- **Stack unification** touches zone management, which is load-bearing
-  for observations. Desync bugs during the refactor would be ironic.
-- **Event observations** add to the observation tensor size, which could
-  affect training throughput or destabilize existing trained models.
+- **Card feature dimension change** affects training. Any trained models
+  need retraining after `CARD_DIM` increases. This is expected and
+  acceptable for the current stage.
 
 ## Metrics
 
-- `game.rs` line count (target: <400)
-- Stack/zone consistency assertions (zero failures across full test suite)
 - Event observation coverage (events appear for all major game actions)
 - No regression in SPS or test pass rate
