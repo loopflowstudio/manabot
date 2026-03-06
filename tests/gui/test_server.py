@@ -3,28 +3,20 @@ test_server.py
 WebSocket integration tests for the GUI backend server.
 """
 
+from datetime import timedelta
 import json
 
 from fastapi.testclient import TestClient
 
 # Local imports
-from gui import trace as trace_store
+from gui import server, trace as trace_store
 from gui.server import app
 
 
 def _pick_action(actions: list[dict]) -> int:
+    preferred_action_types = {*server.ACTION_LABELS, "PRIORITY_PASS_PRIORITY"}
     for action in actions:
-        if action["type"] in {
-            "PRIORITY_PLAY_LAND",
-            "PRIORITY_CAST_SPELL",
-            "DECLARE_ATTACKER",
-            "DECLARE_BLOCKER",
-            "CHOOSE_TARGET",
-        }:
-            return int(action["index"])
-
-    for action in actions:
-        if action["type"] == "PRIORITY_PASS_PRIORITY":
+        if action["type"] in preferred_action_types:
             return int(action["index"])
 
     return int(actions[0]["index"])
@@ -32,6 +24,7 @@ def _pick_action(actions: list[dict]) -> int:
 
 def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
 
     config = {
         "hero_deck": {"Mountain": 1, "Grey Ogre": 1},
@@ -45,6 +38,8 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
         with client.websocket_connect("/ws/play") as websocket:
             websocket.send_json({"type": "new_game", "config": config})
             payload = websocket.receive_json()
+            assert isinstance(payload.get("session_id"), str)
+            assert isinstance(payload.get("resume_token"), str)
 
             max_steps = 300
             while payload["type"] != "game_over":
@@ -80,6 +75,7 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
 
 def test_websocket_rejects_action_without_active_game(monkeypatch, tmp_path):
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
 
     with TestClient(app) as client:
         with client.websocket_connect("/ws/play") as websocket:
@@ -87,3 +83,88 @@ def test_websocket_rejects_action_without_active_game(monkeypatch, tmp_path):
             payload = websocket.receive_json()
             assert payload["type"] == "error"
             assert "No active game session" in payload["message"]
+
+
+def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": {"seed": 5}})
+            payload = websocket.receive_json()
+            assert payload["type"] == "observation"
+            session_id = payload["session_id"]
+            resume_token = payload["resume_token"]
+
+            first_action = _pick_action(payload["actions"])
+            websocket.send_json({"type": "action", "index": first_action})
+            payload = websocket.receive_json()
+            assert payload["type"] in {"observation", "game_over"}
+
+        with client.websocket_connect("/ws/play") as resumed:
+            resumed.send_json(
+                {
+                    "type": "resume",
+                    "session_id": session_id,
+                    "resume_token": resume_token,
+                }
+            )
+            resumed_payload = resumed.receive_json()
+            assert resumed_payload["type"] in {"observation", "game_over"}
+            if resumed_payload["type"] == "observation":
+                assert resumed_payload["session_id"] == session_id
+                assert resumed_payload["resume_token"] == resume_token
+
+
+def test_websocket_rejects_invalid_resume_credentials(monkeypatch, tmp_path):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game"})
+            payload = websocket.receive_json()
+            session_id = payload["session_id"]
+
+        with client.websocket_connect("/ws/play") as resumed:
+            resumed.send_json(
+                {
+                    "type": "resume",
+                    "session_id": session_id,
+                    "resume_token": "not-valid",
+                }
+            )
+            error_payload = resumed.receive_json()
+            assert error_payload["type"] == "error"
+            assert "Invalid resume credentials" in error_payload["message"]
+
+
+def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    monkeypatch.setattr(server, "SESSION_TTL", timedelta(seconds=0))
+    server.SESSION_REGISTRY.clear()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game"})
+            payload = websocket.receive_json()
+            session_id = payload["session_id"]
+            resume_token = payload["resume_token"]
+
+        with client.websocket_connect("/ws/play") as resumed:
+            resumed.send_json(
+                {
+                    "type": "resume",
+                    "session_id": session_id,
+                    "resume_token": resume_token,
+                }
+            )
+            error_payload = resumed.receive_json()
+            assert error_payload["type"] == "error"
+            assert "expired" in error_payload["message"].lower()
+
+    trace_files = sorted(tmp_path.glob("*.json"))
+    assert len(trace_files) == 1
+    trace_payload = json.loads(trace_files[0].read_text(encoding="utf-8"))
+    assert trace_payload["end_reason"] == server.SESSION_EXPIRED_END_REASON

@@ -36,6 +36,7 @@ Key architectural decisions:
 - Scryfall rate limits (10 req/sec) — mitigated by browser caching and tiny card pool
 - WebSocket state management for human vs human (two concurrent connections to same game) — deferred
 - The observation doesn't include the opponent's hand contents (hidden info) — need to verify the GUI correctly shows only public information
+- Session resume protocol assumptions: session-expiration traces finalize with `end_reason = "session_expired"`; resume failures return `type: "error"` keeping socket open; `session_id`/`resume_token` only attached to `observation` responses, not `game_over`
 
 ## Metrics
 
