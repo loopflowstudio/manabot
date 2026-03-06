@@ -25,12 +25,7 @@ pub struct VectorEnv {
 }
 
 impl VectorEnv {
-    pub fn new(
-        num_envs: usize,
-        seed: u64,
-        skip_trivial: bool,
-        opponent_policy: OpponentPolicy,
-    ) -> Self {
+    pub fn new(num_envs: usize, seed: u64, skip_trivial: bool, opponent_policy: OpponentPolicy) -> Self {
         let envs = (0..num_envs)
             .map(|idx| Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false))
             .collect();
@@ -59,68 +54,203 @@ impl VectorEnv {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<Vec<(Observation, InfoDict)>, AgentError> {
-        if player_configs.len() != 2 {
-            return Err(AgentError(format!(
-                "expected exactly 2 player configs, got {}",
-                player_configs.len()
-            )));
-        }
-
+        Self::validate_player_configs(player_configs.len())?;
         self.player_configs = player_configs;
+        let player_configs = self.player_configs.clone();
+        let opponent_policy = self.opponent_policy;
+        let seed_stride = self.seed_stride;
+
         let mut results = Vec::with_capacity(self.envs.len());
-        for env_index in 0..self.envs.len() {
-            let (obs, info) = self.reset_to_hero_turn(env_index)?;
+        for (env, next_seed) in self.envs.iter_mut().zip(self.next_seeds.iter_mut()) {
+            let (obs, info) = Self::reset_to_hero_turn_on_env(
+                env,
+                next_seed,
+                &player_configs,
+                opponent_policy,
+                seed_stride,
+            )?;
             results.push((obs, info));
         }
         Ok(results)
     }
 
     pub fn step(&mut self, actions: &[i64]) -> Result<Vec<StepResult>, AgentError> {
-        if actions.len() != self.envs.len() {
-            return Err(AgentError(format!(
-                "expected {} actions, got {}",
-                self.envs.len(),
-                actions.len()
-            )));
-        }
-        if self.player_configs.len() != 2 {
-            return Err(AgentError(
-                "vector env must be reset before step".to_string(),
-            ));
-        }
+        self.validate_actions_len(actions.len())?;
+        self.validate_ready_for_step()?;
+
+        let player_configs = self.player_configs.clone();
+        let opponent_policy = self.opponent_policy;
+        let seed_stride = self.seed_stride;
 
         let mut results = Vec::with_capacity(self.envs.len());
-        for (env_index, action) in actions.iter().enumerate() {
-            let mut out = self.step_one(env_index, *action)?;
-
-            if out.terminated || out.truncated {
-                let terminal_reward = out.reward;
-                let terminal_terminated = out.terminated;
-                let terminal_truncated = out.truncated;
-                let terminal_info = out.info;
-
-                let (reset_obs, _) = self.reset_to_hero_turn(env_index)?;
-
-                out = StepResult {
-                    obs: reset_obs,
-                    reward: terminal_reward,
-                    terminated: terminal_terminated,
-                    truncated: terminal_truncated,
-                    info: terminal_info,
-                };
-            }
-
+        for ((env, next_seed), action) in self
+            .envs
+            .iter_mut()
+            .zip(self.next_seeds.iter_mut())
+            .zip(actions.iter())
+        {
+            let out = Self::step_with_autoreset_on_env(
+                env,
+                next_seed,
+                *action,
+                &player_configs,
+                opponent_policy,
+                seed_stride,
+            )?;
             results.push(out);
         }
 
         Ok(results)
     }
 
-    fn step_one(&mut self, env_index: usize, action: i64) -> Result<StepResult, AgentError> {
-        let (mut obs, mut reward, mut terminated, mut truncated, mut info) =
-            self.envs[env_index].step(action)?;
+    pub fn reset_all_into<F>(
+        &mut self,
+        player_configs: Vec<PlayerConfig>,
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        Self::validate_player_configs(player_configs.len())?;
+        self.player_configs = player_configs;
 
-        if terminated || truncated || self.opponent_policy == OpponentPolicy::None {
+        let player_configs = self.player_configs.clone();
+        let opponent_policy = self.opponent_policy;
+        let seed_stride = self.seed_stride;
+
+        self.for_each_env(|env_index, env, next_seed| {
+            let (obs, info) = Self::reset_to_hero_turn_on_env(
+                env,
+                next_seed,
+                &player_configs,
+                opponent_policy,
+                seed_stride,
+            )?;
+            write(env_index, &obs, 0.0, false, false)?;
+            Ok(info)
+        })
+    }
+
+    pub fn step_into<F>(
+        &mut self,
+        actions: &[i64],
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        self.validate_actions_len(actions.len())?;
+        self.validate_ready_for_step()?;
+
+        let player_configs = self.player_configs.clone();
+        let opponent_policy = self.opponent_policy;
+        let seed_stride = self.seed_stride;
+
+        self.for_each_env(|env_index, env, next_seed| {
+            let action = actions[env_index];
+            let result = Self::step_with_autoreset_on_env(
+                env,
+                next_seed,
+                action,
+                &player_configs,
+                opponent_policy,
+                seed_stride,
+            )?;
+            write(
+                env_index,
+                &result.obs,
+                result.reward,
+                result.terminated,
+                result.truncated,
+            )?;
+            Ok(result.info)
+        })
+    }
+
+    fn for_each_env<R, F>(&mut self, work: F) -> Result<Vec<R>, AgentError>
+    where
+        F: Fn(usize, &mut Env, &mut u64) -> Result<R, AgentError>,
+    {
+        self.envs
+            .iter_mut()
+            .zip(self.next_seeds.iter_mut())
+            .enumerate()
+            .map(|(env_index, (env, next_seed))| work(env_index, env, next_seed))
+            .collect()
+    }
+
+    fn validate_player_configs(config_len: usize) -> Result<(), AgentError> {
+        if config_len != 2 {
+            return Err(AgentError(format!(
+                "expected exactly 2 player configs, got {config_len}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn validate_actions_len(&self, actions_len: usize) -> Result<(), AgentError> {
+        if actions_len != self.envs.len() {
+            return Err(AgentError(format!(
+                "expected {} actions, got {actions_len}",
+                self.envs.len()
+            )));
+        }
+        Ok(())
+    }
+
+    fn validate_ready_for_step(&self) -> Result<(), AgentError> {
+        if self.player_configs.len() != 2 {
+            return Err(AgentError(
+                "vector env must be reset before step".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn step_with_autoreset_on_env(
+        env: &mut Env,
+        next_seed: &mut u64,
+        action: i64,
+        player_configs: &[PlayerConfig],
+        opponent_policy: OpponentPolicy,
+        seed_stride: u64,
+    ) -> Result<StepResult, AgentError> {
+        let mut out = Self::step_one_on_env(env, action, opponent_policy)?;
+
+        if out.terminated || out.truncated {
+            let terminal_reward = out.reward;
+            let terminal_terminated = out.terminated;
+            let terminal_truncated = out.truncated;
+            let terminal_info = out.info;
+
+            let (reset_obs, _) = Self::reset_to_hero_turn_on_env(
+                env,
+                next_seed,
+                player_configs,
+                opponent_policy,
+                seed_stride,
+            )?;
+
+            out = StepResult {
+                obs: reset_obs,
+                reward: terminal_reward,
+                terminated: terminal_terminated,
+                truncated: terminal_truncated,
+                info: terminal_info,
+            };
+        }
+
+        Ok(out)
+    }
+
+    fn step_one_on_env(
+        env: &mut Env,
+        action: i64,
+        opponent_policy: OpponentPolicy,
+    ) -> Result<StepResult, AgentError> {
+        let (mut obs, mut reward, mut terminated, mut truncated, mut info) = env.step(action)?;
+
+        if terminated || truncated || opponent_policy == OpponentPolicy::None {
             return Ok(StepResult {
                 obs,
                 reward,
@@ -130,12 +260,10 @@ impl VectorEnv {
             });
         }
 
-        while self.is_opponent_turn(&obs) {
-            let opponent_action = self
-                .opponent_policy
-                .select_action(&mut self.envs[env_index])?;
+        while Self::is_opponent_turn(&obs) {
+            let opponent_action = opponent_policy.select_action(env)?;
             let (next_obs, opponent_reward, opp_terminated, opp_truncated, opp_info) =
-                self.envs[env_index].step(opponent_action)?;
+                env.step(opponent_action)?;
             obs = next_obs;
             info = opp_info;
             terminated = opp_terminated;
@@ -157,28 +285,29 @@ impl VectorEnv {
         })
     }
 
-    fn skip_opponent_turns_until_hero(
-        &mut self,
-        env_index: usize,
+    fn skip_opponent_turns_until_hero_on_env(
+        env: &mut Env,
         mut obs: Observation,
+        next_seed: &mut u64,
+        player_configs: &[PlayerConfig],
+        opponent_policy: OpponentPolicy,
+        seed_stride: u64,
     ) -> Result<Observation, AgentError> {
         const MAX_OPPONENT_STEPS: usize = 10_000;
         let mut steps = 0;
-        while self.is_opponent_turn(&obs) {
+        while Self::is_opponent_turn(&obs) {
             steps += 1;
             if steps > MAX_OPPONENT_STEPS {
                 return Err(AgentError(
                     "exceeded max opponent steps without reaching hero turn".to_string(),
                 ));
             }
-            let opponent_action = self
-                .opponent_policy
-                .select_action(&mut self.envs[env_index])?;
-            let (next_obs, _, terminated, truncated, _) =
-                self.envs[env_index].step(opponent_action)?;
+            let opponent_action = opponent_policy.select_action(env)?;
+            let (next_obs, _, terminated, truncated, _) = env.step(opponent_action)?;
             obs = next_obs;
             if terminated || truncated {
-                let (reset_obs, _) = self.reset_env(env_index)?;
+                let (reset_obs, _) =
+                    Self::reset_env_on_env(env, next_seed, seed_stride, player_configs)?;
                 obs = reset_obs;
                 steps = 0;
             }
@@ -186,30 +315,40 @@ impl VectorEnv {
         Ok(obs)
     }
 
-    fn reset_env(&mut self, env_index: usize) -> Result<(Observation, InfoDict), AgentError> {
-        let seed = self
-            .next_seeds
-            .get(env_index)
-            .copied()
-            .ok_or_else(|| AgentError(format!("invalid env index: {env_index}")))?;
-        self.next_seeds[env_index] = seed.saturating_add(self.seed_stride);
-        let env = &mut self.envs[env_index];
+    fn reset_env_on_env(
+        env: &mut Env,
+        next_seed: &mut u64,
+        seed_stride: u64,
+        player_configs: &[PlayerConfig],
+    ) -> Result<(Observation, InfoDict), AgentError> {
+        let seed = *next_seed;
+        *next_seed = seed.saturating_add(seed_stride);
         env.set_seed(seed);
-        env.reset(self.player_configs.clone())
+        env.reset(player_configs.to_vec())
     }
 
-    fn reset_to_hero_turn(
-        &mut self,
-        env_index: usize,
+    fn reset_to_hero_turn_on_env(
+        env: &mut Env,
+        next_seed: &mut u64,
+        player_configs: &[PlayerConfig],
+        opponent_policy: OpponentPolicy,
+        seed_stride: u64,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        let (mut obs, info) = self.reset_env(env_index)?;
-        if self.opponent_policy != OpponentPolicy::None {
-            obs = self.skip_opponent_turns_until_hero(env_index, obs)?;
+        let (mut obs, info) = Self::reset_env_on_env(env, next_seed, seed_stride, player_configs)?;
+        if opponent_policy != OpponentPolicy::None {
+            obs = Self::skip_opponent_turns_until_hero_on_env(
+                env,
+                obs,
+                next_seed,
+                player_configs,
+                opponent_policy,
+                seed_stride,
+            )?;
         }
         Ok((obs, info))
     }
 
-    fn is_opponent_turn(&self, obs: &Observation) -> bool {
+    fn is_opponent_turn(obs: &Observation) -> bool {
         obs.agent.player_index != HERO_PLAYER_INDEX
     }
 }
@@ -219,7 +358,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::{
-        agent::{opponent::OpponentPolicy, vector_env::VectorEnv},
+        agent::{action::AgentError, opponent::OpponentPolicy, vector_env::VectorEnv},
         state::player::PlayerConfig,
     };
 
@@ -286,5 +425,46 @@ mod tests {
         }
 
         assert!(found_terminal, "expected at least one terminal transition");
+    }
+
+    #[test]
+    fn step_into_and_reset_all_into() {
+        let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Passive);
+
+        let reset_infos = env
+            .reset_all_into(
+                sample_player_configs(),
+                |_, obs, reward, terminated, truncated| {
+                    assert_eq!(obs.agent.player_index, 0);
+                    assert_eq!(reward, 0.0);
+                    assert!(!terminated);
+                    assert!(!truncated);
+                    Ok(())
+                },
+            )
+            .expect("reset_all_into should succeed");
+        assert_eq!(reset_infos.len(), 3);
+
+        let step_infos = env
+            .step_into(&[0, 0, 0], |_, _, _, _, _| Ok(()))
+            .expect("step_into should succeed");
+        assert_eq!(step_infos.len(), 3);
+    }
+
+    #[test]
+    fn step_into_errors_are_returned_in_index_order() {
+        let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::Passive);
+        env.reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
+            .expect("reset_all_into should succeed");
+
+        let err = env
+            .step_into(&[0, 0, 0], |env_index, _, _, _, _| {
+                if env_index >= 1 {
+                    return Err(AgentError(format!("env error {env_index}")));
+                }
+                Ok(())
+            })
+            .expect_err("step_into should fail");
+        assert_eq!(err.0, "env error 1");
     }
 }
