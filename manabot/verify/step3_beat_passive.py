@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> None:
             reward,
             num_games=args.num_games,
             opponent_policy="passive",
-            deterministic=True,
+            deterministic=False,
             seed=args.seed + 1000 + global_timestep,
         )
         eval_by_ckpt[global_timestep] = eval_metrics

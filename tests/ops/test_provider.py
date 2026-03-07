@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ops.provider import load_machine_spec, load_runtime_spec, merge_str
 from ops.aws import _is_retryable_send_command_error
+from ops.provider import load_machine_spec, load_runtime_spec, merge_str
 
 
 def test_load_machine_spec_from_repo_defaults():
@@ -24,6 +24,7 @@ def test_load_runtime_spec_from_repo_defaults():
 
     assert runtime.image.startswith("ghcr.io/")
     assert runtime.log_group_prefix == "/manabot"
+    assert runtime.python_version == "3.13"
 
 
 def test_merge_str_coerces_strings_and_skips_none():

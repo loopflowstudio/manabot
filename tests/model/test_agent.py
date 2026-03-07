@@ -22,7 +22,7 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentHypers
 from manabot.model import Agent
 
 # Configure logging

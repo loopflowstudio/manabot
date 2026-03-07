@@ -32,6 +32,7 @@ from manabot.env import (
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
+from manabot.verify.util import run_evaluation
 
 ROLLOUT_HEALTH_KEYS = (
     "truncated_episodes",
@@ -93,6 +94,10 @@ class Trainer:
         # Initialize the profiler
         self.profiler = self.experiment.profiler
 
+        # Store env components for eval
+        self._obs_space = env.observation_space
+        self._reward = env.reward
+
         if self.wandb:
             self.wandb.summary.update(
                 {
@@ -101,6 +106,7 @@ class Trainer:
                     "time_to_converge": None,
                 }
             )
+            self.logger.info(f"wandb: {self.wandb.get_url()}")
         self.logger.info("Trainer initialized.")
 
     def train(self) -> None:
@@ -274,6 +280,9 @@ class Trainer:
                     f"Update {update}/{num_updates} | SPS: {sps} | Total time: {time_since_start:.2f}s"
                 )
 
+                if update % hypers.eval_interval == 0:
+                    self._run_periodic_eval(update)
+
                 if update % 100 == 0:
                     self.logger.info(
                         f"Saving artifact @ update: {update} step: {self.global_step}"
@@ -324,6 +333,75 @@ class Trainer:
 
         self.logger.debug("Rollout step completed.")
         return new_obs, reward, done, action, logprob, value
+
+    def _run_periodic_eval(self, update: int) -> None:
+        """Run evaluation games and log to metrics DB + wandb."""
+        hypers = self.hypers
+        match = Match(self.experiment.full_hypers.match)
+        eval_metrics = run_evaluation(
+            self.agent,
+            self._obs_space,
+            match,
+            self._reward,
+            num_games=hypers.eval_num_games,
+            opponent_policy=hypers.opponent_policy,
+            deterministic=False,
+            seed=self.experiment.seed + self.global_step,
+        )
+
+        self.logger.info(
+            f"Eval @ update {update} (step {self.global_step}): "
+            f"win_rate={eval_metrics['win_rate']:.2%}, "
+            f"passed_when_able={eval_metrics['passed_when_able']:.2%}, "
+            f"landed_when_able={eval_metrics['landed_when_able']:.2%}, "
+            f"cast_when_able={eval_metrics['cast_when_able']:.2%}, "
+            f"pass_land_pass_rate={eval_metrics['pass_land_pass_rate']:.2%}, "
+            f"mean_pass_prob_when_pass_land={eval_metrics['mean_pass_prob_when_pass_land']:.2%}, "
+            f"mean_land_prob_when_pass_land={eval_metrics['mean_land_prob_when_pass_land']:.2%}, "
+            f"attacked_when_able={eval_metrics['attacked_when_able']:.2%}, "
+            f"mean_steps={eval_metrics['mean_steps']:.1f}"
+        )
+
+        if self.wandb:
+            self.wandb.log(
+                {
+                    "eval/win_rate": eval_metrics["win_rate"],
+                    "eval/attack_rate": eval_metrics["attack_rate"],
+                    "eval/passed_when_able": eval_metrics["passed_when_able"],
+                    "eval/attacked_when_able": eval_metrics["attacked_when_able"],
+                    "eval/landed_when_able": eval_metrics["landed_when_able"],
+                    "eval/cast_when_able": eval_metrics["cast_when_able"],
+                    "eval/mean_steps": eval_metrics["mean_steps"],
+                    "eval/could_pass": eval_metrics["could_pass"],
+                    "eval/could_attack": eval_metrics["could_attack"],
+                    "eval/could_land": eval_metrics["could_land"],
+                    "eval/could_spell": eval_metrics["could_spell"],
+                    "eval/single_valid_decisions": eval_metrics[
+                        "single_valid_decisions"
+                    ],
+                    "eval/multi_valid_decisions": eval_metrics["multi_valid_decisions"],
+                    "eval/pass_land_decisions": eval_metrics["pass_land_decisions"],
+                    "eval/pass_land_pass_rate": eval_metrics["pass_land_pass_rate"],
+                    "eval/pass_land_land_rate": eval_metrics["pass_land_land_rate"],
+                    "eval/pass_land_spell_rate": eval_metrics["pass_land_spell_rate"],
+                    "eval/mean_pass_prob": eval_metrics["mean_pass_prob"],
+                    "eval/mean_land_prob": eval_metrics["mean_land_prob"],
+                    "eval/mean_spell_prob": eval_metrics["mean_spell_prob"],
+                    "eval/mean_pass_prob_when_land_available": eval_metrics[
+                        "mean_pass_prob_when_land_available"
+                    ],
+                    "eval/mean_land_prob_when_land_available": eval_metrics[
+                        "mean_land_prob_when_land_available"
+                    ],
+                    "eval/mean_pass_prob_when_pass_land": eval_metrics[
+                        "mean_pass_prob_when_pass_land"
+                    ],
+                    "eval/mean_land_prob_when_pass_land": eval_metrics[
+                        "mean_land_prob_when_pass_land"
+                    ],
+                },
+                step=self.global_step,
+            )
 
     def _init_rollout_buffers(
         self, sample_obs: Dict[str, torch.Tensor]

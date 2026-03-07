@@ -175,22 +175,30 @@ def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
     session = server.GameSession()
     session.obs = SimpleNamespace(game_over=False)
     session.trace = trace_store.Trace(
-        config=trace_store.GameConfig(hero_deck={}, villain_deck={}, villain_type='passive'),
+        config=trace_store.GameConfig(
+            hero_deck={}, villain_deck={}, villain_type="passive"
+        ),
         events=[],
         final_observation={},
         winner=None,
-        end_reason='disconnect',
-        timestamp='2026-03-06T00:00:00+00:00',
+        end_reason="disconnect",
+        timestamp="2026-03-06T00:00:00+00:00",
     )
-    session._pending_villain_log = ['Villain: Pass priority']
+    session._pending_villain_log = ["Villain: Pass priority"]
 
-    monkeypatch.setattr(server, 'serialize_observation', lambda obs: {'game_over': False})
-    monkeypatch.setattr(server, 'describe_actions', lambda obs: [{'index': 0, 'description': 'Pass priority'}])
+    monkeypatch.setattr(
+        server, "serialize_observation", lambda obs: {"game_over": False}
+    )
+    monkeypatch.setattr(
+        server,
+        "describe_actions",
+        lambda obs: [{"index": 0, "description": "Pass priority"}],
+    )
 
     payload = session._wire_message()
 
-    assert payload['type'] == 'observation'
-    assert payload['log'] == ['Villain: Pass priority']
+    assert payload["type"] == "observation"
+    assert payload["log"] == ["Villain: Pass priority"]
     assert session._pending_villain_log == []
 
 
@@ -198,22 +206,26 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
     session = server.GameSession()
     session.obs = SimpleNamespace(game_over=True)
     session.trace = trace_store.Trace(
-        config=trace_store.GameConfig(hero_deck={}, villain_deck={}, villain_type='passive'),
+        config=trace_store.GameConfig(
+            hero_deck={}, villain_deck={}, villain_type="passive"
+        ),
         events=[],
         final_observation={},
         winner=None,
-        end_reason='disconnect',
-        timestamp='2026-03-06T00:00:00+00:00',
+        end_reason="disconnect",
+        timestamp="2026-03-06T00:00:00+00:00",
     )
-    session._pending_villain_log = ['Villain: Attack with Grey Ogre']
+    session._pending_villain_log = ["Villain: Attack with Grey Ogre"]
 
-    monkeypatch.setattr(server, 'serialize_observation', lambda obs: {'game_over': True})
-    monkeypatch.setattr(server, '_winner_for_hero', lambda obs: 1)
-    monkeypatch.setattr(session, '_finalize_trace', lambda end_reason: None)
+    monkeypatch.setattr(
+        server, "serialize_observation", lambda obs: {"game_over": True}
+    )
+    monkeypatch.setattr(server, "_winner_for_hero", lambda obs: 1)
+    monkeypatch.setattr(session, "_finalize_trace", lambda end_reason: None)
 
     payload = session._wire_message()
 
-    assert payload['type'] == 'game_over'
-    assert payload['winner'] == 1
-    assert payload['log'] == ['Villain: Attack with Grey Ogre']
+    assert payload["type"] == "game_over"
+    assert payload["winner"] == 1
+    assert payload["log"] == ["Villain: Attack with Grey Ogre"]
     assert session._pending_villain_log == []

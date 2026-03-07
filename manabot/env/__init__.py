@@ -2,13 +2,13 @@
 from .env import Env
 from .match import Match, Reward
 from .observation import ObservationSpace
-from .vector_env import VectorEnv
 from .single_agent_env import (
     PassivePolicy,
     RandomPolicy,
     SingleAgentEnv,
     build_opponent_policy,
 )
+from .vector_env import VectorEnv
 
 __all__ = [
     "Env",

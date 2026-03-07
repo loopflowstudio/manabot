@@ -30,6 +30,7 @@ class RuntimeSpec:
     image: str
     fallback_build: bool
     log_group_prefix: str = "/manabot"
+    python_version: str = "3.13"
 
 
 @dataclass

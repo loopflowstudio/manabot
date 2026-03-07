@@ -548,9 +548,7 @@ impl SendObservationFieldSlices {
                 slice::from_raw_parts_mut(actions_valid_ptr, config.max_actions)
             },
             // SAFETY: each call uses disjoint per-env rows.
-            events_valid: unsafe {
-                slice::from_raw_parts_mut(events_valid_ptr, config.max_events)
-            },
+            events_valid: unsafe { slice::from_raw_parts_mut(events_valid_ptr, config.max_events) },
         })
     }
 }

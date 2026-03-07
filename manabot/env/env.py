@@ -7,7 +7,6 @@ from typing import Any, Dict, Optional
 
 import gymnasium as gym
 from gymnasium import spaces
-import numpy as np
 
 # Local imports
 from manabot.infra.log import getLogger
