@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+
 from manabot.verify.first_light import (
     recommend_next_step,
     resolve_run_config,
@@ -162,6 +165,23 @@ def test_verify_store_round_trip_and_report(tmp_path):
         assert len(store.get_reports(run_id)) == 1
     finally:
         store.close()
+
+
+def test_verify_store_runs_dir_env_survives_removed_current_directory(monkeypatch, tmp_path):
+    original_cwd = os.getcwd()
+    removed_cwd = tmp_path / "removed"
+    removed_cwd.mkdir()
+    runs_dir = tmp_path / "runs"
+    monkeypatch.setenv("MANABOT_RUNS_DIR", str(runs_dir))
+
+    try:
+        os.chdir(removed_cwd)
+        shutil.rmtree(removed_cwd)
+
+        with VerifyStore() as store:
+            assert store.path == runs_dir / "verify.sqlite"
+    finally:
+        os.chdir(original_cwd)
 
 
 def test_recommend_next_step_blocks_weak_win_signal():

@@ -83,7 +83,8 @@ BOOLEAN_ACTION_FIELDS = {
 
 
 def _default_db_path() -> Path:
-    runs_dir = Path(os.getenv("MANABOT_RUNS_DIR", str(Path.cwd() / ".runs")))
+    runs_dir_env = os.getenv("MANABOT_RUNS_DIR")
+    runs_dir = Path(runs_dir_env) if runs_dir_env else Path.cwd() / ".runs"
     return runs_dir / "verify.sqlite"
 
 
