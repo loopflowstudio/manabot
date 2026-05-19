@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
         reward,
         num_games=args.num_games,
         opponent_policy="passive",
-        deterministic=True,
+        deterministic=False,
         seed=args.seed + 1000,
     )
 

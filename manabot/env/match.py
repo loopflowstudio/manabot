@@ -78,6 +78,9 @@ class Reward:
         trivial: If True, return 1.0 for all rewards.
         win_reward: Reward for winning the game.
         lose_reward: Reward for losing the game.
+        land_play_reward: Reward when a new friendly land enters the battlefield.
+        creature_play_reward: Reward when a new friendly creature enters the battlefield.
+        opponent_life_loss_reward: Reward when opponent life drops across a step.
     """
 
     def __init__(self, hypers: RewardHypers):
@@ -95,7 +98,59 @@ class Reward:
         if self.hypers.trivial:
             return 1.0
 
-        if not new_obs.game_over:
-            return raw_reward
+        reward = float(raw_reward)
+        reward += self._progress_shaping(_last_obs, new_obs)
 
-        return self.hypers.win_reward if new_obs.won else self.hypers.lose_reward
+        if not new_obs.game_over:
+            return reward
+
+        return reward + (
+            self.hypers.win_reward if new_obs.won else self.hypers.lose_reward
+        )
+
+    def _progress_shaping(
+        self,
+        last_obs: managym.Observation,
+        new_obs: managym.Observation,
+    ) -> float:
+        reward = 0.0
+
+        if self.hypers.land_play_reward != 0.0:
+            reward += self.hypers.land_play_reward * max(
+                0,
+                self._count_battlefield_lands(new_obs.agent_cards)
+                - self._count_battlefield_lands(last_obs.agent_cards),
+            )
+
+        if self.hypers.creature_play_reward != 0.0:
+            reward += self.hypers.creature_play_reward * max(
+                0,
+                self._count_battlefield_creatures(new_obs.agent_cards)
+                - self._count_battlefield_creatures(last_obs.agent_cards),
+            )
+
+        if self.hypers.opponent_life_loss_reward != 0.0:
+            reward += self.hypers.opponent_life_loss_reward * max(
+                0,
+                last_obs.opponent.life - new_obs.opponent.life,
+            )
+
+        return reward
+
+    @staticmethod
+    def _count_battlefield_lands(cards: list[managym.Card]) -> int:
+        return sum(
+            1
+            for card in cards
+            if int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
+            and bool(card.card_types.is_land)
+        )
+
+    @staticmethod
+    def _count_battlefield_creatures(cards: list[managym.Card]) -> int:
+        return sum(
+            1
+            for card in cards
+            if int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
+            and bool(card.card_types.is_creature)
+        )

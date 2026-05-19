@@ -177,6 +177,9 @@ class SandboxManager:
         sync_command = f"""set -euo pipefail
 REPO_URL={shlex.quote(self.repo_url)}
 REPO_REF={shlex.quote(self.repo_ref)}
+IMAGE={shlex.quote(self.runtime.image)}
+FALLBACK_BUILD={"1" if self.runtime.fallback_build else "0"}
+PYTHON_VERSION={shlex.quote(self.runtime.python_version)}
 
 if [ ! -d /opt/manabot/repo/.git ]; then
   sudo git clone "$REPO_URL" /opt/manabot/repo
@@ -193,10 +196,23 @@ else
 fi
 
 sudo chown -R ubuntu:ubuntu /opt/manabot/repo
+sudo apt-get update
+sudo apt-get install -y build-essential curl git pkg-config libssl-dev
 if ! sudo -u ubuntu test -x /home/ubuntu/.local/bin/uv; then
   sudo -u ubuntu -H sh -lc 'curl -LsSf https://astral.sh/uv/install.sh | sh'
 fi
-sudo -u ubuntu -H bash -lc 'cd /opt/manabot/repo && /home/ubuntu/.local/bin/uv sync --extra dev --extra ops'
+if ! sudo -u ubuntu test -x /home/ubuntu/.cargo/bin/cargo; then
+  sudo -u ubuntu -H sh -lc 'curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal'
+fi
+if ! sudo docker pull "$IMAGE"; then
+  if [ "$FALLBACK_BUILD" != "1" ]; then
+    echo "Failed to pull runtime image and fallback build is disabled." >&2
+    exit 1
+  fi
+fi
+sudo docker build --build-arg PYTHON_VERSION="$PYTHON_VERSION" -t "$IMAGE" -f /opt/manabot/repo/ops/Dockerfile /opt/manabot/repo
+sudo -u ubuntu -H bash -lc 'export PATH=/home/ubuntu/.local/bin:/home/ubuntu/.cargo/bin:"$PATH"; cd /opt/manabot/repo && uv python install "$PYTHON_VERSION" && uv sync --frozen --extra dev --extra ops --python "$PYTHON_VERSION" && uv pip install --python .venv/bin/python --no-deps -e managym && .venv/bin/python -c '"'"'"'"'"'"'"'"'import sys, torch; import managym; print(f"python={{sys.version.split()[0]}} torch={{torch.__version__}} cuda={{torch.cuda.is_available()}} managym=ok")'"'"'"'"'"'"'"'"''
+sudo docker run --rm --gpus all "$IMAGE" python -c 'import sys, torch; import managym; print(f"python={{sys.version.split()[0]}} torch={{torch.__version__}} cuda={{torch.cuda.is_available()}} managym=ok")'
 """
         result = self.provider.run_command(machine, sync_command, timeout=1800)
         if result.status != "Success":

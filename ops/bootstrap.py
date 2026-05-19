@@ -85,6 +85,7 @@ REPO_URL={_sq(repo_url)}
 REPO_REF={_sq(repo_ref)}
 IMAGE={_sq(runtime.image)}
 FALLBACK_BUILD={"1" if runtime.fallback_build else "0"}
+PYTHON_VERSION={_sq(runtime.python_version)}
 
 if [ ! -f "$MARKER" ]; then
 {_COMMON_BOOTSTRAP}
@@ -94,12 +95,14 @@ if [ ! -f "$MARKER" ]; then
 
   if ! sudo docker pull "$IMAGE"; then
     if [ "$FALLBACK_BUILD" = "1" ]; then
-      sudo docker build -t "$IMAGE" -f /opt/manabot/repo/ops/Dockerfile /opt/manabot/repo
+      sudo docker build --build-arg PYTHON_VERSION="$PYTHON_VERSION" -t "$IMAGE" -f /opt/manabot/repo/ops/Dockerfile /opt/manabot/repo
     else
       echo "Failed to pull runtime image and fallback build is disabled." >&2
       exit 1
     fi
   fi
+
+  sudo docker run --rm --gpus all "$IMAGE" python -c 'import sys, torch; print(f"python={{sys.version.split()[0]}} torch={{torch.__version__}} cuda={{torch.cuda.is_available()}}")'
 
   echo "bootstrap_complete=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | sudo tee "$MARKER" >/dev/null
 fi
@@ -131,6 +134,7 @@ AWS_REGION={_sq(region)}
 LOG_GROUP={_sq(log_group)}
 REPO_URL={_sq(DEFAULT_REPO)}
 REPO_REF='main'
+PYTHON_VERSION={_sq(runtime.python_version)}
 
 if [ ! -f "$MARKER" ]; then
 {_COMMON_BOOTSTRAP}
@@ -138,12 +142,14 @@ if [ ! -f "$MARKER" ]; then
   if ! sudo docker pull "$IMAGE"; then
     if [ "$FALLBACK_BUILD" = "1" ]; then
 {_SYNC_REPO}
-      sudo docker build -t "$IMAGE" -f /opt/manabot/repo/ops/Dockerfile /opt/manabot/repo
+      sudo docker build --build-arg PYTHON_VERSION="$PYTHON_VERSION" -t "$IMAGE" -f /opt/manabot/repo/ops/Dockerfile /opt/manabot/repo
     else
       echo "Failed to pull runtime image and fallback build is disabled." >&2
       exit 1
     fi
   fi
+
+  sudo docker run --rm --gpus all "$IMAGE" python -c 'import sys, torch; print(f"python={{sys.version.split()[0]}} torch={{torch.__version__}} cuda={{torch.cuda.is_available()}}")'
 
   cat <<'SCRIPT' | sudo tee /opt/manabot/run-job.sh >/dev/null
 #!/usr/bin/env bash

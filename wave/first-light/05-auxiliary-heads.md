@@ -1,44 +1,57 @@
 # 05: Auxiliary Prediction Heads
 
-Add auxiliary prediction targets to provide dense training signal.
-This is the highest-impact investment for training efficiency after
-correctness fixes, based on KataGo's experience.
+**Finish line:** Agent has auxiliary prediction heads providing dense training
+signal. A first-light run with aux heads converges faster than one without.
 
-## Finish line
+## Context
 
-Agent has three auxiliary prediction heads. Training loss includes
-auxiliary terms. Verification ladder step 3 (beat passive) converges
-faster with auxiliary heads than without.
+The verification harness (`run_first_light`, `report_first_light`) is now the
+primary experiment interface. Reward shaping (land play, creature play, opponent
+life loss) is implemented and required — terminal-only PPO produces pass-collapse
+where the agent learns to stop playing lands, breaking the entire gameplay chain:
+
+```
+play land -> tap for mana -> cast creature -> declare attacker -> deal damage -> win
+```
+
+Aux heads are the next lever: provide gradient signal to the shared encoder
+without distorting the policy gradient, helping it learn features that matter
+for understanding game state. This is the highest-impact investment for training
+efficiency after reward shaping, based on KataGo's experience.
 
 ## Changes
 
 ### 1. Auxiliary head architecture
 
-Three additional linear heads off the shared encoder output (same
-place the value head reads from):
+Three additional linear heads off the shared encoder output (same place the
+value head reads from). The value head uses `MeanPoolingLayer(dim=1)` to
+reduce the object dimension — aux heads should follow the same pattern:
 
 ```python
 self.life_diff_head = nn.Sequential(
     layer_init(nn.Linear(embed_dim, embed_dim)),
     nn.ReLU(),
-    layer_init(nn.Linear(embed_dim, 1), gain=1.0)
+    MeanPoolingLayer(dim=1),
+    layer_init(nn.Linear(embed_dim, 1), gain=1.0),
 )
 
 self.game_length_head = nn.Sequential(
     layer_init(nn.Linear(embed_dim, embed_dim)),
     nn.ReLU(),
-    layer_init(nn.Linear(embed_dim, 1), gain=1.0)
+    MeanPoolingLayer(dim=1),
+    layer_init(nn.Linear(embed_dim, 1), gain=1.0),
 )
 
 self.creature_diff_head = nn.Sequential(
     layer_init(nn.Linear(embed_dim, embed_dim)),
     nn.ReLU(),
-    layer_init(nn.Linear(embed_dim, 1), gain=1.0)
+    MeanPoolingLayer(dim=1),
+    layer_init(nn.Linear(embed_dim, 1), gain=1.0),
 )
 ```
 
-Each head uses max-pooling over the object dimension (same as value
-head) to produce a scalar prediction.
+These heads live in `manabot/model/agent.py`, gated by a config flag in
+`AgentHypers` (e.g. `aux_heads: bool = False`).
 
 ### 2. Auxiliary targets
 
@@ -48,11 +61,16 @@ Computed retroactively at the end of each episode:
   normalized by dividing by 20. Applied to every transition in the
   episode as a fixed target.
 - **Game length:** Total steps in the episode, normalized by dividing
-  by some reasonable maximum (200?). Applied to every transition.
+  by 200 (the truncation limit). Applied to every transition.
 - **Creature differential:** `(hero_creatures - villain_creatures)` at
   game end, normalized. Applied to every transition.
 
-These are stored in the buffer alongside rewards and values.
+These are stored as flat pre-allocated tensors in the rollout buffer in
+`train.py`, following the existing pattern: `torch.zeros((num_steps, num_envs))`.
+
+Terminal state information is available via `managym.Observation` —
+`raw_obs.agent.life`, `raw_obs.opponent.life`. See `sim.py:determine_outcome`
+for the access pattern.
 
 ### 3. Auxiliary losses
 
@@ -66,11 +84,7 @@ aux_loss = (
 total_loss = policy_loss - ent_coef * entropy + vf_coef * value_loss + aux_loss
 ```
 
-`aux_coef` is a new hyperparameter, default 0.5. Can be tuned.
-
-The auxiliary losses provide gradient signal to the shared encoder
-without distorting the policy gradient. They help the encoder learn
-features that are useful for understanding the game state.
+`aux_coef` is a new hyperparameter, default 0.5.
 
 ### 4. Logging
 
@@ -84,24 +98,25 @@ Track per-head prediction accuracy:
 
 - Auxiliary targets must not distort the policy gradient — they only
   affect the encoder through their own loss terms
-- Terminal state information (life totals, creature counts, game
-  length) is available via `env.last_raw_obs` which exposes the raw
-  `managym.Observation` — see `sim.py:determine_outcome` for the
-  access pattern (`raw_obs.agent.life`, `raw_obs.opponent.life`)
 - Auxiliary heads should be removable via config (for A/B comparison)
-- The buffer is now flat pre-allocated tensors inline in `train.py`
-  (not a separate class). Auxiliary target tensors follow the same
-  pattern: `torch.zeros((num_steps, num_envs))`.
 - `final_observation` plumbing for truncation value bootstrap is
   deferred — keep this in mind when computing episode-level targets
-  across truncation boundaries.
+  across truncation boundaries
 
 ## Done when
 
+A/B comparison using the first-light harness:
+
 ```bash
-# A/B comparison:
-# Run step 3 (beat passive) with and without auxiliary heads
-# Auxiliary heads version should converge faster (fewer steps to 90% win rate)
-python -m manabot.verify.step3_beat_passive --aux-heads=on
-python -m manabot.verify.step3_beat_passive --aux-heads=off
+python -m manabot.verify.run_first_light --mode dev --seed 42 --label aux-on
+# (with aux_heads=True in agent config)
+
+python -m manabot.verify.run_first_light --mode dev --seed 42 --label aux-off
+# (with aux_heads=False)
+
+python -m manabot.verify.report_first_light --run-id <aux-on-id>
+python -m manabot.verify.report_first_light --run-id <aux-off-id>
 ```
+
+Aux-on run should show faster convergence on causal-chain metrics
+(landed_when_able, win rate vs random) compared to aux-off.

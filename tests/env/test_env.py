@@ -8,7 +8,7 @@ import pytest
 import torch
 
 # Local imports
-from manabot.env import Env, VectorEnv, PassivePolicy, Reward
+from manabot.env import Env, Reward, VectorEnv
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.hypers import RewardHypers

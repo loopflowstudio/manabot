@@ -20,6 +20,7 @@ class FakeProvider:
         self.started: list[str] = []
         self.stopped: list[str] = []
         self.terminated: list[str] = []
+        self.run_commands: list[str] = []
 
     def create(self, spec, tags, *, user_data=None, iam_instance_profile=None):
         machine = Machine(
@@ -81,6 +82,7 @@ class FakeProvider:
         return [m for m in self.machines.values() if matches(m)]
 
     def run_command(self, machine, command, timeout=3600):
+        self.run_commands.append(command)
         if "test -f" in command:
             return CommandResult("verify", "Success", "READY\n", "")
         return CommandResult("cmd", "Success", "", "")
@@ -115,4 +117,5 @@ def make_runtime_spec() -> RuntimeSpec:
         image="ghcr.io/loopflowstudio/manabot-gpu:latest",
         fallback_build=True,
         log_group_prefix="/manabot",
+        python_version="3.13",
     )

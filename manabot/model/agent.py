@@ -78,7 +78,8 @@ class Agent(nn.Module):
         )
         self.value_head = nn.Sequential(
             layer_init(nn.Linear(embed_dim, embed_dim)),
-            MaxPoolingLayer(dim=1),
+            nn.ReLU(),
+            MeanPoolingLayer(dim=1),
             layer_init(nn.Linear(embed_dim, embed_dim)),
             nn.ReLU(),
             layer_init(nn.Linear(embed_dim, 1)),
@@ -327,6 +328,15 @@ class MaxPoolingLayer(nn.Module):
         pooled, _ = torch.max(x, dim=self.dim)
         log.debug(f"[SHAPES] Output of MaxPoolingLayer: {pooled.shape}")
         return pooled
+
+
+class MeanPoolingLayer(nn.Module):
+    def __init__(self, dim: int):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.mean(dim=self.dim)
 
 
 class ProjectionLayer(nn.Module):

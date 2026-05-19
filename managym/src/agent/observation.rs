@@ -465,7 +465,11 @@ impl Observation {
         match event {
             GameEvent::CardMoved {
                 card, controller, ..
-            } => Some(Self::card_event_data(EventType::CardMoved, *card, *controller)),
+            } => Some(Self::card_event_data(
+                EventType::CardMoved,
+                *card,
+                *controller,
+            )),
             GameEvent::DamageDealt {
                 source,
                 target,
@@ -491,28 +495,34 @@ impl Observation {
                 new - old,
                 None,
             )),
-            GameEvent::SpellCast { card, .. } => {
-                Some(Self::card_event_data(EventType::SpellCast, *card, PlayerId(0)))
-            }
-            GameEvent::SpellResolved { card } => {
-                Some(Self::card_event_data(EventType::SpellResolved, *card, PlayerId(0)))
-            }
-            GameEvent::SpellCountered { card, .. } => {
-                Some(Self::card_event_data(EventType::SpellCountered, *card, PlayerId(0)))
-            }
+            GameEvent::SpellCast { card, .. } => Some(Self::card_event_data(
+                EventType::SpellCast,
+                *card,
+                PlayerId(0),
+            )),
+            GameEvent::SpellResolved { card } => Some(Self::card_event_data(
+                EventType::SpellResolved,
+                *card,
+                PlayerId(0),
+            )),
+            GameEvent::SpellCountered { card, .. } => Some(Self::card_event_data(
+                EventType::SpellCountered,
+                *card,
+                PlayerId(0),
+            )),
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
-            } => Some(Self::card_event_data(EventType::AbilityTriggered, *source_card, *controller)),
+            } => Some(Self::card_event_data(
+                EventType::AbilityTriggered,
+                *source_card,
+                *controller,
+            )),
             GameEvent::TurnStarted { .. } | GameEvent::StepStarted { .. } => None,
         }
     }
 
-    fn card_event_data(
-        event_type: EventType,
-        card: CardId,
-        controller: PlayerId,
-    ) -> EventData {
+    fn card_event_data(event_type: EventType, card: CardId, controller: PlayerId) -> EventData {
         Self::build_event_data(
             event_type,
             Some(EventEntity::Card(card)),

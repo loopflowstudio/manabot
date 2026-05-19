@@ -543,8 +543,8 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData, Observation,
-                PermanentData, PlayerData, TurnData,
+                ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData,
+                Observation, PermanentData, PlayerData, TurnData,
             },
         },
         flow::turn::{PhaseKind, StepKind},

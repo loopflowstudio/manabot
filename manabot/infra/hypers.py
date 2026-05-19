@@ -86,6 +86,8 @@ class TrainHypers(BaseHypersModel):
     max_grad_norm: float = 0.5
     target_kl: float = float("inf")
     opponent_policy: str = "passive"
+    eval_interval: int = 100
+    eval_num_games: int = 50
 
     @field_validator("target_kl", mode="before")
     @classmethod
@@ -105,6 +107,9 @@ class RewardHypers(BaseHypersModel):
     managym: bool = False
     win_reward: float = 1.0
     lose_reward: float = -1.0
+    land_play_reward: float = 0.0
+    creature_play_reward: float = 0.0
+    opponent_life_loss_reward: float = 0.0
 
 
 class Hypers(BaseHypersModel):

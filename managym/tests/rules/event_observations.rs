@@ -131,10 +131,7 @@ fn combat_damage_emits_damage_and_life_change_events() {
     let events = s.drain_events();
 
     // Find the attacker's card to use as source
-    let attacker_card = s
-        .game()
-        .state
-        .permanents[attacker]
+    let attacker_card = s.game().state.permanents[attacker]
         .as_ref()
         .map(|p| p.card)
         .expect("attacker permanent should exist");
