@@ -846,9 +846,6 @@ class Trainer:
             )
 
     def save(self) -> None:
-        if self.wandb is None:
-            return
-
         name = self.experiment.exp_name
 
         timestamp = datetime.datetime.fromtimestamp(self.start_time).strftime(
@@ -863,7 +860,9 @@ class Trainer:
             "train_hypers": self.hypers.model_dump(),
         }
 
-        path = f"{name}.pt"
+        # Always persist locally, independent of wandb (checkpoints are the
+        # instrument for the strength ladder — never train without saving).
+        path = str(self.experiment.runs_dir / f"step_{self.global_step}.pt")
         torch.save(
             {
                 "model_state_dict": self.agent.state_dict(),
@@ -873,6 +872,9 @@ class Trainer:
             },
             path,
         )
+
+        if self.wandb is None:
+            return
 
         # Create and log artifact with the version tag
         artifact = wandb.Artifact(
