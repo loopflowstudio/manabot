@@ -144,6 +144,48 @@ stronger search. Each iteration adds a chart point. The goal-4 gate
 (search-with-V beats V-greedy) sits between C5 and any value-guided search.
 Ladder strength and the exploitability check ride every iteration.
 
+## Protocol amendments
+
+Amendments are allowed; silent amendments are not. Each is dated and lands
+*before* the experiment it affects runs.
+
+### A1 — Seat balancing (2026-07-09, after C0)
+
+C0 measured random-vs-random on STANDARD_DECK at **93.4% for the on-the-play
+player**. Every historical hero-on-the-play "vs random" win rate (including
+first-light's 82% baseline and 100% final) is seat-contaminated. Henceforth:
+all evaluations are seat-balanced (50/50) and report per-seat win rates
+separately. C1's original "untrained-vs-random < 65%" prediction is untestable
+as stated and is withdrawn.
+
+### A2 — Multi-init baselines (2026-07-09, after C0)
+
+Three fresh untrained inits scored 13% / 68% / 89% vs random (non-overlapping
+CIs). Single-init untrained baselines are meaningless. Henceforth: untrained
+baselines use ≥3 inits (5 preferred), reported as a spread.
+
+### A3 — C1 environment predictions, restated (2026-07-09, before the C1
+training run; original total-decisions prediction likely refuted)
+
+Registered before the seat-balanced interactive-deck measurement runs:
+
+1. Seat-balanced random-vs-random on INTERACTIVE_DECK: on-the-play advantage
+   drops below 80% (interaction punishes pure racing; was 93.4% on
+   STANDARD_DECK).
+2. Priority share of hero decisions rises above 50% (was ~38%; combat
+   declarations were 58% of all surfaced decisions on STANDARD_DECK).
+3. The original "total decisions/game rises ≥1.5x" prediction appears headed
+   for refutation — C1 validation measured ~171 mean vs 194 on STANDARD_DECK.
+   If confirmed refuted, the interesting quantity is the *mix shift*
+   (combat-declaration spam replaced by priority decisions), not the total.
+
+### A4 — skip_trivial folklore correction (2026-07-09, after C0)
+
+The collapse ratio is **~12%**, not "nearly all off-turn windows." Zero
+single-action leaks in ~150k decisions (the mechanism is sound), but the
+volume story told in this wave's own strategy section overstated it. Combat
+declaration, not priority passing, dominates surfaced decisions.
+
 ## Pre-registered exits
 
 Written 2026-07-09, while genuinely agnostic. The point of writing them now is
