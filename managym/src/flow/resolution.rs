@@ -2,7 +2,7 @@ use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
         ability::{Ability, Effect, TargetSpec},
-        game_object::{CardId, PermanentId, Target},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject},
         target::Target as ActionTarget,
         zone::ZoneType,
@@ -197,6 +197,28 @@ impl Game {
                 };
                 permanent.temp_power += power_delta;
                 permanent.temp_toughness += toughness_delta;
+            }
+            Effect::DrawCards { count } => {
+                let Some(source_card) = source else { return };
+                // The card's owner is its controller in this engine (spells are
+                // always cast by their owner), so the owner is the resolving player.
+                let player = self.state.cards[source_card].owner;
+                // Drawing from an empty library sets `drew_when_empty`; the player
+                // loses via state-based actions (CR 704.5c), same as the draw step.
+                self.draw_cards(player, *count);
+            }
+            Effect::MassDamage { amount } => {
+                for player in [PlayerId(0), PlayerId(1)] {
+                    for permanent_id in self.battlefield_permanents(player) {
+                        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+                            continue;
+                        };
+                        if self.state.cards[permanent.card].types.is_creature() {
+                            self.apply_permanent_damage(source, permanent_id, *amount);
+                        }
+                    }
+                }
+                // Lethal damage is cleaned up by state-based actions (CR 704.5g).
             }
         }
     }
