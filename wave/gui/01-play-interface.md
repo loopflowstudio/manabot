@@ -220,9 +220,11 @@ F6 yields through the my-main2 stop and clears at the turn boundary;
 non-priority spaces surface without stops; config validation for
 new_game and set_stops). e2e `frontend/e2e/stops.spec.ts` plays the same
 seed twice through the real UI — auto-pass off vs main-phase-only stops
-— with a deterministic scripted hero: 206 clicks vs 50 clicks to finish
-the same game, and the log still narrates villain actions and auto-pass
-counts inside the skipped stretches.
+— with a deterministic scripted hero (each click serialized on the
+`data-update-seq` server-response counter): 260 clicks vs 50 clicks to
+finish the same game, reproducible run to run, and the log still
+narrates villain actions and auto-pass counts inside the skipped
+stretches. A second browser test drives the F6 keybind end to end.
 
 ## Known gaps Jack will hit
 
