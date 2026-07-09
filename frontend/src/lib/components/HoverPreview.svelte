@@ -1,9 +1,13 @@
 <script lang="ts">
   import Card from './Card.svelte';
 
-  export let name: string | null = null;
-  export let power: number | null = null;
-  export let toughness: number | null = null;
+  interface Props {
+    name?: string | null;
+    power?: number | null;
+    toughness?: number | null;
+  }
+
+  let { name = null, power = null, toughness = null }: Props = $props();
 </script>
 
 {#if name}

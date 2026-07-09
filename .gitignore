@@ -14,6 +14,8 @@ target/
 .uv-cache/
 gui/traces/*.json
 frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
 frontend/.svelte-kit/
 frontend/build/
 frontend/.vite/

@@ -4,18 +4,33 @@
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
 
-  export let label: string;
-  export let player: PlayerState;
-  export let opponent = false;
-  export let focusedIds = new Set<number>();
-  export let clickableTargets: Map<number, number[]> | undefined = undefined;
-  export let onSelectTarget: ((objectId: number) => void) | undefined = undefined;
-  export let onHoverTarget: ((objectId: number | null) => void) | undefined = undefined;
-  export let onPreviewCard:
-    | ((card: { name: string | null; power: number | null; toughness: number | null } | null) => void)
-    | undefined = undefined;
+  interface Props {
+    label: string;
+    player: PlayerState;
+    opponent?: boolean;
+    focusedIds?: Set<number>;
+    clickableTargets?: Map<number, number[]>;
+    onSelectTarget?: (objectId: number) => void;
+    onHoverTarget?: (objectId: number | null) => void;
+    onPreviewCard?: (
+      card: { name: string | null; power: number | null; toughness: number | null } | null,
+    ) => void;
+  }
 
-  $: hiddenHandCount = player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length;
+  let {
+    label,
+    player,
+    opponent = false,
+    focusedIds = new Set<number>(),
+    clickableTargets = undefined,
+    onSelectTarget = undefined,
+    onHoverTarget = undefined,
+    onPreviewCard = undefined,
+  }: Props = $props();
+
+  const hiddenHandCount = $derived(
+    player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length,
+  );
 
   function preview(card: CardState): void {
     onPreviewCard?.({

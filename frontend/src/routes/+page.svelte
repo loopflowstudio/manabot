@@ -10,7 +10,7 @@
   import { connect, disconnect, sendAction, sendNewGame } from '$lib/socket.svelte';
   import type { ActionOption } from '$lib/types';
 
-  let hoveredTargetId: number | null = null;
+  let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
     connect();
@@ -19,14 +19,12 @@
     };
   });
 
-  $: clickableTargets = buildClickableTargets(gameStore.actions);
-  $: filteredActions = filterActionsForTarget(
-    gameStore.actions,
-    clickableTargets,
-    gameStore.selectedTargetId,
+  const clickableTargets = $derived(buildClickableTargets(gameStore.actions));
+  const filteredActions = $derived(
+    filterActionsForTarget(gameStore.actions, clickableTargets, gameStore.selectedTargetId),
   );
-  $: highlightedActionIndexes = new Set(
-    hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? [],
+  const highlightedActionIndexes = $derived(
+    new Set(hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? []),
   );
 
   function targetActionIndexes(objectId: number): number[] {
@@ -101,6 +99,7 @@
     <div class="flex items-center gap-3">
       <span class="text-sm font-medium uppercase tracking-wide text-slate-300">Connection</span>
       <span
+        data-testid="connection-badge"
         class={`rounded px-2 py-1 text-xs font-semibold ${
           gameStore.connection === 'connected'
             ? 'bg-emerald-600/30 text-emerald-300'
@@ -124,7 +123,7 @@
       />
       <button
         class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-        on:click={startNewGame}
+        onclick={startNewGame}
       >
         New Game
       </button>
@@ -171,7 +170,7 @@
       <p class="mb-4 text-lg">Start a game to begin.</p>
       <button
         class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-        on:click={startNewGame}
+        onclick={startNewGame}
       >
         New Game
       </button>

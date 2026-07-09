@@ -1,7 +1,11 @@
 <script lang="ts">
-  export let focused = false;
-  export let clickable = false;
-  export let className = '';
+  interface Props {
+    focused?: boolean;
+    clickable?: boolean;
+    className?: string;
+  }
+
+  let { focused = false, clickable = false, className = '' }: Props = $props();
 </script>
 
 <div

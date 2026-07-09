@@ -5,19 +5,32 @@
   import PermanentRow from './PermanentRow.svelte';
   import PlayerArea from './PlayerArea.svelte';
 
-  export let observation: Observation;
-  export let focusedIds = new Set<number>();
-  export let clickableTargets: Map<number, number[]> | undefined = undefined;
-  export let onSelectTarget: ((objectId: number) => void) | undefined = undefined;
-  export let onHoverTarget: ((objectId: number | null) => void) | undefined = undefined;
-  export let winner: number | null | undefined = undefined;
-  export let overlayActionLabel: string | null = null;
-  export let onOverlayAction: (() => void) | undefined = undefined;
+  interface Props {
+    observation: Observation;
+    focusedIds?: Set<number>;
+    clickableTargets?: Map<number, number[]>;
+    onSelectTarget?: (objectId: number) => void;
+    onHoverTarget?: (objectId: number | null) => void;
+    winner?: number | null;
+    overlayActionLabel?: string | null;
+    onOverlayAction?: () => void;
+  }
 
-  let previewName: string | null = null;
-  let previewPower: number | null = null;
-  let previewToughness: number | null = null;
-  $: stackCards = [...observation.opponent.stack, ...observation.agent.stack];
+  let {
+    observation,
+    focusedIds = new Set<number>(),
+    clickableTargets = undefined,
+    onSelectTarget = undefined,
+    onHoverTarget = undefined,
+    winner = undefined,
+    overlayActionLabel = null,
+    onOverlayAction = undefined,
+  }: Props = $props();
+
+  let previewName = $state<string | null>(null);
+  let previewPower = $state<number | null>(null);
+  let previewToughness = $state<number | null>(null);
+  const stackCards = $derived([...observation.opponent.stack, ...observation.agent.stack]);
 
   function setPreview(
     card: { name: string | null; power: number | null; toughness: number | null } | null,
@@ -28,7 +41,7 @@
   }
 </script>
 
-<section class="relative space-y-4 rounded border border-slate-700 bg-slate-800 p-4">
+<section data-testid="game-board" class="relative space-y-4 rounded border border-slate-700 bg-slate-800 p-4">
   <div class="rounded border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-sm font-semibold text-slate-200">
     Turn {observation.turn.turn_number} · {observation.turn.phase} · {observation.turn.step}
   </div>
@@ -86,14 +99,14 @@
           <button
             type="button"
             class={`rounded border px-3 py-2 text-left ${focusedIds.has(card.id) ? 'border-blue-400 bg-slate-800' : 'border-indigo-400/50 bg-slate-900/80'}`}
-            on:mouseenter={() => {
+            onmouseenter={() => {
               setPreview({
                 name: card.name,
                 power: card.types.is_creature ? card.power : null,
                 toughness: card.types.is_creature ? card.toughness : null,
               });
             }}
-            on:mouseleave={() => setPreview(null)}
+            onmouseleave={() => setPreview(null)}
           >
             {card.name}
           </button>
@@ -118,7 +131,7 @@
         {#if overlayActionLabel && onOverlayAction}
           <button
             class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-            on:click={() => onOverlayAction?.()}
+            onclick={() => onOverlayAction?.()}
           >
             {overlayActionLabel}
           </button>

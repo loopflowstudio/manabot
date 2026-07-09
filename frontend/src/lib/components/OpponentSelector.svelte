@@ -1,14 +1,25 @@
 <script lang="ts">
   import type { OpponentChoice } from '$lib/game.svelte';
 
-  export let value: OpponentChoice = 'search-64';
-  export let checkpointPath = '';
-  export let checkpointDeterministic = false;
-  export let disabled = false;
-  export let onChange: ((value: OpponentChoice) => void) | undefined = undefined;
-  export let onCheckpointPathChange: ((value: string) => void) | undefined = undefined;
-  export let onCheckpointDeterministicChange: ((value: boolean) => void) | undefined =
-    undefined;
+  interface Props {
+    value?: OpponentChoice;
+    checkpointPath?: string;
+    checkpointDeterministic?: boolean;
+    disabled?: boolean;
+    onChange?: (value: OpponentChoice) => void;
+    onCheckpointPathChange?: (value: string) => void;
+    onCheckpointDeterministicChange?: (value: boolean) => void;
+  }
+
+  let {
+    value = 'search-64',
+    checkpointPath = '',
+    checkpointDeterministic = false,
+    disabled = false,
+    onChange = undefined,
+    onCheckpointPathChange = undefined,
+    onCheckpointDeterministicChange = undefined,
+  }: Props = $props();
 </script>
 
 <div class="flex flex-wrap items-center gap-3">
@@ -16,9 +27,9 @@
     Opponent
     <select
       class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
-      value={value}
-      disabled={disabled}
-      on:change={(event) =>
+      {value}
+      {disabled}
+      onchange={(event) =>
         onChange?.((event.currentTarget as HTMLSelectElement).value as OpponentChoice)}
     >
       <option value="search-16">Search 16 (fast)</option>
@@ -38,8 +49,8 @@
         class="w-72 rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
         placeholder="/abs/path/to/step_65536.pt"
         value={checkpointPath}
-        disabled={disabled}
-        on:input={(event) =>
+        {disabled}
+        oninput={(event) =>
           onCheckpointPathChange?.((event.currentTarget as HTMLInputElement).value)}
       />
     </label>
@@ -48,8 +59,8 @@
         type="checkbox"
         class="rounded border-slate-600 bg-slate-900"
         checked={checkpointDeterministic}
-        disabled={disabled}
-        on:change={(event) =>
+        {disabled}
+        onchange={(event) =>
           onCheckpointDeterministicChange?.(
             (event.currentTarget as HTMLInputElement).checked,
           )}
