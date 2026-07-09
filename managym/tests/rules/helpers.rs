@@ -123,6 +123,19 @@ pub fn counterspell_deck() -> BTreeMap<String, usize> {
     land_plus_spell_deck("Island", "Counterspell")
 }
 
+pub fn recall_deck() -> BTreeMap<String, usize> {
+    land_plus_spell_deck("Island", "Ancestral Recall")
+}
+
+pub fn pyroclasm_deck() -> BTreeMap<String, usize> {
+    deck(&[
+        ("Mountain", 20),
+        ("Pyroclasm", 8),
+        ("Grey Ogre", 6),
+        ("Wall of Stone", 6),
+    ])
+}
+
 pub fn empty_deck() -> BTreeMap<String, usize> {
     BTreeMap::new()
 }

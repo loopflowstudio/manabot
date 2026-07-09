@@ -37,6 +37,7 @@ impl CardRegistry {
     pub fn register_all_cards(&mut self) {
         self.register_basic_lands();
         self.register_alpha();
+        self.register_ice_age();
         self.register_visions();
     }
 
@@ -120,6 +121,15 @@ impl CardRegistry {
                 target: TargetSpec::CreatureOrPlayer,
             }),
             text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
+            ..Default::default()
+        });
+
+        self.register_card(CardDefinition {
+            name: "Ancestral Recall".to_string(),
+            mana_cost: Some(ManaCost::parse("U")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effect: Some(Effect::DrawCards { count: 3 }),
+            text_box: "Draw three cards.".to_string(),
             ..Default::default()
         });
 
