@@ -9,8 +9,8 @@ import json
 import random
 from types import SimpleNamespace
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 # Local imports
 from gui import server, trace as trace_store

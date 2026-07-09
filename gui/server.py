@@ -18,8 +18,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from manabot.env.observation import ActionEnum, PhaseEnum, StepEnum, ZoneEnum
 import managym
 
-from . import trace as trace_store
-from . import villain as villain_module
+from . import trace as trace_store, villain as villain_module
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
@@ -41,6 +40,34 @@ DEFAULT_DECK = {
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
 VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
+
+# MTGO-style priority stops. Stop keys are the human-facing step names; they
+# map onto the engine's StepEnum names (serialize_observation reports the same
+# strings in turn.step). Steps without a stop key (untap, cleanup, end of
+# combat) can never be stopped on and always auto-pass unless the stack rule
+# fires.
+STOP_STEP_TO_ENGINE_STEP = {
+    "upkeep": "BEGINNING_UPKEEP",
+    "draw": "BEGINNING_DRAW",
+    "main1": "PRECOMBAT_MAIN_STEP",
+    "begin_combat": "COMBAT_BEGIN",
+    "declare_attackers": "COMBAT_DECLARE_ATTACKERS",
+    "declare_blockers": "COMBAT_DECLARE_BLOCKERS",
+    "combat_damage": "COMBAT_DAMAGE",
+    "main2": "POSTCOMBAT_MAIN_STEP",
+    "end_step": "ENDING_END",
+}
+ENGINE_STEP_TO_STOP_STEP = {
+    engine: stop for stop, engine in STOP_STEP_TO_ENGINE_STEP.items()
+}
+STOP_SIDES = ("my", "opponent")
+# Defaults chosen for the INTERACTIVE_DECK matchup: act in your own main
+# phases, hold instants at the opponent's end step, and always stop when the
+# stack is non-empty (that is how you get to counter things).
+DEFAULT_STOPS: dict[str, list[str]] = {
+    "my": ["main1", "main2"],
+    "opponent": ["end_step"],
+}
 ACTION_LABELS = {
     "PRIORITY_PLAY_LAND": "Play land",
     "PRIORITY_CAST_SPELL": "Cast spell",
@@ -309,6 +336,70 @@ def _is_hero_turn(obs: managym.Observation) -> bool:
     return int(obs.agent.player_index) == HERO_PLAYER_INDEX
 
 
+def _is_priority_space(obs: managym.Observation) -> bool:
+    return obs.action_space.action_space_type == managym.ActionSpaceEnum.PRIORITY
+
+
+def _hero_is_active_player(obs: managym.Observation) -> bool:
+    """Whether the hero is the active player (it is 'my' turn).
+
+    Perspective-independent: finds the hero side by player_index rather than
+    assuming ``obs.agent`` is the hero.
+    """
+    hero = (
+        obs.agent
+        if int(obs.agent.player_index) == HERO_PLAYER_INDEX
+        else obs.opponent
+    )
+    return int(obs.turn.active_player_id) == int(hero.id)
+
+
+def _pass_priority_index(actions: list[dict[str, Any]]) -> int | None:
+    for action in actions:
+        if action["type"] == "PRIORITY_PASS_PRIORITY":
+            return int(action["index"])
+    return None
+
+
+def _parse_stops(value: Any) -> dict[str, list[str]]:
+    """Validate a stops object: {"my": [step, ...], "opponent": [step, ...]}."""
+    if value is None:
+        return {side: list(steps) for side, steps in DEFAULT_STOPS.items()}
+    if not isinstance(value, dict):
+        raise ValueError('stops must be an object of {"my"/"opponent": [steps]}.')
+
+    unknown_sides = set(value) - set(STOP_SIDES)
+    if unknown_sides:
+        raise ValueError(
+            "stops sides must be 'my' or 'opponent'; got: "
+            + ", ".join(sorted(str(side) for side in unknown_sides))
+        )
+
+    stops: dict[str, list[str]] = {}
+    for side in STOP_SIDES:
+        steps = value.get(side, [])
+        if not isinstance(steps, list):
+            raise ValueError(f"stops.{side} must be a list of step names.")
+        normalized: list[str] = []
+        for step in steps:
+            if step not in STOP_STEP_TO_ENGINE_STEP:
+                raise ValueError(
+                    f"Unknown stop step: {step!r}. Valid steps: "
+                    + ", ".join(STOP_STEP_TO_ENGINE_STEP)
+                )
+            if step not in normalized:
+                normalized.append(step)
+        stops[side] = normalized
+    return stops
+
+
+def _parse_flag(data: dict[str, Any], key: str, default: bool) -> bool:
+    value = data.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean.")
+    return value
+
+
 def _normalize_deck(value: Any, fallback: dict[str, int]) -> dict[str, int]:
     if value is None:
         return dict(fallback)
@@ -385,6 +476,9 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_sims=villain_sims,
         villain_checkpoint=villain_checkpoint,
         villain_deterministic=villain_deterministic,
+        stops=_parse_stops(data.get("stops")),
+        stop_on_stack=_parse_flag(data, "stop_on_stack", True),
+        auto_pass=_parse_flag(data, "auto_pass", True),
     )
 
 
@@ -398,6 +492,18 @@ class GameSession:
         self.trace_id: str | None = None
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
+        # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
+        self.stops: dict[str, list[str]] = {
+            side: list(steps) for side, steps in DEFAULT_STOPS.items()
+        }
+        self.stop_on_stack = True
+        self.auto_pass = True
+        # F6: while set, every hero priority window auto-passes (even at stops,
+        # even through a non-empty stack) until this turn number ends or a
+        # non-priority decision surfaces.
+        self._f6_turn: int | None = None
+        # Hero priority windows auto-passed since the last surfaced message.
+        self._auto_passed_since_surface = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -431,8 +537,15 @@ class GameSession:
         self._trace_saved = False
         self.trace_id = None
         self._pending_villain_log = []
+        self.stops = {
+            side: list(steps) for side, steps in (config.stops or DEFAULT_STOPS).items()
+        }
+        self.stop_on_stack = config.stop_on_stack
+        self.auto_pass = config.auto_pass
+        self._f6_turn = None
+        self._auto_passed_since_surface = 0
 
-        self._auto_play_villain()
+        self._advance()
         return self._wire_message()
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
@@ -453,7 +566,46 @@ class GameSession:
             raise ValueError(f"Action index out of range: {action_index}")
 
         self._step_and_record(actor="hero", action_index=action_index, actions=actions)
-        self._auto_play_villain()
+        self._advance()
+        return self._wire_message()
+
+    def set_stops(
+        self,
+        raw_stops: Any,
+        raw_stop_on_stack: Any,
+        raw_auto_pass: Any,
+    ) -> dict[str, Any]:
+        """Update the stop configuration mid-game; missing fields keep their
+        current value. If the hero is currently parked at a window that no
+        longer stops, fast-forward immediately."""
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("No active game session. Send new_game first.")
+
+        if raw_stops is not None:
+            self.stops = _parse_stops(raw_stops)
+        if raw_stop_on_stack is not None:
+            if not isinstance(raw_stop_on_stack, bool):
+                raise ValueError("stop_on_stack must be a boolean.")
+            self.stop_on_stack = raw_stop_on_stack
+        if raw_auto_pass is not None:
+            if not isinstance(raw_auto_pass, bool):
+                raise ValueError("auto_pass must be a boolean.")
+            self.auto_pass = raw_auto_pass
+
+        self._advance()
+        return self._wire_message()
+
+    def pass_turn(self) -> dict[str, Any]:
+        """F6: yield every hero priority window (through stops and stack)
+        until the current turn ends or a non-priority decision surfaces."""
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("No active game session. Send new_game first.")
+        if self.obs.game_over:
+            raise ValueError("Game is already over. Start a new game.")
+
+        if _is_hero_turn(self.obs) and _is_priority_space(self.obs):
+            self._f6_turn = int(self.obs.turn.turn_number)
+            self._advance()
         return self._wire_message()
 
     def current_message(self) -> dict[str, Any]:
@@ -466,6 +618,7 @@ class GameSession:
         actor: str,
         action_index: int,
         actions: list[dict[str, Any]],
+        auto: bool = False,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
@@ -483,6 +636,7 @@ class GameSession:
                 action=action_index,
                 action_description=action_description,
                 reward=float(reward),
+                auto=auto,
             )
         )
         self.obs = next_obs
@@ -509,6 +663,90 @@ class GameSession:
                 actor="villain", action_index=action_index, actions=actions
             )
 
+    def _advance(self) -> None:
+        """Run the game forward to the next point the hero must see.
+
+        Alternates villain auto-play with hero auto-passes until the game is
+        over or a hero decision surfaces per the stop rules. Bounded so a
+        stuck engine cannot spin the server forever.
+        """
+        if self.env is None or self.obs is None or self.trace is None:
+            return
+
+        hero_passes = 0
+        while True:
+            self._auto_play_villain()
+            if self.obs.game_over:
+                self._f6_turn = None
+                return
+
+            # Hero is to act from here on.
+            self._maybe_clear_f6()
+            if self._should_surface():
+                return
+
+            if hero_passes >= MAX_AUTOPLAY_STEPS:
+                raise RuntimeError("Hero auto-pass exceeded safety step limit.")
+            hero_passes += 1
+
+            actions = describe_actions(self.obs)
+            pass_index = _pass_priority_index(actions)
+            if pass_index is None:
+                # Defensive: _should_surface only lets pure priority windows
+                # through, which always contain a pass action.
+                return
+            self._step_and_record(
+                actor="hero",
+                action_index=pass_index,
+                actions=actions,
+                auto=True,
+            )
+            self._auto_passed_since_surface += 1
+
+    def _maybe_clear_f6(self) -> None:
+        if self._f6_turn is None or self.obs is None:
+            return
+        if int(self.obs.turn.turn_number) != self._f6_turn:
+            self._f6_turn = None
+        elif not _is_priority_space(self.obs):
+            # A non-priority decision (attack/block/target) always clears F6.
+            self._f6_turn = None
+
+    def _should_surface(self) -> bool:
+        """Decide whether the hero's current decision point surfaces.
+
+        Assumes the hero is to act on a non-terminal observation. Stops only
+        govern pure priority windows; everything else always surfaces.
+        """
+        obs = self.obs
+        assert obs is not None
+
+        if not _is_priority_space(obs):
+            return True
+        if not self.auto_pass:
+            return True
+        if self._f6_turn is not None:
+            # F6 yields through stops and stack alike until the turn ends.
+            return False
+        if self.stop_on_stack and len(obs.stack_objects) > 0:
+            return True
+
+        step_name = _enum_name(StepEnum, obs.turn.step)
+        stop_step = ENGINE_STEP_TO_STOP_STEP.get(step_name)
+        if stop_step is None:
+            # Untap/cleanup/end-of-combat: no stop exists for these steps.
+            return False
+        side = "my" if _hero_is_active_player(obs) else "opponent"
+        return stop_step in self.stops.get(side, [])
+
+    def _stops_payload(self) -> dict[str, Any]:
+        return {
+            "my": list(self.stops.get("my", [])),
+            "opponent": list(self.stops.get("opponent", [])),
+            "stop_on_stack": self.stop_on_stack,
+            "auto_pass": self.auto_pass,
+        }
+
     def _drain_pending_villain_log(self) -> list[str]:
         pending = list(self._pending_villain_log)
         self._pending_villain_log = []
@@ -520,24 +758,32 @@ class GameSession:
 
         data = hero_view(self.obs)
         log = self._drain_pending_villain_log()
+        auto_passed = self._auto_passed_since_surface
+        self._auto_passed_since_surface = 0
         if self.obs.game_over:
             self._finalize_trace(end_reason="game_over")
             payload = {
                 "type": "game_over",
                 "data": data,
                 "winner": _winner_for_hero(self.obs),
+                "stops": self._stops_payload(),
             }
             if log:
                 payload["log"] = log
+            if auto_passed:
+                payload["auto_passed"] = auto_passed
             return payload
 
         payload = {
             "type": "observation",
             "data": data,
             "actions": describe_actions(self.obs),
+            "stops": self._stops_payload(),
         }
         if log:
             payload["log"] = log
+        if auto_passed:
+            payload["auto_passed"] = auto_passed
         return payload
 
     def _finalize_trace(self, end_reason: str) -> None:
@@ -713,6 +959,25 @@ async def play_socket(websocket: WebSocket) -> None:
                         raise ValueError("Session expired. Start a new game.")
 
                     response = record.game.hero_action(request.get("index"))
+                    record.touch()
+                    response = _response_with_session(response, record)
+                elif message_type in {"set_stops", "pass_turn"}:
+                    if attached_session_id is None:
+                        raise ValueError("No active game session. Send new_game first.")
+
+                    record = SESSION_REGISTRY.get(attached_session_id)
+                    if record is None:
+                        attached_session_id = None
+                        raise ValueError("Session expired. Start a new game.")
+
+                    if message_type == "set_stops":
+                        response = record.game.set_stops(
+                            request.get("stops"),
+                            request.get("stop_on_stack"),
+                            request.get("auto_pass"),
+                        )
+                    else:
+                        response = record.game.pass_turn()
                     record.touch()
                     response = _response_with_session(response, record)
                 elif message_type == "resume":
