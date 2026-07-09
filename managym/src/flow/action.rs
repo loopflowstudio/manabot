@@ -299,6 +299,11 @@ impl Game {
                     Some(PendingChoice::ChooseTargets { .. }) => {
                         self.finish_targets_action(*player)
                     }
+                    _ if self.state.pending_trigger_choice.is_some() => {
+                        // "Up to one target" triggered ability: decline
+                        // choosing a target.
+                        self.decline_trigger_target(*player)
+                    }
                     _ => Err(AgentError("nothing to decline".to_string())),
                 }
             }

@@ -32,10 +32,13 @@ impl Game {
             .enumerate()
             .filter_map(|(idx, perm)| perm.as_ref().map(|_| PermanentId(idx)))
         {
-            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
-            let card = &self.state.cards[permanent.card];
+            // CR 704.5f — A creature with toughness 0 or less is put into
+            // its owner's graveyard (an earthbent land losing its counters
+            // is a 0/0 and dies).
+            let zero_toughness = self.permanent_is_creature(permanent_id)
+                && self.effective_toughness(permanent_id) <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
-            if permanent.has_lethal_damage(card) {
+            if zero_toughness || self.has_lethal_damage(permanent_id) {
                 to_destroy.push(permanent_id);
             }
         }

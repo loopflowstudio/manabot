@@ -1,3 +1,4 @@
+use super::ability::Effect;
 use super::game_object::{CardId, ObjectId, PlayerId, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -36,6 +37,9 @@ pub struct TriggeredAbilityOnStack {
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
     pub context: Option<Target>,
+    /// Delayed triggers resolve these effects instead of looking up
+    /// `Card::abilities[ability_index]`.
+    pub inline_effects: Option<Vec<Effect>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -85,12 +85,21 @@ impl Game {
         }
     }
 
+    /// Damage-source keywords include until-EOT grants while the source is
+    /// on the battlefield (Enter the Avatar State's lifelink).
+    fn source_keywords(&self, source: CardId) -> crate::state::card::Keywords {
+        if let Some(Some(permanent_id)) = self.state.card_to_permanent.get(source.0) {
+            return self.effective_keywords(*permanent_id);
+        }
+        self.state.cards[source].keywords.clone()
+    }
+
     fn source_has_lifelink(&self, source: CardId) -> bool {
-        self.state.cards[source].keywords.lifelink
+        self.source_keywords(source).lifelink
     }
 
     fn source_has_deathtouch(&self, source: CardId) -> bool {
-        self.state.cards[source].keywords.deathtouch
+        self.source_keywords(source).deathtouch
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {

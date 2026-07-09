@@ -7,8 +7,12 @@ use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
     cardsets::alpha::CardRegistry,
     flow::{
-        combat::CombatState, decision::SuspendedResolution, event::GameEvent,
-        priority::PriorityState, trigger::PendingTrigger, turn::TurnState,
+        combat::CombatState,
+        decision::SuspendedResolution,
+        event::GameEvent,
+        priority::PriorityState,
+        trigger::{DelayedTrigger, ExileLink, PendingTrigger},
+        turn::TurnState,
     },
     state::{
         game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId, Target},
@@ -35,6 +39,11 @@ pub struct GameState {
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub pending_trigger_choice: Option<PendingTrigger>,
+    /// One-shot delayed triggers (earthbend returns) watching specific
+    /// cards' next departure from the battlefield.
+    pub delayed_triggers: Vec<DelayedTrigger>,
+    /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
+    pub exile_links: Vec<ExileLink>,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
     pub trigger_enqueue_counter: u64,
