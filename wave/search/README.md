@@ -80,26 +80,53 @@ FLOPs. This is per-step kernel-launch and sync overhead, not compute. It gates
 model scale *and* search throughput simultaneously. Nothing downstream moves
 until it does.
 
-### MCTS in Magic is only tractable after forced-move collapse
+### Forced-move collapse already exists. What's missing is the measurement.
 
-~200-step episodes with a priority system where the overwhelming majority of
-decision points have exactly one sensible action. A naive tree drowns in passes.
-No general auto-pass exists in the engine today (only a narrow
-`combat_actions.rs:264` special case).
+*(Corrected 2026-07-09 after code review; an earlier revision claimed no
+general auto-pass existed. Wrong.)*
 
-Never surface a state with one legal action. Expectation: real agent decisions
-per game drop from ~200 into the 30-80 range, which is squarely tractable for
-determinized search on 1990s hardware, let alone this engine.
+`skip_trivial` — on by default (`python/bindings.rs:1685`, hardcoded in
+`manabot/env/env.py:61`) — is forced-move collapse, with two levers:
 
-Do the collapse before writing a line of MCTS.
+1. **Zero-choice collapse** (`flow/tick.rs:71-82`): any action space with ≤1
+   action is auto-executed, never surfaced.
+2. **Can't-act auto-pass** (`flow/tick.rs:284-288`): a priority holder with
+   nothing castable/playable/activatable is auto-passed. This is the main
+   lever; surfaced priority spaces always include `PassPriority`, so the len-1
+   check fires only on degenerate cases. Mana abilities are correctly excluded
+   from "can act" — they live in a separate `mana_abilities` list consulted
+   only for affordability (`flow/action.rs:49-77`), so an untapped Elf does not
+   hold priority open.
+
+Three gaps remain, and they define the work:
+
+- **The collapse has never been measured.** `skip_trivial_count`
+  (`flow/game.rs:66`) is write-only: incremented, never read, not exposed to
+  Python, not logged. The "~200 steps" figure in first-light's README is
+  unsourced prose; `mean_steps` (`verify/util.py:577`) — post-collapse, both
+  players — was never recorded in any report. Raw ticks, surfaced decisions,
+  and their ratio are all unknown.
+- **Combat is per-permanent** (`flow/tick.rs:178-231`): each eligible attacker
+  is a separate {attack, don't} decision; each blocker a separate choice among
+  legal attackers. A k-creature board costs ~k decisions per combat, every
+  combat. Genuine decisions, not skippable — but a factorization choice with
+  consequences for episode length and tree branching.
+- **Goal 0 will re-inflate decision counts, and `skip_trivial` cannot help.**
+  With a sorcery-only deck, auto-pass eats nearly all off-turn windows. Add
+  instants and every priority window where a player holds a castable instant
+  becomes a surfaced "respond or pass" decision — legal, meaningful, and almost
+  always pass. That is the RL/search analogue of Arena's stops/auto-yield
+  system: an action-abstraction or learned-prior problem, not a legality
+  problem. It is the genuinely open work in this area.
 
 ### Search does not need a good value function. It needs an unbiased one.
 
 The instinct is that a strong value estimator is a prerequisite for search. It
 is not — not here. AlphaZero needed one because Go has no meaningful cheap
-terminal rollout. Magic, post-collapse, is 30-80 real decisions on a 183k SPS
-engine: **roll out to the true terminal reward.** The rollout policy is the leaf
-evaluator. GIB did this in bridge in 1999.
+terminal rollout. Magic, with forced moves already collapsed, is a short game on
+a 183k SPS engine (exact decision count unmeasured — goal 2's job): **roll out
+to the true terminal reward.** The rollout policy is the leaf evaluator. GIB did
+this in bridge in 1999.
 
 What V actually buys is throughput. A terminal rollout costs ~40 forward passes;
 a value net at a leaf costs 1. That is ~40x more simulations per unit compute,
@@ -190,8 +217,13 @@ tries to close it.
    metric to regress. That is the point — it restores dynamic range.
 1. **Batched inference.** 2.0k → 50k+ SPS with inference. Batch across envs,
    eliminate per-step syncs, trace/compile the actor.
-2. **Forced-move collapse in the engine.** Single-legal-action states never
-   reach the agent or the tree. Report real decisions per game.
+2. **Instrument the decision profile.** Forced-move collapse already ships
+   (`skip_trivial`, on by default) — but `skip_trivial_count` is write-only and
+   no report records `mean_steps`. Expose the counter to Python; log surfaced
+   decisions per game broken down by `ActionSpaceKind` (priority / attacker /
+   blocker / target); record the collapse ratio. Re-measure after goal 0 lands —
+   instants will inflate response windows, and that measurement decides whether
+   an auto-yield/stops abstraction is needed before MCTS.
 3. **Determinized search, rollouts first.** Flat Monte Carlo to terminal — no
    value function needed, a day's work, and it may go further than expected.
    Then a tree. This is both the reference opponent and the value oracle.
@@ -214,8 +246,11 @@ tries to close it.
   required" must be re-derived on a deck that has strategy in it, and may not
   survive contact with search.
 - **Branching factor after adding interaction.** `ChooseTarget` and
-  instant-speed responses deepen the tree exactly when we start searching it.
-  Forced-move collapse buys headroom; measure before assuming it is enough.
+  instant-speed responses deepen the tree exactly when we start searching it —
+  and `skip_trivial` cannot absorb response windows, because "could respond but
+  shouldn't" is legal and meaningful. If goal 2's post-goal-0 measurement shows
+  decision counts blowing up, an auto-yield/stops abstraction becomes a
+  prerequisite for MCTS rather than an optimization.
 - **Search too slow even after the inference fix.** Mitigation: flat rollouts
   before a tree; measure sims/decision achievable at target wall-clock before
   committing to MCTS.
@@ -232,8 +267,10 @@ tries to close it.
 
 ## Metrics
 
-- **Real agent decisions per game** after forced-move collapse (baseline ~200;
-  target < 80)
+- **Surfaced decisions per game**, by `ActionSpaceKind`, plus the collapse
+  ratio (`skip_trivial_count` / total ticks) — no baseline exists yet; the
+  "~200 steps" figure was unsourced prose and the first measurement is the
+  deliverable. Re-measured after goal 0 (instants inflate response windows).
 - **SPS with inference enabled** (baseline 2.0k; target ≥ 50k)
 - **Policy-alone win rate vs. search-at-N**, N ∈ {1, 10, 100, 1000} (target:
   policy with no search at inference beats search-at-100)
