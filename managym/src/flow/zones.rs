@@ -74,7 +74,31 @@ impl Game {
             permanent: permanent_id,
             for_mana,
         });
+        if for_mana {
+            self.fire_triggered_mana_abilities(permanent_id, controller);
+        }
         true
+    }
+
+    /// Triggered mana abilities (CR 605.1b): "Whenever you tap a [predicate]
+    /// for mana, add [mana]." They don't use the stack — mana is added to
+    /// the controller's pool immediately, so it can help pay the very cost
+    /// that caused the tap (waterbend composition).
+    fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
+        let mut produced = Vec::new();
+        for permanent_id in self.battlefield_permanents(controller) {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+                continue;
+            };
+            for ability in &self.state.cards[permanent.card].triggered_mana_abilities {
+                if self.permanent_matches_predicate(tapped, &ability.predicate) {
+                    produced.push(ability.mana.clone());
+                }
+            }
+        }
+        for mana in produced {
+            self.state.players[controller.0].mana_pool.add(&mana);
+        }
     }
 
     /// Create a token from a registered token definition under `controller`'s
@@ -144,10 +168,11 @@ impl Game {
         &mut self,
         card: CardId,
         controller: PlayerId,
-        target: Option<Target>,
+        targets: Vec<Target>,
+        target_req_indices: Vec<usize>,
+        kicked: bool,
     ) {
         self.move_card(card, ZoneType::Stack);
-        let targets = target.into_iter().collect();
         self.state
             .stack_objects
             .push(StackObject::Spell(SpellOnStack {
@@ -156,6 +181,8 @@ impl Game {
                 controller,
                 source_card_registry_key: self.state.cards[card].registry_key,
                 targets,
+                target_req_indices,
+                kicked,
             }));
     }
 

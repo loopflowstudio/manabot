@@ -7,6 +7,11 @@ pub struct SpellOnStack {
     pub controller: PlayerId,
     pub source_card_registry_key: ObjectId,
     pub targets: Vec<Target>,
+    /// Which targeting requirement (index into the card's
+    /// `target_requirements()`) each entry of `targets` was chosen for.
+    pub target_req_indices: Vec<usize>,
+    /// Whether the kicker cost was paid while casting (CR 702.33).
+    pub kicked: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,6 +33,9 @@ pub struct TriggeredAbilityOnStack {
     pub source_card_registry_key: ObjectId,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    /// Object from the triggering event that the ability's effects
+    /// reference (e.g. the spell that targeted a warded permanent).
+    pub context: Option<Target>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

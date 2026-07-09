@@ -259,6 +259,12 @@ impl Game {
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {
         loop {
+            // A suspended resolution owns the game until its decision is
+            // made — no SBAs, triggers, or priority in between (CR 608.2).
+            if let Some(decision_space) = self.suspended_decision_action_space() {
+                return Some(decision_space);
+            }
+
             if let Some(choice_space) = self.pending_choice_action_space() {
                 return Some(choice_space);
             }

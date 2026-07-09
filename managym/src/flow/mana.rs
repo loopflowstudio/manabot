@@ -24,13 +24,20 @@ impl Game {
         self.state.mana_cache[player.0] = None;
     }
 
+    /// Mana already in `player`'s pool plus everything their untapped
+    /// permanents could produce.
+    pub(crate) fn available_mana(&self, player: PlayerId) -> Mana {
+        let mut total = self.producible_mana(player);
+        total.add(&self.state.players[player.0].mana_pool);
+        total
+    }
+
     pub(crate) fn produce_mana(
         &mut self,
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
-        let producible = self.producible_mana(player);
-        if !producible.can_pay(cost) {
+        if !self.available_mana(player).can_pay(cost) {
             return Err(AgentError("not enough producible mana".to_string()));
         }
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::{
-    ability::{Ability, Effect},
+    ability::{Ability, Effect, TargetRequirement},
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
@@ -95,6 +95,14 @@ pub struct ManaAbility {
     pub mana: Mana,
 }
 
+/// A triggered mana ability (CR 605.1b): "Whenever you tap a [predicate]
+/// for mana, add [mana]." Resolves immediately — no stack, no priority.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggeredManaAbility {
+    pub predicate: CardPredicate,
+    pub mana: Mana,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Keywords {
     pub flying: bool,
@@ -118,6 +126,11 @@ pub struct ActivatedAbilityDefinition {
     /// Sacrifice the source permanent as an additional activation cost
     /// (e.g. Clue tokens' "{2}, Sacrifice this token: Draw a card.").
     pub sacrifice_source: bool,
+    /// Waterbend cost (CR-style alternative payment): the generic part of
+    /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
+    /// activating player controls, {1} per permanent tapped. Taps count as
+    /// "tapped for mana" (triggered mana abilities compose).
+    pub waterbend: bool,
     pub effect: Effect,
 }
 
@@ -130,8 +143,23 @@ pub struct CardDefinition {
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
+    pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
-    pub spell_effect: Option<Effect>,
+    pub spell_effects: Vec<Effect>,
+    /// Explicit targeting clauses for multi-target or effect-decoupled
+    /// spells. When empty, a single requirement is derived from the first
+    /// targeted spell effect.
+    pub targeting: Vec<TargetRequirement>,
+    /// Kicker (CR 702.33): optional additional cost chosen while casting.
+    pub kicker: Option<ManaCost>,
+    /// Ward (CR 702.21): "counter [the targeting spell] unless its
+    /// controller pays [cost]". Synthesized into a BecomesTargeted
+    /// triggered ability at registration.
+    pub ward: Option<ManaCost>,
+    /// Affinity-style cost reduction: "This spell costs {1} less to cast
+    /// for each [predicate] you control", computed while casting (generic
+    /// floor 0).
+    pub cost_reduction_per: Option<CardPredicate>,
     pub keywords: Keywords,
     /// "This creature can't be blocked by creatures matching [predicate]."
     pub block_restriction: Option<CardPredicate>,
@@ -168,8 +196,13 @@ pub struct Card {
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
     pub mana_abilities: Vec<ManaAbility>,
+    pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
-    pub spell_effect: Option<Effect>,
+    pub spell_effects: Vec<Effect>,
+    pub targeting: Vec<TargetRequirement>,
+    pub kicker: Option<ManaCost>,
+    pub ward: Option<ManaCost>,
+    pub cost_reduction_per: Option<CardPredicate>,
     pub keywords: Keywords,
     pub block_restriction: Option<CardPredicate>,
     pub is_token: bool,
@@ -197,8 +230,13 @@ impl Card {
             subtypes: definition.subtypes.clone(),
             abilities: definition.abilities.clone(),
             mana_abilities: definition.mana_abilities.clone(),
+            triggered_mana_abilities: definition.triggered_mana_abilities.clone(),
             activated_abilities: definition.activated_abilities.clone(),
-            spell_effect: definition.spell_effect.clone(),
+            spell_effects: definition.spell_effects.clone(),
+            targeting: definition.targeting.clone(),
+            kicker: definition.kicker.clone(),
+            ward: definition.ward.clone(),
+            cost_reduction_per: definition.cost_reduction_per.clone(),
             keywords: definition.keywords.clone(),
             block_restriction: definition.block_restriction.clone(),
             is_token: definition.is_token,
@@ -216,6 +254,20 @@ impl Card {
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
     pub fn is_instant_speed(&self) -> bool {
         self.types.is_instant() || self.keywords.flash
+    }
+
+    /// The spell's targeting clauses, in choice order. Explicit `targeting`
+    /// wins; otherwise a single 1-of-1 requirement is derived from the
+    /// first targeted spell effect (the Stage-1 convention).
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        if !self.targeting.is_empty() {
+            return self.targeting.clone();
+        }
+        self.spell_effects
+            .iter()
+            .find_map(|effect| effect.target_spec())
+            .map(|spec| vec![TargetRequirement::one(spec.clone())])
+            .unwrap_or_default()
     }
 }
 

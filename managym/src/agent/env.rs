@@ -224,6 +224,14 @@ impl Env {
         })
     }
 
+    /// Kind of the current action space, if any.
+    pub fn action_space_kind(&self) -> Option<crate::agent::action::ActionSpaceKind> {
+        self.game
+            .as_ref()
+            .and_then(|game| game.action_space())
+            .map(|space| space.kind)
+    }
+
     /// Number of legal actions in the current action space.
     pub fn action_count(&self) -> Result<usize, AgentError> {
         let game = self
