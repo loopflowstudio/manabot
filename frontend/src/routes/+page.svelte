@@ -43,7 +43,12 @@
   }
 
   function startNewGame(): void {
-    sendNewGame({ villain_type: gameStore.villainType });
+    const config = gameStore.opponentConfig();
+    if (config.villain_type === 'checkpoint' && !config.villain_checkpoint) {
+      gameStore.setError('Enter a checkpoint path (.pt) to play against a policy.');
+      return;
+    }
+    sendNewGame({ ...config });
   }
 
   function handleActionSelect(action: ActionOption): void {
@@ -109,7 +114,14 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <OpponentSelector value={gameStore.villainType} onChange={(value) => gameStore.setVillainType(value)} />
+      <OpponentSelector
+        value={gameStore.opponentChoice}
+        checkpointPath={gameStore.checkpointPath}
+        checkpointDeterministic={gameStore.checkpointDeterministic}
+        onChange={(value) => gameStore.setOpponentChoice(value)}
+        onCheckpointPathChange={(value) => gameStore.setCheckpointPath(value)}
+        onCheckpointDeterministicChange={(value) => gameStore.setCheckpointDeterministic(value)}
+      />
       <button
         class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
         on:click={startNewGame}

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import secrets
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -19,21 +19,32 @@ from manabot.env.observation import ActionEnum, PhaseEnum, StepEnum, ZoneEnum
 import managym
 
 from . import trace as trace_store
+from . import villain as villain_module
 from .trace import GameConfig, Trace, TraceEvent
-from .villain import build_villain_policy
+from .villain import VillainPolicy, build_villain_policy
 
+# Mirror of manabot.verify.util.INTERACTIVE_DECK (copied so the server does
+# not import torch at startup; tests assert the two stay in sync).
 DEFAULT_DECK = {
+    "Island": 12,
     "Mountain": 12,
-    "Forest": 12,
-    "Llanowar Elves": 18,
-    "Grey Ogre": 18,
+    "Grey Ogre": 6,
+    "Wind Drake": 6,
+    "Man-o'-War": 4,
+    "Raging Goblin": 4,
+    "Lightning Bolt": 6,
+    "Counterspell": 4,
+    "Ancestral Recall": 3,
+    "Pyroclasm": 3,
 }
 
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
+VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
 ACTION_LABELS = {
     "PRIORITY_PLAY_LAND": "Play land",
     "PRIORITY_CAST_SPELL": "Cast spell",
+    "PRIORITY_ACTIVATE_ABILITY": "Activate ability",
     "DECLARE_ATTACKER": "Declare attacker",
     "DECLARE_BLOCKER": "Declare blocker",
     "CHOOSE_TARGET": "Choose target",
@@ -175,40 +186,80 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
     }
 
 
+def _player_label(player: managym.Player) -> str:
+    return "Hero" if int(player.player_index) == HERO_PLAYER_INDEX else "Villain"
+
+
+def _permanent_names(
+    cards: list[managym.Card],
+    permanents: list[managym.Permanent],
+) -> dict[int, str]:
+    """Map permanent ids to card names.
+
+    Permanents carry their own object ids (distinct from card ids), but the
+    observation lists permanents and battlefield cards in the same order —
+    the same alignment _serialize_player relies on.
+    """
+    battlefield_cards = [
+        card
+        for card in cards
+        if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+    ]
+    names: dict[int, str] = {}
+    for index, permanent in enumerate(permanents):
+        if index < len(battlefield_cards):
+            names[int(permanent.id)] = battlefield_cards[index].name
+    return names
+
+
 def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
+    """Map object ids (players, cards, permanents) to display names."""
     names: dict[int, str] = {
-        int(obs.agent.id): "agent",
-        int(obs.opponent.id): "opponent",
+        int(obs.agent.id): _player_label(obs.agent),
+        int(obs.opponent.id): _player_label(obs.opponent),
     }
     names.update(
         {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
     )
+    names.update(_permanent_names(obs.agent_cards, obs.agent_permanents))
+    names.update(_permanent_names(obs.opponent_cards, obs.opponent_permanents))
     return names
 
 
-def _format_action(
-    action: managym.Action, card_name: str | None, names: dict[int, str]
-) -> str:
+def _format_action(action: managym.Action, names: dict[int, str]) -> str:
+    """Render a legal action in Magic terms with card names.
+
+    Focus semantics (managym observation.rs action_focus):
+      PLAY_LAND / CAST_SPELL: [card_id]
+      DECLARE_ATTACKER:       [attacker_permanent_id]
+      DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
+                              (one entry means "this creature does not block")
+      CHOOSE_TARGET:          [player_id or permanent_id]
+      PASS_PRIORITY:          []
+    """
     action_name = _enum_name(ActionEnum, action.action_type)
+    focus_names = [names.get(int(value)) for value in action.focus]
+    first = focus_names[0] if focus_names else None
 
     if action_name == "PRIORITY_PASS_PRIORITY":
         return "Pass priority"
+    if action_name == "PRIORITY_PLAY_LAND" and first:
+        return f"Play {first}"
+    if action_name == "PRIORITY_CAST_SPELL" and first:
+        return f"Cast {first}"
+    if action_name == "DECLARE_ATTACKER" and first:
+        return f"Attack with {first}"
+    if action_name == "DECLARE_BLOCKER" and first:
+        if len(focus_names) >= 2 and focus_names[1]:
+            return f"Block {focus_names[1]} with {first}"
+        return f"{first}: do not block"
+    if action_name == "CHOOSE_TARGET" and first:
+        return f"Target {first}"
+
     label = ACTION_LABELS.get(action_name, action_name)
-
-    subject = card_name
-    if subject is None:
-        subject = next(
-            (
-                name
-                for value in action.focus
-                if (name := names.get(int(value))) is not None
-            ),
-            None,
-        )
-
-    if subject is None:
-        return label
-    return f"{label}: {subject}"
+    if first:
+        return f"{label}: {first}"
+    return label
 
 
 def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
@@ -216,16 +267,32 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
     names = _build_id_to_name(obs)
     for index, action in enumerate(obs.action_space.actions):
         focus = [int(value) for value in action.focus]
-        card_name = names.get(focus[0]) if focus else None
         results.append(
             {
                 "index": index,
                 "type": _enum_name(ActionEnum, action.action_type),
                 "focus": focus,
-                "description": _format_action(action, card_name, names),
+                "description": _format_action(action, names),
             }
         )
     return results
+
+
+def hero_view(obs: managym.Observation) -> dict[str, Any]:
+    """Serialize an observation for the human player.
+
+    Two guarantees, regardless of whose perspective the engine observation is
+    from (at game over it can be the villain's):
+      1. ``agent`` is always the hero and ``opponent`` always the villain.
+      2. The villain's hand is redacted (libraries are never serialized).
+    """
+    data = serialize_observation(obs)
+    if int(data["agent"]["player_index"]) != HERO_PLAYER_INDEX:
+        data["agent"], data["opponent"] = data["opponent"], data["agent"]
+        data["won"] = bool(obs.game_over) and not bool(obs.won)
+
+    trace_store.redact_observation(data)
+    return data
 
 
 def _winner_for_hero(obs: managym.Observation) -> int | None:
@@ -270,9 +337,11 @@ def _parse_game_config(config: Any) -> GameConfig:
     if not isinstance(data, dict):
         raise ValueError("new_game.config must be an object.")
 
-    villain_type = data.get("villain_type", "passive")
-    if villain_type not in {"passive", "random"}:
-        raise ValueError("villain_type must be 'passive' or 'random'.")
+    villain_type = data.get("villain_type", "search")
+    if villain_type not in VILLAIN_TYPES:
+        raise ValueError(
+            "villain_type must be one of: " + ", ".join(sorted(VILLAIN_TYPES)) + "."
+        )
 
     seed_value = data.get("seed")
     if seed_value is None:
@@ -283,11 +352,39 @@ def _parse_game_config(config: Any) -> GameConfig:
         except Exception as exc:
             raise ValueError("seed must be an integer.") from exc
 
+    villain_sims: int | None = None
+    if villain_type == "search":
+        sims_value = data.get("villain_sims", villain_module.DEFAULT_SEARCH_SIMS)
+        try:
+            villain_sims = int(sims_value)
+        except Exception as exc:
+            raise ValueError("villain_sims must be an integer.") from exc
+        if villain_sims < 1 or villain_sims > villain_module.MAX_SEARCH_SIMS:
+            raise ValueError(
+                f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
+            )
+
+    villain_checkpoint: str | None = None
+    villain_deterministic = False
+    if villain_type == "checkpoint":
+        checkpoint_value = data.get("villain_checkpoint")
+        if not isinstance(checkpoint_value, str) or not checkpoint_value:
+            raise ValueError(
+                "checkpoint villain requires a 'villain_checkpoint' path."
+            )
+        if not Path(checkpoint_value).is_file():
+            raise ValueError(f"Checkpoint not found: {checkpoint_value}")
+        villain_checkpoint = checkpoint_value
+        villain_deterministic = bool(data.get("villain_deterministic", False))
+
     return GameConfig(
         hero_deck=_normalize_deck(data.get("hero_deck"), DEFAULT_DECK),
         villain_deck=_normalize_deck(data.get("villain_deck"), DEFAULT_DECK),
         villain_type=villain_type,
         seed=seed,
+        villain_sims=villain_sims,
+        villain_checkpoint=villain_checkpoint,
+        villain_deterministic=villain_deterministic,
     )
 
 
@@ -296,7 +393,7 @@ class GameSession:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self.env: managym.Env | None = None
         self.obs: managym.Observation | None = None
-        self.villain_policy: Callable[[managym.Observation], int] | None = None
+        self.villain_policy: VillainPolicy | None = None
         self.trace: Trace | None = None
         self.trace_id: str | None = None
         self._trace_saved = False
@@ -307,7 +404,12 @@ class GameSession:
             self.close(end_reason="new_game")
 
         config = _parse_game_config(raw_config)
-        self.villain_policy = build_villain_policy(config.villain_type)
+        try:
+            self.villain_policy = build_villain_policy(config)
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(f"Failed to build villain policy: {exc}") from exc
 
         seed = config.seed if config.seed is not None else 0
         self.env = managym.Env(seed=seed)
@@ -398,7 +500,7 @@ class GameSession:
             steps += 1
 
             actions = describe_actions(self.obs)
-            action_index = int(self.villain_policy(self.obs))
+            action_index = int(self.villain_policy(self.env, self.obs))
             if action_index < 0 or action_index >= len(actions):
                 raise RuntimeError(
                     f"Villain policy selected invalid action index: {action_index}"
@@ -416,7 +518,7 @@ class GameSession:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
-        data = serialize_observation(self.obs)
+        data = hero_view(self.obs)
         log = self._drain_pending_villain_log()
         if self.obs.game_over:
             self._finalize_trace(end_reason="game_over")
@@ -654,8 +756,6 @@ async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict[str, Any
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    if not reveal_hidden:
-        payload = trace_store.redact_trace_payload(payload)
-
+    payload = trace_store.prepare_trace_payload(payload, reveal_hidden=reveal_hidden)
     payload["id"] = trace_id
     return payload
