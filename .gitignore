@@ -21,3 +21,6 @@ frontend/.vite/
 
 # claude-code session worktrees (local harness artifacts)
 .claude/worktrees/
+
+# raw experiment data stays local (reports carry the summaries)
+scratch/*.json
