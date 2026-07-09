@@ -10,15 +10,16 @@ Two processes: backend (FastAPI/uvicorn, port 8000) and frontend (Vite dev
 server, proxies `/api` and `/ws` to port 8000).
 
 ```bash
-# Terminal 1 — backend (from repo root, any venv with manabot + managym installed)
-source .venv-exp/bin/activate   # or your venv
-uv pip install uvicorn          # once
-uvicorn gui.server:app --port 8000
+# one command (repo root) — starts both, Ctrl-C stops both,
+# npm-installs frontend deps on first run:
+uv run scripts/play.py
+```
 
-# Terminal 2 — frontend
-cd frontend
-npm install                     # once
-npm run dev                     # serves http://localhost:5173
+Manual equivalent (all Python through uv, per AGENTS.md):
+
+```bash
+uv run uvicorn gui.server:app --port 8000     # terminal 1 — backend
+cd frontend && npm install && npm run dev     # terminal 2 — frontend
 ```
 
 Open http://localhost:5173 — that root route IS the play page. Pick an
