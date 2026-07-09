@@ -1,11 +1,21 @@
 # Rules
 
-> **Status: dormant, pull-driven** (2026-07-09). Rules work happens only when
-> an experiment in [wave/search](../search/01-experiment-loop.md) pulls it:
-> cycle C1 pulls `DrawCards` + mass-removal effects; Exit 3 pulls minimal
-> pool expansions; the release bar eventually pulls broader completeness.
-> No open-ended rules grinding — completeness is a tarpit with no finish
-> line, and a result is a finish line.
+> **Status: active with a destination** (updated 2026-07-09). The destination
+> pool is the owner's cube — https://cubecobra.com/cube/list/elemental — and
+> the path is capability-ordered:
+>
+> 1. **Milestone 1 — the two-deck slice:** Jack handcrafts two decks from the
+>    cube (guided by the audit's per-card capability price tags,
+>    `00-*-audit.md`, in flight); implement the union of their card lists,
+>    trace-tested. Unlocks games in the cube's real texture AND the project's
+>    first non-mirror matchup.
+> 2. **Milestone 2 — cube-lite rungs:** climb the audit's unlock ladder; at
+>    every rung the expressible subset is itself a playable pool.
+> 3. **Milestone 3 — full cube.**
+>
+> Still no open-ended rules grinding: every rung is pulled by a named pool
+> with a named payoff. Completeness of the CR remains a non-goal;
+> completeness of *this cube* is a finish line.
 
 ## Vision
 

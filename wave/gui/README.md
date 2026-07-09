@@ -62,9 +62,10 @@ That line is the new wave.
    so "the bot beat Jack" is a number with provenance, not an anecdote. Match
    results stored with opponent config + checkpoint hash.
 4. **Presentation batching** (design decided 2026-07-09): decouple deciding
-   from narrating. The bot thinks at its budget (deadline-based search —
-   Blitz 50ms / Standard 250ms / Boss 1s per decision, 1s accepted as the
-   current default); the UI presents each villain sequence (everything
+   from narrating. The bot thinks against a wall-clock budget (deadline-based
+   search, no named tiers — **default: 1s per decision batch**, i.e. per
+   villain sequence between two hero decision points, divided across that
+   sequence's decisions); the UI presents each villain sequence (everything
    between two hero decision points — already the server's natural unit) as
    semantic beats of ~400ms: one beat per game-meaningful event + its visible
    consequence ("attacks with X, Y, Z" is one beat, "Pyroclasm → sweep" is
