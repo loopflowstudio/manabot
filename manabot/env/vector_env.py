@@ -243,6 +243,10 @@ class VectorEnv:
         infos = [dict(info) for info in self._rust_env.get_last_info()]
         return self._stack_infos(infos)
 
+    def skip_trivial_counts(self) -> np.ndarray:
+        """Per-env trivial-decision collapse counters for the current games."""
+        return np.asarray(self._rust_env.skip_trivial_counts(), dtype=np.int64)
+
     def _stack_infos(self, infos: list[dict[str, Any]]) -> Dict[str, Any]:
         if not infos:
             return {}

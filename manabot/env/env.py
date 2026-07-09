@@ -151,6 +151,10 @@ class Env(gym.Env):
     def info(self) -> Dict[str, Any]:
         return self._engine.info()
 
+    def skip_trivial_count(self) -> int:
+        """Trivial decision points auto-collapsed since the current game began."""
+        return self._engine.skip_trivial_count()
+
     def close(self):
         pass
 
