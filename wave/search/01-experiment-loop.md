@@ -226,7 +226,10 @@ evidence: bluff-rate ≈ 0, instant-holding ≈ 0, and the exploiter's wins
 concentrated in represent/trick lines.
 
 **Pivot:** belief-conditioned value function over public state (ReBeL-shaped,
-scoped down). Explicitly not the fix: more rollouts, bigger trees.
+scoped down). Explicitly not the fix: more rollouts, bigger trees. Full design
+captured in **[wave/beliefs](../beliefs/README.md)** (dormant,
+trigger-armed on this exit): PBS, update rule, ε-floor, canonical action IDs,
+range-conditioned value head, off-model handling, pre-registered predictions.
 
 ### Exit 2 — Search isn't paying → model-free game-theoretic bet
 
