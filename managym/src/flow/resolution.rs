@@ -1,85 +1,84 @@
+// resolution.rs
+// Resolving stack objects. Effects execute through an EffectFrame so a
+// resolution can suspend on a mid-resolution decision (see decision.rs).
+
+use std::collections::VecDeque;
+
 use crate::{
-    flow::{event::GameEvent, game::Game},
+    flow::{
+        decision::{Decision, EffectFrame, FrameFinalize},
+        event::GameEvent,
+        game::Game,
+    },
     state::{
         ability::{Ability, Effect, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
-        stack_object::{
-            ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
-        },
-        target::Target as ActionTarget,
+        stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
     },
 };
 
-/// Everything an effect needs to know about what is resolving it.
-pub(crate) struct EffectContext {
-    /// The card whose spell or ability is resolving.
-    pub source: Option<CardId>,
-    /// The player the effect resolves for ("you").
-    pub controller: PlayerId,
-    /// For triggered abilities: how many times this ability has resolved
-    /// this turn, counting this resolution. Zero for spells and activated
-    /// abilities.
-    pub resolutions_this_turn: u32,
-}
-
 impl Game {
     pub(crate) fn resolve_top_of_stack(&mut self) {
-        let Some(stack_object) = self.pop_stack() else {
+        let Some(stack_object) = self.state.stack_objects.last().cloned() else {
             return;
         };
 
         match stack_object {
+            // The spell's stack object stays on the stack while it resolves
+            // (CR 608.2m — the card moves out as resolution's final step),
+            // so a suspended resolution leaves a consistent stack.
             StackObject::Spell(spell) => self.resolve_spell_object(spell),
-            StackObject::ActivatedAbility(ability) => self.resolve_activated_ability(ability),
-            StackObject::TriggeredAbility(triggered) => self.resolve_triggered_ability(triggered),
+            StackObject::ActivatedAbility(ability) => {
+                self.pop_stack();
+                self.resolve_activated_ability(ability);
+            }
+            StackObject::TriggeredAbility(triggered) => {
+                self.pop_stack();
+                self.resolve_triggered_ability(triggered);
+            }
         }
     }
 
     fn resolve_spell_object(&mut self, spell: SpellOnStack) {
         let card = spell.card;
-        let spell_effect = self.state.cards[card].spell_effect.clone();
+        let card_ref = &self.state.cards[card];
+        let effects = card_ref.spell_effects.clone();
+        let requirements = card_ref.target_requirements();
 
-        if let Some(effect) = spell_effect {
-            let target = spell.targets.first().copied();
-            if let Some(target_spec) = effect.target_spec() {
-                // CR 608.2b — A spell whose targets are all illegal on
-                // resolution doesn't resolve and is put into its owner's
-                // graveyard. The stack object was already popped, so
-                // counter_spell (which searches the stack) would no-op and
-                // strand the card in the stack zone; move it directly.
-                let fizzles = match target {
-                    None => true,
-                    Some(target) => !self.is_legal_target(target, target_spec),
-                };
-                if fizzles {
-                    self.move_card(card, ZoneType::Graveyard);
-                    self.emit(GameEvent::SpellCountered { card, by: None });
-                    return;
+        // CR 608.2b — A spell whose targets are all illegal on resolution
+        // doesn't resolve and is put into its owner's graveyard.
+        if !spell.targets.is_empty() {
+            let controller = spell.controller;
+            let any_legal = spell.targets.iter().enumerate().any(|(i, target)| {
+                let req_index = spell.target_req_indices.get(i).copied().unwrap_or(0);
+                requirements
+                    .get(req_index)
+                    .is_some_and(|req| self.target_is_legal(*target, &req.spec, controller))
+            });
+            if !any_legal {
+                if let Some(index) = self.find_spell_on_stack_index(card) {
+                    self.state.stack_objects.remove(index);
                 }
+                self.move_card(card, ZoneType::Graveyard);
+                self.emit(GameEvent::SpellCountered { card, by: None });
+                return;
             }
-
-            let ctx = EffectContext {
-                source: Some(card),
-                controller: spell.controller,
-                resolutions_this_turn: 0,
-            };
-            self.execute_spell_effect(&effect, target, &ctx);
-            self.move_card(card, ZoneType::Graveyard);
-            self.emit(GameEvent::SpellResolved { card });
-            return;
         }
 
-        let is_permanent = self.state.cards[card].types.is_permanent();
-        if is_permanent {
-            self.move_card(card, ZoneType::Battlefield);
-            let owner = self.state.cards[card].owner;
-            self.invalidate_mana_cache(owner);
-        } else {
-            self.move_card(card, ZoneType::Graveyard);
-        }
-        self.emit(GameEvent::SpellResolved { card });
+        let frame = EffectFrame {
+            source: Some(card),
+            controller: spell.controller,
+            resolutions_this_turn: 0,
+            kicked: spell.kicked,
+            targets: spell.targets.clone(),
+            target_req_indices: spell.target_req_indices.clone(),
+            context_target: None,
+            queue: VecDeque::from(effects),
+            finalize: FrameFinalize::Spell { card },
+        };
+        self.run_frame(frame);
     }
 
     pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>) {
@@ -119,17 +118,18 @@ impl Game {
             }
         }
 
-        let action_target = ability.targets.first().and_then(|t| match t {
-            Target::Player(p) => Some(ActionTarget::Player(*p)),
-            Target::Permanent(p) => Some(ActionTarget::Permanent(*p)),
-            Target::StackSpell(_) => None,
-        });
-        let ctx = EffectContext {
+        let frame = EffectFrame {
             source: Some(ability.source_card),
             controller: ability.controller,
             resolutions_this_turn: 0,
+            kicked: false,
+            targets: ability.targets.clone(),
+            target_req_indices: Vec::new(),
+            context_target: None,
+            queue: VecDeque::from(vec![definition.effect]),
+            finalize: FrameFinalize::None,
         };
-        self.execute_effect(&definition.effect, action_target, &ctx);
+        self.run_frame(frame);
     }
 
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
@@ -157,90 +157,90 @@ impl Game {
         *count += 1;
         let resolutions_this_turn = *count;
 
-        let action_target = triggered.targets.first().and_then(|t| match t {
-            Target::Player(p) => Some(ActionTarget::Player(*p)),
-            Target::Permanent(p) => Some(ActionTarget::Permanent(*p)),
-            Target::StackSpell(_) => None,
-        });
-        let ctx = EffectContext {
+        let frame = EffectFrame {
             source: Some(triggered.source_card),
             controller: triggered.controller,
             resolutions_this_turn,
+            kicked: false,
+            targets: triggered.targets.clone(),
+            target_req_indices: Vec::new(),
+            context_target: triggered.context,
+            queue: VecDeque::from(effects),
+            finalize: FrameFinalize::None,
         };
-        for effect in &effects {
-            self.execute_effect(effect, action_target, &ctx);
-        }
+        self.run_frame(frame);
     }
 
-    /// Execute a spell effect, with access to the raw Target (needed for StackSpell targets).
-    fn execute_spell_effect(
+    /// Execute one effect. Returns a decision to suspend on, or None if the
+    /// effect completed. Branching effects push their branch onto the front
+    /// of the frame's queue.
+    pub(crate) fn execute_frame_effect(
         &mut self,
         effect: &Effect,
-        target: Option<Target>,
-        ctx: &EffectContext,
-    ) {
-        match effect {
-            Effect::CounterSpell { .. } => {
-                let Some(Target::StackSpell(target_spell)) = target else {
-                    return;
-                };
-                self.counter_spell(target_spell, ctx.source);
-            }
-            _ => {
-                let action_target = target.map(|t| match t {
-                    Target::Player(p) => ActionTarget::Player(p),
-                    Target::Permanent(p) => ActionTarget::Permanent(p),
-                    Target::StackSpell(c) => ActionTarget::StackSpell(c),
-                });
-                self.execute_effect(effect, action_target, ctx);
-            }
-        }
-    }
-
-    fn execute_effect(
-        &mut self,
-        effect: &Effect,
-        target: Option<ActionTarget>,
-        ctx: &EffectContext,
-    ) {
+        frame: &mut EffectFrame,
+    ) -> Option<Decision> {
         match effect {
             Effect::ReturnToHand { target: spec } => {
-                let Some(chosen) = target else { return };
-                if !self.is_valid_target_for_spec(chosen, spec) {
-                    return;
+                let chosen = frame.primary_target()?;
+                if !self.target_is_legal(chosen, spec, frame.controller) {
+                    return None;
                 }
-                if let ActionTarget::Permanent(permanent_id) = chosen {
-                    self.return_permanent_to_owner_hand(permanent_id);
-                }
-            }
-            Effect::DealDamage { amount, .. } => {
-                let Some(chosen) = target else { return };
                 match chosen {
-                    ActionTarget::Player(player) => {
-                        self.apply_player_damage(ctx.source, player, *amount);
+                    Target::Permanent(permanent_id) => {
+                        self.return_permanent_to_owner_hand(permanent_id);
                     }
-                    ActionTarget::Permanent(permanent_id) => {
-                        self.apply_permanent_damage(ctx.source, permanent_id, *amount);
+                    Target::StackSpell(card) => {
+                        // Bounce a spell: its stack object ceases and the
+                        // card returns to its owner's hand.
+                        if let Some(index) = self.find_spell_on_stack_index(card) {
+                            self.state.stack_objects.remove(index);
+                            let owner = self.state.cards[card].owner;
+                            self.move_card(card, ZoneType::Hand);
+                            self.invalidate_mana_cache(owner);
+                        }
                     }
-                    ActionTarget::StackSpell(_) => {}
+                    Target::Player(_) => {}
                 }
+                None
+            }
+            Effect::DealDamage { amount, target: spec } => {
+                let chosen = frame.primary_target()?;
+                if !self.target_is_legal(chosen, spec, frame.controller) {
+                    return None;
+                }
+                match chosen {
+                    Target::Player(player) => {
+                        self.apply_player_damage(frame.source, player, *amount);
+                    }
+                    Target::Permanent(permanent_id) => {
+                        self.apply_permanent_damage(frame.source, permanent_id, *amount);
+                    }
+                    Target::StackSpell(_) => {}
+                }
+                None
             }
             Effect::CounterSpell { .. } => {
-                // Handled by execute_spell_effect — should not reach here.
+                let Some(Target::StackSpell(target_spell)) = frame.primary_target() else {
+                    return None;
+                };
+                self.counter_spell(target_spell, frame.source);
+                None
             }
             Effect::ModifyUntilEot {
                 power_delta,
                 toughness_delta,
             } => {
-                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.temp_power += power_delta;
                     permanent.temp_toughness += toughness_delta;
                 }
+                None
             }
             Effect::DrawCards { count } => {
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
-                self.draw_cards(ctx.controller, *count);
+                self.draw_cards(frame.controller, *count);
+                None
             }
             Effect::MassDamage { amount } => {
                 for player in [PlayerId(0), PlayerId(1)] {
@@ -249,11 +249,12 @@ impl Game {
                             continue;
                         };
                         if self.state.cards[permanent.card].types.is_creature() {
-                            self.apply_permanent_damage(ctx.source, permanent_id, *amount);
+                            self.apply_permanent_damage(frame.source, permanent_id, *amount);
                         }
                     }
                 }
                 // Lethal damage is cleaned up by state-based actions (CR 704.5g).
+                None
             }
             Effect::CreateToken {
                 token_name,
@@ -261,63 +262,205 @@ impl Game {
                 tapped_and_attacking,
             } => {
                 for _ in 0..*count {
-                    self.create_token(token_name, ctx.controller, *tapped_and_attacking);
+                    self.create_token(token_name, frame.controller, *tapped_and_attacking);
                 }
+                None
             }
             Effect::PutCountersOnSource { count } => {
-                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.plus1_counters += count;
                 }
+                None
             }
-            Effect::PutCounters {
-                count,
-                target: spec,
-            } => {
-                let Some(chosen) = target else { return };
-                if !self.is_valid_target_for_spec(chosen, spec) {
-                    return;
+            Effect::PutCounters { count, target: spec } => {
+                let chosen = frame.primary_target()?;
+                if !self.target_is_legal(chosen, spec, frame.controller) {
+                    return None;
                 }
-                if let ActionTarget::Permanent(permanent_id) = chosen {
+                if let Target::Permanent(permanent_id) = chosen {
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                         permanent.plus1_counters += count;
                     }
                 }
+                None
             }
             Effect::TapSource => {
-                if let Some(permanent_id) = self.source_permanent_id(ctx) {
+                if let Some(permanent_id) = self.source_permanent_id(frame) {
                     self.tap_permanent(permanent_id, false);
                 }
+                None
             }
             Effect::UntapSource => {
-                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.untap();
                     let controller = permanent.controller;
                     self.invalidate_mana_cache(controller);
                 }
+                None
             }
             Effect::CantBeBlockedThisTurnSource => {
-                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.cant_be_blocked_this_turn = true;
                 }
+                None
             }
             Effect::GainLife { amount } => {
-                self.gain_life(ctx.controller, *amount);
+                self.gain_life(frame.controller, *amount);
+                None
             }
             Effect::OnNthResolutionThisTurn { n, effect } => {
-                if ctx.resolutions_this_turn == *n {
-                    self.execute_effect(effect, target, ctx);
+                if frame.resolutions_this_turn == *n {
+                    frame.queue.push_front((**effect).clone());
                 }
+                None
+            }
+            Effect::Scry { count } => {
+                let remaining = self.library_top(frame.controller, *count);
+                if remaining.is_empty() {
+                    return None;
+                }
+                Some(Decision::Scry {
+                    player: frame.controller,
+                    remaining,
+                })
+            }
+            Effect::LookAndSelect {
+                look,
+                min_select,
+                max_select,
+                predicate,
+            } => {
+                let looked = self.library_top(frame.controller, *look);
+                if looked.is_empty() {
+                    return None;
+                }
+                Some(Decision::LookAndSelect {
+                    player: frame.controller,
+                    looked,
+                    predicate: predicate.clone(),
+                    selected: 0,
+                    min_select: *min_select,
+                    max_select: *max_select,
+                })
+            }
+            Effect::PutTopCardsInHand { count } => {
+                for card in self.library_top(frame.controller, *count) {
+                    self.move_card(card, ZoneType::Hand);
+                }
+                self.invalidate_mana_cache(frame.controller);
+                None
+            }
+            Effect::Learn => Some(Decision::DiscardThenDraw {
+                player: frame.controller,
+            }),
+            Effect::Modal { modes } => {
+                if modes.is_empty() {
+                    return None;
+                }
+                Some(Decision::Modal {
+                    player: frame.controller,
+                    modes: modes.clone(),
+                })
+            }
+            Effect::CounterUnlessPays { cost } => {
+                let Some(Target::StackSpell(target_spell)) = frame.primary_target() else {
+                    return None;
+                };
+                // The spell may already have left the stack (e.g. it was
+                // countered in response) — the effect does nothing.
+                self.find_spell_on_stack_index(target_spell)?;
+                let spell_controller = self.spell_controller(target_spell)?;
+                Some(Decision::PayOrNot {
+                    player: spell_controller,
+                    cost: cost.clone(),
+                    if_paid: Vec::new(),
+                    if_declined: vec![Effect::CounterSpell {
+                        target: TargetSpec::Spell,
+                    }],
+                })
+            }
+            Effect::IfKicked { then, otherwise } => {
+                let branch = if frame.kicked { then } else { otherwise };
+                for effect in branch.iter().rev() {
+                    frame.queue.push_front(effect.clone());
+                }
+                None
+            }
+            Effect::IfGraveyardAtLeast {
+                count,
+                predicate,
+                then,
+                otherwise,
+            } => {
+                let matches = self.count_graveyard_matching(frame.controller, predicate);
+                let branch = if matches >= *count { then } else { otherwise };
+                for effect in branch.iter().rev() {
+                    frame.queue.push_front(effect.clone());
+                }
+                None
+            }
+            Effect::TargetCreaturesDealPowerDamageToLastTarget => {
+                let targets = frame.targets.clone();
+                if targets.len() < 2 {
+                    return None;
+                }
+                let Some(Target::Permanent(victim)) = targets.last().copied() else {
+                    return None;
+                };
+                for attacker in &targets[..targets.len() - 1] {
+                    let Target::Permanent(attacker_id) = attacker else {
+                        continue;
+                    };
+                    // Both creatures must still be legal (on the
+                    // battlefield) when damage is dealt.
+                    if !self.permanent_is_battlefield_creature(victim) {
+                        break;
+                    }
+                    if !self.permanent_is_battlefield_creature(*attacker_id) {
+                        continue;
+                    }
+                    let Some(attacker_perm) = self.state.permanents[*attacker_id].as_ref() else {
+                        continue;
+                    };
+                    let attacker_card = attacker_perm.card;
+                    let power = attacker_perm
+                        .effective_power(&self.state.cards[attacker_card]);
+                    if power > 0 {
+                        self.apply_permanent_damage(Some(attacker_card), victim, power);
+                    }
+                }
+                None
             }
         }
     }
 
-    fn source_permanent_id(&self, ctx: &EffectContext) -> Option<PermanentId> {
-        let source_card = ctx.source?;
+    fn spell_controller(&self, card: CardId) -> Option<PlayerId> {
+        self.state.stack_objects.iter().find_map(|object| match object {
+            StackObject::Spell(spell) if spell.card == card => Some(spell.controller),
+            _ => None,
+        })
+    }
+
+    pub(crate) fn permanent_is_battlefield_creature(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self
+            .state
+            .permanents
+            .get(permanent_id.0)
+            .and_then(|p| p.as_ref())
+        else {
+            return false;
+        };
+        self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
+            && self.state.cards[permanent.card].types.is_creature()
+    }
+
+    fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
+        let source_card = frame.source?;
         self.state.card_to_permanent[source_card]
     }
 
-    fn source_permanent_mut(&mut self, ctx: &EffectContext) -> Option<&mut Permanent> {
-        let permanent_id = self.source_permanent_id(ctx)?;
+    fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
+        let permanent_id = self.source_permanent_id(frame)?;
         self.state.permanents[permanent_id].as_mut()
     }
 
@@ -331,11 +474,39 @@ impl Game {
         self.invalidate_mana_cache(controller);
     }
 
-    /// Check whether a game-object Target is still legal for a given TargetSpec.
-    fn is_legal_target(&self, target: Target, spec: &TargetSpec) -> bool {
+    /// Check whether a target is (still) legal for a given TargetSpec, from
+    /// the perspective of `controller` ("you").
+    pub(crate) fn target_is_legal(
+        &self,
+        target: Target,
+        spec: &TargetSpec,
+        controller: PlayerId,
+    ) -> bool {
         match (target, spec) {
             (Target::Player(_), TargetSpec::CreatureOrPlayer) => true,
             (Target::Permanent(perm_id), TargetSpec::CreatureOrPlayer | TargetSpec::Creature) => {
+                self.permanent_is_battlefield_creature(perm_id)
+            }
+            (Target::Permanent(perm_id), TargetSpec::CreatureYouControl) => {
+                self.permanent_is_battlefield_creature(perm_id)
+                    && self.state.permanents[perm_id]
+                        .as_ref()
+                        .is_some_and(|p| p.controller == controller)
+            }
+            (Target::Permanent(perm_id), TargetSpec::CreatureOpponentControls) => {
+                self.permanent_is_battlefield_creature(perm_id)
+                    && self.state.permanents[perm_id]
+                        .as_ref()
+                        .is_some_and(|p| p.controller != controller)
+            }
+            (Target::StackSpell(card_id), TargetSpec::Spell) => {
+                self.find_spell_on_stack_index(card_id).is_some()
+            }
+            (Target::StackSpell(card_id), TargetSpec::SpellOrPermanent { min_mana_value }) => {
+                self.find_spell_on_stack_index(card_id).is_some()
+                    && self.card_mana_value(card_id) >= *min_mana_value
+            }
+            (Target::Permanent(perm_id), TargetSpec::SpellOrPermanent { min_mana_value }) => {
                 let Some(permanent) = self
                     .state
                     .permanents
@@ -345,12 +516,17 @@ impl Game {
                     return false;
                 };
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-                    && self.state.cards[permanent.card].types.is_creature()
-            }
-            (Target::StackSpell(card_id), TargetSpec::Spell) => {
-                self.find_spell_on_stack_index(card_id).is_some()
+                    && self.card_mana_value(permanent.card) >= *min_mana_value
             }
             _ => false,
         }
+    }
+
+    pub(crate) fn card_mana_value(&self, card: CardId) -> u8 {
+        self.state.cards[card]
+            .mana_cost
+            .as_ref()
+            .map(|cost| cost.mana_value)
+            .unwrap_or(0)
     }
 }

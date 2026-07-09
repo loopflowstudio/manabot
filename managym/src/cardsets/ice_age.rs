@@ -12,7 +12,7 @@ impl CardRegistry {
             name: "Pyroclasm".to_string(),
             mana_cost: Some(ManaCost::parse("1R")),
             types: CardTypes::new([CardType::Sorcery]),
-            spell_effect: Some(Effect::MassDamage { amount: 2 }),
+            spell_effects: vec![Effect::MassDamage { amount: 2 }],
             text_box: "Pyroclasm deals 2 damage to each creature.".to_string(),
             ..Default::default()
         });

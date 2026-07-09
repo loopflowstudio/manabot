@@ -66,6 +66,10 @@ pub struct CardData {
     /// Subtype tags the current pool cares about.
     pub is_ally: bool,
     pub is_lesson: bool,
+    /// Ward cost (mana value; 0 = no ward).
+    pub ward_cost: i32,
+    /// Kicker cost (mana value; 0 = no kicker).
+    pub kicker_cost: i32,
     pub card_types: CardTypeData,
     pub keywords: KeywordData,
     pub mana_cost: ManaCost,
@@ -289,6 +293,17 @@ impl Observation {
             self.add_card(game, *card, ZoneType::Hand);
         }
 
+        // Library cards revealed to the agent by a pending mid-resolution
+        // decision (scry / look-at-top-N). Only the deciding player sees
+        // them.
+        if let Some(suspended) = &game.state.suspended_decision {
+            if suspended.decision.player() == agent_player {
+                for card in suspended.decision.revealed_cards() {
+                    self.add_card(game, *card, ZoneType::Library);
+                }
+            }
+        }
+
         for player in game.players_starting_with_agent() {
             for card in game.state.zones.zone_cards(ZoneType::Graveyard, player) {
                 self.add_card(game, *card, ZoneType::Graveyard);
@@ -373,6 +388,16 @@ impl Observation {
             is_token: card.is_token,
             is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),
+            ward_cost: card
+                .ward
+                .as_ref()
+                .map(|cost| i32::from(cost.mana_value))
+                .unwrap_or(0),
+            kicker_cost: card
+                .kicker
+                .as_ref()
+                .map(|cost| i32::from(cost.mana_value))
+                .unwrap_or(0),
             card_types: CardTypeData {
                 is_castable: card.types.is_castable(),
                 is_permanent: card.types.is_permanent(),
@@ -541,6 +566,7 @@ impl Observation {
             // are already visible via CardMoved / permanent state.
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
+            | GameEvent::PermanentTargeted { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::TurnStarted { .. }
             | GameEvent::StepStarted { .. } => None,
@@ -630,6 +656,35 @@ impl Observation {
                     vec![game.state.cards[card_id].id]
                 }
             },
+            Action::ScryCard { card, .. } | Action::SelectCard { card, .. } => {
+                vec![game.state.cards[card].id]
+            }
+            Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
+                .as_ref()
+                .map(|perm| vec![perm.id])
+                .unwrap_or_default(),
+            // Decisions about the resolving/cast object: focus its card.
+            Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
+                let card = game
+                    .state
+                    .suspended_decision
+                    .as_ref()
+                    .and_then(|suspended| suspended.frame.source)
+                    .or(match &game.pending_choice {
+                        Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
+                        | Some(crate::flow::game::PendingChoice::ChooseTargets {
+                            card, ..
+                        }) => Some(*card),
+                        Some(crate::flow::game::PendingChoice::Waterbend {
+                            permanent, ..
+                        }) => game.state.permanents[*permanent]
+                            .as_ref()
+                            .map(|perm| perm.card),
+                        None => None,
+                    });
+                card.map(|card| vec![game.state.cards[card].id])
+                    .unwrap_or_default()
+            }
         }
     }
 
@@ -688,6 +743,8 @@ impl Observation {
                 "is_token": card.is_token,
                 "is_ally": card.is_ally,
                 "is_lesson": card.is_lesson,
+                "ward_cost": card.ward_cost,
+                "kicker_cost": card.kicker_cost,
                 "card_types": {
                     "is_castable": card.card_types.is_castable,
                     "is_permanent": card.card_types.is_permanent,

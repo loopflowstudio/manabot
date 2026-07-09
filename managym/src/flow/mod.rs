@@ -2,6 +2,7 @@ pub mod action;
 pub mod combat;
 pub mod combat_actions;
 pub mod damage;
+pub mod decision;
 pub mod event;
 pub mod game;
 pub mod identity;

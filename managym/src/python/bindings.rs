@@ -465,6 +465,13 @@ pub enum ActionEnum {
     DeclareBlocker = 4,
     ChooseTarget = 5,
     PriorityActivateAbility = 6,
+    ScryKeep = 7,
+    ScryBottom = 8,
+    SelectCard = 9,
+    DeclineChoice = 10,
+    PayCost = 11,
+    ChooseMode = 12,
+    TapForCost = 13,
 }
 
 #[cfg(feature = "python")]
@@ -484,6 +491,20 @@ impl ActionEnum {
     const CHOOSE_TARGET: Self = Self::ChooseTarget;
     #[classattr]
     const PRIORITY_ACTIVATE_ABILITY: Self = Self::PriorityActivateAbility;
+    #[classattr]
+    const SCRY_KEEP: Self = Self::ScryKeep;
+    #[classattr]
+    const SCRY_BOTTOM: Self = Self::ScryBottom;
+    #[classattr]
+    const SELECT_CARD: Self = Self::SelectCard;
+    #[classattr]
+    const DECLINE_CHOICE: Self = Self::DeclineChoice;
+    #[classattr]
+    const PAY_COST: Self = Self::PayCost;
+    #[classattr]
+    const CHOOSE_MODE: Self = Self::ChooseMode;
+    #[classattr]
+    const TAP_FOR_COST: Self = Self::TapForCost;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -505,6 +526,13 @@ impl From<ActionType> for ActionEnum {
             ActionType::DeclareBlocker => Self::DeclareBlocker,
             ActionType::ChooseTarget => Self::ChooseTarget,
             ActionType::PriorityActivateAbility => Self::PriorityActivateAbility,
+            ActionType::ScryKeep => Self::ScryKeep,
+            ActionType::ScryBottom => Self::ScryBottom,
+            ActionType::SelectCard => Self::SelectCard,
+            ActionType::DeclineChoice => Self::DeclineChoice,
+            ActionType::PayCost => Self::PayCost,
+            ActionType::ChooseMode => Self::ChooseMode,
+            ActionType::TapForCost => Self::TapForCost,
         }
     }
 }
@@ -520,6 +548,13 @@ impl From<ActionEnum> for ActionType {
             ActionEnum::DeclareBlocker => Self::DeclareBlocker,
             ActionEnum::ChooseTarget => Self::ChooseTarget,
             ActionEnum::PriorityActivateAbility => Self::PriorityActivateAbility,
+            ActionEnum::ScryKeep => Self::ScryKeep,
+            ActionEnum::ScryBottom => Self::ScryBottom,
+            ActionEnum::SelectCard => Self::SelectCard,
+            ActionEnum::DeclineChoice => Self::DeclineChoice,
+            ActionEnum::PayCost => Self::PayCost,
+            ActionEnum::ChooseMode => Self::ChooseMode,
+            ActionEnum::TapForCost => Self::TapForCost,
         }
     }
 }
@@ -534,6 +569,12 @@ pub enum ActionSpaceEnum {
     DeclareAttacker = 2,
     DeclareBlocker = 3,
     ChooseTarget = 4,
+    Scry = 5,
+    LookAndSelect = 6,
+    PayOrNot = 7,
+    Modal = 8,
+    DiscardThenDraw = 9,
+    Waterbend = 10,
 }
 
 #[cfg(feature = "python")]
@@ -622,6 +663,18 @@ impl ActionSpaceEnum {
     const DECLARE_BLOCKER: Self = Self::DeclareBlocker;
     #[classattr]
     const CHOOSE_TARGET: Self = Self::ChooseTarget;
+    #[classattr]
+    const SCRY: Self = Self::Scry;
+    #[classattr]
+    const LOOK_AND_SELECT: Self = Self::LookAndSelect;
+    #[classattr]
+    const PAY_OR_NOT: Self = Self::PayOrNot;
+    #[classattr]
+    const MODAL: Self = Self::Modal;
+    #[classattr]
+    const DISCARD_THEN_DRAW: Self = Self::DiscardThenDraw;
+    #[classattr]
+    const WATERBEND: Self = Self::Waterbend;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -641,6 +694,12 @@ impl From<ActionSpaceKind> for ActionSpaceEnum {
             ActionSpaceKind::DeclareAttacker => Self::DeclareAttacker,
             ActionSpaceKind::DeclareBlocker => Self::DeclareBlocker,
             ActionSpaceKind::ChooseTarget => Self::ChooseTarget,
+            ActionSpaceKind::Scry => Self::Scry,
+            ActionSpaceKind::LookAndSelect => Self::LookAndSelect,
+            ActionSpaceKind::PayOrNot => Self::PayOrNot,
+            ActionSpaceKind::Modal => Self::Modal,
+            ActionSpaceKind::DiscardThenDraw => Self::DiscardThenDraw,
+            ActionSpaceKind::Waterbend => Self::Waterbend,
         }
     }
 }
@@ -654,6 +713,12 @@ impl From<ActionSpaceEnum> for ActionSpaceKind {
             ActionSpaceEnum::DeclareAttacker => Self::DeclareAttacker,
             ActionSpaceEnum::DeclareBlocker => Self::DeclareBlocker,
             ActionSpaceEnum::ChooseTarget => Self::ChooseTarget,
+            ActionSpaceEnum::Scry => Self::Scry,
+            ActionSpaceEnum::LookAndSelect => Self::LookAndSelect,
+            ActionSpaceEnum::PayOrNot => Self::PayOrNot,
+            ActionSpaceEnum::Modal => Self::Modal,
+            ActionSpaceEnum::DiscardThenDraw => Self::DiscardThenDraw,
+            ActionSpaceEnum::Waterbend => Self::Waterbend,
         }
     }
 }
@@ -1066,6 +1131,10 @@ pub struct PyCard {
     #[pyo3(get, set)]
     pub is_lesson: bool,
     #[pyo3(get, set)]
+    pub ward_cost: i32,
+    #[pyo3(get, set)]
+    pub kicker_cost: i32,
+    #[pyo3(get, set)]
     pub card_types: PyCardTypes,
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
@@ -1087,6 +1156,8 @@ impl From<CardData> for PyCard {
             is_token: value.is_token,
             is_ally: value.is_ally,
             is_lesson: value.is_lesson,
+            ward_cost: value.ward_cost,
+            kicker_cost: value.kicker_cost,
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
@@ -1108,6 +1179,8 @@ impl From<PyCard> for CardData {
             is_token: value.is_token,
             is_ally: value.is_ally,
             is_lesson: value.is_lesson,
+            ward_cost: value.ward_cost,
+            kicker_cost: value.kicker_cost,
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
