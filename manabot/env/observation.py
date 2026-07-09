@@ -67,6 +67,29 @@ class ActionEnum(IntEnum):
     DECLARE_BLOCKER = 4
     CHOOSE_TARGET = 5
     PRIORITY_ACTIVATE_ABILITY = 6
+    SCRY_KEEP = 7
+    SCRY_BOTTOM = 8
+    SELECT_CARD = 9
+    DECLINE_CHOICE = 10
+    PAY_COST = 11
+    CHOOSE_MODE = 12
+    TAP_FOR_COST = 13
+
+
+class ActionSpaceEnum(IntEnum):
+    """Mirrors managym.ActionSpaceEnum for validation."""
+
+    GAME_OVER = 0
+    PRIORITY = 1
+    DECLARE_ATTACKER = 2
+    DECLARE_BLOCKER = 3
+    CHOOSE_TARGET = 4
+    SCRY = 5
+    LOOK_AND_SELECT = 6
+    PAY_OR_NOT = 7
+    MODAL = 8
+    DISCARD_THEN_DRAW = 9
+    WATERBEND = 10
 
 
 class ZoneEnum(IntEnum):
@@ -131,8 +154,9 @@ class ObservationEncoder:
         # Player: life + is_active + zones + phase/step one-hots + gy lessons.
         self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 1
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
-        # 12 keywords + is_token/is_ally/is_lesson tags + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3) + 1
+        # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
+        # kicker flag/cost + validity.
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4) + 1
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, validity.
         self.permanent_dim = 6 + 1
@@ -338,6 +362,14 @@ class ObservationEncoder:
         arr[i] = float(card.is_ally)
         i += 1
         arr[i] = float(card.is_lesson)
+        i += 1
+        arr[i] = float(card.ward_cost > 0)
+        i += 1
+        arr[i] = float(card.ward_cost) / 10.0
+        i += 1
+        arr[i] = float(card.kicker_cost > 0)
+        i += 1
+        arr[i] = float(card.kicker_cost) / 10.0
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr

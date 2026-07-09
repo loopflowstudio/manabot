@@ -101,6 +101,13 @@ class ActionEnum(IntEnum):
     DECLARE_BLOCKER = 4
     CHOOSE_TARGET = 5
     PRIORITY_ACTIVATE_ABILITY = 6
+    SCRY_KEEP = 7
+    SCRY_BOTTOM = 8
+    SELECT_CARD = 9
+    DECLINE_CHOICE = 10
+    PAY_COST = 11
+    CHOOSE_MODE = 12
+    TAP_FOR_COST = 13
 
 class ActionSpaceEnum(IntEnum):
     GAME_OVER = 0
@@ -108,6 +115,12 @@ class ActionSpaceEnum(IntEnum):
     DECLARE_ATTACKER = 2
     DECLARE_BLOCKER = 3
     CHOOSE_TARGET = 4
+    SCRY = 5
+    LOOK_AND_SELECT = 6
+    PAY_OR_NOT = 7
+    MODAL = 8
+    DISCARD_THEN_DRAW = 9
+    WATERBEND = 10
 
 class StackObjectKindEnum(IntEnum):
     SPELL = 0
@@ -186,6 +199,8 @@ class Card:
     is_token: bool
     is_ally: bool
     is_lesson: bool
+    ward_cost: int
+    kicker_cost: int
     card_types: CardTypes
     keywords: Keywords
     mana_cost: ManaCost
