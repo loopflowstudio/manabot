@@ -144,4 +144,29 @@ impl ZoneManager {
     ) {
         self.zone_cards_mut(zone, player).shuffle(rng);
     }
+
+    /// Resample `player`'s hidden zones (hand + library) as one pool.
+    ///
+    /// The union of hand and library is shuffled, then split back so the hand
+    /// keeps its original size. Used by determinization: from the opponent's
+    /// perspective these cards are exchangeable, so a uniform re-deal over the
+    /// pool is exactly a sample from the belief state (public zones untouched).
+    pub fn resample_hidden<R: rand::Rng + ?Sized>(&mut self, player: PlayerId, rng: &mut R) {
+        let idx = player.0;
+        let hand_size = self.hand[idx].len();
+        let mut pool: Vec<CardId> =
+            Vec::with_capacity(hand_size + self.library[idx].len());
+        pool.append(&mut self.hand[idx]);
+        pool.append(&mut self.library[idx]);
+        pool.shuffle(rng);
+        let library = pool.split_off(hand_size);
+        for card in &pool {
+            self.card_zones[card.0] = Some(ZoneType::Hand);
+        }
+        for card in &library {
+            self.card_zones[card.0] = Some(ZoneType::Library);
+        }
+        self.hand[idx] = pool;
+        self.library[idx] = library;
+    }
 }

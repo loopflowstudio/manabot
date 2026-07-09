@@ -8,11 +8,23 @@ use crate::{
             ObservationEncoderConfig,
         },
     },
-    flow::game::Game,
+    flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
-    state::player::PlayerConfig,
+    state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
+
+/// Result of a flat Monte Carlo evaluation of the current action space.
+#[derive(Clone, Debug)]
+pub struct FlatMcResult {
+    /// Mean playout score per legal action (win = 1.0, loss = 0.0,
+    /// draw/step-cap = 0.5), for the player holding the current decision.
+    pub scores: Vec<f64>,
+    /// Total playouts performed (actions x worlds x rollouts).
+    pub simulations: u64,
+    /// Playouts that hit the step cap without terminating.
+    pub cap_hits: u64,
+}
 
 #[derive(Debug)]
 pub struct Env {
@@ -190,6 +202,165 @@ impl Env {
             .iter()
             .position(|action| matches!(action, Action::PassPriority { .. }))
             .unwrap_or(0))
+    }
+
+    /// Independent copy of this env's game for search rollouts.
+    ///
+    /// Profiling and behavior tracking are disabled on the fork; stepping the
+    /// fork never mutates the original.
+    pub fn fork(&self) -> Result<Env, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.fork called before reset".to_string()))?
+            .clone();
+        Ok(Env {
+            game: Some(game),
+            skip_trivial: self.skip_trivial,
+            seed: self.seed,
+            profiler: Profiler::new(false, 64),
+            hero_tracker: BehaviorTracker::new(false),
+            villain_tracker: BehaviorTracker::new(false),
+        })
+    }
+
+    /// Number of legal actions in the current action space.
+    pub fn action_count(&self) -> Result<usize, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.action_count called before reset".to_string()))?;
+        let action_space = game
+            .action_space()
+            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+        Ok(action_space.actions.len())
+    }
+
+    /// Player index holding the current decision, if any.
+    pub fn current_agent_index(&self) -> Option<usize> {
+        self.game
+            .as_ref()
+            .and_then(|game| game.action_space())
+            .and_then(|space| space.player)
+            .map(|player| player.0)
+    }
+
+    pub fn is_game_over(&self) -> bool {
+        self.game.as_ref().is_some_and(|game| game.is_game_over())
+    }
+
+    pub fn winner_index(&self) -> Option<usize> {
+        self.game.as_ref().and_then(|game| game.winner_index())
+    }
+
+    /// Resample hidden information from `perspective`'s point of view.
+    /// See [`Game::determinize`].
+    pub fn determinize(&mut self, perspective: usize, seed: u64) -> Result<(), AgentError> {
+        if perspective > 1 {
+            return Err(AgentError(format!(
+                "determinize: perspective {perspective} out of range"
+            )));
+        }
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
+        game.determinize(PlayerId(perspective), seed);
+        Ok(())
+    }
+
+    /// Reseed the game RNG and play both sides uniformly-random-legal to
+    /// terminal. Returns the winner index, or None on draw / step cap.
+    pub fn random_playout(
+        &mut self,
+        seed: u64,
+        max_steps: usize,
+    ) -> Result<Option<usize>, AgentError> {
+        let game = self
+            .game
+            .as_mut()
+            .ok_or_else(|| AgentError("env.random_playout called before reset".to_string()))?;
+        game.reseed(seed);
+        game.random_playout(max_steps, None)
+    }
+
+    /// Flat determinized Monte Carlo evaluation of the current action space.
+    ///
+    /// For each of `worlds` determinizations (sampled from the perspective of
+    /// the player holding the decision), every legal action is applied to a
+    /// clone of the world and scored by `rollouts` uniformly-random playouts
+    /// (win 1.0 / loss 0.0 / draw-or-cap 0.5). Worlds are shared across
+    /// actions (common random numbers) to reduce comparison variance.
+    pub fn flat_mc_scores(
+        &self,
+        worlds: usize,
+        rollouts: usize,
+        seed: u64,
+        max_steps: usize,
+    ) -> Result<FlatMcResult, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.flat_mc_scores called before reset".to_string()))?;
+        if game.is_game_over() {
+            return Err(AgentError(
+                "env.flat_mc_scores called after game over".to_string(),
+            ));
+        }
+        let action_space = game
+            .action_space()
+            .ok_or_else(|| AgentError("no active action space".to_string()))?;
+        let hero = action_space
+            .player
+            .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+        let num_actions = action_space.actions.len();
+        if num_actions == 0 {
+            return Err(AgentError("no valid actions available".to_string()));
+        }
+
+        let mut totals = vec![0.0f64; num_actions];
+        let mut simulations = 0u64;
+        let mut cap_hits = 0u64;
+
+        for world_index in 0..worlds {
+            let world_seed = mix_seed(seed, world_index as u64);
+            let mut world = game.clone();
+            world.determinize(hero, world_seed);
+            #[allow(clippy::needless_range_loop)] // action is a semantic index
+            for action in 0..num_actions {
+                for rollout in 0..rollouts {
+                    let mut sim = world.clone();
+                    sim.reseed(mix_seed(
+                        world_seed,
+                        (action * rollouts + rollout + 1) as u64,
+                    ));
+                    let done = sim.step(action)?;
+                    let outcome = if done {
+                        sim.winner_index()
+                    } else {
+                        let mut hit_cap = false;
+                        let result = sim.random_playout(max_steps, Some(&mut hit_cap))?;
+                        if hit_cap {
+                            cap_hits += 1;
+                        }
+                        result
+                    };
+                    simulations += 1;
+                    totals[action] += match outcome {
+                        Some(winner) if winner == hero.0 => 1.0,
+                        Some(_) => 0.0,
+                        None => 0.5,
+                    };
+                }
+            }
+        }
+
+        let denominator = (worlds * rollouts).max(1) as f64;
+        Ok(FlatMcResult {
+            scores: totals.into_iter().map(|t| t / denominator).collect(),
+            simulations,
+            cap_hits,
+        })
     }
 
     pub fn random_action_index(&mut self) -> Result<usize, AgentError> {

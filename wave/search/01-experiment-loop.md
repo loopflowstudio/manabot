@@ -129,6 +129,16 @@ training cost.** Every future training run is judged against it.
 determinization or the rollout policy is broken — stop and diagnose before any
 distillation work.
 
+**RESULT (2026-07-09):** both predictions confirmed, kill criterion clear.
+Seat-balanced, 300 games/matchup: search-{16,64,256} vs random =
+91.7% / 95.0% / 99.0%; search-64 beats all three C1v2 checkpoints 94.0–95.7%
+(even search-16 beats them 84.0–92.7%); search-256 beats search-16
+head-to-head 76.7%. Cost: 7 / 31 / 113 ms per decision at N=16/64/256, $0
+training, 4.5 core-hours for the whole matrix. Ladder strength of every
+trained policy to date is below N=16. A pre-existing engine bug (fizzled
+spells stranded in the stack zone) was found by random playouts and fixed.
+See `reports/exp-02-flat-mc.md`.
+
 ### C4 — Is distillation cheaper than RL?
 
 **Q:** Per dollar, does supervised learning from search beat PPO from scratch?

@@ -33,12 +33,18 @@ impl Game {
         if let Some(effect) = spell_effect {
             let target = spell.targets.first().copied();
             if let Some(target_spec) = effect.target_spec() {
-                let Some(target) = target else {
-                    self.counter_spell(card, None);
-                    return;
+                // CR 608.2b — A spell whose targets are all illegal on
+                // resolution doesn't resolve and is put into its owner's
+                // graveyard. The stack object was already popped, so
+                // counter_spell (which searches the stack) would no-op and
+                // strand the card in the stack zone; move it directly.
+                let fizzles = match target {
+                    None => true,
+                    Some(target) => !self.is_legal_target(target, target_spec),
                 };
-                if !self.is_legal_target(target, target_spec) {
-                    self.counter_spell(card, None);
+                if fizzles {
+                    self.move_card(card, ZoneType::Graveyard);
+                    self.emit(GameEvent::SpellCountered { card, by: None });
                     return;
                 }
             }
