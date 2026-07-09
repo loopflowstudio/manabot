@@ -82,6 +82,14 @@ opportunity ≥80% of the time); surfaced decisions/game rises ≥1.5x vs. E0a
 (response windows open — `skip_trivial` cannot absorb them).
 **Cost cap:** one dev-preset run (~262k steps) + the Rust work. Local.
 
+**RESULT (2026-07-09):** engine work landed (PR #37); recipe re-run 2×3 seeds.
+0/3 seeds pass the exp-00c threshold; best 57.5% seat-balanced vs a 50%
+untrained baseline. Aggro fingerprint confirmed (cast_when_able 0.88–0.95 in
+2/3 seeds, one net-harmful); one seed went seat-parasitic (95% on draw / 20%
+on play) and was caught by the per-seat clause. `cast_when_able` flipped sign
+as a quality signal. Decisions/game prediction refuted (0.60x, mix shift).
+See `reports/exp-01-c1-training.md`, `reports/exp-00c-seat-balanced-baselines.md`.
+
 ### C2 — Is bias-free dense signal possible?
 
 **Q:** Does potential-based shaping learn without the aggro fingerprint?
