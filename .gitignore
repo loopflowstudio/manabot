@@ -18,3 +18,6 @@ frontend/.svelte-kit/
 frontend/build/
 frontend/.vite/
 .runs/
+
+# claude-code session worktrees (local harness artifacts)
+.claude/worktrees/
