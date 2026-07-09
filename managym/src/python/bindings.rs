@@ -1746,6 +1746,16 @@ impl PyEnv {
         Ok(py_dict.into_any().unbind())
     }
 
+    /// Number of trivial decision points auto-collapsed by `skip_trivial`
+    /// since the current game began. Resets to zero on `reset`.
+    fn skip_trivial_count(&self) -> PyResult<usize> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(env.skip_trivial_count())
+    }
+
     fn export_profile_baseline(&self) -> PyResult<String> {
         let env = self
             .inner

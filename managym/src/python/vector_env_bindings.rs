@@ -285,6 +285,12 @@ impl PyVectorEnv {
         })
     }
 
+    /// Per-env `skip_trivial` collapse counters for the current games.
+    /// Each counter resets when its env's game resets.
+    fn skip_trivial_counts(&self) -> Vec<usize> {
+        self.inner.skip_trivial_counts()
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()
