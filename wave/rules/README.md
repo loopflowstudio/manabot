@@ -1,5 +1,12 @@
 # Rules
 
+> **Status: dormant, pull-driven** (2026-07-09). Rules work happens only when
+> an experiment in [wave/search](../search/01-experiment-loop.md) pulls it:
+> cycle C1 pulls `DrawCards` + mass-removal effects; Exit 3 pulls minimal
+> pool expansions; the release bar eventually pulls broader completeness.
+> No open-ended rules grinding — completeness is a tarpit with no finish
+> line, and a result is a finish line.
+
 ## Vision
 
 Grow managym into a materially fuller implementation of Magic's rules while
