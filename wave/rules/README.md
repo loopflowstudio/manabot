@@ -4,14 +4,22 @@
 > pool is the owner's cube — https://cubecobra.com/cube/list/elemental — and
 > the path is capability-ordered:
 >
-> 1. **Milestone 1 — the two-deck slice:** Jack handcrafts two decks from the
->    cube (guided by the audit's per-card capability price tags,
->    `00-*-audit.md`, in flight); implement the union of their card lists,
->    trace-tested. Unlocks games in the cube's real texture AND the project's
->    first non-mirror matchup.
-> 2. **Milestone 2 — cube-lite rungs:** climb the audit's unlock ladder; at
->    every rung the expressible subset is itself a playable pool.
-> 3. **Milestone 3 — full cube.**
+> 1. **Milestone 1 — the two-deck slice** (UR Lessons vs GW Allies, lists in
+>    review): implement the union of the two decklists, trace-tested. Sits
+>    almost entirely inside the audit's evergreen substrate (targets, EOT
+>    modifiers, tokens, +1/+1 counters, the trigger family, activated costs)
+>    plus three pulled extras (waterbend, multi-target, exile-until-leaves).
+>    Unlocks games in the cube's real texture AND the first non-mirror matchup.
+> 2. **Milestone 2 — TLA commons complete** (audit verdict, `00-pool-audit.md`:
+>    TLA dominates FIN on every cube-relevant axis — 34 TLA commons are
+>    literally cube cards, closure 58 vs 65, and the bendings are the cube's
+>    identity mechanic on 59 unique cube cards). Completing it puts the cube
+>    at ~80% weighted expressible. Earthbend arrives here regardless of any
+>    two-deck-slice decision.
+> 3. **Milestone 3 — full cube closure:** the tail is MULTIFACE (12% of cube,
+>    in neither commons set), sagas, replacement effects, vehicles, X-costs —
+>    "done" is defined by ten named cards (The Legend of Kuruk et al., see
+>    audit §Hardest).
 >
 > Still no open-ended rules grinding: every rung is pulled by a named pool
 > with a named payoff. Completeness of the CR remains a non-goal;
