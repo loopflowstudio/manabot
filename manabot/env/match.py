@@ -113,6 +113,7 @@ class Reward:
 
         reward = float(raw_reward)
         reward += self._progress_shaping(_last_obs, new_obs)
+        reward += self._potential_shaping(_last_obs, new_obs)
 
         if not new_obs.game_over:
             return reward
@@ -149,6 +150,45 @@ class Reward:
             )
 
         return reward
+
+    def _potential_shaping(
+        self,
+        last_obs: managym.Observation,
+        new_obs: managym.Observation,
+    ) -> float:
+        """Potential-based shaping term gamma * Phi(s') - Phi(s).
+
+        Phi(terminal) is treated as 0 so the shaping telescopes out over an
+        episode and preserves policy invariance (Ng, Harada & Russell 1999).
+        """
+        if not self.hypers.potential_enabled:
+            return 0.0
+
+        prev_phi = self._potential(last_obs)
+        next_phi = 0.0 if new_obs.game_over else self._potential(new_obs)
+        return self.hypers.potential_gamma * next_phi - prev_phi
+
+    def _potential(self, obs: managym.Observation) -> float:
+        """Hero-perspective board-state potential Phi(s)."""
+
+        phi = 0.0
+        if self.hypers.potential_land_weight != 0.0:
+            phi += self.hypers.potential_land_weight * (
+                self._count_battlefield_lands(obs.agent_cards)
+                - self._count_battlefield_lands(obs.opponent_cards)
+            )
+        if self.hypers.potential_creature_weight != 0.0:
+            phi += self.hypers.potential_creature_weight * (
+                self._count_battlefield_creatures(obs.agent_cards)
+                - self._count_battlefield_creatures(obs.opponent_cards)
+            )
+        if self.hypers.potential_life_weight != 0.0:
+            phi += (
+                self.hypers.potential_life_weight
+                * (float(obs.agent.life) - float(obs.opponent.life))
+                / 20.0
+            )
+        return phi
 
     @staticmethod
     def _count_battlefield_lands(cards: list[managym.Card]) -> int:

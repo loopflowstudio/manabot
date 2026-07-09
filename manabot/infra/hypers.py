@@ -113,6 +113,20 @@ class RewardHypers(BaseHypersModel):
     land_play_reward: float = 0.0
     creature_play_reward: float = 0.0
     opponent_life_loss_reward: float = 0.0
+    # Potential-based shaping (Ng, Harada & Russell 1999): adds
+    # gamma * Phi(s') - Phi(s) to every hero step reward, with Phi(terminal)
+    # treated as 0 so the potential telescopes out over an episode. Phi is a
+    # hero-perspective board-state potential:
+    #   Phi(s) = potential_land_weight * (hero bf lands - villain bf lands)
+    #          + potential_creature_weight * (hero bf creatures - villain bf creatures)
+    #          + potential_life_weight * (hero life - villain life) / 20
+    # potential_gamma must match the training discount (train.gamma) for
+    # policy invariance to hold.
+    potential_enabled: bool = False
+    potential_gamma: float = 0.99
+    potential_land_weight: float = 0.03
+    potential_creature_weight: float = 0.06
+    potential_life_weight: float = 0.2
 
 
 class Hypers(BaseHypersModel):
