@@ -6,9 +6,9 @@ use crate::{
 };
 
 pub const PLAYER_DIM: usize = 27;
-pub const CARD_DIM: usize = 33;
+pub const CARD_DIM: usize = 37;
 pub const PERMANENT_DIM: usize = 7;
-pub const ACTION_TYPE_DIM: usize = 7;
+pub const ACTION_TYPE_DIM: usize = 14;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
@@ -421,7 +421,11 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[29] = bool_to_f32(card.is_token);
     out[30] = bool_to_f32(card.is_ally);
     out[31] = bool_to_f32(card.is_lesson);
-    out[32] = 1.0; // validity flag
+    out[32] = bool_to_f32(card.ward_cost > 0);
+    out[33] = card.ward_cost as f32 / 10.0;
+    out[34] = bool_to_f32(card.kicker_cost > 0);
+    out[35] = card.kicker_cost as f32 / 10.0;
+    out[36] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -661,6 +665,8 @@ mod tests {
             is_token: false,
             is_ally: false,
             is_lesson: false,
+            ward_cost: 0,
+            kicker_cost: 0,
             card_types: CardTypeData {
                 is_castable: true,
                 is_permanent: true,

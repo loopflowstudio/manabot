@@ -276,6 +276,15 @@ impl Scenario {
             // should use choose_target_named or explicit action selection instead.
             ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
+            // Mid-resolution / cost decisions default to declining (the
+            // last action is Decline for optional choices); tests that care
+            // pick explicitly.
+            ActionSpaceKind::Scry => 0,
+            ActionSpaceKind::LookAndSelect
+            | ActionSpaceKind::PayOrNot
+            | ActionSpaceKind::DiscardThenDraw => space.actions.len().saturating_sub(1),
+            ActionSpaceKind::Modal => 0,
+            ActionSpaceKind::Waterbend => 0,
         };
         self.step_action(index);
     }

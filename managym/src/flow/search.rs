@@ -49,6 +49,25 @@ impl Game {
         self.state
             .zones
             .shuffle(ZoneType::Library, perspective, &mut rng);
+
+        // A pending mid-resolution decision may have revealed library cards
+        // to the deciding player (scry / look-at-top-N). Those cards are
+        // known information — pin them back on top in their revealed order.
+        if let Some(suspended) = &self.state.suspended_decision {
+            let player = suspended.decision.player();
+            let revealed = suspended.decision.revealed_cards().to_vec();
+            if !revealed.is_empty() {
+                let library = self
+                    .state
+                    .zones
+                    .zone_cards_mut(ZoneType::Library, player);
+                library.retain(|card| !revealed.contains(card));
+                // revealed[0] is the top of the library = last element.
+                for card in revealed.iter().rev() {
+                    library.push(*card);
+                }
+            }
+        }
     }
 
     /// Play both sides uniformly-random-legal to terminal.

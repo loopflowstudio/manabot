@@ -162,6 +162,13 @@ fn combat_damage_reduces_life() {
             // Priority: play lands and cast spells when possible, else pass
             ActionSpaceKind::Priority => 0,
             ActionSpaceKind::GameOver => break,
+            // Mid-resolution / cost decisions: take the first option.
+            ActionSpaceKind::Scry
+            | ActionSpaceKind::LookAndSelect
+            | ActionSpaceKind::PayOrNot
+            | ActionSpaceKind::Modal
+            | ActionSpaceKind::DiscardThenDraw
+            | ActionSpaceKind::Waterbend => 0,
         };
 
         game.step(action_index).expect("step should succeed");

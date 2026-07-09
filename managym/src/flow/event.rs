@@ -33,7 +33,7 @@ pub enum GameEvent {
     },
     SpellCast {
         card: CardId,
-        target: Option<Target>,
+        targets: Vec<Target>,
     },
     SpellResolved {
         card: CardId,
@@ -56,6 +56,12 @@ pub enum GameEvent {
     PermanentTapped {
         permanent: PermanentId,
         for_mana: bool,
+    },
+    /// A permanent became the target of a spell (ward, CR 702.21).
+    PermanentTargeted {
+        permanent: PermanentId,
+        spell: CardId,
+        spell_controller: PlayerId,
     },
     /// The declare-attackers turn-based action completed with one or more
     /// attackers (CR 508.1 — attack triggers fire on the whole batch).
