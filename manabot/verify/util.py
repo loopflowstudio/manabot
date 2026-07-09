@@ -54,6 +54,43 @@ INTERACTIVE_DECK = {
     "Pyroclasm": 3,
 }
 
+# Milestone-1 two-deck slice (wave/rules/01-two-deck-slice.md): the actual
+# 40-card cube decks the engine's TLA slice was built for.
+UR_LESSONS_DECK = {
+    "Island": 9,
+    "Mountain": 8,
+    "Tiger-Seal": 2,
+    "Otter-Penguin": 2,
+    "Fire Nation Cadets": 2,
+    "First-Time Flyer": 2,
+    "Forecasting Fortune Teller": 1,
+    "Dragonfly Swarm": 1,
+    "Firebending Lesson": 4,
+    "Igneous Inspiration": 2,
+    "Pop Quiz": 2,
+    "Divide by Zero": 2,
+    "It'll Quench Ya!": 2,
+    "Accumulate Wisdom": 2,
+}
+
+GW_ALLIES_DECK = {
+    "Plains": 9,
+    "Forest": 8,
+    "Water Tribe Rallier": 2,
+    "Invasion Reinforcements": 2,
+    "Compassionate Healer": 2,
+    "Earth Kingdom Jailer": 2,
+    "White Lotus Reinforcements": 2,
+    "Earth King's Lieutenant": 2,
+    "Kyoshi Warriors": 2,
+    "Badgermole Cub": 2,
+    "Suki, Kyoshi Warrior": 1,
+    "South Pole Voyager": 1,
+    "Allies at Last": 2,
+    "Yip Yip!": 1,
+    "Fancy Footwork": 2,
+}
+
 
 @dataclass(frozen=True)
 class EvaluationActionRecord:

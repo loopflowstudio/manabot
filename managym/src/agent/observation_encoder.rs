@@ -5,9 +5,9 @@ use crate::{
     flow::turn::{PhaseKind, StepKind},
 };
 
-pub const PLAYER_DIM: usize = 27;
+pub const PLAYER_DIM: usize = 28;
 pub const CARD_DIM: usize = 37;
-pub const PERMANENT_DIM: usize = 7;
+pub const PERMANENT_DIM: usize = 11;
 pub const ACTION_TYPE_DIM: usize = 14;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const EVENT_DIM: usize = 7;
@@ -361,6 +361,7 @@ fn encode_player_features(
     }
 
     out[26] = player.graveyard_lessons as f32 / 10.0;
+    out[27] = player.combat_mana as f32 / 10.0;
 
     object_to_index.insert(player.id, *current_object_index);
     *current_object_index += 1;
@@ -460,7 +461,11 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[3] = bool_to_f32(permanent.is_summoning_sick);
     out[4] = permanent.plus1_counters as f32 / 10.0;
     out[5] = bool_to_f32(permanent.cant_be_blocked_this_turn);
-    out[6] = 1.0;
+    out[6] = permanent.power as f32 / 10.0;
+    out[7] = permanent.toughness as f32 / 10.0;
+    out[8] = bool_to_f32(permanent.is_animated);
+    out[9] = bool_to_f32(permanent.has_exile_link);
+    out[10] = 1.0;
 }
 
 fn encode_actions(
@@ -605,6 +610,7 @@ mod tests {
                 life: 20,
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
+                combat_mana: 0,
             },
             agent_cards: vec![
                 make_card(111, ZoneType::Hand, true, 2, 2, 1),
@@ -620,6 +626,7 @@ mod tests {
                 life: 18,
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
+                combat_mana: 0,
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -698,6 +705,10 @@ mod tests {
             is_summoning_sick: false,
             plus1_counters: 0,
             cant_be_blocked_this_turn: false,
+            power: 2,
+            toughness: 2,
+            is_animated: false,
+            has_exile_link: false,
         }
     }
 
