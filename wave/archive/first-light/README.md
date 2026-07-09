@@ -15,9 +15,15 @@
 > Lightning Bolt; `:127` Counterspell; `agent/action.rs:8` carries
 > `DeclareBlocker` and `ChooseTarget`) — the deck was.
 >
-> Finding 2 in particular ("reward shaping is required") is a claim about that
-> game and has not been tested on a deck with strategy in it. It must be
-> re-derived. It may not survive.
+> **Update 2026-07-09: findings 1 and 2 are refuted, not merely caveated.**
+> Terminal-only reward fails replication as a failure: on this wave's own
+> STANDARD_DECK with current code it learns cleanly (60.8–66.3% seat-balanced
+> vs random, 3/3 seeds, no pass-collapse), and on the interactive deck it
+> *beats* the shaped recipe by ~15 points while the shaping produced
+> cast-everything policies, one net-harmful. The original pass-collapse
+> observation (unsourced, pre-bugfix code, hero-on-play single-seed evals)
+> appears to have been an artifact. See `reports/exp-04-potential-shaping.md`
+> addenda.
 
 ## Vision
 
