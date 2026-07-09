@@ -11,5 +11,5 @@ as follows.
 | `self-play` | Absorbed into search C5+ (expert iteration / population play). `01-opponent-pool.md` remains the reference design for the checkpoint ladder; Elo/evaluation thinking feeds the ladder-strength metric. |
 | `scale` | `01-throughput.md` became search goal 1 (batched inference, pulled at C5, not pushed). `02-game-theory.md` became the pre-registered pivots: Exit 1 (belief-based) and Exit 2 (model-free game-theoretic). |
 | `architecture` | Dissolved into the loop: architecture changes are experiments (question, prediction, cost cap, report) — not a standing front. |
-| `gui` | Shipped its polish (e234933). No further spend until there is a result to show. |
+| `gui` | Split disposition (corrected 2026-07-09): GUI-as-**product** (polish, aesthetics) stays archived until there is a result to show. GUI-as-**instrument** — the replay viewer (`frontend/src/routes/replay/`) and trace recorder (`gui/trace.py`) — is measurement infrastructure, pull-driven like rules: used whenever a behavioral question can't be answered from aggregates (e.g. exp-01's seat-parasitic seed). Discipline: replays generate hypotheses; only aggregate metrics confirm them. |
 | `publishing` | Replaced by the release bar in `wave/search/01-experiment-loop.md`: promotion rides with the first citable result, not with completeness. |
