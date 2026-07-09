@@ -238,7 +238,71 @@ impl Game {
             controller: event_controller,
         };
         self.emit(event);
+        if old_zone == Some(ZoneType::Battlefield) {
+            self.handle_leaves_battlefield(card, to_zone);
+        }
         self.process_game_events();
+    }
+
+    /// Leave-the-battlefield bookkeeping: fire one-shot delayed triggers
+    /// (earthbend returns) and end "exiled until this leaves" durations
+    /// (Jailer links — the exiled card returns immediately, no stack).
+    fn handle_leaves_battlefield(&mut self, card: CardId, to_zone: ZoneType) {
+        // Delayed triggers watching this card fire on dies/exiled and are
+        // dropped otherwise (they watched this battlefield stint only).
+        let watching: Vec<_> = {
+            let mut kept = Vec::new();
+            let mut fired = Vec::new();
+            for trigger in std::mem::take(&mut self.state.delayed_triggers) {
+                if trigger.watched_card == card {
+                    fired.push(trigger);
+                } else {
+                    kept.push(trigger);
+                }
+            }
+            self.state.delayed_triggers = kept;
+            fired
+        };
+        if matches!(to_zone, ZoneType::Graveyard | ZoneType::Exile) {
+            for trigger in watching {
+                match trigger.kind {
+                    crate::flow::trigger::DelayedTriggerKind::ReturnToBattlefieldTapped => {
+                        self.enqueue_delayed_trigger(
+                            card,
+                            trigger.controller,
+                            vec![crate::state::ability::Effect::ReturnSourceToBattlefieldTapped],
+                        );
+                    }
+                }
+            }
+        }
+
+        // "Until this creature leaves the battlefield" durations end now:
+        // linked exiled cards return under their owners' control.
+        let ended: Vec<_> = {
+            let mut kept = Vec::new();
+            let mut ended = Vec::new();
+            for link in std::mem::take(&mut self.state.exile_links) {
+                if link.source_card == card {
+                    ended.push(link);
+                } else {
+                    kept.push(link);
+                }
+            }
+            self.state.exile_links = kept;
+            ended
+        };
+        for link in ended {
+            let owner = self.state.cards[link.exiled_card].owner;
+            if self
+                .state
+                .zones
+                .contains(link.exiled_card, ZoneType::Exile, owner)
+            {
+                self.move_card(link.exiled_card, ZoneType::Battlefield);
+                self.invalidate_mana_cache(owner);
+            }
+        }
     }
 
     pub(crate) fn assert_stack_consistent(&self) {

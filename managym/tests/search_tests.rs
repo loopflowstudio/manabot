@@ -371,3 +371,86 @@ fn flat_mc_survives_stage2_decision_points() {
         "expected at least one Stage-2 decision point across seeds"
     );
 }
+
+/// Flat MC must survive decision points in the real Milestone-1 matchup:
+/// play random games between the actual UR Lessons and GW Allies lists
+/// and run a small flat-MC evaluation from surfaced decision points.
+#[test]
+fn flat_mc_survives_milestone1_matchup() {
+    use managym::agent::action::ActionSpaceKind;
+
+    let ur_deck = BTreeMap::from([
+        ("Island".to_string(), 9),
+        ("Mountain".to_string(), 8),
+        ("Tiger-Seal".to_string(), 2),
+        ("Otter-Penguin".to_string(), 2),
+        ("Fire Nation Cadets".to_string(), 2),
+        ("First-Time Flyer".to_string(), 2),
+        ("Forecasting Fortune Teller".to_string(), 1),
+        ("Dragonfly Swarm".to_string(), 1),
+        ("Firebending Lesson".to_string(), 4),
+        ("Igneous Inspiration".to_string(), 2),
+        ("Pop Quiz".to_string(), 2),
+        ("Divide by Zero".to_string(), 2),
+        ("It'll Quench Ya!".to_string(), 2),
+        ("Accumulate Wisdom".to_string(), 2),
+    ]);
+    let gw_deck = BTreeMap::from([
+        ("Plains".to_string(), 9),
+        ("Forest".to_string(), 8),
+        ("Water Tribe Rallier".to_string(), 2),
+        ("Invasion Reinforcements".to_string(), 2),
+        ("Compassionate Healer".to_string(), 2),
+        ("Earth Kingdom Jailer".to_string(), 2),
+        ("White Lotus Reinforcements".to_string(), 2),
+        ("Earth King's Lieutenant".to_string(), 2),
+        ("Kyoshi Warriors".to_string(), 2),
+        ("Badgermole Cub".to_string(), 2),
+        ("Suki, Kyoshi Warrior".to_string(), 1),
+        ("South Pole Voyager".to_string(), 1),
+        ("Allies at Last".to_string(), 2),
+        ("Yip Yip!".to_string(), 1),
+        ("Fancy Footwork".to_string(), 2),
+    ]);
+
+    let is_decision_kind = |kind: ActionSpaceKind| {
+        matches!(
+            kind,
+            ActionSpaceKind::Scry
+                | ActionSpaceKind::LookAndSelect
+                | ActionSpaceKind::PayOrNot
+                | ActionSpaceKind::Modal
+                | ActionSpaceKind::DiscardThenDraw
+                | ActionSpaceKind::Waterbend
+                | ActionSpaceKind::ChooseTarget
+        )
+    };
+
+    let mut decisions_evaluated = 0_usize;
+    for seed in 0..12_u64 {
+        let mut env = Env::new(seed, true, false, false);
+        let p0 = PlayerConfig::new("lessons", ur_deck.clone());
+        let p1 = PlayerConfig::new("allies", gw_deck.clone());
+        env.reset(vec![p0, p1]).expect("reset");
+
+        let mut steps = 0_usize;
+        while !env.is_game_over() && steps < 800 {
+            if decisions_evaluated < 8
+                && env.action_space_kind().is_some_and(is_decision_kind)
+            {
+                let result = env
+                    .flat_mc_scores(1, 1, seed ^ 0x57a3e3, 400)
+                    .expect("flat MC at a decision point");
+                assert!(!result.scores.is_empty());
+                decisions_evaluated += 1;
+            }
+            let action = env.random_action_index().expect("action index");
+            env.step(action as i64).expect("step");
+            steps += 1;
+        }
+    }
+    assert!(
+        decisions_evaluated > 0,
+        "expected at least one decision point across seeds"
+    );
+}

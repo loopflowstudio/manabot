@@ -1,5 +1,5 @@
 use super::{
-    card::Card,
+    card::{Card, Keywords},
     game_object::{CardId, ObjectId, PlayerId},
     mana::Mana,
 };
@@ -20,6 +20,12 @@ pub struct Permanent {
     pub plus1_counters: i32,
     /// "Can't be blocked this turn" — cleared during cleanup.
     pub cant_be_blocked_this_turn: bool,
+    /// Earthbend animation: this permanent is a 0/0 creature with haste in
+    /// addition to its printed types (still a land). No duration — it lasts
+    /// as long as the permanent does.
+    pub animated: bool,
+    /// Keywords granted until end of turn — cleared during cleanup.
+    pub temp_keywords: Keywords,
     pub attacking: bool,
 }
 
@@ -37,37 +43,52 @@ impl Permanent {
             temp_toughness: 0,
             plus1_counters: 0,
             cant_be_blocked_this_turn: false,
+            animated: false,
+            temp_keywords: Keywords::default(),
             attacking: false,
         }
     }
 
+    /// Whether this permanent is a creature — printed type or earthbend
+    /// animation (a land that's also a 0/0 creature).
+    pub fn is_creature(&self, card: &Card) -> bool {
+        card.types.is_creature() || self.animated
+    }
+
+    /// Printed keywords plus until-EOT grants plus animation (earthbent
+    /// lands have haste).
+    pub fn effective_keywords(&self, card: &Card) -> Keywords {
+        let mut keywords = card.keywords.union(&self.temp_keywords);
+        if self.animated {
+            keywords.haste = true;
+        }
+        keywords
+    }
+
     pub fn can_tap(&self, card: &Card) -> bool {
-        !(self.tapped || (self.summoning_sick && card.types.is_creature()))
+        !(self.tapped || (self.summoning_sick && self.is_creature(card)))
     }
 
     pub fn can_attack(&self, card: &Card) -> bool {
-        card.types.is_creature() && !card.keywords.defender && !self.tapped && !self.summoning_sick
+        self.is_creature(card)
+            && !self.effective_keywords(card).defender
+            && !self.tapped
+            && !self.summoning_sick
     }
 
     pub fn can_block(&self, card: &Card) -> bool {
-        card.types.is_creature() && !self.tapped
+        self.is_creature(card) && !self.tapped
     }
 
-    pub fn has_lethal_damage(&self, card: &Card) -> bool {
-        if !card.types.is_creature() {
-            return false;
-        }
-        if self.deathtouch_damage && self.damage > 0 {
-            return true;
-        }
-        self.damage >= self.effective_toughness(card)
-    }
-
-    pub fn effective_power(&self, card: &Card) -> i32 {
+    /// Base + counters + until-EOT deltas. Static continuous effects and
+    /// characteristic-defining P/T need whole-game state — use
+    /// `Game::effective_power` / `Game::effective_toughness` (this is their
+    /// local component).
+    pub fn local_power(&self, card: &Card) -> i32 {
         card.power.unwrap_or(0) + self.plus1_counters + self.temp_power
     }
 
-    pub fn effective_toughness(&self, card: &Card) -> i32 {
+    pub fn local_toughness(&self, card: &Card) -> i32 {
         card.toughness.unwrap_or(0) + self.plus1_counters + self.temp_toughness
     }
 
@@ -103,5 +124,6 @@ impl Permanent {
         self.temp_power = 0;
         self.temp_toughness = 0;
         self.cant_be_blocked_this_turn = false;
+        self.temp_keywords = Keywords::default();
     }
 }

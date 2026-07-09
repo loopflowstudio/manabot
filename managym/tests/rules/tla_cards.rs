@@ -199,9 +199,8 @@ fn avatar_enthusiasts_counter_when_another_ally_enters() {
 
     assert_eq!(counters(&s, enthusiasts), 1);
     // Counters contribute to P/T: 2/2 base + 1 counter = 3/3.
-    let card = &s.game().state.cards[permanent(&s, enthusiasts).card];
-    assert_eq!(permanent(&s, enthusiasts).effective_power(card), 3);
-    assert_eq!(permanent(&s, enthusiasts).effective_toughness(card), 3);
+    assert_eq!(s.game().effective_power(enthusiasts), 3);
+    assert_eq!(s.game().effective_toughness(enthusiasts), 3);
 }
 
 /// ...but NOT when a non-Ally creature enters...

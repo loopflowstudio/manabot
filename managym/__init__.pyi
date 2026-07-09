@@ -187,6 +187,7 @@ class Player:
     life: int
     zone_counts: List[int]
     graveyard_lessons: int
+    combat_mana: int
 
 class Card:
     zone: ZoneEnum
@@ -213,6 +214,10 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
+    power: int
+    toughness: int
+    is_animated: bool
+    has_exile_link: bool
 
 class Turn:
     turn_number: int
