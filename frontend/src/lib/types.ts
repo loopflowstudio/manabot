@@ -126,21 +126,48 @@ export interface ReplayFrame {
   actor: 'hero' | 'villain' | null;
 }
 
+export type StopSide = 'my' | 'opponent';
+
+// Effective priority-stop configuration; the server echoes this on every
+// observation/game_over payload (see gui/server.py: _stops_payload).
+export interface StopsConfig {
+  my: string[];
+  opponent: string[];
+  stop_on_stack: boolean;
+  auto_pass: boolean;
+}
+
 export type ServerMessage =
   | {
       type: 'observation';
       data: Observation;
       actions: ActionOption[];
       log?: string[];
+      stops?: StopsConfig;
+      auto_passed?: number;
       session_id?: string;
       resume_token?: string;
     }
-  | { type: 'game_over'; data: Observation; winner: number | null; log?: string[] }
+  | {
+      type: 'game_over';
+      data: Observation;
+      winner: number | null;
+      log?: string[];
+      stops?: StopsConfig;
+      auto_passed?: number;
+    }
   | { type: 'error'; message: string };
 
 export type ClientMessage =
   | { type: 'new_game'; config?: Record<string, unknown> }
   | { type: 'action'; index: number }
+  | {
+      type: 'set_stops';
+      stops: { my: string[]; opponent: string[] };
+      stop_on_stack: boolean;
+      auto_pass: boolean;
+    }
+  | { type: 'pass_turn' }
   | { type: 'resume'; session_id: string; resume_token: string };
 
 export type ConnectionState =

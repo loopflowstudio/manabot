@@ -1,10 +1,13 @@
 import { deriveObservationNotes } from './log';
+import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
 import type {
   ActionOption,
   ConnectionState,
   GameLogEntry,
   Observation,
   OpponentConfig,
+  StopsConfig,
+  StopSide,
 } from './types';
 
 export type OpponentChoice =
@@ -50,6 +53,15 @@ export class GameStore {
   opponentChoice = $state<OpponentChoice>('search-64');
   checkpointPath = $state('');
   checkpointDeterministic = $state(false);
+  // Priority stops (MTGO-style auto-pass). Loaded from localStorage, sent
+  // with new_game, and overwritten by the server's effective-config echo.
+  stops = $state<StopsConfig>(loadStoredStops());
+  // True while a pass-turn (F6) request is in flight — the server is
+  // fast-forwarding priority windows on our behalf.
+  fastForwarding = $state(false);
+  // Monotonic count of applied server updates (observation/game_over).
+  // Surfaced in the DOM so tests can serialize on server responses.
+  updateSeq = $state(0);
 
   private logSequence = 0;
 
@@ -81,23 +93,70 @@ export class GameStore {
     );
   }
 
+  newGameConfig(): Record<string, unknown> {
+    return {
+      ...this.opponentConfig(),
+      stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },
+      stop_on_stack: this.stops.stop_on_stack,
+      auto_pass: this.stops.auto_pass,
+    };
+  }
+
+  toggleStop(side: StopSide, step: string): void {
+    const steps = this.stops[side].includes(step)
+      ? this.stops[side].filter((existing) => existing !== step)
+      : [...this.stops[side], step];
+    this.updateStops({ ...this.stops, [side]: steps });
+  }
+
+  setStopOnStack(value: boolean): void {
+    this.updateStops({ ...this.stops, stop_on_stack: value });
+  }
+
+  setAutoPass(value: boolean): void {
+    this.updateStops({ ...this.stops, auto_pass: value });
+  }
+
+  resetStops(): void {
+    this.updateStops(defaultStops());
+  }
+
+  applyServerStops(stops: StopsConfig | undefined): void {
+    if (stops) {
+      this.updateStops(stops);
+    }
+  }
+
+  beginFastForward(): void {
+    this.fastForwarding = true;
+  }
+
+  endFastForward(): void {
+    this.fastForwarding = false;
+  }
+
   applyObservation(
     observation: Observation,
     actions: ActionOption[],
     sessionId?: string,
     resumeToken?: string,
     log: string[] = [],
+    stops?: StopsConfig,
+    autoPassed = 0,
   ): void {
     const previous = this.observation;
 
+    this.updateSeq += 1;
     this.observation = observation;
     this.actions = actions;
     this.gameOver = observation.game_over;
     this.winner = null;
     this.errorMessage = null;
     this.resumeFailed = false;
+    this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
+    this.applyServerStops(stops);
 
     if (sessionId) {
       this.sessionId = sessionId;
@@ -107,6 +166,7 @@ export class GameStore {
     }
 
     this.appendLogLines('villain', log);
+    this.appendAutoPassNote(autoPassed);
     this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
@@ -114,19 +174,25 @@ export class GameStore {
     observation: Observation,
     winner: number | null,
     log: string[] = [],
+    stops?: StopsConfig,
+    autoPassed = 0,
   ): void {
     const previous = this.observation;
 
+    this.updateSeq += 1;
     this.observation = observation;
     this.actions = [];
     this.gameOver = true;
     this.winner = winner;
     this.errorMessage = null;
     this.resumeFailed = false;
+    this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
+    this.applyServerStops(stops);
 
     this.appendLogLines('villain', log);
+    this.appendAutoPassNote(autoPassed);
     this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
@@ -167,12 +233,28 @@ export class GameStore {
     this.setFocus([]);
   }
 
+  private updateStops(next: StopsConfig): void {
+    this.stops = next;
+    saveStoredStops(next);
+  }
+
+  private appendAutoPassNote(autoPassed: number): void {
+    if (autoPassed <= 0) {
+      return;
+    }
+    const windows = autoPassed === 1 ? 'window' : 'windows';
+    this.appendLogLines('system', [
+      `Auto-passed ${autoPassed} priority ${windows}.`,
+    ]);
+  }
+
   private resetMatchState(): void {
     this.observation = null;
     this.actions = [];
     this.gameOver = false;
     this.winner = null;
     this.actionLog = [];
+    this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;

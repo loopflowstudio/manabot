@@ -29,6 +29,13 @@ class GameConfig:
     villain_sims: int | None = None  # search: simulations per legal action
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
+    # Priority-stop configuration at game start (MTGO-style auto-pass).
+    # ``stops`` maps "my"/"opponent" to the stop step names that surface;
+    # None means the server defaults. set_stops updates the live session,
+    # not this record.
+    stops: dict[str, list[str]] | None = None
+    stop_on_stack: bool = True  # always surface when the stack is non-empty
+    auto_pass: bool = True  # master switch; False = surface every window
 
 
 @dataclass
@@ -39,6 +46,10 @@ class TraceEvent:
     action: int
     action_description: str
     reward: float
+    # True when the server auto-passed this priority window (stops system /
+    # F6), False for decisions the human actually clicked. Competency metrics
+    # must not credit auto-passes as deliberate passes.
+    auto: bool = False
 
 
 @dataclass
