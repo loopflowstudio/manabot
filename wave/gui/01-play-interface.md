@@ -109,6 +109,49 @@ trace config records the exact opponent for every game.
 - `cd frontend && npm run build` clean; `npm run check` 0 errors;
   `npm test` 12 green.
 
+## Fix note: the frozen-DOM reactivity bug (July 2026)
+
+The play page rendered once and then never updated: the connection badge sat
+on "disconnected" even though the WebSocket was open, and New Game visibly
+did nothing while the server happily played games underneath. Nothing in the
+validation above could catch it — every check ran at the WebSocket/protocol
+or unit level, never against the rendered DOM.
+
+**Root cause**: `+page.svelte` and `replay/+page.svelte` were Svelte
+*legacy-mode* components (top-level `$:` statements, no runes) reading the
+*runes-mode* stores (`game.svelte.ts` / `replay.svelte.ts`, `$state` class
+fields). In legacy mode Svelte 5 deliberately preserves Svelte 4 semantics:
+
+- Template reads of imported objects compile to
+  `$.untrack(() => gameStore.connection)` — imports were never reactive in
+  Svelte 4, so legacy mode explicitly opts out of tracking them.
+- `$:` statements compile to `legacy_pre_effect(deps, fn)` where `deps` only
+  reads the compile-time-detected identifiers (the `gameStore` object
+  reference — never `.actions`) and the body runs inside `untrack(fn)`.
+
+So no DOM effect ever subscribed to the stores' `$state` signals. Store
+updates happened; the DOM never followed. Both routes were affected from the
+first GUI commit (the replay page's "worked" status was equally never
+DOM-verified).
+
+**Fix**: every component converted to runes mode
+(`$props`/`$derived`/`$state`/`$effect`, `onclick` instead of `on:click`),
+so all store reads happen in tracked contexts.
+
+**Interop rule going forward**: never read a runes store from a legacy-mode
+component — in particular, no legacy `$:` over `$state` fields. Any new
+`.svelte` file in this frontend must be runes mode (a stray top-level `$:`
+or `export let` silently flips the whole component back to legacy).
+
+**Regression net**: `npm run test:e2e` (Playwright, headless Chromium)
+drives the real stack — backend on `MANABOT_API_PORT` (default 8011,
+uvicorn binary override `MANABOT_UVICORN`), vite dev on 5183 — and asserts
+DOM *mutation*: badge reaches "connected", New Game renders a board vs the
+random villain, ten decision points where the game log must grow after every
+click and the board HTML must change across the game, and any console error
+(except the dev favicon 404) fails the run. It fails against the pre-fix
+page and passes now.
+
 ## Known gaps Jack will hit
 
 - **Checkpoint quality**: there is no trained checkpoint in the repo; the
