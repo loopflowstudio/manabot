@@ -148,6 +148,21 @@ class GameSocketController {
     this.send({ type: 'action', index });
   }
 
+  sendSetStops(): void {
+    const stops = gameStore.stops;
+    this.send({
+      type: 'set_stops',
+      stops: { my: [...stops.my], opponent: [...stops.opponent] },
+      stop_on_stack: stops.stop_on_stack,
+      auto_pass: stops.auto_pass,
+    });
+  }
+
+  sendPassTurn(): void {
+    gameStore.beginFastForward();
+    this.send({ type: 'pass_turn' });
+  }
+
   private send(message: ClientMessage): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
@@ -187,6 +202,8 @@ class GameSocketController {
         message.session_id,
         message.resume_token,
         message.log ?? [],
+        message.stops,
+        message.auto_passed ?? 0,
       );
       if (message.session_id && message.resume_token) {
         saveResumeCredentials({
@@ -200,7 +217,13 @@ class GameSocketController {
 
     if (message.type === 'game_over') {
       this.pendingResume = false;
-      gameStore.applyGameOver(message.data, message.winner, message.log ?? []);
+      gameStore.applyGameOver(
+        message.data,
+        message.winner,
+        message.log ?? [],
+        message.stops,
+        message.auto_passed ?? 0,
+      );
       this.flushQueue();
       return;
     }
@@ -214,6 +237,7 @@ class GameSocketController {
       return;
     }
 
+    gameStore.endFastForward();
     gameStore.setError(message.message);
   }
 
@@ -247,4 +271,12 @@ export function sendNewGame(config?: Record<string, unknown>): void {
 
 export function sendAction(index: number): void {
   controller.sendAction(index);
+}
+
+export function sendSetStops(): void {
+  controller.sendSetStops();
+}
+
+export function sendPassTurn(): void {
+  controller.sendPassTurn();
 }
