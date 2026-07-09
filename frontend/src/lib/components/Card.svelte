@@ -1,34 +1,51 @@
 <script lang="ts">
   import CardImage from './CardImage.svelte';
 
-  export let name: string;
-  export let power: number | null = null;
-  export let toughness: number | null = null;
-  export let focused = false;
-  export let clickable = false;
-  export let tapped = false;
-  export let dimmed = false;
-  export let damage = 0;
-  export let size: 'small' | 'normal' = 'small';
-  export let onSelect: (() => void) | undefined = undefined;
-  export let onHoverStart: (() => void) | undefined = undefined;
-  export let onHoverEnd: (() => void) | undefined = undefined;
+  interface Props {
+    name: string;
+    power?: number | null;
+    toughness?: number | null;
+    focused?: boolean;
+    clickable?: boolean;
+    tapped?: boolean;
+    dimmed?: boolean;
+    damage?: number;
+    size?: 'small' | 'normal';
+    onSelect?: () => void;
+    onHoverStart?: () => void;
+    onHoverEnd?: () => void;
+  }
 
-  $: widthClass = size === 'normal' ? 'w-40' : 'w-20';
-  $: imageClass = 'h-full w-full rounded-md object-cover';
+  let {
+    name,
+    power = null,
+    toughness = null,
+    focused = false,
+    clickable = false,
+    tapped = false,
+    dimmed = false,
+    damage = 0,
+    size = 'small',
+    onSelect = undefined,
+    onHoverStart = undefined,
+    onHoverEnd = undefined,
+  }: Props = $props();
+
+  const widthClass = $derived(size === 'normal' ? 'w-40' : 'w-20');
+  const imageClass = 'h-full w-full rounded-md object-cover';
 </script>
 
 <button
   type="button"
   aria-label={name}
   class={`group relative aspect-[5/7] ${widthClass} overflow-visible rounded-lg border bg-slate-900 text-left shadow transition ${focused ? 'border-blue-400 ring-1 ring-blue-400/70' : 'border-slate-700'} ${clickable ? 'cursor-pointer hover:-translate-y-1 hover:border-amber-300' : 'cursor-default'} ${tapped ? 'rotate-90' : ''} ${dimmed ? 'opacity-70' : ''}`}
-  on:click={() => {
+  onclick={() => {
     if (clickable) {
       onSelect?.();
     }
   }}
-  on:mouseenter={() => onHoverStart?.()}
-  on:mouseleave={() => onHoverEnd?.()}
+  onmouseenter={() => onHoverStart?.()}
+  onmouseleave={() => onHoverEnd?.()}
 >
   <div class="absolute inset-0 overflow-hidden rounded-lg">
     <CardImage name={name} size={size} alt={name} className={imageClass}>

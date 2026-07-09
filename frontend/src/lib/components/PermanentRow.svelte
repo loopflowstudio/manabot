@@ -3,15 +3,27 @@
 
   import Card from './Card.svelte';
 
-  export let label: string;
-  export let permanents: PermanentState[] = [];
-  export let focusedIds = new Set<number>();
-  export let clickableTargets: Map<number, number[]> | undefined = undefined;
-  export let onSelectTarget: ((objectId: number) => void) | undefined = undefined;
-  export let onHoverTarget: ((objectId: number | null) => void) | undefined = undefined;
-  export let onPreviewCard:
-    | ((card: { name: string | null; power: number | null; toughness: number | null } | null) => void)
-    | undefined = undefined;
+  interface Props {
+    label: string;
+    permanents?: PermanentState[];
+    focusedIds?: Set<number>;
+    clickableTargets?: Map<number, number[]>;
+    onSelectTarget?: (objectId: number) => void;
+    onHoverTarget?: (objectId: number | null) => void;
+    onPreviewCard?: (
+      card: { name: string | null; power: number | null; toughness: number | null } | null,
+    ) => void;
+  }
+
+  let {
+    label,
+    permanents = [],
+    focusedIds = new Set<number>(),
+    clickableTargets = undefined,
+    onSelectTarget = undefined,
+    onHoverTarget = undefined,
+    onPreviewCard = undefined,
+  }: Props = $props();
 </script>
 
 <div class="min-h-24">

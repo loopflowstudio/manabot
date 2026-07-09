@@ -1,13 +1,25 @@
 <script lang="ts">
   import type { ActionOption } from '$lib/types';
 
-  export let actions: ActionOption[] = [];
-  export let selectedTargetId: number | null = null;
-  export let highlightedActionIndexes = new Set<number>();
-  export let disabled = false;
-  export let onHoverAction: ((action: ActionOption | null) => void) | undefined = undefined;
-  export let onSelectAction: ((action: ActionOption) => void) | undefined = undefined;
-  export let onClearSelection: (() => void) | undefined = undefined;
+  interface Props {
+    actions?: ActionOption[];
+    selectedTargetId?: number | null;
+    highlightedActionIndexes?: Set<number>;
+    disabled?: boolean;
+    onHoverAction?: (action: ActionOption | null) => void;
+    onSelectAction?: (action: ActionOption) => void;
+    onClearSelection?: () => void;
+  }
+
+  let {
+    actions = [],
+    selectedTargetId = null,
+    highlightedActionIndexes = new Set<number>(),
+    disabled = false,
+    onHoverAction = undefined,
+    onSelectAction = undefined,
+    onClearSelection = undefined,
+  }: Props = $props();
 </script>
 
 <aside class="rounded border border-slate-700 bg-slate-800 p-4">
@@ -21,7 +33,7 @@
       {/if}
     </div>
     {#if selectedTargetId !== null}
-      <button class="text-xs text-slate-400 underline hover:text-slate-200" on:click={() => onClearSelection?.()}>
+      <button class="text-xs text-slate-400 underline hover:text-slate-200" onclick={() => onClearSelection?.()}>
         Show all
       </button>
     {/if}
@@ -37,11 +49,12 @@
     {:else}
       {#each actions as action}
         <button
+          data-testid="action-option"
           class={`w-full rounded border px-3 py-2 text-left text-sm transition ${highlightedActionIndexes.has(action.index) ? 'border-amber-300 bg-slate-800' : 'border-slate-600 bg-slate-900 hover:border-blue-400 hover:bg-slate-800'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-          on:mouseenter={() => onHoverAction?.(action)}
-          on:mouseleave={() => onHoverAction?.(null)}
-          on:click={() => onSelectAction?.(action)}
-          disabled={disabled}
+          onmouseenter={() => onHoverAction?.(action)}
+          onmouseleave={() => onHoverAction?.(null)}
+          onclick={() => onSelectAction?.(action)}
+          {disabled}
         >
           <div class="font-medium">{action.description}</div>
           <div class="mt-1 text-xs text-slate-400">{action.type}</div>

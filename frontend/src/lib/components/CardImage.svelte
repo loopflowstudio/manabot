@@ -1,29 +1,34 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+
   import { scryfallImageUrl } from '$lib/scryfall';
 
-  export let name: string;
-  export let size: 'small' | 'normal' = 'small';
-  export let alt = name;
-  export let className = '';
-
-  let failed = false;
-  $: src = name ? scryfallImageUrl(name, size) : null;
-  $: if (src) {
-    failed = false;
+  interface Props {
+    name: string;
+    size?: 'small' | 'normal';
+    alt?: string;
+    className?: string;
+    children?: Snippet;
   }
+
+  let { name, size = 'small', alt = undefined, className = '', children = undefined }: Props = $props();
+
+  let failedSrc = $state<string | null>(null);
+  const src = $derived(name ? scryfallImageUrl(name, size) : null);
+  const failed = $derived(src !== null && failedSrc === src);
 </script>
 
 {#if src && !failed}
   <img
-    src={src}
-    alt={alt}
+    {src}
+    alt={alt ?? name}
     class={className}
     loading="lazy"
     draggable="false"
-    on:error={() => {
-      failed = true;
+    onerror={() => {
+      failedSrc = src;
     }}
   />
 {:else}
-  <slot />
+  {@render children?.()}
 {/if}
