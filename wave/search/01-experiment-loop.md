@@ -173,6 +173,19 @@ miniature — if it fails, "search as teacher" (goal 5) needs rethinking before
 scaling.
 **Cost cap:** dataset generation ≤ 24 engine-hours; BC is minutes.
 
+**RESULT (2026-07-09):** prediction confirmed on both clauses. BC on 73k
+search-64 self-play decisions ($0.66 all-in: datagen 762 s + sweeps 1,599 s)
+hits 90.5% vs random seat-balanced and beats matched-cost PPO ($0.57,
+5.84M steps — 22x exp-01's budget, still 52.7% vs random) 82.0% head-to-head;
+a $0.092 variant (200 games, one config) already exceeds PPO's final strength
+at 71.8% vs random — 1/6.2 of PPO's cost. Ladder placement (goal 6, first
+real point): beats search-4, even with search-8, loses to search-16 —
+**ladder ≈ N=8** (prior trained policies: ≲1; exploitability probe deferred
+to C5). Behavioral inheritance confirmed: student cast_when_able/passed 0.61/
+0.34 vs teacher 0.58/0.35, while matched PPO reproduces the aggro fingerprint
+(0.97/0.007). Sizing amendment: PPO sized by measured 2,472 SPS, not the
+stale 637. See `reports/exp-03-distillation.md`.
+
 ### C5+ — The loop proper
 
 Policy-rollout search (first time batched inference — wave goal 1 — is

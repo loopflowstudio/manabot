@@ -1,0 +1,469 @@
+{
+  "matchups": {
+    "bc-search64__random": {
+      "hero": "bc-search64",
+      "villain": "random",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "random"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 362.0,
+        "win_rate": 0.905,
+        "win_ci_lower": 0.8722909782843384,
+        "win_ci_upper": 0.9300037828299202,
+        "mean_steps": 150.7025,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 183.0,
+        "win_rate_on_play": 0.915,
+        "win_ci_lower_on_play": 0.8681031145576462,
+        "win_ci_upper_on_play": 0.9462547005301476,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 179.0,
+        "win_rate_on_draw": 0.895,
+        "win_ci_lower_on_draw": 0.8448186177864638,
+        "win_ci_upper_on_draw": 0.9302930375380628
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 7.246160415932536,
+      "engine_seconds": 43.40505333500914
+    },
+    "ppo-matched__random": {
+      "hero": "ppo-matched",
+      "villain": "random",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/first-light-exp03-ppo-matched-final/step_5836800.pt",
+        "name": "ppo-matched"
+      },
+      "villain_spec": {
+        "kind": "random"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 211.0,
+        "win_rate": 0.5275,
+        "win_ci_lower": 0.47854513130033327,
+        "win_ci_upper": 0.5759316734666842,
+        "mean_steps": 184.6525,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 83.0,
+        "win_rate_on_play": 0.415,
+        "win_ci_lower_on_play": 0.34894169173249645,
+        "win_ci_upper_on_play": 0.48426212927361817,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 128.0,
+        "win_rate_on_draw": 0.64,
+        "win_ci_lower_on_draw": 0.5714139956562683,
+        "win_ci_upper_on_draw": 0.703309122686602
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 5.581767000025138,
+      "engine_seconds": 28.85027833492495
+    },
+    "bc-search64__ppo-matched": {
+      "hero": "bc-search64",
+      "villain": "ppo-matched",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/first-light-exp03-ppo-matched-final/step_5836800.pt",
+        "name": "ppo-matched"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 328.0,
+        "win_rate": 0.82,
+        "win_ci_lower": 0.7793616474280235,
+        "win_ci_upper": 0.8545502625881809,
+        "mean_steps": 165.445,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 133.0,
+        "win_rate_on_play": 0.665,
+        "win_ci_lower_on_play": 0.5970206277343806,
+        "win_ci_upper_on_play": 0.7267601903125737,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 195.0,
+        "win_rate_on_draw": 0.975,
+        "win_ci_lower_on_draw": 0.9428208558483829,
+        "win_ci_upper_on_draw": 0.9892754385292123
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 10.775622291956097,
+      "engine_seconds": 62.52359929098748
+    },
+    "bc-search64__c1v2-s1": {
+      "hero": "bc-search64",
+      "villain": "c1v2-s1",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "checkpoint",
+        "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s1-final/step_65536.pt",
+        "name": "c1v2-s1"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 337.0,
+        "win_rate": 0.8425,
+        "win_ci_lower": 0.8035644342063322,
+        "win_ci_upper": 0.8749194069828866,
+        "mean_steps": 157.0075,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 164.0,
+        "win_rate_on_play": 0.82,
+        "win_ci_lower_on_play": 0.7608840628376158,
+        "win_ci_upper_on_play": 0.8670544933746589,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 173.0,
+        "win_rate_on_draw": 0.865,
+        "win_ci_lower_on_draw": 0.8107074954488286,
+        "win_ci_upper_on_draw": 0.9055349202307972
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 9.940020957961679,
+      "engine_seconds": 57.90784454101231
+    },
+    "bc-search64__c1v2-s2": {
+      "hero": "bc-search64",
+      "villain": "c1v2-s2",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "checkpoint",
+        "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s2-final/step_65536.pt",
+        "name": "c1v2-s2"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 358.0,
+        "win_rate": 0.895,
+        "win_ci_lower": 0.861108321155689,
+        "win_ci_upper": 0.9213766927705633,
+        "mean_steps": 155.7275,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 175.0,
+        "win_rate_on_play": 0.875,
+        "win_ci_lower_on_play": 0.8219846471534161,
+        "win_ci_upper_on_play": 0.9138808484078432,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 183.0,
+        "win_rate_on_draw": 0.915,
+        "win_ci_lower_on_draw": 0.8681031145576462,
+        "win_ci_upper_on_draw": 0.9462547005301476
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 9.231176333036274,
+      "engine_seconds": 58.831572124152444
+    },
+    "bc-search64__c1v2-s3": {
+      "hero": "bc-search64",
+      "villain": "c1v2-s3",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "checkpoint",
+        "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s3-final/step_65536.pt",
+        "name": "c1v2-s3"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 324.0,
+        "win_rate": 0.81,
+        "win_ci_lower": 0.7686754184345866,
+        "win_ci_upper": 0.8454267443936115,
+        "mean_steps": 175.8125,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 166.0,
+        "win_rate_on_play": 0.83,
+        "win_ci_lower_on_play": 0.7718399896049647,
+        "win_ci_upper_on_play": 0.8757216464889435,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 158.0,
+        "win_rate_on_draw": 0.79,
+        "win_ci_lower_on_draw": 0.7283526118460081,
+        "win_ci_upper_on_draw": 0.840716704721366
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 10.272047833073884,
+      "engine_seconds": 62.34532524982933
+    },
+    "bc-search64__search-16": {
+      "hero": "bc-search64",
+      "villain": "search-16",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "search",
+        "sims": 16
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 162.0,
+        "win_rate": 0.405,
+        "win_ci_lower": 0.35801711355168203,
+        "win_ci_upper": 0.45379028816225736,
+        "mean_steps": 125.4825,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 61.0,
+        "win_rate_on_play": 0.305,
+        "win_ci_lower_on_play": 0.24536314352669053,
+        "win_ci_upper_on_play": 0.3719867987814547,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 101.0,
+        "win_rate_on_draw": 0.505,
+        "win_ci_lower_on_draw": 0.4362687594824017,
+        "win_ci_upper_on_draw": 0.573542780458415
+      },
+      "hero_search": null,
+      "villain_search": {
+        "decisions": 24313.0,
+        "seconds": 181.7879713587463,
+        "simulations": 1137168.0,
+        "cap_hits": 0.0,
+        "mean_seconds_per_decision": 0.007476986441769682,
+        "median_seconds_per_decision": 0.006111791939474642,
+        "mean_sims_per_decision": 46.77201497141447,
+        "cap_hit_rate": 0.0
+      },
+      "wall_seconds": 33.59391408297233,
+      "engine_seconds": 216.68601783190388
+    },
+    "bc-search64__search-64": {
+      "hero": "bc-search64",
+      "villain": "search-64",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "search",
+        "sims": 64
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 112.0,
+        "win_rate": 0.28,
+        "win_ci_lower": 0.23825069981202088,
+        "win_ci_upper": 0.32593486205183864,
+        "mean_steps": 138.905,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 14.0,
+        "win_rate_on_play": 0.07,
+        "win_ci_lower_on_play": 0.04215178292291873,
+        "win_ci_upper_on_play": 0.11405578216683726,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 98.0,
+        "win_rate_on_draw": 0.49,
+        "win_ci_lower_on_draw": 0.4215615528275274,
+        "win_ci_upper_on_draw": 0.5588153672908391
+      },
+      "hero_search": null,
+      "villain_search": {
+        "decisions": 27961.0,
+        "seconds": 903.1699451422319,
+        "simulations": 5463424.0,
+        "cap_hits": 0.0,
+        "mean_seconds_per_decision": 0.03230106023183119,
+        "median_seconds_per_decision": 0.025048624956980348,
+        "mean_sims_per_decision": 195.39444225886055,
+        "cap_hit_rate": 0.0
+      },
+      "wall_seconds": 174.65511829196475,
+      "engine_seconds": 945.9768875418231
+    },
+    "bc-search64__search-4": {
+      "hero": "bc-search64",
+      "villain": "search-4",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "search",
+        "sims": 4
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 219.0,
+        "win_rate": 0.5475,
+        "win_ci_lower": 0.49850022043569253,
+        "win_ci_upper": 0.5955960787073378,
+        "mean_steps": 131.455,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 70.0,
+        "win_rate_on_play": 0.35,
+        "win_ci_lower_on_play": 0.28728715939415395,
+        "win_ci_upper_on_play": 0.41836664238134236,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 149.0,
+        "win_rate_on_draw": 0.745,
+        "win_ci_lower_on_draw": 0.6803694869280502,
+        "win_ci_upper_on_draw": 0.8003959701719725
+      },
+      "hero_search": null,
+      "villain_search": {
+        "decisions": 23996.0,
+        "seconds": 44.682135412469506,
+        "simulations": 277460.0,
+        "cap_hits": 0.0,
+        "mean_seconds_per_decision": 0.0018620659865173157,
+        "median_seconds_per_decision": 0.0014370209537446499,
+        "mean_sims_per_decision": 11.56276046007668,
+        "cap_hit_rate": 0.0
+      },
+      "wall_seconds": 13.937630000058562,
+      "engine_seconds": 85.94285970879719
+    },
+    "bc-search64__search-8": {
+      "hero": "bc-search64",
+      "villain": "search-8",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_policy_v2.pt",
+        "name": "bc-search64"
+      },
+      "villain_spec": {
+        "kind": "search",
+        "sims": 8
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 202.0,
+        "win_rate": 0.505,
+        "win_ci_lower": 0.4561884685810796,
+        "win_ci_upper": 0.5537164050129236,
+        "mean_steps": 131.905,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 122.0,
+        "win_rate_on_play": 0.61,
+        "win_ci_lower_on_play": 0.5409361758928833,
+        "win_ci_upper_on_play": 0.674917702805086,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 80.0,
+        "win_rate_on_draw": 0.4,
+        "win_ci_lower_on_draw": 0.3346046396837895,
+        "win_ci_upper_on_draw": 0.46916456149987484
+      },
+      "hero_search": null,
+      "villain_search": {
+        "decisions": 24958.0,
+        "seconds": 96.54913111845963,
+        "simulations": 580896.0,
+        "cap_hits": 0.0,
+        "mean_seconds_per_decision": 0.003868464264703086,
+        "median_seconds_per_decision": 0.0030849375179968774,
+        "mean_sims_per_decision": 23.274941902396026,
+        "cap_hit_rate": 0.0
+      },
+      "wall_seconds": 25.728316958993673,
+      "engine_seconds": 137.77061037521344
+    },
+    "bc-fifth__random": {
+      "hero": "bc-fifth",
+      "villain": "random",
+      "hero_spec": {
+        "kind": "checkpoint",
+        "path": ".runs/exp03/bc_fifth.pt",
+        "name": "bc-fifth"
+      },
+      "villain_spec": {
+        "kind": "random"
+      },
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 287.0,
+        "win_rate": 0.7175,
+        "win_ci_lower": 0.6714715471495262,
+        "win_ci_upper": 0.7593904541896128,
+        "mean_steps": 155.5125,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 110.0,
+        "win_rate_on_play": 0.55,
+        "win_ci_lower_on_play": 0.48075488574571107,
+        "win_ci_upper_on_play": 0.6173605136624569,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 177.0,
+        "win_rate_on_draw": 0.885,
+        "win_ci_lower_on_draw": 0.8333517476611362,
+        "win_ci_upper_on_draw": 0.9221368277817569
+      },
+      "hero_search": null,
+      "villain_search": null,
+      "wall_seconds": 7.019968708045781,
+      "engine_seconds": 43.0825572067406
+    }
+  },
+  "profiles": {
+    "bc-search64": {
+      "num_games": 400.0,
+      "win_rate": 0.865,
+      "win_rate_on_play": 0.92,
+      "win_rate_on_draw": 0.81,
+      "cast_when_able": 0.609959594899512,
+      "could_spell": 19057.0,
+      "spell_casts": 11624.0,
+      "passed_when_able": 0.34006149964519433,
+      "could_pass": 25366.0,
+      "pass_count": 8626.0,
+      "attacked_when_able": 1.0,
+      "landed_when_able": 0.4726096997690531,
+      "mean_steps": 179.6725
+    },
+    "ppo-matched": {
+      "num_games": 400.0,
+      "win_rate": 0.5875,
+      "win_rate_on_play": 0.82,
+      "win_rate_on_draw": 0.355,
+      "cast_when_able": 0.9743037742762917,
+      "could_spell": 21832.0,
+      "spell_casts": 21271.0,
+      "passed_when_able": 0.006667855232661794,
+      "could_pass": 28045.0,
+      "pass_count": 187.0,
+      "attacked_when_able": 1.0,
+      "landed_when_able": 0.5069652890017702,
+      "mean_steps": 217.0175
+    }
+  }
+}
