@@ -7,6 +7,9 @@ import { expect, test, type Page } from '@playwright/test';
 // WebSocket protocol underneath works fine.
 
 const DECISION_POINTS = 10;
+// Hard cap so a pathological game cannot spin forever; scripted random games
+// in tests/gui/test_play_modes.py finish well under this.
+const MAX_ACTIONS = 1000;
 
 // 1x1 transparent PNG so card art requests resolve without hitting Scryfall
 // (offline CI) and without logging resource-load console errors.
@@ -63,13 +66,20 @@ test('play page reacts to the full game loop', async ({ page }) => {
 
   const boardSnapshots = new Set<string>();
   let actionsTaken = 0;
+  let gameOver = false;
 
-  while (actionsTaken < DECISION_POINTS) {
+  while (actionsTaken < MAX_ACTIONS) {
     // Wait for a decision point: either legal actions are offered or the game
-    // ended (vs random the hero occasionally dies fast — start another game).
+    // ended. Play the game to completion so a trace lands for the replay
+    // suite, but require at least DECISION_POINTS decisions overall (vs
+    // random the hero occasionally dies fast — start another game).
     await expect(actionButtons.first().or(gameOverOverlay)).toBeVisible({ timeout: 30_000 });
 
     if (await gameOverOverlay.isVisible()) {
+      if (actionsTaken >= DECISION_POINTS) {
+        gameOver = true;
+        break;
+      }
       await page.getByRole('button', { name: 'Play Again' }).click();
       await expect(board).toBeVisible({ timeout: 15_000 });
       continue;
@@ -78,9 +88,27 @@ test('play page reacts to the full game loop', async ({ page }) => {
     const logCountBefore = await logEntries.count();
     boardSnapshots.add(await board.innerHTML());
 
-    const first = actionButtons.first();
-    await expect(first).toBeEnabled();
-    await first.click();
+    // Pick a random legal action, like the scripted WebSocket tests do. The
+    // action list is swapped out whenever a server response lands, so the
+    // sampled button can vanish between count() and click() — retry with a
+    // fresh sample.
+    let clicked = false;
+    for (let attempt = 0; attempt < 5 && !clicked; attempt += 1) {
+      const count = await actionButtons.count();
+      if (count === 0) {
+        break; // response in flight or game over — re-enter the outer wait
+      }
+      const choice = actionButtons.nth(Math.floor(Math.random() * count));
+      try {
+        await choice.click({ timeout: 2_000 });
+        clicked = true;
+      } catch {
+        // list changed under us; resample
+      }
+    }
+    if (!clicked) {
+      continue;
+    }
     actionsTaken += 1;
 
     // THE regression assertion: every action must visibly mutate the DOM.
@@ -93,6 +121,9 @@ test('play page reacts to the full game loop', async ({ page }) => {
       })
       .toBeGreaterThan(logCountBefore);
   }
+
+  expect(gameOver, `game did not finish within ${MAX_ACTIONS} actions`).toBe(true);
+  expect(actionsTaken).toBeGreaterThanOrEqual(DECISION_POINTS);
 
   // The board itself must have re-rendered across the game: turn/phase header,
   // cards, and life totals change as the game advances. A frozen board yields
