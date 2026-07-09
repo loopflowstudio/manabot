@@ -156,6 +156,7 @@ class Keywords:
     flying: bool
     reach: bool
     haste: bool
+    flash: bool
     vigilance: bool
     trample: bool
     first_strike: bool
@@ -172,6 +173,7 @@ class Player:
     is_agent: bool
     life: int
     zone_counts: List[int]
+    graveyard_lessons: int
 
 class Card:
     zone: ZoneEnum
@@ -181,6 +183,9 @@ class Card:
     name: str
     power: int
     toughness: int
+    is_token: bool
+    is_ally: bool
+    is_lesson: bool
     card_types: CardTypes
     keywords: Keywords
     mana_cost: ManaCost
@@ -191,6 +196,8 @@ class Permanent:
     tapped: bool
     damage: int
     is_summoning_sick: bool
+    plus1_counters: int
+    cant_be_blocked_this_turn: bool
 
 class Turn:
     turn_number: int
