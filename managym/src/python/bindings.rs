@@ -805,6 +805,8 @@ pub struct PyPlayer {
     pub life: i32,
     #[pyo3(get, set)]
     pub zone_counts: Vec<i32>,
+    #[pyo3(get, set)]
+    pub graveyard_lessons: i32,
 }
 
 #[cfg(feature = "python")]
@@ -817,6 +819,7 @@ impl From<PlayerData> for PyPlayer {
             is_active: value.is_active,
             life: value.life,
             zone_counts: value.zone_counts.to_vec(),
+            graveyard_lessons: value.graveyard_lessons,
         }
     }
 }
@@ -836,6 +839,7 @@ impl From<PyPlayer> for PlayerData {
             is_active: value.is_active,
             life: value.life,
             zone_counts,
+            graveyard_lessons: value.graveyard_lessons,
         }
     }
 }
@@ -963,6 +967,8 @@ pub struct PyKeywords {
     #[pyo3(get, set)]
     pub haste: bool,
     #[pyo3(get, set)]
+    pub flash: bool,
+    #[pyo3(get, set)]
     pub vigilance: bool,
     #[pyo3(get, set)]
     pub trample: bool,
@@ -987,6 +993,7 @@ impl From<KeywordData> for PyKeywords {
             flying: value.flying,
             reach: value.reach,
             haste: value.haste,
+            flash: value.flash,
             vigilance: value.vigilance,
             trample: value.trample,
             first_strike: value.first_strike,
@@ -1053,6 +1060,12 @@ pub struct PyCard {
     #[pyo3(get, set)]
     pub toughness: i32,
     #[pyo3(get, set)]
+    pub is_token: bool,
+    #[pyo3(get, set)]
+    pub is_ally: bool,
+    #[pyo3(get, set)]
+    pub is_lesson: bool,
+    #[pyo3(get, set)]
     pub card_types: PyCardTypes,
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
@@ -1071,6 +1084,9 @@ impl From<CardData> for PyCard {
             name: value.name,
             power: value.power,
             toughness: value.toughness,
+            is_token: value.is_token,
+            is_ally: value.is_ally,
+            is_lesson: value.is_lesson,
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
@@ -1089,6 +1105,9 @@ impl From<PyCard> for CardData {
             name: value.name,
             power: value.power,
             toughness: value.toughness,
+            is_token: value.is_token,
+            is_ally: value.is_ally,
+            is_lesson: value.is_lesson,
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
@@ -1103,6 +1122,7 @@ impl From<PyKeywords> for KeywordData {
             flying: value.flying,
             reach: value.reach,
             haste: value.haste,
+            flash: value.flash,
             vigilance: value.vigilance,
             trample: value.trample,
             first_strike: value.first_strike,
@@ -1129,6 +1149,10 @@ pub struct PyPermanent {
     pub damage: i32,
     #[pyo3(get, set)]
     pub is_summoning_sick: bool,
+    #[pyo3(get, set)]
+    pub plus1_counters: i32,
+    #[pyo3(get, set)]
+    pub cant_be_blocked_this_turn: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1140,6 +1164,8 @@ impl From<PermanentData> for PyPermanent {
             tapped: value.tapped,
             damage: value.damage,
             is_summoning_sick: value.is_summoning_sick,
+            plus1_counters: value.plus1_counters,
+            cant_be_blocked_this_turn: value.cant_be_blocked_this_turn,
         }
     }
 }
@@ -1153,6 +1179,8 @@ impl From<PyPermanent> for PermanentData {
             tapped: value.tapped,
             damage: value.damage,
             is_summoning_sick: value.is_summoning_sick,
+            plus1_counters: value.plus1_counters,
+            cant_be_blocked_this_turn: value.cant_be_blocked_this_turn,
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::state::{
-    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSource},
+    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -15,12 +15,11 @@ impl CardRegistry {
             subtypes: vec!["Jellyfish".to_string()],
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {
-                    source: TriggerSource::This,
+                    subject: TriggerSubject::This,
                 },
-                effect: Effect::ReturnToHand {
+                effects: vec![Effect::ReturnToHand {
                     target: TargetSpec::Creature,
-                },
-                intervening_if: None,
+                }],
             }],
             text_box: "When Man-o'-War enters the battlefield, return target creature to its owner's hand.".to_string(),
             power: Some(2),

@@ -40,7 +40,7 @@ impl Game {
                 break;
             }
 
-            let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
+            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
 
@@ -48,13 +48,18 @@ impl Game {
             if permanent.tapped || card.mana_abilities.is_empty() || !permanent.can_tap(card) {
                 continue;
             }
+            let produced: Vec<_> = card
+                .mana_abilities
+                .iter()
+                .map(|ability| ability.mana.clone())
+                .collect();
 
             // CR 106.3 — Activate mana abilities to add mana to the mana pool.
-            permanent.tap();
-            for ability in &card.mana_abilities {
-                self.state.players[player.0].mana_pool.add(&ability.mana);
+            // Tapping for mana emits a PermanentTapped { for_mana: true } event.
+            self.tap_permanent(permanent_id, true);
+            for mana in &produced {
+                self.state.players[player.0].mana_pool.add(mana);
             }
-            self.invalidate_mana_cache(player);
         }
 
         if !self.state.players[player.0].mana_pool.can_pay(cost) {

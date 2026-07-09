@@ -128,9 +128,14 @@ class ObservationEncoder:
         self.num_event_entity_kinds = len(EventEntityKindEnum.__members__)
 
         # Define dimensions for players, cards, permanents.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 11) + 1
-        self.permanent_dim = 4 + 1
+        # Player: life + is_active + zones + phase/step one-hots + gy lessons.
+        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 1
+        # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
+        # 12 keywords + is_token/is_ally/is_lesson tags + validity.
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3) + 1
+        # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
+        # can't-be-blocked-this-turn, validity.
+        self.permanent_dim = 6 + 1
         self.event_dim = 7
 
         # Action space dimension: action type + validity bit.
@@ -258,6 +263,8 @@ class ObservationEncoder:
         if 0 <= step < self.num_steps:
             arr[step_start + step] = 1.0
 
+        arr[step_start + self.num_steps] = float(player.graveyard_lessons) / 10.0
+
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
         return arr
@@ -323,6 +330,14 @@ class ObservationEncoder:
         arr[i] = float(card.keywords.defender)
         i += 1
         arr[i] = float(card.keywords.menace)
+        i += 1
+        arr[i] = float(card.keywords.flash)
+        i += 1
+        arr[i] = float(card.is_token)
+        i += 1
+        arr[i] = float(card.is_ally)
+        i += 1
+        arr[i] = float(card.is_lesson)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr
@@ -350,6 +365,8 @@ class ObservationEncoder:
         arr[1] = float(perm.tapped)
         arr[2] = float(perm.damage) / 10.0
         arr[3] = float(perm.is_summoning_sick)
+        arr[4] = float(perm.plus1_counters) / 10.0
+        arr[5] = float(perm.cant_be_blocked_this_turn)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

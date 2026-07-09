@@ -93,7 +93,7 @@ impl Game {
         self.state.cards[source].keywords.deathtouch
     }
 
-    fn gain_life(&mut self, player: PlayerId, amount: i32) {
+    pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {
         if amount <= 0 {
             return;
         }

@@ -15,6 +15,11 @@ pub struct Permanent {
     pub deathtouch_damage: bool,
     pub temp_power: i32,
     pub temp_toughness: i32,
+    /// +1/+1 counters (CR 122). Any permanent can carry them, including
+    /// lands — they contribute to P/T only via effective_power/toughness.
+    pub plus1_counters: i32,
+    /// "Can't be blocked this turn" — cleared during cleanup.
+    pub cant_be_blocked_this_turn: bool,
     pub attacking: bool,
 }
 
@@ -30,6 +35,8 @@ impl Permanent {
             deathtouch_damage: false,
             temp_power: 0,
             temp_toughness: 0,
+            plus1_counters: 0,
+            cant_be_blocked_this_turn: false,
             attacking: false,
         }
     }
@@ -57,11 +64,11 @@ impl Permanent {
     }
 
     pub fn effective_power(&self, card: &Card) -> i32 {
-        card.power.unwrap_or(0) + self.temp_power
+        card.power.unwrap_or(0) + self.plus1_counters + self.temp_power
     }
 
     pub fn effective_toughness(&self, card: &Card) -> i32 {
-        card.toughness.unwrap_or(0) + self.temp_toughness
+        card.toughness.unwrap_or(0) + self.plus1_counters + self.temp_toughness
     }
 
     pub fn producible_mana(&self, card: &Card) -> Mana {
@@ -92,15 +99,9 @@ impl Permanent {
         self.damage += amount;
     }
 
-    pub fn attack_with_card(&mut self, card: &Card) {
-        self.attacking = true;
-        if !card.keywords.vigilance {
-            self.tap();
-        }
-    }
-
     pub fn clear_temporary_modifiers(&mut self) {
         self.temp_power = 0;
         self.temp_toughness = 0;
+        self.cant_be_blocked_this_turn = false;
     }
 }
