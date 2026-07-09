@@ -38,6 +38,22 @@ STANDARD_DECK = {
 }
 MOUNTAIN_DECK = {"Mountain": 20}
 
+# UR deck with real interaction: instant-speed removal (Lightning Bolt),
+# permission (Counterspell), card draw (Ancestral Recall), and mass removal
+# (Pyroclasm). Two colors for mana stability; 60 cards.
+INTERACTIVE_DECK = {
+    "Island": 12,
+    "Mountain": 12,
+    "Grey Ogre": 6,
+    "Wind Drake": 6,
+    "Man-o'-War": 4,
+    "Raging Goblin": 4,
+    "Lightning Bolt": 6,
+    "Counterspell": 4,
+    "Ancestral Recall": 3,
+    "Pyroclasm": 3,
+}
+
 
 @dataclass(frozen=True)
 class EvaluationActionRecord:
@@ -317,6 +333,7 @@ def _run_evaluation_internal(
     deterministic: bool,
     seed: int,
     capture_actions: bool,
+    seat_balanced: bool = False,
 ) -> EvaluationArtifacts:
     env = Env(
         match,
@@ -328,8 +345,12 @@ def _run_evaluation_internal(
         enable_behavior_tracking=False,
     )
     opponent = build_opponent_policy(opponent_policy)
+    match_swapped = match.swapped()
 
     hero_wins = 0
+    # Per-seat tallies; seat 0 = hero on the play, seat 1 = hero on the draw.
+    seat_games = {0: 0, 1: 0}
+    seat_wins = {0: 0, 1: 0}
     game_lengths: list[int] = []
     hero_actions = 0
     hero_attack_actions = 0
@@ -374,7 +395,12 @@ def _run_evaluation_internal(
 
     try:
         for game_index in range(num_games):
-            obs, _ = env.reset(seed=seed + game_index)
+            hero_seat = game_index % 2 if seat_balanced else 0
+            obs, _ = env.reset(
+                seed=seed + game_index,
+                options={"match": match_swapped} if hero_seat == 1 else None,
+            )
+            seat_games[hero_seat] += 1
             done = False
             steps = 0
             aborted = False
@@ -384,7 +410,7 @@ def _run_evaluation_internal(
 
             while not done:
                 active_player = int(env.last_raw_obs.agent.player_index)
-                if active_player == 0:
+                if active_player == hero_seat:
                     action = _select_agent_action(
                         agent,
                         obs,
@@ -463,7 +489,7 @@ def _run_evaluation_internal(
                             EvaluationActionRecord(
                                 game_index=game_index,
                                 step=steps,
-                                player=0,
+                                player=hero_seat,
                                 action_type=_action_type_name(obs, action),
                                 choice_set=choice_set,
                                 is_trivial=is_trivial,
@@ -512,8 +538,9 @@ def _run_evaluation_internal(
 
             if not aborted:
                 winner = winner_from_info_or_obs(info, env.last_raw_obs)
-                if winner == 0:
+                if winner == hero_seat:
                     hero_wins += 1
+                    seat_wins[hero_seat] += 1
 
             game_lengths.append(steps)
     finally:
@@ -574,6 +601,17 @@ def _run_evaluation_internal(
         "wins": float(hero_wins),
         "win_rate": win_rate,
         "win_ci_lower": wilson_lower_bound(hero_wins, num_games),
+        "seat_balanced": float(seat_balanced),
+        "games_on_play": float(seat_games[0]),
+        "wins_on_play": float(seat_wins[0]),
+        "win_rate_on_play": (
+            seat_wins[0] / seat_games[0] if seat_games[0] > 0 else 0.0
+        ),
+        "games_on_draw": float(seat_games[1]),
+        "wins_on_draw": float(seat_wins[1]),
+        "win_rate_on_draw": (
+            seat_wins[1] / seat_games[1] if seat_games[1] > 0 else 0.0
+        ),
         "mean_steps": float(np.mean(game_lengths)) if game_lengths else 0.0,
         "attack_rate": attack_rate,
         "passed_when_able": passed_when_able,
@@ -638,8 +676,14 @@ def capture_evaluation(
     deterministic: bool = False,
     seed: int = 0,
     capture_actions: bool = False,
+    seat_balanced: bool = False,
 ) -> EvaluationArtifacts:
-    """Run evaluation games and return metrics plus optional detailed artifacts."""
+    """Run evaluation games and return metrics plus optional detailed artifacts.
+
+    With ``seat_balanced=True`` the hero alternates between player seat 0
+    (on the play) and seat 1 (on the draw); per-seat win rates land in the
+    ``win_rate_on_play`` / ``win_rate_on_draw`` metrics.
+    """
 
     return _run_evaluation_internal(
         agent,
@@ -651,6 +695,7 @@ def capture_evaluation(
         deterministic=deterministic,
         seed=seed,
         capture_actions=capture_actions,
+        seat_balanced=seat_balanced,
     )
 
 
@@ -664,6 +709,7 @@ def run_evaluation(
     opponent_policy: str = "passive",
     deterministic: bool = False,
     seed: int = 0,
+    seat_balanced: bool = False,
 ) -> dict[str, float]:
     """Run evaluation games and return aggregate metrics only."""
 
@@ -677,6 +723,7 @@ def run_evaluation(
         deterministic=deterministic,
         seed=seed,
         capture_actions=False,
+        seat_balanced=seat_balanced,
     ).metrics
 
 

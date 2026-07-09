@@ -24,6 +24,11 @@ class GameConfig:
     villain_deck: dict[str, int]
     villain_type: str
     seed: int | None = None
+    # Opponent parameters (recorded in traces so every game is attributable
+    # to an exact opponent configuration).
+    villain_sims: int | None = None  # search: simulations per legal action
+    villain_checkpoint: str | None = None  # checkpoint: path to .pt file
+    villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
 
 
 @dataclass
@@ -51,10 +56,12 @@ def utc_now_iso() -> str:
 
 
 def _normalize_timestamp_for_filename(timestamp: str) -> str:
+    # Replace the UTC offset before stripping ':' so the trace id contains no
+    # '+' (TRACE_ID_PATTERN would reject it and the trace could not be loaded).
     normalized = (
-        timestamp.replace("-", "")
+        timestamp.replace("+00:00", "Z")
+        .replace("-", "")
         .replace(":", "")
-        .replace("+00:00", "Z")
         .replace(".", "_")
     )
     return normalized
@@ -128,11 +135,20 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
     hand = player_state.get("hand")
     if not isinstance(hand, list):
         return
-    player_state["hand_hidden_count"] = len(hand)
+    zone_counts = player_state.get("zone_counts")
+    if isinstance(zone_counts, dict) and "HAND" in zone_counts:
+        player_state["hand_hidden_count"] = int(zone_counts["HAND"])
+    else:
+        player_state["hand_hidden_count"] = len(hand)
     player_state["hand"] = []
 
 
-def _redact_observation(observation: dict[str, Any]) -> None:
+def redact_observation(observation: dict[str, Any]) -> None:
+    """Strip the opponent's hidden information from a serialized observation.
+
+    Mutates in place. Libraries are never serialized (only counts), so the
+    opponent's hand is the only hidden zone to remove.
+    """
     if not isinstance(observation, dict):
         return
 
@@ -141,12 +157,50 @@ def _redact_observation(observation: dict[str, Any]) -> None:
         _redact_hand(opponent)
 
 
+# Backwards-compatible alias used by redact_trace_payload.
+_redact_observation = redact_observation
+
+
+def normalize_observation_to_hero(observation: dict[str, Any]) -> None:
+    """Present an observation from the hero's (player 0) perspective.
+
+    Trace events record the raw engine observation, whose perspective is the
+    player to act — villain events are villain-perspective. The replay viewer
+    (and any human-facing payload) renders ``agent`` as the hero, so swap the
+    sides back when needed. Mutates in place; no-op when player_index is
+    missing (e.g. minimal test fixtures).
+    """
+    if not isinstance(observation, dict):
+        return
+    agent = observation.get("agent")
+    opponent = observation.get("opponent")
+    if not isinstance(agent, dict) or not isinstance(opponent, dict):
+        return
+    if agent.get("player_index") == 1 and opponent.get("player_index") == 0:
+        observation["agent"], observation["opponent"] = opponent, agent
+        if observation.get("game_over") and "won" in observation:
+            observation["won"] = not bool(observation["won"])
+
+
+def prepare_trace_payload(
+    payload: dict[str, Any], reveal_hidden: bool = False
+) -> dict[str, Any]:
+    """Normalize a stored trace for the viewer: hero-perspective throughout,
+    with the villain's hand redacted unless ``reveal_hidden``."""
+    prepared = deepcopy(payload)
+
+    observations = [
+        event.get("observation", {}) for event in prepared.get("events", [])
+    ]
+    observations.append(prepared.get("final_observation", {}))
+
+    for observation in observations:
+        normalize_observation_to_hero(observation)
+        if not reveal_hidden:
+            redact_observation(observation)
+
+    return prepared
+
+
 def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    redacted = deepcopy(payload)
-
-    for event in redacted.get("events", []):
-        _redact_observation(event.get("observation", {}))
-
-    _redact_observation(redacted.get("final_observation", {}))
-
-    return redacted
+    return prepare_trace_payload(payload, reveal_hidden=False)

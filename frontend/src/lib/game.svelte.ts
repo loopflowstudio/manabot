@@ -4,7 +4,35 @@ import type {
   ConnectionState,
   GameLogEntry,
   Observation,
+  OpponentConfig,
 } from './types';
+
+export type OpponentChoice =
+  | 'search-16'
+  | 'search-64'
+  | 'search-256'
+  | 'random'
+  | 'passive'
+  | 'checkpoint';
+
+export function buildOpponentConfig(
+  choice: OpponentChoice,
+  checkpointPath: string,
+  checkpointDeterministic: boolean,
+): OpponentConfig {
+  if (choice === 'checkpoint') {
+    return {
+      villain_type: 'checkpoint',
+      villain_checkpoint: checkpointPath.trim(),
+      villain_deterministic: checkpointDeterministic,
+    };
+  }
+  if (choice === 'random' || choice === 'passive') {
+    return { villain_type: choice };
+  }
+  const sims = Number(choice.split('-')[1]);
+  return { villain_type: 'search', villain_sims: sims };
+}
 
 export class GameStore {
   observation = $state<Observation | null>(null);
@@ -19,7 +47,9 @@ export class GameStore {
   resumeToken = $state<string | null>(null);
   resumeFailed = $state(false);
   selectedTargetId = $state<number | null>(null);
-  villainType = $state<'passive' | 'random'>('passive');
+  opponentChoice = $state<OpponentChoice>('search-64');
+  checkpointPath = $state('');
+  checkpointDeterministic = $state(false);
 
   private logSequence = 0;
 
@@ -31,8 +61,24 @@ export class GameStore {
     this.errorMessage = message;
   }
 
-  setVillainType(next: 'passive' | 'random'): void {
-    this.villainType = next;
+  setOpponentChoice(next: OpponentChoice): void {
+    this.opponentChoice = next;
+  }
+
+  setCheckpointPath(next: string): void {
+    this.checkpointPath = next;
+  }
+
+  setCheckpointDeterministic(next: boolean): void {
+    this.checkpointDeterministic = next;
+  }
+
+  opponentConfig(): OpponentConfig {
+    return buildOpponentConfig(
+      this.opponentChoice,
+      this.checkpointPath,
+      this.checkpointDeterministic,
+    );
   }
 
   applyObservation(

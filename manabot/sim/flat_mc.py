@@ -1,0 +1,365 @@
+"""Flat determinized Monte Carlo player and seat-balanced matchup evaluation.
+
+The searcher (exp-02, wave/search C3) runs entirely on engine throughput: at
+each of its decision points it asks the Rust engine (managym.Env.flat_mc_scores)
+to evaluate every legal action by W determinized worlds x R uniformly-random
+playouts per action, then plays the argmax. No network, no training.
+
+Determinization (see managym/src/flow/search.rs): decklists are known to both
+players, so hidden information is exactly the opponent's hand plus both library
+orders. A sampled world replaces the opponent's hand with a uniform draw of
+|hand| cards from their unseen pool (hand + library) and reshuffles both
+libraries; all public state is preserved.
+
+The matchup loop mirrors manabot.verify.util's seat balancing (hero alternates
+between seat 0, on the play, and seat 1, on the draw) and its Wilson CI math,
+but takes two arbitrary players instead of one agent + named opponent policy.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import math
+import time
+from typing import Any, Protocol
+
+import numpy as np
+import torch
+
+from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.infra.hypers import (
+    AgentHypers,
+    MatchHypers,
+    ObservationSpaceHypers,
+    RewardHypers,
+)
+from manabot.model.agent import Agent
+from manabot.verify.util import (
+    INTERACTIVE_DECK,
+    _select_agent_action,
+    winner_from_info_or_obs,
+)
+
+DEFAULT_MAX_PLAYOUT_STEPS = 2000
+DEFAULT_ROLLOUTS_PER_WORLD = 4
+
+
+def wilson_interval(wins: int, total: int, z: float = 1.96) -> tuple[float, float]:
+    """Two-sided Wilson score interval for a Bernoulli rate."""
+
+    if total <= 0:
+        return (0.0, 1.0)
+    p = wins / total
+    denom = 1.0 + (z**2) / total
+    center = p + (z**2) / (2 * total)
+    margin = z * math.sqrt((p * (1 - p) + (z**2) / (4 * total)) / total)
+    return (
+        max(0.0, (center - margin) / denom),
+        min(1.0, (center + margin) / denom),
+    )
+
+
+# -----------------------------------------------------------------------------
+# Players
+# -----------------------------------------------------------------------------
+
+
+class MatchupPlayer(Protocol):
+    """A player usable by play_games: picks an action index each decision."""
+
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int: ...
+
+
+@dataclass
+class SearchStats:
+    """Accumulated cost/behavior of a search player across games."""
+
+    decisions: int = 0
+    seconds: float = 0.0
+    simulations: int = 0
+    cap_hits: int = 0
+    decision_seconds: list[float] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "decisions": float(self.decisions),
+            "seconds": self.seconds,
+            "simulations": float(self.simulations),
+            "cap_hits": float(self.cap_hits),
+        }
+
+
+class FlatMCPlayer:
+    """Flat determinized Monte Carlo with uniformly-random rollouts.
+
+    ``sims`` is the strength dial N: simulations per legal action, split as
+    W worlds x R rollouts (W = N / R, default R = 4). Worlds are shared across
+    actions inside the engine (common random numbers).
+    """
+
+    def __init__(
+        self,
+        sims: int,
+        *,
+        rollouts_per_world: int = DEFAULT_ROLLOUTS_PER_WORLD,
+        max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
+        seed: int = 0,
+    ):
+        if sims < 1:
+            raise ValueError("sims must be >= 1")
+        self.sims = sims
+        self.rollouts = max(1, min(rollouts_per_world, sims))
+        self.worlds = max(1, sims // self.rollouts)
+        self.max_steps = max_steps
+        self._seed = seed
+        self._calls = 0
+        self.stats = SearchStats()
+
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+        del obs  # search reads the raw engine state, not the encoding
+        self._calls += 1
+        call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
+        start = time.perf_counter()
+        scores, simulations, cap_hits = env._engine.flat_mc_scores(
+            self.worlds,
+            self.rollouts,
+            call_seed,
+            self.max_steps,
+        )
+        elapsed = time.perf_counter() - start
+        self.stats.decisions += 1
+        self.stats.seconds += elapsed
+        self.stats.simulations += int(simulations)
+        self.stats.cap_hits += int(cap_hits)
+        self.stats.decision_seconds.append(elapsed)
+        return int(np.argmax(scores))
+
+
+class RandomMatchupPlayer:
+    """Uniform random over valid actions in the encoded observation.
+
+    Matches the RandomPolicy used for every historical vs-random baseline.
+    """
+
+    def __init__(self, seed: int = 0):
+        self._rng = np.random.default_rng(seed)
+
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+        del env
+        valid = np.flatnonzero(obs["actions_valid"] > 0)
+        if len(valid) == 0:
+            return 0
+        return int(self._rng.choice(valid))
+
+
+class AgentMatchupPlayer:
+    """Trained policy player (stochastic, as in prior seat-balanced evals)."""
+
+    def __init__(self, agent: Agent, deterministic: bool = False):
+        self.agent = agent
+        self.deterministic = deterministic
+        agent.eval()
+
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+        del env
+        return _select_agent_action(self.agent, obs, deterministic=self.deterministic)
+
+
+# -----------------------------------------------------------------------------
+# Player specs (picklable descriptions for multiprocessing workers)
+# -----------------------------------------------------------------------------
+
+
+def load_checkpoint_agent(path: str) -> tuple[Agent, ObservationSpace]:
+    """Load an Agent from a training checkpoint, using its saved hypers."""
+
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    hypers = checkpoint["hypers"]
+    obs_space = ObservationSpace(
+        ObservationSpaceHypers(**hypers["observation_hypers"])
+    )
+    agent = Agent(obs_space, AgentHypers(**hypers["agent_hypers"]))
+    agent.load_state_dict(checkpoint["model_state_dict"])
+    agent.eval()
+    return agent, obs_space
+
+
+def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, ObservationSpace | None]:
+    """Build a player from a picklable spec.
+
+    Specs:
+        {"kind": "search", "sims": 64, "max_steps": 2000}
+        {"kind": "random"}
+        {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
+    Returns (player, observation_space_or_None). Checkpoint players carry the
+    ObservationSpace their encoder was trained with.
+    """
+
+    kind = spec["kind"]
+    if kind == "search":
+        return (
+            FlatMCPlayer(
+                int(spec["sims"]),
+                rollouts_per_world=int(
+                    spec.get("rollouts_per_world", DEFAULT_ROLLOUTS_PER_WORLD)
+                ),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                seed=seed,
+            ),
+            None,
+        )
+    if kind == "random":
+        return RandomMatchupPlayer(seed=seed), None
+    if kind == "checkpoint":
+        agent, obs_space = load_checkpoint_agent(spec["path"])
+        return (
+            AgentMatchupPlayer(agent, deterministic=bool(spec.get("deterministic", False))),
+            obs_space,
+        )
+    raise ValueError(f"unknown player spec kind: {kind}")
+
+
+def spec_name(spec: dict[str, Any]) -> str:
+    kind = spec["kind"]
+    if kind == "search":
+        return f"search-{spec['sims']}"
+    if kind == "checkpoint":
+        return spec.get("name", spec["path"])
+    return kind
+
+
+# -----------------------------------------------------------------------------
+# Matchup loop
+# -----------------------------------------------------------------------------
+
+
+@dataclass
+class GameRecord:
+    game_index: int
+    hero_seat: int
+    hero_won: bool
+    winner: int | None
+    steps: int
+
+
+@dataclass
+class MatchupResult:
+    hero: str
+    villain: str
+    records: list[GameRecord]
+    hero_search: SearchStats | None
+    villain_search: SearchStats | None
+    wall_seconds: float
+
+
+def play_games(
+    hero_spec: dict[str, Any],
+    villain_spec: dict[str, Any],
+    *,
+    num_games: int,
+    seed: int = 0,
+    game_offset: int = 0,
+    hero_deck: dict[str, int] | None = None,
+    villain_deck: dict[str, int] | None = None,
+) -> MatchupResult:
+    """Play seat-balanced games between two player specs.
+
+    Game ``i`` (globally indexed ``game_offset + i``) puts the hero in seat
+    ``(game_offset + i) % 2``; seat 0 is on the play. The env is reseeded per
+    game as in manabot.verify.util.
+    """
+
+    hero_player, hero_obs_space = make_player(hero_spec, seed=seed * 2 + 1)
+    villain_player, villain_obs_space = make_player(villain_spec, seed=seed * 2 + 2)
+    obs_space = hero_obs_space or villain_obs_space or ObservationSpace()
+
+    match = Match(
+        MatchHypers(
+            hero=spec_name(hero_spec)[:32],
+            villain=spec_name(villain_spec)[:32],
+            hero_deck=hero_deck or dict(INTERACTIVE_DECK),
+            villain_deck=villain_deck or dict(INTERACTIVE_DECK),
+        )
+    )
+    match_swapped = match.swapped()
+    env = Env(
+        match,
+        obs_space,
+        Reward(RewardHypers()),
+        seed=seed,
+        auto_reset=False,
+        enable_profiler=False,
+        enable_behavior_tracking=False,
+    )
+
+    records: list[GameRecord] = []
+    start = time.perf_counter()
+    for i in range(num_games):
+        game_index = game_offset + i
+        hero_seat = game_index % 2
+        obs, _ = env.reset(
+            seed=seed + game_index,
+            options={"match": match_swapped} if hero_seat == 1 else None,
+        )
+        done = False
+        steps = 0
+        info: dict[str, Any] = {}
+        while not done:
+            acting = int(env.last_raw_obs.agent.player_index)
+            player = hero_player if acting == hero_seat else villain_player
+            action = player.act(env, obs)
+            obs, _, terminated, truncated, info = env.step(action)
+            steps += 1
+            done = bool(terminated or truncated)
+        winner = winner_from_info_or_obs(info, env.last_raw_obs)
+        records.append(
+            GameRecord(
+                game_index=game_index,
+                hero_seat=hero_seat,
+                hero_won=winner == hero_seat,
+                winner=winner,
+                steps=steps,
+            )
+        )
+    wall_seconds = time.perf_counter() - start
+
+    return MatchupResult(
+        hero=spec_name(hero_spec),
+        villain=spec_name(villain_spec),
+        records=records,
+        hero_search=getattr(hero_player, "stats", None),
+        villain_search=getattr(villain_player, "stats", None),
+        wall_seconds=wall_seconds,
+    )
+
+
+def aggregate_records(records: list[GameRecord]) -> dict[str, float]:
+    """Overall and per-seat win rates with Wilson 95% intervals."""
+
+    num_games = len(records)
+    wins = sum(r.hero_won for r in records)
+    lo, hi = wilson_interval(wins, num_games)
+    metrics: dict[str, float] = {
+        "num_games": float(num_games),
+        "wins": float(wins),
+        "win_rate": wins / num_games if num_games else 0.0,
+        "win_ci_lower": lo,
+        "win_ci_upper": hi,
+        "mean_steps": (
+            float(np.mean([r.steps for r in records])) if records else 0.0
+        ),
+        "draws_or_caps": float(sum(r.winner is None for r in records)),
+    }
+    for seat in (0, 1):
+        seat_records = [r for r in records if r.hero_seat == seat]
+        seat_wins = sum(r.hero_won for r in seat_records)
+        seat_lo, seat_hi = wilson_interval(seat_wins, len(seat_records))
+        label = "play" if seat == 0 else "draw"
+        metrics[f"games_on_{label}"] = float(len(seat_records))
+        metrics[f"wins_on_{label}"] = float(seat_wins)
+        metrics[f"win_rate_on_{label}"] = (
+            seat_wins / len(seat_records) if seat_records else 0.0
+        )
+        metrics[f"win_ci_lower_on_{label}"] = seat_lo
+        metrics[f"win_ci_upper_on_{label}"] = seat_hi
+    return metrics

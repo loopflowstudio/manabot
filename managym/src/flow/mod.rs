@@ -10,6 +10,7 @@ pub mod play;
 pub mod priority;
 pub mod resolution;
 pub mod sba;
+pub mod search;
 pub mod setup;
 pub mod tick;
 pub mod trigger;

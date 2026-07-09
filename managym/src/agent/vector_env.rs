@@ -55,6 +55,12 @@ impl VectorEnv {
         self.envs.is_empty()
     }
 
+    /// Per-env `skip_trivial` collapse counters for the current games.
+    /// Each counter resets when its env's game resets.
+    pub fn skip_trivial_counts(&self) -> Vec<usize> {
+        self.envs.iter().map(Env::skip_trivial_count).collect()
+    }
+
     pub fn reset_all(
         &mut self,
         player_configs: Vec<PlayerConfig>,

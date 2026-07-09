@@ -186,9 +186,7 @@ def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
     )
     session._pending_villain_log = ["Villain: Pass priority"]
 
-    monkeypatch.setattr(
-        server, "serialize_observation", lambda obs: {"game_over": False}
-    )
+    monkeypatch.setattr(server, "hero_view", lambda obs: {"game_over": False})
     monkeypatch.setattr(
         server,
         "describe_actions",
@@ -217,9 +215,7 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
     )
     session._pending_villain_log = ["Villain: Attack with Grey Ogre"]
 
-    monkeypatch.setattr(
-        server, "serialize_observation", lambda obs: {"game_over": True}
-    )
+    monkeypatch.setattr(server, "hero_view", lambda obs: {"game_over": True})
     monkeypatch.setattr(server, "_winner_for_hero", lambda obs: 1)
     monkeypatch.setattr(session, "_finalize_trace", lambda end_reason: None)
 

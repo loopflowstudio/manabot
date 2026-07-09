@@ -12,7 +12,14 @@
 
 <aside class="rounded border border-slate-700 bg-slate-800 p-4">
   <div class="mb-3 flex items-center justify-between gap-3">
-    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-300">Actions</h2>
+    <div class="flex items-center gap-2">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-300">Actions</h2>
+      {#if disabled}
+        <span class="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold text-slate-300">Game over</span>
+      {:else if actions.length > 0}
+        <span class="rounded bg-emerald-600/30 px-2 py-0.5 text-xs font-semibold text-emerald-300">Your move</span>
+      {/if}
+    </div>
     {#if selectedTargetId !== null}
       <button class="text-xs text-slate-400 underline hover:text-slate-200" on:click={() => onClearSelection?.()}>
         Show all

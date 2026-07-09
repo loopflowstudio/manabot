@@ -1746,6 +1746,16 @@ impl PyEnv {
         Ok(py_dict.into_any().unbind())
     }
 
+    /// Number of trivial decision points auto-collapsed by `skip_trivial`
+    /// since the current game began. Resets to zero on `reset`.
+    fn skip_trivial_count(&self) -> PyResult<usize> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(env.skip_trivial_count())
+    }
+
     fn export_profile_baseline(&self) -> PyResult<String> {
         let env = self
             .inner
@@ -1760,6 +1770,115 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(env.compare_profile(&baseline))
+    }
+
+    /// Independent copy of this env (current game state cloned; stepping the
+    /// clone never mutates the original). Profiling/tracking disabled.
+    fn clone_env(&self) -> PyResult<PyEnv> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let fork = env.fork().map_err(map_agent_err)?;
+        Ok(PyEnv {
+            inner: Mutex::new(fork),
+        })
+    }
+
+    /// Player index holding the current decision, or None.
+    fn current_agent_index(&self) -> PyResult<Option<usize>> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(env.current_agent_index())
+    }
+
+    fn is_game_over(&self) -> PyResult<bool> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(env.is_game_over())
+    }
+
+    fn winner_index(&self) -> PyResult<Option<usize>> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(env.winner_index())
+    }
+
+    /// Number of legal actions in the current action space.
+    fn action_count(&self) -> PyResult<usize> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.action_count().map_err(map_agent_err)
+    }
+
+    /// Resample hidden information (opponent hand + both library orders)
+    /// consistent with `perspective`'s observation. Defaults to the player
+    /// holding the current decision. Public state is preserved.
+    #[pyo3(signature = (seed, perspective=None))]
+    fn determinize(&self, seed: u64, perspective: Option<usize>) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let perspective = match perspective {
+            Some(p) => p,
+            None => env.current_agent_index().ok_or_else(|| {
+                PyRuntimeError::new_err("determinize: no current decision player")
+            })?,
+        };
+        env.determinize(perspective, seed).map_err(map_agent_err)
+    }
+
+    /// Play both sides uniformly-random-legal to terminal from the current
+    /// state. Returns the winner index, or None on draw / step cap.
+    #[pyo3(signature = (seed, max_steps=2000))]
+    fn random_playout(
+        &self,
+        py: Python<'_>,
+        seed: u64,
+        max_steps: usize,
+    ) -> PyResult<Option<usize>> {
+        py.allow_threads(|| {
+            let mut env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.random_playout(seed, max_steps).map_err(map_agent_err)
+        })
+    }
+
+    /// Flat determinized Monte Carlo evaluation of the current action space.
+    ///
+    /// Returns (scores, simulations, cap_hits): mean playout score per legal
+    /// action for the player holding the decision (win 1.0 / loss 0.0 /
+    /// draw-or-cap 0.5), total playouts, and playouts that hit the step cap.
+    #[pyo3(signature = (worlds, rollouts, seed, max_steps=2000))]
+    fn flat_mc_scores(
+        &self,
+        py: Python<'_>,
+        worlds: usize,
+        rollouts: usize,
+        seed: u64,
+        max_steps: usize,
+    ) -> PyResult<(Vec<f64>, u64, u64)> {
+        py.allow_threads(|| {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            let result = env
+                .flat_mc_scores(worlds, rollouts, seed, max_steps)
+                .map_err(map_agent_err)?;
+            Ok((result.scores, result.simulations, result.cap_hits))
+        })
     }
 
     fn encode_observation(&self, py: Python<'_>, obs: PyObservation) -> PyResult<PyObject> {

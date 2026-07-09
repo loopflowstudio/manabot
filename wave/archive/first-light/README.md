@@ -1,5 +1,30 @@
 # First Light
 
+> **Status: closed. Superseded by [wave/search](../search/README.md).**
+>
+> Goal 5 (auxiliary prediction heads) is superseded, not abandoned. Aux heads
+> were the strategy-neutral fix for credit assignment; lookahead is a better
+> one. They remain the fallback if the search wave's goal-4 gate fails.
+>
+> **Read the findings below with a large caveat.** Every one of them was
+> derived on the deck at `manabot/infra/hypers.py:13` — `Mountain 12, Forest 12,
+> Llanowar Elves 18, Grey Ogre 18`. No instants, no removal, no counterspells,
+> no card draw, no mass removal. That is a vanilla creature-combat game, not
+> Magic: the only legal decisions are play-land, play-creature, attack, block.
+> The engine was never the limitation (`cardsets/alpha.rs:115` implements
+> Lightning Bolt; `:127` Counterspell; `agent/action.rs:8` carries
+> `DeclareBlocker` and `ChooseTarget`) — the deck was.
+>
+> **Update 2026-07-09: findings 1 and 2 are refuted, not merely caveated.**
+> Terminal-only reward fails replication as a failure: on this wave's own
+> STANDARD_DECK with current code it learns cleanly (60.8–66.3% seat-balanced
+> vs random, 3/3 seeds, no pass-collapse), and on the interactive deck it
+> *beats* the shaped recipe by ~15 points while the shaping produced
+> cast-everything policies, one net-harmful. The original pass-collapse
+> observation (unsourced, pre-bugfix code, hero-on-play single-seed evals)
+> appears to have been an artifact. See `reports/exp-04-potential-shaping.md`
+> addenda.
+
 ## Vision
 
 Get the manabot training platform to the point where an agent demonstrably
@@ -36,8 +61,10 @@ The first-light wave has established that:
    `cast_when_able`, and pass-vs-land choice distributions tell you whether
    learning is real. Win rate alone is too noisy at small eval sizes.
 
-The remaining work is to provide denser gradient signal via auxiliary prediction
-heads, following KataGo's approach.
+Findings 1 and 2 are scoped to the vanilla-creature deck (see Status, above) and
+carry no weight on a deck with interaction in it. Findings 3 and 4 are about the
+measurement apparatus and survive the deck change intact — stochastic eval and
+the causal-chain metrics remain the right instruments.
 
 ## Goals
 
@@ -45,7 +72,10 @@ heads, following KataGo's approach.
 2. ~~Single-agent training against passive/random~~ done
 3. ~~Clean observation space~~ done
 4. ~~Verification harness~~ done
-5. Add auxiliary prediction heads for dense training signal
+5. ~~Add auxiliary prediction heads for dense training signal~~ superseded by
+   [wave/search](../search/README.md) goals 3-5: search generates the dense
+   signal aux heads were meant to approximate, and it does so without injecting
+   a strategic prior. Retained as the fallback if search fails its goal-4 gate.
 
 ## Risks
 

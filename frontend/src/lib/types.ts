@@ -82,11 +82,23 @@ export interface TraceSummary {
   num_events: number;
 }
 
+export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
+
+export interface OpponentConfig {
+  villain_type: VillainType;
+  villain_sims?: number;
+  villain_checkpoint?: string;
+  villain_deterministic?: boolean;
+}
+
 export interface TraceConfig {
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;
   villain_type: string;
   seed?: number | null;
+  villain_sims?: number | null;
+  villain_checkpoint?: string | null;
+  villain_deterministic?: boolean;
 }
 
 export interface TraceEvent {

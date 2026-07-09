@@ -50,6 +50,14 @@ class VectorEnv:
         self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
         self._card_land_index = self.observation_space.encoder.num_zones + 1 + 2 + 1
         self._card_creature_index = self._card_land_index + 1
+        self._prev_obs_keys: Tuple[str, ...] = ("agent_cards", "opponent_player")
+        if self.reward.hypers.potential_enabled:
+            self._prev_obs_keys = (
+                "agent_cards",
+                "opponent_cards",
+                "agent_player",
+                "opponent_player",
+            )
 
     def _build_rust_env(self, seed: int) -> "managym.VectorEnv":
         return managym.VectorEnv(
@@ -127,18 +135,29 @@ class VectorEnv:
         if shaping is not None:
             self._reward_tensor.add_(shaping)
 
-        done = self._terminated_tensor | self._truncated_tensor
-        if not bool(done.any()):
-            return
+        potential_shaping = self._compute_potential_shaping()
 
-        win_reward = torch.full_like(self._reward_tensor, self.reward.hypers.win_reward)
-        lose_reward = torch.full_like(
-            self._reward_tensor, self.reward.hypers.lose_reward
-        )
-        terminal_shaped = torch.where(self._reward_tensor > 0, win_reward, lose_reward)
-        self._reward_tensor.copy_(
-            torch.where(done, terminal_shaped, self._reward_tensor)
-        )
+        done = self._terminated_tensor | self._truncated_tensor
+        if bool(done.any()):
+            win_reward = torch.full_like(
+                self._reward_tensor, self.reward.hypers.win_reward
+            )
+            lose_reward = torch.full_like(
+                self._reward_tensor, self.reward.hypers.lose_reward
+            )
+            terminal_shaped = torch.where(
+                self._reward_tensor > 0, win_reward, lose_reward
+            )
+            self._reward_tensor.copy_(
+                torch.where(done, terminal_shaped, self._reward_tensor)
+            )
+
+        # Potential-based shaping is added after the terminal win/lose
+        # overwrite: the terminal step still carries its -Phi(s_last)
+        # correction (Phi(terminal) = 0), which is required for the
+        # potential to telescope out and preserve policy invariance.
+        if potential_shaping is not None:
+            self._reward_tensor.add_(potential_shaping)
 
     def _compute_progress_shaping(self) -> torch.Tensor | None:
         hypers = self.reward.hypers
@@ -191,6 +210,67 @@ class VectorEnv:
         )
         return shaping
 
+    def _compute_potential_shaping(self) -> torch.Tensor | None:
+        """Potential-based shaping term gamma * Phi(s') - Phi(s) per env.
+
+        Phi(terminal) is treated as 0: on done steps the buffers already hold
+        the next episode's reset observation, which must not leak into the
+        shaping, and zeroing the terminal potential is what makes the shaping
+        telescope out over an episode (Ng, Harada & Russell 1999).
+        """
+        hypers = self.reward.hypers
+        if not hypers.potential_enabled:
+            return None
+
+        prev_phi = self._potential(
+            self._prev_obs["agent_cards"],
+            self._prev_obs["opponent_cards"],
+            self._prev_obs["agent_player"],
+            self._prev_obs["opponent_player"],
+        )
+        next_phi = self._potential(
+            self._obs_tensors["agent_cards"],
+            self._obs_tensors["opponent_cards"],
+            self._obs_tensors["agent_player"],
+            self._obs_tensors["opponent_player"],
+        )
+        done = self._terminated_tensor | self._truncated_tensor
+        next_phi = next_phi.masked_fill(done, 0.0)
+        return hypers.potential_gamma * next_phi - prev_phi
+
+    def _potential(
+        self,
+        agent_cards: torch.Tensor,
+        opponent_cards: torch.Tensor,
+        agent_player: torch.Tensor,
+        opponent_player: torch.Tensor,
+    ) -> torch.Tensor:
+        """Hero-perspective board-state potential Phi(s).
+
+        Life features are already encoded as life/20, matching the
+        (hero_life - villain_life)/20 term in the Phi definition.
+        """
+        hypers = self.reward.hypers
+        phi = torch.zeros_like(self._reward_tensor)
+
+        if hypers.potential_land_weight != 0.0:
+            phi += hypers.potential_land_weight * (
+                self._battlefield_card_count(agent_cards, self._card_land_index)
+                - self._battlefield_card_count(opponent_cards, self._card_land_index)
+            )
+        if hypers.potential_creature_weight != 0.0:
+            phi += hypers.potential_creature_weight * (
+                self._battlefield_card_count(agent_cards, self._card_creature_index)
+                - self._battlefield_card_count(
+                    opponent_cards, self._card_creature_index
+                )
+            )
+        if hypers.potential_life_weight != 0.0:
+            phi += hypers.potential_life_weight * (
+                agent_player[:, 0, 0] - opponent_player[:, 0, 0]
+            )
+        return phi
+
     def _battlefield_card_count(
         self,
         cards: torch.Tensor,
@@ -225,8 +305,7 @@ class VectorEnv:
         Dict[str, Any],
     ]:
         self._prev_obs = {
-            "agent_cards": self._obs_tensors["agent_cards"].clone(),
-            "opponent_player": self._obs_tensors["opponent_player"].clone(),
+            key: self._obs_tensors[key].clone() for key in self._prev_obs_keys
         }
         self._rust_env.step_into_buffers(actions.cpu().tolist())
         self._sync_tensors_from_buffers()
@@ -242,6 +321,10 @@ class VectorEnv:
     def get_last_info(self) -> Dict[str, Any]:
         infos = [dict(info) for info in self._rust_env.get_last_info()]
         return self._stack_infos(infos)
+
+    def skip_trivial_counts(self) -> np.ndarray:
+        """Per-env trivial-decision collapse counters for the current games."""
+        return np.asarray(self._rust_env.skip_trivial_counts(), dtype=np.int64)
 
     def _stack_infos(self, infos: list[dict[str, Any]]) -> Dict[str, Any]:
         if not infos:
