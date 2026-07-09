@@ -54,10 +54,7 @@ fn ancestral_recall_decking_loses_game() {
         .game()
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(0))
-        .iter()
-        .copied()
-        .collect();
+        .zone_cards(ZoneType::Library, PlayerId(0)).to_vec();
     for card in library {
         s.game_mut()
             .state

@@ -181,9 +181,7 @@ impl Game {
     ) -> Option<Decision> {
         match effect {
             Effect::ReturnToHand { target: spec } => {
-                let Some(chosen) = frame.primary_target() else {
-                    return None;
-                };
+                let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, spec, frame.controller) {
                     return None;
                 }
@@ -206,9 +204,7 @@ impl Game {
                 None
             }
             Effect::DealDamage { amount, target: spec } => {
-                let Some(chosen) = frame.primary_target() else {
-                    return None;
-                };
+                let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, spec, frame.controller) {
                     return None;
                 }
@@ -277,9 +273,7 @@ impl Game {
                 None
             }
             Effect::PutCounters { count, target: spec } => {
-                let Some(chosen) = frame.primary_target() else {
-                    return None;
-                };
+                let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, spec, frame.controller) {
                     return None;
                 }
@@ -374,12 +368,8 @@ impl Game {
                 };
                 // The spell may already have left the stack (e.g. it was
                 // countered in response) — the effect does nothing.
-                if self.find_spell_on_stack_index(target_spell).is_none() {
-                    return None;
-                }
-                let Some(spell_controller) = self.spell_controller(target_spell) else {
-                    return None;
-                };
+                self.find_spell_on_stack_index(target_spell)?;
+                let spell_controller = self.spell_controller(target_spell)?;
                 Some(Decision::PayOrNot {
                     player: spell_controller,
                     cost: cost.clone(),

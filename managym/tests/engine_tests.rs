@@ -309,3 +309,61 @@ fn random_smoke_tla_proof_cards() {
         assert!(game.winner_index().is_some(), "seed {seed}: no winner");
     }
 }
+
+/// Stage-2 smoke: 200 random-vs-random games between the UR-decisions deck
+/// and the GW-costs deck (every Stage-2 card included) must reach a
+/// terminal state with no panics and no stuck games. Random action
+/// selection exercises every new ActionSpace kind (scry, look-and-select,
+/// pay-or-not, modal, discard-then-draw, waterbend, multi-targeting).
+#[test]
+fn random_smoke_stage2_cards() {
+    use rand::{Rng, SeedableRng};
+
+    let ur_deck = BTreeMap::from([
+        ("Island".to_string(), 7),
+        ("Mountain".to_string(), 6),
+        ("Glider Kids".to_string(), 3),
+        ("Firebending Lesson".to_string(), 3),
+        ("It'll Quench Ya!".to_string(), 2),
+        ("Accumulate Wisdom".to_string(), 3),
+        ("Pop Quiz".to_string(), 2),
+        ("Igneous Inspiration".to_string(), 2),
+        ("Divide by Zero".to_string(), 2),
+        ("Crossroads of Destiny".to_string(), 2),
+        ("Waterfall Aerialist".to_string(), 3),
+        ("Otter-Penguin".to_string(), 2),
+    ]);
+    let gw_deck = BTreeMap::from([
+        ("Plains".to_string(), 7),
+        ("Forest".to_string(), 6),
+        ("Water Tribe Rallier".to_string(), 4),
+        ("Allies at Last".to_string(), 3),
+        ("Badgermole Cub".to_string(), 3),
+        ("Kyoshi Warriors".to_string(), 4),
+        ("Invasion Reinforcements".to_string(), 3),
+        ("South Pole Voyager".to_string(), 3),
+        ("Forecasting Fortune Teller".to_string(), 4),
+    ]);
+
+    for seed in 0..200_u64 {
+        let p0 = PlayerConfig::new("decisions", ur_deck.clone());
+        let p1 = PlayerConfig::new("costs", gw_deck.clone());
+        let mut game = Game::new(vec![p0, p1], seed, true);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed ^ 0x57a6e2);
+
+        let mut steps = 0_usize;
+        while !game.is_game_over() {
+            let action_count = game
+                .action_space()
+                .map(|space| space.actions.len())
+                .unwrap_or(0);
+            assert!(action_count > 0, "seed {seed}: empty action space");
+            let action = rng.gen_range(0..action_count);
+            game.step(action)
+                .unwrap_or_else(|e| panic!("seed {seed}: step failed: {e:?}"));
+            steps += 1;
+            assert!(steps < 50_000, "seed {seed}: game appears stuck");
+        }
+        assert!(game.winner_index().is_some(), "seed {seed}: no winner");
+    }
+}

@@ -509,6 +509,29 @@ impl Scenario {
         self.step_action(decline_index);
     }
 
+    /// Tap a specific permanent to pay {1} of a pending waterbend cost.
+    pub fn choose_waterbend_tap(&mut self, permanent: PermanentId) -> bool {
+        let Some(index) = self.action_space().actions.iter().position(|action| {
+            matches!(action, Action::WaterbendTap { permanent: p, .. } if *p == permanent)
+        }) else {
+            return false;
+        };
+        self.step_action(index);
+        true
+    }
+
+    /// Number of untapped battlefield permanents with the given name.
+    pub fn untapped_permanents_named(&self, player: usize, card_name: &str) -> usize {
+        self.battlefield_permanents_named(player, card_name)
+            .into_iter()
+            .filter(|id| {
+                self.game.state.permanents[*id]
+                    .as_ref()
+                    .is_some_and(|permanent| !permanent.tapped)
+            })
+            .count()
+    }
+
     pub fn choose_target_named(&mut self, card_name: &str) {
         let choose_index = self
             .action_space()
