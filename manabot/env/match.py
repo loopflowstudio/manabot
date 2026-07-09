@@ -43,6 +43,19 @@ class Match:
     def to_rust(self) -> "list[managym.PlayerConfig]":
         return [self.to_rust_hero(), self.to_rust_villain()]
 
+    def swapped(self) -> "Match":
+        """Return a copy with hero and villain seats exchanged.
+
+        The managym engine always gives player 0 the first turn
+        (managym/src/flow/setup.rs: TurnState::new(PlayerId(0))), so passing
+        a swapped Match to Env.reset puts the hero on the draw. Used for
+        seat-balanced evaluation.
+        """
+        other = deepcopy(self)
+        other.hero, other.villain = other.villain, other.hero
+        other.hero_deck, other.villain_deck = other.villain_deck, other.hero_deck
+        return other
+
     def __str__(self) -> str:
         """Return a human-readable string representation of the match."""
         return f"Match({self.hero} vs {self.villain})"
