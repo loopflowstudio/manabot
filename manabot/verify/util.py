@@ -38,6 +38,22 @@ STANDARD_DECK = {
 }
 MOUNTAIN_DECK = {"Mountain": 20}
 
+# UR deck with real interaction: instant-speed removal (Lightning Bolt),
+# permission (Counterspell), card draw (Ancestral Recall), and mass removal
+# (Pyroclasm). Two colors for mana stability; 60 cards.
+INTERACTIVE_DECK = {
+    "Island": 12,
+    "Mountain": 12,
+    "Grey Ogre": 6,
+    "Wind Drake": 6,
+    "Man-o'-War": 4,
+    "Raging Goblin": 4,
+    "Lightning Bolt": 6,
+    "Counterspell": 4,
+    "Ancestral Recall": 3,
+    "Pyroclasm": 3,
+}
+
 
 @dataclass(frozen=True)
 class EvaluationActionRecord:

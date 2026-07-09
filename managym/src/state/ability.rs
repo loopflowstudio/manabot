@@ -33,6 +33,14 @@ pub enum Effect {
         power_delta: i32,
         toughness_delta: i32,
     },
+    /// Resolving player draws `count` cards. No target.
+    DrawCards {
+        count: usize,
+    },
+    /// Deal `amount` damage to each creature on the battlefield. No target.
+    MassDamage {
+        amount: i32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,6 +57,8 @@ impl Effect {
             Effect::DealDamage { target, .. } => Some(target),
             Effect::CounterSpell { target } => Some(target),
             Effect::ModifyUntilEot { .. } => None,
+            Effect::DrawCards { .. } => None,
+            Effect::MassDamage { .. } => None,
         }
     }
 }
