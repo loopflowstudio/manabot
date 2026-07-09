@@ -260,3 +260,45 @@ fn agent_player_index_alternates() {
         "expected agent player index to alternate, saw {seen:?}"
     );
 }
+
+/// Stage-1 smoke: 200 random-vs-random games on a deck containing every TLA
+/// proof card must reach a terminal state with no panics and no stuck games.
+#[test]
+fn random_smoke_tla_proof_cards() {
+    use rand::{Rng, SeedableRng};
+
+    let tla_deck = BTreeMap::from([
+        ("Plains".to_string(), 9),
+        ("Island".to_string(), 8),
+        ("Kyoshi Warriors".to_string(), 3),
+        ("Avatar Enthusiasts".to_string(), 4),
+        ("Invasion Reinforcements".to_string(), 3),
+        ("Jeong Jeong's Deserters".to_string(), 3),
+        ("South Pole Voyager".to_string(), 2),
+        ("Tiger-Seal".to_string(), 3),
+        ("Otter-Penguin".to_string(), 3),
+        ("Forecasting Fortune Teller".to_string(), 2),
+    ]);
+
+    for seed in 0..200_u64 {
+        let p0 = PlayerConfig::new("ally", tla_deck.clone());
+        let p1 = PlayerConfig::new("penguin", tla_deck.clone());
+        let mut game = Game::new(vec![p0, p1], seed, true);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed ^ 0x5eed);
+
+        let mut steps = 0_usize;
+        while !game.is_game_over() {
+            let action_count = game
+                .action_space()
+                .map(|space| space.actions.len())
+                .unwrap_or(1)
+                .max(1);
+            let action = rng.gen_range(0..action_count);
+            game.step(action)
+                .unwrap_or_else(|e| panic!("seed {seed}: step failed: {e:?}"));
+            steps += 1;
+            assert!(steps < 50_000, "seed {seed}: game appears stuck");
+        }
+        assert!(game.winner_index().is_some(), "seed {seed}: no winner");
+    }
+}

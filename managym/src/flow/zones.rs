@@ -39,7 +39,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn draw_cards(&mut self, player: PlayerId, amount: usize) {
+    pub fn draw_cards(&mut self, player: PlayerId, amount: usize) {
         for _ in 0..amount {
             if self.state.zones.size(ZoneType::Library, player) == 0 {
                 self.state.players[player.0].drew_when_empty = true;
@@ -80,7 +80,7 @@ impl Game {
     /// Create a token from a registered token definition under `controller`'s
     /// control. Tokens are full cards in `GameState::cards`; state-based
     /// actions remove them once they leave the battlefield (CR 704.5d).
-    pub(crate) fn create_token(
+    pub fn create_token(
         &mut self,
         name: &str,
         controller: PlayerId,
