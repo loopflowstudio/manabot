@@ -237,3 +237,34 @@ or head-to-head) before Φ enters any recipe; (2) the discriminating run for
 current code, labels `c2-vanilla-terminal-s{1,2,3}`, in flight at time of
 writing. Registered prediction (60/40): no collapse — pointing to code-era
 artifact over deck mechanism.
+
+## Addendum 2: the discriminating run — first-light's pass-collapse was an artifact
+
+`c2-vanilla-terminal-s{1,2,3}`: terminal-only reward, STANDARD_DECK (the
+original first-light deck), current code, seat-balanced 400g judging:
+
+| seed | overall (LB) | cast_w_able | passed_w_able | landed_w_able |
+|---|---|---|---|---|
+| 1 | 64.0% (.592) | 0.999 | 0.31 | 0.35 |
+| 2 | 66.3% (.615) | 0.987 | 0.40 | 0.27 |
+| 3 | 60.8% (.559) | 0.987 | 0.37 | 0.29 |
+
+**No pass-collapse on either deck.** The registered 60/40 prediction (no
+collapse → code-era/measurement artifact, not deck mechanism) resolved on the
+60 side. First-light's founding observation — "pure terminal reward fails...
+produces pass-collapse" (wave/archive/first-light/README.md, unsourced) — fails
+direct replication on its own deck with current code. Candidate causes of the
+original observation: the then-unfixed PPO bugs (first-light goal 1), and/or
+hero-on-play single-seed 50-game evals reading behavioral drift as failure.
+
+The pair of E2a results is the cleanest demonstration of shaping's cost
+available: the SAME terminal-only reward produces cast_when_able ≈ 0.99 on the
+vanilla deck (casting is correct there) and 0.15–0.29 on the interactive deck
+(holding is correct there) — the un-shaped policy adapts its behavior to the
+deck. Pay-per-event shaping forced vanilla-deck behavior onto the interactive
+deck. The reward didn't need to encode strategy; it needed to stop doing so.
+
+Also noteworthy: vanilla winners play FEWER lands than random (0.27–0.35 vs
+~0.44 baseline) — surplus land plays are dead actions once the curve is met.
+Under first-light's diagnostics, declining landed_when_able was the definition
+of failure; even the failure signature was backwards.
