@@ -145,6 +145,127 @@ encoding):
   machinery); the gy-Lesson observation path is trace-tested via an injected
   subtype.
 
+## Stage 2 RESULT (landed 2026-07-09)
+
+**What landed** (three commits: decision/cost engine, cards + trace tests,
+Python observation mirror):
+
+- **Choice framework** (`flow/decision.rs`): resolutions execute through an
+  `EffectFrame` (source, controller, targets + per-target requirement
+  indices, kicked flag, trigger-context target, effect queue, finalizer).
+  Any effect may return a `Decision`, which parks the frame as
+  `GameState::suspended_decision` and surfaces an ActionSpace to the
+  deciding player; the answer feeds back through `execute_decision_action`
+  and the frame resumes (branch effects push onto the queue front, so
+  nested decisions compose). While suspended, nothing else runs — no SBAs,
+  no trigger flushing, no priority. Decision kinds: `Scry` (per-card
+  keep/bottom, top-down; kept cards keep relative order — no reorder),
+  `LookAndSelect` (top-N, select up to K matching a `CardPredicate` to
+  hand, `min_select` for mandatory picks, rest to bottom in random order),
+  `PayOrNot` (if-paid / if-declined effect branches; pay option only
+  offered when `available_mana` covers it), `Modal`, `DiscardThenDraw`
+  (learn). New `ActionSpaceKind`s: `Scry`, `LookAndSelect`, `PayOrNot`,
+  `Modal`, `DiscardThenDraw`, `Waterbend`; new `Action`s / `ActionType`s:
+  `ScryCard` (ScryKeep/ScryBottom), `SelectCard`, `Decline`, `PayCost`,
+  `ChooseMode`, `WaterbendTap` (TapForCost). ACTION_TYPE_DIM 7→14.
+- **Spells stay on the stack while resolving** (CR 608.2m):
+  `resolve_top_of_stack` peeks instead of popping for spells; the
+  finalizer removes the stack object and moves the card as resolution's
+  last step. This keeps a suspended stack consistent and makes
+  "Lessons in your graveyard" exclude the resolving Lesson (Accumulate
+  Wisdom does not count itself).
+- **Casting pipeline** (`flow/play.rs`): `PendingChoice` grew from a single
+  ChooseTarget into a staged pipeline — `KickerChoice` (PayOrNot space,
+  only offered when the kicked cost is affordable) → `ChooseTargets` per
+  `TargetRequirement {spec, min, max}` ("up to N" adds a Decline action
+  once min is met; duplicate targets excluded within a requirement) →
+  payment. `SpellOnStack` carries `kicked` and `target_req_indices`;
+  CR 608.2b fizzle = all chosen targets illegal for their requirement.
+  `TargetSpec` grew `SpellOrPermanent{min_mana_value}` (Divide by Zero),
+  `CreatureYouControl`, `CreatureOpponentControls` — target legality is
+  controller-relative (`target_is_legal(target, spec, controller)`).
+- **Cost mechanics**: affinity-style reduction via
+  `CardDefinition::cost_reduction_per` (generic reduced by matching
+  battlefield permanents, floor 0, computed in `effective_spell_cost` at
+  gating and payment). Waterbend on activated abilities
+  (`ActivatedAbilityDefinition::waterbend`): activation opens a
+  `Waterbend` payment space — tap any untapped artifact/creature for {1}
+  of the generic component (taps emit `PermanentTapped{for_mana: true}`),
+  or `PayCost` to settle the remainder with mana; tap actions are gated so
+  affordability is preserved (never a dead-end space). **Triggered mana
+  abilities** (CR 605.1b, `CardDefinition::triggered_mana_abilities`) fire
+  inside `tap_permanent(for_mana=true)` and add to the pool immediately —
+  Badgermole Cub's {G} arrives mid-payment and pays the same waterbend
+  remainder (trace-tested: 2 taps + Cub → only 1 of 3 forests needed).
+- **Ward as a keyword**: `CardDefinition::ward` synthesizes a
+  `BecomesTargeted` triggered ability at registration. Casting emits
+  `PermanentTargeted` per permanent target; `PendingTrigger` /
+  `TriggeredAbilityOnStack` carry the triggering spell as a **context
+  target**, and `Effect::CounterUnlessPays` (shared with It'll Quench Ya!)
+  reads the frame's primary target (chosen target or context) and asks the
+  spell's controller to pay or watch it get countered.
+- **Cards registered**: tla.rs — Glider Kids, Firebending Lesson (kicker),
+  It'll Quench Ya!, Accumulate Wisdom, Water Tribe Rallier (waterbend
+  {5}), Allies at Last (affinity + up-to-2 + 1 multi-target), Badgermole
+  Cub, Crossroads of Destiny (invented modal proof card — no M1 deck card
+  is modal). strixhaven.rs (new) — Pop Quiz, Igneous Inspiration, Divide
+  by Zero (spell-or-permanent bounce; bounced stack spells cease and the
+  card returns to its owner's hand), Waterfall Aerialist (ward {2} proof;
+  Dragonfly Swarm waits on Stage 3 dynamic P/T).
+- **Observation encoding**: library cards revealed by a pending decision
+  are added to the *deciding* agent's observation (zone Library) and
+  focused by the decision's actions; `Game::determinize` pins them back on
+  top of the library (they're known information — flat MC at a scry/look
+  decision stays coherent). CardData gained ward/kicker costs; CARD_DIM
+  33→37; mirrored in the Rust encoder, pyo3 bindings, `__init__.pyi`,
+  JSON, and `manabot/env/observation.py` (+ a new ActionSpaceEnum mirror).
+- **Validation**: cargo 164 green (135 preserved + 29 new: 27 per-card /
+  machinery trace tests, a 200-seed random-vs-random Stage-2 deck smoke
+  with non-empty-action-space asserts, and a flat-MC-at-decision-points
+  test); clippy clean; pytest 209 green after cp312 rebuild; 200-seed
+  Python-path smoke (UR-decisions vs GW-costs decks, observations encoded
+  every step, every new ActionSpace kind exercised, `flat_mc_scores` run
+  at live decision points, zero panics / zero stuck games).
+
+**Design decisions Stage 3 must know**
+
+- `EffectFrame.context_target` is how trigger-event payloads reach
+  effects. Earthbend's "when this land dies/exiles, return it tapped" and
+  Earth Kingdom Jailer's exile-linkage can ride the same channel; extend
+  `trigger_context_for_event` for new event kinds.
+- Ward triggers on **spells only** — abilities that target (there are
+  none in M1 beyond Deserters' friendly counter) don't emit
+  `PermanentTargeted`, and countering an *ability* stack object has no
+  Target representation yet.
+- `Modal` modes must be **targetless** (modes execute mid-resolution;
+  mode-specific targeting would need cast-time mode selection, CR 601.2b).
+  Fine for M1; revisit if a modal card with targeted modes lands.
+- Waterbend is implemented for **activated abilities only** (no M1 spell
+  has it) and allows tapping summoning-sick untapped creatures (convoke-
+  style; taps aren't {T} activations). Affordability gating is
+  conservative: it ignores triggered-mana bonuses (Cub can only make
+  things cheaper, never gate out a legal line... but a line affordable
+  *only* through Cub mana won't be offered).
+- Scry keeps cards in relative order (no reorder sub-decision) and
+  scry/look bottom moves are silent library reorders (no CardMoved
+  events); look-and-select to hand uses `move_card` (public CardMoved).
+- `PutCounters` still targets creatures only; earthbend needs a
+  land-capable TargetSpec — `CreatureYouControl`-style controller-relative
+  specs show the pattern.
+- Multi-target effects read `EffectFrame.targets` directly
+  (`TargetCreaturesDealPowerDamageToLastTarget` interprets last = victim);
+  per-target requirement indices are on the stack object if a future
+  effect needs requirement-aware dispatch.
+- Encoded action tensors cap at `max_actions = 20`; learn with a big hand
+  or wide waterbend boards can exceed it (raw action path unaffected,
+  encoder truncates with a warning — pre-existing behavior, now easier to
+  hit). Revisit capacity when Stage 4 wires decks into training.
+- Priority-gating for castability still uses `producible_mana` (untapped
+  permanents only); payment and decision gating use `available_mana`
+  (pool + producible). Until-end-of-combat mana (Stage 3 firebending)
+  should extend the pool/`clear_mana_pools` — decisions and waterbend
+  already read the pool correctly.
+
 ## Notes
 
 - Cub + Rallier interaction is a real test case: waterbend taps creatures to
