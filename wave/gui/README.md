@@ -61,7 +61,16 @@ That line is the new wave.
 3. **Best-of-N protocol**: fixed match format (best of 10, alternating seats)
    so "the bot beat Jack" is a number with provenance, not an anecdote. Match
    results stored with opponent config + checkpoint hash.
-4. Trigger-linked, later: when wave/beliefs activates, the table becomes the
+4. **Presentation batching** (design decided 2026-07-09): decouple deciding
+   from narrating. The bot thinks at its budget (deadline-based search —
+   Blitz 50ms / Standard 250ms / Boss 1s per decision, 1s accepted as the
+   current default); the UI presents each villain sequence (everything
+   between two hero decision points — already the server's natural unit) as
+   semantic beats of ~400ms: one beat per game-meaningful event + its visible
+   consequence ("attacks with X, Y, Z" is one beat, "Pyroclasm → sweep" is
+   one beat). Click-to-skip. One thinking indicator per composition, not per
+   micro-decision. Implementation rides with the C5 deadline-searcher work.
+5. Trigger-linked, later: when wave/beliefs activates, the table becomes the
    bluff observatory — the first place a human is shown a calibrated
    represent-the-Counterspell line and has to decide whether to play into it.
 
