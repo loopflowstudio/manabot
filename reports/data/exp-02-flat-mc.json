@@ -1,0 +1,589 @@
+{
+  "search-16__random": {
+    "hero": "search-16",
+    "villain": "random",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "villain_spec": {
+      "kind": "random"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 275.0,
+      "win_rate": 0.9166666666666666,
+      "win_ci_lower": 0.8798776190248736,
+      "win_ci_upper": 0.94291952264368,
+      "mean_steps": 120.98666666666666,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 127.0,
+      "win_rate_on_play": 0.8466666666666667,
+      "win_ci_lower_on_play": 0.7804188029480452,
+      "win_ci_upper_on_play": 0.8956012072442565,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 148.0,
+      "win_rate_on_draw": 0.9866666666666667,
+      "win_ci_lower_on_draw": 0.9526921436197237,
+      "win_ci_upper_on_draw": 0.9963359476117767
+    },
+    "hero_search": {
+      "decisions": 17712.0,
+      "seconds": 128.19535927532706,
+      "simulations": 806256.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.007237768703439875,
+      "median_seconds_per_decision": 0.005819583544507623,
+      "mean_sims_per_decision": 45.520325203252035,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 28.30824554094579,
+    "engine_seconds": 133.47329279081896
+  },
+  "search-64__random": {
+    "hero": "search-64",
+    "villain": "random",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "villain_spec": {
+      "kind": "random"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 285.0,
+      "win_rate": 0.95,
+      "win_ci_lower": 0.9191522802928904,
+      "win_ci_upper": 0.9694686327091474,
+      "mean_steps": 99.58333333333333,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 148.0,
+      "win_rate_on_play": 0.9866666666666667,
+      "win_ci_lower_on_play": 0.9526921436197237,
+      "win_ci_upper_on_play": 0.9963359476117767,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 137.0,
+      "win_rate_on_draw": 0.9133333333333333,
+      "win_ci_lower_on_draw": 0.8573705468757647,
+      "win_ci_upper_on_draw": 0.9486533114304411
+    },
+    "hero_search": {
+      "decisions": 15143.0,
+      "seconds": 463.6479404635029,
+      "simulations": 2934784.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.03061797137050141,
+      "median_seconds_per_decision": 0.025137374992482364,
+      "mean_sims_per_decision": 193.80466222016773,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 83.50975800002925,
+    "engine_seconds": 468.3295773761347
+  },
+  "search-256__random": {
+    "hero": "search-256",
+    "villain": "random",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 256
+    },
+    "villain_spec": {
+      "kind": "random"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 297.0,
+      "win_rate": 0.99,
+      "win_ci_lower": 0.9710159953649372,
+      "win_ci_upper": 0.9965934432372819,
+      "mean_steps": 98.29666666666667,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 148.0,
+      "win_rate_on_play": 0.9866666666666667,
+      "win_ci_lower_on_play": 0.9526921436197237,
+      "win_ci_upper_on_play": 0.9963359476117767,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 149.0,
+      "win_rate_on_draw": 0.9933333333333333,
+      "win_ci_lower_on_draw": 0.9632062470660242,
+      "win_ci_upper_on_draw": 0.9988222289768665
+    },
+    "hero_search": {
+      "decisions": 15271.0,
+      "seconds": 1728.0598944440717,
+      "simulations": 11309568.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.11315957661214536,
+      "median_seconds_per_decision": 0.0924519581021741,
+      "mean_sims_per_decision": 740.59118590793,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 287.4178125000326,
+    "engine_seconds": 1733.0192950398196
+  },
+  "search-16__c1v2-s1": {
+    "hero": "search-16",
+    "villain": "c1v2-s1",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s1-final/step_65536.pt",
+      "name": "c1v2-s1"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 278.0,
+      "win_rate": 0.9266666666666666,
+      "win_ci_lower": 0.8914679042010734,
+      "win_ci_upper": 0.9510763688675256,
+      "mean_steps": 122.66,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 137.0,
+      "win_rate_on_play": 0.9133333333333333,
+      "win_ci_lower_on_play": 0.8573705468757647,
+      "win_ci_upper_on_play": 0.9486533114304411,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 141.0,
+      "win_rate_on_draw": 0.94,
+      "win_ci_lower_on_draw": 0.8899090795570952,
+      "win_ci_upper_on_draw": 0.9681163179946722
+    },
+    "hero_search": {
+      "decisions": 18750.0,
+      "seconds": 145.92963945143856,
+      "simulations": 852160.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.007782914104076723,
+      "median_seconds_per_decision": 0.006369791517499834,
+      "mean_sims_per_decision": 45.44853333333333,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 24.88336129207164,
+    "engine_seconds": 160.05337904207408
+  },
+  "search-16__c1v2-s2": {
+    "hero": "search-16",
+    "villain": "c1v2-s2",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s2-final/step_65536.pt",
+      "name": "c1v2-s2"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 267.0,
+      "win_rate": 0.89,
+      "win_ci_lower": 0.8495429318702987,
+      "win_ci_upper": 0.9205951927314675,
+      "mean_steps": 116.19666666666667,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 138.0,
+      "win_rate_on_play": 0.92,
+      "win_ci_lower_on_play": 0.8653774250568133,
+      "win_ci_upper_on_play": 0.9536468180607831,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 129.0,
+      "win_rate_on_draw": 0.86,
+      "win_ci_lower_on_draw": 0.7954465685598426,
+      "win_ci_upper_on_draw": 0.9065742112552398
+    },
+    "hero_search": {
+      "decisions": 18053.0,
+      "seconds": 143.13751353987027,
+      "simulations": 841136.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.007928738355944733,
+      "median_seconds_per_decision": 0.00623299996368587,
+      "mean_sims_per_decision": 46.592588489447735,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 23.814792709075846,
+    "engine_seconds": 156.87246433272958
+  },
+  "search-16__c1v2-s3": {
+    "hero": "search-16",
+    "villain": "c1v2-s3",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s3-final/step_65536.pt",
+      "name": "c1v2-s3"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 252.0,
+      "win_rate": 0.84,
+      "win_ci_lower": 0.7942554091313135,
+      "win_ci_upper": 0.8771470584702261,
+      "mean_steps": 126.87666666666667,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 131.0,
+      "win_rate_on_play": 0.8733333333333333,
+      "win_ci_lower_on_play": 0.8106321928453123,
+      "win_ci_upper_on_play": 0.9173893565925509,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 121.0,
+      "win_rate_on_draw": 0.8066666666666666,
+      "win_ci_lower_on_draw": 0.7361357242542107,
+      "win_ci_upper_on_draw": 0.8618819770697485
+    },
+    "hero_search": {
+      "decisions": 17455.0,
+      "seconds": 118.55736562306993,
+      "simulations": 768928.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.006792172192670864,
+      "median_seconds_per_decision": 0.005706666968762875,
+      "mean_sims_per_decision": 44.05201947865941,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 24.722279125009663,
+    "engine_seconds": 133.79408424987923
+  },
+  "search-64__c1v2-s1": {
+    "hero": "search-64",
+    "villain": "c1v2-s1",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s1-final/step_65536.pt",
+      "name": "c1v2-s1"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 282.0,
+      "win_rate": 0.94,
+      "win_ci_lower": 0.90715983751747,
+      "win_ci_upper": 0.9617139440845226,
+      "mean_steps": 115.21,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 143.0,
+      "win_rate_on_play": 0.9533333333333334,
+      "win_ci_lower_on_play": 0.9068124260764262,
+      "win_ci_upper_on_play": 0.9772137410981222,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 139.0,
+      "win_rate_on_draw": 0.9266666666666666,
+      "win_ci_lower_on_draw": 0.873463014734016,
+      "win_ci_upper_on_draw": 0.9585616131949707
+    },
+    "hero_search": {
+      "decisions": 17965.0,
+      "seconds": 534.9986438323976,
+      "simulations": 3360832.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.02978005253728904,
+      "median_seconds_per_decision": 0.024525624932721257,
+      "mean_sims_per_decision": 187.0766490397996,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 90.26884841604624,
+    "engine_seconds": 549.3494692498352
+  },
+  "search-64__c1v2-s2": {
+    "hero": "search-64",
+    "villain": "c1v2-s2",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s2-final/step_65536.pt",
+      "name": "c1v2-s2"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 287.0,
+      "win_rate": 0.9566666666666667,
+      "win_ci_lower": 0.927281870871939,
+      "win_ci_upper": 0.9745037963967957,
+      "mean_steps": 104.56,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 137.0,
+      "win_rate_on_play": 0.9133333333333333,
+      "win_ci_lower_on_play": 0.8573705468757647,
+      "win_ci_upper_on_play": 0.9486533114304411,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 150.0,
+      "win_rate_on_draw": 1.0,
+      "win_ci_lower_on_draw": 0.9750288608542813,
+      "win_ci_upper_on_draw": 1.0
+    },
+    "hero_search": {
+      "decisions": 17319.0,
+      "seconds": 502.5109565249877,
+      "simulations": 3115648.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.0290150099038621,
+      "median_seconds_per_decision": 0.024352084030397236,
+      "mean_sims_per_decision": 179.89768462382355,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 77.74614745902363,
+    "engine_seconds": 515.0930174178211
+  },
+  "search-64__c1v2-s3": {
+    "hero": "search-64",
+    "villain": "c1v2-s3",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s3-final/step_65536.pt",
+      "name": "c1v2-s3"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 286.0,
+      "win_rate": 0.9533333333333334,
+      "win_ci_lower": 0.9232019646862172,
+      "win_ci_upper": 0.9720013254491692,
+      "mean_steps": 112.27666666666667,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 137.0,
+      "win_rate_on_play": 0.9133333333333333,
+      "win_ci_lower_on_play": 0.8573705468757647,
+      "win_ci_upper_on_play": 0.9486533114304411,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 149.0,
+      "win_rate_on_draw": 0.9933333333333333,
+      "win_ci_lower_on_draw": 0.9632062470660242,
+      "win_ci_upper_on_draw": 0.9988222289768665
+    },
+    "hero_search": {
+      "decisions": 16063.0,
+      "seconds": 493.5221521612257,
+      "simulations": 3092736.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.03072415813741055,
+      "median_seconds_per_decision": 0.024248250061646104,
+      "mean_sims_per_decision": 192.5378820892735,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 77.83896562492009,
+    "engine_seconds": 507.4142500850139
+  },
+  "search-256__c1v2-s1": {
+    "hero": "search-256",
+    "villain": "c1v2-s1",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 256
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s1-final/step_65536.pt",
+      "name": "c1v2-s1"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 296.0,
+      "win_rate": 0.9866666666666667,
+      "win_ci_lower": 0.9662239391535501,
+      "win_ci_upper": 0.9948031223153204,
+      "mean_steps": 102.55333333333333,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 150.0,
+      "win_rate_on_play": 1.0,
+      "win_ci_lower_on_play": 0.9750288608542813,
+      "win_ci_upper_on_play": 1.0,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 146.0,
+      "win_rate_on_draw": 0.9733333333333334,
+      "win_ci_lower_on_draw": 0.9334450938998244,
+      "win_ci_upper_on_draw": 0.9895822277088953
+    },
+    "hero_search": {
+      "decisions": 16444.0,
+      "seconds": 2047.8623987010214,
+      "simulations": 12636416.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.12453553871935183,
+      "median_seconds_per_decision": 0.10163358296267688,
+      "mean_sims_per_decision": 768.4514716613962,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 318.97114749997854,
+    "engine_seconds": 2060.6756503740326
+  },
+  "search-256__c1v2-s2": {
+    "hero": "search-256",
+    "villain": "c1v2-s2",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 256
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s2-final/step_65536.pt",
+      "name": "c1v2-s2"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 294.0,
+      "win_rate": 0.98,
+      "win_ci_lower": 0.9570598132699448,
+      "win_ci_upper": 0.9908024939322287,
+      "mean_steps": 94.52333333333333,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 145.0,
+      "win_rate_on_play": 0.9666666666666667,
+      "win_ci_lower_on_play": 0.9243471574929044,
+      "win_ci_upper_on_play": 0.9856797793044249,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 149.0,
+      "win_rate_on_draw": 0.9933333333333333,
+      "win_ci_lower_on_draw": 0.9632062470660242,
+      "win_ci_upper_on_draw": 0.9988222289768665
+    },
+    "hero_search": {
+      "decisions": 16513.0,
+      "seconds": 2068.3075932631036,
+      "simulations": 12626688.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.12525329093823676,
+      "median_seconds_per_decision": 0.10311008302960545,
+      "mean_sims_per_decision": 764.6513655907467,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 327.4110259159934,
+    "engine_seconds": 2079.7880276649958
+  },
+  "search-256__c1v2-s3": {
+    "hero": "search-256",
+    "villain": "c1v2-s3",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 256
+    },
+    "villain_spec": {
+      "kind": "checkpoint",
+      "path": "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s3-final/step_65536.pt",
+      "name": "c1v2-s3"
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 291.0,
+      "win_rate": 0.97,
+      "win_ci_lower": 0.9439768490080931,
+      "win_ci_upper": 0.9841383267940353,
+      "mean_steps": 105.77666666666667,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 145.0,
+      "win_rate_on_play": 0.9666666666666667,
+      "win_ci_lower_on_play": 0.9243471574929044,
+      "win_ci_upper_on_play": 0.9856797793044249,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 146.0,
+      "win_rate_on_draw": 0.9733333333333334,
+      "win_ci_lower_on_draw": 0.9334450938998244,
+      "win_ci_upper_on_draw": 0.9895822277088953
+    },
+    "hero_search": {
+      "decisions": 15224.0,
+      "seconds": 2487.0514810790773,
+      "simulations": 11931136.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.16336386502095884,
+      "median_seconds_per_decision": 0.11684406298445538,
+      "mean_sims_per_decision": 783.7057277982134,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": null,
+    "wall_seconds": 391.92191883409396,
+    "engine_seconds": 2504.791552415816
+  },
+  "search-16__search-256": {
+    "hero": "search-16",
+    "villain": "search-256",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "villain_spec": {
+      "kind": "search",
+      "sims": 256
+    },
+    "metrics": {
+      "num_games": 300.0,
+      "wins": 70.0,
+      "win_rate": 0.23333333333333334,
+      "win_ci_lower": 0.18902749123816998,
+      "win_ci_upper": 0.28438233809395574,
+      "mean_steps": 104.72666666666667,
+      "draws_or_caps": 0.0,
+      "games_on_play": 150.0,
+      "wins_on_play": 46.0,
+      "win_rate_on_play": 0.30666666666666664,
+      "win_ci_lower_on_play": 0.2384689020846879,
+      "win_ci_upper_on_play": 0.38451993838498993,
+      "games_on_draw": 150.0,
+      "wins_on_draw": 24.0,
+      "win_rate_on_draw": 0.16,
+      "win_ci_lower_on_draw": 0.10993931727556672,
+      "win_ci_upper_on_draw": 0.227041057343522
+    },
+    "hero_search": {
+      "decisions": 15025.0,
+      "seconds": 277.6694208064582,
+      "simulations": 722496.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.018480493897268434,
+      "median_seconds_per_decision": 0.014392375014722347,
+      "mean_sims_per_decision": 48.086256239600665,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": {
+      "decisions": 16393.0,
+      "seconds": 5035.764816926094,
+      "simulations": 12862720.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.3071899479610867,
+      "median_seconds_per_decision": 0.22717333305627108,
+      "mean_sims_per_decision": 784.6471054718478,
+      "cap_hit_rate": 0.0
+    },
+    "wall_seconds": 793.585544208996,
+    "engine_seconds": 5329.766671166872
+  }
+}
