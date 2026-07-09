@@ -121,7 +121,9 @@ impl Game {
                 player: self.active_player(),
             });
         }
-        self.state.events.push(GameEvent::StepStarted { step });
+        // Emitted (not just logged) so step-based triggers such as
+        // "at the beginning of your upkeep" can see it.
+        self.emit(GameEvent::StepStarted { step });
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
@@ -178,7 +180,18 @@ impl Game {
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
-                let attacker = combat.attackers_to_declare.pop()?;
+                let Some(attacker) = combat.attackers_to_declare.pop() else {
+                    // CR 508.1 — Attack triggers fire once the whole batch of
+                    // attackers has been declared.
+                    let attackers = combat.attackers.clone();
+                    if !attackers.is_empty() {
+                        self.emit(GameEvent::AttackersDeclared {
+                            player: active,
+                            attackers,
+                        });
+                    }
+                    return None;
+                };
                 Some(ActionSpace {
                     player: Some(active),
                     kind: ActionSpaceKind::DeclareAttacker,
@@ -249,6 +262,10 @@ impl Game {
             if let Some(choice_space) = self.pending_choice_action_space() {
                 return Some(choice_space);
             }
+
+            // Turn any events emitted outside card movement (step starts,
+            // taps, draws, attack declarations) into pending triggers.
+            self.process_game_events();
 
             if !self.state.priority.sba_done {
                 // CR 117.5, 704.3 — Check state-based actions before granting priority.

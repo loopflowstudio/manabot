@@ -6,6 +6,7 @@ use crate::{
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
+        predicate::CardPredicate,
         stack_object::{SpellOnStack, StackObject},
         zone::ZoneType,
     },
@@ -47,8 +48,90 @@ impl Game {
 
             if let Some(card) = self.state.zones.top(ZoneType::Library, player) {
                 self.move_card(card, ZoneType::Hand);
+                self.state.turn.cards_drawn_this_turn[player.0] += 1;
+                self.emit(GameEvent::CardDrawn {
+                    player,
+                    nth_this_turn: self.state.turn.cards_drawn_this_turn[player.0],
+                });
             }
         }
+    }
+
+    /// Tap a permanent, emitting a `PermanentTapped` event on the
+    /// untapped-to-tapped transition (CR 603.10-style "becomes tapped").
+    /// Returns whether the permanent transitioned.
+    pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
+            return false;
+        };
+        if permanent.tapped {
+            return false;
+        }
+        permanent.tap();
+        let controller = permanent.controller;
+        self.invalidate_mana_cache(controller);
+        self.emit(GameEvent::PermanentTapped {
+            permanent: permanent_id,
+            for_mana,
+        });
+        true
+    }
+
+    /// Create a token from a registered token definition under `controller`'s
+    /// control. Tokens are full cards in `GameState::cards`; state-based
+    /// actions remove them once they leave the battlefield (CR 704.5d).
+    pub(crate) fn create_token(
+        &mut self,
+        name: &str,
+        controller: PlayerId,
+        tapped_and_attacking: bool,
+    ) {
+        let object_id = self.state.id_gen.next_id();
+        let Some(card) = self
+            .state
+            .card_registry
+            .instantiate(name, controller, object_id)
+        else {
+            debug_assert!(false, "unknown token definition: {name}");
+            return;
+        };
+        debug_assert!(card.is_token, "created token must be a token definition");
+
+        let card_id = CardId(self.state.cards.len());
+        self.state.cards.push(card);
+        self.state.card_to_permanent.push(None);
+        self.move_card(card_id, ZoneType::Battlefield);
+
+        if tapped_and_attacking {
+            if let Some(permanent_id) = self.state.card_to_permanent[card_id] {
+                if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                    permanent.tapped = true;
+                    permanent.attacking = true;
+                }
+                // A token put onto the battlefield attacking joins combat but
+                // was never declared, so no attack triggers fire (CR 508.4a).
+                if let Some(combat) = self.state.combat.as_mut() {
+                    combat.attackers.push(permanent_id);
+                    combat.attacker_to_blockers.entry(permanent_id).or_default();
+                }
+            }
+        }
+        self.invalidate_mana_cache(controller);
+    }
+
+    /// Count cards in a player's graveyard matching a predicate (e.g.
+    /// "Lesson cards in your graveyard").
+    pub(crate) fn count_graveyard_matching(
+        &self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+    ) -> usize {
+        self.state
+            .zones
+            .zone_cards(ZoneType::Graveyard, player)
+            .iter()
+            .filter(|card_id| predicate.matches_card(&self.state.cards[*card_id]))
+            .count()
     }
 
     pub(crate) fn emit(&mut self, event: GameEvent) {

@@ -3,11 +3,26 @@ use crate::{
     state::{
         ability::{Ability, Effect, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject},
+        permanent::Permanent,
+        stack_object::{
+            ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
+        },
         target::Target as ActionTarget,
         zone::ZoneType,
     },
 };
+
+/// Everything an effect needs to know about what is resolving it.
+pub(crate) struct EffectContext {
+    /// The card whose spell or ability is resolving.
+    pub source: Option<CardId>,
+    /// The player the effect resolves for ("you").
+    pub controller: PlayerId,
+    /// For triggered abilities: how many times this ability has resolved
+    /// this turn, counting this resolution. Zero for spells and activated
+    /// abilities.
+    pub resolutions_this_turn: u32,
+}
 
 impl Game {
     pub(crate) fn resolve_top_of_stack(&mut self) {
@@ -18,11 +33,7 @@ impl Game {
         match stack_object {
             StackObject::Spell(spell) => self.resolve_spell_object(spell),
             StackObject::ActivatedAbility(ability) => self.resolve_activated_ability(ability),
-            StackObject::TriggeredAbility(triggered) => self.resolve_triggered_ability(
-                triggered.source_card,
-                triggered.ability_index,
-                triggered.targets.first().copied(),
-            ),
+            StackObject::TriggeredAbility(triggered) => self.resolve_triggered_ability(triggered),
         }
     }
 
@@ -49,7 +60,12 @@ impl Game {
                 }
             }
 
-            self.execute_spell_effect(&effect, target, card);
+            let ctx = EffectContext {
+                source: Some(card),
+                controller: spell.controller,
+                resolutions_this_turn: 0,
+            };
+            self.execute_spell_effect(&effect, target, &ctx);
             self.move_card(card, ZoneType::Graveyard);
             self.emit(GameEvent::SpellResolved { card });
             return;
@@ -76,77 +92,99 @@ impl Game {
     }
 
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        let Some(source_permanent_id) = self.state.card_to_permanent[ability.source_card] else {
-            return;
-        };
-        let Some(source_permanent) = self.state.permanents[source_permanent_id].as_ref() else {
-            return;
-        };
-        if source_permanent.id != ability.source_permanent_object_id {
-            return;
-        }
-
-        let Some(effect) = self.state.cards[ability.source_card]
+        let Some(definition) = self.state.cards[ability.source_card]
             .activated_abilities
             .get(ability.ability_index)
-            .map(|def| def.effect.clone())
+            .cloned()
         else {
             return;
         };
+
+        // The resolving ability must still belong to the permanent that
+        // activated it — a new permanent from the same card re-entering the
+        // battlefield must not receive its effects. When the source was
+        // sacrificed as an activation cost it is expected to be gone and the
+        // ability resolves anyway (CR 113.7a).
+        if !definition.sacrifice_source {
+            let Some(source_permanent_id) = self.state.card_to_permanent[ability.source_card]
+            else {
+                return;
+            };
+            let Some(source_permanent) = self.state.permanents[source_permanent_id].as_ref()
+            else {
+                return;
+            };
+            if source_permanent.id != ability.source_permanent_object_id {
+                return;
+            }
+        }
 
         let action_target = ability.targets.first().and_then(|t| match t {
             Target::Player(p) => Some(ActionTarget::Player(*p)),
             Target::Permanent(p) => Some(ActionTarget::Permanent(*p)),
             Target::StackSpell(_) => None,
         });
-        self.execute_effect(&effect, action_target, Some(ability.source_card));
+        let ctx = EffectContext {
+            source: Some(ability.source_card),
+            controller: ability.controller,
+            resolutions_this_turn: 0,
+        };
+        self.execute_effect(&definition.effect, action_target, &ctx);
     }
 
-    fn resolve_triggered_ability(
-        &mut self,
-        source_card: CardId,
-        ability_index: usize,
-        target: Option<Target>,
-    ) {
+    fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
         let Some(ability) = self
             .state
             .cards
-            .get(source_card.0)
-            .and_then(|card| card.abilities.get(ability_index))
+            .get(triggered.source_card.0)
+            .and_then(|card| card.abilities.get(triggered.ability_index))
             .cloned()
         else {
             return;
         };
 
-        let Ability::Triggered {
-            effect,
-            intervening_if,
-            ..
-        } = ability;
+        let Ability::Triggered { effects, .. } = ability;
 
-        if let Some(condition) = intervening_if.as_ref() {
-            // CR 603.4 — Intervening "if" clauses are checked on resolution.
-            if !self.check_trigger_condition(condition, source_card) {
-                return;
-            }
-        }
+        // Track per-turn resolutions for "the Nth time this ability has
+        // resolved this turn" gating.
+        let key = (triggered.source_card.0, triggered.ability_index);
+        let count = self
+            .state
+            .turn
+            .ability_resolutions_this_turn
+            .entry(key)
+            .or_insert(0);
+        *count += 1;
+        let resolutions_this_turn = *count;
 
-        let action_target = target.and_then(|t| match t {
-            Target::Player(p) => Some(ActionTarget::Player(p)),
-            Target::Permanent(p) => Some(ActionTarget::Permanent(p)),
+        let action_target = triggered.targets.first().and_then(|t| match t {
+            Target::Player(p) => Some(ActionTarget::Player(*p)),
+            Target::Permanent(p) => Some(ActionTarget::Permanent(*p)),
             Target::StackSpell(_) => None,
         });
-        self.execute_effect(&effect, action_target, Some(source_card));
+        let ctx = EffectContext {
+            source: Some(triggered.source_card),
+            controller: triggered.controller,
+            resolutions_this_turn,
+        };
+        for effect in &effects {
+            self.execute_effect(effect, action_target, &ctx);
+        }
     }
 
     /// Execute a spell effect, with access to the raw Target (needed for StackSpell targets).
-    fn execute_spell_effect(&mut self, effect: &Effect, target: Option<Target>, source: CardId) {
+    fn execute_spell_effect(
+        &mut self,
+        effect: &Effect,
+        target: Option<Target>,
+        ctx: &EffectContext,
+    ) {
         match effect {
             Effect::CounterSpell { .. } => {
                 let Some(Target::StackSpell(target_spell)) = target else {
                     return;
                 };
-                self.counter_spell(target_spell, Some(source));
+                self.counter_spell(target_spell, ctx.source);
             }
             _ => {
                 let action_target = target.map(|t| match t {
@@ -154,7 +192,7 @@ impl Game {
                     Target::Permanent(p) => ActionTarget::Permanent(p),
                     Target::StackSpell(c) => ActionTarget::StackSpell(c),
                 });
-                self.execute_effect(effect, action_target, Some(source));
+                self.execute_effect(effect, action_target, ctx);
             }
         }
     }
@@ -163,7 +201,7 @@ impl Game {
         &mut self,
         effect: &Effect,
         target: Option<ActionTarget>,
-        source: Option<CardId>,
+        ctx: &EffectContext,
     ) {
         match effect {
             Effect::ReturnToHand { target: spec } => {
@@ -179,10 +217,10 @@ impl Game {
                 let Some(chosen) = target else { return };
                 match chosen {
                     ActionTarget::Player(player) => {
-                        self.apply_player_damage(source, player, *amount);
+                        self.apply_player_damage(ctx.source, player, *amount);
                     }
                     ActionTarget::Permanent(permanent_id) => {
-                        self.apply_permanent_damage(source, permanent_id, *amount);
+                        self.apply_permanent_damage(ctx.source, permanent_id, *amount);
                     }
                     ActionTarget::StackSpell(_) => {}
                 }
@@ -194,24 +232,15 @@ impl Game {
                 power_delta,
                 toughness_delta,
             } => {
-                let Some(source_card) = source else { return };
-                let Some(perm_id) = self.state.card_to_permanent[source_card] else {
-                    return;
-                };
-                let Some(permanent) = self.state.permanents[perm_id].as_mut() else {
-                    return;
-                };
-                permanent.temp_power += power_delta;
-                permanent.temp_toughness += toughness_delta;
+                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                    permanent.temp_power += power_delta;
+                    permanent.temp_toughness += toughness_delta;
+                }
             }
             Effect::DrawCards { count } => {
-                let Some(source_card) = source else { return };
-                // The card's owner is its controller in this engine (spells are
-                // always cast by their owner), so the owner is the resolving player.
-                let player = self.state.cards[source_card].owner;
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
-                self.draw_cards(player, *count);
+                self.draw_cards(ctx.controller, *count);
             }
             Effect::MassDamage { amount } => {
                 for player in [PlayerId(0), PlayerId(1)] {
@@ -220,13 +249,76 @@ impl Game {
                             continue;
                         };
                         if self.state.cards[permanent.card].types.is_creature() {
-                            self.apply_permanent_damage(source, permanent_id, *amount);
+                            self.apply_permanent_damage(ctx.source, permanent_id, *amount);
                         }
                     }
                 }
                 // Lethal damage is cleaned up by state-based actions (CR 704.5g).
             }
+            Effect::CreateToken {
+                token_name,
+                count,
+                tapped_and_attacking,
+            } => {
+                for _ in 0..*count {
+                    self.create_token(token_name, ctx.controller, *tapped_and_attacking);
+                }
+            }
+            Effect::PutCountersOnSource { count } => {
+                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                    permanent.plus1_counters += count;
+                }
+            }
+            Effect::PutCounters {
+                count,
+                target: spec,
+            } => {
+                let Some(chosen) = target else { return };
+                if !self.is_valid_target_for_spec(chosen, spec) {
+                    return;
+                }
+                if let ActionTarget::Permanent(permanent_id) = chosen {
+                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                        permanent.plus1_counters += count;
+                    }
+                }
+            }
+            Effect::TapSource => {
+                if let Some(permanent_id) = self.source_permanent_id(ctx) {
+                    self.tap_permanent(permanent_id, false);
+                }
+            }
+            Effect::UntapSource => {
+                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                    permanent.untap();
+                    let controller = permanent.controller;
+                    self.invalidate_mana_cache(controller);
+                }
+            }
+            Effect::CantBeBlockedThisTurnSource => {
+                if let Some(permanent) = self.source_permanent_mut(ctx) {
+                    permanent.cant_be_blocked_this_turn = true;
+                }
+            }
+            Effect::GainLife { amount } => {
+                self.gain_life(ctx.controller, *amount);
+            }
+            Effect::OnNthResolutionThisTurn { n, effect } => {
+                if ctx.resolutions_this_turn == *n {
+                    self.execute_effect(effect, target, ctx);
+                }
+            }
         }
+    }
+
+    fn source_permanent_id(&self, ctx: &EffectContext) -> Option<PermanentId> {
+        let source_card = ctx.source?;
+        self.state.card_to_permanent[source_card]
+    }
+
+    fn source_permanent_mut(&mut self, ctx: &EffectContext) -> Option<&mut Permanent> {
+        let permanent_id = self.source_permanent_id(ctx)?;
+        self.state.permanents[permanent_id].as_mut()
     }
 
     fn return_permanent_to_owner_hand(&mut self, permanent_id: PermanentId) {

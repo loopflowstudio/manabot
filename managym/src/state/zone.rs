@@ -84,6 +84,16 @@ impl ZoneManager {
         }
     }
 
+    /// Remove a card from all zones entirely (CR 704.5d — tokens cease to
+    /// exist). The card object remains in `GameState::cards` but is no
+    /// longer in any zone.
+    pub fn remove_card(&mut self, card: CardId, owner: PlayerId) {
+        if let Some(zone) = self.zone_of(card) {
+            self.remove_from_zone(card, owner, zone);
+            self.card_zones[card.0] = None;
+        }
+    }
+
     pub fn move_card(&mut self, card: CardId, owner: PlayerId, to_zone: ZoneType) {
         self.ensure_slot(card);
         if let Some(old_zone) = self.zone_of(card) {

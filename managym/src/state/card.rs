@@ -4,6 +4,7 @@ use super::{
     ability::{Ability, Effect},
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
+    predicate::CardPredicate,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -60,10 +61,6 @@ impl CardTypes {
         self.types.contains(&CardType::Instant)
     }
 
-    pub fn is_instant_speed(&self) -> bool {
-        self.is_instant()
-    }
-
     pub fn is_creature(&self) -> bool {
         self.types.contains(&CardType::Creature)
     }
@@ -103,6 +100,8 @@ pub struct Keywords {
     pub flying: bool,
     pub reach: bool,
     pub haste: bool,
+    /// CR 702.8 — May be cast any time the controller could cast an instant.
+    pub flash: bool,
     pub vigilance: bool,
     pub trample: bool,
     pub first_strike: bool,
@@ -116,6 +115,9 @@ pub struct Keywords {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActivatedAbilityDefinition {
     pub mana_cost: ManaCost,
+    /// Sacrifice the source permanent as an additional activation cost
+    /// (e.g. Clue tokens' "{2}, Sacrifice this token: Draw a card.").
+    pub sacrifice_source: bool,
     pub effect: Effect,
 }
 
@@ -131,6 +133,12 @@ pub struct CardDefinition {
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
     pub spell_effect: Option<Effect>,
     pub keywords: Keywords,
+    /// "This creature can't be blocked by creatures matching [predicate]."
+    pub block_restriction: Option<CardPredicate>,
+    /// Explicit color identity for cards without a mana cost (tokens).
+    pub color_override: Option<Colors>,
+    /// Tokens cease to exist outside the battlefield (CR 111.7, 704.5d).
+    pub is_token: bool,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
@@ -138,6 +146,9 @@ pub struct CardDefinition {
 
 impl CardDefinition {
     pub fn colors(&self) -> Colors {
+        if let Some(colors) = &self.color_override {
+            return colors.clone();
+        }
         self.mana_cost
             .as_ref()
             .map(|m| m.colors())
@@ -160,6 +171,8 @@ pub struct Card {
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
     pub spell_effect: Option<Effect>,
     pub keywords: Keywords,
+    pub block_restriction: Option<CardPredicate>,
+    pub is_token: bool,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
@@ -187,11 +200,22 @@ impl Card {
             activated_abilities: definition.activated_abilities.clone(),
             spell_effect: definition.spell_effect.clone(),
             keywords: definition.keywords.clone(),
+            block_restriction: definition.block_restriction.clone(),
+            is_token: definition.is_token,
             text_box: definition.text_box.clone(),
             power: definition.power,
             toughness: definition.toughness,
             owner,
         }
+    }
+
+    pub fn has_subtype(&self, subtype: &str) -> bool {
+        self.subtypes.iter().any(|s| s == subtype)
+    }
+
+    /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
+    pub fn is_instant_speed(&self) -> bool {
+        self.types.is_instant() || self.keywords.flash
     }
 }
 

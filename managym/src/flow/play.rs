@@ -72,7 +72,7 @@ impl Game {
             (
                 card_ref.types.is_land(),
                 card_ref.owner,
-                card_ref.types.is_instant_speed(),
+                card_ref.is_instant_speed(),
             )
         };
 
@@ -210,6 +210,13 @@ impl Game {
 
         self.produce_mana(player, &ability.mana_cost)?;
         self.spend_mana(player, &ability.mana_cost)?;
+
+        if ability.sacrifice_source {
+            // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
+            // moves the source to its owner's graveyard immediately.
+            self.move_card(source_card, ZoneType::Graveyard);
+            self.invalidate_mana_cache(player);
+        }
 
         let id = self.state.id_gen.next_id();
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {

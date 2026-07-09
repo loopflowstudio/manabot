@@ -39,6 +39,7 @@ impl CardRegistry {
         self.register_alpha();
         self.register_ice_age();
         self.register_visions();
+        self.register_tla();
     }
 
     pub fn register_card(&mut self, definition: CardDefinition) {
@@ -279,6 +280,7 @@ impl CardRegistry {
             },
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("R"),
+                sacrifice_source: false,
                 effect: Effect::ModifyUntilEot {
                     power_delta: 1,
                     toughness_delta: 0,

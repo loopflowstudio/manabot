@@ -5,9 +5,9 @@ use crate::{
     flow::turn::{PhaseKind, StepKind},
 };
 
-pub const PLAYER_DIM: usize = 26;
-pub const CARD_DIM: usize = 29;
-pub const PERMANENT_DIM: usize = 5;
+pub const PLAYER_DIM: usize = 27;
+pub const CARD_DIM: usize = 33;
+pub const PERMANENT_DIM: usize = 7;
 pub const ACTION_TYPE_DIM: usize = 7;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const EVENT_DIM: usize = 7;
@@ -360,6 +360,8 @@ fn encode_player_features(
         out[14 + step_index] = 1.0;
     }
 
+    out[26] = player.graveyard_lessons as f32 / 10.0;
+
     object_to_index.insert(player.id, *current_object_index);
     *current_object_index += 1;
 }
@@ -415,7 +417,11 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[25] = bool_to_f32(card.keywords.lifelink);
     out[26] = bool_to_f32(card.keywords.defender);
     out[27] = bool_to_f32(card.keywords.menace);
-    out[28] = 1.0; // validity flag
+    out[28] = bool_to_f32(card.keywords.flash);
+    out[29] = bool_to_f32(card.is_token);
+    out[30] = bool_to_f32(card.is_ally);
+    out[31] = bool_to_f32(card.is_lesson);
+    out[32] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -448,7 +454,9 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[1] = bool_to_f32(permanent.tapped);
     out[2] = permanent.damage as f32 / 10.0;
     out[3] = bool_to_f32(permanent.is_summoning_sick);
-    out[4] = 1.0;
+    out[4] = permanent.plus1_counters as f32 / 10.0;
+    out[5] = bool_to_f32(permanent.cant_be_blocked_this_turn);
+    out[6] = 1.0;
 }
 
 fn encode_actions(
@@ -592,6 +600,7 @@ mod tests {
                 is_active: true,
                 life: 20,
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
+                graveyard_lessons: 0,
             },
             agent_cards: vec![
                 make_card(111, ZoneType::Hand, true, 2, 2, 1),
@@ -606,6 +615,7 @@ mod tests {
                 is_active: false,
                 life: 18,
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
+                graveyard_lessons: 0,
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -648,6 +658,9 @@ mod tests {
             name: format!("Card {id}"),
             power,
             toughness,
+            is_token: false,
+            is_ally: false,
+            is_lesson: false,
             card_types: CardTypeData {
                 is_castable: true,
                 is_permanent: true,
@@ -677,6 +690,8 @@ mod tests {
             tapped: false,
             damage: 0,
             is_summoning_sick: false,
+            plus1_counters: 0,
+            cant_be_blocked_this_turn: false,
         }
     }
 
@@ -699,11 +714,11 @@ mod tests {
         assert_eq!(encoded.opponent_player[9 + 2], 1.0);
 
         // Validity flags for populated card/permanent slots.
-        assert_eq!(encoded.agent_cards[28], 1.0);
-        assert_eq!(encoded.agent_cards[28 + 29], 1.0);
-        assert_eq!(encoded.agent_cards[28 + 29 * 2], 0.0);
-        assert_eq!(encoded.agent_permanents[4], 1.0);
-        assert_eq!(encoded.agent_permanents[4 + 5], 0.0);
+        assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_cards[CARD_DIM - 1 + CARD_DIM], 1.0);
+        assert_eq!(encoded.agent_cards[CARD_DIM - 1 + CARD_DIM * 2], 0.0);
+        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM], 0.0);
 
         // Expected object indices with padding-aware ordering:
         // players: 0,1; agent cards: [2,3,4]; opponent cards: [5,6,7];
@@ -783,7 +798,7 @@ mod tests {
         let err = encode_into(&obs, &config, out).expect_err("invalid length must fail");
         assert_eq!(
             err.to_string(),
-            "invalid length for agent_player: expected 26, got 1"
+            format!("invalid length for agent_player: expected {PLAYER_DIM}, got 1")
         );
     }
 }
