@@ -4,6 +4,7 @@ pub mod game_object;
 pub mod mana;
 pub mod permanent;
 pub mod player;
+pub mod predicate;
 pub mod stack_object;
 pub mod target;
 pub mod zone;

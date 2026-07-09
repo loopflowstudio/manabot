@@ -33,6 +33,8 @@ pub struct PlayerData {
     pub is_active: bool,
     pub life: i32,
     pub zone_counts: [i32; 7],
+    /// Lesson cards in this player's graveyard.
+    pub graveyard_lessons: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,6 +62,10 @@ pub struct CardData {
     pub name: String,
     pub power: i32,
     pub toughness: i32,
+    pub is_token: bool,
+    /// Subtype tags the current pool cares about.
+    pub is_ally: bool,
+    pub is_lesson: bool,
     pub card_types: CardTypeData,
     pub keywords: KeywordData,
     pub mana_cost: ManaCost,
@@ -70,6 +76,7 @@ pub struct KeywordData {
     pub flying: bool,
     pub reach: bool,
     pub haste: bool,
+    pub flash: bool,
     pub vigilance: bool,
     pub trample: bool,
     pub first_strike: bool,
@@ -122,6 +129,8 @@ pub struct PermanentData {
     pub tapped: bool,
     pub damage: i32,
     pub is_summoning_sick: bool,
+    pub plus1_counters: i32,
+    pub cant_be_blocked_this_turn: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -268,6 +277,10 @@ impl Observation {
             is_active: game.active_player() == player,
             life: p.life,
             zone_counts,
+            graveyard_lessons: game.count_graveyard_matching(
+                player,
+                &crate::state::predicate::CardPredicate::subtype("Lesson"),
+            ) as i32,
         }
     }
 
@@ -335,6 +348,8 @@ impl Observation {
             tapped: permanent.tapped,
             damage: permanent.damage,
             is_summoning_sick: permanent.summoning_sick,
+            plus1_counters: permanent.plus1_counters,
+            cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -355,6 +370,9 @@ impl Observation {
             name: card.name.clone(),
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
+            is_token: card.is_token,
+            is_ally: card.has_subtype("Ally"),
+            is_lesson: card.has_subtype("Lesson"),
             card_types: CardTypeData {
                 is_castable: card.types.is_castable(),
                 is_permanent: card.types.is_permanent(),
@@ -373,6 +391,7 @@ impl Observation {
                 flying: card.keywords.flying,
                 reach: card.keywords.reach,
                 haste: card.keywords.haste,
+                flash: card.keywords.flash,
                 vigilance: card.keywords.vigilance,
                 trample: card.keywords.trample,
                 first_strike: card.keywords.first_strike,
@@ -518,7 +537,13 @@ impl Observation {
                 *source_card,
                 *controller,
             )),
-            GameEvent::TurnStarted { .. } | GameEvent::StepStarted { .. } => None,
+            // Internal trigger-plumbing events; the underlying state changes
+            // are already visible via CardMoved / permanent state.
+            GameEvent::CardDrawn { .. }
+            | GameEvent::PermanentTapped { .. }
+            | GameEvent::AttackersDeclared { .. }
+            | GameEvent::TurnStarted { .. }
+            | GameEvent::StepStarted { .. } => None,
         }
     }
 
@@ -647,6 +672,7 @@ impl Observation {
                 "is_agent": player.is_agent,
                 "life": player.life,
                 "zone_counts": player.zone_counts,
+                "graveyard_lessons": player.graveyard_lessons,
             })
         }
 
@@ -659,6 +685,9 @@ impl Observation {
                 "owner_id": card.owner_id,
                 "power": card.power,
                 "toughness": card.toughness,
+                "is_token": card.is_token,
+                "is_ally": card.is_ally,
+                "is_lesson": card.is_lesson,
                 "card_types": {
                     "is_castable": card.card_types.is_castable,
                     "is_permanent": card.card_types.is_permanent,
@@ -677,6 +706,7 @@ impl Observation {
                     "flying": card.keywords.flying,
                     "reach": card.keywords.reach,
                     "haste": card.keywords.haste,
+                    "flash": card.keywords.flash,
                     "vigilance": card.keywords.vigilance,
                     "trample": card.keywords.trample,
                     "first_strike": card.keywords.first_strike,
@@ -703,6 +733,8 @@ impl Observation {
                 "tapped": permanent.tapped,
                 "damage": permanent.damage,
                 "is_summoning_sick": permanent.is_summoning_sick,
+                "plus1_counters": permanent.plus1_counters,
+                "cant_be_blocked_this_turn": permanent.cant_be_blocked_this_turn,
             })
         }
 

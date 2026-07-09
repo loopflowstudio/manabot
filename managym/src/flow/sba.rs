@@ -4,7 +4,7 @@
 use crate::{
     flow::game::Game,
     state::{
-        game_object::{PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -48,6 +48,24 @@ impl Game {
             let controller = permanent.controller;
             self.move_card(card, ZoneType::Graveyard);
             self.invalidate_mana_cache(controller);
+        }
+
+        // CR 704.5d — A token in a zone other than the battlefield ceases to
+        // exist. This runs after the move to the graveyard, so death triggers
+        // from tokens have already been enqueued.
+        let mut tokens_to_remove = Vec::new();
+        for (index, card) in self.state.cards.iter().enumerate() {
+            if !card.is_token {
+                continue;
+            }
+            let card_id = CardId(index);
+            match self.state.zones.zone_of(card_id) {
+                Some(ZoneType::Battlefield) | None => {}
+                Some(_) => tokens_to_remove.push((card_id, card.owner)),
+            }
+        }
+        for (card_id, owner) in tokens_to_remove {
+            self.state.zones.remove_card(card_id, owner);
         }
     }
 

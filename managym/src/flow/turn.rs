@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::state::game_object::PlayerId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +51,13 @@ pub struct TurnState {
     pub active_player: PlayerId,
     pub turn_number: u32,
     pub lands_played: u32,
+    /// Cards drawn by each player this turn (for "your Nth card each turn"
+    /// triggers). Resets every turn.
+    pub cards_drawn_this_turn: [u32; 2],
+    /// Times each triggered ability `(card index, ability index)` has
+    /// resolved this turn (for "the Nth time this ability has resolved this
+    /// turn" gating). Resets every turn.
+    pub ability_resolutions_this_turn: BTreeMap<(usize, usize), u32>,
     pub current_phase: usize,
     pub current_step: usize,
     pub step_initialized: bool,
@@ -61,6 +70,8 @@ impl TurnState {
             active_player,
             turn_number: 1,
             lands_played: 0,
+            cards_drawn_this_turn: [0, 0],
+            ability_resolutions_this_turn: BTreeMap::new(),
             current_phase: 0,
             current_step: 0,
             step_initialized: false,
@@ -115,6 +126,9 @@ impl TurnState {
         self.turn_number += 1;
         // CR 305.2 — The land-play allowance resets each new turn.
         self.lands_played = 0;
+        // Turn-scoped counters reset with the turn.
+        self.cards_drawn_this_turn = [0, 0];
+        self.ability_resolutions_this_turn.clear();
         self.active_player = PlayerId((self.active_player.0 + 1) % 2);
     }
 }

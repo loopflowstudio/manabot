@@ -93,7 +93,7 @@ impl Game {
             return None;
         }
 
-        let can_cast_now = if card.types.is_instant_speed() {
+        let can_cast_now = if card.is_instant_speed() {
             self.can_cast_instants(player)
         } else {
             self.can_cast_sorceries(player)

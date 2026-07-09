@@ -31,9 +31,13 @@ impl Game {
             return Err(AgentError("permanent cannot attack".to_string()));
         }
 
-        let controller = permanent.controller;
-        permanent.attack_with_card(card);
-        self.invalidate_mana_cache(controller);
+        let has_vigilance = card.keywords.vigilance;
+        permanent.attacking = true;
+        if !has_vigilance {
+            // CR 508.1f — Attackers without vigilance become tapped, which
+            // fires "becomes tapped" triggers.
+            self.tap_permanent(permanent_id, false);
+        }
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
             combat.attacker_to_blockers.entry(permanent_id).or_default();
@@ -237,10 +241,21 @@ impl Game {
             return false;
         }
 
+        if attacker.cant_be_blocked_this_turn {
+            return false;
+        }
+
         if attacker_card.keywords.flying
             && !(blocker_card.keywords.flying || blocker_card.keywords.reach)
         {
             return false;
+        }
+
+        // "This creature can't be blocked by creatures [matching predicate]."
+        if let Some(restriction) = &attacker_card.block_restriction {
+            if self.permanent_matches_predicate(blocker_id, restriction) {
+                return false;
+            }
         }
 
         true
