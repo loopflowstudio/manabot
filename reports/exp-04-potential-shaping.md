@@ -213,3 +213,27 @@ scheduled, using whichever reward wins as the PPO baseline.
 - Tests: `tests/env/test_potential_shaping.py` (8 tests); full suite 189
   passed (tests/gui excluded: missing `httpx2` in the experiment venv,
   unrelated). No Rust touched; cargo test not required.
+
+## Addendum (coordinating session): E2a terminal-only, full results
+
+Seat-balanced 400g vs random, INTERACTIVE_DECK, labels `c2-terminal-s{1,2,3}`:
+
+| seed | overall (LB) | play / draw | cast_w_able | passed_w_able | landed_w_able | gate |
+|---|---|---|---|---|---|---|
+| 1 | 75.5% (.711) | 74.0 / 77.0 | 0.29 | 0.60 | 0.66 | PASS |
+| 2 | 64.5% (.597) | 62.5 / 66.5 | 0.17 | 0.76 | 0.44 | PASS |
+| 3 | 60.0% (.551) | 56.0 / 64.0 | 0.15 | 0.78 | 0.69 | marginal (per-seat) |
+
+The pre-registered E2a prediction (pass-collapse reproduces) is **refuted**.
+Under first-light's diagnostics these behavioral profiles read as collapse
+(passed_when_able 0.60–0.78); they coexist with the best trained win rates to
+date. On this deck heavy passing is patience. Note E2a's seats are balanced
+where E2c seeds 1–2 are strongly seat-lopsided (42/88.5, 99/51) — terminal-only
+produced the more seat-robust policies.
+
+Open questions carried forward: (1) powered E2a-vs-E2c comparison (≥10 seeds
+or head-to-head) before Φ enters any recipe; (2) the discriminating run for
+*why* first-light's terminal-only collapsed — same recipe on STANDARD_DECK,
+current code, labels `c2-vanilla-terminal-s{1,2,3}`, in flight at time of
+writing. Registered prediction (60/40): no collapse — pointing to code-era
+artifact over deck mechanism.

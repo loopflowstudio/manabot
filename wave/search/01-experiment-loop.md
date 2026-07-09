@@ -110,6 +110,26 @@ dense signal no longer costs a strategic prior — goal 5's "delete shaping"
 becomes "replace with Φ," and aux heads stay dead.
 **Cost cap:** 3 dev runs. Local.
 
+**RESULT (2026-07-09):** E2c prediction **confirmed with margin**; E2a
+prediction ("pass-collapse reproduces") **refuted** — and the refutation is
+the headline. Seat-balanced 400g vs random, 3 seeds each:
+
+| arm | win rates | cast_when_able | note |
+|---|---|---|---|
+| E2a terminal-only | **75.5 / 64.5 / 60.0%** | 0.15–0.29 | 2 gate-passes; balanced seats |
+| E2b current shaping | 55.7 / 43.2 / 58.3% | 0.88–0.95 | aggro fingerprint; 0 passes |
+| E2c potential Φ | 75.0 / 68.2 / 65.2% | 0.35–0.38 | fingerprint gone; 1 gate-pass; 2 seeds seat-lopsided |
+
+Every E2c seed beats every E2b seed (non-overlapping CIs). But E2a ≈ E2c
+(means 66.7% vs 69.5%, indistinguishable at n=3): on the interactive deck the
+right amount of shaping may be **zero** — heavy passing is patience, not
+collapse, and pay-per-event shaping was actively harmful. First-light's
+"terminal reward fails / shaping is required" is refuted on this deck; a
+discriminating run (terminal-only on the vanilla deck, current code) is in
+flight to separate deck-mechanism from code-era artifact. Open question
+carried: E2a-vs-E2c needs a powered comparison before Φ enters any default
+recipe. See `reports/exp-04-potential-shaping.md`.
+
 ### C3 — How much intelligence is free?
 
 **Q:** What does zero-training intelligence look like on this engine?
