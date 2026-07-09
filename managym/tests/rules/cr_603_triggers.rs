@@ -132,12 +132,14 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             ability_index: 0,
             controller: PlayerId(1),
             enqueue_order: 0,
+            context: None,
         },
         PendingTrigger {
             source_card: p0_source,
             ability_index: 0,
             controller: PlayerId(0),
             enqueue_order: 1,
+            context: None,
         },
     ];
 
@@ -200,6 +202,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         ability_index: 0,
         controller: PlayerId(0),
         enqueue_order: 0,
+        context: None,
     });
 
     s.pass_priority();

@@ -87,7 +87,7 @@ fn spell_events_are_observable_for_creature_spells() {
 
     assert!(events.contains(&GameEvent::SpellCast {
         card: elf,
-        target: None,
+        targets: Vec::new(),
     }));
     assert!(events.contains(&GameEvent::SpellResolved { card: elf }));
     assert!(events.contains(&GameEvent::CardMoved {

@@ -276,6 +276,15 @@ impl Scenario {
             // should use choose_target_named or explicit action selection instead.
             ActionSpaceKind::ChooseTarget => 0,
             ActionSpaceKind::GameOver => 0,
+            // Mid-resolution / cost decisions default to declining (the
+            // last action is Decline for optional choices); tests that care
+            // pick explicitly.
+            ActionSpaceKind::Scry => 0,
+            ActionSpaceKind::LookAndSelect
+            | ActionSpaceKind::PayOrNot
+            | ActionSpaceKind::DiscardThenDraw => space.actions.len().saturating_sub(1),
+            ActionSpaceKind::Modal => 0,
+            ActionSpaceKind::Waterbend => 0,
         };
         self.step_action(index);
     }
@@ -498,6 +507,29 @@ impl Scenario {
             .position(|action| matches!(action, Action::DeclareBlocker { attacker: None, .. }))
             .expect("no-block action should exist");
         self.step_action(decline_index);
+    }
+
+    /// Tap a specific permanent to pay {1} of a pending waterbend cost.
+    pub fn choose_waterbend_tap(&mut self, permanent: PermanentId) -> bool {
+        let Some(index) = self.action_space().actions.iter().position(|action| {
+            matches!(action, Action::WaterbendTap { permanent: p, .. } if *p == permanent)
+        }) else {
+            return false;
+        };
+        self.step_action(index);
+        true
+    }
+
+    /// Number of untapped battlefield permanents with the given name.
+    pub fn untapped_permanents_named(&self, player: usize, card_name: &str) -> usize {
+        self.battlefield_permanents_named(player, card_name)
+            .into_iter()
+            .filter(|id| {
+                self.game.state.permanents[*id]
+                    .as_ref()
+                    .is_some_and(|permanent| !permanent.tapped)
+            })
+            .count()
     }
 
     pub fn choose_target_named(&mut self, card_name: &str) {

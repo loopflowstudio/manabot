@@ -311,3 +311,63 @@ fn env_fork_is_independent() {
     let result = env.flat_mc_scores(1, 1, 3, 2000).expect("search works");
     assert!(!result.scores.is_empty());
 }
+
+/// Flat MC must survive Stage-2 decision points: play random games on the
+/// Stage-2 decks and, whenever a mid-resolution decision surfaces, run a
+/// small flat-MC evaluation from it (rollouts step through the same
+/// decision machinery).
+#[test]
+fn flat_mc_survives_stage2_decision_points() {
+    use managym::agent::action::ActionSpaceKind;
+
+    let stage2_deck = BTreeMap::from([
+        ("Island".to_string(), 8),
+        ("Mountain".to_string(), 6),
+        ("Glider Kids".to_string(), 4),
+        ("Firebending Lesson".to_string(), 4),
+        ("Accumulate Wisdom".to_string(), 4),
+        ("Pop Quiz".to_string(), 3),
+        ("Igneous Inspiration".to_string(), 3),
+        ("Crossroads of Destiny".to_string(), 3),
+    ]);
+
+    let is_decision_kind = |kind: ActionSpaceKind| {
+        matches!(
+            kind,
+            ActionSpaceKind::Scry
+                | ActionSpaceKind::LookAndSelect
+                | ActionSpaceKind::PayOrNot
+                | ActionSpaceKind::Modal
+                | ActionSpaceKind::DiscardThenDraw
+                | ActionSpaceKind::Waterbend
+        )
+    };
+
+    let mut decisions_evaluated = 0_usize;
+    for seed in 0..12_u64 {
+        let mut env = Env::new(seed, true, false, false);
+        let p0 = PlayerConfig::new("hero", stage2_deck.clone());
+        let p1 = PlayerConfig::new("villain", stage2_deck.clone());
+        env.reset(vec![p0, p1]).expect("reset");
+
+        let mut steps = 0_usize;
+        while !env.is_game_over() && steps < 800 {
+            if decisions_evaluated < 6
+                && env.action_space_kind().is_some_and(is_decision_kind)
+            {
+                let result = env
+                    .flat_mc_scores(1, 1, seed ^ 0xf1a7, 400)
+                    .expect("flat MC at a decision point");
+                assert!(!result.scores.is_empty());
+                decisions_evaluated += 1;
+            }
+            let action = env.random_action_index().expect("action index");
+            env.step(action as i64).expect("step");
+            steps += 1;
+        }
+    }
+    assert!(
+        decisions_evaluated > 0,
+        "expected at least one Stage-2 decision point across seeds"
+    );
+}

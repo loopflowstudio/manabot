@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::state::{
-    ability::{Effect, TargetSpec},
+    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
     card::{
         basic_land, ActivatedAbilityDefinition, Card, CardDefinition, CardType, CardTypes,
         Keywords, ManaAbility,
@@ -39,10 +39,22 @@ impl CardRegistry {
         self.register_alpha();
         self.register_ice_age();
         self.register_visions();
+        self.register_strixhaven();
         self.register_tla();
     }
 
-    pub fn register_card(&mut self, definition: CardDefinition) {
+    pub fn register_card(&mut self, mut definition: CardDefinition) {
+        // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
+        // becomes the target of a spell an opponent controls, counter it
+        // unless that player pays [cost]."
+        if let Some(ward_cost) = definition.ward.clone() {
+            definition.abilities.push(Ability::Triggered {
+                condition: TriggerCondition::BecomesTargeted {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::CounterUnlessPays { cost: ward_cost }],
+            });
+        }
         let registry_key = self.registry_key_gen.next_id();
         let name = definition.name.clone();
         self.cards.insert(
@@ -117,10 +129,10 @@ impl CardRegistry {
             name: "Lightning Bolt".to_string(),
             mana_cost: Some(ManaCost::parse("R")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effect: Some(Effect::DealDamage {
+            spell_effects: vec![Effect::DealDamage {
                 amount: 3,
                 target: TargetSpec::CreatureOrPlayer,
-            }),
+            }],
             text_box: "Lightning Bolt deals 3 damage to any target.".to_string(),
             ..Default::default()
         });
@@ -129,7 +141,7 @@ impl CardRegistry {
             name: "Ancestral Recall".to_string(),
             mana_cost: Some(ManaCost::parse("U")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effect: Some(Effect::DrawCards { count: 3 }),
+            spell_effects: vec![Effect::DrawCards { count: 3 }],
             text_box: "Draw three cards.".to_string(),
             ..Default::default()
         });
@@ -138,9 +150,9 @@ impl CardRegistry {
             name: "Counterspell".to_string(),
             mana_cost: Some(ManaCost::parse("UU")),
             types: CardTypes::new([CardType::Instant]),
-            spell_effect: Some(Effect::CounterSpell {
+            spell_effects: vec![Effect::CounterSpell {
                 target: TargetSpec::Spell,
-            }),
+            }],
             text_box: "Counter target spell.".to_string(),
             ..Default::default()
         });
@@ -281,6 +293,7 @@ impl CardRegistry {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("R"),
                 sacrifice_source: false,
+                waterbend: false,
                 effect: Effect::ModifyUntilEot {
                     power_delta: 1,
                     toughness_delta: 0,

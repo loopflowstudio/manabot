@@ -70,6 +70,39 @@ impl ManaCost {
         out
     }
 
+    /// Component-wise sum of two costs (base + kicker).
+    pub fn plus(&self, other: &ManaCost) -> ManaCost {
+        let mut out = self.clone();
+        for i in 0..out.cost.len() {
+            out.cost[i] = out.cost[i].saturating_add(other.cost[i]);
+        }
+        out.mana_value = out.cost.iter().copied().sum();
+        out
+    }
+
+    /// Reduce the generic component by `amount`, floored at zero
+    /// (affinity-style cost reduction, waterbend payments).
+    pub fn reduced_generic(&self, amount: u8) -> ManaCost {
+        let mut out = self.clone();
+        let generic = &mut out.cost[Color::Generic as usize];
+        *generic = generic.saturating_sub(amount);
+        out.mana_value = out.cost.iter().copied().sum();
+        out
+    }
+
+    /// The generic component of the cost.
+    pub fn generic(&self) -> u8 {
+        self.cost[Color::Generic as usize]
+    }
+
+    /// This cost with the generic component replaced by `generic`.
+    pub fn with_generic(&self, generic: u8) -> ManaCost {
+        let mut out = self.clone();
+        out.cost[Color::Generic as usize] = generic;
+        out.mana_value = out.cost.iter().copied().sum();
+        out
+    }
+
     pub fn colors(&self) -> Colors {
         let mut out = Colors::new();
         for color in [

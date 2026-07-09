@@ -1,3 +1,4 @@
+use super::mana::ManaCost;
 use super::predicate::CardPredicate;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,6 +39,10 @@ pub enum TriggerCondition {
     BecomesTapped { subject: TriggerSubject },
     /// "Whenever [subject] is tapped for mana."
     TappedForMana { subject: TriggerSubject },
+    /// "Whenever [subject] becomes the target of a spell an opponent
+    /// controls." (Ward, CR 702.21.) The triggering spell is threaded to the
+    /// ability's effects as the trigger context target.
+    BecomesTargeted { subject: TriggerSubject },
     /// "At the beginning of your upkeep."
     BeginningOfYourUpkeep,
     /// "Whenever you draw your Nth card each turn." The per-player draw
@@ -113,6 +118,61 @@ pub enum Effect {
         n: u32,
         effect: Box<Effect>,
     },
+    /// Scry `count` (CR 701.26): the controller looks at the top `count`
+    /// cards and decides, one at a time from the top, whether each goes to
+    /// the bottom of the library or stays on top. Kept cards retain their
+    /// relative order (no reordering — engine simplification).
+    Scry {
+        count: usize,
+    },
+    /// "Look at the top `look` cards of your library. Put up to
+    /// `max_select` cards matching [predicate] from among them into your
+    /// hand and the rest on the bottom of your library in a random order."
+    /// `min_select` > 0 makes the selection mandatory when possible.
+    LookAndSelect {
+        look: usize,
+        min_select: usize,
+        max_select: usize,
+        predicate: CardPredicate,
+    },
+    /// Put the top `count` cards of the controller's library into their
+    /// hand (not a draw — no draw triggers).
+    PutTopCardsInHand {
+        count: usize,
+    },
+    /// Learn, without a sideboard (1v1 constructed): "You may discard a
+    /// card. If you do, draw a card."
+    Learn,
+    /// "Choose one —" modal effect. Mode effects must be targetless (engine
+    /// limitation, see Stage 2 notes).
+    Modal {
+        modes: Vec<Vec<Effect>>,
+    },
+    /// "Counter [the spell] unless its controller pays [cost]." The spell is
+    /// the frame's primary target: either a chosen `TargetSpec::Spell`
+    /// target (It'll Quench Ya!) or the trigger-context spell (ward).
+    /// Reports no target spec of its own — targeting is declared on the
+    /// card (`CardDefinition::targeting`) when a choice is required.
+    CounterUnlessPays {
+        cost: ManaCost,
+    },
+    /// Branch on whether the resolving spell was kicked (CR 702.33).
+    IfKicked {
+        then: Vec<Effect>,
+        otherwise: Vec<Effect>,
+    },
+    /// Branch on "if there are `count` or more cards matching [predicate]
+    /// in your graveyard", evaluated at resolution.
+    IfGraveyardAtLeast {
+        count: usize,
+        predicate: CardPredicate,
+        then: Vec<Effect>,
+        otherwise: Vec<Effect>,
+    },
+    /// Allies at Last: all chosen targets except the last each deal damage
+    /// equal to their power to the last target. Targeting is declared on
+    /// the card (`CardDefinition::targeting`).
+    TargetCreaturesDealPowerDamageToLastTarget,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -120,6 +180,32 @@ pub enum TargetSpec {
     Creature,
     CreatureOrPlayer,
     Spell,
+    /// "target spell or permanent with mana value `min_mana_value` or
+    /// greater" (Divide by Zero).
+    SpellOrPermanent { min_mana_value: u8 },
+    /// "target creature you control" — relative to the caster/controller.
+    CreatureYouControl,
+    /// "target creature an opponent controls".
+    CreatureOpponentControls,
+}
+
+/// One targeting clause of a spell: "[up to] N target [spec]".
+/// `min == 0` encodes "up to"; `max` bounds how many may be chosen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TargetRequirement {
+    pub spec: TargetSpec,
+    pub min: usize,
+    pub max: usize,
+}
+
+impl TargetRequirement {
+    pub fn one(spec: TargetSpec) -> Self {
+        Self { spec, min: 1, max: 1 }
+    }
+
+    pub fn up_to(max: usize, spec: TargetSpec) -> Self {
+        Self { spec, min: 0, max }
+    }
 }
 
 impl Effect {
@@ -130,6 +216,13 @@ impl Effect {
             Effect::CounterSpell { target } => Some(target),
             Effect::PutCounters { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
+            Effect::IfKicked { then, otherwise }
+            | Effect::IfGraveyardAtLeast {
+                then, otherwise, ..
+            } => then
+                .iter()
+                .chain(otherwise.iter())
+                .find_map(|effect| effect.target_spec()),
             Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }
@@ -138,7 +231,14 @@ impl Effect {
             | Effect::TapSource
             | Effect::UntapSource
             | Effect::CantBeBlockedThisTurnSource
-            | Effect::GainLife { .. } => None,
+            | Effect::GainLife { .. }
+            | Effect::Scry { .. }
+            | Effect::LookAndSelect { .. }
+            | Effect::PutTopCardsInHand { .. }
+            | Effect::Learn
+            | Effect::Modal { .. }
+            | Effect::CounterUnlessPays { .. }
+            | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
         }
     }
 }

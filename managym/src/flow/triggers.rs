@@ -30,20 +30,11 @@ impl Game {
             return Err(AgentError("wrong player for target selection".to_string()));
         }
 
-        let action_target = match target {
-            Target::Player(p) => ActionTarget::Player(p),
-            Target::Permanent(p) => ActionTarget::Permanent(p),
-            Target::StackSpell(_) => {
-                return Err(AgentError(
-                    "invalid target for triggered ability".to_string(),
-                ));
-            }
-        };
-
         let Some(Some(target_spec)) = self.trigger_target_spec(&pending_trigger) else {
             return Err(AgentError("triggered ability no longer exists".to_string()));
         };
-        if !self.is_valid_target_for_spec(action_target, target_spec) {
+        let target_spec = target_spec.clone();
+        if !self.target_is_legal(target, &target_spec, pending_trigger.controller) {
             return Err(AgentError("selected target is not legal".to_string()));
         }
 
@@ -67,7 +58,9 @@ impl Game {
                     continue;
                 }
                 Some(Some(target_spec)) => {
-                    let legal_targets = self.legal_targets_for_spec(target_spec);
+                    let target_spec = target_spec.clone();
+                    let legal_targets =
+                        self.legal_targets_for_spec(&target_spec, trigger.controller);
                     if legal_targets.is_empty() {
                         // CR 603.3d — Triggered abilities with no legal required targets are removed.
                         continue;
@@ -82,7 +75,11 @@ impl Game {
                             .into_iter()
                             .map(|legal_target| Action::ChooseTarget {
                                 player: controller,
-                                target: legal_target,
+                                target: match legal_target {
+                                    Target::Player(p) => ActionTarget::Player(p),
+                                    Target::Permanent(p) => ActionTarget::Permanent(p),
+                                    Target::StackSpell(c) => ActionTarget::StackSpell(c),
+                                },
                             })
                             .collect(),
                         focus: Vec::new(),
@@ -141,6 +138,7 @@ impl Game {
             source_card_registry_key,
             ability_index: trigger.ability_index,
             targets,
+            context: trigger.context,
         }));
         self.emit(GameEvent::AbilityTriggered {
             source_card: trigger.source_card,
@@ -149,53 +147,69 @@ impl Game {
         self.state.priority.start_round(self.active_player());
     }
 
-    pub(crate) fn legal_targets_for_spec(&self, target_spec: &TargetSpec) -> Vec<ActionTarget> {
+    /// All currently legal targets for a spec, from `controller`'s
+    /// perspective ("you").
+    pub(crate) fn legal_targets_for_spec(
+        &self,
+        target_spec: &TargetSpec,
+        controller: PlayerId,
+    ) -> Vec<Target> {
         match target_spec {
-            TargetSpec::Creature | TargetSpec::CreatureOrPlayer => {
+            TargetSpec::Creature
+            | TargetSpec::CreatureOrPlayer
+            | TargetSpec::CreatureYouControl
+            | TargetSpec::CreatureOpponentControls => {
                 let mut out = Vec::new();
                 if matches!(target_spec, TargetSpec::CreatureOrPlayer) {
-                    out.push(ActionTarget::Player(PlayerId(0)));
-                    out.push(ActionTarget::Player(PlayerId(1)));
+                    out.push(Target::Player(PlayerId(0)));
+                    out.push(Target::Player(PlayerId(1)));
                 }
                 for player in [PlayerId(0), PlayerId(1)] {
                     for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
                         let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
                             continue;
                         };
-                        if self.state.permanents[permanent_id].is_none() {
-                            continue;
-                        }
-                        if self.state.cards[card_id].types.is_creature() {
-                            out.push(ActionTarget::Permanent(permanent_id));
+                        let target = Target::Permanent(permanent_id);
+                        if self.target_is_legal(target, target_spec, controller) {
+                            out.push(target);
                         }
                     }
                 }
                 out
             }
-            TargetSpec::Spell => Vec::new(),
+            TargetSpec::Spell => self.stack_spell_targets(0),
+            TargetSpec::SpellOrPermanent { min_mana_value } => {
+                let mut out = self.stack_spell_targets(*min_mana_value);
+                for player in [PlayerId(0), PlayerId(1)] {
+                    for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
+                        let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
+                            continue;
+                        };
+                        let target = Target::Permanent(permanent_id);
+                        if self.target_is_legal(target, target_spec, controller) {
+                            out.push(target);
+                        }
+                    }
+                }
+                out
+            }
         }
     }
 
-    pub(crate) fn is_valid_target_for_spec(
-        &self,
-        target: ActionTarget,
-        target_spec: &TargetSpec,
-    ) -> bool {
-        match (target, target_spec) {
-            (ActionTarget::Player(_), TargetSpec::CreatureOrPlayer) => true,
-            (
-                ActionTarget::Permanent(permanent_id),
-                TargetSpec::Creature | TargetSpec::CreatureOrPlayer,
-            ) => {
-                let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                    return false;
-                };
-                let card = &self.state.cards[permanent.card];
-                card.types.is_creature()
-                    && self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-            }
-            _ => false,
-        }
+    fn stack_spell_targets(&self, min_mana_value: u8) -> Vec<Target> {
+        self.state
+            .stack_objects
+            .iter()
+            .rev()
+            .filter_map(|object| match object {
+                StackObject::Spell(spell)
+                    if self.card_mana_value(spell.card) >= min_mana_value =>
+                {
+                    Some(Target::StackSpell(spell.card))
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     /// Match pending game events against every triggered ability in play and
@@ -208,6 +222,15 @@ impl Game {
             for event in events {
                 self.check_triggers_for_event(&event);
             }
+        }
+    }
+
+    /// The object from an event that a fired ability's effects may
+    /// reference (e.g. ward counters the spell that targeted its permanent).
+    fn trigger_context_for_event(event: &GameEvent) -> Option<Target> {
+        match event {
+            GameEvent::PermanentTargeted { spell, .. } => Some(Target::StackSpell(*spell)),
+            _ => None,
         }
     }
 
@@ -224,12 +247,14 @@ impl Game {
             }
         }
 
+        let context = Self::trigger_context_for_event(event);
         for (source_card, ability_index, controller) in fired {
             self.state.pending_triggers.push(PendingTrigger {
                 source_card,
                 ability_index,
                 controller,
                 enqueue_order: self.state.trigger_enqueue_counter,
+                context,
             });
             self.state.trigger_enqueue_counter =
                 self.state.trigger_enqueue_counter.saturating_add(1);
@@ -352,6 +377,23 @@ impl Game {
                 },
             ) => {
                 self.subject_matches_permanent(subject, source_card, source_controller, *permanent)
+            }
+            (
+                TriggerCondition::BecomesTargeted { subject },
+                GameEvent::PermanentTargeted {
+                    permanent,
+                    spell_controller,
+                    ..
+                },
+            ) => {
+                // Ward triggers only for spells opponents control (CR 702.21a).
+                *spell_controller != source_controller
+                    && self.subject_matches_permanent(
+                        subject,
+                        source_card,
+                        source_controller,
+                        *permanent,
+                    )
             }
             (
                 TriggerCondition::BeginningOfYourUpkeep,
