@@ -147,10 +147,13 @@ or `export let` silently flips the whole component back to legacy).
 drives the real stack — backend on `MANABOT_API_PORT` (default 8011,
 uvicorn binary override `MANABOT_UVICORN`), vite dev on 5183 — and asserts
 DOM *mutation*: badge reaches "connected", New Game renders a board vs the
-random villain, ten decision points where the game log must grow after every
-click and the board HTML must change across the game, and any console error
-(except the dev favicon 404) fails the run. It fails against the pre-fix
-page and passes now.
+random villain, a full game is played with random legal actions (at least
+ten decision points) where the game log must grow after every click and the
+board HTML must change across the game, and any console error (except the
+dev favicon 404) fails the run. A second spec loads `/replay`, requires the
+fetched trace list to render, and steps through frames asserting the frame
+counter and board follow. The play spec fails against the pre-fix page
+(badge frozen at "disconnected") and passes now.
 
 ## Known gaps Jack will hit
 
