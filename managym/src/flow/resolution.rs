@@ -448,9 +448,7 @@ impl Game {
                     return None;
                 };
                 let (watched_card, controller) = {
-                    let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
-                        return None;
-                    };
+                    let permanent = self.state.permanents[permanent_id].as_mut()?;
                     // The land becomes a 0/0 creature with haste that's
                     // still a land (base 0/0 by construction — lands print
                     // no P/T) and picks up the counters.
@@ -501,9 +499,7 @@ impl Game {
                 if self.state.zones.zone_of(source_card) != Some(ZoneType::Battlefield) {
                     return None;
                 }
-                let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                    return None;
-                };
+                let permanent = self.state.permanents[permanent_id].as_ref()?;
                 let exiled_card = permanent.card;
                 let exiled_controller = permanent.controller;
                 self.move_card(exiled_card, ZoneType::Exile);

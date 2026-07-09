@@ -79,7 +79,7 @@ impl Game {
                     self.can_pay_with_waterbend(player, &ability.mana_cost, waterbend_candidates)
                 } else {
                     if producible.is_none() {
-                        *producible = Some(self.producible_mana(player));
+                        *producible = Some(self.available_mana(player));
                     }
                     producible
                         .as_ref()
@@ -136,8 +136,10 @@ impl Game {
 
         match self.effective_spell_cost(player, card_id, false) {
             Some(cost) => {
+                // Castability gating sees pooled mana too — until-end-of-
+                // combat mana (firebending) must make spells castable.
                 if producible.is_none() {
-                    *producible = Some(self.producible_mana(player));
+                    *producible = Some(self.available_mana(player));
                 }
                 producible
                     .as_ref()
