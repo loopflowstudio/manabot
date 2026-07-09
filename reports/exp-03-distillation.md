@@ -278,3 +278,14 @@ the same cycle — the ladder number above is provisional until then.
 - C1v2 opponents: `/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s{1,2,3}-final/step_65536.pt`
   (read-only; trained pre-fizzle-fix).
 - Machine: Apple M4 Max, Python 3.12, isolated venv, WANDB_MODE=disabled.
+
+## Addendum (coordinating session): the fair-PPO caveat
+
+The matched-cost PPO baseline ran `first_light_shaped_v1` — the recipe exp-04
+convicted while this experiment was in flight. Best-practice PPO on this deck
+is terminal-only (exp-04: 60.0–75.5% at $0.14/seed). Against THAT reference,
+the honest headline is "BC-from-search beats good PPO by ~15+ points at equal
+cost and reaches its strength band at well under half the cost" — not the
+38-point spread vs the shaped baseline. The 22x-budget shaped run reproducing
+the aggro fingerprint exactly (cast 0.97 / pass 0.007) is itself a finding:
+the bias is budget-invariant. Directional verdict unchanged; margins repriced.
