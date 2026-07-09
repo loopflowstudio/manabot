@@ -56,6 +56,95 @@ random-vs-random A-vs-B games to terminal with zero errors; decks exposed to
 the play UI and the training/eval stack (deck constants next to
 INTERACTIVE_DECK); first A-vs-B matchup table (seat-balanced, per-deck).
 
+## Stage 1 RESULT (landed 2026-07-09)
+
+**What landed** (three commits: engine substrate, trace tests, observation
+encoding):
+
+- **Trigger framework** (`state/ability.rs`, `flow/triggers.rs`):
+  `TriggerCondition` now spans `EntersTheBattlefield`, `Dies`, `Attacks`,
+  `BecomesTapped`, `TappedForMana`, `BeginningOfYourUpkeep`, and
+  `YouDrawNthCardThisTurn { n }`, each event-based condition parameterized by
+  a `TriggerSubject` (`This` / `AnotherYouControl(pred)` /
+  `AnyYouControl(pred)`). Events (`StepStarted`, `CardDrawn`,
+  `PermanentTapped { for_mana }`, `AttackersDeclared`) are pumped through
+  `process_game_events` at the top of the priority loop, so triggers work for
+  state changes that happen outside card movement. Attack triggers fire once
+  per declared batch (CR 508.1); "one or more you control attack" fires once
+  per combat. Triggered abilities carry `Vec<Effect>` (Otter-Penguin does two
+  things); targetless triggers go straight onto the stack — the old code
+  silently dropped them. Turn-scoped counters (`cards_drawn_this_turn`,
+  `ability_resolutions_this_turn`) live on `TurnState` and reset with the
+  turn; `Effect::OnNthResolutionThisTurn` implements South Pole Voyager's
+  "second time this ability has resolved this turn" gate.
+- **+1/+1 counters**: `Permanent::plus1_counters` (any permanent, lands
+  included), feeding `effective_power/toughness` and therefore the
+  lethal-damage SBA and power-based predicates.
+- **Tokens**: registry-defined cards with `is_token`; `Game::create_token`
+  supports entering tapped-and-attacking (joins `combat.attackers`, no attack
+  trigger per CR 508.4a). SBA removes tokens from non-battlefield zones after
+  death triggers enqueue (CR 704.5d). `Ally` (1/1 white, `color_override`)
+  and `Clue` ({2}, sac: draw — `sacrifice_source` activation cost) are
+  registered.
+- **Type predicates**: `state/predicate.rs::CardPredicate` (card type,
+  subtype, max power) shared by trigger subjects, block restrictions, and
+  `count_graveyard_matching` (gy Lesson counting). Lesson is just a subtype
+  string on instants/sorceries.
+- **Keywords**: `flash` (via `Card::is_instant_speed`; `CardTypes::
+  is_instant_speed` removed), conditional unblockability as
+  `Card::block_restriction: Option<CardPredicate>` checked against the
+  blocker's *effective* power, plus a `cant_be_blocked_this_turn` permanent
+  flag cleared at cleanup. Vigilance attackers don't emit `PermanentTapped`
+  (verified); haste attackers fire attack triggers on their entry turn
+  (verified).
+- **Observation encoding**: CARD_DIM 29→33 (flash, is_token, is_ally,
+  is_lesson), PERMANENT_DIM 5→7 (plus1_counters, cant_be_blocked_this_turn),
+  PLAYER_DIM 26→27 (graveyard_lessons), mirrored in the Rust encoder,
+  pyo3 bindings, `__init__.pyi`, JSON, and `manabot/env/observation.py`.
+- **Proof cards** (`cardsets/tla.rs`): Kyoshi Warriors, Avatar Enthusiasts,
+  Invasion Reinforcements, Jeong Jeong's Deserters, Tiger-Seal,
+  Otter-Penguin, Forecasting Fortune Teller, plus South Pole Voyager (bonus —
+  fully expressible and exercises Nth-resolution gating + `GainLife`).
+- **Validation**: cargo 135 tests green (107 pre-existing, 28 new: per-card
+  traces + substrate tests incl. `tla_cards.rs`), pytest 209 green after
+  cp312 rebuild, and a 200-seed random-vs-random smoke on a proof-card deck
+  (zero panics, zero stuck games, terminal winner every seed).
+
+**Design decisions Stage 2 must know**
+
+- Triggered abilities support **at most one targeted effect** per ability
+  (`Ability::target_spec` takes the first). Multi-target spells (Fancy
+  Footwork, Allies at Last) need `TargetSpec` growth, not ability-shape
+  growth.
+- `EffectContext { source, controller, resolutions_this_turn }` threads
+  through effect execution; "you" in effect text = `ctx.controller` (spells
+  now use the caster, not the card owner — same thing today, but
+  future-proof).
+- `intervening_if` was **removed** (was scaffolding, nothing used it).
+  Dragonfly Swarm's "if there's a Lesson card in your graveyard" (Stage 3)
+  should come back as a proper *state predicate* type checked at trigger and
+  resolution time (CR 603.4), not as a `TriggerCondition`.
+- `TappedForMana` exists as a stack-trigger condition. Badgermole Cub's
+  "whenever you tap a creature for mana, add {G}" is a **triggered mana
+  ability** (CR 605.1b — no stack); Stage 2/3's waterbend work should route
+  it through mana production directly rather than this condition.
+- Trigger-frequency gating at *enqueue* time ("this ability triggers only
+  once each turn") is not implemented — no Milestone-1 card needs it;
+  resolution counting covers the Voyager pattern.
+- `PutCounters` targets creatures only (`TargetSpec::Creature`); earthbend
+  (Stage 3) targets lands, which needs a land-capable `TargetSpec` — the
+  counter *state* already works on lands.
+- Tokens are real entries in `GameState::cards` (cards vec grows mid-game;
+  `zone_of == None` after they cease). Anything iterating `state.cards` must
+  tolerate zoneless cards.
+- `block_restriction` is not yet agent-visible (no encoding); the
+  `cant_be_blocked_this_turn` flag is. Revisit if a deck card gains a static
+  block restriction (none in Milestone 1; Foggy Swamp Vinebender would be the
+  TLA-commons test card).
+- No Lesson-typed card is registered yet (all four Lesson spells need Stage-2
+  machinery); the gy-Lesson observation path is trace-tested via an injected
+  subtype.
+
 ## Notes
 
 - Cub + Rallier interaction is a real test case: waterbend taps creatures to
