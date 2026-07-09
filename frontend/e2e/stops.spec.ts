@@ -29,8 +29,15 @@ async function openStopsPanel(page: Page): Promise<void> {
   await expect(page.getByTestId('auto-pass-toggle').first()).toBeVisible();
 }
 
+async function updateSeq(page: Page): Promise<number> {
+  return Number(await page.locator('main').getAttribute('data-update-seq'));
+}
+
 // Deterministic scripted hero: develop mana, otherwise pass. Identical
-// engine trajectory whether the passes are clicked or auto-passed.
+// engine trajectory whether the passes are clicked or auto-passed. Each
+// click waits for the server response (data-update-seq increments per
+// applied observation) before choosing again, so the action list is never
+// mid-swap and the click count is exact.
 async function playUntilGameOver(page: Page): Promise<number> {
   const actionButtons = page.getByTestId('action-option');
   const gameOverOverlay = page.getByText('Game Over', { exact: true });
@@ -42,30 +49,24 @@ async function playUntilGameOver(page: Page): Promise<number> {
       return clicks;
     }
 
-    // The action list is replaced when a server response lands, so a sampled
-    // button can vanish between locate and click — retry with a fresh pick.
-    let clicked = false;
-    for (let attempt = 0; attempt < 5 && !clicked; attempt += 1) {
-      if (await gameOverOverlay.isVisible()) {
-        return clicks;
-      }
-      const playLand = actionButtons.filter({ hasText: /Play (Island|Mountain)/ }).first();
-      const passPriority = actionButtons.filter({ hasText: 'Pass priority' }).first();
-      const choice = (await playLand.count()) > 0
-        ? playLand
-        : (await passPriority.count()) > 0
-          ? passPriority
-          : actionButtons.first();
-      try {
-        await choice.click({ timeout: 2_000 });
-        clicked = true;
-      } catch {
-        // list changed under us; resample
-      }
+    const seqBefore = await updateSeq(page);
+    const labels = await actionButtons.allTextContents();
+    let pick = labels.findIndex((label) => /Play (Island|Mountain)/.test(label));
+    if (pick === -1) {
+      pick = labels.findIndex((label) => label.includes('Pass priority'));
     }
-    if (clicked) {
-      clicks += 1;
+    if (pick === -1) {
+      pick = 0;
     }
+    await actionButtons.nth(pick).click();
+    clicks += 1;
+
+    await expect
+      .poll(() => updateSeq(page), {
+        timeout: 30_000,
+        message: `no server response after click ${clicks}`,
+      })
+      .toBeGreaterThan(seqBefore);
   }
 
   throw new Error(`game did not finish within ${MAX_ACTIONS} actions`);
@@ -118,4 +119,32 @@ test('stops cut the clicks needed to finish a game, log keeps narrating', async 
   const logTexts = await page.getByTestId('log-entry').allTextContents();
   expect(logTexts.some((text) => text.startsWith('Villain: '))).toBe(true);
   expect(logTexts.some((text) => /Auto-passed \d+ priority window/.test(text))).toBe(true);
+});
+
+test('F6 passes the turn from the keyboard', async ({ page }) => {
+  await page.route('https://api.scryfall.com/**', (route) =>
+    route.fulfill({ contentType: 'image/png', body: TINY_PNG }),
+  );
+
+  await page.goto('/');
+  await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
+    timeout: 15_000,
+  });
+  await page.locator('select').first().selectOption('random');
+
+  await page.getByRole('button', { name: 'New Game' }).first().click();
+  const board = page.getByTestId('game-board');
+  await expect(board).toBeVisible({ timeout: 15_000 });
+
+  // Default stops: the game opens at my main1 on turn 1.
+  await expect(board).toContainText('Turn 1');
+  await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 15_000 });
+
+  await page.keyboard.press('F6');
+
+  // The rest of turn 1 (including the my-main2 stop) is yielded server-side;
+  // the next surfaced decision is on a later turn.
+  await expect(board).toContainText(/Turn (?!1 )\d+/, { timeout: 30_000 });
+  const logTexts = await page.getByTestId('log-entry').allTextContents();
+  expect(logTexts.some((text) => text.includes('Hero: Pass turn (F6)'))).toBe(true);
 });

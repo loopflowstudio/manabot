@@ -59,6 +59,9 @@ export class GameStore {
   // True while a pass-turn (F6) request is in flight — the server is
   // fast-forwarding priority windows on our behalf.
   fastForwarding = $state(false);
+  // Monotonic count of applied server updates (observation/game_over).
+  // Surfaced in the DOM so tests can serialize on server responses.
+  updateSeq = $state(0);
 
   private logSequence = 0;
 
@@ -143,6 +146,7 @@ export class GameStore {
   ): void {
     const previous = this.observation;
 
+    this.updateSeq += 1;
     this.observation = observation;
     this.actions = actions;
     this.gameOver = observation.game_over;
@@ -175,6 +179,7 @@ export class GameStore {
   ): void {
     const previous = this.observation;
 
+    this.updateSeq += 1;
     this.observation = observation;
     this.actions = [];
     this.gameOver = true;
