@@ -29,27 +29,19 @@ RANDOM_SEARCH_MS_PER_SIM = 113.0 / 256.0
 
 
 def throughput_probe(
-    student: str,
+    spec: dict[str, Any],
     *,
-    sims: int,
     decisions: int,
     seed: int,
-    device: str,
 ) -> dict[str, Any]:
-    """Play psearch self-play decisions on one env; measure cost."""
+    """Play search self-play decisions on one env; measure cost."""
 
     from manabot.env import Env, Match, ObservationSpace, Reward
     from manabot.infra.hypers import MatchHypers, RewardHypers
     from manabot.sim.flat_mc import make_player
     from manabot.verify.util import INTERACTIVE_DECK
 
-    spec = {
-        "kind": "policy_search",
-        "sims": sims,
-        "checkpoint": student,
-        "device": device,
-    }
-    player, _ = make_player(spec, seed=seed)
+    player, _ = make_player(dict(spec), seed=seed)
     obs_space = ObservationSpace()
     match = Match(
         MatchHypers(
@@ -72,21 +64,25 @@ def throughput_probe(
     wall = time.perf_counter() - start
 
     stats = player.stats
-    return {
-        "sims": sims,
+    out = {
+        "spec": {k: v for k, v in spec.items() if k != "checkpoint"},
         "decisions": stats.decisions,
         "wall_seconds": wall,
         "ms_per_decision": 1000.0 * stats.seconds / stats.decisions,
         "playouts": stats.simulations,
         "playouts_per_second": stats.simulations / stats.seconds,
-        "net_obs": stats.net_obs,
-        "net_obs_per_second": stats.net_obs / stats.seconds,
-        "net_forwards": stats.net_forwards,
-        "rollout_steps": stats.rollout_steps,
-        "mean_plies_per_playout": stats.rollout_steps / max(1, stats.simulations),
         "cap_hits": stats.cap_hits,
         "random_search_ms_per_sim_ref": RANDOM_SEARCH_MS_PER_SIM,
     }
+    if hasattr(stats, "net_obs"):
+        out.update(
+            net_obs=stats.net_obs,
+            net_obs_per_second=stats.net_obs / stats.seconds,
+            net_forwards=stats.net_forwards,
+            rollout_steps=stats.rollout_steps,
+            mean_plies_per_playout=stats.rollout_steps / max(1, stats.simulations),
+        )
+    return out
 
 
 def main() -> None:
@@ -118,32 +114,6 @@ def main() -> None:
     def save() -> None:
         out_path.write_text(json.dumps(results, indent=2))
 
-    # Phase A — throughput probe.
-    if "probe" not in results:
-        print(
-            f"[run ] probe: psearch-{args.sims} self-play, "
-            f"{args.probe_decisions} decisions",
-            flush=True,
-        )
-        results["probe"] = throughput_probe(
-            args.student,
-            sims=args.sims,
-            decisions=args.probe_decisions,
-            seed=args.seed,
-            device=args.device,
-        )
-        save()
-    probe = results["probe"]
-    print(
-        f"       {probe['ms_per_decision']:.0f} ms/dec | "
-        f"{probe['playouts_per_second']:.1f} playouts/s | "
-        f"{probe['net_obs_per_second']:.0f} net obs/s | "
-        f"{probe['mean_plies_per_playout']:.0f} plies/playout",
-        flush=True,
-    )
-
-    from manabot.verify.run_flat_mc import run_matchup
-
     psearch_spec = {
         "kind": "policy_search",
         "sims": args.sims,
@@ -152,6 +122,46 @@ def main() -> None:
         "epsilon": args.epsilon,
         "name": f"psearch-{args.sims}",
     }
+
+    # Phase A — throughput probes, both searchers, same box, same day.
+    if "probe" not in results:
+        print(
+            f"[run ] probe: psearch-{args.sims} self-play, "
+            f"{args.probe_decisions} decisions",
+            flush=True,
+        )
+        results["probe"] = throughput_probe(
+            psearch_spec, decisions=args.probe_decisions, seed=args.seed
+        )
+        save()
+    if "probe_random" not in results:
+        print(
+            f"[run ] probe: search-{args.sims} (random rollouts) self-play, "
+            f"{args.probe_decisions} decisions",
+            flush=True,
+        )
+        results["probe_random"] = throughput_probe(
+            {"kind": "search", "sims": args.sims},
+            decisions=args.probe_decisions,
+            seed=args.seed,
+        )
+        save()
+    probe = results["probe"]
+    probe_random = results["probe_random"]
+    print(
+        f"       policy: {probe['ms_per_decision']:.0f} ms/dec | "
+        f"{probe['playouts_per_second']:.1f} playouts/s | "
+        f"{probe['net_obs_per_second']:.0f} net obs/s | "
+        f"{probe['mean_plies_per_playout']:.0f} plies/playout",
+        flush=True,
+    )
+    print(
+        f"       random: {probe_random['ms_per_decision']:.1f} ms/dec | "
+        f"{probe_random['playouts_per_second']:.0f} playouts/s",
+        flush=True,
+    )
+
+    from manabot.verify.run_flat_mc import run_matchup
 
     # Phase B — equal sims.
     key = f"equal_sims_{args.sims}"
@@ -176,11 +186,15 @@ def main() -> None:
             flush=True,
         )
 
-    # Phase C — equal wall-clock (P2).
+    # Phase C — equal wall-clock (P2). N* from the same-day probes:
+    # random-rollout search cost is linear in sims, so its per-sim cost is
+    # probe_random ms/dec divided by the probe's sims.
+    ms_per_sim_today = probe_random["ms_per_decision"] / args.sims
     n_star = args.equal_wallclock_sims or max(
         args.sims,
-        int(round(probe["ms_per_decision"] / RANDOM_SEARCH_MS_PER_SIM)),
+        int(round(probe["ms_per_decision"] / ms_per_sim_today)),
     )
+    results["ms_per_sim_today"] = ms_per_sim_today
     results["equal_wallclock_sims"] = n_star
     key = f"equal_wallclock_{n_star}"
     if key not in results:
