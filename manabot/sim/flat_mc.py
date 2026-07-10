@@ -1,6 +1,6 @@
 """Flat determinized Monte Carlo player and seat-balanced matchup evaluation.
 
-The searcher (exp-02, wave/search C3) runs entirely on engine throughput: at
+The searcher (exp-02, wave/intelligence C3) runs entirely on engine throughput: at
 each of its decision points it asks the Rust engine (managym.Env.flat_mc_scores)
 to evaluate every legal action by W determinized worlds x R uniformly-random
 playouts per action, then plays the argmax. No network, no training.
@@ -42,6 +42,22 @@ from manabot.verify.util import (
 
 DEFAULT_MAX_PLAYOUT_STEPS = 2000
 DEFAULT_ROLLOUTS_PER_WORLD = 4
+
+# managym ActionSpaceKind (managym/src/agent/action.rs), incl. the Stage-2/3
+# mid-resolution decision kinds. Used for per-matchup decision profiles.
+ACTION_SPACE_KIND_NAMES = {
+    0: "game_over",
+    1: "priority",
+    2: "declare_attacker",
+    3: "declare_blocker",
+    4: "choose_target",
+    5: "scry",
+    6: "look_and_select",
+    7: "pay_or_not",
+    8: "modal",
+    9: "discard_then_draw",
+    10: "waterbend",
+}
 
 
 def wilson_interval(wins: int, total: int, z: float = 1.96) -> tuple[float, float]:
@@ -310,6 +326,11 @@ class GameRecord:
     hero_won: bool
     winner: int | None
     steps: int
+    # Decision-profile instrumentation (exp-00 style): total turns and
+    # surfaced decisions by ActionSpaceKind, split hero/villain.
+    turns: int = 0
+    hero_decisions: dict[str, int] = field(default_factory=dict)
+    villain_decisions: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -374,8 +395,15 @@ def play_games(
         done = False
         steps = 0
         info: dict[str, Any] = {}
+        hero_decisions: dict[str, int] = {}
+        villain_decisions: dict[str, int] = {}
         while not done:
-            acting = int(env.last_raw_obs.agent.player_index)
+            raw = env.last_raw_obs
+            acting = int(raw.agent.player_index)
+            kind_id = int(raw.action_space.action_space_type)
+            kind = ACTION_SPACE_KIND_NAMES.get(kind_id, f"unknown_{kind_id}")
+            counts = hero_decisions if acting == hero_seat else villain_decisions
+            counts[kind] = counts.get(kind, 0) + 1
             player = hero_player if acting == hero_seat else villain_player
             action = player.act(env, obs)
             obs, _, terminated, truncated, info = env.step(action)
@@ -389,6 +417,9 @@ def play_games(
                 hero_won=winner == hero_seat,
                 winner=winner,
                 steps=steps,
+                turns=int(env.last_raw_obs.turn.turn_number),
+                hero_decisions=hero_decisions,
+                villain_decisions=villain_decisions,
             )
         )
     wall_seconds = time.perf_counter() - start

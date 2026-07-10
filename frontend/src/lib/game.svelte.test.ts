@@ -172,6 +172,55 @@ describe('GameStore', () => {
     expect(store.stops).toEqual(echo);
   });
 
+  it('defaults to the UR-vs-GW matchup and sends deck names in new_game', () => {
+    const store = createGameStore();
+    expect(store.decks).toEqual({ hero: 'ur_lessons', villain: 'gw_allies' });
+
+    const config = store.newGameConfig();
+    expect(config.hero_deck).toBe('ur_lessons');
+    expect(config.villain_deck).toBe('gw_allies');
+
+    store.setHeroDeck('gw_allies');
+    store.setVillainDeck('interactive');
+    const updated = store.newGameConfig();
+    expect(updated.hero_deck).toBe('gw_allies');
+    expect(updated.villain_deck).toBe('interactive');
+  });
+
+  it('sanitizes stored deck selections and falls back to defaults', async () => {
+    const { sanitizeDeckSelection, defaultDeckSelection } = await import('./decks');
+
+    expect(sanitizeDeckSelection({ hero: 'interactive', villain: 'gw_allies' })).toEqual({
+      hero: 'interactive',
+      villain: 'gw_allies',
+    });
+    expect(sanitizeDeckSelection({ hero: 'not_a_deck', villain: 'gw_allies' })).toBeNull();
+    expect(sanitizeDeckSelection('garbage')).toBeNull();
+    expect(sanitizeDeckSelection(null)).toBeNull();
+    expect(defaultDeckSelection()).toEqual({ hero: 'ur_lessons', villain: 'gw_allies' });
+  });
+
+  it('adopts the server deck-names echo for the game header', () => {
+    const store = createGameStore();
+    expect(store.deckNames).toBeNull();
+
+    store.applyObservation(
+      makeObservation(),
+      [],
+      undefined,
+      undefined,
+      [],
+      undefined,
+      0,
+      { hero: 'UR Lessons', villain: 'GW Allies' },
+    );
+
+    expect(store.deckNames).toEqual({
+      hero: 'UR Lessons',
+      villain: 'GW Allies',
+    });
+  });
+
   it('narrates auto-passed windows and clears the fast-forward flag', () => {
     const store = createGameStore();
     store.beginFastForward();

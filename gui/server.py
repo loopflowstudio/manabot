@@ -15,16 +15,22 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 # Local imports
-from manabot.env.observation import ActionEnum, PhaseEnum, StepEnum, ZoneEnum
+from manabot.env.observation import (
+    ActionEnum,
+    ActionSpaceEnum,
+    PhaseEnum,
+    StepEnum,
+    ZoneEnum,
+)
 import managym
 
 from . import trace as trace_store, villain as villain_module
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
-# Mirror of manabot.verify.util.INTERACTIVE_DECK (copied so the server does
-# not import torch at startup; tests assert the two stay in sync).
-DEFAULT_DECK = {
+# Mirrors of manabot.verify.util deck constants (copied so the server does
+# not import torch at startup; tests assert they stay in sync).
+INTERACTIVE_DECK = {
     "Island": 12,
     "Mountain": 12,
     "Gray Ogre": 6,
@@ -36,6 +42,58 @@ DEFAULT_DECK = {
     "Ancestral Recall": 3,
     "Pyroclasm": 3,
 }
+UR_LESSONS_DECK = {
+    "Island": 9,
+    "Mountain": 8,
+    "Tiger-Seal": 2,
+    "Otter-Penguin": 2,
+    "Fire Nation Cadets": 2,
+    "First-Time Flyer": 2,
+    "Forecasting Fortune Teller": 1,
+    "Dragonfly Swarm": 1,
+    "Firebending Lesson": 4,
+    "Igneous Inspiration": 2,
+    "Pop Quiz": 2,
+    "Divide by Zero": 2,
+    "It'll Quench Ya!": 2,
+    "Accumulate Wisdom": 2,
+}
+GW_ALLIES_DECK = {
+    "Plains": 9,
+    "Forest": 8,
+    "Water Tribe Rallier": 2,
+    "Invasion Reinforcements": 2,
+    "Compassionate Healer": 2,
+    "Earth Kingdom Jailer": 2,
+    "White Lotus Reinforcements": 2,
+    "Earth King's Lieutenant": 2,
+    "Kyoshi Warriors": 2,
+    "Badgermole Cub": 2,
+    "Suki, Kyoshi Warrior": 1,
+    "South Pole Voyager": 1,
+    "Allies at Last": 2,
+    "Yip Yip!": 1,
+    "Fancy Footwork": 2,
+}
+
+# Decks selectable by name over the wire (new_game.config hero_deck /
+# villain_deck may be one of these keys instead of a {card: count} object).
+NAMED_DECKS: dict[str, dict[str, int]] = {
+    "interactive": INTERACTIVE_DECK,
+    "ur_lessons": UR_LESSONS_DECK,
+    "gw_allies": GW_ALLIES_DECK,
+}
+DECK_DISPLAY_NAMES = {
+    "interactive": "Interactive",
+    "ur_lessons": "UR Lessons",
+    "gw_allies": "GW Allies",
+    "custom": "Custom",
+}
+# Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
+DEFAULT_HERO_DECK_NAME = "ur_lessons"
+DEFAULT_VILLAIN_DECK_NAME = "gw_allies"
+# Backwards-compatible alias (tests and older callers).
+DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
@@ -141,8 +199,14 @@ def _serialize_permanent(
         "tapped": bool(permanent.tapped),
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
-        "power": int(card.power) if card else None,
-        "toughness": int(card.toughness) if card else None,
+        # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
+        # SBA actually checks. Printed values ride alongside so the UI can
+        # show "4/4 (2/2)" on a buffed permanent.
+        "power": int(permanent.power),
+        "toughness": int(permanent.toughness),
+        "base_power": int(card.power) if card else None,
+        "base_toughness": int(card.toughness) if card else None,
+        "plus1_counters": int(permanent.plus1_counters),
     }
 
 
@@ -253,7 +317,11 @@ def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
     return names
 
 
-def _format_action(action: managym.Action, names: dict[int, str]) -> str:
+def _format_action(
+    action: managym.Action,
+    names: dict[int, str],
+    space_kind: str = "",
+) -> str:
     """Render a legal action in Magic terms with card names.
 
     Focus semantics (managym observation.rs action_focus):
@@ -262,6 +330,10 @@ def _format_action(action: managym.Action, names: dict[int, str]) -> str:
       DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
                               (one entry means "this creature does not block")
       CHOOSE_TARGET:          [player_id or permanent_id]
+      SCRY_* / SELECT_CARD:   [card_id] (library cards revealed by the
+                              pending decision are in the observation)
+      TAP_FOR_COST:           [permanent_id]
+      DECLINE/PAY/MODE:       [resolving or cast card_id]
       PASS_PRIORITY:          []
     """
     action_name = _enum_name(ActionEnum, action.action_type)
@@ -282,6 +354,26 @@ def _format_action(action: managym.Action, names: dict[int, str]) -> str:
         return f"{first}: do not block"
     if action_name == "CHOOSE_TARGET" and first:
         return f"Target {first}"
+    # Mid-resolution decision actions (scry / look-and-select / learn /
+    # pay-or-not / modal / waterbend) in Magic terms.
+    if action_name == "SCRY_KEEP" and first:
+        return f"Keep {first} on top"
+    if action_name == "SCRY_BOTTOM" and first:
+        return f"Put {first} on the bottom"
+    if action_name == "SELECT_CARD" and first:
+        if space_kind == "DISCARD_THEN_DRAW":
+            return f"Discard {first}, then draw a card"
+        return f"Put {first} into your hand"
+    if action_name == "DECLINE_CHOICE":
+        if space_kind == "DISCARD_THEN_DRAW":
+            return "Keep your hand (do not discard)"
+        return "Decline"
+    if action_name == "PAY_COST":
+        return f"Pay the cost ({first})" if first else "Pay the cost"
+    if action_name == "CHOOSE_MODE":
+        return f"Choose a mode ({first})" if first else "Choose a mode"
+    if action_name == "TAP_FOR_COST" and first:
+        return f"Tap {first} to help pay"
 
     label = ACTION_LABELS.get(action_name, action_name)
     if first:
@@ -292,6 +384,7 @@ def _format_action(action: managym.Action, names: dict[int, str]) -> str:
 def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     names = _build_id_to_name(obs)
+    space_kind = _enum_name(ActionSpaceEnum, int(obs.action_space.action_space_type))
     for index, action in enumerate(obs.action_space.actions):
         focus = [int(value) for value in action.focus]
         results.append(
@@ -299,7 +392,7 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
                 "index": index,
                 "type": _enum_name(ActionEnum, action.action_type),
                 "focus": focus,
-                "description": _format_action(action, names),
+                "description": _format_action(action, names, space_kind),
             }
         )
     return results
@@ -400,11 +493,27 @@ def _parse_flag(data: dict[str, Any], key: str, default: bool) -> bool:
     return value
 
 
-def _normalize_deck(value: Any, fallback: dict[str, int]) -> dict[str, int]:
+def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str]:
+    """Resolve a wire deck config to ``(deck, deck_name)``.
+
+    Accepts a named deck (one of NAMED_DECKS), a {card: count} object
+    (recorded as "custom"), or None (the named fallback).
+    """
     if value is None:
-        return dict(fallback)
+        return dict(NAMED_DECKS[fallback_name]), fallback_name
+    if isinstance(value, str):
+        if value not in NAMED_DECKS:
+            raise ValueError(
+                "Unknown deck name: "
+                + repr(value)
+                + ". Valid decks: "
+                + ", ".join(sorted(NAMED_DECKS))
+            )
+        return dict(NAMED_DECKS[value]), value
     if not isinstance(value, dict):
-        raise ValueError("Deck config must be an object of {card_name: count}.")
+        raise ValueError(
+            "Deck config must be a deck name or an object of {card_name: count}."
+        )
 
     deck: dict[str, int] = {}
     for card_name, count in value.items():
@@ -420,7 +529,7 @@ def _normalize_deck(value: Any, fallback: dict[str, int]) -> dict[str, int]:
             raise ValueError(f"Deck count for '{card_name}' must be non-negative.")
         deck[card_name] = normalized_count
 
-    return deck
+    return deck, "custom"
 
 
 def _parse_game_config(config: Any) -> GameConfig:
@@ -468,9 +577,18 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_checkpoint = checkpoint_value
         villain_deterministic = bool(data.get("villain_deterministic", False))
 
+    hero_deck, hero_deck_name = _normalize_deck(
+        data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
+    )
+    villain_deck, villain_deck_name = _normalize_deck(
+        data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
+    )
+
     return GameConfig(
-        hero_deck=_normalize_deck(data.get("hero_deck"), DEFAULT_DECK),
-        villain_deck=_normalize_deck(data.get("villain_deck"), DEFAULT_DECK),
+        hero_deck=hero_deck,
+        villain_deck=villain_deck,
+        hero_deck_name=hero_deck_name,
+        villain_deck_name=villain_deck_name,
         villain_type=villain_type,
         seed=seed,
         villain_sims=villain_sims,
@@ -490,6 +608,8 @@ class GameSession:
         self.villain_policy: VillainPolicy | None = None
         self.trace: Trace | None = None
         self.trace_id: str | None = None
+        # Display names for the current matchup, echoed on every payload.
+        self.deck_names: dict[str, str] | None = None
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
@@ -526,6 +646,10 @@ class GameSession:
         ]
         self.obs, _ = self.env.reset(player_configs)
 
+        self.deck_names = {
+            "hero": DECK_DISPLAY_NAMES.get(config.hero_deck_name, "Custom"),
+            "villain": DECK_DISPLAY_NAMES.get(config.villain_deck_name, "Custom"),
+        }
         self.trace = Trace(
             config=config,
             events=[],
@@ -768,6 +892,8 @@ class GameSession:
                 "winner": _winner_for_hero(self.obs),
                 "stops": self._stops_payload(),
             }
+            if self.deck_names:
+                payload["deck_names"] = dict(self.deck_names)
             if log:
                 payload["log"] = log
             if auto_passed:
@@ -778,8 +904,13 @@ class GameSession:
             "type": "observation",
             "data": data,
             "actions": describe_actions(self.obs),
+            "action_space": _enum_name(
+                ActionSpaceEnum, int(self.obs.action_space.action_space_type)
+            ),
             "stops": self._stops_payload(),
         }
+        if self.deck_names:
+            payload["deck_names"] = dict(self.deck_names)
         if log:
             payload["log"] = log
         if auto_passed:

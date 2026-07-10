@@ -183,14 +183,17 @@ class TestEnumParity:
 class TestObservationEncoder:
     """Test the observation encoder's core functionality."""
 
-    def test_default_padding_targets_182_objects(self):
+    def test_default_padding_targets_202_objects(self):
+        # 2 players + 60 cards x 2 + 40 permanents x 2 (permanent capacity
+        # raised 30 -> 40: token-heavy GW games exceeded 30 battlefield
+        # entries and truncated).
         default_encoder = ObservationEncoder(ObservationSpaceHypers())
         total_objects = (
             2
             + default_encoder.cards_per_player * 2
             + default_encoder.perms_per_player * 2
         )
-        assert total_objects == 182
+        assert total_objects == 202
 
     def get_expected_keys(self) -> Set[str]:
         """Get the complete set of expected keys in an encoded observation."""

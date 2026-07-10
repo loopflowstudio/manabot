@@ -24,6 +24,10 @@ class GameConfig:
     villain_deck: dict[str, int]
     villain_type: str
     seed: int | None = None
+    # Named-deck identifiers ("interactive" / "ur_lessons" / "gw_allies" /
+    # "custom") — recorded so every trace is attributable to an exact matchup.
+    hero_deck_name: str = "custom"
+    villain_deck_name: str = "custom"
     # Opponent parameters (recorded in traces so every game is attributable
     # to an exact opponent configuration).
     villain_sims: int | None = None  # search: simulations per legal action

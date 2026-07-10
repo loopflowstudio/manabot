@@ -12,4 +12,4 @@ as follows.
 | `scale` | `01-throughput.md` became search goal 1 (batched inference, pulled at C5, not pushed). `02-game-theory.md` became the pre-registered pivots: Exit 1 (belief-based) and Exit 2 (model-free game-theoretic). |
 | `architecture` | Dissolved into the loop: architecture changes are experiments (question, prediction, cost cap, report) — not a standing front. |
 | `gui` | **Restarted 2026-07-09** — moved back to `wave/gui/` with a new charter: human-vs-bot play as a learning instrument (pluggable trained/search opponents, competency checklist, best-of-N protocol). Product polish stays out of scope. |
-| `publishing` | Replaced by the release bar in `wave/search/01-experiment-loop.md`: promotion rides with the first citable result, not with completeness. |
+| `publishing` | Replaced by the release bar in `wave/intelligence/01-experiment-loop.md`: promotion rides with the first citable result, not with completeness. |

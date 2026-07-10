@@ -99,6 +99,21 @@ class Env(gym.Env):
         # Gymnasium requires calling this for seeding (if you use self.np_random)
         super().reset(seed=seed)
 
+        # managym.Env has no set_seed and its reset() reuses the constructor
+        # seed, so honoring a new seed requires rebuilding the engine. Without
+        # this, reset(seed=...) silently replays the identical deal (same
+        # shuffles/opening hands) for every value of seed — which is what the
+        # evaluation harness had been doing historically (see
+        # reports/exp-06-newworld-training.md).
+        if seed is not None and seed != self.seed:
+            self.seed = seed
+            self._engine = managym.Env(
+                seed=self.seed,
+                skip_trivial=self.skip_trivial,
+                enable_profiler=self.enable_profiler,
+                enable_behavior_tracking=self.enable_behavior_tracking,
+            )
+
         match = self.match if not options else options.get("match", self.match)
 
         # Get the initial managym observation
@@ -144,6 +159,18 @@ class Env(gym.Env):
         py_obs = self.obs_space.encode(raw_obs)
         self._last_obs = raw_obs
         return py_obs, reward, terminated, truncated, info
+
+    def scenario_refresh(self) -> tuple[dict, "managym.Observation"]:
+        """Re-sync after managym scenario_* state injection.
+
+        The competency harness (manabot/verify/competency.py) constructs
+        positions via the engine's scenario_* helpers on ``self._engine``;
+        those leave the cached observation and action space stale. This
+        recomputes both and returns (encoded_obs, raw_obs).
+        """
+        raw_obs = self._engine.scenario_refresh()
+        self._last_obs = raw_obs
+        return self.obs_space.encode(raw_obs), raw_obs
 
     def render(self):
         pass
