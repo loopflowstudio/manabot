@@ -1,5 +1,22 @@
 # Search
 
+> **Scope (2026-07-10):** this is the main wave — search AND beliefs, one arc:
+> decision-time planning under hidden information. The beliefs design lives in
+> [02-beliefs-design.md](02-beliefs-design.md). Two constraints now bind every
+> cycle:
+>
+> **Worlds.** An observation/action-shape change is a *world version*, and
+> worlds are frozen deliberately, not dribbled: every checkpoint, shard, and
+> report carries its world tag; numbers from different worlds never share a
+> table untagged; on each freeze, the headline baselines are re-run in the new
+> world before new claims are made. (Cost of ignoring this, measured: every
+> exp-07 artifact was dead on arrival in exp-10.)
+>
+> **Pacing.** A cycle is not closed when its report lands — it is closed when
+> its result is integrated into `paper/` in a form the owner can re-derive and
+> defend at a whiteboard. Agent throughput never outruns that gate. One cycle
+> in flight remains the rule; un-integrated results queue, they do not stack.
+
 ## Vision
 
 Make search the teacher.
