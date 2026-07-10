@@ -46,6 +46,24 @@ SCORE_KEY = "scores"
 # -----------------------------------------------------------------------------
 
 
+def _git_commit() -> str | None:
+    try:
+        import subprocess
+
+        return (
+            subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=Path(__file__).resolve().parent,
+                timeout=5,
+            ).stdout.strip()
+            or None
+        )
+    except Exception:
+        return None
+
+
 def generate_selfplay_shard(
     *,
     num_games: int,
@@ -55,6 +73,7 @@ def generate_selfplay_shard(
     game_offset: int = 0,
     out_path: str | Path | None = None,
     max_steps_per_game: int = 5000,
+    round_index: int = 0,
 ) -> dict[str, Any]:
     """Play teacher-vs-teacher self-play games, recording every decision.
 
@@ -166,6 +185,25 @@ def generate_selfplay_shard(
         else np.zeros((0, max_actions), dtype=np.float32)
     )
 
+    # Provenance tag (expert-iteration staleness accounting, exp-07): who
+    # generated these labels, with what rollout policy, at which round, from
+    # which code. Self-play mirror, so the generating opponent is the teacher.
+    import json as _json
+
+    provenance = {
+        "round": round_index,
+        "teacher_spec": {
+            k: v for k, v in teacher_spec.items() if k != "device"
+        },
+        "teacher_name": teacher_name,
+        "rollout_policy_checkpoint": teacher_spec.get("checkpoint"),
+        "generating_opponent": teacher_name,
+        "git_commit": _git_commit(),
+        "seed": seed,
+        "game_offset": game_offset,
+    }
+    arrays["provenance"] = np.array(_json.dumps(provenance))
+
     if out_path is not None:
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,6 +217,7 @@ def generate_selfplay_shard(
     }
     return {
         "teacher": teacher_name,
+        "provenance": provenance,
         "num_games": num_games,
         "decisions": len(actions),
         "wall_seconds": wall_seconds,
@@ -194,14 +233,52 @@ def generate_selfplay_shard(
 # -----------------------------------------------------------------------------
 
 
-def load_shards(paths: list[str | Path]) -> dict[str, np.ndarray]:
-    """Load and concatenate dataset shards."""
+def load_shards(
+    paths: list[str | Path],
+    *,
+    rounds: list[int] | None = None,
+) -> dict[str, np.ndarray]:
+    """Load and concatenate dataset shards.
+
+    Adds a per-decision "round" column (expert-iteration staleness
+    diagnostic): taken from ``rounds`` (one per shard) when given, else from
+    each shard's embedded provenance tag, else -1 for legacy shards.
+    """
+
+    import json as _json
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)
     if all(SCORE_KEY in s for s in shards):
         keys.append(SCORE_KEY)
-    return {key: np.concatenate([s[key] for s in shards]) for key in keys}
+    out = {key: np.concatenate([s[key] for s in shards]) for key in keys}
+
+    round_cols = []
+    for i, shard in enumerate(shards):
+        if rounds is not None:
+            shard_round = int(rounds[i])
+        elif "provenance" in shard:
+            shard_round = int(_json.loads(str(shard["provenance"])).get("round", -1))
+        else:
+            shard_round = -1
+        round_cols.append(
+            np.full(len(shard["action"]), shard_round, dtype=np.int16)
+        )
+    out["round"] = np.concatenate(round_cols)
+
+    # Game indices are only unique within a round's shard set; offset them
+    # per round so the by-game train/val split never merges games across
+    # rounds.
+    unique_rounds = np.unique(out["round"])
+    if len(unique_rounds) > 1:
+        game_index = out["game_index"].astype(np.int64)
+        offset = 0
+        for r in unique_rounds:
+            rows = out["round"] == r
+            game_index[rows] += offset
+            offset = int(game_index[rows].max()) + 1
+        out["game_index"] = game_index
+    return out
 
 
 def split_by_game(
@@ -228,6 +305,11 @@ class BCEpochStats:
     val_loss: float
     val_accuracy: float
     val_accuracy_nontrivial: float
+    # Staleness diagnostic (exp-07): validation loss on the freshest round's
+    # decisions only, vs the aggregate val_loss above. Only populated when
+    # the training data spans multiple rounds; divergence between the two
+    # curves is the pre-registered trigger for replay-window tuning.
+    val_loss_fresh: float | None = None
 
 
 def _batch_tensors(
@@ -342,6 +424,15 @@ def train_bc(
     rng = np.random.default_rng(seed)
     history: list[BCEpochStats] = []
 
+    # Staleness diagnostic: freshest-round-only val subset, when the data
+    # spans rounds (expert-iteration aggregation).
+    fresh_val_idx: np.ndarray | None = None
+    if "round" in dataset and len(np.unique(dataset["round"])) > 1:
+        fresh_round = int(dataset["round"].max())
+        fresh_val_idx = val_idx[dataset["round"][val_idx] == fresh_round]
+        if len(fresh_val_idx) == 0:
+            fresh_val_idx = None
+
     for epoch in range(epochs):
         agent.train()
         order = train_idx.copy()
@@ -366,18 +457,30 @@ def train_bc(
         val_loss, val_acc, val_acc_nontrivial = evaluate_bc(
             agent, dataset, val_idx, batch_size=batch_size, device=dev
         )
+        val_loss_fresh = None
+        if fresh_val_idx is not None:
+            val_loss_fresh, _, _ = evaluate_bc(
+                agent, dataset, fresh_val_idx, batch_size=batch_size, device=dev
+            )
         stats = BCEpochStats(
             epoch=epoch,
             train_loss=total_loss / max(1, len(order)),
             val_loss=val_loss,
             val_accuracy=val_acc,
             val_accuracy_nontrivial=val_acc_nontrivial,
+            val_loss_fresh=val_loss_fresh,
         )
         history.append(stats)
         if log:
+            fresh_part = (
+                f" val_loss_fresh {stats.val_loss_fresh:.4f}"
+                if stats.val_loss_fresh is not None
+                else ""
+            )
             print(
                 f"  epoch {epoch}: train_loss {stats.train_loss:.4f} "
-                f"val_loss {stats.val_loss:.4f} val_acc {stats.val_accuracy:.4f} "
+                f"val_loss {stats.val_loss:.4f}{fresh_part} "
+                f"val_acc {stats.val_accuracy:.4f} "
                 f"val_acc_nontrivial {stats.val_accuracy_nontrivial:.4f}",
                 flush=True,
             )

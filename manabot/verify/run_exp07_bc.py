@@ -56,6 +56,16 @@ def quick_eval_vs_random(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=str, required=True)
+    parser.add_argument(
+        "--round", type=int, default=0, help="round tag for --data-dir shards"
+    )
+    parser.add_argument(
+        "--extra-data-dir",
+        type=str,
+        default=None,
+        help="optional second shard dir (multi-round aggregate training)",
+    )
+    parser.add_argument("--extra-round", type=int, default=0)
     parser.add_argument("--out", type=str, required=True)
     parser.add_argument("--log", type=str, required=True)
     parser.add_argument("--taus", type=str, default="0.03,0.05,0.1")
@@ -84,11 +94,19 @@ def main() -> None:
     shard_paths = sorted(glob.glob(str(Path(args.data_dir) / "shard_*.npz")))
     if not shard_paths:
         raise SystemExit(f"no shards found under {args.data_dir}")
+    rounds = [args.round] * len(shard_paths)
+    if args.extra_data_dir:
+        extra = sorted(glob.glob(str(Path(args.extra_data_dir) / "shard_*.npz")))
+        if not extra:
+            raise SystemExit(f"no shards found under {args.extra_data_dir}")
+        shard_paths = shard_paths + extra
+        rounds = rounds + [args.extra_round] * len(extra)
 
     sweep_start = time.perf_counter()
-    dataset = load_shards(shard_paths)
+    dataset = load_shards(shard_paths, rounds=rounds)
     print(
-        f"loaded {len(dataset['action'])} decisions from {len(shard_paths)} shards",
+        f"loaded {len(dataset['action'])} decisions from {len(shard_paths)} shards "
+        f"(rounds {sorted(set(rounds))})",
         flush=True,
     )
 
