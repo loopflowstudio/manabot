@@ -1,10 +1,13 @@
 """Exp-07 (wave/search C7): judge a distilled student (standard protocol).
 
 Matrix per student:
-    1. student (argmax) vs random — seat-balanced, batched vector driver;
+    1. student vs random — seat-balanced, batched vector driver;
     2. ladder rungs: student vs search-{8,16,32,64} (process-parallel);
     3. behavioral profile (cast_when_able / passed_when_able, exp-01 metrics);
-    4. optional head-to-head vs another checkpoint (both argmax, batched).
+    4. optional head-to-head vs another checkpoint (batched).
+
+Policies sample stochastically from masked softmax — the exp-00c/01/02/03
+protocol.
 
 Usage:
     python -m manabot.verify.run_exp07_judge --student .runs/exp07/student_r0.pt \
@@ -29,7 +32,7 @@ def batched_matchup(
     device: str,
     num_streams: int = 128,
 ) -> dict[str, Any]:
-    """Seat-balanced argmax checkpoint vs (random | argmax checkpoint)."""
+    """Seat-balanced checkpoint (stochastic) vs random or another checkpoint."""
 
     from manabot.sim.flat_mc import aggregate_records, load_checkpoint_agent
     from manabot.sim.rollout import (
@@ -39,13 +42,13 @@ def batched_matchup(
     )
 
     hero_agent, _ = load_checkpoint_agent(hero_path)
-    hero = BatchedSampler(hero_agent, deterministic=True, seed=seed, device=device)
+    hero = BatchedSampler(hero_agent, deterministic=False, seed=seed, device=device)
     if villain_path is None:
         villain: Any = RandomBatchController(seed=seed + 1)
     else:
         villain_agent, _ = load_checkpoint_agent(villain_path)
         villain = BatchedSampler(
-            villain_agent, deterministic=True, seed=seed + 1, device=device
+            villain_agent, deterministic=False, seed=seed + 1, device=device
         )
     records, stats = run_vector_games(
         hero, villain, num_games=num_games, num_streams=num_streams, seed=seed
@@ -114,7 +117,7 @@ def main() -> None:
         "kind": "checkpoint",
         "path": args.student,
         "name": args.name,
-        "deterministic": True,
+        "deterministic": False,
     }
     ladder = section.setdefault("ladder", {})
     for index, rung in enumerate(int(n) for n in args.rungs.split(",")):

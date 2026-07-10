@@ -30,7 +30,7 @@ def quick_eval_vs_random(
     device: str,
     num_streams: int = 128,
 ) -> dict[str, float]:
-    """Seat-balanced argmax-student vs random via the batched driver."""
+    """Seat-balanced student (stochastic) vs random via the batched driver."""
 
     from manabot.sim.flat_mc import aggregate_records, load_checkpoint_agent
     from manabot.sim.rollout import (
@@ -40,7 +40,7 @@ def quick_eval_vs_random(
     )
 
     agent, _ = load_checkpoint_agent(checkpoint_path)
-    sampler = BatchedSampler(agent, deterministic=True, seed=seed, device=device)
+    sampler = BatchedSampler(agent, deterministic=False, seed=seed, device=device)
     records, stats = run_vector_games(
         sampler,
         RandomBatchController(seed=seed + 1),
