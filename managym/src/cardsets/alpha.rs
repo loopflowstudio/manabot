@@ -66,6 +66,12 @@ impl CardRegistry {
         );
     }
 
+    /// Iterate every registered card definition (conformance tests audit
+    /// these against the Scryfall fixture).
+    pub fn definitions(&self) -> impl Iterator<Item = &CardDefinition> {
+        self.cards.values().map(|registered| &registered.definition)
+    }
+
     pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
         let registered = self.cards.get(name)?;
         Some(Card::from_definition(
@@ -84,6 +90,7 @@ impl CardRegistry {
         self.register_card(basic_land("Forest", Color::Green));
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn register_creature(
         &mut self,
         name: &str,
@@ -92,6 +99,7 @@ impl CardRegistry {
         power: i32,
         toughness: i32,
         keywords: Keywords,
+        text_box: &str,
     ) {
         self.register_card(CardDefinition {
             name: name.to_string(),
@@ -102,6 +110,7 @@ impl CardRegistry {
                 .map(|subtype| (*subtype).to_string())
                 .collect(),
             keywords,
+            text_box: text_box.to_string(),
             power: Some(power),
             toughness: Some(toughness),
             ..Default::default()
@@ -123,7 +132,7 @@ impl CardRegistry {
             ..Default::default()
         });
 
-        self.register_creature("Grey Ogre", "2R", &["Ogre"], 2, 2, Keywords::default());
+        self.register_creature("Gray Ogre", "2R", &["Ogre"], 2, 2, Keywords::default(), "");
 
         self.register_card(CardDefinition {
             name: "Lightning Bolt".to_string(),
@@ -137,12 +146,16 @@ impl CardRegistry {
             ..Default::default()
         });
 
+        // DEVIATION (documented in wave/rules/01-two-deck-slice.md): oracle
+        // is "Target player draws three cards." — the engine has no
+        // target-player draw, so the caster always draws (the self-target
+        // case; the opponent-draw line is not available).
         self.register_card(CardDefinition {
             name: "Ancestral Recall".to_string(),
             mana_cost: Some(ManaCost::parse("U")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![Effect::DrawCards { count: 3 }],
-            text_box: "Draw three cards.".to_string(),
+            text_box: "Target player draws three cards.".to_string(),
             ..Default::default()
         });
 
@@ -167,6 +180,7 @@ impl CardRegistry {
                 flying: true,
                 ..Default::default()
             },
+            "Flying",
         );
         self.register_creature(
             "Giant Spider",
@@ -178,17 +192,19 @@ impl CardRegistry {
                 reach: true,
                 ..Default::default()
             },
+            "Reach (This creature can block creatures with flying.)",
         );
         self.register_creature(
             "Raging Goblin",
             "R",
-            &["Goblin"],
+            &["Goblin", "Berserker"],
             1,
             1,
             Keywords {
                 haste: true,
                 ..Default::default()
             },
+            "Haste (This creature can attack and {T} as soon as it comes under your control.)",
         );
         self.register_creature(
             "Serra Angel",
@@ -201,6 +217,7 @@ impl CardRegistry {
                 vigilance: true,
                 ..Default::default()
             },
+            "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
         );
         self.register_creature(
             "Typhoid Rats",
@@ -212,6 +229,7 @@ impl CardRegistry {
                 deathtouch: true,
                 ..Default::default()
             },
+            "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
         );
         self.register_creature(
             "War Mammoth",
@@ -223,6 +241,7 @@ impl CardRegistry {
                 trample: true,
                 ..Default::default()
             },
+            "Trample",
         );
         self.register_creature(
             "Wall of Stone",
@@ -234,6 +253,7 @@ impl CardRegistry {
                 defender: true,
                 ..Default::default()
             },
+            "Defender (This creature can't attack.)",
         );
         self.register_creature(
             "Boggart Brute",
@@ -245,6 +265,7 @@ impl CardRegistry {
                 menace: true,
                 ..Default::default()
             },
+            "Menace (This creature can't be blocked except by two or more creatures.)",
         );
         self.register_creature(
             "Youthful Knight",
@@ -256,6 +277,7 @@ impl CardRegistry {
                 first_strike: true,
                 ..Default::default()
             },
+            "First strike",
         );
         self.register_creature(
             "Fencing Ace",
@@ -267,6 +289,7 @@ impl CardRegistry {
                 double_strike: true,
                 ..Default::default()
             },
+            "Double strike (This creature deals both first-strike and regular combat damage.)",
         );
         self.register_creature(
             "Healer's Hawk",
@@ -279,8 +302,9 @@ impl CardRegistry {
                 lifelink: true,
                 ..Default::default()
             },
+            "Flying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
         );
-        self.register_creature("Craw Wurm", "4GG", &["Wurm"], 6, 4, Keywords::default());
+        self.register_creature("Craw Wurm", "4GG", &["Wurm"], 6, 4, Keywords::default(), "");
         self.register_card(CardDefinition {
             name: "Shivan Dragon".to_string(),
             mana_cost: Some(ManaCost::parse("4RR")),
@@ -299,6 +323,7 @@ impl CardRegistry {
                     toughness_delta: 0,
                 },
             }],
+            text_box: "Flying\n{R}: This creature gets +1/+0 until end of turn.".to_string(),
             power: Some(5),
             toughness: Some(5),
             ..Default::default()

@@ -16,12 +16,12 @@ fn mixed_deck() -> BTreeMap<String, usize> {
         ("Mountain".to_string(), 12),
         ("Forest".to_string(), 12),
         ("Llanowar Elves".to_string(), 18),
-        ("Grey Ogre".to_string(), 18),
+        ("Gray Ogre".to_string(), 18),
     ])
 }
 
 fn aggro_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Mountain".to_string(), 20), ("Grey Ogre".to_string(), 20)])
+    BTreeMap::from([("Mountain".to_string(), 20), ("Gray Ogre".to_string(), 20)])
 }
 
 fn make_game(seed: u64, skip_trivial: bool) -> Game {
@@ -131,7 +131,7 @@ fn observation_contract_enum_values_stable() {
 
 #[test]
 fn combat_damage_reduces_life() {
-    // Grey Ogre deck: creatures will eventually attack and deal damage.
+    // Gray Ogre deck: creatures will eventually attack and deal damage.
     // skip_trivial=false so we control every decision.
     let p1 = PlayerConfig::new("attacker", aggro_deck());
     let p2 = PlayerConfig::new("defender", aggro_deck());
@@ -320,8 +320,9 @@ fn random_smoke_stage2_cards() {
     use rand::{Rng, SeedableRng};
 
     let ur_deck = BTreeMap::from([
-        ("Island".to_string(), 7),
+        ("Island".to_string(), 5),
         ("Mountain".to_string(), 6),
+        ("Plains".to_string(), 2), // Glider Kids is white (oracle {2}{W})
         ("Glider Kids".to_string(), 3),
         ("Firebending Lesson".to_string(), 3),
         ("It'll Quench Ya!".to_string(), 2),

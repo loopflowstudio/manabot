@@ -381,7 +381,7 @@ fn jailer_scenario(seed: u64) -> Scenario {
         deck(&[("Plains", 24), ("Earth Kingdom Jailer", 16)]),
         deck(&[
             ("Mountain", 16),
-            ("Grey Ogre", 8),
+            ("Gray Ogre", 8),
             ("Raging Goblin", 8),
             ("Lightning Bolt", 8),
         ]),
@@ -397,7 +397,7 @@ fn jailer_scenario(seed: u64) -> Scenario {
 #[test]
 fn jailer_exiles_and_returns_on_leaving() {
     let mut s = jailer_scenario(311);
-    let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let ogre_card = permanent(&s, ogre).card;
     s.advance_to_active_step(0, StepKind::Main);
     cast_and_resolve(&mut s);
@@ -428,7 +428,7 @@ fn jailer_exiles_and_returns_on_leaving() {
 #[test]
 fn jailer_target_is_up_to_one_and_mv_gated() {
     let mut s = jailer_scenario(312);
-    let _ogre = s.force_permanent_on_battlefield(1, "Grey Ogre"); // mv 3
+    let _ogre = s.force_permanent_on_battlefield(1, "Gray Ogre"); // mv 3
     let _goblin = s.force_permanent_on_battlefield(1, "Raging Goblin"); // mv 1
     s.advance_to_active_step(0, StepKind::Main);
     cast_and_resolve(&mut s);
@@ -464,7 +464,7 @@ fn jailer_trigger_still_fires_with_no_legal_targets() {
 #[test]
 fn jailer_killed_in_response_exiles_nothing() {
     let mut s = jailer_scenario(314);
-    let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let ogre_card = permanent(&s, ogre).card;
     force_lands(&mut s, 1, "Mountain", 1);
     s.force_card_in_hand(1, "Lightning Bolt");

@@ -25,8 +25,8 @@ from manabot.verify.util import (
 
 DECKS = {
     "elves": {"Forest": 24, "Llanowar Elves": 36},
-    "ogres": {"Mountain": 24, "Grey Ogre": 36},
-    "mixed": {"Mountain": 12, "Forest": 12, "Llanowar Elves": 18, "Grey Ogre": 18},
+    "ogres": {"Mountain": 24, "Gray Ogre": 36},
+    "mixed": {"Mountain": 12, "Forest": 12, "Llanowar Elves": 18, "Gray Ogre": 18},
     "lands": {"Mountain": 30, "Forest": 30},
 }
 

@@ -71,7 +71,7 @@ fn cr_106_negative_spell_not_available_without_mana() {
     let mut s = Scenario::new(ogre_only_deck(), mountain_deck(), 15);
 
     s.advance_to_active_step(0, StepKind::Main);
-    s.force_card_in_hand(0, "Grey Ogre");
+    s.force_card_in_hand(0, "Gray Ogre");
 
     s.assert_action_not_available(ActionType::PriorityCastSpell);
 }

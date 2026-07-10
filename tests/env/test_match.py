@@ -19,7 +19,7 @@ SAMPLE_DECKS = {
         "Mountain": 12,
         "Forest": 12,
         "Llanowar Elves": 18,
-        "Grey Ogre": 18,
+        "Gray Ogre": 18,
     },
 }
 

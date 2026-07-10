@@ -19,7 +19,7 @@ MAX_HERO_MOVES = 3000
 # engine offers a priority window at every step of both players' turns.
 BOLT_DECK = {"Mountain": 12, "Lightning Bolt": 12}
 COUNTER_DECK = {"Island": 14, "Counterspell": 8}
-OGRE_DECK = {"Mountain": 14, "Grey Ogre": 8}
+OGRE_DECK = {"Mountain": 14, "Gray Ogre": 8}
 
 
 @pytest.fixture()
@@ -228,7 +228,7 @@ def test_stack_nonempty_forces_surfacing(isolated_traces):
     # counter opportunities.
     assert all(w["stack"] for w in stack_windows)
     assert any(w["can_counter"] for w in stack_windows)
-    assert any("Grey Ogre" in w["stack"] for w in stack_windows)
+    assert any("Gray Ogre" in w["stack"] for w in stack_windows)
 
     for trace_file in isolated_traces.glob("*.json"):
         trace_file.unlink()

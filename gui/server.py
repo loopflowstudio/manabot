@@ -27,7 +27,7 @@ from .villain import VillainPolicy, build_villain_policy
 DEFAULT_DECK = {
     "Island": 12,
     "Mountain": 12,
-    "Grey Ogre": 6,
+    "Gray Ogre": 6,
     "Wind Drake": 6,
     "Man-o'-War": 4,
     "Raging Goblin": 4,

@@ -18,7 +18,7 @@ fn interactive_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([
         ("Island".to_string(), 12),
         ("Mountain".to_string(), 12),
-        ("Grey Ogre".to_string(), 6),
+        ("Gray Ogre".to_string(), 6),
         ("Wind Drake".to_string(), 6),
         ("Man-o'-War".to_string(), 4),
         ("Raging Goblin".to_string(), 4),
@@ -321,8 +321,9 @@ fn flat_mc_survives_stage2_decision_points() {
     use managym::agent::action::ActionSpaceKind;
 
     let stage2_deck = BTreeMap::from([
-        ("Island".to_string(), 8),
+        ("Island".to_string(), 6),
         ("Mountain".to_string(), 6),
+        ("Plains".to_string(), 2), // Glider Kids is white (oracle {2}{W})
         ("Glider Kids".to_string(), 4),
         ("Firebending Lesson".to_string(), 4),
         ("Accumulate Wisdom".to_string(), 4),

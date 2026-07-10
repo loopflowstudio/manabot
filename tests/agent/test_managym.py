@@ -6,7 +6,7 @@ import managym
 
 @pytest.fixture
 def basic_deck_configs():
-    return [{"Grey Ogre": 8, "Mountain": 12}, {"Forest": 12, "Llanowar Elves": 8}]
+    return [{"Gray Ogre": 8, "Mountain": 12}, {"Forest": 12, "Llanowar Elves": 8}]
 
 
 class TestManagym:

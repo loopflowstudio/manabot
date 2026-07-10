@@ -78,8 +78,8 @@ UI defaults to Search 64.
 - Libraries are never serialized (counts only) in any payload.
 
 **Action labels in Magic terms** (`gui/server.py: _format_action`):
-"Play Mountain", "Cast Lightning Bolt", "Attack with Grey Ogre",
-"Block Grey Ogre with Wind Drake", "Wind Drake: do not block",
+"Play Mountain", "Cast Lightning Bolt", "Attack with Gray Ogre",
+"Block Gray Ogre with Wind Drake", "Wind Drake: do not block",
 "Target Villain", "Pass priority". Attack/block focus ids are *permanent*
 ids, which the old id→name map missed — attack/block buttons were
 previously unlabeled.

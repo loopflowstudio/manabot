@@ -239,22 +239,26 @@ impl CardRegistry {
 
         // ---- Stage 2: decisions & costs ----
 
-        // Glider Kids {1}{U} 2/1 — Human Ally
-        // When this creature enters, scry 1.
+        // Glider Kids {2}{W} 2/3 — Human Pilot Ally
+        // Flying. When this creature enters, scry 1.
         self.register_card(CardDefinition {
             name: "Glider Kids".to_string(),
-            mana_cost: Some(ManaCost::parse("1U")),
+            mana_cost: Some(ManaCost::parse("2W")),
             types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Human".into(), "Ally".into()],
+            subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
             abilities: vec![Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::Scry { count: 1 }],
             }],
-            text_box: "When this creature enters, scry 1.".to_string(),
+            text_box: "Flying\nWhen this creature enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)".to_string(),
             power: Some(2),
-            toughness: Some(1),
+            toughness: Some(3),
             ..Default::default()
         });
 
@@ -299,10 +303,12 @@ impl CardRegistry {
         });
 
         // Accumulate Wisdom {1}{U} Instant — Lesson
-        // Look at the top three cards of your library. Put one of them into
-        // your hand and the rest on the bottom of your library in a random
-        // order. If there are three or more Lesson cards in your graveyard,
-        // put all three into your hand instead.
+        // Look at the top three cards of your library. Put one of those
+        // cards into your hand and the rest on the bottom of your library
+        // in any order. Put each of those cards into your hand instead if
+        // there are three or more Lesson cards in your graveyard.
+        // (Engine bottoms the rest in a random order — no reorder
+        // sub-decision, see wave doc Stage-2 notes.)
         self.register_card(CardDefinition {
             name: "Accumulate Wisdom".to_string(),
             mana_cost: Some(ManaCost::parse("1U")),
@@ -319,7 +325,7 @@ impl CardRegistry {
                     predicate: CardPredicate::default(),
                 }],
             }],
-            text_box: "Look at the top three cards of your library. Put one of them into your hand and the rest on the bottom of your library in a random order. If there are three or more Lesson cards in your graveyard, put all three into your hand instead.".to_string(),
+            text_box: "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.".to_string(),
             ..Default::default()
         });
 
@@ -348,7 +354,7 @@ impl CardRegistry {
                     },
                 },
             }],
-            text_box: "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (You may tap untapped artifacts and creatures you control to help pay waterbend costs; each pays {1}.)".to_string(),
+            text_box: "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)".to_string(),
             power: Some(2),
             toughness: Some(2),
             ..Default::default()
@@ -741,6 +747,8 @@ impl CardRegistry {
         // Crossroads of Destiny {1} Sorcery — modal-machinery proof card
         // (no Milestone-1 deck card is modal; the framework is exercised
         // here). Choose one — You gain 3 life; or draw a card.
+        // not a real card — invented for the modal framework; not on
+        // Scryfall, excluded from the conformance fixture.
         self.register_card(CardDefinition {
             name: "Crossroads of Destiny".to_string(),
             mana_cost: Some(ManaCost::parse("1")),

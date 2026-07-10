@@ -60,7 +60,7 @@ def observation_space(hypers):
 @pytest.fixture(scope="session")
 def player_configs():
     """Create consistent player configurations with minimal decks."""
-    player_a = managym.PlayerConfig("Alice", {"Mountain": 10, "Grey Ogre": 20})
+    player_a = managym.PlayerConfig("Alice", {"Mountain": 10, "Gray Ogre": 20})
     player_b = managym.PlayerConfig("Bob", {"Forest": 10, "Llanowar Elves": 20})
     return [player_a, player_b]
 

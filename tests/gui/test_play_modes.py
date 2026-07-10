@@ -231,7 +231,7 @@ def test_format_action_uses_magic_terms():
         2: "Villain",
         10: "Lightning Bolt",
         11: "Mountain",
-        20: "Grey Ogre",
+        20: "Gray Ogre",
         21: "Wind Drake",
     }
     cases = [
@@ -243,11 +243,11 @@ def test_format_action_uses_magic_terms():
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_ATTACKER), [20]),
-            "Attack with Grey Ogre",
+            "Attack with Gray Ogre",
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_BLOCKER), [21, 20]),
-            "Block Grey Ogre with Wind Drake",
+            "Block Gray Ogre with Wind Drake",
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_BLOCKER), [21]),

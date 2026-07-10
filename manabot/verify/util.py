@@ -34,7 +34,7 @@ STANDARD_DECK = {
     "Mountain": 12,
     "Forest": 12,
     "Llanowar Elves": 18,
-    "Grey Ogre": 18,
+    "Gray Ogre": 18,
 }
 MOUNTAIN_DECK = {"Mountain": 20}
 
@@ -44,7 +44,7 @@ MOUNTAIN_DECK = {"Mountain": 20}
 INTERACTIVE_DECK = {
     "Island": 12,
     "Mountain": 12,
-    "Grey Ogre": 6,
+    "Gray Ogre": 6,
     "Wind Drake": 6,
     "Man-o'-War": 4,
     "Raging Goblin": 4,
