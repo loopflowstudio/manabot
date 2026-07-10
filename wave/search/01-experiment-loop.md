@@ -186,6 +186,35 @@ to C5). Behavioral inheritance confirmed: student cast_when_able/passed 0.61/
 (0.97/0.007). Sizing amendment: PPO sized by measured 2,472 SPS, not the
 stale 637. See `reports/exp-03-distillation.md`.
 
+### C9 — Can the pilot play control? (2026-07-09)
+
+**Q:** Is exp-08's UR-at-22% a deck property (H1) or a pilot property (H2 —
+flat MC with random rollouts cannot play control: strategy fusion never holds
+interaction for value; random rollouts burn inherited counterspells on the
+first target)?
+
+Two instruments (`manabot/verify/competency.py`, engine state-injection
+surface `managym/src/flow/scenario.rs`):
+
+1. **Competency scenarios** — five constructed positions with documented
+   known-correct lines (counter-the-bomb, hold-the-wipe, bolt-the-threat,
+   race-vs-block, hold-up-quench), scored per decision against scripted
+   villains, ≥100 runs × {random, search-16/64/256}, Wilson CIs. This is a
+   permanent instrument: every future policy gets a tactics score.
+2. **Micro-format mirrors** — MICRO_AGGRO vs MICRO_CONTROL (≤6 names each),
+   seat-balanced 300 games/cell, mirrors ≈50% sanity, cross-matchup at
+   N ∈ {16, 64, 256} with behavioral probes (what counters countered, what
+   bolts targeted, instant-holding rate).
+
+**Predictions** (registered in `reports/exp-09-control-competency.md` before
+the runs): under H2 the scenario correct-line rates are flat in N (Δ < 0.15
+from N=16 to N=256), never exceed 0.50, and random ≥ search-16 on
+hold-the-wipe; control-vs-aggro is flat-to-declining in N (~0.35) while
+counter_first_window_rate stays > 0.70 and instant_holding_rate < 0.15.
+**Cost cap:** CPU only, ≤ 4 workers (shared machine), ~6 core-hours.
+
+**RESULT:** PENDING.
+
 ### C5+ — The loop proper
 
 Policy-rollout search (first time batched inference — wave goal 1 — is
