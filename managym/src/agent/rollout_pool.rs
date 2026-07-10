@@ -266,8 +266,7 @@ mod tests {
         let _ = game.take_observation_events();
         let num_actions = game.action_space().map(|s| s.actions.len()).unwrap();
 
-        let mut pool =
-            RolloutPool::from_game(&game, 2, 2, 99, 2000).expect("pool should build");
+        let mut pool = RolloutPool::from_game(&game, 2, 2, 99, 2000).expect("pool should build");
         assert_eq!(pool.num_slots(), 2 * 2 * num_actions);
         assert_eq!(pool.num_actions(), num_actions);
 
@@ -299,8 +298,7 @@ mod tests {
     fn pool_rejects_wrong_action_len() {
         let mut game = sample_game();
         let _ = game.take_observation_events();
-        let mut pool =
-            RolloutPool::from_game(&game, 1, 1, 3, 2000).expect("pool should build");
+        let mut pool = RolloutPool::from_game(&game, 1, 1, 3, 2000).expect("pool should build");
         let err = pool
             .step_active_into(&[0], |_, _| Ok(()))
             .expect_err("wrong length must fail");

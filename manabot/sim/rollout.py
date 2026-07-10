@@ -25,8 +25,6 @@ from typing import Any
 import numpy as np
 import torch
 
-import managym
-
 from manabot.env import Env, Match, ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.model.agent import Agent
@@ -35,6 +33,7 @@ from manabot.sim.flat_mc import (
     GameRecord,
     SearchStats,
 )
+import managym
 
 OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
 

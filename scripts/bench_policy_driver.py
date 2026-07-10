@@ -18,14 +18,13 @@ import time
 import numpy as np
 import torch
 
-import managym
-
 from manabot.env import Match, ObservationSpace
 from manabot.infra.hypers import AgentHypers
 from manabot.infra.profiler import Profiler
 from manabot.model import Agent
 from manabot.sim.rollout import BatchedSampler, _allocate_buffers
 from manabot.verify.util import INTERACTIVE_DECK
+import managym
 
 
 def main() -> None:
