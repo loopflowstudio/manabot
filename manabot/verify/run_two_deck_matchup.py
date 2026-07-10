@@ -112,8 +112,8 @@ def run_matchup(
     base_seed: int,
 ) -> dict[str, Any]:
     from manabot.sim.flat_mc import (
-        aggregate_records,
         GameRecord,
+        aggregate_records,
         spec_name,
     )
 

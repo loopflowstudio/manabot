@@ -226,6 +226,23 @@ finish the same game, reproducible run to run, and the log still
 narrates villain actions and auto-pass counts inside the skipped
 stretches. A second browser test drives the F6 keybind end to end.
 
+## Deck selection (Milestone 1 close-out, July 2026)
+
+Hero and villain deck pickers in the header (persisted to localStorage):
+`UR Lessons`, `GW Allies`, `Interactive`. The default matchup is now **UR
+Lessons (hero) vs GW Allies (villain)** — the Milestone-1 two-deck slice.
+`new_game.config` `hero_deck`/`villain_deck` accept a named deck
+(`interactive` / `ur_lessons` / `gw_allies`, mirrored from
+`manabot.verify.util` and sync-tested) or a custom `{card: count}` object;
+every payload echoes `deck_names` (rendered in the game header,
+`data-testid="deck-names"`) and traces record `hero_deck_name` /
+`villain_deck_name`. Observation payloads also carry `action_space` (the
+ActionSpaceEnum name) so the action panel shows a decision prompt for the
+mid-resolution choice kinds (scry / look-and-select / pay-or-not / modal /
+learn / waterbend), and the decision actions themselves are labeled in
+Magic terms ("Keep X on top", "Discard X, then draw a card", "Pay the
+cost", "Tap X to help pay"). e2e: `frontend/e2e/two-deck.spec.ts`.
+
 ## Known gaps Jack will hit
 
 - **Checkpoint quality**: there is no trained checkpoint in the repo; the

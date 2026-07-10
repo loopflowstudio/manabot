@@ -29,7 +29,7 @@ impl Default for ObservationEncoderConfig {
         Self {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
-            max_actions: 20,
+            max_actions: 32,
             max_focus_objects: 2,
             max_events: 32,
         }

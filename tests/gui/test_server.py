@@ -173,7 +173,10 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
 
 def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
     session = server.GameSession()
-    session.obs = SimpleNamespace(game_over=False)
+    session.obs = SimpleNamespace(
+        game_over=False,
+        action_space=SimpleNamespace(action_space_type=1),
+    )
     session.trace = trace_store.Trace(
         config=trace_store.GameConfig(
             hero_deck={}, villain_deck={}, villain_type="passive"
