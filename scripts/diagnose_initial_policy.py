@@ -30,6 +30,7 @@ reward = Reward(hypers.reward)
 
 agent = Agent(obs_space, hypers.agent)
 agent.eval()
+agent.debug = True  # forward() stashes last_raw_logits only in debug mode
 
 env = Env(
     match,
