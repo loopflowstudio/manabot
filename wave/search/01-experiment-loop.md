@@ -213,7 +213,26 @@ hold-the-wipe; control-vs-aggro is flat-to-declining in N (~0.35) while
 counter_first_window_rate stays > 0.70 and instant_holding_rate < 0.15.
 **Cost cap:** CPU only, ≤ 4 workers (shared machine), ~6 core-hours.
 
-**RESULT:** PENDING.
+**RESULT (2026-07-09): H2 confirmed at the decision level; exp-08's 22% is
+a pilot artifact, not a deck measurement.** All three registered scenario
+claims held, mostly at ceiling: max correct-line rate 0.39 at any N,
+Δ(256−16) ≤ 0.02 on every scenario, and uniform random *beats* every
+search strength on hold-the-wipe (0.23 vs 0.00 — search casts Pyroclasm on
+turn 1 in 300/300 runs), race-vs-block, and hold-up-quench; the bolt is
+burned before the key threat even appears in 100% of S3 runs (0/400 ever
+killed the Lieutenant). The micro win-rate claim was refuted,
+instructively: control-vs-aggro goes 0.037 (random) → 0.393 (N=16) →
+0.630 (N=64) → 0.530 (N=256) — search rescues the *win rate* while the
+behavior probes show it never plays control (instant-holding flat ~0.40 and
+below random's 0.57 at every N; a quarter of Counterspells burned on 1-MV
+goblins at N=256; what rises with N is only within-decision target quality,
+0.34 → 0.69). Mirrors sanity at 0.490/0.517. N buys discrimination inside
+the present decision, none across turns. The scenario suite
+(`manabot/verify/competency.py`, ~4 min for 2,000 scored runs) is now a
+standing gate: any pilot/policy that cannot lift S2/S5 off zero is not a
+control player, whatever the ladder says. Feeds Exit 1 (belief-based /
+root-level information-set handling) and the C5 policy-rollout question.
+See `reports/exp-09-control-competency.md`.
 
 ### C5+ — The loop proper
 
