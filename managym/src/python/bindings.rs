@@ -1956,6 +1956,74 @@ impl PyEnv {
         env.action_count().map_err(map_agent_err)
     }
 
+    // ------------------------------------------------------------------
+    // Scenario / state-injection helpers (flow/scenario.rs).
+    //
+    // FOR TEST AND MEASUREMENT HARNESSES ONLY — they mutate state directly,
+    // bypassing the rules engine (no events, no triggers, no costs). Used by
+    // manabot/verify/competency.py to construct scored mid-game positions.
+    // Inject at a priority decision, then call scenario_refresh() once.
+    // ------------------------------------------------------------------
+
+    /// Scenario harness: set a player's life total directly.
+    fn scenario_set_life(&self, player: usize, life: i32) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_set_life(player, life).map_err(map_agent_err)
+    }
+
+    /// Scenario harness: move a player's entire hand to the bottom of their
+    /// library.
+    fn scenario_clear_hand(&self, player: usize) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_clear_hand(player).map_err(map_agent_err)
+    }
+
+    /// Scenario harness: move one card named `name` from the player's
+    /// library (or graveyard) into their hand.
+    fn scenario_force_card_in_hand(&self, player: usize, name: &str) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_force_card_in_hand(player, name)
+            .map_err(map_agent_err)
+    }
+
+    /// Scenario harness: put a card named `name` onto the battlefield as a
+    /// new permanent (no ETB triggers). `ready` clears summoning sickness.
+    /// Returns the new permanent index.
+    #[pyo3(signature = (player, name, ready=true))]
+    fn scenario_force_battlefield(
+        &self,
+        player: usize,
+        name: &str,
+        ready: bool,
+    ) -> PyResult<usize> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_force_battlefield(player, name, ready)
+            .map_err(map_agent_err)
+    }
+
+    /// Scenario harness: recompute the current priority action space after
+    /// injections and return a fresh observation.
+    fn scenario_refresh(&self) -> PyResult<PyObservation> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let obs = env.scenario_refresh().map_err(map_agent_err)?;
+        Ok(PyObservation::from(obs))
+    }
+
     /// Resample hidden information (opponent hand + both library orders)
     /// consistent with `perspective`'s observation. Defaults to the player
     /// holding the current decision. Public state is preserved.
