@@ -53,7 +53,7 @@ binding fixes were needed; cargo untouched.
 
 Seat-balanced 400 games vs random per final checkpoint, stochastic policy,
 eval seeds 6001–6003 (`scratch/judge_c6a.py`,
-`reports/data/exp-06-newworld-judging.json`). This is the exact harness the
+`experiments/data/exp-06-newworld-judging.json`). This is the exact harness the
 E2a control was judged with — including its just-discovered single-deal
 limitation (next section): each row is 400 stochastic rollouts of **one**
 deal, so CIs are deal-conditional.
@@ -86,7 +86,7 @@ noted, not interpreted.
 ### Fixed-harness judging (per-game deals; see instrument finding)
 
 Same checkpoints, same protocol, after the `Env.reset(seed=...)` fix — each
-game now plays a fresh deal (`reports/data/exp-06-newworld-judging-fixed.json`):
+game now plays a fresh deal (`experiments/data/exp-06-newworld-judging-fixed.json`):
 
 | seed | overall | LB | on play (LB) | on draw (LB) | cast_w_able | passed_w_able | landed_w_able |
 |---|---|---|---|---|---|---|---|
@@ -227,9 +227,9 @@ on rules stage 3.
 - Checkpoints: `.runs/first-light-c6a-newworld-s{n}-final/step_65536.pt`
   (chunk-local counters, as in exp-01/exp-04).
 - Judging: `scratch/judge_c6a.py`; standard-protocol rows in
-  `reports/data/exp-06-newworld-judging.json` (pre-fix harness, eval seeds
+  `experiments/data/exp-06-newworld-judging.json` (pre-fix harness, eval seeds
   6001–6003), fixed-harness rows in
-  `reports/data/exp-06-newworld-judging-fixed.json` (same seeds, per-game
+  `experiments/data/exp-06-newworld-judging-fixed.json` (same seeds, per-game
   deals).
 - SPS calibration: run_id 4 (`c6a-sps-cal`), log `.runs/exp06/sps_cal.json`.
 - Smoke: `scratch/smoke_c6a.py`.
