@@ -872,6 +872,8 @@ pub struct PyPlayer {
     pub zone_counts: Vec<i32>,
     #[pyo3(get, set)]
     pub graveyard_lessons: i32,
+    #[pyo3(get, set)]
+    pub combat_mana: i32,
 }
 
 #[cfg(feature = "python")]
@@ -885,6 +887,7 @@ impl From<PlayerData> for PyPlayer {
             life: value.life,
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
+            combat_mana: value.combat_mana,
         }
     }
 }
@@ -905,6 +908,7 @@ impl From<PyPlayer> for PlayerData {
             life: value.life,
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
+            combat_mana: value.combat_mana,
         }
     }
 }
@@ -1226,6 +1230,14 @@ pub struct PyPermanent {
     pub plus1_counters: i32,
     #[pyo3(get, set)]
     pub cant_be_blocked_this_turn: bool,
+    #[pyo3(get, set)]
+    pub power: i32,
+    #[pyo3(get, set)]
+    pub toughness: i32,
+    #[pyo3(get, set)]
+    pub is_animated: bool,
+    #[pyo3(get, set)]
+    pub has_exile_link: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1239,6 +1251,10 @@ impl From<PermanentData> for PyPermanent {
             is_summoning_sick: value.is_summoning_sick,
             plus1_counters: value.plus1_counters,
             cant_be_blocked_this_turn: value.cant_be_blocked_this_turn,
+            power: value.power,
+            toughness: value.toughness,
+            is_animated: value.is_animated,
+            has_exile_link: value.has_exile_link,
         }
     }
 }
@@ -1254,6 +1270,10 @@ impl From<PyPermanent> for PermanentData {
             is_summoning_sick: value.is_summoning_sick,
             plus1_counters: value.plus1_counters,
             cant_be_blocked_this_turn: value.cant_be_blocked_this_turn,
+            power: value.power,
+            toughness: value.toughness,
+            is_animated: value.is_animated,
+            has_exile_link: value.has_exile_link,
         }
     }
 }

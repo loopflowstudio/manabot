@@ -191,59 +191,60 @@ fn determinize_pins_scry_revealed_cards_on_top() {
 // Firebending Lesson — kicker (cast-time PAY_OR_NOT): 2 vs 5 damage.
 // ---------------------------------------------------------------------------
 
-fn firebending_setup(seed: u64, mountains: usize) -> Scenario {
+fn firebending_setup(seed: u64, mountains: usize) -> (Scenario, PermanentId) {
     let mut s = Scenario::new(
         deck(&[("Mountain", 24), ("Firebending Lesson", 16)]),
-        deck(&[("Plains", 40)]),
+        deck(&[("Plains", 24), ("Wall of Stone", 16)]),
         seed,
     );
+    let wall = s.force_permanent_on_battlefield(1, "Wall of Stone");
     force_lands(&mut s, 0, "Mountain", mountains);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Firebending Lesson");
     s.advance_to_active_step(0, StepKind::Main);
-    s
+    (s, wall)
 }
 
 #[test]
 fn firebending_lesson_kicked_deals_five() {
-    let mut s = firebending_setup(31, 5);
+    let (mut s, wall) = firebending_setup(31, 5);
     cast_only(&mut s);
     let space = s.action_space();
     assert_eq!(space.kind, ActionSpaceKind::PayOrNot);
     assert_eq!(space.player, Some(PlayerId(0)));
     assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
-    // All five mountains paid for {1}{R} + kicker {3}.
+    assert!(s.choose_target(Target::Permanent(wall)));
+    // All five mountains paid for {R} + kicker {4}.
     assert_eq!(s.untapped_permanents_named(0, "Mountain"), 0);
     s.pass_priority();
     s.pass_priority();
-    s.assert_life(1, 15);
+    assert_eq!(permanent(&s, wall).damage, 5);
 }
 
 #[test]
 fn firebending_lesson_unkicked_deals_two() {
-    let mut s = firebending_setup(32, 5);
+    let (mut s, wall) = firebending_setup(32, 5);
     cast_only(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wall)));
     s.pass_priority();
     s.pass_priority();
-    s.assert_life(1, 18);
+    assert_eq!(permanent(&s, wall).damage, 2);
 }
 
 /// With only enough mana for the base cost, the kicker choice is not
-/// offered — casting goes straight to targeting.
+/// offered - casting goes straight to targeting.
 #[test]
 fn firebending_lesson_kicker_not_offered_when_unaffordable() {
-    let mut s = firebending_setup(33, 2);
+    let (mut s, wall) = firebending_setup(33, 2);
     cast_only(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wall)));
     s.pass_priority();
     s.pass_priority();
-    s.assert_life(1, 18);
+    assert_eq!(permanent(&s, wall).damage, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -660,15 +661,15 @@ fn badgermole_cub_composes_with_waterbend_payment() {
 #[test]
 fn allies_at_last_affinity_and_two_attackers() {
     let mut s = Scenario::new(
-        deck(&[("Plains", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
+        deck(&[("Forest", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
         deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
         91,
     );
     let w1 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
     let w2 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
     let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
-    // Two Allies -> {4}{W} costs {2}{W}: three plains suffice.
-    force_lands(&mut s, 0, "Plains", 3);
+    // Two Allies -> {2}{G} costs {G}: one forest suffices.
+    force_lands(&mut s, 0, "Forest", 1);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Allies at Last");
     s.advance_to_active_step(0, StepKind::Main);
@@ -684,7 +685,7 @@ fn allies_at_last_affinity_and_two_attackers() {
     let space = s.action_space().clone();
     assert_eq!(space.actions.len(), 1);
     assert!(s.choose_target(Target::Permanent(ogre)));
-    // Affinity was applied: the cast succeeded on three lands.
+    // Affinity was applied: the cast succeeded on a single forest.
     assert_eq!(s.game().state.stack_objects.len(), 1);
 
     s.pass_priority();
@@ -698,13 +699,13 @@ fn allies_at_last_affinity_and_two_attackers() {
 #[test]
 fn allies_at_last_up_to_zero_attackers_is_legal() {
     let mut s = Scenario::new(
-        deck(&[("Plains", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
+        deck(&[("Forest", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
         deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
         92,
     );
     let _w1 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
     let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
-    force_lands(&mut s, 0, "Plains", 4);
+    force_lands(&mut s, 0, "Forest", 4);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Allies at Last");
     s.advance_to_active_step(0, StepKind::Main);

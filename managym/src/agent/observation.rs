@@ -35,6 +35,8 @@ pub struct PlayerData {
     pub zone_counts: [i32; 7],
     /// Lesson cards in this player's graveyard.
     pub graveyard_lessons: i32,
+    /// Total until-end-of-combat mana in this player's pool (firebending).
+    pub combat_mana: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -135,6 +137,14 @@ pub struct PermanentData {
     pub is_summoning_sick: bool,
     pub plus1_counters: i32,
     pub cant_be_blocked_this_turn: bool,
+    /// Effective power/toughness — CDA base, static continuous effects,
+    /// until-EOT deltas, and +1/+1 counters all applied.
+    pub power: i32,
+    pub toughness: i32,
+    /// Earthbend animation: a land that's also a 0/0 creature.
+    pub is_animated: bool,
+    /// This permanent holds cards in exile until it leaves (Jailer).
+    pub has_exile_link: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -285,6 +295,7 @@ impl Observation {
                 player,
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
+            combat_mana: p.combat_mana_pool.total() as i32,
         }
     }
 
@@ -327,7 +338,7 @@ impl Observation {
                     let Some(permanent) = game.state.permanents[perm_id].as_ref() else {
                         continue;
                     };
-                    self.add_permanent(game, permanent);
+                    self.add_permanent(game, perm_id, permanent);
                 }
             }
         }
@@ -356,7 +367,13 @@ impl Observation {
         }
     }
 
-    fn add_permanent(&mut self, game: &Game, permanent: &Permanent) {
+    fn add_permanent(
+        &mut self,
+        game: &Game,
+        perm_id: crate::state::game_object::PermanentId,
+        permanent: &Permanent,
+    ) {
+        let (power, toughness) = game.effective_pt(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
@@ -365,6 +382,14 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
+            power,
+            toughness,
+            is_animated: permanent.animated,
+            has_exile_link: game
+                .state
+                .exile_links
+                .iter()
+                .any(|link| link.source_card == permanent.card),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -728,6 +753,7 @@ impl Observation {
                 "life": player.life,
                 "zone_counts": player.zone_counts,
                 "graveyard_lessons": player.graveyard_lessons,
+                "combat_mana": player.combat_mana,
             })
         }
 
@@ -792,6 +818,10 @@ impl Observation {
                 "is_summoning_sick": permanent.is_summoning_sick,
                 "plus1_counters": permanent.plus1_counters,
                 "cant_be_blocked_this_turn": permanent.cant_be_blocked_this_turn,
+                "power": permanent.power,
+                "toughness": permanent.toughness,
+                "is_animated": permanent.is_animated,
+                "has_exile_link": permanent.has_exile_link,
             })
         }
 

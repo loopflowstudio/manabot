@@ -367,3 +367,74 @@ fn random_smoke_stage2_cards() {
         assert!(game.winner_index().is_some(), "seed {seed}: no winner");
     }
 }
+
+/// The Milestone-1 UR Lessons decklist (wave/rules/01-two-deck-slice.md).
+fn ur_lessons_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Island".to_string(), 9),
+        ("Mountain".to_string(), 8),
+        ("Tiger-Seal".to_string(), 2),
+        ("Otter-Penguin".to_string(), 2),
+        ("Fire Nation Cadets".to_string(), 2),
+        ("First-Time Flyer".to_string(), 2),
+        ("Forecasting Fortune Teller".to_string(), 1),
+        ("Dragonfly Swarm".to_string(), 1),
+        ("Firebending Lesson".to_string(), 4),
+        ("Igneous Inspiration".to_string(), 2),
+        ("Pop Quiz".to_string(), 2),
+        ("Divide by Zero".to_string(), 2),
+        ("It'll Quench Ya!".to_string(), 2),
+        ("Accumulate Wisdom".to_string(), 2),
+    ])
+}
+
+/// The Milestone-1 GW Allies decklist (wave/rules/01-two-deck-slice.md).
+fn gw_allies_deck() -> BTreeMap<String, usize> {
+    BTreeMap::from([
+        ("Plains".to_string(), 9),
+        ("Forest".to_string(), 8),
+        ("Water Tribe Rallier".to_string(), 2),
+        ("Invasion Reinforcements".to_string(), 2),
+        ("Compassionate Healer".to_string(), 2),
+        ("Earth Kingdom Jailer".to_string(), 2),
+        ("White Lotus Reinforcements".to_string(), 2),
+        ("Earth King's Lieutenant".to_string(), 2),
+        ("Kyoshi Warriors".to_string(), 2),
+        ("Badgermole Cub".to_string(), 2),
+        ("Suki, Kyoshi Warrior".to_string(), 1),
+        ("South Pole Voyager".to_string(), 1),
+        ("Allies at Last".to_string(), 2),
+        ("Yip Yip!".to_string(), 1),
+        ("Fancy Footwork".to_string(), 2),
+    ])
+}
+
+/// Stage-3 smoke: 200 random-vs-random games between the ACTUAL Milestone-1
+/// decklists (every card of both 40s registered) must reach a terminal
+/// state with no panics, no empty action spaces, and no stuck games.
+#[test]
+fn random_smoke_milestone1_decklists() {
+    use rand::{Rng, SeedableRng};
+
+    for seed in 0..200_u64 {
+        let p0 = PlayerConfig::new("lessons", ur_lessons_deck());
+        let p1 = PlayerConfig::new("allies", gw_allies_deck());
+        let mut game = Game::new(vec![p0, p1], seed, true);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(seed ^ 0x3a6e3);
+
+        let mut steps = 0_usize;
+        while !game.is_game_over() {
+            let action_count = game
+                .action_space()
+                .map(|space| space.actions.len())
+                .unwrap_or(0);
+            assert!(action_count > 0, "seed {seed}: empty action space");
+            let action = rng.gen_range(0..action_count);
+            game.step(action)
+                .unwrap_or_else(|e| panic!("seed {seed}: step failed: {e:?}"));
+            steps += 1;
+            assert!(steps < 50_000, "seed {seed}: game appears stuck");
+        }
+        assert!(game.winner_index().is_some(), "seed {seed}: no winner");
+    }
+}

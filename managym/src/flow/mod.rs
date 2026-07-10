@@ -13,6 +13,7 @@ pub mod resolution;
 pub mod sba;
 pub mod search;
 pub mod setup;
+pub mod statics;
 pub mod tick;
 pub mod trigger;
 pub mod triggers;

@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::{
-    ability::{Ability, Effect, TargetRequirement},
+    ability::{Ability, Effect, StaticCondition, TargetRequirement},
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
@@ -118,6 +118,64 @@ pub struct Keywords {
     pub lifelink: bool,
     pub defender: bool,
     pub menace: bool,
+    /// CR 702.11 — Can't be the target of spells or abilities opponents
+    /// control.
+    pub hexproof: bool,
+}
+
+impl Keywords {
+    /// Keyword-set union (printed keywords plus until-EOT grants).
+    pub fn union(&self, other: &Keywords) -> Keywords {
+        Keywords {
+            flying: self.flying || other.flying,
+            reach: self.reach || other.reach,
+            haste: self.haste || other.haste,
+            flash: self.flash || other.flash,
+            vigilance: self.vigilance || other.vigilance,
+            trample: self.trample || other.trample,
+            first_strike: self.first_strike || other.first_strike,
+            double_strike: self.double_strike || other.double_strike,
+            deathtouch: self.deathtouch || other.deathtouch,
+            lifelink: self.lifelink || other.lifelink,
+            defender: self.defender || other.defender,
+            menace: self.menace || other.menace,
+            hexproof: self.hexproof || other.hexproof,
+        }
+    }
+}
+
+/// Characteristic-defining power (CR 604.3): recomputed on every read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PowerCda {
+    /// "This creature's power is equal to the number of creatures you
+    /// control." (Suki, Kyoshi Warrior.)
+    CreaturesYouControl,
+    /// "This creature's power is equal to the number of [predicate] cards
+    /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
+    GraveyardMatching(CardPredicate),
+}
+
+/// Which battlefield permanents a static P/T buff applies to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StaticScope {
+    /// The source permanent itself ("This creature gets +1/+1 as long as
+    /// ..." — First-Time Flyer).
+    This,
+    /// "Other [predicate] you control" (anthem — White Lotus
+    /// Reinforcements). Matched against printed characteristics (no
+    /// power predicates, to keep P/T computation non-recursive).
+    OtherYouControl(CardPredicate),
+}
+
+/// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
+/// +P/+T [as long as condition]". Applies only while the source is on the
+/// battlefield.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StaticPtBuff {
+    pub scope: StaticScope,
+    pub condition: Option<StaticCondition>,
+    pub power: i32,
+    pub toughness: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -167,6 +225,11 @@ pub struct CardDefinition {
     pub color_override: Option<Colors>,
     /// Tokens cease to exist outside the battlefield (CR 111.7, 704.5d).
     pub is_token: bool,
+    /// Characteristic-defining power (`power` is ignored when set).
+    pub power_cda: Option<PowerCda>,
+    /// Static continuous P/T effects this card projects while on the
+    /// battlefield (anthems, conditional self-buffs).
+    pub static_pt_buffs: Vec<StaticPtBuff>,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
@@ -206,6 +269,8 @@ pub struct Card {
     pub keywords: Keywords,
     pub block_restriction: Option<CardPredicate>,
     pub is_token: bool,
+    pub power_cda: Option<PowerCda>,
+    pub static_pt_buffs: Vec<StaticPtBuff>,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
@@ -240,6 +305,8 @@ impl Card {
             keywords: definition.keywords.clone(),
             block_restriction: definition.block_restriction.clone(),
             is_token: definition.is_token,
+            power_cda: definition.power_cda.clone(),
+            static_pt_buffs: definition.static_pt_buffs.clone(),
             text_box: definition.text_box.clone(),
             power: definition.power,
             toughness: definition.toughness,
