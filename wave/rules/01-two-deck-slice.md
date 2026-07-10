@@ -482,7 +482,7 @@ play UI, e2e + decision prompts, matchup table):
   main-phase stops on, asserts deck names render and choice-kind decisions
   render clickable labeled options (run surfaced DISCARD_THEN_DRAW (learn)
   and PAY_OR_NOT (kicker) prompts). Full Playwright suite 5/5.
-- **exp-08 matchup table** (`reports/exp-08-two-deck-matchup.md`,
+- **exp-08 matchup table** (`experiments/exp-08-two-deck-matchup.md`,
   pre-registered prediction committed before running): 2000 games (5 cells
   x 400, seat-balanced, Wilson CIs, zero errors/draws/caps). UR win rates:
   random-vs-random **0.345** [0.300, 0.393] (raw deck advantage: GW 65.5%);

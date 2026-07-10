@@ -11,7 +11,7 @@ protocol.
 
 Usage:
     python -m manabot.verify.run_exp07_judge --student .runs/exp07/student_r0.pt \
-        --name r0 --out reports/data/exp-07-expert-iteration.json
+        --name r0 --out experiments/data/exp-07-expert-iteration.json
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7000)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument(
-        "--out", type=str, default="reports/data/exp-07-expert-iteration.json"
+        "--out", type=str, default="experiments/data/exp-07-expert-iteration.json"
     )
     args = parser.parse_args()
 

@@ -22,7 +22,7 @@
 > *beats* the shaped recipe by ~15 points while the shaping produced
 > cast-everything policies, one net-harmful. The original pass-collapse
 > observation (unsourced, pre-bugfix code, hero-on-play single-seed evals)
-> appears to have been an artifact. See `reports/exp-04-potential-shaping.md`
+> appears to have been an artifact. See `experiments/exp-04-potential-shaping.md`
 > addenda.
 
 ## Vision

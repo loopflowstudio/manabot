@@ -62,7 +62,7 @@ make watch              # rebuild on save
 
 ## Where the numbers come from
 
-Every figure traces to a report in `reports/`, which is the source of truth. When
+Every figure traces to a report in `experiments/`, which is the source of truth. When
 a report lands, update the paper.
 
 | Paper section | Report |
@@ -95,7 +95,7 @@ successes/trials and checked to reproduce that bound.
   `bc-fifth` policies. Those matchups are cheap and would sharpen Table 2.
 - ~~The 4×Ancestral-Recall deck-quality probe (23.7% → 78.25%) cited in the
   calibration section has no standalone report yet~~ — resolved:
-  `reports/exp-08b-ancestral-dose.md` (single-seed-batch caveat noted there).
+  `experiments/exp-08b-ancestral-dose.md` (single-seed-batch caveat noted there).
 - There is no controlled comparison with the contemporaneous MTG-Causal-RL
   benchmark; the paper currently positions the two systems from their reported
   interfaces and scopes.

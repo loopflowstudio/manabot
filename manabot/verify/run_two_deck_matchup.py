@@ -8,7 +8,7 @@ hero win rate IS the UR per-deck win rate.
 
 Usage:
     python -m manabot.verify.run_two_deck_matchup --games 400 --workers 8 \
-        --out reports/data/exp-08-two-deck-matchup.json
+        --out experiments/data/exp-08-two-deck-matchup.json
 """
 
 from __future__ import annotations
@@ -212,7 +212,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
-        "--out", type=str, default="reports/data/exp-08-two-deck-matchup.json"
+        "--out", type=str, default="experiments/data/exp-08-two-deck-matchup.json"
     )
     parser.add_argument(
         "--only",

@@ -11,7 +11,7 @@ PPO policies via the same capture_evaluation instrument used in exp-01.
 Usage:
     python -m manabot.verify.run_distill_judge \
         --bc .runs/exp03/bc_policy.pt --ppo .runs/<ppo>/step_N.pt \
-        --games 400 --workers 8 --out reports/data/exp-03-distillation.json
+        --games 400 --workers 8 --out experiments/data/exp-03-distillation.json
 """
 
 from __future__ import annotations
@@ -118,7 +118,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=5000)
     parser.add_argument("--profile-games", type=int, default=400)
     parser.add_argument(
-        "--out", type=str, default="reports/data/exp-03-distillation.json"
+        "--out", type=str, default="experiments/data/exp-03-distillation.json"
     )
     parser.add_argument("--skip-profiles", action="store_true")
     args = parser.parse_args()

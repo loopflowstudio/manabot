@@ -11,7 +11,7 @@ Three phases, resumable via the output JSON:
 
 Usage:
     python -m manabot.verify.run_exp07_p2 --student .runs/exp07/student_r0.pt \
-        --sims 16 --games 100 --out reports/data/exp-07-p2.json
+        --sims 16 --games 100 --out experiments/data/exp-07-p2.json
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def main() -> None:
         default=None,
         help="override the N* derived from the probe",
     )
-    parser.add_argument("--out", type=str, default="reports/data/exp-07-p2.json")
+    parser.add_argument("--out", type=str, default="experiments/data/exp-07-p2.json")
     args = parser.parse_args()
 
     os.environ.setdefault("WANDB_MODE", "disabled")

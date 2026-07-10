@@ -33,69 +33,13 @@ and the budget cap is the claim, not a limitation.
 3. **Cost cap** — set in advance. Exceeding it means the experiment is
    redesigned, not extended.
 4. **Run** — through the verify harness; provenance in the store.
-5. **Report** — `reports/exp-NN-<name>.md`: prediction vs. result, belief
+5. **Report** — `experiments/exp-NN-<name>.md`: prediction vs. result, belief
    update, and the next cycle's question. The report is not done until it names
    the next question.
 6. **Chart** — update the strength-vs-cost ledger.
 
 Global rules: every number gets a CI; every claim in a doc links a report; kill
 criteria written before running; one cycle in flight.
-
-## Standing discipline
-
-Codified 2026-07-10 from external advisor review ("keep doing" findings).
-These bind every cycle and every agent. Each rule names its enforcement
-point — a rule without one is an aspiration, and aspirations rot.
-
-**D1 — Predictions are committed before results exist.**
-Pre-registration is not "written in the report at the end": the prediction
-block (numbers, kill criteria, cost cap) is a git commit that PRECEDES the
-run. exp-09 set the precedent (report skeleton with predictions committed
-before any measurement); it is now the required order.
-*Enforcement:* report reviews check the commit timestamps — prediction commit
-< first result artifact. A report whose predictions cannot be shown to
-predate its data is downgraded to exploratory.
-
-**D2 — Every report names its strongest alternative explanation.**
-Attacking our own conclusions is the project's best habit (seat
-contamination, init variance, harmful shaping, dead checkpoints, card errors,
-a degrading loop — all self-caught). Make it structural: each report carries
-a **Confounds** section stating (a) the strongest alternative reading of the
-result and (b) what would discriminate it. "None identified" is a claim, and
-it is falsifiable.
-*Enforcement:* the report template; coordinating-session review rejects
-reports without the section.
-
-**D3 — No aggregate-only claims about capability.**
-Win rates say *that*; only mechanism-level probes say *why* — and exp-09
-proved aggregates can rise while the capability is absent (win rate masked
-incapacity). Any claim that an agent CAN or CANNOT do something requires a
-behavioral measurement (competency scenario, action-level stat, per-bucket
-metric), not a matchup table alone.
-*Enforcement:* the competency suite (`manabot/verify/competency.py`) is the
-standing instrument; capability claims in reports must cite a mechanism
-measurement or be phrased as strength claims only.
-
-**D4 — The engine's research leverage is a protected interface.**
-Determinism (seeded reproduction), speed (the 183k-SPS class), state
-injection (`Env.scenario_*`), and native search primitives
-(clone/determinize/playout, `flat_mc_scores`) are what let hypotheses be
-tested for dollars instead of hidden behind compute. They are load-bearing
-for the science, not conveniences.
-*Enforcement:* changes that break determinism, remove injection surface, or
-regress engine throughput >10% are treated as failing changes regardless of
-green tests; the conformance-fixture pattern (oracle-anchored CI for
-hand-transcribed content) extends to any future externally-anchored data.
-
-**D5 — Claims narrow to what the comparison supports.**
-Confounded comparisons are reported WITH their confound and the narrowed
-claim (the exp-03 pattern: "beats the shaped baseline" repriced to "beats
-good PPO by less" when the baseline was convicted mid-flight; the paper's
-refuted-claims ledger is the brand). Numbers trace to reports; reports trace
-to store rows; superseded claims are struck through with dates, never
-silently edited.
-*Enforcement:* the paper's every-number-traces rule, applied to wave docs and
-reports equally; the refuted-claims ledger is append-only.
 
 ## Cycles
 
@@ -144,7 +88,7 @@ untrained baseline. Aggro fingerprint confirmed (cast_when_able 0.88–0.95 in
 2/3 seeds, one net-harmful); one seed went seat-parasitic (95% on draw / 20%
 on play) and was caught by the per-seat clause. `cast_when_able` flipped sign
 as a quality signal. Decisions/game prediction refuted (0.60x, mix shift).
-See `reports/exp-01-c1-training.md`, `reports/exp-00c-seat-balanced-baselines.md`.
+See `experiments/exp-01-c1-training.md`, `experiments/exp-00c-seat-balanced-baselines.md`.
 
 ### C2 — Is bias-free dense signal possible?
 
@@ -184,7 +128,7 @@ collapse, and pay-per-event shaping was actively harmful. First-light's
 discriminating run (terminal-only on the vanilla deck, current code) is in
 flight to separate deck-mechanism from code-era artifact. Open question
 carried: E2a-vs-E2c needs a powered comparison before Φ enters any default
-recipe. See `reports/exp-04-potential-shaping.md`.
+recipe. See `experiments/exp-04-potential-shaping.md`.
 
 ### C3 — How much intelligence is free?
 
@@ -213,7 +157,7 @@ head-to-head 76.7%. Cost: 7 / 31 / 113 ms per decision at N=16/64/256, $0
 training, 4.5 core-hours for the whole matrix. Ladder strength of every
 trained policy to date is below N=16. A pre-existing engine bug (fizzled
 spells stranded in the stack zone) was found by random playouts and fixed.
-See `reports/exp-02-flat-mc.md`.
+See `experiments/exp-02-flat-mc.md`.
 
 ### C4 — Is distillation cheaper than RL?
 
@@ -240,7 +184,7 @@ real point): beats search-4, even with search-8, loses to search-16 —
 to C5). Behavioral inheritance confirmed: student cast_when_able/passed 0.61/
 0.34 vs teacher 0.58/0.35, while matched PPO reproduces the aggro fingerprint
 (0.97/0.007). Sizing amendment: PPO sized by measured 2,472 SPS, not the
-stale 637. See `reports/exp-03-distillation.md`.
+stale 637. See `experiments/exp-03-distillation.md`.
 
 ### C9 — Can the pilot play control? (2026-07-09)
 
@@ -262,7 +206,7 @@ surface `managym/src/flow/scenario.rs`):
    N ∈ {16, 64, 256} with behavioral probes (what counters countered, what
    bolts targeted, instant-holding rate).
 
-**Predictions** (registered in `reports/exp-09-control-competency.md` before
+**Predictions** (registered in `experiments/exp-09-control-competency.md` before
 the runs): under H2 the scenario correct-line rates are flat in N (Δ < 0.15
 from N=16 to N=256), never exceed 0.50, and random ≥ search-16 on
 hold-the-wipe; control-vs-aggro is flat-to-declining in N (~0.35) while
@@ -288,7 +232,7 @@ the present decision, none across turns. The scenario suite
 standing gate: any pilot/policy that cannot lift S2/S5 off zero is not a
 control player, whatever the ladder says. Feeds Exit 1 (belief-based /
 root-level information-set handling) and the C5 policy-rollout question.
-See `reports/exp-09-control-competency.md`.
+See `experiments/exp-09-control-competency.md`.
 
 ### C5+ — The loop proper
 
@@ -307,7 +251,7 @@ batched inference finally unblock it?
 
 First cycle on the post-stage-2 world (CARD_DIM 37; all prior checkpoints
 dimensionally dead). Pre-registered predictions (verbatim in
-`reports/exp-07-expert-iteration.md`): P1 batched inference ≥10x (2k → ≥20k
+`experiments/exp-07-expert-iteration.md`): P1 batched inference ≥10x (2k → ≥20k
 obs/sec); P2 policy-rollout search beats random-rollout search at equal
 wall-clock (>55%); P3 the R1 student beats the R0 student head-to-head
 (>55%) and places ≥ N=16.
@@ -329,7 +273,7 @@ process-parallel rate). Diagnosis: the loop fails on label economics —
 0.21 ms random playouts buy more label truth per dollar than ~34 ms
 policy playouts. Exit-2's tripwire is half-armed (one sub-2-point round);
 C8 should run the goal-4 gate (search-with-V vs V-greedy) before any
-second crank. See `reports/exp-07-expert-iteration.md`.
+second crank. See `experiments/exp-07-expert-iteration.md`.
 
 ## Protocol amendments
 

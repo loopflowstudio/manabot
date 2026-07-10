@@ -5,7 +5,7 @@ processes, and writes one JSON blob per matchup so partial progress survives.
 
 Usage:
     python -m manabot.verify.run_flat_mc --games 200 --workers 8 \
-        --out reports/data/exp-02-flat-mc.json
+        --out experiments/data/exp-02-flat-mc.json
 """
 
 from __future__ import annotations
@@ -176,7 +176,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
-        "--out", type=str, default="reports/data/exp-02-flat-mc.json"
+        "--out", type=str, default="experiments/data/exp-02-flat-mc.json"
     )
     parser.add_argument(
         "--only",

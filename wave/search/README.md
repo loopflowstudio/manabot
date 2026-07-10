@@ -74,7 +74,7 @@ cardset.
 
 ### Inference, not the engine, is the bottleneck
 
-`reports/sps-closeout.md`: 183k SPS env-only, **2.0k SPS with inference, 97% of
+`experiments/sps-closeout.md`: 183k SPS env-only, **2.0k SPS with inference, 97% of
 step time in torch** — on a 64-hidden-dim network that is a rounding error in
 FLOPs. This is per-step kernel-launch and sync overhead, not compute. It gates
 model scale *and* search throughput simultaneously. Nothing downstream moves
@@ -166,7 +166,7 @@ required; *improvement* is.
      board, behind on cards" vs. "behind on board, holding removal"). This is
      the one that catches the pathology below.
 3. **Fix what explained variance measures.** Today V is trained to predict
-   *shaped returns*, so the logged EV (0.434, `reports/first-light-run-1.md`)
+   *shaped returns*, so the logged EV (0.434, `experiments/first-light-run-1.md`)
    partly reflects the net predicting its own land-play bonuses. That number
    cannot assess fitness for search, because it is not estimating `P(win)`.
    Deleting shaping (goal 4) makes the question well-posed for the first time.
@@ -227,7 +227,7 @@ tries to close it.
    torch fell from 97% of step time to 75%, env stepping is visible again
    (25%). The remaining gap to 50k is obs-transfer consolidation (17 per-key
    host→GPU copies), not per-step syncs. Numbers:
-   `reports/exp-07-expert-iteration.md`.
+   `experiments/exp-07-expert-iteration.md`.
 2. **Instrument the decision profile.** Forced-move collapse already ships
    (`skip_trivial`, on by default) — but `skip_trivial_count` is write-only and
    no report records `mean_steps`. Expose the counter to Python; log surfaced
@@ -314,7 +314,7 @@ tries to close it.
   (Cowling, Powley, Whitehouse, 2012)
 - Ginsberg, *GIB: Steps toward an expert-level bridge-playing program* (IJCAI
   1999) — determinization working embarrassingly well in practice
-- [reports/sps-closeout.md](../../reports/sps-closeout.md) — where the 2.0k
+- [experiments/sps-closeout.md](../../experiments/sps-closeout.md) — where the 2.0k
   number comes from
-- [reports/first-light-run-1.md](../../reports/first-light-run-1.md) — what was
+- [experiments/first-light-run-1.md](../../experiments/first-light-run-1.md) — what was
   measured on the vanilla-creature deck

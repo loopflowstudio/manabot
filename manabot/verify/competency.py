@@ -22,9 +22,9 @@ counterspells on the first target"):
 Usage:
     uv run python -m manabot.verify.competency scenarios \
         --agents random,search-16,search-64,search-256 --runs 100 \
-        --workers 4 --out reports/data/exp-09-scenarios.json
+        --workers 4 --out experiments/data/exp-09-scenarios.json
     uv run python -m manabot.verify.competency micro \
-        --games 300 --workers 4 --out reports/data/exp-09-micro.json
+        --games 300 --workers 4 --out experiments/data/exp-09-micro.json
 """
 
 from __future__ import annotations
@@ -1265,7 +1265,7 @@ def main() -> None:
     scen.add_argument("--workers", type=int, default=4)
     scen.add_argument("--seed", type=int, default=0)
     scen.add_argument(
-        "--out", type=str, default="reports/data/exp-09-scenarios.json"
+        "--out", type=str, default="experiments/data/exp-09-scenarios.json"
     )
 
     micro = sub.add_parser("micro", help="run the micro-format matchups")
@@ -1273,7 +1273,7 @@ def main() -> None:
     micro.add_argument("--workers", type=int, default=4)
     micro.add_argument("--seed", type=int, default=0)
     micro.add_argument("--only", type=str, default=None)
-    micro.add_argument("--out", type=str, default="reports/data/exp-09-micro.json")
+    micro.add_argument("--out", type=str, default="experiments/data/exp-09-micro.json")
 
     args = parser.parse_args()
     os.environ.setdefault("WANDB_MODE", "disabled")

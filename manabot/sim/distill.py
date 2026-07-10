@@ -337,7 +337,7 @@ def soft_targets_from_scores(
     τ trades off teacher sharpness against playout noise: at N sims/action
     the per-score standard error is ~sqrt(p(1-p)/N) (≈0.03 at N=256), so τ
     well below that amplifies noise, τ >> score spreads flattens the teacher
-    away. Exp-07 sweeps τ; see reports/exp-07-expert-iteration.md.
+    away. Exp-07 sweeps τ; see experiments/exp-07-expert-iteration.md.
     """
 
     invalid = scores < 0

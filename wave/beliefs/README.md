@@ -205,5 +205,5 @@ not "we ran ReBeL on Magic."
 - Kreps & Wilson, *Sequential Equilibria* (1982) — off-path beliefs
 - wave/search/README.md — Exit 1 (activation trigger), goal-4 gate,
   strategy-fusion section
-- reports/exp-02-flat-mc.md — the searcher whose blind spots this wave exists
+- experiments/exp-02-flat-mc.md — the searcher whose blind spots this wave exists
   to fix
