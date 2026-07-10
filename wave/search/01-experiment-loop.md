@@ -41,6 +41,62 @@ and the budget cap is the claim, not a limitation.
 Global rules: every number gets a CI; every claim in a doc links a report; kill
 criteria written before running; one cycle in flight.
 
+## Standing discipline
+
+Codified 2026-07-10 from external advisor review ("keep doing" findings).
+These bind every cycle and every agent. Each rule names its enforcement
+point — a rule without one is an aspiration, and aspirations rot.
+
+**D1 — Predictions are committed before results exist.**
+Pre-registration is not "written in the report at the end": the prediction
+block (numbers, kill criteria, cost cap) is a git commit that PRECEDES the
+run. exp-09 set the precedent (report skeleton with predictions committed
+before any measurement); it is now the required order.
+*Enforcement:* report reviews check the commit timestamps — prediction commit
+< first result artifact. A report whose predictions cannot be shown to
+predate its data is downgraded to exploratory.
+
+**D2 — Every report names its strongest alternative explanation.**
+Attacking our own conclusions is the project's best habit (seat
+contamination, init variance, harmful shaping, dead checkpoints, card errors,
+a degrading loop — all self-caught). Make it structural: each report carries
+a **Confounds** section stating (a) the strongest alternative reading of the
+result and (b) what would discriminate it. "None identified" is a claim, and
+it is falsifiable.
+*Enforcement:* the report template; coordinating-session review rejects
+reports without the section.
+
+**D3 — No aggregate-only claims about capability.**
+Win rates say *that*; only mechanism-level probes say *why* — and exp-09
+proved aggregates can rise while the capability is absent (win rate masked
+incapacity). Any claim that an agent CAN or CANNOT do something requires a
+behavioral measurement (competency scenario, action-level stat, per-bucket
+metric), not a matchup table alone.
+*Enforcement:* the competency suite (`manabot/verify/competency.py`) is the
+standing instrument; capability claims in reports must cite a mechanism
+measurement or be phrased as strength claims only.
+
+**D4 — The engine's research leverage is a protected interface.**
+Determinism (seeded reproduction), speed (the 183k-SPS class), state
+injection (`Env.scenario_*`), and native search primitives
+(clone/determinize/playout, `flat_mc_scores`) are what let hypotheses be
+tested for dollars instead of hidden behind compute. They are load-bearing
+for the science, not conveniences.
+*Enforcement:* changes that break determinism, remove injection surface, or
+regress engine throughput >10% are treated as failing changes regardless of
+green tests; the conformance-fixture pattern (oracle-anchored CI for
+hand-transcribed content) extends to any future externally-anchored data.
+
+**D5 — Claims narrow to what the comparison supports.**
+Confounded comparisons are reported WITH their confound and the narrowed
+claim (the exp-03 pattern: "beats the shaped baseline" repriced to "beats
+good PPO by less" when the baseline was convicted mid-flight; the paper's
+refuted-claims ledger is the brand). Numbers trace to reports; reports trace
+to store rows; superseded claims are struck through with dates, never
+silently edited.
+*Enforcement:* the paper's every-number-traces rule, applied to wave docs and
+reports equally; the refuted-claims ledger is append-only.
+
 ## Cycles
 
 ### C0 — Calibrate the instrument
