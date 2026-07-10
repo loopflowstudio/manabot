@@ -2,6 +2,8 @@
 
 One experiment = one report (`exp-NN-<name>.md`). Raw data in `data/`.
 Run provenance lives in the verify store (`.runs/verify.sqlite`).
+**Runners:** the exp-specific driver scripts live in [runners/](runners/) —
+`manabot/` keeps only reusable instruments.
 
 ## Discipline
 
