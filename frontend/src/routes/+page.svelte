@@ -3,6 +3,7 @@
 
   import { buildClickableTargets, filterActionsForTarget, focusIdsForActionIndexes } from '$lib/action-map';
   import ActionPanel from '$lib/components/ActionPanel.svelte';
+  import DeckSelector from '$lib/components/DeckSelector.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
@@ -155,9 +156,23 @@
       >
         {gameStore.connection}
       </span>
+      {#if gameStore.deckNames && gameStore.observation}
+        <span
+          data-testid="deck-names"
+          class="rounded bg-slate-700/60 px-2 py-1 text-xs font-semibold text-slate-200"
+        >
+          {gameStore.deckNames.hero} vs {gameStore.deckNames.villain}
+        </span>
+      {/if}
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
+      <DeckSelector
+        hero={gameStore.decks.hero}
+        villain={gameStore.decks.villain}
+        onHeroChange={(value) => gameStore.setHeroDeck(value)}
+        onVillainChange={(value) => gameStore.setVillainDeck(value)}
+      />
       <OpponentSelector
         value={gameStore.opponentChoice}
         checkpointPath={gameStore.checkpointPath}
@@ -197,6 +212,7 @@
       <div class="flex flex-col gap-4">
         <ActionPanel
           actions={filteredActions}
+          actionSpaceKind={gameStore.actionSpaceKind}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedActionIndexes}
           disabled={gameStore.gameOver}

@@ -145,6 +145,18 @@ class Env(gym.Env):
         self._last_obs = raw_obs
         return py_obs, reward, terminated, truncated, info
 
+    def scenario_refresh(self) -> tuple[dict, "managym.Observation"]:
+        """Re-sync after managym scenario_* state injection.
+
+        The competency harness (manabot/verify/competency.py) constructs
+        positions via the engine's scenario_* helpers on ``self._engine``;
+        those leave the cached observation and action space stale. This
+        recomputes both and returns (encoded_obs, raw_obs).
+        """
+        raw_obs = self._engine.scenario_refresh()
+        self._last_obs = raw_obs
+        return self.obs_space.encode(raw_obs), raw_obs
+
     def render(self):
         pass
 

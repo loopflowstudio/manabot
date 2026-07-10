@@ -1,0 +1,361 @@
+{
+  "s1_counter_the_bomb": {
+    "correct_line": "decline the Gray Ogre, counter the Shivan Dragon",
+    "random": {
+      "runs": 100,
+      "correct": 34,
+      "correct_rate": 0.34,
+      "ci_lower": 0.25461379497543,
+      "ci_upper": 0.43722454341689065,
+      "detail": {
+        "counter_cast_on": {
+          "None": 28,
+          "Gray Ogre": 38,
+          "Shivan Dragon": 34
+        },
+        "countered_bait": 38,
+        "bomb_resolved": 66,
+        "never_countered": 28
+      },
+      "wall_seconds": 1.3922175000188872
+    },
+    "search-16": {
+      "runs": 100,
+      "correct": 39,
+      "correct_rate": 0.39,
+      "ci_lower": 0.300167219319702,
+      "ci_upper": 0.4879716383250184,
+      "detail": {
+        "counter_cast_on": {
+          "Shivan Dragon": 39,
+          "Gray Ogre": 61
+        },
+        "countered_bait": 61,
+        "bomb_resolved": 61,
+        "never_countered": 0
+      },
+      "wall_seconds": 4.05006483301986
+    },
+    "search-64": {
+      "runs": 100,
+      "correct": 30,
+      "correct_rate": 0.3,
+      "ci_lower": 0.21894753866228117,
+      "ci_upper": 0.3958503843281196,
+      "detail": {
+        "counter_cast_on": {
+          "Shivan Dragon": 30,
+          "Gray Ogre": 70
+        },
+        "countered_bait": 70,
+        "bomb_resolved": 70,
+        "never_countered": 0
+      },
+      "wall_seconds": 10.169842457980849
+    },
+    "search-256": {
+      "runs": 100,
+      "correct": 39,
+      "correct_rate": 0.39,
+      "ci_lower": 0.300167219319702,
+      "ci_upper": 0.4879716383250184,
+      "detail": {
+        "counter_cast_on": {
+          "Shivan Dragon": 39,
+          "Gray Ogre": 61
+        },
+        "countered_bait": 61,
+        "bomb_resolved": 61,
+        "never_countered": 0
+      },
+      "wall_seconds": 32.581608375068754
+    },
+    "student_r0": {
+      "error": "Error(s) in loading state_dict for Agent:\n\tUnexpected key(s) in state_dict: \"_is_agent_template\". \n\tsize mismatch for player_embedding.projection.0.weight: copying a param with shape torch.Size([64, 27]) from checkpoint, the shape in current model is torch.Size([64, 28]).\n\tsize mismatch for card_embedding.projection.0.weight: copying a param with shape torch.Size([64, 37]) from checkpoint, the shape in current model is torch.Size([64, 38]).\n\tsize mismatch for perm_embedding.projection.0.weight: copying a param with shape torch.Size([64, 7]) from checkpoint, the shape in current model is torch.Size([64, 24])."
+    }
+  },
+  "s2_hold_the_wipe": {
+    "correct_line": "pass turn 1, wipe 4 creatures on turn 2 instead of 2",
+    "random": {
+      "runs": 100,
+      "correct": 23,
+      "correct_rate": 0.23,
+      "ci_lower": 0.15843154746876406,
+      "ci_upper": 0.321545648568277,
+      "detail": {
+        "premature": 72,
+        "wiped": 2.5052631578947366,
+        "cast_turn": 1.6105263157894736,
+        "hero_life_at_cast": 18.526315789473685,
+        "never_cast": 5
+      },
+      "wall_seconds": 1.5227871669922024
+    },
+    "search-16": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "premature": 100,
+        "wiped": 2.0,
+        "cast_turn": 1.0,
+        "hero_life_at_cast": 20.0,
+        "never_cast": 0
+      },
+      "wall_seconds": 1.7928306669928133
+    },
+    "search-64": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "premature": 100,
+        "wiped": 2.0,
+        "cast_turn": 1.0,
+        "hero_life_at_cast": 20.0,
+        "never_cast": 0
+      },
+      "wall_seconds": 3.1695323339663446
+    },
+    "search-256": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "premature": 100,
+        "wiped": 2.0,
+        "cast_turn": 1.0,
+        "hero_life_at_cast": 20.0,
+        "never_cast": 0
+      },
+      "wall_seconds": 5.690731707960367
+    },
+    "student_r0": {
+      "error": "Error(s) in loading state_dict for Agent:\n\tUnexpected key(s) in state_dict: \"_is_agent_template\". \n\tsize mismatch for player_embedding.projection.0.weight: copying a param with shape torch.Size([64, 27]) from checkpoint, the shape in current model is torch.Size([64, 28]).\n\tsize mismatch for card_embedding.projection.0.weight: copying a param with shape torch.Size([64, 37]) from checkpoint, the shape in current model is torch.Size([64, 38]).\n\tsize mismatch for perm_embedding.projection.0.weight: copying a param with shape torch.Size([64, 7]) from checkpoint, the shape in current model is torch.Size([64, 24])."
+    }
+  },
+  "s3_bolt_the_threat": {
+    "correct_line": "hold the bolt for the Lieutenant; kill it before it leaves 3-damage range",
+    "random": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "bolt_cast": 100,
+        "target": {
+          "own:Wind Drake": 50,
+          "own_face": 13,
+          "Invasion Reinforcements": 19,
+          "villain_face": 18
+        },
+        "never_cast": 0
+      },
+      "wall_seconds": 1.7002760829636827
+    },
+    "search-16": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "bolt_cast": 100,
+        "target": {
+          "villain_face": 35,
+          "Invasion Reinforcements": 40,
+          "own_face": 25
+        },
+        "never_cast": 0
+      },
+      "wall_seconds": 4.488700208021328
+    },
+    "search-64": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "bolt_cast": 100,
+        "target": {
+          "Invasion Reinforcements": 47,
+          "villain_face": 52,
+          "own_face": 1
+        },
+        "never_cast": 0
+      },
+      "wall_seconds": 10.352409417042509
+    },
+    "search-256": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "bolt_cast": 100,
+        "target": {
+          "Invasion Reinforcements": 71,
+          "villain_face": 29
+        },
+        "never_cast": 0
+      },
+      "wall_seconds": 29.511614957940765
+    },
+    "student_r0": {
+      "error": "Error(s) in loading state_dict for Agent:\n\tUnexpected key(s) in state_dict: \"_is_agent_template\". \n\tsize mismatch for player_embedding.projection.0.weight: copying a param with shape torch.Size([64, 27]) from checkpoint, the shape in current model is torch.Size([64, 28]).\n\tsize mismatch for card_embedding.projection.0.weight: copying a param with shape torch.Size([64, 37]) from checkpoint, the shape in current model is torch.Size([64, 38]).\n\tsize mismatch for perm_embedding.projection.0.weight: copying a param with shape torch.Size([64, 7]) from checkpoint, the shape in current model is torch.Size([64, 24])."
+    }
+  },
+  "s4_race_vs_block": {
+    "correct_line": "attack with the two fliers only; hold both ground creatures as blockers",
+    "random": {
+      "runs": 100,
+      "correct": 4,
+      "correct_rate": 0.04,
+      "ci_lower": 0.015663050551848013,
+      "ci_upper": 0.09837217232607373,
+      "detail": {
+        "raced": 72,
+        "full_hold": 13,
+        "ogres_attacked": 0.87,
+        "drakes_attacked": 0.79,
+        "blocks": 3.15,
+        "hero_won": 1
+      },
+      "wall_seconds": 1.2572140420088544
+    },
+    "search-16": {
+      "runs": 100,
+      "correct": 2,
+      "correct_rate": 0.02,
+      "ci_lower": 0.005501852234968177,
+      "ci_upper": 0.07001316294199365,
+      "detail": {
+        "raced": 97,
+        "full_hold": 0,
+        "ogres_attacked": 1.56,
+        "drakes_attacked": 1.49,
+        "blocks": 2.86,
+        "hero_won": 19
+      },
+      "wall_seconds": 4.920462750014849
+    },
+    "search-64": {
+      "runs": 100,
+      "correct": 1,
+      "correct_rate": 0.01,
+      "ci_lower": 0.0017673865655472639,
+      "ci_upper": 0.05448752476093461,
+      "detail": {
+        "raced": 92,
+        "full_hold": 4,
+        "ogres_attacked": 1.38,
+        "drakes_attacked": 1.0,
+        "blocks": 3.07,
+        "hero_won": 17
+      },
+      "wall_seconds": 17.93563154095318
+    },
+    "search-256": {
+      "runs": 100,
+      "correct": 0,
+      "correct_rate": 0.0,
+      "ci_lower": 0.0,
+      "ci_upper": 0.03699480747600191,
+      "detail": {
+        "raced": 95,
+        "full_hold": 2,
+        "ogres_attacked": 1.37,
+        "drakes_attacked": 0.84,
+        "blocks": 3.25,
+        "hero_won": 4
+      },
+      "wall_seconds": 65.20580245903693
+    },
+    "student_r0": {
+      "error": "Error(s) in loading state_dict for Agent:\n\tUnexpected key(s) in state_dict: \"_is_agent_template\". \n\tsize mismatch for player_embedding.projection.0.weight: copying a param with shape torch.Size([64, 27]) from checkpoint, the shape in current model is torch.Size([64, 28]).\n\tsize mismatch for card_embedding.projection.0.weight: copying a param with shape torch.Size([64, 37]) from checkpoint, the shape in current model is torch.Size([64, 38]).\n\tsize mismatch for perm_embedding.projection.0.weight: copying a param with shape torch.Size([64, 7]) from checkpoint, the shape in current model is torch.Size([64, 24])."
+    }
+  },
+  "s5_hold_up_quench": {
+    "correct_line": "pass the main phase holding 1U; counter the tapped-out Craw Wurm",
+    "random": {
+      "runs": 100,
+      "correct": 14,
+      "correct_rate": 0.14,
+      "ci_lower": 0.08526265754464904,
+      "ci_upper": 0.2213736038380724,
+      "detail": {
+        "held_main": 54,
+        "main_choice": {
+          "Otter-Penguin": 46,
+          "pass": 54
+        },
+        "quenched": 14,
+        "threat_resolved": 86
+      },
+      "wall_seconds": 1.5567912920378149
+    },
+    "search-16": {
+      "runs": 100,
+      "correct": 1,
+      "correct_rate": 0.01,
+      "ci_lower": 0.0017673865655472639,
+      "ci_upper": 0.05448752476093461,
+      "detail": {
+        "held_main": 13,
+        "main_choice": {
+          "Otter-Penguin": 87,
+          "pass": 13
+        },
+        "quenched": 1,
+        "threat_resolved": 99
+      },
+      "wall_seconds": 2.169381625019014
+    },
+    "search-64": {
+      "runs": 100,
+      "correct": 8,
+      "correct_rate": 0.08,
+      "ci_lower": 0.04109296948581091,
+      "ci_upper": 0.1499826687940307,
+      "detail": {
+        "held_main": 25,
+        "main_choice": {
+          "Otter-Penguin": 75,
+          "pass": 25
+        },
+        "quenched": 8,
+        "threat_resolved": 92
+      },
+      "wall_seconds": 2.9777416670694947
+    },
+    "search-256": {
+      "runs": 100,
+      "correct": 3,
+      "correct_rate": 0.03,
+      "ci_lower": 0.010254338223414811,
+      "ci_upper": 0.08452078080402699,
+      "detail": {
+        "held_main": 24,
+        "main_choice": {
+          "Otter-Penguin": 76,
+          "pass": 24
+        },
+        "quenched": 3,
+        "threat_resolved": 97
+      },
+      "wall_seconds": 7.213645291980356
+    },
+    "student_r0": {
+      "error": "Error(s) in loading state_dict for Agent:\n\tUnexpected key(s) in state_dict: \"_is_agent_template\". \n\tsize mismatch for player_embedding.projection.0.weight: copying a param with shape torch.Size([64, 27]) from checkpoint, the shape in current model is torch.Size([64, 28]).\n\tsize mismatch for card_embedding.projection.0.weight: copying a param with shape torch.Size([64, 37]) from checkpoint, the shape in current model is torch.Size([64, 38]).\n\tsize mismatch for perm_embedding.projection.0.weight: copying a param with shape torch.Size([64, 7]) from checkpoint, the shape in current model is torch.Size([64, 24])."
+    }
+  }
+}

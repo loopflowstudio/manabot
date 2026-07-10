@@ -26,6 +26,7 @@
   <label class="flex items-center gap-2 text-sm text-slate-300">
     Opponent
     <select
+      data-testid="opponent-select"
       class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
       {value}
       {disabled}
