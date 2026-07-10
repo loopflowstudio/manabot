@@ -21,7 +21,12 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 5. **Seeds are the unit.** Game-level CIs quantify one checkpoint's eval
    noise; claims about a *method* need independent training seeds and
    cross-seed uncertainty. Three seeds are three data points.
-6. **Protect the instrument.** Engine determinism, throughput, state
+6. **Write timeless.** Reports, claims, and READMEs are self-contained: no
+   relative dates ("yesterday"), no conversation references ("as discussed",
+   "the big reversal"). Absolute dates, world tags, source-report paths,
+   terms defined inline or by pointer. A reader with only the repo
+   reconstructs everything.
+7. **Protect the instrument.** Engine determinism, throughput, state
    injection, and search primitives are what make experiments cheap —
    changes that break them are failing changes regardless of green tests.
 
