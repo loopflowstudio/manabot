@@ -30,11 +30,15 @@ import torch
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
-from manabot.sim.flat_mc import FlatMCPlayer, spec_name
+from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
 OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
 META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
+# "scores" (D, max_actions) float32 — raw flat-MC win-probability estimates
+# per action (engine order), -1.0 padding on invalid slots. Present in shards
+# generated from exp-07 onward; loaders treat it as optional.
+SCORE_KEY = "scores"
 
 
 # -----------------------------------------------------------------------------
@@ -45,23 +49,37 @@ META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
 def generate_selfplay_shard(
     *,
     num_games: int,
-    sims: int,
+    sims: int | None = None,
+    teacher_spec: dict[str, Any] | None = None,
     seed: int,
     game_offset: int = 0,
     out_path: str | Path | None = None,
     max_steps_per_game: int = 5000,
 ) -> dict[str, Any]:
-    """Play search-vs-search self-play games, recording every decision.
+    """Play teacher-vs-teacher self-play games, recording every decision.
+
+    The teacher is any search player spec accepted by
+    manabot.sim.flat_mc.make_player (``{"kind": "search", ...}`` or
+    ``{"kind": "policy_search", ...}``); passing ``sims`` alone is shorthand
+    for the exp-03 random-rollout teacher. Every decision records the encoded
+    observation, the argmax action, and the raw per-action playout scores
+    (the soft target for distillation).
 
     Returns a summary dict (games, decisions, wall/search seconds, steps).
     When ``out_path`` is given the decisions are written there as an .npz.
     """
 
+    if teacher_spec is None:
+        if sims is None:
+            raise ValueError("pass either sims or teacher_spec")
+        teacher_spec = {"kind": "search", "sims": sims}
+    teacher_name = spec_name(teacher_spec)
+
     obs_space = ObservationSpace()
     match = Match(
         MatchHypers(
-            hero=f"search-{sims}-a"[:32],
-            villain=f"search-{sims}-b"[:32],
+            hero=f"{teacher_name}-a"[:32],
+            villain=f"{teacher_name}-b"[:32],
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
@@ -76,11 +94,13 @@ def generate_selfplay_shard(
         enable_behavior_tracking=False,
     )
     players = [
-        FlatMCPlayer(sims, seed=seed * 2 + 1),
-        FlatMCPlayer(sims, seed=seed * 2 + 2),
+        make_player(teacher_spec, seed=seed * 2 + 1)[0],
+        make_player(teacher_spec, seed=seed * 2 + 2)[0],
     ]
 
+    max_actions = obs_space.encoder.max_actions
     obs_buffers: dict[str, list[np.ndarray]] = {key: [] for key in OBS_KEYS}
+    score_rows: list[np.ndarray] = []
     actions: list[int] = []
     game_indices: list[int] = []
     seats: list[int] = []
@@ -102,6 +122,12 @@ def generate_selfplay_shard(
             action = players[acting].act(env, obs)
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
+            score_row = np.full(max_actions, -1.0, dtype=np.float32)
+            raw_scores = players[acting].last_scores
+            if raw_scores is not None:
+                k = min(len(raw_scores), max_actions)
+                score_row[:k] = raw_scores[:k]
+            score_rows.append(score_row)
             actions.append(action)
             game_indices.append(game_index)
             seats.append(acting)
@@ -134,6 +160,11 @@ def generate_selfplay_shard(
     arrays["seat"] = np.asarray(seats, dtype=np.int8)
     arrays["num_valid"] = np.asarray(num_valids, dtype=np.int16)
     arrays["winner"] = winner_column
+    arrays[SCORE_KEY] = (
+        np.stack(score_rows)
+        if score_rows
+        else np.zeros((0, max_actions), dtype=np.float32)
+    )
 
     if out_path is not None:
         out_path = Path(out_path)
@@ -147,7 +178,7 @@ def generate_selfplay_shard(
         "cap_hits": players[0].stats.cap_hits + players[1].stats.cap_hits,
     }
     return {
-        "teacher": spec_name({"kind": "search", "sims": sims}),
+        "teacher": teacher_name,
         "num_games": num_games,
         "decisions": len(actions),
         "wall_seconds": wall_seconds,
@@ -168,6 +199,8 @@ def load_shards(paths: list[str | Path]) -> dict[str, np.ndarray]:
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)
+    if all(SCORE_KEY in s for s in shards):
+        keys.append(SCORE_KEY)
     return {key: np.concatenate([s[key] for s in shards]) for key in keys}
 
 
@@ -210,6 +243,24 @@ def _batch_tensors(
         dataset["action"][indices], dtype=torch.long, device=device
     )
     return obs, target
+
+
+def soft_targets_from_scores(
+    scores: torch.Tensor, temperature: float
+) -> torch.Tensor:
+    """Distribution over actions from raw flat-MC scores.
+
+    Scores are Monte Carlo win-probability estimates in [0, 1] (padding
+    -1.0 marks invalid actions), so p ∝ exp(score / τ) over valid actions.
+    τ trades off teacher sharpness against playout noise: at N sims/action
+    the per-score standard error is ~sqrt(p(1-p)/N) (≈0.03 at N=256), so τ
+    well below that amplifies noise, τ >> score spreads flattens the teacher
+    away. Exp-07 sweeps τ; see reports/exp-07-expert-iteration.md.
+    """
+
+    invalid = scores < 0
+    logits = (scores / temperature).masked_fill(invalid, -1e9)
+    return torch.softmax(logits, dim=-1)
 
 
 @torch.no_grad()
@@ -260,19 +311,31 @@ def train_bc(
     seed: int = 0,
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
+    soft_temperature: float | None = None,
+    initial_agent_state: dict[str, Any] | None = None,
     log: bool = False,
 ) -> tuple[Agent, ObservationSpace, list[BCEpochStats]]:
     """Behavior-clone a fresh Agent on (observation, search action) pairs.
 
     Cross-entropy on the Agent's masked logits (invalid actions are already
     filled with -1e8 inside Agent.forward, so the distribution is over valid
-    actions only). The train/val split is by game.
+    actions only). With ``soft_temperature`` set (requires the dataset's
+    "scores" column), the target is the softened flat-MC score distribution
+    instead of the one-hot argmax. Validation metrics are always measured
+    against the teacher argmax so runs stay comparable across temperatures.
+    The train/val split is by game. ``initial_agent_state`` warm-starts the
+    student (fine-tuning) instead of a fresh init.
     """
+
+    if soft_temperature is not None and SCORE_KEY not in dataset:
+        raise ValueError("soft_temperature requires a dataset with scores")
 
     torch.manual_seed(seed)
     dev = torch.device(device)
     obs_space = ObservationSpace()
     agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
+    if initial_agent_state is not None:
+        agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
 
     train_idx, val_idx = split_by_game(dataset, val_fraction=val_fraction, seed=seed)
@@ -288,7 +351,14 @@ def train_bc(
             batch = order[start : start + batch_size]
             obs, target = _batch_tensors(dataset, batch, dev)
             logits, _ = agent.forward(obs)
-            loss = torch.nn.functional.cross_entropy(logits, target)
+            if soft_temperature is not None:
+                scores = torch.as_tensor(
+                    dataset[SCORE_KEY][batch], dtype=torch.float32, device=dev
+                )
+                soft = soft_targets_from_scores(scores, soft_temperature)
+                loss = torch.nn.functional.cross_entropy(logits, soft)
+            else:
+                loss = torch.nn.functional.cross_entropy(logits, target)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
