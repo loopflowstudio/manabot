@@ -52,9 +52,9 @@
 \begin{abstract}
 \textit{Magic: The Gathering} combines an expanding card pool, structured hidden information, state-dependent actions, long decision horizons, and a rules system capable of universal computation. Existing work has studied search, deck construction, card representations, and, recently, causal reinforcement learning in restricted versions of the game. This work focuses on a complementary combination: a fast, rules-explicit environment with native search primitives and cost-calibrated baselines.
 
-This paper presents \textbf{manabot}. We contribute (i) \textbf{managym}, a deterministic, seedable, forkable Rust engine ($\approx$10.7k lines, 106 rules-cited integration tests) that runs $1.8\times10^{5}$ steps/second on an Apple M4 Max and exposes determinization as a native primitive; (ii) a \textbf{measurement protocol} based on seat-balanced evaluation, Wilson intervals, pre-registered predictions, and standardized compute accounting; (iii) a \textbf{reference suite} spanning flat determinized search, PPO under three reward regimes, and behavior cloning from search; and (iv) \textbf{five open challenge areas} with measurable entry criteria.
+This paper presents \textbf{manabot}. We contribute (i) \textbf{managym}, a deterministic, seedable, forkable Rust engine ($\approx$15k lines, 162 rules-cited integration tests, a 55-card pool) that runs $1.8\times10^{5}$ steps/second on an Apple M4 Max and exposes determinization and state injection as native primitives; (ii) a \textbf{measurement protocol} based on seat-balanced evaluation, Wilson intervals, pre-registered predictions, and standardized compute accounting; (iii) a \textbf{reference suite} spanning flat determinized search, PPO under three reward regimes, behavior cloning from search, and one measured round of expert iteration; (iv) a \textbf{control-competency suite} --- five injected scenarios with known-correct lines --- that no current agent passes; and (v) \textbf{five open challenge areas} with measurable entry criteria.
 
-On a 35-card interactive mirror, \searchn{16} requires no training and runs in 7\,ms per decision. It wins $91.7\%$ against a uniform-random opponent and defeated each of the three early PPO policies tested head-to-head; the stronger terminal-only and potential-shaped PPO policies have not yet been placed on this ladder. A distilled \searchn{64} policy reaches $90.5\%$ against random at 0.98\,ms per decision. These are baseline results, not a claim to strong \textit{Magic} play: there is no human evaluation, adaptive opponent population, or broad card pool. They expose a large gap on the common random-opponent axis and define the head-to-head tests still needed.
+On an interactive mirror, \searchn{16} requires no training and runs in 7\,ms per decision. It wins $91.7\%$ against a uniform-random opponent and defeated each of the three early PPO policies tested head-to-head. A student distilled from \searchn{256} reaches $87.0\%$ against random at ladder strength $N\approx7$; one crank of expert iteration on top of it \emph{degraded} the student, and the search pilot itself scores at most $0.39$ on the five competency scenarios --- uniform random beats it outright on three. These are baseline results, not a claim to strong \textit{Magic} play: there is no human evaluation, adaptive opponent population, or broad card pool. They expose a large gap on the common random-opponent axis and define the tests a solution must pass.
 \end{abstract}
 
 \section{Introduction}
@@ -67,7 +67,7 @@ Prior work includes Monte Carlo search for card selection \citep{ward2009draft},
 
 The remaining entry cost is still high. Restricted environments necessarily choose a rules slice; evaluation can be dominated by seat and opponent effects; and a learned policy can look strong against random play while remaining weaker than a small search budget. We encountered all three problems in that order.
 
-This paper is an attempt to pay that cost once, publicly, so that the next person does not have to. Sections \ref{sec:platform}--\ref{sec:protocol} describe the platform and measurement protocol. Section \ref{sec:baselines} gives the reference baselines --- what currently works, what it costs, and where measured agents sit on a common strength ladder. Section \ref{sec:challenges} turns the exposed gaps into five entry criteria; Section \ref{sec:limitations} bounds their interpretation; and Section \ref{sec:pitfalls} records the calibration findings that changed the project.
+This paper is an attempt to pay that cost once, publicly, so that the next person does not have to. Sections \ref{sec:platform}--\ref{sec:protocol} describe the platform and measurement protocol. Section \ref{sec:baselines} gives the reference baselines --- what currently works, what it costs, and where measured agents sit on a common strength ladder. Section \ref{sec:competency} adds the behavioral lens: a five-scenario control-competency suite, with known-correct lines, that every current agent fails. Section \ref{sec:challenges} turns the exposed gaps into five entry criteria; Section \ref{sec:limitations} bounds their interpretation; and Section \ref{sec:pitfalls} records the calibration findings that changed the project.
 
 \paragraph{What we are claiming.} The environment is fast, deterministic, instrumented, and covered by CR-cited tests within a stated subset; the reported baselines follow one explicit protocol; and the resulting gaps motivate five concrete research targets. Tests do not prove rules correctness, and the protocol has not been validated beyond the reported decks and opponents. We are explicitly \emph{not} claiming to have trained a strong agent. That is the invitation.
 
@@ -76,13 +76,13 @@ This paper is an attempt to pay that cost once, publicly, so that the next perso
 
 Difficulty claims about games are cheap. Here is what is actually load-bearing about this one, in the form of the constraints each property places on a solution.
 
-\paragraph{The action set is variable, state-dependent, and object-referential.} At each decision the legal set is a list --- cast this, block that with this, target the other --- of size $1$ to $20$ in our subset, and index $i$ carries no stable meaning across states. A fixed maximum-width masked head is possible, and is common in related environments, but it discards the semantics shared by actions that refer to the same objects. Manabot instead scores each legal action from its type and referenced objects. The mean is $3.08$ valid actions per surfaced decision; the tail and the changing referents create the modeling problem.
+\paragraph{The action set is variable, state-dependent, and object-referential.} At each decision the legal set is a list --- cast this, block that with this, target the other --- of size $1$ to $32$ in our subset, and index $i$ carries no stable meaning across states. A fixed maximum-width masked head is possible, and is common in related environments, but it discards the semantics shared by actions that refer to the same objects. Manabot instead scores each legal action from its type and referenced objects. The mean is $3.08$ valid actions per surfaced decision on the original two mirrors; the tail and the changing referents create the modeling problem, and the tail grows with the pool --- the constructed decks of \S\ref{sec:milestone1} exceed the original 20-action encoder capacity at real priority windows.
 
 \paragraph{The hidden state has explicit support.} With public decklists, the unknown state is the opponent's hand and the order of both libraries. A uniform sample from the opponent's unseen pool is correct before their behavior conveys information; it becomes misspecified as observed actions reveal their policy and likely holdings. Determinization has long been used for \textit{Magic} search \citep{cowling2012magic}. The open opportunity here is to condition those samples on public action history and measure whether the improved posterior produces stronger play. This is Challenge \ref{ch:belief}.
 
 \paragraph{The learning horizon exceeds the credit window.} In random-versus-random play, games run 33--41 turns and surface about 58--97 decisions to one player, depending on the deck. PPO with $\gamma=0.99$ and $\lambda=0.95$ has an effective GAE horizon of $1/(1-\gamma\lambda)\approx16.8$ agent steps, so the measured trajectories span roughly 3.5--5.8 such horizons. Simple per-event shaping is harmful on the interactive deck (\S\ref{sec:pitfalls}); potential-based shaping does not establish an improvement over terminal-only reward at the tested budget. Long-horizon learning therefore remains open, but the current experiments do not identify its solution.
 
-\paragraph{The card pool is expanding and semantic.} We implement 35 cards; the full game contains tens of thousands and continues to add mechanics. An identifier-only policy cannot transfer to an unseen card. Useful representations must connect rules text or structured card semantics to game behavior, an issue already studied for deck construction \citep{bertram2024representations} but not for play in this platform. This is Challenge \ref{ch:pool}.
+\paragraph{The card pool is expanding and semantic.} We implement 55 cards; the full game contains tens of thousands and continues to add mechanics. An identifier-only policy cannot transfer to an unseen card. Useful representations must connect rules text or structured card semantics to game behavior, an issue already studied for deck construction \citep{bertram2024representations} but not for play in this platform. This is Challenge \ref{ch:pool}.
 
 \paragraph{The variance is enormous and the confounds are worse.} Between two \emph{uniformly random} players on a creature deck, going first wins $94.1\%\ci{92.5\%}{95.4\%}$ of games. Any evaluation that does not balance seats is measuring the seat. We discovered this after it had invalidated our own founding result (\S\ref{sec:pitfalls}).
 
@@ -91,7 +91,7 @@ Difficulty claims about games are cheap. Here is what is actually load-bearing a
 
 \subsection{managym: the engine}
 
-A two-player subset of the \textit{Comprehensive Rules} in Rust ($10{,}738$ lines), with PyO3 bindings. Table~\ref{tab:rules} states the implemented rule families and known omissions. The 106 CR-cited integration tests exercise the listed behavior; they are evidence about the subset, not a proof of complete rules correctness.
+A two-player subset of the \textit{Comprehensive Rules} in Rust ($14{,}923$ lines), with PyO3 bindings. Table~\ref{tab:rules} states the implemented rule families and known omissions. The 162 CR-cited integration tests exercise the listed behavior; they are evidence about the subset, not a proof of complete rules correctness.
 
 \begin{table}[H]
 \centering\small
@@ -104,26 +104,28 @@ A two-player subset of the \textit{Comprehensive Rules} in Rust ($10{,}738$ line
 117 Priority & tested & APNAP pass loop \\
 305 Lands & tested & One per turn; no additional-land effects \\
 405 Stack & tested & LIFO resolution, priority after resolution, counterspells \\
-601 Casting (subset) & tested & Timing/cost legality for the current pool \\
-602 Activated abilities (subset) & tested & Stack use, costs, duration, source removal \\
-603 Triggers & tested & Data-driven substrate; \S\ref{sec:triggers} \\
-702 Keywords (subset) & tested & Eleven combat and timing keywords in the current pool \\
+601 Casting (subset) & tested & Timing/cost legality; kicker, cost reduction, multi-target; mid-resolution choices (scry, look-and-select, pay-or-not, modal, learn) \\
+602 Activated abilities (subset) & tested & Stack use, costs, duration, source removal; waterbend tap-to-pay \\
+603 Triggers & tested & Data-driven substrate; intervening-if; delayed triggers; \S\ref{sec:triggers} \\
+605 Mana abilities (subset) & tested & Triggered mana abilities (605.1b); until-end-of-combat pools \\
+613 Continuous effects & tested & Simplified additive slice: base/CDA $\to$ statics $\to$ until-EOT $\to$ counters; \textbf{no timestamps or dependency} \\
+702 Keywords (subset) & tested & Thirteen combat and timing keywords, ward, until-EOT grants \\
 508/509 Attack, block & tested & Per-creature declaration; multiple blockers; no damage-order choice \\
 510 Combat damage & tested & First/double strike, trample, deathtouch, menace \\
-514, 704.5 Cleanup, SBAs & tested & Damage cleanup; life, draw, and lethal-damage losses \\
+514, 704.5 Cleanup, SBAs & tested & Damage cleanup; life, draw, and lethal-damage losses; zero-toughness deaths \\
 \midrule
-Layers, replacement/prevention & \textbf{absent} & Designed, unimplemented. Challenge \ref{ch:rules} \\
+614 Replacement/prevention & \textbf{absent} & Designed, unimplemented. Challenge \ref{ch:rules} \\
 Multiplayer, planeswalkers, battles & \textbf{absent} & \texttt{Game::new} asserts two players \\
 \bottomrule
 \end{tabular}
-\caption{Rules coverage. ``Tested'' means CR-cited integration tests exist in the rules-test directory; there are 106 in total. The table summarizes supported rule families rather than every implemented clause. The absences bound every claim in this paper.}
+\caption{Rules coverage. ``Tested'' means CR-cited integration tests exist in the rules-test directory; there are 162 in total. The table summarizes supported rule families rather than every implemented clause. The absences bound every claim in this paper.}
 \label{tab:rules}
 \end{table}
 
-The pool is 35 cards: five basic lands, 18 from Alpha (\textit{Lightning Bolt}, \textit{Counterspell}, \textit{Ancestral Recall}, \textit{Shivan Dragon}, \ldots), \textit{Pyroclasm}, \textit{Man-o'-War}, and a ten-card modern slice exercising tokens, $+1/+1$ counters, flash, and ETB triggers with subject predicates. Two decklists are standard:
+The pool is 55 real cards plus two token definitions: five basic lands and 18 spells from Alpha (\textit{Lightning Bolt}, \textit{Counterspell}, \textit{Ancestral Recall}, \textit{Shivan Dragon}, \ldots), \textit{Pyroclasm}, \textit{Man-o'-War}, four Strixhaven cards, and a 26-card \textit{Avatar: The Last Airbender} slice exercising tokens, $+1/+1$ counters, flash, ETB triggers with subject predicates, and the Milestone-1 mechanics of \S\ref{sec:milestone1}. Every registered shell is checked against a committed Scryfall snapshot in CI (\S\ref{sec:pitfalls} explains why that tripwire exists). Two 60-card mirror decklists are standard for calibration:
 
 \begin{itemize}\itemsep1pt
-\item \stddeck{} --- 12 Mountain, 12 Forest, 18 Llanowar Elves, 18 Grey Ogre. Zero interaction: a pure race.
+\item \stddeck{} --- 12 Mountain, 12 Forest, 18 Llanowar Elves, 18 Gray Ogre. Zero interaction: a pure race.
 \item \intdeck{} --- 12 Island, 12 Mountain, 20 creatures, 16 interaction spells (6 \textit{Lightning Bolt}, 4 \textit{Counterspell}, 3 \textit{Ancestral Recall}, 3 \textit{Pyroclasm}). Instants make timing matter.
 \end{itemize}
 
@@ -139,7 +141,7 @@ On top of this the engine ships \texttt{flat\_mc\_scores}, which for each legal 
 \begin{lstlisting}[caption={A minimal imperfect-information search loop. Signatures are current as of this draft.}]
 import managym
 
-deck = {"Island": 12, "Mountain": 12, "Grey Ogre": 6, "Wind Drake": 6,
+deck = {"Island": 12, "Mountain": 12, "Gray Ogre": 6, "Wind Drake": 6,
         "Man-o'-War": 4, "Raging Goblin": 4, "Lightning Bolt": 6,
         "Counterspell": 4, "Ancestral Recall": 3, "Pyroclasm": 3}
 hero    = managym.PlayerConfig("hero", deck)
@@ -163,23 +165,40 @@ while not obs.game_over:
 \end{lstlisting}
 
 \subsection{Throughput, and where the time actually goes}
+\label{sec:throughput}
 
-Measured on an Apple M4 Max. Environment stepping alone: $90{,}898$ steps/s at one environment, $183{,}350\pm660$ at sixteen, saturating near $1.9\times10^{5}$. Add policy inference and this collapses to $2{,}035$ steps/s; add the full PPO update and it is $2{,}472$--$2{,}856$.
+Measured on an Apple M4 Max. Environment stepping alone: $90{,}898$ steps/s at one environment, $183{,}350\pm660$ at sixteen, saturating near $1.9\times10^{5}$. Add policy inference and the original harness collapsed to $2{,}035$ steps/s; with the full PPO update, $2{,}472$--$2{,}856$. At that point inference cost roughly $72\times$ one environment step, and we wrote that ``the environment is not the bottleneck.''
 
-\textbf{For the current policy, the environment is not the bottleneck.} Inference costs roughly $72\times$ one environment step in the profiling breakdown. This result is specific to the measured model and hardware, but it directs optimization toward batching and network inference rather than further engine work.
+That statement was true but incomplete: most of the inference tax was self-inflicted. Three layers of fix --- removing a debug tax from the agent's hot path (eagerly formatted logging forcing device syncs, per-call mask allocations, a per-sample Python loop), a batched driver that runs one masked forward for many concurrent games over the zero-copy buffers the Rust envs write into, and moving that batched forward to the M4's GPU --- lifted net-in-the-loop throughput from $2{,}035$ to $\mathbf{24{,}474}$ obs/sec ($12.0\times$; $6.4\times$ against a same-day re-measurement of the baseline under identical machine load). The layers are not independent: MPS at batch 16 is useless and only becomes $\approx6\times$ CPU at batch 256 and above, so batching is what makes the GPU usable at all; CPU-only the model is genuinely compute-bound at $\approx$7.3k obs/sec. Two conditional facts matter for anyone reproducing this: \textbf{MPS does not multiplex across processes} --- four workers sharing the GPU deliver roughly one worker's throughput --- so in-the-loop data generation must batch across games within one process, and the same 400-game evaluation that took $\sim$10 minutes of process-pool time now runs in 9 seconds.
+
+Torch's share of the loop fell from $97.2\%$ to $74.8\%$; the environment is visible in the profile again ($25.2\%$) for the first time since the engine work, and the next lever is observation-transfer consolidation, not further network optimization. All numbers trace to \texttt{reports/exp-07-expert-iteration.md}.
 
 \subsection{The trigger substrate}
 \label{sec:triggers}
 
 Triggered abilities are data, not code: \texttt{Ability::Triggered\{condition, effects\}}, where \texttt{TriggerCondition} ranges over ETB / dies / attacks / becomes-tapped / tapped-for-mana / upkeep / ``you draw your $n$th card this turn'', each parameterized by a \texttt{TriggerSubject} (\texttt{This}, \texttt{AnotherYouControl(pred)}, \texttt{AnyYouControl(pred)}) over a structural \texttt{CardPredicate}. Effects compose, including a recursive \texttt{OnNthResolutionThisTurn} gate. Triggers are collected from game events, ordered APNAP, dropped when no legal target exists (CR 603.3d), and placed on the stack.
 
-This substrate is the bet on which card-pool growth rests. Whether it generalizes beyond the present 35-card pool is untested, and is Challenge \ref{ch:rules}.
+This substrate is the bet on which card-pool growth rests. Milestone 1 (\S\ref{sec:milestone1}) was its first real test: the 26-card cube slice landed on this substrate without changing its shape, and the audit that followed found the errors in hand-transcribed card \emph{data}, not in the trigger machinery. Whether it continues to scale is Challenge \ref{ch:rules}.
+
+\subsection{Milestone 1: two constructed decks from a real cube}
+\label{sec:milestone1}
+
+The platform's first pool expansion was deliberately shaped like the real task: take two 40-card decks from an actual cube design --- \textsc{UR Lessons} (counterspells, card selection, kicker) and \textsc{GW Allies} (tokens, $+1/+1$ counters, an anthem, earthbend) --- and implement everything they need. That forced four capability families into the engine:
+
+\begin{itemize}\itemsep1pt
+\item \textbf{Mid-resolution choices.} A resolving spell or ability can park itself and surface a decision --- scry, look-and-select, pay-or-not (kicker, ward), modal, learn --- as a first-class action space; nested decisions compose. Search stays coherent through these: cards revealed by a pending decision are pinned during determinization.
+\item \textbf{Continuous effects.} A simplified CR 613 slice (base and characteristic-defining P/T, then static effects, then until-end-of-turn deltas, then counters; every Milestone-1 effect is additive, so timestamps are not modeled), plus earthbend's land animation with a delayed return trigger and exile-until-the-source-leaves linkage.
+\item \textbf{Cost mechanics.} Affinity-style reduction, waterbend (tap permanents to help pay), and triggered mana abilities that fire mid-payment.
+\item \textbf{Scenario injection.} \texttt{Env.scenario\_*} methods (set life, force cards in hand, force battlefield permanents, refresh) construct exact mid-game positions, bypassing the rules engine. This exists for measurement, and \S\ref{sec:competency} is built on it.
+\end{itemize}
+
+Both decks are playable in the browser UI against any agent, with MTGO-style priority stops and auto-pass. The first cross-deck matchup table (2{,}000 seat-balanced games, zero engine errors) is a calibration result discussed in \S\ref{sec:pitfalls}: GW Allies wins $65.5\%$ under random-vs-random and $\approx77\%$ in search mirrors --- and \S\ref{sec:competency} shows why that last number says more about the pilot than the decks.
 
 \subsection{manabot: the learning side}
 
 A Gymnasium-compatible vectorized wrapper \citep{towers2024gymnasium} and an object-centric observation encoder used by PPO and the distilled policy. The flat-MC player instead reads raw engine state; the distillation harness connects the two by recording encoded observations paired with search actions.
 
-\paragraph{Observations} are designed to respect hidden information --- the opponent's hand and both libraries are never encoded --- and are object-centric: per-player $[27]$, per-card $[60\times33]$, per-permanent $[30\times7]$, actions $[20\times8]$, events $[32\times7]$, plus \texttt{action\_focus} $[20\times2]$, which maps each action to the (up to two) objects it refers to. Validity masks accompany every padded tensor.
+\paragraph{Observations} are designed to respect hidden information --- the opponent's hand and both libraries are never encoded --- and are object-centric: per-player $[28]$, per-card $[60\times38]$, per-permanent $[40\times24]$ (including effective P/T and effective keywords, so anthems, counters, and until-end-of-turn grants are agent-visible), actions $[32\times15]$, events $[32\times7]$, plus \texttt{action\_focus} $[32\times2]$, which maps each action to the (up to two) objects it refers to. Validity masks accompany every padded tensor. These shapes have grown twice with the rules substrate; each growth invalidates earlier checkpoints, a bookkeeping fact that matters when comparing agents across sections (\S\ref{sec:newworld}).
 
 \paragraph{The policy} embeds each object class into $d=64$, optionally mixes them with one transformer block \citep{vaswani2017attention} carrying a learned \emph{perspective} vector whose sign flips by ownership, then scores each action by concatenating its embedding with those of its focus objects and passing the result through a shared head. One logit per action slot; invalid slots masked to $-10^8$. It is deliberately \emph{not} a pointer network \citep{vinyals2015pointer}. 100{,}354 parameters (50{,}306 without attention). We regard this architecture as a placeholder, not a contribution.
 
@@ -213,7 +232,7 @@ On the creature deck, moving first wins $94\%$ of games between two uniform-rand
 
 \paragraph{The cost axis.} Strength is meaningless unbudgeted. We book measured wall-clock time at an AWS \texttt{g5.xlarge} on-demand rate of \$1.006/hr. An early measurement priced $10^{6}$ steps at \$0.44; the later vectorized harness ran roughly four times faster, so the ledger uses each experiment's realized time rather than a universal per-step conversion. This is an accounting proxy, not an incurred cloud bill: all experiments ran on one laptop. Hardware, batching, and pricing changes limit comparisons outside this paper.
 
-\paragraph{Pre-registration.} Each experimental cycle opens with a written question, a prediction, and a cost cap, and closes with a report in \texttt{reports/} recording whether the prediction held. Of seven predictions registered so far, three were refuted outright. We publish all of them.
+\paragraph{Pre-registration.} Each experimental cycle opens with a written question, a prediction, and a cost cap, and closes with a report in \texttt{reports/} recording whether the prediction held. Of seven predictions registered by the first four cycles, three were refuted outright; the cycles since have refuted four more, including both halves of the expert-iteration prediction (\S\ref{sec:newworld}), the claim that search would narrow a cross-deck gap, and the claim that a control deck's win rate would stay flat in search strength (\S\ref{sec:competency}). We publish all of them.
 
 \section{Reference Baselines}
 \label{sec:baselines}
@@ -265,7 +284,7 @@ v i em ep \\
 \label{fig:frontier}
 \end{figure}
 
-Table~\ref{tab:baselines} is the reference suite. Every row is 400 seat-balanced games against a uniform random opponent on \intdeck, except the search rows (300 games) and the mirror row.
+Table~\ref{tab:baselines} is the reference suite. Every row is 400 seat-balanced games against a uniform random opponent on \intdeck, except the search rows (300 games) and the mirror row. These rows were measured before the Milestone-1 observation-shape changes; \S\ref{sec:newworld} adds the current-world frontier on top of them.
 
 \begin{table}[H]
 \centering\small
@@ -330,6 +349,50 @@ n w em ep \\
 \label{fig:ladder}
 \end{figure}
 
+\subsection{The second generation: distillation from \searchn{256}, and a failed crank of expert iteration}
+\label{sec:newworld}
+
+The results above predate the Milestone-1 observation-shape changes; every checkpoint behind them is dimensionally dead in the current engine. The first cycle run in the current world (\texttt{reports/exp-07-expert-iteration.md}) re-established the distillation baseline at a higher teacher budget and then attempted the obvious next step --- closing the AlphaZero-style loop \citep{anthony2017exit,silver2018alphazero}. Both halves of that attempt were pre-registered, and both were refuted.
+
+\paragraph{The round-0 student.} Behavior cloning on 600 \searchn{256} self-play games (80{,}568 decisions, hard arg\-max targets) yields \texttt{student\_r0}: $87.0\%\ci{83.3}{89.9}$ against random over 400 seat-balanced games, at estimated ladder strength $N\approx7$ (it splits with \searchn{8}, $44.5\%\ci{37.8}{51.4}$), for roughly \$2.90 of data generation and training. A temperature sweep over soft targets $p\propto\exp(\text{score}/\tau)$ found strength \emph{monotone in target sharpness}: hard argmax won ($88.0\%$ on the quick evaluation), $\tau=0.02$ scored $84.0\%$, $\tau=0.05$ scored $80.0\%$, and larger $\tau$ was clearly worse. At 256 simulations per action the argmax is already low-noise; softening mostly re-injects the teacher's rollout noise floor.
+
+\paragraph{Policy rollouts do not pay for themselves.} The prediction: replacing random rollouts inside the searcher with the trained student would win at equal wall-clock, because rollouts would stop wasting interaction. At equal \emph{simulations} the policy-rollout searcher shows a positive but non-significant edge ($56.0\%\ci{46.2}{65.3}$). But a policy rollout costs $\approx6\times$ more per playout even with hybrid random tails, and at equal \emph{wall-clock} --- the honest comparison --- the random-rollout searcher wins decisively: the policy-rollout side took $\mathbf{31.0\%}\ci{22.8}{40.6}$.
+
+\paragraph{The crank degraded the student.} One full round of expert iteration --- the student becomes the rollout policy for a new teacher, whose labels train a new student --- was predicted to beat \texttt{student\_r0} head-to-head and place at ladder $N\ge16$. Instead the round-1 student \emph{lost to its predecessor} $74.2$--$25.8$ ($25.8\%\ci{21.7}{30.3}$) and fell to ladder $N\approx3$--$4$. The diagnosis is label economics, the same fact as the wall-clock result seen from the other side: the affordable policy-rollout teacher could argmax only 8 noisy policy playouts per action, while round 0 had argmaxed 256 cheap random playouts --- and \textbf{argmax-of-8-smart is a worse label source than argmax-of-256-dumb}. A 0.21\,ms random playout buys more label truth per dollar than a $\sim$34\,ms policy playout. The refutation convicts this cycle's affordable loop, not expert iteration in principle --- but it is a calibration result for the field: \emph{at this scale, the loop does not compound by default}. Anyone budgeting an expert-iteration project on a fast engine should price the label source, not the algorithm.
+
+\section{The Control-Competency Suite}
+\label{sec:competency}
+
+Everything in Section~\ref{sec:baselines} is a strength measurement: who beats whom, at what cost. This section is a different kind of instrument, and we believe it is the platform's most useful recent contribution: a \emph{behavioral} benchmark with known-correct answers, built after the win-rate lens visibly failed.
+
+The failure was concrete. The first cross-deck matchup table (\S\ref{sec:milestone1}) put the control-shaped deck at $\approx$$22\%$ against the aggressive deck in search mirrors --- and search \emph{widened} the gap relative to random-vs-random, the opposite of the pre-registered prediction that search would reclaim the control deck's conditional value. Two hypotheses survive that table: the deck is structurally worse, or the pilot --- flat determinized MC with uniformly random rollouts --- cannot play control at all. Win rates cannot distinguish them. Scored decisions can.
+
+\paragraph{The instrument.} Five constructed mid-game positions, injected exactly via the engine's scenario surface, each with a scripted opponent and a documented, information-sound correct line. Each agent plays each scenario 100 times; the score is the fraction of runs on the correct line. The suite runs in about four minutes (\texttt{manabot/verify/competency.py}), and its predictions were pre-registered.
+
+\begin{table}[H]
+\centering\small
+\setlength{\tabcolsep}{4.5pt}%
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Scenario} & \textbf{Correct line} & \textbf{random} & \searchn{16} & \searchn{64} & \searchn{256} \\
+\midrule
+S1 counter-the-bomb & save the counter for the bomb & $0.34$ & $0.39$ & $0.30$ & $0.39$ \\
+S2 hold-the-wipe & wait one turn, wipe four & $\mathbf{0.23}$ & $0.00$ & $0.00$ & $0.00$ \\
+S3 bolt-the-threat & hold removal for the threat & $0.00$ & $0.00$ & $0.00$ & $0.00$ \\
+S4 race-vs-block & keep the blockers back & $\mathbf{0.04}$ & $0.02$ & $0.01$ & $0.00$ \\
+S5 hold-up-quench & hold mana, counter the threat & $\mathbf{0.14}$ & $0.01$ & $0.08$ & $0.03$ \\
+\bottomrule
+\end{tabular}
+\caption{Correct-line rate, 100 runs per cell; Wilson intervals in \texttt{reports/exp-09-control-competency.md}. Bold marks scenarios where uniform random beats every search strength. No agent exceeds $0.39$ anywhere, and the $N{=}256$ vs.\ $N{=}16$ difference is at most $0.02$ on every scenario.}
+\label{tab:competency}
+\end{table}
+
+Three pre-registered structural claims all held. No scenario exceeds $0.50$ correct at any $N$ (maximum observed: $0.39$). The rates are \emph{flat in $N$}: sixteen times more simulation buys no tactical competence. And uniform random outright beats every search strength on three of the five scenarios --- because random sometimes does nothing by accident, while search systematically prefers the visible action. The mechanism is directly observable in the decision logs. On S2, search cast the board wipe at the first legal moment, wiping exactly the two visible creatures, in \textbf{300 of 300 runs at every strength}: the ``cast now'' branch shows two guaranteed kills in every determinized world, and the ``wait'' branch's better wipe never materializes in random continuations. This is strategy fusion \citep{frank1998bridge} in its purest observable form. On S3, the Bolt was spent in $100\%$ of runs before the key threat was even castable, and the threat died in zero of 400 runs across all agents. On S1, search always spent the Counterspell and put it on the bait creature $61$--$70\%$ of the time --- the rollout pathology that prices a held counter at zero.
+
+\paragraph{Win rate masks incapacity.} The companion micro-format experiment is the sharpest measurement lesson the platform has produced. A minimal control deck against a minimal aggro deck, 300 seat-balanced games per cell: the control deck wins $3.7\%$ under random piloting, $39.3\%$ at \searchn{16}, $63.0\%$ at \searchn{64}. Search \emph{rescues the win rate} --- while the per-decision probes show it never plays control. The statistics that improve with $N$ are exactly the immediate-value ones (bolt-target quality among simultaneously visible creatures: $0.34\to0.69$); the statistics that require valuing the future are flat or \emph{worse than random} at every $N$ (holding instants: $\approx0.40$ vs.\ random's $0.57$; a quarter of all Counterspells still burned on one-mana creatures at $N{=}256$). Search-$N$ buys discrimination \emph{within} the present decision and none \emph{across} turns. A rising win rate is not evidence that a policy has acquired the behavior a deck is built around.
+
+Two consequences follow. First, the $22\%$ matchup number says nothing about the decks: the pilot it was measured under cannot execute any of the five competencies the control deck is built on, so the deck hypothesis is unmeasurable with this pilot. Second, the suite is the \textbf{acceptance test for Challenge \ref{ch:belief}}: a proposed fix to imperfect-information search --- learned beliefs, information-set planning, policy-guided rollouts --- must at minimum lift S2 and S5 off zero, and should report all five scores. Any agent scoring near the search rows should not be called a control player, whatever its ladder position.
+
 \section{The Challenge Areas}
 \label{sec:challenges}
 
@@ -339,11 +402,11 @@ These five problems organize the gaps exposed by the current platform. They are 
 
 \textbf{Statement.} Produce a policy that, at inference time and without search, has ladder strength $N\ge16$.
 
-\textbf{Current best.} \texttt{bc-search64}, with estimated ladder strength $N\approx8$, for \$0.66. The $N=8$ interval includes $50\%$, so this placement is descriptive rather than confirmed. The later terminal-only and potential-shaped PPO policies are unmeasured; the three earlier per-event PPO policies are below $N=16$.
+\textbf{Current best.} \texttt{student\_r0} (\S\ref{sec:newworld}), estimated ladder strength $N\approx7$ for $\approx$\$2.90 in the current world; \texttt{bc-search64} reached $N\approx8$ for \$0.66 in the pre-Milestone-1 world. Both rungs are descriptive rather than confirmed (each interval at the nearest rung includes $50\%$). The terminal-only and potential-shaped PPO policies remain unmeasured on the ladder.
 
 \textbf{Entry criterion.} Beat \searchn{16} head-to-head over $\ge400$ seat-balanced games with a Wilson lower bound above $50\%$, at $<10$\,ms per decision and $<\$5$ of training. Report ladder strength, dollars, and milliseconds.
 
-\textbf{Why it is tractable.} One round of argmax behavior cloning --- no DAgger, value head, soft targets, or iteration --- produced the first learned policy near a measured ladder rung. Expert iteration \citep{anthony2017exit,silver2018alphazero}, in which the student becomes the rollout policy for the next teacher, is a direct next experiment. Whether it clears $N=16$ is an open empirical question.
+\textbf{Why it is tractable, and what we know does not work.} One round of argmax behavior cloning --- no DAgger \citep{ross2011dagger}, value head, soft targets, or iteration --- produces a learned policy near a measured ladder rung, cheaply and reproducibly. The obvious escalation, expert iteration \citep{anthony2017exit,silver2018alphazero}, has now been tried once and \emph{degraded} the student (\S\ref{sec:newworld}); at this scale the loop's binding constraint is the cost of good labels, not the algorithm's shape. Routes that remain open: a bigger random-rollout teacher budget, value-guided search that replaces rollouts with one forward pass at the leaves, and cheap fast-rollout policies.
 
 \challenge{Model the belief state}{ch:belief}
 
@@ -351,9 +414,9 @@ These five problems organize the gaps exposed by the current platform. They are 
 
 \textbf{Current best.} No learned belief model in manabot. \texttt{determinize()} draws uniformly from the opponent's unseen pool. This is correct before public behavior conveys information and increasingly misspecified when actions depend on private cards.
 
-\textbf{Entry criterion.} A belief model $b(\text{hand} \mid \text{public history})$ that (i) beats the uniform prior in held-out log-likelihood of the true opponent hand, and (ii) when substituted into \texttt{determinize}, yields a searcher that beats an equal-simulation uniform searcher over $\ge400$ seat-balanced games.
+\textbf{Entry criterion.} A belief model $b(\text{hand} \mid \text{public history})$ that (i) beats the uniform prior in held-out log-likelihood of the true opponent hand, (ii) when substituted into \texttt{determinize}, yields a searcher that beats an equal-simulation uniform searcher over $\ge400$ seat-balanced games, and (iii) reports the control-competency suite (\S\ref{sec:competency}), lifting hold-the-wipe and hold-up-quench strictly off zero.
 
-\textbf{Why it is tractable, and what it would not solve.} Public decklists provide a known card multiset, and the simulator exposes the true hidden state at every self-play history, so supervised targets are available without hand annotation. The engine also isolates sampling inside \texttt{determinize()}, making a posterior substitution local. A learned posterior would address \emph{which worlds are sampled}; it would not fix strategy fusion \citep{frank1998bridge}, where perfect-information plans differ across states the player cannot distinguish. Information-set planning methods such as ISMCTS \citep{cowling2012ismcts} and ReBeL \citep{brown2020rebel} address that separate failure mode. The present experiments do not establish which limitation causes the observed search curve.
+\textbf{Why it is tractable, and what it would not solve.} Public decklists provide a known card multiset, and the simulator exposes the true hidden state at every self-play history, so supervised targets are available without hand annotation. The engine also isolates sampling inside \texttt{determinize()}, making a posterior substitution local. A learned posterior would address \emph{which worlds are sampled}; it would not by itself fix strategy fusion \citep{frank1998bridge}, where perfect-information plans differ across states the player cannot distinguish. Both failure modes are now directly observed in this platform (\S\ref{sec:competency}): the scenario suite caught strategy fusion executing the premature board wipe in 300 of 300 runs, and the rollout pathology burning held counters on bait. Information-set planning methods such as ISMCTS \citep{cowling2012ismcts} and ReBeL \citep{brown2020rebel} address the fusion half; the suite is the acceptance test for any of them.
 
 \challenge{Long-horizon credit assignment from terminal reward}{ch:credit}
 
@@ -369,28 +432,28 @@ These five problems organize the gaps exposed by the current platform. They are 
 
 \textbf{Statement.} Train an agent that plays competently with cards it has never seen.
 
-\textbf{Current best.} No zero-shot game-play result in manabot. The observation encoder represents cards as hand-built feature vectors: six type flags, twelve keyword flags, power/toughness/mana value, and three type tags. Related work has demonstrated generalized representations for unseen cards in deck-construction decisions \citep{bertram2024representations}, but transfer to sequential play remains open here.
+\textbf{Current best.} No zero-shot game-play result in manabot. The observation encoder represents cards as hand-built feature vectors: type flags, keyword flags, ward and kicker costs, power/toughness/mana value, and type tags. Related work has demonstrated generalized representations for unseen cards in deck-construction decisions \citep{bertram2024representations}, but transfer to sequential play remains open here.
 
-\textbf{Entry criterion.} Hold out the ten-card modern slice (\texttt{cardsets/tla.rs}) from training, freeze the policy, and evaluate it on decks containing those cards. It must beat an otherwise matched identifier-only or randomized-representation baseline head-to-head with a Wilson lower bound above $50\%$; also report the gap to an oracle trained with the held-out cards.
+\textbf{Entry criterion.} Hold out the 26-card \textit{Avatar} slice (\texttt{cardsets/tla.rs}) from training, freeze the policy, and evaluate it on decks containing those cards. It must beat an otherwise matched identifier-only or randomized-representation baseline head-to-head with a Wilson lower bound above $50\%$; also report the gap to an oracle trained with the held-out cards.
 
 \textbf{Why it is approachable.} \textit{Magic} cards pair natural-language rules text with engine-level structure, and the policy already scores actions through the objects they reference. That isolates the card encoder as a replaceable component. A text or program encoder does not provide compositional generalization for free; the held-out-card protocol is intended to distinguish genuine transfer from a larger lookup table.
 
 \challenge{Scale the rules substrate}{ch:rules}
 
-\textbf{Statement.} Grow the engine from 35 cards toward a playable cube while preserving rules-test coverage and throughput.
+\textbf{Statement.} Grow the engine from 55 cards toward a playable cube while preserving rules-test coverage and throughput.
 
-\textbf{Current best.} 35 cards, 106 rules-cited tests, $1.8\times10^{5}$ steps/s. Layers, replacement and prevention effects, mulligans, player-selected combat-damage ordering, and floating-mana choice are absent.
+\textbf{Current best.} 55 cards, 162 rules-cited tests, $1.8\times10^{5}$ steps/s (measured on the original pool). Milestone 1 (\S\ref{sec:milestone1}) cleared the first hard slice --- mid-resolution choices, an additive layers subset, earthbend, exile linkage --- with the suite green. Full CR 613 (timestamps, dependency, non-additive effects), replacement and prevention effects (CR 614), mulligans, player-selected combat-damage ordering, and floating-mana choice remain absent.
 
-\textbf{Entry criterion.} Implement a CR slice (layers being the hard one), keep the rules suite green, and hold $\ge10^{5}$ steps/s at 16 environments.
+\textbf{Entry criterion.} Implement the next CR slice (replacement/prevention being the hard one now), keep the rules suite and the Scryfall conformance tripwire green, and hold $\ge10^{5}$ steps/s at 16 environments.
 
-\textbf{Why it matters.} Rules coverage gates every other challenge. Our trigger substrate (\S\ref{sec:triggers}) is a bet that triggered abilities decompose into subjects, predicates, and composable effects; the evidence for that bet is 35 cards. Layers --- \textit{Magic}'s continuous-effect resolution order --- are a deliberately hard test of whether the representation extends beyond the current pool.
+\textbf{Why it matters.} Rules coverage gates every other challenge. Our trigger substrate (\S\ref{sec:triggers}) is a bet that triggered abilities decompose into subjects, predicates, and composable effects; that bet survived its first 26-card expansion intact --- the defects the expansion surfaced were in hand-transcribed card data, not in the substrate (\S\ref{sec:pitfalls}). Whether it survives non-additive continuous effects is the next deliberately hard test.
 
 \section{Scope and Limitations}
 \label{sec:limitations}
 
-\paragraph{Game scope.} Managym implements a 35-card, two-player subset without mulligans, layers, replacement or prevention effects, or several combat and mana choices. The experiments use two fixed 60-card mirrors; all frontier results in Table~\ref{tab:baselines} use \intdeck, while one calibration replication also uses \stddeck. Results should not be read as estimates of performance on unrestricted \textit{Magic}.
+\paragraph{Game scope.} Managym implements a 55-card, two-player subset without mulligans, replacement or prevention effects, full layers, or several combat and mana choices. The experiments use two fixed 60-card mirrors plus one 40-card constructed matchup and two micro-format decks; all frontier results in Table~\ref{tab:baselines} use \intdeck, while one calibration replication also uses \stddeck. Results should not be read as estimates of performance on unrestricted \textit{Magic}.
 
-\paragraph{Opponent scope.} Absolute win rates are anchored on uniform random play. The ladder uses our own flat determinized search, whose rollouts also assume uniform random play and inherit perfect-information Monte Carlo pathologies. There is no adaptive self-play population, Elo pool, external agent, or human evaluation. The current ladder is useful for regression and within-project comparison, not evidence of competitive strength.
+\paragraph{Opponent scope.} Absolute win rates are anchored on uniform random play. The ladder uses our own flat determinized search, whose rollouts also assume uniform random play and inherit perfect-information Monte Carlo pathologies --- pathologies that \S\ref{sec:competency} now measures directly: the ladder's own reference agents fail all five competency scenarios. There is no adaptive self-play population, Elo pool, external agent, or human evaluation. The current ladder is useful for regression and within-project comparison, not evidence of competitive strength, and ladder position and behavioral competence are demonstrably separable axes.
 
 \paragraph{Comparison scope.} Several comparisons are not fully controlled. The distilled policy has twice the parameter count of the cost-matched PPO policy; the matched PPO uses a reward recipe later shown to be harmful; policy sampling during evaluation is stochastic; and the strongest PPO policies have not been placed on the ladder. The tables preserve these results as a baseline ledger, but causal claims about learning algorithms require controlled follow-up experiments.
 
@@ -399,7 +462,7 @@ These five problems organize the gaps exposed by the current platform. They are 
 \section{Calibration Findings, or: What This Domain Will Do To You}
 \label{sec:pitfalls}
 
-Table~\ref{tab:refuted} lists eight claims that influenced the project and the evidence that overturned them. Several originated in unbalanced, single-seed measurements; others were assumptions that profiling had never tested. They are included because they changed architecture, reward, or evaluation decisions, and because each was cheaper to falsify than to build around.
+Table~\ref{tab:refuted} lists fourteen claims that influenced the project and the evidence that overturned them. Several originated in unbalanced, single-seed measurements; others were assumptions that profiling, replication, or an oracle had never tested. They are included because they changed architecture, reward, or evaluation decisions, and because each was cheaper to falsify than to build around.
 
 \begin{table}[H]
 \centering\small
@@ -415,13 +478,19 @@ Table~\ref{tab:refuted} lists eight claims that influenced the project and the e
 ``Most decisions are trivial and auto-passed.'' & profiling & Only $12.4\%$ collapse. Combat is $58\%$ of real decisions. \\
 ``The environment is the bottleneck.'' & profiling & In the profiled stack, inference costs $72\times$ the environment step. \\
 ``The interactive deck surfaces more decisions.'' & profiling & They fall to $0.60\times$. \\
+``Search narrows a cross-deck gap by reclaiming conditional value.'' & matchup table & Search \emph{widened} it (UR $34.5\%\to{\approx}23\%$); random rollouts price held interaction at zero. \\
+``The $22\%$ matchup number measures the decks.'' & competency suite & The pilot cannot execute a single control line; the number measured the pilot. \\
+``Win rate tracks behavior.'' & behavior probes & Micro-format win rate rose $0.04\to0.63$ with $N$ while every cross-turn behavior stayed pathological. \\
+``Hand-transcribed cards are close enough.'' & oracle audit & 20 of 55 card shells were wrong, including a wrong-color card and a card name that does not exist. \\
+``One crank of expert iteration climbs the ladder.'' & head-to-head & Round 1 lost $74$--$26$ to round 0; cheap policy-rollout labels are worse than many random playouts. \\
+``The GPU speeds up inference.'' & profiling & Only at batch ${\ge}256$; and MPS does not multiplex across processes. \\
 \bottomrule
 \end{tabular}
-\caption{Eight claims and their disposition. Each changed after a measurement or replication step, before another algorithmic intervention.}
+\caption{Fourteen claims and their disposition. Each changed after a measurement, replication, or audit step, before another algorithmic intervention.}
 \label{tab:refuted}
 \end{table}
 
-Two of these deserve their own statement, because they are findings about the domain rather than about us.
+Several of these deserve their own statement, because they are findings about the domain rather than about us.
 
 \paragraph{Per-event shaping installs the wrong prior.} Three reward regimes, three seeds each, 400 seat-balanced games per seed:
 
@@ -440,29 +509,33 @@ Terminal-only & $66.7$ & $60.0$--$75.5$ & $0.15$--$0.29$ \\
 
 Every potential-shaped seed beats every per-event seed, with non-overlapping intervals. Terminal-only and potential-$\Phi$ overlap at this sample size. The policy-invariance result of \citet{ng1999shaping} concerns optimal policies under its assumptions; it does not imply that potential shaping has no effect on finite-budget learning. These experiments therefore support a narrower operational choice: terminal-only reward is the simpler default until a powered comparison shows that potential shaping improves sample efficiency. The pass-collapse observation that originally motivated dense shaping does not replicate on either deck.
 
-\paragraph{The deck is the probe.} The most informative number above is the last column. The \emph{same} terminal-only reward yields $\texttt{cast\_when\_able}\approx0.99$ on \stddeck, where immediate development is usually useful, and $0.15$--$0.29$ on \intdeck, where holding interaction can be valuable. By contrast, two of three per-event seeds cast at $0.88$--$0.95$ on the interactive deck. The paired profile distinguishes deck-sensitive behavior from a reward-induced habit, although direct tactical metrics are still needed to establish why a policy waits.
+\paragraph{The deck is the probe.} The most informative number above is the last column. The \emph{same} terminal-only reward yields $\texttt{cast\_when\_able}\approx0.99$ on \stddeck, where immediate development is usually useful, and $0.15$--$0.29$ on \intdeck, where holding interaction can be valuable. By contrast, two of three per-event seeds cast at $0.88$--$0.95$ on the interactive deck. The paired profile distinguishes deck-sensitive behavior from a reward-induced habit; the competency scenarios of \S\ref{sec:competency} are the direct tactical metrics this observation called for.
+
+\paragraph{The pilot confounds every matchup table, and so does raw card quality.} The first cross-deck table (\S\ref{sec:milestone1}) looked like a deck-strength measurement --- until the competency suite showed the measuring instrument could not execute the losing deck's game plan, making the deck hypothesis unmeasurable with that pilot. The complementary confound is card quality: in a follow-up probe on the same matchup, swapping a single card name --- four copies of \textit{Ancestral Recall} --- into the weaker deck moved the \searchn{64} mirror by 55 points, from $23.7\%$ to $78.25\%$. At this pool size a matchup table is a joint measurement of decks, pilot, and a handful of over-powered cards, and attributing its numbers to any one factor requires the other two to be probed separately.
+
+\paragraph{Game content needs CI against its source of truth.} A full audit of every registered card against Scryfall oracle data found \textbf{20 of 55 card shells wrong}: a card implemented in the wrong \emph{color} with the wrong cost and stats (\textit{Glider Kids}, registered as a blue $\{1\}\{U\}$ 2/1 without flying; the real card is a white $\{2\}\{W\}$ 2/3 flyer --- it had been sitting in blue-red test decks), a card whose name does not exist (``Grey Ogre''; the Alpha card is \textit{Gray Ogre}), wrong power/toughness on a ward proof card, and over a dozen stale or empty text boxes. None of these were rules-engine bugs; all were hand-transcription drift that 162 rules tests could not catch, because the tests exercised the transcribed data. The fix is structural, not heroic: a committed Scryfall snapshot and a CI test that fails any registration whose shell diverges from it --- and fails any \emph{new} registration that lacks a fixture entry. Hand-transcribed game content is data, and data needs the same tripwires as code.
 
 \section{Getting Started}
 
 The repository contains the engine, the learner, the search player, the distillation harness, the evaluation protocol, and every experiment report backing the numbers in this paper.
 
 \begin{itemize}\itemsep1pt
-\item \texttt{managym/} --- the Rust engine and its 106 rules-cited tests. \texttt{cargo test}.
-\item \texttt{manabot/} --- Gymnasium wrapper, PPO, \texttt{FlatMCPlayer}, distillation.
-\item \texttt{manabot/verify/} --- the seat-balanced evaluation harness. Use this; do not write your own.
-\item \texttt{reports/} --- one report per experimental cycle; checked-in raw JSON is included for the later search, distillation, and shaping evaluations.
+\item \texttt{managym/} --- the Rust engine, its 162 rules-cited tests, and the Scryfall conformance tripwire. \texttt{cargo test}.
+\item \texttt{manabot/} --- Gymnasium wrapper, PPO, \texttt{FlatMCPlayer}, the batched inference driver, distillation.
+\item \texttt{manabot/verify/} --- the seat-balanced evaluation harness and the control-competency suite (\texttt{competency.py}). Use these; do not write your own.
+\item \texttt{reports/} --- one report per experimental cycle; checked-in raw JSON is included for the search, distillation, shaping, expert-iteration, matchup, and competency evaluations.
 \item \texttt{docs/rules\_coverage.yaml} --- machine-tracked scope. If your card needs a rule not listed here, it is Challenge \ref{ch:rules}.
 \end{itemize}
 
-The fastest path to a comparable result is to reproduce \searchn{16} against random, then place a policy on the ladder with the same seat-balanced protocol. A confirmed result beyond $N=16$ clears Challenge \ref{ch:ladder}.
+The fastest path to a comparable result is to reproduce \searchn{16} against random, then place a policy on the ladder with the same seat-balanced protocol. A confirmed result beyond $N=16$ clears Challenge \ref{ch:ladder}; the competency suite is a four-minute run and tells you whether your agent can do what its win rate implies.
 
 \section{Conclusion}
 
-We set out to train an agent to play \textit{Magic: The Gathering}, and built an apparatus for measuring progress instead. The engine is fast, deterministic, and tested within a stated subset. Determinization is native, so a flat imperfect-information search is one call. Seat balancing and replication overturned several early conclusions, including the reward recipe used for the cost-matched PPO comparison.
+We set out to train an agent to play \textit{Magic: The Gathering}, and built an apparatus for measuring progress instead. The engine is fast, deterministic, and tested within a stated subset. Determinization and state injection are native, so a flat imperfect-information search is one call and a scored tactical scenario is a few more. Seat balancing, replication, and an oracle audit overturned early conclusions in reward design, evaluation, and the card data itself.
 
-On the interactive mirror, the cheapest search reaches $91.7\%$ against random, while the best learned-from-scratch point estimate is $75.5\%$. Search also defeats the three early PPO policies tested directly, and distillation produces the strongest learned policy in the suite; the stronger later PPO policies still need ladder matchups. This is a local baseline, not a verdict on learning. It defines the next experiments: stronger opponents, history-conditioned beliefs, controlled distillation comparisons, zero-shot card transfer, and a broader rules substrate. The instrument is usable; the measurements reveal how much remains.
+On the interactive mirror, the cheapest search reaches $91.7\%$ against random, while the best learned-from-scratch point estimate is $75.5\%$; the strongest learned policy overall is distilled from search ($87.0\%$, ladder $N\approx7$), and the one attempt to iterate that recipe degraded it. Meanwhile the search family that anchors the ladder fails all five control-competency scenarios --- uniform random beats it on three --- so the platform now measures a second axis, behavior, on which no current agent scores at all. This is a local baseline, not a verdict on learning. It defines the next experiments: stronger opponents, history-conditioned beliefs, information-set planning judged by the competency suite, zero-shot card transfer, and a broader rules substrate. The instrument is usable; the measurements reveal how much remains.
 
-\paragraph{Reproducibility.} All experimental cycles have reports under \texttt{reports/}; checked-in JSON under \texttt{reports/data/} covers the search, distillation, and shaping evaluations, while earlier reports give provenance and reproduction commands. Provenance commits: \texttt{e38f20b} (cost basis), \texttt{b884038} (decision profile), \texttt{f019e7a} (seat-balanced baselines). Win-rate intervals are Wilson $95\%$.
+\paragraph{Reproducibility.} All experimental cycles have reports under \texttt{reports/}; checked-in JSON under \texttt{reports/data/} covers the search, distillation, shaping, expert-iteration, two-deck-matchup, and competency evaluations, while earlier reports give provenance and reproduction commands. Provenance commits: \texttt{e38f20b} (cost basis), \texttt{b884038} (decision profile), \texttt{f019e7a} (seat-balanced baselines). Win-rate intervals are Wilson $95\%$.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
