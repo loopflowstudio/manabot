@@ -173,6 +173,64 @@ def test_race_block_full_hold_is_not_correct():
     assert result["correct"] is False
 
 
+class RaceHero(PassHero):
+    """Attacks with everything, never blocks."""
+
+    def act(self, env, obs):
+        raw = env.last_raw_obs
+        if int(raw.action_space.action_space_type) == SPACE_ATTACKER:
+            return 0
+        return super().act(env, obs)
+
+
+class BlockLineHero(PassHero):
+    """S4's documented correct line: attack fliers, distribute ground blocks."""
+
+    def __init__(self):
+        self._blocks_this_turn: dict[int, int] = {}
+
+    def act(self, env, obs):
+        from manabot.verify.competency import _battlefield_pairs, _hero_view
+
+        raw = env.last_raw_obs
+        kind = int(raw.action_space.action_space_type)
+        actions = raw.action_space.actions
+        if kind == SPACE_ATTACKER:
+            focus = int(actions[0].focus[0]) if actions[0].focus else -1
+            hero_side, _ = _hero_view(raw)
+            name = next(
+                (
+                    str(card.name)
+                    for card, perm in _battlefield_pairs(raw, hero_side)
+                    if int(perm.id) == focus
+                ),
+                "?",
+            )
+            return 0 if name == "Wind Drake" else 1
+        if kind == SPACE_BLOCKER:
+            turn = int(raw.turn.turn_number)
+            n = self._blocks_this_turn.get(turn, 0)
+            self._blocks_this_turn[turn] = n + 1
+            return min(n, len(actions) - 1)  # blocker k blocks attacker k
+        return super().act(env, obs)
+
+
+def test_race_block_documented_math_holds_end_to_end():
+    """The doc's combat math, verified in the engine: racing loses on the
+    villain's second attack (game turn 4); the block line wins on hero turn
+    5 (game turn 9) at low life."""
+
+    scenario = SCENARIOS["s4_race_vs_block"]
+    raced = run_scenario_once(scenario, RaceHero(), None, seed=2)
+    assert raced["raced"] is True
+    assert raced["hero_won"] is False
+    assert raced["end_turn"] == 4
+    blocked = run_scenario_once(scenario, BlockLineHero(), None, seed=2)
+    assert blocked["correct"] is True
+    assert blocked["hero_won"] is True
+    assert blocked["end_turn"] == 9
+
+
 def test_bolt_threat_never_cast_is_wrong():
     scenario = SCENARIOS["s3_bolt_the_threat"]
     result = run_scenario_once(scenario, PassHero(), None, seed=8)
