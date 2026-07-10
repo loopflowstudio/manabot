@@ -389,6 +389,31 @@ registered and trace-tested — the two decks are fully dealable.
   in M1 reads P/T off the battlefield).
 - Firebending is an on-stack triggered ability (the TLA reminder-text
   reading), not a mana ability.
+- Ancestral Recall: oracle is "Target player draws three cards." — the
+  engine has no target-player draw, so the caster always draws (the
+  self-target case; the opponent-draw line is unavailable). Added by the
+  card-conformance audit, 2026-07-09.
+- Learn has no sideboard mode (1v1 constructed): "you may discard a
+  card; if you do, draw a card" only — the reveal-a-Lesson-from-outside-
+  the-game option is not offered (also noted at the top of this doc).
+- Accumulate Wisdom / Water Tribe Rallier bottom the unselected cards in
+  a **random** order (Rallier's oracle says random; Accumulate Wisdom's
+  says "any order" — no reorder sub-decision, see Stage-2 notes).
+- Waterfall Aerialist's ward {2} shares the spells-only ward limitation
+  described for Dragonfly Swarm above.
+
+**Card-conformance audit (2026-07-09)** — every registered real card is
+now shell-checked against a committed Scryfall snapshot
+(`managym/tests/fixtures/scryfall_cards.json`, refreshed via
+`uv run scripts/refresh_card_fixture.py`) by
+`managym/tests/conformance_tests.rs`; new registrations without a fixture
+entry fail. Shell fixes landed by the audit: Glider Kids ({1}{U} 2/1 →
+oracle {2}{W} 2/3 Human **Pilot** Ally with flying), Waterfall Aerialist
+({2}{U} 2/4 Djinn → oracle {3}{U} 3/1 Djinn **Wizard**), "Grey Ogre" →
+**Gray Ogre** (real card's spelling), Raging Goblin gained its Berserker
+subtype, and text boxes across the sets were aligned to current oracle
+wording ("enters" not "enters the battlefield", Ancestral Recall's
+targeting text, Accumulate Wisdom's current wording).
 
 **Stage-4 leftovers**
 
