@@ -38,7 +38,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [06](exp-06-newworld-training.md) | did observation growth hurt training? | benign — seeds in/above the historical band |
 | [08](exp-08-two-deck-matchup.md) / [08b](exp-08b-ancestral-dose.md) | what decides a matchup table? | pilot + card quality — 4× Recall swung it 55 points; UR-22% was a pilot artifact |
 | [09](exp-09-control-competency.md) | can the pilot play control? | no — ≤0.39 correct at any N; random beats search on 3/5 scenarios; win rate masks incapacity |
-| [10](exp-10-value-gate.md) | does search-with-V beat V-greedy? | gate 57.5% (marginal) but V loses to random rollouts at ¼ sims; Spearman 0.23 in interaction states |
+| [10](exp-10-value-gate.md) | does search-with-V beat V-greedy? | gate passes deal-diverse 60.25% [55.4, 64.9], but V loses to cheaper random-rollout search (P3 refuted); V's ordering near-noise in undecided positions; first battery + training corpus (3 deals/225g) were deal-narrow |
 | [11](exp-11-curriculum-exploitability.md) | does a stronger opponent teach better? | self-play quietly wins; the opponent installs the strategy; student robust (exploiter ≤26%) |
 
 (Older platform docs: [first-light-run-1](first-light-run-1.md),
