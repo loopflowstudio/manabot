@@ -154,6 +154,12 @@ impl Game {
                 permanent.attacking = false;
             }
             self.state.combat = None;
+            // Until-end-of-combat mana (firebending) empties now.
+            self.clear_combat_mana_pools();
+        }
+        if matches!(step, StepKind::Cleanup) {
+            // Safety net: no combat mana survives the turn.
+            self.clear_combat_mana_pools();
         }
     }
 

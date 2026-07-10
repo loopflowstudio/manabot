@@ -30,11 +30,15 @@ import torch
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
-from manabot.sim.flat_mc import FlatMCPlayer, spec_name
+from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
 OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
 META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
+# "scores" (D, max_actions) float32 — raw flat-MC win-probability estimates
+# per action (engine order), -1.0 padding on invalid slots. Present in shards
+# generated from exp-07 onward; loaders treat it as optional.
+SCORE_KEY = "scores"
 
 
 # -----------------------------------------------------------------------------
@@ -42,26 +46,59 @@ META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
 # -----------------------------------------------------------------------------
 
 
+def _git_commit() -> str | None:
+    try:
+        import subprocess
+
+        return (
+            subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                cwd=Path(__file__).resolve().parent,
+                timeout=5,
+            ).stdout.strip()
+            or None
+        )
+    except Exception:
+        return None
+
+
 def generate_selfplay_shard(
     *,
     num_games: int,
-    sims: int,
+    sims: int | None = None,
+    teacher_spec: dict[str, Any] | None = None,
     seed: int,
     game_offset: int = 0,
     out_path: str | Path | None = None,
     max_steps_per_game: int = 5000,
+    round_index: int = 0,
 ) -> dict[str, Any]:
-    """Play search-vs-search self-play games, recording every decision.
+    """Play teacher-vs-teacher self-play games, recording every decision.
+
+    The teacher is any search player spec accepted by
+    manabot.sim.flat_mc.make_player (``{"kind": "search", ...}`` or
+    ``{"kind": "policy_search", ...}``); passing ``sims`` alone is shorthand
+    for the exp-03 random-rollout teacher. Every decision records the encoded
+    observation, the argmax action, and the raw per-action playout scores
+    (the soft target for distillation).
 
     Returns a summary dict (games, decisions, wall/search seconds, steps).
     When ``out_path`` is given the decisions are written there as an .npz.
     """
 
+    if teacher_spec is None:
+        if sims is None:
+            raise ValueError("pass either sims or teacher_spec")
+        teacher_spec = {"kind": "search", "sims": sims}
+    teacher_name = spec_name(teacher_spec)
+
     obs_space = ObservationSpace()
     match = Match(
         MatchHypers(
-            hero=f"search-{sims}-a"[:32],
-            villain=f"search-{sims}-b"[:32],
+            hero=f"{teacher_name}-a"[:32],
+            villain=f"{teacher_name}-b"[:32],
             hero_deck=dict(INTERACTIVE_DECK),
             villain_deck=dict(INTERACTIVE_DECK),
         )
@@ -76,11 +113,13 @@ def generate_selfplay_shard(
         enable_behavior_tracking=False,
     )
     players = [
-        FlatMCPlayer(sims, seed=seed * 2 + 1),
-        FlatMCPlayer(sims, seed=seed * 2 + 2),
+        make_player(teacher_spec, seed=seed * 2 + 1)[0],
+        make_player(teacher_spec, seed=seed * 2 + 2)[0],
     ]
 
+    max_actions = obs_space.encoder.max_actions
     obs_buffers: dict[str, list[np.ndarray]] = {key: [] for key in OBS_KEYS}
+    score_rows: list[np.ndarray] = []
     actions: list[int] = []
     game_indices: list[int] = []
     seats: list[int] = []
@@ -102,6 +141,12 @@ def generate_selfplay_shard(
             action = players[acting].act(env, obs)
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
+            score_row = np.full(max_actions, -1.0, dtype=np.float32)
+            raw_scores = players[acting].last_scores
+            if raw_scores is not None:
+                k = min(len(raw_scores), max_actions)
+                score_row[:k] = raw_scores[:k]
+            score_rows.append(score_row)
             actions.append(action)
             game_indices.append(game_index)
             seats.append(acting)
@@ -134,6 +179,30 @@ def generate_selfplay_shard(
     arrays["seat"] = np.asarray(seats, dtype=np.int8)
     arrays["num_valid"] = np.asarray(num_valids, dtype=np.int16)
     arrays["winner"] = winner_column
+    arrays[SCORE_KEY] = (
+        np.stack(score_rows)
+        if score_rows
+        else np.zeros((0, max_actions), dtype=np.float32)
+    )
+
+    # Provenance tag (expert-iteration staleness accounting, exp-07): who
+    # generated these labels, with what rollout policy, at which round, from
+    # which code. Self-play mirror, so the generating opponent is the teacher.
+    import json as _json
+
+    provenance = {
+        "round": round_index,
+        "teacher_spec": {
+            k: v for k, v in teacher_spec.items() if k != "device"
+        },
+        "teacher_name": teacher_name,
+        "rollout_policy_checkpoint": teacher_spec.get("checkpoint"),
+        "generating_opponent": teacher_name,
+        "git_commit": _git_commit(),
+        "seed": seed,
+        "game_offset": game_offset,
+    }
+    arrays["provenance"] = np.array(_json.dumps(provenance))
 
     if out_path is not None:
         out_path = Path(out_path)
@@ -147,7 +216,8 @@ def generate_selfplay_shard(
         "cap_hits": players[0].stats.cap_hits + players[1].stats.cap_hits,
     }
     return {
-        "teacher": spec_name({"kind": "search", "sims": sims}),
+        "teacher": teacher_name,
+        "provenance": provenance,
         "num_games": num_games,
         "decisions": len(actions),
         "wall_seconds": wall_seconds,
@@ -163,12 +233,52 @@ def generate_selfplay_shard(
 # -----------------------------------------------------------------------------
 
 
-def load_shards(paths: list[str | Path]) -> dict[str, np.ndarray]:
-    """Load and concatenate dataset shards."""
+def load_shards(
+    paths: list[str | Path],
+    *,
+    rounds: list[int] | None = None,
+) -> dict[str, np.ndarray]:
+    """Load and concatenate dataset shards.
+
+    Adds a per-decision "round" column (expert-iteration staleness
+    diagnostic): taken from ``rounds`` (one per shard) when given, else from
+    each shard's embedded provenance tag, else -1 for legacy shards.
+    """
+
+    import json as _json
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)
-    return {key: np.concatenate([s[key] for s in shards]) for key in keys}
+    if all(SCORE_KEY in s for s in shards):
+        keys.append(SCORE_KEY)
+    out = {key: np.concatenate([s[key] for s in shards]) for key in keys}
+
+    round_cols = []
+    for i, shard in enumerate(shards):
+        if rounds is not None:
+            shard_round = int(rounds[i])
+        elif "provenance" in shard:
+            shard_round = int(_json.loads(str(shard["provenance"])).get("round", -1))
+        else:
+            shard_round = -1
+        round_cols.append(
+            np.full(len(shard["action"]), shard_round, dtype=np.int16)
+        )
+    out["round"] = np.concatenate(round_cols)
+
+    # Game indices are only unique within a round's shard set; offset them
+    # per round so the by-game train/val split never merges games across
+    # rounds.
+    unique_rounds = np.unique(out["round"])
+    if len(unique_rounds) > 1:
+        game_index = out["game_index"].astype(np.int64)
+        offset = 0
+        for r in unique_rounds:
+            rows = out["round"] == r
+            game_index[rows] += offset
+            offset = int(game_index[rows].max()) + 1
+        out["game_index"] = game_index
+    return out
 
 
 def split_by_game(
@@ -195,6 +305,11 @@ class BCEpochStats:
     val_loss: float
     val_accuracy: float
     val_accuracy_nontrivial: float
+    # Staleness diagnostic (exp-07): validation loss on the freshest round's
+    # decisions only, vs the aggregate val_loss above. Only populated when
+    # the training data spans multiple rounds; divergence between the two
+    # curves is the pre-registered trigger for replay-window tuning.
+    val_loss_fresh: float | None = None
 
 
 def _batch_tensors(
@@ -210,6 +325,24 @@ def _batch_tensors(
         dataset["action"][indices], dtype=torch.long, device=device
     )
     return obs, target
+
+
+def soft_targets_from_scores(
+    scores: torch.Tensor, temperature: float
+) -> torch.Tensor:
+    """Distribution over actions from raw flat-MC scores.
+
+    Scores are Monte Carlo win-probability estimates in [0, 1] (padding
+    -1.0 marks invalid actions), so p ∝ exp(score / τ) over valid actions.
+    τ trades off teacher sharpness against playout noise: at N sims/action
+    the per-score standard error is ~sqrt(p(1-p)/N) (≈0.03 at N=256), so τ
+    well below that amplifies noise, τ >> score spreads flattens the teacher
+    away. Exp-07 sweeps τ; see reports/exp-07-expert-iteration.md.
+    """
+
+    invalid = scores < 0
+    logits = (scores / temperature).masked_fill(invalid, -1e9)
+    return torch.softmax(logits, dim=-1)
 
 
 @torch.no_grad()
@@ -260,24 +393,45 @@ def train_bc(
     seed: int = 0,
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
+    soft_temperature: float | None = None,
+    initial_agent_state: dict[str, Any] | None = None,
     log: bool = False,
 ) -> tuple[Agent, ObservationSpace, list[BCEpochStats]]:
     """Behavior-clone a fresh Agent on (observation, search action) pairs.
 
     Cross-entropy on the Agent's masked logits (invalid actions are already
     filled with -1e8 inside Agent.forward, so the distribution is over valid
-    actions only). The train/val split is by game.
+    actions only). With ``soft_temperature`` set (requires the dataset's
+    "scores" column), the target is the softened flat-MC score distribution
+    instead of the one-hot argmax. Validation metrics are always measured
+    against the teacher argmax so runs stay comparable across temperatures.
+    The train/val split is by game. ``initial_agent_state`` warm-starts the
+    student (fine-tuning) instead of a fresh init.
     """
+
+    if soft_temperature is not None and SCORE_KEY not in dataset:
+        raise ValueError("soft_temperature requires a dataset with scores")
 
     torch.manual_seed(seed)
     dev = torch.device(device)
     obs_space = ObservationSpace()
     agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
+    if initial_agent_state is not None:
+        agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
 
     train_idx, val_idx = split_by_game(dataset, val_fraction=val_fraction, seed=seed)
     rng = np.random.default_rng(seed)
     history: list[BCEpochStats] = []
+
+    # Staleness diagnostic: freshest-round-only val subset, when the data
+    # spans rounds (expert-iteration aggregation).
+    fresh_val_idx: np.ndarray | None = None
+    if "round" in dataset and len(np.unique(dataset["round"])) > 1:
+        fresh_round = int(dataset["round"].max())
+        fresh_val_idx = val_idx[dataset["round"][val_idx] == fresh_round]
+        if len(fresh_val_idx) == 0:
+            fresh_val_idx = None
 
     for epoch in range(epochs):
         agent.train()
@@ -288,7 +442,14 @@ def train_bc(
             batch = order[start : start + batch_size]
             obs, target = _batch_tensors(dataset, batch, dev)
             logits, _ = agent.forward(obs)
-            loss = torch.nn.functional.cross_entropy(logits, target)
+            if soft_temperature is not None:
+                scores = torch.as_tensor(
+                    dataset[SCORE_KEY][batch], dtype=torch.float32, device=dev
+                )
+                soft = soft_targets_from_scores(scores, soft_temperature)
+                loss = torch.nn.functional.cross_entropy(logits, soft)
+            else:
+                loss = torch.nn.functional.cross_entropy(logits, target)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -296,18 +457,30 @@ def train_bc(
         val_loss, val_acc, val_acc_nontrivial = evaluate_bc(
             agent, dataset, val_idx, batch_size=batch_size, device=dev
         )
+        val_loss_fresh = None
+        if fresh_val_idx is not None:
+            val_loss_fresh, _, _ = evaluate_bc(
+                agent, dataset, fresh_val_idx, batch_size=batch_size, device=dev
+            )
         stats = BCEpochStats(
             epoch=epoch,
             train_loss=total_loss / max(1, len(order)),
             val_loss=val_loss,
             val_accuracy=val_acc,
             val_accuracy_nontrivial=val_acc_nontrivial,
+            val_loss_fresh=val_loss_fresh,
         )
         history.append(stats)
         if log:
+            fresh_part = (
+                f" val_loss_fresh {stats.val_loss_fresh:.4f}"
+                if stats.val_loss_fresh is not None
+                else ""
+            )
             print(
                 f"  epoch {epoch}: train_loss {stats.train_loss:.4f} "
-                f"val_loss {stats.val_loss:.4f} val_acc {stats.val_accuracy:.4f} "
+                f"val_loss {stats.val_loss:.4f}{fresh_part} "
+                f"val_acc {stats.val_accuracy:.4f} "
                 f"val_acc_nontrivial {stats.val_accuracy_nontrivial:.4f}",
                 flush=True,
             )

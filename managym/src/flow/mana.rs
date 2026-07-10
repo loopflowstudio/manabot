@@ -24,11 +24,19 @@ impl Game {
         self.state.mana_cache[player.0] = None;
     }
 
-    /// Mana already in `player`'s pool plus everything their untapped
-    /// permanents could produce.
+    /// Mana already in `player`'s pools (regular + until-end-of-combat)
+    /// plus everything their untapped permanents could produce.
     pub(crate) fn available_mana(&self, player: PlayerId) -> Mana {
         let mut total = self.producible_mana(player);
         total.add(&self.state.players[player.0].mana_pool);
+        total.add(&self.state.players[player.0].combat_mana_pool);
+        total
+    }
+
+    /// Both pools combined (regular + until-end-of-combat).
+    pub(crate) fn pooled_mana(&self, player: PlayerId) -> Mana {
+        let mut total = self.state.players[player.0].mana_pool.clone();
+        total.add(&self.state.players[player.0].combat_mana_pool);
         total
     }
 
@@ -43,7 +51,7 @@ impl Game {
 
         let permanents = self.battlefield_permanents(player);
         for permanent_id in permanents {
-            if self.state.players[player.0].mana_pool.can_pay(cost) {
+            if self.pooled_mana(player).can_pay(cost) {
                 break;
             }
 
@@ -69,22 +77,38 @@ impl Game {
             }
         }
 
-        if !self.state.players[player.0].mana_pool.can_pay(cost) {
+        if !self.pooled_mana(player).can_pay(cost) {
             return Err(AgentError("failed to produce enough mana".to_string()));
         }
 
         Ok(())
     }
 
+    /// Pay `cost` from the player's pools. Until-end-of-combat mana is
+    /// spent first (it expires sooner).
     pub(crate) fn spend_mana(
         &mut self,
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
-        if !self.state.players[player.0].mana_pool.can_pay(cost) {
+        let combined = self.pooled_mana(player);
+        if !combined.can_pay(cost) {
             return Err(AgentError("insufficient mana in pool".to_string()));
         }
-        self.state.players[player.0].mana_pool.pay(cost);
+        let mut remaining = combined;
+        remaining.pay(cost);
+
+        // Rebuild the two pools from what's left: spent mana comes out of
+        // the combat pool first, slot by slot.
+        let player_state = &mut self.state.players[player.0];
+        for slot in 0..remaining.mana.len() {
+            let before =
+                player_state.mana_pool.mana[slot] + player_state.combat_mana_pool.mana[slot];
+            let spent = before - remaining.mana[slot];
+            let from_combat = spent.min(player_state.combat_mana_pool.mana[slot]);
+            player_state.combat_mana_pool.mana[slot] -= from_combat;
+            player_state.mana_pool.mana[slot] -= spent - from_combat;
+        }
         Ok(())
     }
 
@@ -100,9 +124,19 @@ impl Game {
         total
     }
 
+    /// CR 106.4 — regular pools empty as each step/phase ends. The combat
+    /// pool (until-end-of-combat mana) survives; see
+    /// `clear_combat_mana_pools`.
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in &mut self.state.players {
             player.mana_pool.clear();
+        }
+    }
+
+    /// Until-end-of-combat mana (firebending) empties as combat ends.
+    pub(crate) fn clear_combat_mana_pools(&mut self) {
+        for player in &mut self.state.players {
+            player.combat_mana_pool.clear();
         }
     }
 }

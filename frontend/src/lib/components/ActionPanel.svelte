@@ -1,25 +1,38 @@
 <script lang="ts">
+  import { DECISION_PROMPTS } from '$lib/game.svelte';
   import type { ActionOption } from '$lib/types';
 
   interface Props {
     actions?: ActionOption[];
+    actionSpaceKind?: string;
     selectedTargetId?: number | null;
     highlightedActionIndexes?: Set<number>;
     disabled?: boolean;
+    fastForwarding?: boolean;
+    canPassTurn?: boolean;
     onHoverAction?: (action: ActionOption | null) => void;
     onSelectAction?: (action: ActionOption) => void;
     onClearSelection?: () => void;
+    onPassTurn?: () => void;
   }
 
   let {
     actions = [],
+    actionSpaceKind = '',
     selectedTargetId = null,
     highlightedActionIndexes = new Set<number>(),
     disabled = false,
+    fastForwarding = false,
+    canPassTurn = false,
     onHoverAction = undefined,
     onSelectAction = undefined,
     onClearSelection = undefined,
+    onPassTurn = undefined,
   }: Props = $props();
+
+  const decisionPrompt = $derived(
+    actions.length > 0 && !disabled ? DECISION_PROMPTS[actionSpaceKind] ?? null : null,
+  );
 </script>
 
 <aside class="rounded border border-slate-700 bg-slate-800 p-4">
@@ -28,16 +41,39 @@
       <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-300">Actions</h2>
       {#if disabled}
         <span class="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold text-slate-300">Game over</span>
+      {:else if fastForwarding}
+        <span data-testid="auto-passing" class="animate-pulse rounded bg-sky-600/30 px-2 py-0.5 text-xs font-semibold text-sky-300">Auto-passing…</span>
       {:else if actions.length > 0}
         <span class="rounded bg-emerald-600/30 px-2 py-0.5 text-xs font-semibold text-emerald-300">Your move</span>
       {/if}
     </div>
-    {#if selectedTargetId !== null}
-      <button class="text-xs text-slate-400 underline hover:text-slate-200" onclick={() => onClearSelection?.()}>
-        Show all
+    <div class="flex items-center gap-3">
+      {#if selectedTargetId !== null}
+        <button class="text-xs text-slate-400 underline hover:text-slate-200" onclick={() => onClearSelection?.()}>
+          Show all
+        </button>
+      {/if}
+      <button
+        data-testid="pass-turn"
+        class="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-300 transition hover:border-sky-400 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!canPassTurn || fastForwarding}
+        onclick={() => onPassTurn?.()}
+        title="Auto-pass every priority window until the turn ends"
+      >
+        Pass Turn (F6)
       </button>
-    {/if}
+    </div>
   </div>
+
+  {#if decisionPrompt}
+    <p
+      data-testid="decision-prompt"
+      data-kind={actionSpaceKind}
+      class="mb-3 rounded border border-violet-500/40 bg-violet-900/20 px-3 py-2 text-sm text-violet-200"
+    >
+      {decisionPrompt}
+    </p>
+  {/if}
 
   {#if selectedTargetId !== null}
     <p class="mb-3 text-xs text-slate-400">Filtered to actions for selected board target.</p>

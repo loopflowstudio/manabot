@@ -61,6 +61,16 @@ impl VectorEnv {
         self.envs.iter().map(Env::skip_trivial_count).collect()
     }
 
+    /// Per-env index of the player holding the current decision (-1 if no
+    /// decision is pending). With `opponent_policy = none` both seats
+    /// surface, so callers routing decisions to per-seat policies need this.
+    pub fn current_agent_indices(&self) -> Vec<i64> {
+        self.envs
+            .iter()
+            .map(|env| env.current_agent_index().map_or(-1, |index| index as i64))
+            .collect()
+    }
+
     pub fn reset_all(
         &mut self,
         player_configs: Vec<PlayerConfig>,
@@ -377,7 +387,7 @@ mod tests {
                     ("Mountain".to_string(), 12usize),
                     ("Forest".to_string(), 12usize),
                     ("Llanowar Elves".to_string(), 18usize),
-                    ("Grey Ogre".to_string(), 18usize),
+                    ("Gray Ogre".to_string(), 18usize),
                 ]),
             ),
             PlayerConfig::new(
@@ -386,7 +396,7 @@ mod tests {
                     ("Mountain".to_string(), 12usize),
                     ("Forest".to_string(), 12usize),
                     ("Llanowar Elves".to_string(), 18usize),
-                    ("Grey Ogre".to_string(), 18usize),
+                    ("Gray Ogre".to_string(), 18usize),
                 ]),
             ),
         ]

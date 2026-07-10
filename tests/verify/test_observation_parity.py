@@ -12,7 +12,7 @@ import managym
 
 def make_player_configs() -> list[managym.PlayerConfig]:
     return [
-        managym.PlayerConfig("Red Mage", {"Mountain": 10, "Grey Ogre": 20}),
+        managym.PlayerConfig("Red Mage", {"Mountain": 10, "Gray Ogre": 20}),
         managym.PlayerConfig("Green Mage", {"Forest": 10, "Llanowar Elves": 20}),
     ]
 

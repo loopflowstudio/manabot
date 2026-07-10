@@ -5,9 +5,9 @@ use crate::{
     flow::turn::{PhaseKind, StepKind},
 };
 
-pub const PLAYER_DIM: usize = 27;
-pub const CARD_DIM: usize = 37;
-pub const PERMANENT_DIM: usize = 7;
+pub const PLAYER_DIM: usize = 28;
+pub const CARD_DIM: usize = 38;
+pub const PERMANENT_DIM: usize = 24;
 pub const ACTION_TYPE_DIM: usize = 14;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const EVENT_DIM: usize = 7;
@@ -28,8 +28,8 @@ impl Default for ObservationEncoderConfig {
     fn default() -> Self {
         Self {
             max_cards_per_player: 60,
-            max_permanents_per_player: 30,
-            max_actions: 20,
+            max_permanents_per_player: 40,
+            max_actions: 32,
             max_focus_objects: 2,
             max_events: 32,
         }
@@ -361,6 +361,7 @@ fn encode_player_features(
     }
 
     out[26] = player.graveyard_lessons as f32 / 10.0;
+    out[27] = player.combat_mana as f32 / 10.0;
 
     object_to_index.insert(player.id, *current_object_index);
     *current_object_index += 1;
@@ -425,7 +426,8 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[33] = card.ward_cost as f32 / 10.0;
     out[34] = bool_to_f32(card.kicker_cost > 0);
     out[35] = card.kicker_cost as f32 / 10.0;
-    out[36] = 1.0; // validity flag
+    out[36] = bool_to_f32(card.keywords.hexproof);
+    out[37] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -460,7 +462,26 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[3] = bool_to_f32(permanent.is_summoning_sick);
     out[4] = permanent.plus1_counters as f32 / 10.0;
     out[5] = bool_to_f32(permanent.cant_be_blocked_this_turn);
-    out[6] = 1.0;
+    out[6] = permanent.power as f32 / 10.0;
+    out[7] = permanent.toughness as f32 / 10.0;
+    out[8] = bool_to_f32(permanent.is_animated);
+    out[9] = bool_to_f32(permanent.has_exile_link);
+    // Effective keywords (printed + until-EOT grants) — agents see what the
+    // permanent can do right now, not just what's printed on the card.
+    out[10] = bool_to_f32(permanent.keywords.flying);
+    out[11] = bool_to_f32(permanent.keywords.reach);
+    out[12] = bool_to_f32(permanent.keywords.haste);
+    out[13] = bool_to_f32(permanent.keywords.flash);
+    out[14] = bool_to_f32(permanent.keywords.vigilance);
+    out[15] = bool_to_f32(permanent.keywords.trample);
+    out[16] = bool_to_f32(permanent.keywords.first_strike);
+    out[17] = bool_to_f32(permanent.keywords.double_strike);
+    out[18] = bool_to_f32(permanent.keywords.deathtouch);
+    out[19] = bool_to_f32(permanent.keywords.lifelink);
+    out[20] = bool_to_f32(permanent.keywords.defender);
+    out[21] = bool_to_f32(permanent.keywords.menace);
+    out[22] = bool_to_f32(permanent.keywords.hexproof);
+    out[23] = 1.0;
 }
 
 fn encode_actions(
@@ -605,6 +626,7 @@ mod tests {
                 life: 20,
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
+                combat_mana: 0,
             },
             agent_cards: vec![
                 make_card(111, ZoneType::Hand, true, 2, 2, 1),
@@ -620,6 +642,7 @@ mod tests {
                 life: 18,
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
+                combat_mana: 0,
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -698,6 +721,11 @@ mod tests {
             is_summoning_sick: false,
             plus1_counters: 0,
             cant_be_blocked_this_turn: false,
+            power: 2,
+            toughness: 2,
+            is_animated: false,
+            has_exile_link: false,
+            keywords: KeywordData::default(),
         }
     }
 

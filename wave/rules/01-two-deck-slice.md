@@ -1,5 +1,17 @@
 # 01: The Two-Deck Slice (Milestone 1)
 
+> ## ✅ MILESTONE 1 DONE — 2026-07-09
+>
+> All 26 distinct cards of both lists registered, trace-tested, dealable,
+> and playable in the browser (deck pickers, UR-vs-GW default, decision
+> prompts, full Playwright coverage). First A-vs-B matchup table shipped
+> (exp-08): 2000 seat-balanced games, zero errors — **GW Allies 65.5%
+> [60.7, 70.0] over UR Lessons under random play, widening to ~77% in
+> search mirrors; search-64 lifts the weaker deck to 86.0% over a random
+> GW pilot**. Observations now carry effective keywords (until-EOT grants
+> visible), 40 permanent slots, 32 action slots. Validation: cargo 194 +
+> clippy clean, pytest 219, npm check/vitest/e2e all green.
+
 Two 40-card decks from the elemental cube, playable against each other in the
 engine and behind the play UI. Lists blessed 2026-07-09 ("don't care on the
 specific 40 too much — I'll be impressed if we can get this set working"), so
@@ -265,6 +277,226 @@ Python observation mirror):
   (pool + producible). Until-end-of-combat mana (Stage 3 firebending)
   should extend the pool/`clear_mana_pools` — decisions and waterbend
   already read the pool correctly.
+
+## Stage 3 RESULT (landed 2026-07-09)
+
+**What landed** (three commits: engine substrate, cards + trace tests,
+observation mirror + python smoke): every card of both decklists is now
+registered and trace-tested — the two decks are fully dealable.
+
+- **Continuous-effect layers** (`flow/statics.rs`):
+  `Game::effective_power/toughness/effective_pt(permanent_id)` replaces the
+  old permanent-local P/T everywhere (SBA, combat, predicates,
+  observations). Layer order, a deliberate simplification of CR 613:
+  **base P/T (printed or characteristic-defining, layer 7a) → static
+  continuous P/T effects (layer 7c: anthems + conditional self-buffs) →
+  until-end-of-turn deltas (also 7c) → +1/+1 counters (7d)**. Every
+  Milestone-1 effect is additive, so within-layer timestamp ordering is
+  not modeled. Anthem scopes (`StaticScope::OtherYouControl(pred)`)
+  match printed characteristics plus animation but never power, so the
+  computation cannot recurse. CDAs (`CardDefinition::power_cda`:
+  `CreaturesYouControl` for Suki, `GraveyardMatching` for Dragonfly
+  Swarm) are recomputed on every read; conditional statics
+  (`StaticCondition::GraveyardAtLeast`, shared with trigger gating) are
+  likewise pure queries — First-Time Flyer flips between 1/2 and 2/3 as
+  Lessons enter/leave the graveyard with zero stored state.
+- **Earthbend** (`Effect::Earthbend`, `TargetSpec::LandYouControl`):
+  animation is permanent state (`Permanent::animated`) meaning "also a
+  0/0 creature with haste, still a land" — the only animation shape in
+  M1, with no duration (it lasts as long as the permanent). Base 0/0
+  falls out of lands printing no P/T. All creature checks are
+  animation-aware (attack/block/tap, lethal SBA, Creature target specs,
+  predicates, MassDamage); a new CR 704.5f SBA kills 0-toughness
+  creatures, so an earthbent land stripped of counters dies. The
+  return is a one-shot **delayed trigger** (`GameState::delayed_triggers`
+  watching the card's next battlefield exit): dies/exiled → a
+  `PendingTrigger` with **inline effects** (`inline_effects` channel on
+  PendingTrigger/TriggeredAbilityOnStack — a real stack object with no
+  `Card::abilities` entry) resolving
+  `ReturnSourceToBattlefieldTapped`; any other exit drops the watcher.
+  Returns enter tapped without a "becomes tapped" event, as a fresh
+  object: not animated, no counters, granted trigger gone.
+- **Exile-until-this-leaves** (Jailer): `Effect::ExileUntilSourceLeaves`
+  + `GameState::exile_links`. CR 603.6e pragmatics: at trigger
+  resolution the exile is skipped unless the **source card is still on
+  the battlefield** (Banisher-Priest ruling; object-identity check
+  deliberately card-level — a same-card new-object race is unreachable
+  in M1). When the Jailer leaves by any route, linked cards still in
+  exile return immediately under their owners — **no trigger, no
+  stack** (CR 610.3-style duration end); cards that left exile earlier
+  are simply unlinked. "Up to one target" is a first: triggered-ability
+  target choices can now carry a Decline action
+  (`Effect::target_optional`), and an optional-target trigger with zero
+  legal targets still resolves (as a no-op) instead of being removed.
+  `TargetSpec::PermanentOpponentControls{predicate}` rides the
+  CardPredicate growth (`card_types_any`, `not_card_types`,
+  `min_mana_value`).
+- **Until-end-of-combat mana** (firebending): a second pool
+  (`Player::combat_mana_pool`) that survives step boundaries and empties
+  at end of combat (+ cleanup safety net). Payment spends the combat
+  pool first (it expires sooner); `available_mana` and castability
+  gating now include pooled mana — previously priority gating used
+  producible-only, which would have made firebending mana uncastable.
+  Fire Nation Cadets' "has firebending 2 as long as a Lesson is in your
+  graveyard" is a **conditionally-granted, on-stack attack trigger**:
+  `TriggerCondition::ActiveIf{active_if, condition}` checks the
+  condition at fire time (granted ability doesn't exist without it);
+  once on the stack it resolves regardless (granted-trigger semantics).
+  Dragonfly Swarm's death trigger composes ActiveIf (fire-time) with an
+  `IfGraveyardAtLeast` branch (resolution-time) = full intervening-if
+  (CR 603.4).
+- **Keyword grants + hexproof**: `Permanent::temp_keywords` (until-EOT,
+  cleared at cleanup) unioned into `effective_keywords` used by combat
+  (flying/reach blocks, first/double strike passes, trample, vigilance)
+  and damage (lifelink/deathtouch via the source's permanent when on
+  the battlefield). `Keywords::hexproof` blocks opponent targeting in
+  `target_is_legal`. New effects: `BuffTarget`, `UntapTarget`,
+  `GrantKeywordsToTarget`, `IfTargetMatches` (Yip Yip's Ally rider),
+  `ForEachTarget` (per-target sub-effects with per-target legality — a
+  Fancy Footwork target that died is skipped individually, CR 608.2b),
+  `PutCountersOnEachMatching`, `AddMana`.
+- **Cards**: new — Fire Nation Cadets, First-Time Flyer, Dragonfly
+  Swarm, Compassionate Healer, Earth Kingdom Jailer, White Lotus
+  Reinforcements, Earth King's Lieutenant, Suki Kyoshi Warrior, Yip
+  Yip!, Fancy Footwork, Enter the Avatar State; Badgermole Cub gained
+  its earthbend-1 ETB (and 2/2 body). Oracle corrections from Scryfall:
+  Firebending Lesson is {R} Instant–Lesson kicker {4} targeting a
+  creature (was {1}{R} Sorcery kicker {3} any target), It'll Quench Ya!
+  is a Lesson, Water Tribe Rallier is {1}{W} 2/2 Soldier, Allies at
+  Last is {2}{G} Instant.
+- **Observation encoding**: PERMANENT_DIM 7→11 (effective power,
+  effective toughness, is_animated, has_exile_link), PLAYER_DIM 27→28
+  (combat_mana). Conditional statics/anthems/CDAs are agent-visible
+  through effective P/T; exiled cards were already visible in the Exile
+  zone and the holding permanent is now flagged. Mirrored in the Rust
+  encoder, pyo3 bindings, `__init__.pyi`, JSON, and
+  `manabot/env/observation.py`.
+- **Deck constants**: `UR_LESSONS_DECK` / `GW_ALLIES_DECK` in
+  `manabot/verify/util.py` next to INTERACTIVE_DECK (Stage 4's first
+  bullet, pulled forward).
+- **Validation**: cargo 194 green (161 rules incl. 28 Stage-3 traces, 13
+  engine incl. a 200-seed random-vs-random smoke on the ACTUAL
+  decklists, 10 search incl. flat-MC at decision points in the real
+  matchup, 10 unit); clippy clean; pytest 209 green after cp312
+  rebuild; 200-seed full-stack Python smoke on the real matchup
+  (observations encoded every step, zero panics / zero stuck games;
+  Scry, LookAndSelect, PayOrNot, DiscardThenDraw, Waterbend and
+  ChooseTarget all exercised) with `flat_mc_scores` run at 10 live
+  decision points.
+
+**Deviations from CR / oracle (documented on the cards)**
+
+- Suki's hybrid {G/W} pips are registered as {G}{W} (no hybrid-mana
+  support; the GW deck runs both colors, so only corner-case payments
+  differ). The legend rule is not enforced (single copy in the deck).
+- Enter the Avatar State grants its four keywords but does not add the
+  Avatar type ("becomes an Avatar in addition to its other types" has
+  no mechanical relevance in M1 — no until-EOT type-addition machinery
+  was built).
+- Dragonfly Swarm's ward {1} triggers on **spells only** (Stage-2 ward
+  limitation; oracle says "spell or ability" — no M1 ability targets an
+  opponent's permanent).
+- CDAs are computed for battlefield permanents; CDA cards in other zones
+  observe as printed (CR 604.3 says CDAs apply everywhere, but nothing
+  in M1 reads P/T off the battlefield).
+- Firebending is an on-stack triggered ability (the TLA reminder-text
+  reading), not a mana ability.
+- Ancestral Recall: oracle is "Target player draws three cards." — the
+  engine has no target-player draw, so the caster always draws (the
+  self-target case; the opponent-draw line is unavailable). Added by the
+  card-conformance audit, 2026-07-09.
+- Learn has no sideboard mode (1v1 constructed): "you may discard a
+  card; if you do, draw a card" only — the reveal-a-Lesson-from-outside-
+  the-game option is not offered (also noted at the top of this doc).
+- Accumulate Wisdom / Water Tribe Rallier bottom the unselected cards in
+  a **random** order (Rallier's oracle says random; Accumulate Wisdom's
+  says "any order" — no reorder sub-decision, see Stage-2 notes).
+- Waterfall Aerialist's ward {2} shares the spells-only ward limitation
+  described for Dragonfly Swarm above.
+
+**Card-conformance audit (2026-07-09)** — every registered real card is
+now shell-checked against a committed Scryfall snapshot
+(`managym/tests/fixtures/scryfall_cards.json`, refreshed via
+`uv run scripts/refresh_card_fixture.py`) by
+`managym/tests/conformance_tests.rs`; new registrations without a fixture
+entry fail. Shell fixes landed by the audit: Glider Kids ({1}{U} 2/1 →
+oracle {2}{W} 2/3 Human **Pilot** Ally with flying), Waterfall Aerialist
+({2}{U} 2/4 Djinn → oracle {3}{U} 3/1 Djinn **Wizard**), "Grey Ogre" →
+**Gray Ogre** (real card's spelling), Raging Goblin gained its Berserker
+subtype, and text boxes across the sets were aligned to current oracle
+wording ("enters" not "enters the battlefield", Ancestral Recall's
+targeting text, Accumulate Wisdom's current wording).
+
+**Stage-4 leftovers**
+
+- Until-EOT keyword grants are visible in engine state but **not in the
+  encoded observation** (CardData carries printed keywords; PermanentData
+  has no keyword slots). If agents should see a Yip-Yip'd flyer, encode
+  effective keywords for battlefield card entries.
+- The real GW deck exceeds `max_permanents_per_player = 30` in
+  token-heavy games (encoder truncates 34→30 with a warning; raw action
+  path unaffected). Combine with Stage 2's `max_actions = 20` note when
+  sizing the training encoder.
+- The blessed UR list sums to 41 cards (17 lands + 24 spells) — kept as
+  written ("counts may flex ±1"); GW is exactly 40.
+- Enter the Avatar State is registered and tested but **not in the
+  blessed 40** — deck constants follow the wave doc lists.
+- Random-vs-random on the real matchup is seat/deck-skewed (GW won
+  142/200 as villain seat under uniform-random play) — the Stage-4
+  matchup table should seat-balance as specced.
+
+## Stage 4 RESULT (landed 2026-07-09)
+
+**What landed** (four commits: observation leftovers, deck selection in the
+play UI, e2e + decision prompts, matchup table):
+
+- **Stage-3 leftovers fixed** — all four:
+  - (a) *Granted keywords are agent-visible*: `PermanentData` carries an
+    effective-keywords block (printed ∪ until-EOT grants, 13 flags incl.
+    hexproof) — PERMANENT_DIM 11→24; `KeywordData`/CardData gained
+    hexproof — CARD_DIM 37→38. A Yip-Yip'd flyer or Avatar-State hexproof
+    creature is visible to agents and (via payload keywords) the UI; card
+    entries keep printed keywords. Trace-tested in `stage3_cards.rs`
+    (granted flying + all four Avatar State grants observed).
+  - (b) *Permanent capacity*: `max_permanents_per_player` 30→40 (GW token
+    games hit 34). Also `max_actions` 20→32 — the real decks exceed 20
+    legal actions at some windows, and the smoke run showed the encoder
+    truncating live (uniform-random-over-encoded never saw the tail).
+    All dims mirrored across Rust encoder, pyo3, `__init__.pyi`, JSON,
+    `manabot/env/observation.py`, `ObservationSpaceHypers`. **This is an
+    observation-shape change: pre-existing checkpoints do not transfer.**
+  - (c) *Seat balancing*: exp-08 matchup table below is seat-balanced.
+  - (d) *UR list is 41 cards*: kept as blessed ("counts may flex ±1");
+    recorded here as the standing decision. Enter the Avatar State stays
+    registered + tested but out of both lists.
+- **Decks in the play UI**: hero/villain deck pickers (UR Lessons /
+  GW Allies / Interactive), runes mode, persisted to localStorage; default
+  matchup is now UR (hero) vs GW (villain); named decks resolve
+  server-side (`gui/server.py NAMED_DECKS`, sync-tested against
+  `manabot.verify.util`); deck names render in the game header and are
+  recorded in traces (`hero_deck_name`/`villain_deck_name`). Decision
+  spaces surface as prompts (scry / pay-or-not / learn / look-and-select /
+  modal / waterbend) with Magic-terms action labels.
+- **Browser e2e** (`frontend/e2e/two-deck.spec.ts`): selects UR vs GW
+  through the UI, plays a full game to terminal vs the random villain with
+  main-phase stops on, asserts deck names render and choice-kind decisions
+  render clickable labeled options (run surfaced DISCARD_THEN_DRAW (learn)
+  and PAY_OR_NOT (kicker) prompts). Full Playwright suite 5/5.
+- **exp-08 matchup table** (`reports/exp-08-two-deck-matchup.md`,
+  pre-registered prediction committed before running): 2000 games (5 cells
+  x 400, seat-balanced, Wilson CIs, zero errors/draws/caps). UR win rates:
+  random-vs-random **0.345** [0.300, 0.393] (raw deck advantage: GW 65.5%);
+  search-16 mirror 0.223; search-64 mirror 0.237 — **search widens the
+  deck gap** (predicted narrowing — wrong; the asymmetric cells were
+  called: search-64(UR) vs random(GW) 0.860, predicted 0.85; random(UR)
+  vs search-64(GW) 0.007, predicted 0.03). Search shortens games (24.7 →
+  ~19-20 mean turns) and kills the on-play seat advantage (0.575 any-deck
+  at random → 0.448 at search-64). Every Stage-2/3 decision kind except
+  modal surfaces in every cell; GW's waterbend dominates random-play
+  decision counts (30/game) and search prunes it to ~8.
+- **Validation**: cargo 194 green + clippy clean; pytest 219 green (cp312
+  rebuilt); frontend `npm run check` 0 errors, vitest 24 green, Playwright
+  e2e 5/5 green (incl. the new two-deck spec).
 
 ## Notes
 

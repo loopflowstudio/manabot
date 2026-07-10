@@ -41,6 +41,62 @@ and the budget cap is the claim, not a limitation.
 Global rules: every number gets a CI; every claim in a doc links a report; kill
 criteria written before running; one cycle in flight.
 
+## Standing discipline
+
+Codified 2026-07-10 from external advisor review ("keep doing" findings).
+These bind every cycle and every agent. Each rule names its enforcement
+point — a rule without one is an aspiration, and aspirations rot.
+
+**D1 — Predictions are committed before results exist.**
+Pre-registration is not "written in the report at the end": the prediction
+block (numbers, kill criteria, cost cap) is a git commit that PRECEDES the
+run. exp-09 set the precedent (report skeleton with predictions committed
+before any measurement); it is now the required order.
+*Enforcement:* report reviews check the commit timestamps — prediction commit
+< first result artifact. A report whose predictions cannot be shown to
+predate its data is downgraded to exploratory.
+
+**D2 — Every report names its strongest alternative explanation.**
+Attacking our own conclusions is the project's best habit (seat
+contamination, init variance, harmful shaping, dead checkpoints, card errors,
+a degrading loop — all self-caught). Make it structural: each report carries
+a **Confounds** section stating (a) the strongest alternative reading of the
+result and (b) what would discriminate it. "None identified" is a claim, and
+it is falsifiable.
+*Enforcement:* the report template; coordinating-session review rejects
+reports without the section.
+
+**D3 — No aggregate-only claims about capability.**
+Win rates say *that*; only mechanism-level probes say *why* — and exp-09
+proved aggregates can rise while the capability is absent (win rate masked
+incapacity). Any claim that an agent CAN or CANNOT do something requires a
+behavioral measurement (competency scenario, action-level stat, per-bucket
+metric), not a matchup table alone.
+*Enforcement:* the competency suite (`manabot/verify/competency.py`) is the
+standing instrument; capability claims in reports must cite a mechanism
+measurement or be phrased as strength claims only.
+
+**D4 — The engine's research leverage is a protected interface.**
+Determinism (seeded reproduction), speed (the 183k-SPS class), state
+injection (`Env.scenario_*`), and native search primitives
+(clone/determinize/playout, `flat_mc_scores`) are what let hypotheses be
+tested for dollars instead of hidden behind compute. They are load-bearing
+for the science, not conveniences.
+*Enforcement:* changes that break determinism, remove injection surface, or
+regress engine throughput >10% are treated as failing changes regardless of
+green tests; the conformance-fixture pattern (oracle-anchored CI for
+hand-transcribed content) extends to any future externally-anchored data.
+
+**D5 — Claims narrow to what the comparison supports.**
+Confounded comparisons are reported WITH their confound and the narrowed
+claim (the exp-03 pattern: "beats the shaped baseline" repriced to "beats
+good PPO by less" when the baseline was convicted mid-flight; the paper's
+refuted-claims ledger is the brand). Numbers trace to reports; reports trace
+to store rows; superseded claims are struck through with dates, never
+silently edited.
+*Enforcement:* the paper's every-number-traces rule, applied to wave docs and
+reports equally; the refuted-claims ledger is append-only.
+
 ## Cycles
 
 ### C0 — Calibrate the instrument
@@ -186,6 +242,54 @@ to C5). Behavioral inheritance confirmed: student cast_when_able/passed 0.61/
 (0.97/0.007). Sizing amendment: PPO sized by measured 2,472 SPS, not the
 stale 637. See `reports/exp-03-distillation.md`.
 
+### C9 — Can the pilot play control? (2026-07-09)
+
+**Q:** Is exp-08's UR-at-22% a deck property (H1) or a pilot property (H2 —
+flat MC with random rollouts cannot play control: strategy fusion never holds
+interaction for value; random rollouts burn inherited counterspells on the
+first target)?
+
+Two instruments (`manabot/verify/competency.py`, engine state-injection
+surface `managym/src/flow/scenario.rs`):
+
+1. **Competency scenarios** — five constructed positions with documented
+   known-correct lines (counter-the-bomb, hold-the-wipe, bolt-the-threat,
+   race-vs-block, hold-up-quench), scored per decision against scripted
+   villains, ≥100 runs × {random, search-16/64/256}, Wilson CIs. This is a
+   permanent instrument: every future policy gets a tactics score.
+2. **Micro-format mirrors** — MICRO_AGGRO vs MICRO_CONTROL (≤6 names each),
+   seat-balanced 300 games/cell, mirrors ≈50% sanity, cross-matchup at
+   N ∈ {16, 64, 256} with behavioral probes (what counters countered, what
+   bolts targeted, instant-holding rate).
+
+**Predictions** (registered in `reports/exp-09-control-competency.md` before
+the runs): under H2 the scenario correct-line rates are flat in N (Δ < 0.15
+from N=16 to N=256), never exceed 0.50, and random ≥ search-16 on
+hold-the-wipe; control-vs-aggro is flat-to-declining in N (~0.35) while
+counter_first_window_rate stays > 0.70 and instant_holding_rate < 0.15.
+**Cost cap:** CPU only, ≤ 4 workers (shared machine), ~6 core-hours.
+
+**RESULT (2026-07-09): H2 confirmed at the decision level; exp-08's 22% is
+a pilot artifact, not a deck measurement.** All three registered scenario
+claims held, mostly at ceiling: max correct-line rate 0.39 at any N,
+Δ(256−16) ≤ 0.02 on every scenario, and uniform random *beats* every
+search strength on hold-the-wipe (0.23 vs 0.00 — search casts Pyroclasm on
+turn 1 in 300/300 runs), race-vs-block, and hold-up-quench; the bolt is
+burned before the key threat even appears in 100% of S3 runs (0/400 ever
+killed the Lieutenant). The micro win-rate claim was refuted,
+instructively: control-vs-aggro goes 0.037 (random) → 0.393 (N=16) →
+0.630 (N=64) → 0.530 (N=256) — search rescues the *win rate* while the
+behavior probes show it never plays control (instant-holding flat ~0.40 and
+below random's 0.57 at every N; a quarter of Counterspells burned on 1-MV
+goblins at N=256; what rises with N is only within-decision target quality,
+0.34 → 0.69). Mirrors sanity at 0.490/0.517. N buys discrimination inside
+the present decision, none across turns. The scenario suite
+(`manabot/verify/competency.py`, ~4 min for 2,000 scored runs) is now a
+standing gate: any pilot/policy that cannot lift S2/S5 off zero is not a
+control player, whatever the ladder says. Feeds Exit 1 (belief-based /
+root-level information-set handling) and the C5 policy-rollout question.
+See `reports/exp-09-control-competency.md`.
+
 ### C5+ — The loop proper
 
 Policy-rollout search (first time batched inference — wave goal 1 — is
@@ -227,6 +331,38 @@ baselines (23.1% on-play interactive, 93.4% on-play standard) are deal
 artifacts; deal-averaged, random mirror play is near seat-parity (~48.6%
 on-play, 3000 games). Fixed (Python-only) + regression-tested; judging is
 deal-averaged from now on. See `reports/exp-06-newworld-training.md`.
+
+### C7 — Expert iteration lands in the new world
+
+**Q:** Does one full crank of the closed loop (distill → student becomes
+rollout policy → stronger teacher → re-distill) climb the ladder — and does
+batched inference finally unblock it?
+
+First cycle on the post-stage-2 world (CARD_DIM 37; all prior checkpoints
+dimensionally dead). Pre-registered predictions (verbatim in
+`reports/exp-07-expert-iteration.md`): P1 batched inference ≥10x (2k → ≥20k
+obs/sec); P2 policy-rollout search beats random-rollout search at equal
+wall-clock (>55%); P3 the R1 student beats the R0 student head-to-head
+(>55%) and places ≥ N=16.
+
+**RESULT (2026-07-09):** P1 **confirmed** — 2.0k → 24.5k obs/sec (12x;
+agent hot-path cleanup + batched driver + MPS, which only batching makes
+usable; CPU is now compute-bound at 7.3k). P2 **refuted** — at equal
+wall-clock, search with R0-student rollouts loses 31.0% [22.8, 40.6] to
+random-rollout search (equal sims: 56.0%, n.s.; policy playouts cost ~6x
+per playout even with 8-ply hybrid tails). P3 **refuted** — one crank of
+the loop *degraded* the student: R1 (distilled from the affordable
+psearch-8 teacher) loses 25.8% [21.7, 30.3] head-to-head to R0 and drops
+to ladder ≈4; R0 (search-256 teacher) is the new-world frontier at
+**87.0% vs random, ladder ≈7**. Secondary findings: soft score-
+distribution targets are mildly *harmful* at N=256 (hard argmax won the
+sweep); MPS does not multiplex across processes, so net-in-loop datagen
+must batch across games in-process (pooled driver: 45 dec/s, ~7x the
+process-parallel rate). Diagnosis: the loop fails on label economics —
+0.21 ms random playouts buy more label truth per dollar than ~34 ms
+policy playouts. Exit-2's tripwire is half-armed (one sub-2-point round);
+C8 should run the goal-4 gate (search-with-V vs V-greedy) before any
+second crank. See `reports/exp-07-expert-iteration.md`.
 
 ## Protocol amendments
 
@@ -358,9 +494,9 @@ unit.
 | Wave goal | Cycle |
 | --- | --- |
 | 0 real deck | C1 |
-| 1 batched inference | pulled at C5 |
+| 1 batched inference | **landed at C7** (2.0k → 24.5k obs/sec) |
 | 2 decision profile | C0 |
-| 3 determinized search | C3 (flat), C5 (tree/policy rollouts) |
-| 4 gate: assess V | C5+ entry condition |
-| 5 search as teacher | C4 (static), C5+ (iterated) |
+| 3 determinized search | C3 (flat), C7 (policy rollouts — wall-clock negative) |
+| 4 gate: assess V | C8 entry condition |
+| 5 search as teacher | C4 (static, positive), C7 (iterated, negative) |
 | 6 headline metric | the chart, every cycle |

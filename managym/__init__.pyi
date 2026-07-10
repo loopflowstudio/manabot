@@ -28,6 +28,17 @@ class Env:
     def is_game_over(self) -> bool: ...
     def winner_index(self) -> Optional[int]: ...
     def action_count(self) -> int: ...
+    # Scenario / state-injection helpers — test & measurement harnesses only
+    # (manabot/verify/competency.py). Bypass the rules engine: no events,
+    # no triggers, no costs. Inject at a priority decision, then call
+    # scenario_refresh() once.
+    def scenario_set_life(self, player: int, life: int) -> None: ...
+    def scenario_clear_hand(self, player: int) -> None: ...
+    def scenario_force_card_in_hand(self, player: int, name: str) -> None: ...
+    def scenario_force_battlefield(
+        self, player: int, name: str, ready: bool = True
+    ) -> int: ...
+    def scenario_refresh(self) -> Observation: ...
     def determinize(self, seed: int, perspective: Optional[int] = None) -> None: ...
     def random_playout(self, seed: int, max_steps: int = 2000) -> Optional[int]: ...
     def flat_mc_scores(
@@ -178,6 +189,7 @@ class Keywords:
     lifelink: bool
     defender: bool
     menace: bool
+    hexproof: bool
 
 class Player:
     player_index: int
@@ -187,6 +199,7 @@ class Player:
     life: int
     zone_counts: List[int]
     graveyard_lessons: int
+    combat_mana: int
 
 class Card:
     zone: ZoneEnum
@@ -213,6 +226,12 @@ class Permanent:
     is_summoning_sick: bool
     plus1_counters: int
     cant_be_blocked_this_turn: bool
+    power: int
+    toughness: int
+    is_animated: bool
+    has_exile_link: bool
+    # Effective keywords (printed + until-EOT grants).
+    keywords: Keywords
 
 class Turn:
     turn_number: int

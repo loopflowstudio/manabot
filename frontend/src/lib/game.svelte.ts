@@ -1,10 +1,20 @@
+import {
+  loadStoredDeckSelection,
+  saveStoredDeckSelection,
+  type DeckChoice,
+  type DeckSelection,
+} from './decks';
 import { deriveObservationNotes } from './log';
+import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
 import type {
   ActionOption,
   ConnectionState,
+  DeckNames,
   GameLogEntry,
   Observation,
   OpponentConfig,
+  StopsConfig,
+  StopSide,
 } from './types';
 
 export type OpponentChoice =
@@ -34,9 +44,24 @@ export function buildOpponentConfig(
   return { villain_type: 'search', villain_sims: sims };
 }
 
+// Decision prompts for the non-priority action-space kinds (mid-resolution
+// choices surfaced by the engine). Keys are ActionSpaceEnum names echoed by
+// the server in the observation payload's `action_space` field.
+export const DECISION_PROMPTS: Record<string, string> = {
+  SCRY: 'Scry — keep each card on top or put it on the bottom.',
+  LOOK_AND_SELECT: 'Look at the revealed cards — choose what to take.',
+  PAY_OR_NOT: 'Optional cost — pay it or decline.',
+  MODAL: 'Choose a mode.',
+  DISCARD_THEN_DRAW: 'Learn — discard a card to draw a card, or keep your hand.',
+  WATERBEND: 'Waterbend — tap permanents to help pay the cost.',
+  CHOOSE_TARGET: 'Choose a target.',
+};
+
 export class GameStore {
   observation = $state<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
+  // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
+  actionSpaceKind = $state<string>('');
   actionLog = $state<GameLogEntry[]>([]);
   gameOver = $state(false);
   winner = $state<number | null>(null);
@@ -50,6 +75,21 @@ export class GameStore {
   opponentChoice = $state<OpponentChoice>('search-64');
   checkpointPath = $state('');
   checkpointDeterministic = $state(false);
+  // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
+  // localStorage and sent with new_game.
+  decks = $state<DeckSelection>(loadStoredDeckSelection());
+  // Display names for the live matchup, echoed by the server on every
+  // payload — what the game header renders.
+  deckNames = $state<DeckNames | null>(null);
+  // Priority stops (MTGO-style auto-pass). Loaded from localStorage, sent
+  // with new_game, and overwritten by the server's effective-config echo.
+  stops = $state<StopsConfig>(loadStoredStops());
+  // True while a pass-turn (F6) request is in flight — the server is
+  // fast-forwarding priority windows on our behalf.
+  fastForwarding = $state(false);
+  // Monotonic count of applied server updates (observation/game_over).
+  // Surfaced in the DOM so tests can serialize on server responses.
+  updateSeq = $state(0);
 
   private logSequence = 0;
 
@@ -73,6 +113,14 @@ export class GameStore {
     this.checkpointDeterministic = next;
   }
 
+  setHeroDeck(next: DeckChoice): void {
+    this.updateDecks({ ...this.decks, hero: next });
+  }
+
+  setVillainDeck(next: DeckChoice): void {
+    this.updateDecks({ ...this.decks, villain: next });
+  }
+
   opponentConfig(): OpponentConfig {
     return buildOpponentConfig(
       this.opponentChoice,
@@ -81,23 +129,76 @@ export class GameStore {
     );
   }
 
+  newGameConfig(): Record<string, unknown> {
+    return {
+      ...this.opponentConfig(),
+      hero_deck: this.decks.hero,
+      villain_deck: this.decks.villain,
+      stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },
+      stop_on_stack: this.stops.stop_on_stack,
+      auto_pass: this.stops.auto_pass,
+    };
+  }
+
+  toggleStop(side: StopSide, step: string): void {
+    const steps = this.stops[side].includes(step)
+      ? this.stops[side].filter((existing) => existing !== step)
+      : [...this.stops[side], step];
+    this.updateStops({ ...this.stops, [side]: steps });
+  }
+
+  setStopOnStack(value: boolean): void {
+    this.updateStops({ ...this.stops, stop_on_stack: value });
+  }
+
+  setAutoPass(value: boolean): void {
+    this.updateStops({ ...this.stops, auto_pass: value });
+  }
+
+  resetStops(): void {
+    this.updateStops(defaultStops());
+  }
+
+  applyServerStops(stops: StopsConfig | undefined): void {
+    if (stops) {
+      this.updateStops(stops);
+    }
+  }
+
+  beginFastForward(): void {
+    this.fastForwarding = true;
+  }
+
+  endFastForward(): void {
+    this.fastForwarding = false;
+  }
+
   applyObservation(
     observation: Observation,
     actions: ActionOption[],
     sessionId?: string,
     resumeToken?: string,
     log: string[] = [],
+    stops?: StopsConfig,
+    autoPassed = 0,
+    deckNames?: DeckNames,
+    actionSpaceKind = '',
   ): void {
     const previous = this.observation;
 
+    this.updateSeq += 1;
     this.observation = observation;
     this.actions = actions;
+    this.actionSpaceKind = actionSpaceKind;
     this.gameOver = observation.game_over;
     this.winner = null;
     this.errorMessage = null;
     this.resumeFailed = false;
+    this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
+    this.applyServerStops(stops);
+    this.applyDeckNames(deckNames);
 
     if (sessionId) {
       this.sessionId = sessionId;
@@ -107,6 +208,7 @@ export class GameStore {
     }
 
     this.appendLogLines('villain', log);
+    this.appendAutoPassNote(autoPassed);
     this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
@@ -114,19 +216,28 @@ export class GameStore {
     observation: Observation,
     winner: number | null,
     log: string[] = [],
+    stops?: StopsConfig,
+    autoPassed = 0,
+    deckNames?: DeckNames,
   ): void {
     const previous = this.observation;
 
+    this.updateSeq += 1;
     this.observation = observation;
     this.actions = [];
+    this.actionSpaceKind = '';
     this.gameOver = true;
     this.winner = winner;
     this.errorMessage = null;
     this.resumeFailed = false;
+    this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
+    this.applyServerStops(stops);
+    this.applyDeckNames(deckNames);
 
     this.appendLogLines('villain', log);
+    this.appendAutoPassNote(autoPassed);
     this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
@@ -167,12 +278,40 @@ export class GameStore {
     this.setFocus([]);
   }
 
+  private updateStops(next: StopsConfig): void {
+    this.stops = next;
+    saveStoredStops(next);
+  }
+
+  private updateDecks(next: DeckSelection): void {
+    this.decks = next;
+    saveStoredDeckSelection(next);
+  }
+
+  private applyDeckNames(deckNames: DeckNames | undefined): void {
+    if (deckNames) {
+      this.deckNames = deckNames;
+    }
+  }
+
+  private appendAutoPassNote(autoPassed: number): void {
+    if (autoPassed <= 0) {
+      return;
+    }
+    const windows = autoPassed === 1 ? 'window' : 'windows';
+    this.appendLogLines('system', [
+      `Auto-passed ${autoPassed} priority ${windows}.`,
+    ]);
+  }
+
   private resetMatchState(): void {
     this.observation = null;
     this.actions = [];
+    this.actionSpaceKind = '';
     this.gameOver = false;
     this.winner = null;
     this.actionLog = [];
+    this.fastForwarding = false;
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;

@@ -9,8 +9,8 @@ import json
 import random
 from types import SimpleNamespace
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 # Local imports
 from gui import server, trace as trace_store
@@ -205,9 +205,16 @@ def test_new_game_rejects_bad_villain_configs(isolated_traces):
                 assert expected_fragment.lower() in payload["message"].lower()
 
 
-def test_default_deck_is_interactive_deck_mirror():
-    from manabot.verify.util import INTERACTIVE_DECK
+def test_named_decks_mirror_verify_util_constants():
+    from manabot.verify.util import (
+        GW_ALLIES_DECK,
+        INTERACTIVE_DECK,
+        UR_LESSONS_DECK,
+    )
 
+    assert server.NAMED_DECKS["interactive"] == INTERACTIVE_DECK
+    assert server.NAMED_DECKS["ur_lessons"] == UR_LESSONS_DECK
+    assert server.NAMED_DECKS["gw_allies"] == GW_ALLIES_DECK
     assert server.DEFAULT_DECK == INTERACTIVE_DECK
 
 
@@ -215,8 +222,52 @@ def test_default_villain_is_search_64(isolated_traces):
     config = server._parse_game_config({})
     assert config.villain_type == "search"
     assert config.villain_sims == 64
-    assert config.hero_deck == server.DEFAULT_DECK
-    assert config.villain_deck == server.DEFAULT_DECK
+    # Default matchup is the Milestone-1 two-deck slice: UR hero vs GW.
+    assert config.hero_deck == server.UR_LESSONS_DECK
+    assert config.villain_deck == server.GW_ALLIES_DECK
+    assert config.hero_deck_name == "ur_lessons"
+    assert config.villain_deck_name == "gw_allies"
+
+
+def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
+    """Named decks: payloads echo display names, traces record identifiers."""
+    with TestClient(app) as client:
+        payload = _play_full_game(
+            client,
+            {
+                "villain_type": "random",
+                "seed": 11,
+                "hero_deck": "ur_lessons",
+                "villain_deck": "gw_allies",
+                "auto_pass": False,
+            },
+            hero_seed=11,
+        )
+        assert payload["deck_names"] == {
+            "hero": "UR Lessons",
+            "villain": "GW Allies",
+        }
+
+    trace_files = sorted(isolated_traces.glob("*.json"))
+    assert trace_files
+    trace = json.loads(trace_files[-1].read_text())
+    assert trace["config"]["hero_deck_name"] == "ur_lessons"
+    assert trace["config"]["villain_deck_name"] == "gw_allies"
+    assert trace["config"]["hero_deck"] == server.UR_LESSONS_DECK
+    assert trace["config"]["villain_deck"] == server.GW_ALLIES_DECK
+
+
+def test_named_deck_selection_and_custom_deck_names(isolated_traces):
+    config = server._parse_game_config(
+        {"hero_deck": "gw_allies", "villain_deck": {"Mountain": 40}}
+    )
+    assert config.hero_deck == server.GW_ALLIES_DECK
+    assert config.hero_deck_name == "gw_allies"
+    assert config.villain_deck == {"Mountain": 40}
+    assert config.villain_deck_name == "custom"
+
+    with pytest.raises(ValueError, match="Unknown deck name"):
+        server._parse_game_config({"hero_deck": "not_a_deck"})
 
 
 def _stub_action(action_type: int, focus: list[int]) -> SimpleNamespace:
@@ -231,7 +282,7 @@ def test_format_action_uses_magic_terms():
         2: "Villain",
         10: "Lightning Bolt",
         11: "Mountain",
-        20: "Grey Ogre",
+        20: "Gray Ogre",
         21: "Wind Drake",
     }
     cases = [
@@ -243,11 +294,11 @@ def test_format_action_uses_magic_terms():
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_ATTACKER), [20]),
-            "Attack with Grey Ogre",
+            "Attack with Gray Ogre",
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_BLOCKER), [21, 20]),
-            "Block Grey Ogre with Wind Drake",
+            "Block Gray Ogre with Wind Drake",
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_BLOCKER), [21]),

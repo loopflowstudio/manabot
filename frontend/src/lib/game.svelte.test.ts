@@ -122,4 +122,124 @@ describe('GameStore', () => {
     expect(store.resumeToken).toBeNull();
     expect(store.observation).toBeNull();
   });
+
+  it('starts with default stops and toggles individual stop steps', () => {
+    const store = createGameStore();
+    expect(store.stops).toEqual({
+      my: ['main1', 'main2'],
+      opponent: ['end_step'],
+      stop_on_stack: true,
+      auto_pass: true,
+    });
+
+    store.toggleStop('my', 'upkeep');
+    expect(store.stops.my).toEqual(['main1', 'main2', 'upkeep']);
+    store.toggleStop('my', 'main1');
+    expect(store.stops.my).toEqual(['main2', 'upkeep']);
+    store.setStopOnStack(false);
+    store.setAutoPass(false);
+    expect(store.stops.stop_on_stack).toBe(false);
+    expect(store.stops.auto_pass).toBe(false);
+    store.resetStops();
+    expect(store.stops.my).toEqual(['main1', 'main2']);
+  });
+
+  it('includes the stops config in new_game configs', () => {
+    const store = createGameStore();
+    store.toggleStop('opponent', 'declare_blockers');
+
+    const config = store.newGameConfig();
+    expect(config.stops).toEqual({
+      my: ['main1', 'main2'],
+      opponent: ['end_step', 'declare_blockers'],
+    });
+    expect(config.stop_on_stack).toBe(true);
+    expect(config.auto_pass).toBe(true);
+    expect(config.villain_type).toBe('search');
+  });
+
+  it('adopts the server stops echo from observation payloads', () => {
+    const store = createGameStore();
+    const echo = {
+      my: ['end_step'],
+      opponent: [],
+      stop_on_stack: false,
+      auto_pass: true,
+    };
+
+    store.applyObservation(makeObservation(), [], undefined, undefined, [], echo);
+
+    expect(store.stops).toEqual(echo);
+  });
+
+  it('defaults to the UR-vs-GW matchup and sends deck names in new_game', () => {
+    const store = createGameStore();
+    expect(store.decks).toEqual({ hero: 'ur_lessons', villain: 'gw_allies' });
+
+    const config = store.newGameConfig();
+    expect(config.hero_deck).toBe('ur_lessons');
+    expect(config.villain_deck).toBe('gw_allies');
+
+    store.setHeroDeck('gw_allies');
+    store.setVillainDeck('interactive');
+    const updated = store.newGameConfig();
+    expect(updated.hero_deck).toBe('gw_allies');
+    expect(updated.villain_deck).toBe('interactive');
+  });
+
+  it('sanitizes stored deck selections and falls back to defaults', async () => {
+    const { sanitizeDeckSelection, defaultDeckSelection } = await import('./decks');
+
+    expect(sanitizeDeckSelection({ hero: 'interactive', villain: 'gw_allies' })).toEqual({
+      hero: 'interactive',
+      villain: 'gw_allies',
+    });
+    expect(sanitizeDeckSelection({ hero: 'not_a_deck', villain: 'gw_allies' })).toBeNull();
+    expect(sanitizeDeckSelection('garbage')).toBeNull();
+    expect(sanitizeDeckSelection(null)).toBeNull();
+    expect(defaultDeckSelection()).toEqual({ hero: 'ur_lessons', villain: 'gw_allies' });
+  });
+
+  it('adopts the server deck-names echo for the game header', () => {
+    const store = createGameStore();
+    expect(store.deckNames).toBeNull();
+
+    store.applyObservation(
+      makeObservation(),
+      [],
+      undefined,
+      undefined,
+      [],
+      undefined,
+      0,
+      { hero: 'UR Lessons', villain: 'GW Allies' },
+    );
+
+    expect(store.deckNames).toEqual({
+      hero: 'UR Lessons',
+      villain: 'GW Allies',
+    });
+  });
+
+  it('narrates auto-passed windows and clears the fast-forward flag', () => {
+    const store = createGameStore();
+    store.beginFastForward();
+    expect(store.fastForwarding).toBe(true);
+
+    store.applyObservation(
+      makeObservation(),
+      [],
+      undefined,
+      undefined,
+      ['Villain: Cast Grey Ogre'],
+      undefined,
+      3,
+    );
+
+    expect(store.fastForwarding).toBe(false);
+    expect(store.actionLog.map((entry) => entry.text)).toEqual([
+      'Villain: Cast Grey Ogre',
+      'Auto-passed 3 priority windows.',
+    ]);
+  });
 });

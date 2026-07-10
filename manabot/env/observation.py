@@ -151,15 +151,18 @@ class ObservationEncoder:
         self.num_event_entity_kinds = len(EventEntityKindEnum.__members__)
 
         # Define dimensions for players, cards, permanents.
-        # Player: life + is_active + zones + phase/step one-hots + gy lessons.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 1
+        # Player: life + is_active + zones + phase/step one-hots + gy
+        # lessons + until-end-of-combat mana.
+        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 2
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4) + 1
+        # kicker flag/cost + hexproof + validity.
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 1
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
-        # can't-be-blocked-this-turn, validity.
-        self.permanent_dim = 6 + 1
+        # can't-be-blocked-this-turn, effective power/toughness, animated
+        # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
+        # (printed + until-EOT grants), validity.
+        self.permanent_dim = 10 + 13 + 1
         self.event_dim = 7
 
         # Action space dimension: action type + validity bit.
@@ -288,6 +291,7 @@ class ObservationEncoder:
             arr[step_start + step] = 1.0
 
         arr[step_start + self.num_steps] = float(player.graveyard_lessons) / 10.0
+        arr[step_start + self.num_steps + 1] = float(player.combat_mana) / 10.0
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -370,6 +374,8 @@ class ObservationEncoder:
         arr[i] = float(card.kicker_cost > 0)
         i += 1
         arr[i] = float(card.kicker_cost) / 10.0
+        i += 1
+        arr[i] = float(card.keywords.hexproof)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr
@@ -399,6 +405,25 @@ class ObservationEncoder:
         arr[3] = float(perm.is_summoning_sick)
         arr[4] = float(perm.plus1_counters) / 10.0
         arr[5] = float(perm.cant_be_blocked_this_turn)
+        arr[6] = float(perm.power) / 10.0
+        arr[7] = float(perm.toughness) / 10.0
+        arr[8] = float(perm.is_animated)
+        arr[9] = float(perm.has_exile_link)
+        # Effective keywords (printed + until-EOT grants) — mirrors the Rust
+        # encoder's permanent keyword block exactly.
+        arr[10] = float(perm.keywords.flying)
+        arr[11] = float(perm.keywords.reach)
+        arr[12] = float(perm.keywords.haste)
+        arr[13] = float(perm.keywords.flash)
+        arr[14] = float(perm.keywords.vigilance)
+        arr[15] = float(perm.keywords.trample)
+        arr[16] = float(perm.keywords.first_strike)
+        arr[17] = float(perm.keywords.double_strike)
+        arr[18] = float(perm.keywords.deathtouch)
+        arr[19] = float(perm.keywords.lifelink)
+        arr[20] = float(perm.keywords.defender)
+        arr[21] = float(perm.keywords.menace)
+        arr[22] = float(perm.keywords.hexproof)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

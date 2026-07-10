@@ -1,0 +1,717 @@
+{
+  "Accumulate Wisdom": {
+    "name": "Accumulate Wisdom",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Allies at Last": {
+    "name": "Allies at Last",
+    "mana_cost": "{2}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Affinity"
+    ],
+    "oracle_text": "Affinity for Allies (This spell costs {1} less to cast for each Ally you control.)\nUp to two target creatures you control each deal damage equal to their power to target creature an opponent controls.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Ancestral Recall": {
+    "name": "Ancestral Recall",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target player draws three cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Avatar Enthusiasts": {
+    "name": "Avatar Enthusiasts",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Peasant Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever another Ally you control enters, put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Badgermole Cub": {
+    "name": "Badgermole Cub",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Badger Mole",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Boggart Brute": {
+    "name": "Boggart Brute",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Goblin Warrior",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Compassionate Healer": {
+    "name": "Compassionate Healer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Cleric Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Counterspell": {
+    "name": "Counterspell",
+    "mana_cost": "{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target spell.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Craw Wurm": {
+    "name": "Craw Wurm",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Creature — Wurm",
+    "power": "6",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "G"
+    ]
+  },
+  "Divide by Zero": {
+    "name": "Divide by Zero",
+    "mana_cost": "{2}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Learn"
+    ],
+    "oracle_text": "Return target spell or permanent with mana value 1 or greater to its owner's hand.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Dragonfly Swarm": {
+    "name": "Dragonfly Swarm",
+    "mana_cost": "{1}{U}{R}",
+    "type_line": "Creature — Dragon Insect",
+    "power": "*",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Ward"
+    ],
+    "oracle_text": "Flying, ward {1} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {1}.)\nThis creature's power is equal to the number of noncreature, nonland cards in your graveyard.\nWhen this creature dies, if there's a Lesson card in your graveyard, draw a card.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "Earth King's Lieutenant": {
+    "name": "Earth King's Lieutenant",
+    "mana_cost": "{G}{W}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Earth Kingdom Jailer": {
+    "name": "Earth Kingdom Jailer",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Enter the Avatar State": {
+    "name": "Enter the Avatar State",
+    "mana_cost": "{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Until end of turn, target creature you control becomes an Avatar in addition to its other types and gains flying, first strike, lifelink, and hexproof. (A creature with hexproof can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Fancy Footwork": {
+    "name": "Fancy Footwork",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Fencing Ace": {
+    "name": "Fencing Ace",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Double strike"
+    ],
+    "oracle_text": "Double strike (This creature deals both first-strike and regular combat damage.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Fire Nation Cadets": {
+    "name": "Fire Nation Cadets",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Firebending Lesson": {
+    "name": "Firebending Lesson",
+    "mana_cost": "{R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "First-Time Flyer": {
+    "name": "First-Time Flyer",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Pilot Ally",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Forecasting Fortune Teller": {
+    "name": "Forecasting Fortune Teller",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Human Advisor Ally",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Forest": {
+    "name": "Forest",
+    "mana_cost": "",
+    "type_line": "Basic Land — Forest",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "({T}: Add {G}.)",
+    "colors": []
+  },
+  "Giant Spider": {
+    "name": "Giant Spider",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Spider",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Glider Kids": {
+    "name": "Glider Kids",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Pilot Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Scry",
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Gray Ogre": {
+    "name": "Gray Ogre",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Ogre",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Healer's Hawk": {
+    "name": "Healer's Hawk",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Bird",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flying",
+      "Lifelink"
+    ],
+    "oracle_text": "Flying\nLifelink (Damage dealt by this creature also causes you to gain that much life.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Igneous Inspiration": {
+    "name": "Igneous Inspiration",
+    "mana_cost": "{2}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Learn"
+    ],
+    "oracle_text": "Igneous Inspiration deals 3 damage to any target.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Invasion Reinforcements": {
+    "name": "Invasion Reinforcements",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen this creature enters, create a 1/1 white Ally creature token.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Island": {
+    "name": "Island",
+    "mana_cost": "",
+    "type_line": "Basic Land — Island",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "({T}: Add {U}.)",
+    "colors": []
+  },
+  "It'll Quench Ya!": {
+    "name": "It'll Quench Ya!",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Counter target spell unless its controller pays {2}.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Jeong Jeong's Deserters": {
+    "name": "Jeong Jeong's Deserters",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Rebel Ally",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, put a +1/+1 counter on target creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Kyoshi Warriors": {
+    "name": "Kyoshi Warriors",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, create a 1/1 white Ally creature token.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Lightning Bolt": {
+    "name": "Lightning Bolt",
+    "mana_cost": "{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Lightning Bolt deals 3 damage to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Llanowar Elves": {
+    "name": "Llanowar Elves",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Elf Druid",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Add {G}.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Man-o'-War": {
+    "name": "Man-o'-War",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Jellyfish",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, return target creature to its owner's hand.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Mountain": {
+    "name": "Mountain",
+    "mana_cost": "",
+    "type_line": "Basic Land — Mountain",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "({T}: Add {R}.)",
+    "colors": []
+  },
+  "Otter-Penguin": {
+    "name": "Otter-Penguin",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Otter Bird",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Plains": {
+    "name": "Plains",
+    "mana_cost": "",
+    "type_line": "Basic Land — Plains",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "({T}: Add {W}.)",
+    "colors": []
+  },
+  "Pop Quiz": {
+    "name": "Pop Quiz",
+    "mana_cost": "{2}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Learn"
+    ],
+    "oracle_text": "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Pyroclasm": {
+    "name": "Pyroclasm",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Pyroclasm deals 2 damage to each creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Raging Goblin": {
+    "name": "Raging Goblin",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Goblin Berserker",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Serra Angel": {
+    "name": "Serra Angel",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Creature — Angel",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying\nVigilance (Attacking doesn't cause this creature to tap.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Shivan Dragon": {
+    "name": "Shivan Dragon",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\n{R}: This creature gets +1/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "South Pole Voyager": {
+    "name": "South Pole Voyager",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Scout Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever this creature or another Ally you control enters, you gain 1 life. If this is the second time this ability has resolved this turn, draw a card.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Suki, Kyoshi Warrior": {
+    "name": "Suki, Kyoshi Warrior",
+    "mana_cost": "{2}{G/W}{G/W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "*",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Suki's power is equal to the number of creatures you control.\nWhenever Suki attacks, create a 1/1 white Ally creature token that's tapped and attacking.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Swamp": {
+    "name": "Swamp",
+    "mana_cost": "",
+    "type_line": "Basic Land — Swamp",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "({T}: Add {B}.)",
+    "colors": []
+  },
+  "Tiger-Seal": {
+    "name": "Tiger-Seal",
+    "mana_cost": "{U}",
+    "type_line": "Creature — Cat Seal",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Typhoid Rats": {
+    "name": "Typhoid Rats",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Rat",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Wall of Stone": {
+    "name": "Wall of Stone",
+    "mana_cost": "{1}{R}{R}",
+    "type_line": "Creature — Wall",
+    "power": "0",
+    "toughness": "8",
+    "keywords": [
+      "Defender"
+    ],
+    "oracle_text": "Defender (This creature can't attack.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "War Mammoth": {
+    "name": "War Mammoth",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Elephant",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample",
+    "colors": [
+      "G"
+    ]
+  },
+  "Water Tribe Rallier": {
+    "name": "Water Tribe Rallier",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Waterfall Aerialist": {
+    "name": "Waterfall Aerialist",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Djinn Wizard",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Flying",
+      "Ward"
+    ],
+    "oracle_text": "Flying\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "White Lotus Reinforcements": {
+    "name": "White Lotus Reinforcements",
+    "mana_cost": "{1}{G}{W}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nOther Allies you control get +1/+1.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Wind Drake": {
+    "name": "Wind Drake",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Drake",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying",
+    "colors": [
+      "U"
+    ]
+  },
+  "Yip Yip!": {
+    "name": "Yip Yip!",
+    "mana_cost": "{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Youthful Knight": {
+    "name": "Youthful Knight",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Knight",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike",
+    "colors": [
+      "W"
+    ]
+  }
+}

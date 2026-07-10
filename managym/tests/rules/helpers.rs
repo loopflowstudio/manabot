@@ -52,11 +52,11 @@ pub fn forest_elves_deck() -> BTreeMap<String, usize> {
 }
 
 pub fn ogre_deck() -> BTreeMap<String, usize> {
-    land_plus_spell_deck("Mountain", "Grey Ogre")
+    land_plus_spell_deck("Mountain", "Gray Ogre")
 }
 
 pub fn ogre_only_deck() -> BTreeMap<String, usize> {
-    BTreeMap::from([("Grey Ogre".to_string(), 40)])
+    BTreeMap::from([("Gray Ogre".to_string(), 40)])
 }
 
 pub fn manowar_deck() -> BTreeMap<String, usize> {
@@ -131,7 +131,7 @@ pub fn pyroclasm_deck() -> BTreeMap<String, usize> {
     deck(&[
         ("Mountain", 20),
         ("Pyroclasm", 8),
-        ("Grey Ogre", 6),
+        ("Gray Ogre", 6),
         ("Wall of Stone", 6),
     ])
 }

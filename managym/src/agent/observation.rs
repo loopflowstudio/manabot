@@ -35,6 +35,8 @@ pub struct PlayerData {
     pub zone_counts: [i32; 7],
     /// Lesson cards in this player's graveyard.
     pub graveyard_lessons: i32,
+    /// Total until-end-of-combat mana in this player's pool (firebending).
+    pub combat_mana: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,6 +91,27 @@ pub struct KeywordData {
     pub lifelink: bool,
     pub defender: bool,
     pub menace: bool,
+    pub hexproof: bool,
+}
+
+impl KeywordData {
+    pub fn from_keywords(keywords: &crate::state::card::Keywords) -> Self {
+        Self {
+            flying: keywords.flying,
+            reach: keywords.reach,
+            haste: keywords.haste,
+            flash: keywords.flash,
+            vigilance: keywords.vigilance,
+            trample: keywords.trample,
+            first_strike: keywords.first_strike,
+            double_strike: keywords.double_strike,
+            deathtouch: keywords.deathtouch,
+            lifelink: keywords.lifelink,
+            defender: keywords.defender,
+            menace: keywords.menace,
+            hexproof: keywords.hexproof,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,6 +158,18 @@ pub struct PermanentData {
     pub is_summoning_sick: bool,
     pub plus1_counters: i32,
     pub cant_be_blocked_this_turn: bool,
+    /// Effective power/toughness — CDA base, static continuous effects,
+    /// until-EOT deltas, and +1/+1 counters all applied.
+    pub power: i32,
+    pub toughness: i32,
+    /// Earthbend animation: a land that's also a 0/0 creature.
+    pub is_animated: bool,
+    /// This permanent holds cards in exile until it leaves (Jailer).
+    pub has_exile_link: bool,
+    /// Effective keywords — printed keywords unioned with until-EOT grants
+    /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
+    /// printed keywords; this is what the permanent can actually do now.
+    pub keywords: KeywordData,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -285,6 +320,7 @@ impl Observation {
                 player,
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
+            combat_mana: p.combat_mana_pool.total() as i32,
         }
     }
 
@@ -327,7 +363,7 @@ impl Observation {
                     let Some(permanent) = game.state.permanents[perm_id].as_ref() else {
                         continue;
                     };
-                    self.add_permanent(game, permanent);
+                    self.add_permanent(game, perm_id, permanent);
                 }
             }
         }
@@ -356,7 +392,13 @@ impl Observation {
         }
     }
 
-    fn add_permanent(&mut self, game: &Game, permanent: &Permanent) {
+    fn add_permanent(
+        &mut self,
+        game: &Game,
+        perm_id: crate::state::game_object::PermanentId,
+        permanent: &Permanent,
+    ) {
+        let (power, toughness) = game.effective_pt(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
@@ -365,6 +407,15 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
+            power,
+            toughness,
+            is_animated: permanent.animated,
+            has_exile_link: game
+                .state
+                .exile_links
+                .iter()
+                .any(|link| link.source_card == permanent.card),
+            keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -412,20 +463,7 @@ impl Observation {
                 is_kindred: card.types.is_kindred(),
                 is_battle: card.types.is_battle(),
             },
-            keywords: KeywordData {
-                flying: card.keywords.flying,
-                reach: card.keywords.reach,
-                haste: card.keywords.haste,
-                flash: card.keywords.flash,
-                vigilance: card.keywords.vigilance,
-                trample: card.keywords.trample,
-                first_strike: card.keywords.first_strike,
-                double_strike: card.keywords.double_strike,
-                deathtouch: card.keywords.deathtouch,
-                lifelink: card.keywords.lifelink,
-                defender: card.keywords.defender,
-                menace: card.keywords.menace,
-            },
+            keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
         }
     }
@@ -719,6 +757,24 @@ impl Observation {
     }
 
     pub fn to_json(&self) -> String {
+        fn keywords_json(keywords: &KeywordData) -> Value {
+            json!({
+                "flying": keywords.flying,
+                "reach": keywords.reach,
+                "haste": keywords.haste,
+                "flash": keywords.flash,
+                "vigilance": keywords.vigilance,
+                "trample": keywords.trample,
+                "first_strike": keywords.first_strike,
+                "double_strike": keywords.double_strike,
+                "deathtouch": keywords.deathtouch,
+                "lifelink": keywords.lifelink,
+                "defender": keywords.defender,
+                "menace": keywords.menace,
+                "hexproof": keywords.hexproof,
+            })
+        }
+
         fn player_json(player: &PlayerData) -> Value {
             json!({
                 "player_index": player.player_index,
@@ -728,6 +784,7 @@ impl Observation {
                 "life": player.life,
                 "zone_counts": player.zone_counts,
                 "graveyard_lessons": player.graveyard_lessons,
+                "combat_mana": player.combat_mana,
             })
         }
 
@@ -759,20 +816,7 @@ impl Observation {
                     "is_kindred": card.card_types.is_kindred,
                     "is_battle": card.card_types.is_battle,
                 },
-                "keywords": {
-                    "flying": card.keywords.flying,
-                    "reach": card.keywords.reach,
-                    "haste": card.keywords.haste,
-                    "flash": card.keywords.flash,
-                    "vigilance": card.keywords.vigilance,
-                    "trample": card.keywords.trample,
-                    "first_strike": card.keywords.first_strike,
-                    "double_strike": card.keywords.double_strike,
-                    "deathtouch": card.keywords.deathtouch,
-                    "lifelink": card.keywords.lifelink,
-                    "defender": card.keywords.defender,
-                    "menace": card.keywords.menace,
-                },
+                "keywords": keywords_json(&card.keywords),
                 "mana_cost": {
                     "cost": card.mana_cost.cost[..6]
                         .iter()
@@ -792,6 +836,11 @@ impl Observation {
                 "is_summoning_sick": permanent.is_summoning_sick,
                 "plus1_counters": permanent.plus1_counters,
                 "cant_be_blocked_this_turn": permanent.cant_be_blocked_this_turn,
+                "power": permanent.power,
+                "toughness": permanent.toughness,
+                "is_animated": permanent.is_animated,
+                "has_exile_link": permanent.has_exile_link,
+                "keywords": keywords_json(&permanent.keywords),
             })
         }
 

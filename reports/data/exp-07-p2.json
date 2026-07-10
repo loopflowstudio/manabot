@@ -1,0 +1,155 @@
+{
+  "probe": {
+    "spec": {
+      "kind": "policy_search",
+      "sims": 8,
+      "device": "mps",
+      "epsilon": 0.1,
+      "policy_plies": 8,
+      "name": "psearch-8"
+    },
+    "decisions": 60,
+    "wall_seconds": 3.9509814579505473,
+    "ms_per_decision": 65.06118326215073,
+    "playouts": 1616,
+    "playouts_per_second": 413.9693129282782,
+    "cap_hits": 0,
+    "random_search_ms_per_sim_ref": 0.44140625,
+    "net_obs": 12928,
+    "net_obs_per_second": 3311.7545034262257,
+    "net_forwards": 480,
+    "rollout_steps": 12928,
+    "mean_plies_per_playout": 8.0
+  },
+  "probe_random": {
+    "spec": {
+      "kind": "search",
+      "sims": 8
+    },
+    "decisions": 60,
+    "wall_seconds": 0.6371269579976797,
+    "ms_per_decision": 10.419462518378472,
+    "playouts": 1616,
+    "playouts_per_second": 2584.906206613509,
+    "cap_hits": 0,
+    "random_search_ms_per_sim_ref": 0.44140625
+  },
+  "equal_sims_8": {
+    "hero": "psearch-8",
+    "villain": "search-8",
+    "hero_spec": {
+      "kind": "policy_search",
+      "sims": 8,
+      "checkpoint": ".runs/exp07/student_r0.pt",
+      "device": "mps",
+      "epsilon": 0.1,
+      "policy_plies": 8,
+      "name": "psearch-8"
+    },
+    "villain_spec": {
+      "kind": "search",
+      "sims": 8
+    },
+    "metrics": {
+      "num_games": 100.0,
+      "wins": 56.0,
+      "win_rate": 0.56,
+      "win_ci_lower": 0.4622792771125631,
+      "win_ci_upper": 0.6532813459903167,
+      "mean_steps": 117.81,
+      "draws_or_caps": 0.0,
+      "games_on_play": 50.0,
+      "wins_on_play": 23.0,
+      "win_rate_on_play": 0.46,
+      "win_ci_lower_on_play": 0.3296943460178264,
+      "win_ci_upper_on_play": 0.5960136567161192,
+      "games_on_draw": 50.0,
+      "wins_on_draw": 33.0,
+      "win_rate_on_draw": 0.66,
+      "win_ci_lower_on_draw": 0.5215356854148286,
+      "win_ci_upper_on_draw": 0.7756323036493894
+    },
+    "hero_search": {
+      "decisions": 5963.0,
+      "seconds": 480.44670867780223,
+      "simulations": 134928.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.08057130784467588,
+      "median_seconds_per_decision": 0.07319879101123661,
+      "mean_sims_per_decision": 22.62753647492873,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": {
+      "decisions": 5818.0,
+      "seconds": 51.68482304608915,
+      "simulations": 132528.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.008883606573752003,
+      "median_seconds_per_decision": 0.00698854197980836,
+      "mean_sims_per_decision": 22.778961842557578,
+      "cap_hit_rate": 0.0
+    },
+    "wall_seconds": 172.82224850007333,
+    "engine_seconds": 540.6966351248557
+  },
+  "ms_per_sim_today": 1.302432814797309,
+  "equal_wallclock_sims": 50,
+  "equal_wallclock_50": {
+    "hero": "psearch-8",
+    "villain": "search-50",
+    "hero_spec": {
+      "kind": "policy_search",
+      "sims": 8,
+      "checkpoint": ".runs/exp07/student_r0.pt",
+      "device": "mps",
+      "epsilon": 0.1,
+      "policy_plies": 8,
+      "name": "psearch-8"
+    },
+    "villain_spec": {
+      "kind": "search",
+      "sims": 50
+    },
+    "metrics": {
+      "num_games": 100.0,
+      "wins": 31.0,
+      "win_rate": 0.31,
+      "win_ci_lower": 0.22779563206132378,
+      "win_ci_upper": 0.40626239477955695,
+      "mean_steps": 113.44,
+      "draws_or_caps": 0.0,
+      "games_on_play": 50.0,
+      "wins_on_play": 8.0,
+      "win_rate_on_play": 0.16,
+      "win_ci_lower_on_play": 0.08337321362087696,
+      "win_ci_upper_on_play": 0.2851448096176598,
+      "games_on_draw": 50.0,
+      "wins_on_draw": 23.0,
+      "win_rate_on_draw": 0.46,
+      "win_ci_lower_on_draw": 0.3296943460178264,
+      "win_ci_upper_on_draw": 0.5960136567161192
+    },
+    "hero_search": {
+      "decisions": 5443.0,
+      "seconds": 522.7228867899394,
+      "simulations": 126120.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.09603580503214025,
+      "median_seconds_per_decision": 0.08125149994157255,
+      "mean_sims_per_decision": 23.171045379386367,
+      "cap_hit_rate": 0.0
+    },
+    "villain_search": {
+      "decisions": 5901.0,
+      "seconds": 349.1072796458611,
+      "simulations": 845040.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.05916069812673464,
+      "median_seconds_per_decision": 0.04598762490786612,
+      "mean_sims_per_decision": 143.20284697508896,
+      "cap_hit_rate": 0.0
+    },
+    "wall_seconds": 272.4592496670084,
+    "engine_seconds": 880.4599448739318
+  }
+}

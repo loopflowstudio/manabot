@@ -62,22 +62,23 @@ impl CardRegistry {
             ..Default::default()
         });
 
-        // Waterfall Aerialist {2}{U} 2/4 — Djinn
+        // Waterfall Aerialist {3}{U} 3/1 — Djinn Wizard
         // Flying, Ward {2}. (Ward-machinery proof card; Dragonfly Swarm
-        // arrives with Stage 3's dynamic P/T.)
+        // arrives with Stage 3's dynamic P/T. Engine ward triggers on
+        // spells only — see wave doc.)
         self.register_card(CardDefinition {
             name: "Waterfall Aerialist".to_string(),
-            mana_cost: Some(ManaCost::parse("2U")),
+            mana_cost: Some(ManaCost::parse("3U")),
             types: CardTypes::new([CardType::Creature]),
-            subtypes: vec!["Djinn".into()],
+            subtypes: vec!["Djinn".into(), "Wizard".into()],
             keywords: Keywords {
                 flying: true,
                 ..Default::default()
             },
             ward: Some(ManaCost::parse("2")),
-            text_box: "Flying\nWard {2} (Whenever this creature becomes the target of a spell an opponent controls, counter it unless that player pays {2}.)".to_string(),
-            power: Some(2),
-            toughness: Some(4),
+            text_box: "Flying\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)".to_string(),
+            power: Some(3),
+            toughness: Some(1),
             ..Default::default()
         });
     }

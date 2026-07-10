@@ -72,9 +72,7 @@ impl Env {
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
     /// since the current game began. Resets to zero on `reset`.
     pub fn skip_trivial_count(&self) -> usize {
-        self.game
-            .as_ref()
-            .map_or(0, |game| game.skip_trivial_count)
+        self.game.as_ref().map_or(0, |game| game.skip_trivial_count)
     }
 
     pub fn step(
@@ -261,6 +259,76 @@ impl Env {
         self.game.as_ref().and_then(|game| game.winner_index())
     }
 
+    // ------------------------------------------------------------------
+    // Scenario / state-injection surface (flow/scenario.rs).
+    //
+    // FOR TEST AND MEASUREMENT HARNESSES ONLY: bypasses the rules engine.
+    // Typical use: reset, inject at the first priority decision, then call
+    // scenario_refresh to recompute the action space and observation.
+    // ------------------------------------------------------------------
+
+    fn scenario_game_mut(&mut self, method: &str) -> Result<&mut Game, AgentError> {
+        if self.game.as_ref().is_some_and(|game| game.is_game_over()) {
+            return Err(AgentError(format!("env.{method} called after game over")));
+        }
+        self.game
+            .as_mut()
+            .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
+    }
+
+    fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
+        if player > 1 {
+            return Err(AgentError(format!(
+                "scenario: player {player} out of range"
+            )));
+        }
+        Ok(PlayerId(player))
+    }
+
+    pub fn scenario_set_life(&mut self, player: usize, life: i32) -> Result<(), AgentError> {
+        let player = Self::scenario_player(player)?;
+        self.scenario_game_mut("scenario_set_life")?
+            .scenario_set_life(player, life);
+        Ok(())
+    }
+
+    pub fn scenario_clear_hand(&mut self, player: usize) -> Result<(), AgentError> {
+        let player = Self::scenario_player(player)?;
+        self.scenario_game_mut("scenario_clear_hand")?
+            .scenario_clear_hand(player);
+        Ok(())
+    }
+
+    pub fn scenario_force_card_in_hand(
+        &mut self,
+        player: usize,
+        name: &str,
+    ) -> Result<(), AgentError> {
+        let player = Self::scenario_player(player)?;
+        self.scenario_game_mut("scenario_force_card_in_hand")?
+            .scenario_force_card_in_hand(player, name)
+    }
+
+    pub fn scenario_force_battlefield(
+        &mut self,
+        player: usize,
+        name: &str,
+        ready: bool,
+    ) -> Result<usize, AgentError> {
+        let player = Self::scenario_player(player)?;
+        self.scenario_game_mut("scenario_force_battlefield")?
+            .scenario_force_battlefield(player, name, ready)
+            .map(|permanent| permanent.0)
+    }
+
+    /// Recompute the current priority action space after injections and
+    /// return a fresh observation of the repaired state.
+    pub fn scenario_refresh(&mut self) -> Result<Observation, AgentError> {
+        let game = self.scenario_game_mut("scenario_refresh")?;
+        game.scenario_refresh_priority()?;
+        Ok(Observation::new(game, &[]))
+    }
+
     /// Resample hidden information from `perspective`'s point of view.
     /// See [`Game::determinize`].
     pub fn determinize(&mut self, perspective: usize, seed: u64) -> Result<(), AgentError> {
@@ -369,6 +437,22 @@ impl Env {
             simulations,
             cap_hits,
         })
+    }
+
+    /// Build a batched rollout pool from the current decision point.
+    /// See [`crate::agent::rollout_pool::RolloutPool`].
+    pub fn rollout_pool(
+        &self,
+        worlds: usize,
+        rollouts: usize,
+        seed: u64,
+        max_steps: usize,
+    ) -> Result<crate::agent::rollout_pool::RolloutPool, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.rollout_pool called before reset".to_string()))?;
+        crate::agent::rollout_pool::RolloutPool::from_game(game, worlds, rollouts, seed, max_steps)
     }
 
     pub fn random_action_index(&mut self) -> Result<usize, AgentError> {

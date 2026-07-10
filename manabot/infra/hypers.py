@@ -15,7 +15,7 @@ def _default_deck() -> dict[str, int]:
         "Mountain": 12,
         "Forest": 12,
         "Llanowar Elves": 18,
-        "Grey Ogre": 18,
+        "Gray Ogre": 18,
     }
 
 
@@ -32,8 +32,12 @@ class BaseHypersModel(BaseModel):
 
 class ObservationSpaceHypers(BaseHypersModel):
     max_cards_per_player: int = 60
-    max_permanents_per_player: int = 30
-    max_actions: int = 20
+    # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
+    max_permanents_per_player: int = 40
+    # 20 -> 32: the real Milestone-1 decks exceed 20 legal actions at some
+    # priority windows (learn hands, wide waterbend boards) — the encoder
+    # truncated and uniform-random-over-encoded policies never saw the tail.
+    max_actions: int = 32
     max_focus_objects: int = 2
     max_events: int = 32
 

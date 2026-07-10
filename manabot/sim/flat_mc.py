@@ -43,6 +43,22 @@ from manabot.verify.util import (
 DEFAULT_MAX_PLAYOUT_STEPS = 2000
 DEFAULT_ROLLOUTS_PER_WORLD = 4
 
+# managym ActionSpaceKind (managym/src/agent/action.rs), incl. the Stage-2/3
+# mid-resolution decision kinds. Used for per-matchup decision profiles.
+ACTION_SPACE_KIND_NAMES = {
+    0: "game_over",
+    1: "priority",
+    2: "declare_attacker",
+    3: "declare_blocker",
+    4: "choose_target",
+    5: "scry",
+    6: "look_and_select",
+    7: "pay_or_not",
+    8: "modal",
+    9: "discard_then_draw",
+    10: "waterbend",
+}
+
 
 def wilson_interval(wins: int, total: int, z: float = 1.96) -> tuple[float, float]:
     """Two-sided Wilson score interval for a Bernoulli rate."""
@@ -114,6 +130,9 @@ class FlatMCPlayer:
         self._seed = seed
         self._calls = 0
         self.stats = SearchStats()
+        #: Raw per-action playout scores from the most recent act() call
+        #: (win-probability estimates in [0, 1], engine action order).
+        self.last_scores: np.ndarray | None = None
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         del obs  # search reads the raw engine state, not the encoding
@@ -132,6 +151,7 @@ class FlatMCPlayer:
         self.stats.simulations += int(simulations)
         self.stats.cap_hits += int(cap_hits)
         self.stats.decision_seconds.append(elapsed)
+        self.last_scores = np.asarray(scores, dtype=np.float32)
         return int(np.argmax(scores))
 
 
@@ -189,6 +209,8 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
 
     Specs:
         {"kind": "search", "sims": 64, "max_steps": 2000}
+        {"kind": "policy_search", "sims": 16, "checkpoint": "/abs/path.pt",
+         "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
         {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
     Returns (player, observation_space_or_None). Checkpoint players carry the
@@ -208,6 +230,29 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
             ),
             None,
         )
+    if kind == "policy_search":
+        from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
+
+        agent, obs_space = load_checkpoint_agent(spec["checkpoint"])
+        sampler = BatchedSampler(
+            agent,
+            epsilon=float(spec.get("epsilon", 0.1)),
+            temperature=float(spec.get("temperature", 1.0)),
+            seed=seed,
+            device=str(spec.get("device", "cpu")),
+        )
+        policy_plies = spec.get("policy_plies")
+        return (
+            PolicyRolloutMCPlayer(
+                int(spec["sims"]),
+                sampler,
+                rollouts_per_world=int(spec.get("rollouts_per_world", 1)),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                policy_plies=int(policy_plies) if policy_plies is not None else None,
+                seed=seed,
+            ),
+            obs_space,
+        )
     if kind == "random":
         return RandomMatchupPlayer(seed=seed), None
     if kind == "checkpoint":
@@ -223,6 +268,8 @@ def spec_name(spec: dict[str, Any]) -> str:
     kind = spec["kind"]
     if kind == "search":
         return f"search-{spec['sims']}"
+    if kind == "policy_search":
+        return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
         return spec.get("name", spec["path"])
     return kind
@@ -240,6 +287,11 @@ class GameRecord:
     hero_won: bool
     winner: int | None
     steps: int
+    # Decision-profile instrumentation (exp-00 style): total turns and
+    # surfaced decisions by ActionSpaceKind, split hero/villain.
+    turns: int = 0
+    hero_decisions: dict[str, int] = field(default_factory=dict)
+    villain_decisions: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -304,8 +356,15 @@ def play_games(
         done = False
         steps = 0
         info: dict[str, Any] = {}
+        hero_decisions: dict[str, int] = {}
+        villain_decisions: dict[str, int] = {}
         while not done:
-            acting = int(env.last_raw_obs.agent.player_index)
+            raw = env.last_raw_obs
+            acting = int(raw.agent.player_index)
+            kind_id = int(raw.action_space.action_space_type)
+            kind = ACTION_SPACE_KIND_NAMES.get(kind_id, f"unknown_{kind_id}")
+            counts = hero_decisions if acting == hero_seat else villain_decisions
+            counts[kind] = counts.get(kind, 0) + 1
             player = hero_player if acting == hero_seat else villain_player
             action = player.act(env, obs)
             obs, _, terminated, truncated, info = env.step(action)
@@ -319,6 +378,9 @@ def play_games(
                 hero_won=winner == hero_seat,
                 winner=winner,
                 steps=steps,
+                turns=int(env.last_raw_obs.turn.turn_number),
+                hero_decisions=hero_decisions,
+                villain_decisions=villain_decisions,
             )
         )
     wall_seconds = time.perf_counter() - start

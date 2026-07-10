@@ -47,7 +47,7 @@ fn cr_702_flying_cant_be_blocked_by_ground() {
 #[test]
 fn cr_702_flying_negative_nonflyer_is_blockable() {
     let mut s = Scenario::new(ogre_deck(), forest_elves_deck(), 70202);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let _elf = s.force_permanent_on_battlefield(1, "Llanowar Elves");
     set_not_summoning_sick(&mut s, ogre);
 
@@ -162,7 +162,7 @@ fn cr_702_vigilance_attacker_stays_untapped() {
 #[test]
 fn cr_702_vigilance_negative_attacker_taps_without_vigilance() {
     let mut s = Scenario::new(ogre_deck(), mountain_deck(), 70208);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     set_not_summoning_sick(&mut s, ogre);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -262,7 +262,7 @@ fn cr_702_trample_excess_hits_player() {
 #[test]
 fn cr_702_trample_negative_no_excess_without_trample() {
     let mut s = Scenario::new(ogre_deck(), forest_elves_deck(), 70212);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let _elf = s.force_permanent_on_battlefield(1, "Llanowar Elves");
     set_not_summoning_sick(&mut s, ogre);
 
@@ -281,7 +281,7 @@ fn cr_702_trample_negative_no_excess_without_trample() {
 fn cr_702_trample_with_deathtouch_assigns_one_lethal() {
     let mut s = Scenario::new(war_mammoth_deck(), ogre_deck(), 70213);
     let mammoth = s.force_permanent_on_battlefield(0, "War Mammoth");
-    let _ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let _ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     set_not_summoning_sick(&mut s, mammoth);
     let mammoth_card = s.game().state.permanents[mammoth]
         .as_ref()
@@ -421,7 +421,7 @@ fn cr_702_menace_two_blockers_is_legal() {
 fn cr_702_first_strike_kills_before_normal_damage() {
     let mut s = Scenario::new(youthful_knight_deck(), ogre_deck(), 70220);
     let knight = s.force_permanent_on_battlefield(0, "Youthful Knight");
-    let _ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let _ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     set_not_summoning_sick(&mut s, knight);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -435,15 +435,15 @@ fn cr_702_first_strike_kills_before_normal_damage() {
     assert!(!s
         .battlefield_permanents_named(0, "Youthful Knight")
         .is_empty());
-    assert!(s.battlefield_permanents_named(1, "Grey Ogre").is_empty());
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
 }
 
 /// Negative: without first strike, creatures deal combat damage simultaneously.
 #[test]
 fn cr_702_first_strike_negative_normal_combat_is_simultaneous() {
     let mut s = Scenario::new(ogre_deck(), ogre_deck(), 70221);
-    let attacker = s.force_permanent_on_battlefield(0, "Grey Ogre");
-    let _blocker = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let _blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
     set_not_summoning_sick(&mut s, attacker);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -454,8 +454,8 @@ fn cr_702_first_strike_negative_normal_combat_is_simultaneous() {
     s.pass_priority();
     s.pass_priority();
 
-    assert!(s.battlefield_permanents_named(0, "Grey Ogre").is_empty());
-    assert!(s.battlefield_permanents_named(1, "Grey Ogre").is_empty());
+    assert!(s.battlefield_permanents_named(0, "Gray Ogre").is_empty());
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
 }
 
 /// CR 702.4 — Double strike deals damage in both combat damage steps.
@@ -500,9 +500,9 @@ fn cr_702_double_strike_with_trample_interaction() {
 #[test]
 fn cr_702_regression_multi_blocker_damage_is_split_not_duplicated() {
     let mut s = Scenario::new(ogre_deck(), ogre_deck(), 70224);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
-    let _ogre_one = s.force_permanent_on_battlefield(1, "Grey Ogre");
-    let _ogre_two = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let _ogre_one = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let _ogre_two = s.force_permanent_on_battlefield(1, "Gray Ogre");
     set_not_summoning_sick(&mut s, ogre);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -514,7 +514,7 @@ fn cr_702_regression_multi_blocker_damage_is_split_not_duplicated() {
     s.pass_priority();
     s.pass_priority();
 
-    let surviving_ogres = s.battlefield_permanents_named(1, "Grey Ogre").len();
+    let surviving_ogres = s.battlefield_permanents_named(1, "Gray Ogre").len();
     assert_eq!(surviving_ogres, 1);
 }
 

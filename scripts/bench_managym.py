@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Profile managym simulation throughput.
-Grey Ogre mirror match, random policy, single thread.
+Gray Ogre mirror match, random policy, single thread.
 """
 
 import argparse
@@ -32,9 +32,9 @@ def run_profile(games: int, seed: int):
     """Run the profiling benchmark."""
     random.seed(seed)
 
-    # Grey Ogre mirror: 20 Mountains + 20 Grey Ogres each
-    hero_deck = {"Mountain": 20, "Grey Ogre": 20}
-    villain_deck = {"Mountain": 20, "Grey Ogre": 20}
+    # Gray Ogre mirror: 20 Mountains + 20 Gray Ogres each
+    hero_deck = {"Mountain": 20, "Gray Ogre": 20}
+    villain_deck = {"Mountain": 20, "Gray Ogre": 20}
 
     hero_config = managym.PlayerConfig("Hero", hero_deck)
     villain_config = managym.PlayerConfig("Villain", villain_deck)
@@ -79,7 +79,7 @@ def run_profile(games: int, seed: int):
     print("- Threads: 1")
     print("- skip_trivial: True")
     print("- enable_profiler: True")
-    print("- Deck: Grey Ogre mirror (Mountain x20, Grey Ogre x20)")
+    print("- Deck: Gray Ogre mirror (Mountain x20, Gray Ogre x20)")
     print("- Policy: random")
 
     print("\n## Throughput")

@@ -28,7 +28,7 @@ def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
     server.SESSION_REGISTRY.clear()
 
     config = {
-        "hero_deck": {"Mountain": 1, "Grey Ogre": 1},
+        "hero_deck": {"Mountain": 1, "Gray Ogre": 1},
         "villain_deck": {"Forest": 1, "Llanowar Elves": 1},
         "villain_type": "passive",
         "seed": 7,
@@ -173,7 +173,10 @@ def test_websocket_expired_session_requires_new_game(monkeypatch, tmp_path):
 
 def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
     session = server.GameSession()
-    session.obs = SimpleNamespace(game_over=False)
+    session.obs = SimpleNamespace(
+        game_over=False,
+        action_space=SimpleNamespace(action_space_type=1),
+    )
     session.trace = trace_store.Trace(
         config=trace_store.GameConfig(
             hero_deck={}, villain_deck={}, villain_type="passive"
@@ -213,7 +216,7 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
         end_reason="disconnect",
         timestamp="2026-03-06T00:00:00+00:00",
     )
-    session._pending_villain_log = ["Villain: Attack with Grey Ogre"]
+    session._pending_villain_log = ["Villain: Attack with Gray Ogre"]
 
     monkeypatch.setattr(server, "hero_view", lambda obs: {"game_over": True})
     monkeypatch.setattr(server, "_winner_for_hero", lambda obs: 1)
@@ -223,5 +226,5 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
 
     assert payload["type"] == "game_over"
     assert payload["winner"] == 1
-    assert payload["log"] == ["Villain: Attack with Grey Ogre"]
+    assert payload["log"] == ["Villain: Attack with Gray Ogre"]
     assert session._pending_villain_log == []

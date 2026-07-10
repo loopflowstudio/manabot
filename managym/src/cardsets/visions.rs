@@ -21,7 +21,8 @@ impl CardRegistry {
                     target: TargetSpec::Creature,
                 }],
             }],
-            text_box: "When Man-o'-War enters the battlefield, return target creature to its owner's hand.".to_string(),
+            text_box: "When this creature enters, return target creature to its owner's hand."
+                .to_string(),
             power: Some(2),
             toughness: Some(2),
             ..Default::default()
