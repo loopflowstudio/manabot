@@ -2002,6 +2002,30 @@ impl PyEnv {
         })
     }
 
+    /// Batched policy-rollout pool for the current decision point. See
+    /// `RolloutPool`: worlds x rollouts simulations per legal action, root
+    /// actions pre-applied, ready for batched policy-driven stepping.
+    #[pyo3(signature = (worlds, rollouts, seed, max_steps=2000))]
+    fn rollout_pool(
+        &self,
+        py: Python<'_>,
+        worlds: usize,
+        rollouts: usize,
+        seed: u64,
+        max_steps: usize,
+    ) -> PyResult<crate::python::vector_env_bindings::PyRolloutPool> {
+        py.allow_threads(|| {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            let pool = env
+                .rollout_pool(worlds, rollouts, seed, max_steps)
+                .map_err(map_agent_err)?;
+            Ok(crate::python::vector_env_bindings::PyRolloutPool::from_inner(pool))
+        })
+    }
+
     fn encode_observation(&self, py: Python<'_>, obs: PyObservation) -> PyResult<PyObject> {
         let env = self
             .inner

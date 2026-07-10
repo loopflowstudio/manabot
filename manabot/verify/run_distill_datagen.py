@@ -33,9 +33,11 @@ def _worker(args: dict[str, Any]) -> dict[str, Any]:
     return generate_selfplay_shard(
         num_games=args["num_games"],
         sims=args["sims"],
+        teacher_spec=args.get("teacher_spec"),
         seed=args["seed"],
         game_offset=args["game_offset"],
         out_path=args["out_path"],
+        round_index=args.get("round_index", 0),
     )
 
 
@@ -44,6 +46,16 @@ def main() -> None:
     parser.add_argument("--games", type=int, default=480)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--sims", type=int, default=64)
+    parser.add_argument(
+        "--teacher-json",
+        type=str,
+        default=None,
+        help='full teacher spec as JSON, e.g. \'{"kind": "policy_search", '
+        '"sims": 16, "checkpoint": "/abs/x.pt"}\' (overrides --sims)',
+    )
+    parser.add_argument(
+        "--round", type=int, default=0, help="expert-iteration round tag"
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out-dir", type=str, default=".runs/exp03/dataset")
     args = parser.parse_args()
@@ -51,6 +63,7 @@ def main() -> None:
     os.environ.setdefault("WANDB_MODE", "disabled")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    teacher_spec = json.loads(args.teacher_json) if args.teacher_json else None
 
     chunks = []
     per_worker = args.games // args.workers
@@ -64,6 +77,8 @@ def main() -> None:
             {
                 "num_games": chunk,
                 "sims": args.sims,
+                "teacher_spec": teacher_spec,
+                "round_index": args.round,
                 "seed": args.seed + w * 1_000_000,
                 "game_offset": offset,
                 "out_path": str(out_dir / f"shard_{w:02d}.npz"),
@@ -83,6 +98,8 @@ def main() -> None:
     winners = [w for s in summaries for w in s["winners"]]
     manifest = {
         "teacher": summaries[0]["teacher"] if summaries else None,
+        "provenance": summaries[0].get("provenance") if summaries else None,
+        "round": args.round,
         "games": int(sum(s["num_games"] for s in summaries)),
         "decisions": decisions,
         "wall_seconds": wall_seconds,

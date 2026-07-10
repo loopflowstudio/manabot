@@ -22,6 +22,7 @@ use crate::{
             EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
+        rollout_pool::RolloutPool,
         vector_env::VectorEnv,
     },
     infra::profiler::InfoDict,
@@ -131,133 +132,11 @@ impl PyVectorEnv {
     }
 
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>) -> PyResult<()> {
-        let n = self.num_envs;
-        let c = self.config;
-
-        self.buffers = Some(ObservationBuffers {
-            agent_player: require_numpy_array(
-                &buffers,
-                "agent_player",
-                &[n, 1, PLAYER_DIM],
-                "float32",
-            )?
-            .unbind(),
-            opponent_player: require_numpy_array(
-                &buffers,
-                "opponent_player",
-                &[n, 1, PLAYER_DIM],
-                "float32",
-            )?
-            .unbind(),
-            agent_cards: require_numpy_array(
-                &buffers,
-                "agent_cards",
-                &[n, c.max_cards_per_player, CARD_DIM],
-                "float32",
-            )?
-            .unbind(),
-            opponent_cards: require_numpy_array(
-                &buffers,
-                "opponent_cards",
-                &[n, c.max_cards_per_player, CARD_DIM],
-                "float32",
-            )?
-            .unbind(),
-            agent_permanents: require_numpy_array(
-                &buffers,
-                "agent_permanents",
-                &[n, c.max_permanents_per_player, PERMANENT_DIM],
-                "float32",
-            )?
-            .unbind(),
-            opponent_permanents: require_numpy_array(
-                &buffers,
-                "opponent_permanents",
-                &[n, c.max_permanents_per_player, PERMANENT_DIM],
-                "float32",
-            )?
-            .unbind(),
-            actions: require_numpy_array(
-                &buffers,
-                "actions",
-                &[n, c.max_actions, ACTION_DIM],
-                "float32",
-            )?
-            .unbind(),
-            events: require_numpy_array(
-                &buffers,
-                "events",
-                &[n, c.max_events, EVENT_DIM],
-                "float32",
-            )?
-            .unbind(),
-            action_focus: require_numpy_array(
-                &buffers,
-                "action_focus",
-                &[n, c.max_actions, c.max_focus_objects],
-                "int32",
-            )?
-            .unbind(),
-            agent_player_valid: require_numpy_array(
-                &buffers,
-                "agent_player_valid",
-                &[n, 1],
-                "float32",
-            )?
-            .unbind(),
-            opponent_player_valid: require_numpy_array(
-                &buffers,
-                "opponent_player_valid",
-                &[n, 1],
-                "float32",
-            )?
-            .unbind(),
-            agent_cards_valid: require_numpy_array(
-                &buffers,
-                "agent_cards_valid",
-                &[n, c.max_cards_per_player],
-                "float32",
-            )?
-            .unbind(),
-            opponent_cards_valid: require_numpy_array(
-                &buffers,
-                "opponent_cards_valid",
-                &[n, c.max_cards_per_player],
-                "float32",
-            )?
-            .unbind(),
-            agent_permanents_valid: require_numpy_array(
-                &buffers,
-                "agent_permanents_valid",
-                &[n, c.max_permanents_per_player],
-                "float32",
-            )?
-            .unbind(),
-            opponent_permanents_valid: require_numpy_array(
-                &buffers,
-                "opponent_permanents_valid",
-                &[n, c.max_permanents_per_player],
-                "float32",
-            )?
-            .unbind(),
-            actions_valid: require_numpy_array(
-                &buffers,
-                "actions_valid",
-                &[n, c.max_actions],
-                "float32",
-            )?
-            .unbind(),
-            events_valid: require_numpy_array(
-                &buffers,
-                "events_valid",
-                &[n, c.max_events],
-                "float32",
-            )?
-            .unbind(),
-            rewards: require_numpy_array(&buffers, "rewards", &[n], "float64")?.unbind(),
-            terminated: require_numpy_array(&buffers, "terminated", &[n], "uint8")?.unbind(),
-            truncated: require_numpy_array(&buffers, "truncated", &[n], "uint8")?.unbind(),
-        });
+        self.buffers = Some(read_observation_buffers(
+            &buffers,
+            self.num_envs,
+            &self.config,
+        )?);
         Ok(())
     }
 
@@ -291,12 +170,140 @@ impl PyVectorEnv {
         self.inner.skip_trivial_counts()
     }
 
+    /// Per-env index of the player holding the current decision (-1 if no
+    /// decision is pending).
+    fn current_agent_indices(&self) -> Vec<i64> {
+        self.inner.current_agent_indices()
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
     }
+}
+
+#[cfg(feature = "python")]
+fn read_observation_buffers(
+    buffers: &Bound<'_, PyDict>,
+    n: usize,
+    c: &ObservationEncoderConfig,
+) -> PyResult<ObservationBuffers> {
+    Ok(ObservationBuffers {
+        agent_player: require_numpy_array(
+            &buffers,
+            "agent_player",
+            &[n, 1, PLAYER_DIM],
+            "float32",
+        )?
+        .unbind(),
+        opponent_player: require_numpy_array(
+            &buffers,
+            "opponent_player",
+            &[n, 1, PLAYER_DIM],
+            "float32",
+        )?
+        .unbind(),
+        agent_cards: require_numpy_array(
+            &buffers,
+            "agent_cards",
+            &[n, c.max_cards_per_player, CARD_DIM],
+            "float32",
+        )?
+        .unbind(),
+        opponent_cards: require_numpy_array(
+            &buffers,
+            "opponent_cards",
+            &[n, c.max_cards_per_player, CARD_DIM],
+            "float32",
+        )?
+        .unbind(),
+        agent_permanents: require_numpy_array(
+            &buffers,
+            "agent_permanents",
+            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            "float32",
+        )?
+        .unbind(),
+        opponent_permanents: require_numpy_array(
+            &buffers,
+            "opponent_permanents",
+            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            "float32",
+        )?
+        .unbind(),
+        actions: require_numpy_array(
+            &buffers,
+            "actions",
+            &[n, c.max_actions, ACTION_DIM],
+            "float32",
+        )?
+        .unbind(),
+        events: require_numpy_array(&buffers, "events", &[n, c.max_events, EVENT_DIM], "float32")?
+            .unbind(),
+        action_focus: require_numpy_array(
+            &buffers,
+            "action_focus",
+            &[n, c.max_actions, c.max_focus_objects],
+            "int32",
+        )?
+        .unbind(),
+        agent_player_valid: require_numpy_array(
+            &buffers,
+            "agent_player_valid",
+            &[n, 1],
+            "float32",
+        )?
+        .unbind(),
+        opponent_player_valid: require_numpy_array(
+            &buffers,
+            "opponent_player_valid",
+            &[n, 1],
+            "float32",
+        )?
+        .unbind(),
+        agent_cards_valid: require_numpy_array(
+            &buffers,
+            "agent_cards_valid",
+            &[n, c.max_cards_per_player],
+            "float32",
+        )?
+        .unbind(),
+        opponent_cards_valid: require_numpy_array(
+            &buffers,
+            "opponent_cards_valid",
+            &[n, c.max_cards_per_player],
+            "float32",
+        )?
+        .unbind(),
+        agent_permanents_valid: require_numpy_array(
+            &buffers,
+            "agent_permanents_valid",
+            &[n, c.max_permanents_per_player],
+            "float32",
+        )?
+        .unbind(),
+        opponent_permanents_valid: require_numpy_array(
+            &buffers,
+            "opponent_permanents_valid",
+            &[n, c.max_permanents_per_player],
+            "float32",
+        )?
+        .unbind(),
+        actions_valid: require_numpy_array(
+            &buffers,
+            "actions_valid",
+            &[n, c.max_actions],
+            "float32",
+        )?
+        .unbind(),
+        events_valid: require_numpy_array(&buffers, "events_valid", &[n, c.max_events], "float32")?
+            .unbind(),
+        rewards: require_numpy_array(&buffers, "rewards", &[n], "float64")?.unbind(),
+        terminated: require_numpy_array(&buffers, "terminated", &[n], "uint8")?.unbind(),
+        truncated: require_numpy_array(&buffers, "truncated", &[n], "uint8")?.unbind(),
+    })
 }
 
 #[cfg(feature = "python")]
@@ -328,9 +335,126 @@ impl PyVectorEnv {
     }
 }
 
+/// Batched policy-rollout pool for one flat-MC search decision.
+///
+/// Created via `Env.rollout_pool(...)`. All simulations of the decision run
+/// simultaneously: `encode_active()` / `step_active(actions)` write each
+/// active simulation's encoded observation into caller-owned numpy buffers
+/// (same layout as `VectorEnv.set_buffers`, leading dim = capacity) and
+/// return the active slot indices, so a policy network can pick every
+/// rollout action with one batched forward pass per step.
+#[cfg(feature = "python")]
+#[pyclass(name = "RolloutPool")]
+pub struct PyRolloutPool {
+    inner: RolloutPool,
+    config: ObservationEncoderConfig,
+    buffers: Option<ObservationBuffers>,
+}
+
+#[cfg(feature = "python")]
+impl PyRolloutPool {
+    pub fn from_inner(inner: RolloutPool) -> Self {
+        Self {
+            inner,
+            config: ObservationEncoderConfig::default(),
+            buffers: None,
+        }
+    }
+
+    fn run_with_buffers<R: Send>(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(
+                &mut RolloutPool,
+                SendWriteBuffers,
+                ObservationEncoderConfig,
+            ) -> Result<R, AgentError>
+            + Send,
+    ) -> PyResult<R> {
+        let buffers = self
+            .buffers
+            .take()
+            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+        let config = self.config;
+        let inner = &mut self.inner;
+
+        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
+            py.allow_threads(|| run(inner, write_buffers, config))
+                .map_err(map_agent_err)
+        });
+        self.buffers = Some(buffers);
+        result
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyRolloutPool {
+    #[getter]
+    fn num_slots(&self) -> usize {
+        self.inner.num_slots()
+    }
+
+    #[getter]
+    fn num_actions(&self) -> usize {
+        self.inner.num_actions()
+    }
+
+    #[getter]
+    fn active_count(&self) -> usize {
+        self.inner.active_count()
+    }
+
+    /// Attach caller-owned numpy buffers with leading dimension `capacity`
+    /// (>= num_slots). The rewards/terminated/truncated buffers are required
+    /// for layout parity with VectorEnv but are never written.
+    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
+        if capacity < self.inner.num_slots() {
+            return Err(PyValueError::new_err(format!(
+                "buffer capacity {capacity} < num_slots {}",
+                self.inner.num_slots()
+            )));
+        }
+        self.buffers = Some(read_observation_buffers(&buffers, capacity, &self.config)?);
+        Ok(())
+    }
+
+    /// Encode observations for every active slot; returns their indices.
+    fn encode_active(&mut self, py: Python<'_>) -> PyResult<Vec<usize>> {
+        self.run_with_buffers(py, |inner, write_buffers, config| {
+            inner.encode_active_into(|slot_index, obs| {
+                write_buffers.encode_observation(slot_index, obs, &config)
+            })
+        })
+    }
+
+    /// Step every active slot with `actions[slot_index]`; returns the slot
+    /// indices still active afterwards (their observations re-encoded).
+    fn step_active(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<Vec<usize>> {
+        self.run_with_buffers(py, move |inner, write_buffers, config| {
+            inner.step_active_into(&actions, |slot_index, obs| {
+                write_buffers.encode_observation(slot_index, obs, &config)
+            })
+        })
+    }
+
+    /// Finish all still-active slots with engine-side random play to
+    /// terminal (hybrid rollouts). Returns the number of slots finished.
+    fn finish_random(&mut self, py: Python<'_>) -> PyResult<usize> {
+        let inner = &mut self.inner;
+        py.allow_threads(|| inner.finish_random().map_err(map_agent_err))
+    }
+
+    /// (scores, simulations, cap_hits) — mean playout score per root action.
+    fn scores(&self) -> (Vec<f64>, u64, u64) {
+        self.inner.scores()
+    }
+}
+
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyVectorEnv>()
+    m.add_class::<PyVectorEnv>()?;
+    m.add_class::<PyRolloutPool>()
 }
 
 #[cfg(feature = "python")]
