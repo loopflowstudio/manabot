@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { DECISION_PROMPTS } from '$lib/game.svelte';
   import type { ActionOption } from '$lib/types';
 
   interface Props {
     actions?: ActionOption[];
+    actionSpaceKind?: string;
     selectedTargetId?: number | null;
     highlightedActionIndexes?: Set<number>;
     disabled?: boolean;
@@ -16,6 +18,7 @@
 
   let {
     actions = [],
+    actionSpaceKind = '',
     selectedTargetId = null,
     highlightedActionIndexes = new Set<number>(),
     disabled = false,
@@ -26,6 +29,10 @@
     onClearSelection = undefined,
     onPassTurn = undefined,
   }: Props = $props();
+
+  const decisionPrompt = $derived(
+    actions.length > 0 && !disabled ? DECISION_PROMPTS[actionSpaceKind] ?? null : null,
+  );
 </script>
 
 <aside class="rounded border border-slate-700 bg-slate-800 p-4">
@@ -57,6 +64,16 @@
       </button>
     </div>
   </div>
+
+  {#if decisionPrompt}
+    <p
+      data-testid="decision-prompt"
+      data-kind={actionSpaceKind}
+      class="mb-3 rounded border border-violet-500/40 bg-violet-900/20 px-3 py-2 text-sm text-violet-200"
+    >
+      {decisionPrompt}
+    </p>
+  {/if}
 
   {#if selectedTargetId !== null}
     <p class="mb-3 text-xs text-slate-400">Filtered to actions for selected board target.</p>

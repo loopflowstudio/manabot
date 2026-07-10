@@ -83,7 +83,12 @@ test('stops cut the clicks needed to finish a game, log keeps narrating', async 
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await page.locator('select').first().selectOption('random');
+  await page.getByTestId('opponent-select').selectOption('random');
+  // This spec's click-count contract was written for the INTERACTIVE_DECK
+  // mirror (hero holds Counterspell/Bolt, so the baseline surfaces priority
+  // at every step); pin the decks rather than inherit the UR/GW default.
+  await page.getByTestId('deck-select-hero').selectOption('interactive');
+  await page.getByTestId('deck-select-villain').selectOption('interactive');
 
   // ---- Run 1: no-stops baseline (auto-pass off = pre-stops behavior). ----
   await openStopsPanel(page);
@@ -130,7 +135,9 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
   });
-  await page.locator('select').first().selectOption('random');
+  await page.getByTestId('opponent-select').selectOption('random');
+  await page.getByTestId('deck-select-hero').selectOption('interactive');
+  await page.getByTestId('deck-select-villain').selectOption('interactive');
 
   await page.getByRole('button', { name: 'New Game' }).first().click();
   const board = page.getByTestId('game-board');

@@ -178,6 +178,7 @@ class Keywords:
     lifelink: bool
     defender: bool
     menace: bool
+    hexproof: bool
 
 class Player:
     player_index: int
@@ -218,6 +219,8 @@ class Permanent:
     toughness: int
     is_animated: bool
     has_exile_link: bool
+    # Effective keywords (printed + until-EOT grants).
+    keywords: Keywords
 
 class Turn:
     turn_number: int

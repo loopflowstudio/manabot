@@ -1053,6 +1053,8 @@ pub struct PyKeywords {
     pub defender: bool,
     #[pyo3(get, set)]
     pub menace: bool,
+    #[pyo3(get, set)]
+    pub hexproof: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1071,6 +1073,7 @@ impl From<KeywordData> for PyKeywords {
             lifelink: value.lifelink,
             defender: value.defender,
             menace: value.menace,
+            hexproof: value.hexproof,
         }
     }
 }
@@ -1208,6 +1211,7 @@ impl From<PyKeywords> for KeywordData {
             lifelink: value.lifelink,
             defender: value.defender,
             menace: value.menace,
+            hexproof: value.hexproof,
         }
     }
 }
@@ -1238,6 +1242,9 @@ pub struct PyPermanent {
     pub is_animated: bool,
     #[pyo3(get, set)]
     pub has_exile_link: bool,
+    /// Effective keywords (printed + until-EOT grants).
+    #[pyo3(get, set)]
+    pub keywords: PyKeywords,
 }
 
 #[cfg(feature = "python")]
@@ -1255,6 +1262,7 @@ impl From<PermanentData> for PyPermanent {
             toughness: value.toughness,
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
+            keywords: value.keywords.into(),
         }
     }
 }
@@ -1274,6 +1282,7 @@ impl From<PyPermanent> for PermanentData {
             toughness: value.toughness,
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
+            keywords: value.keywords.into(),
         }
     }
 }
@@ -1679,23 +1688,29 @@ impl PyObservation {
                     "is_kindred": card.card_types.is_kindred,
                     "is_battle": card.card_types.is_battle,
                 },
-                "keywords": {
-                    "flying": card.keywords.flying,
-                    "reach": card.keywords.reach,
-                    "haste": card.keywords.haste,
-                    "vigilance": card.keywords.vigilance,
-                    "trample": card.keywords.trample,
-                    "first_strike": card.keywords.first_strike,
-                    "double_strike": card.keywords.double_strike,
-                    "deathtouch": card.keywords.deathtouch,
-                    "lifelink": card.keywords.lifelink,
-                    "defender": card.keywords.defender,
-                    "menace": card.keywords.menace,
-                },
+                "keywords": keywords_json(&card.keywords),
                 "mana_cost": {
                     "cost": card.mana_cost.cost,
                     "mana_value": card.mana_cost.mana_value,
                 }
+            })
+        }
+
+        fn keywords_json(keywords: &PyKeywords) -> Value {
+            json!({
+                "flying": keywords.flying,
+                "reach": keywords.reach,
+                "haste": keywords.haste,
+                "flash": keywords.flash,
+                "vigilance": keywords.vigilance,
+                "trample": keywords.trample,
+                "first_strike": keywords.first_strike,
+                "double_strike": keywords.double_strike,
+                "deathtouch": keywords.deathtouch,
+                "lifelink": keywords.lifelink,
+                "defender": keywords.defender,
+                "menace": keywords.menace,
+                "hexproof": keywords.hexproof,
             })
         }
 
@@ -1706,6 +1721,7 @@ impl PyObservation {
                 "tapped": permanent.tapped,
                 "damage": permanent.damage,
                 "is_summoning_sick": permanent.is_summoning_sick,
+                "keywords": keywords_json(&permanent.keywords),
             })
         }
 
