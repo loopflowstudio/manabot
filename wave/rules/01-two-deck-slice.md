@@ -1,5 +1,17 @@
 # 01: The Two-Deck Slice (Milestone 1)
 
+> ## ✅ MILESTONE 1 DONE — 2026-07-09
+>
+> All 26 distinct cards of both lists registered, trace-tested, dealable,
+> and playable in the browser (deck pickers, UR-vs-GW default, decision
+> prompts, full Playwright coverage). First A-vs-B matchup table shipped
+> (exp-08): 2000 seat-balanced games, zero errors — **GW Allies 65.5%
+> [60.7, 70.0] over UR Lessons under random play, widening to ~77% in
+> search mirrors; search-64 lifts the weaker deck to 86.0% over a random
+> GW pilot**. Observations now carry effective keywords (until-EOT grants
+> visible), 40 permanent slots, 32 action slots. Validation: cargo 194 +
+> clippy clean, pytest 219, npm check/vitest/e2e all green.
+
 Two 40-card decks from the elemental cube, playable against each other in the
 engine and behind the play UI. Lists blessed 2026-07-09 ("don't care on the
 specific 40 too much — I'll be impressed if we can get this set working"), so
@@ -432,6 +444,59 @@ targeting text, Accumulate Wisdom's current wording).
 - Random-vs-random on the real matchup is seat/deck-skewed (GW won
   142/200 as villain seat under uniform-random play) — the Stage-4
   matchup table should seat-balance as specced.
+
+## Stage 4 RESULT (landed 2026-07-09)
+
+**What landed** (four commits: observation leftovers, deck selection in the
+play UI, e2e + decision prompts, matchup table):
+
+- **Stage-3 leftovers fixed** — all four:
+  - (a) *Granted keywords are agent-visible*: `PermanentData` carries an
+    effective-keywords block (printed ∪ until-EOT grants, 13 flags incl.
+    hexproof) — PERMANENT_DIM 11→24; `KeywordData`/CardData gained
+    hexproof — CARD_DIM 37→38. A Yip-Yip'd flyer or Avatar-State hexproof
+    creature is visible to agents and (via payload keywords) the UI; card
+    entries keep printed keywords. Trace-tested in `stage3_cards.rs`
+    (granted flying + all four Avatar State grants observed).
+  - (b) *Permanent capacity*: `max_permanents_per_player` 30→40 (GW token
+    games hit 34). Also `max_actions` 20→32 — the real decks exceed 20
+    legal actions at some windows, and the smoke run showed the encoder
+    truncating live (uniform-random-over-encoded never saw the tail).
+    All dims mirrored across Rust encoder, pyo3, `__init__.pyi`, JSON,
+    `manabot/env/observation.py`, `ObservationSpaceHypers`. **This is an
+    observation-shape change: pre-existing checkpoints do not transfer.**
+  - (c) *Seat balancing*: exp-08 matchup table below is seat-balanced.
+  - (d) *UR list is 41 cards*: kept as blessed ("counts may flex ±1");
+    recorded here as the standing decision. Enter the Avatar State stays
+    registered + tested but out of both lists.
+- **Decks in the play UI**: hero/villain deck pickers (UR Lessons /
+  GW Allies / Interactive), runes mode, persisted to localStorage; default
+  matchup is now UR (hero) vs GW (villain); named decks resolve
+  server-side (`gui/server.py NAMED_DECKS`, sync-tested against
+  `manabot.verify.util`); deck names render in the game header and are
+  recorded in traces (`hero_deck_name`/`villain_deck_name`). Decision
+  spaces surface as prompts (scry / pay-or-not / learn / look-and-select /
+  modal / waterbend) with Magic-terms action labels.
+- **Browser e2e** (`frontend/e2e/two-deck.spec.ts`): selects UR vs GW
+  through the UI, plays a full game to terminal vs the random villain with
+  main-phase stops on, asserts deck names render and choice-kind decisions
+  render clickable labeled options (run surfaced DISCARD_THEN_DRAW (learn)
+  and PAY_OR_NOT (kicker) prompts). Full Playwright suite 5/5.
+- **exp-08 matchup table** (`reports/exp-08-two-deck-matchup.md`,
+  pre-registered prediction committed before running): 2000 games (5 cells
+  x 400, seat-balanced, Wilson CIs, zero errors/draws/caps). UR win rates:
+  random-vs-random **0.345** [0.300, 0.393] (raw deck advantage: GW 65.5%);
+  search-16 mirror 0.223; search-64 mirror 0.237 — **search widens the
+  deck gap** (predicted narrowing — wrong; the asymmetric cells were
+  called: search-64(UR) vs random(GW) 0.860, predicted 0.85; random(UR)
+  vs search-64(GW) 0.007, predicted 0.03). Search shortens games (24.7 →
+  ~19-20 mean turns) and kills the on-play seat advantage (0.575 any-deck
+  at random → 0.448 at search-64). Every Stage-2/3 decision kind except
+  modal surfaces in every cell; GW's waterbend dominates random-play
+  decision counts (30/game) and search prunes it to ~8.
+- **Validation**: cargo 194 green + clippy clean; pytest 219 green (cp312
+  rebuilt); frontend `npm run check` 0 errors, vitest 24 green, Playwright
+  e2e 5/5 green (incl. the new two-deck spec).
 
 ## Notes
 

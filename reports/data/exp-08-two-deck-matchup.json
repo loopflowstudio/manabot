@@ -1,0 +1,495 @@
+{
+  "random__random": {
+    "hero": "random (UR Lessons)",
+    "villain": "random (GW Allies)",
+    "hero_spec": {
+      "kind": "random"
+    },
+    "villain_spec": {
+      "kind": "random"
+    },
+    "metrics": {
+      "num_games": 400.0,
+      "wins": 138.0,
+      "win_rate": 0.345,
+      "win_ci_lower": 0.30008703653936986,
+      "win_ci_upper": 0.39286188204653105,
+      "mean_steps": 185.705,
+      "draws_or_caps": 0.0,
+      "games_on_play": 200.0,
+      "wins_on_play": 84.0,
+      "win_rate_on_play": 0.42,
+      "win_ci_lower_on_play": 0.3537348235017175,
+      "win_ci_upper_on_play": 0.4892805374452139,
+      "games_on_draw": 200.0,
+      "wins_on_draw": 54.0,
+      "win_rate_on_draw": 0.27,
+      "win_ci_lower_on_draw": 0.2132335473104056,
+      "win_ci_upper_on_draw": 0.33543561541202216,
+      "on_play_win_rate_any_deck": 0.575,
+      "on_play_win_ci_lower": 0.5260666333045342,
+      "on_play_win_ci_upper": 0.6225064706055136
+    },
+    "turns": {
+      "mean": 24.68,
+      "median": 22.0,
+      "p95": 44.049999999999955,
+      "min": 11.0,
+      "max": 52.0
+    },
+    "steps": {
+      "mean": 185.705,
+      "median": 125.0,
+      "p95": 558.7499999999993,
+      "min": 37.0,
+      "max": 819.0
+    },
+    "decision_profile": {
+      "ur": {
+        "decisions_per_game": {
+          "mean": 67.2575,
+          "median": 58.5,
+          "p95": 140.04999999999995,
+          "min": 12.0,
+          "max": 195.0
+        },
+        "mean_by_kind": {
+          "choose_target": 3.4875,
+          "declare_attacker": 10.275,
+          "declare_blocker": 4.2375,
+          "discard_then_draw": 2.7425,
+          "look_and_select": 0.695,
+          "pay_or_not": 0.8875,
+          "priority": 44.9325
+        }
+      },
+      "gw": {
+        "decisions_per_game": {
+          "mean": 118.4475,
+          "median": 66.0,
+          "p95": 433.8499999999992,
+          "min": 23.0,
+          "max": 667.0
+        },
+        "mean_by_kind": {
+          "choose_target": 4.725,
+          "declare_attacker": 17.82,
+          "declare_blocker": 2.6,
+          "look_and_select": 5.145,
+          "pay_or_not": 0.295,
+          "priority": 54.8975,
+          "scry": 2.7525,
+          "waterbend": 30.2125
+        }
+      }
+    },
+    "hero_search": null,
+    "villain_search": null,
+    "wall_seconds": 3.978470499976538,
+    "engine_seconds": 15.724015123094432
+  },
+  "search-16__search-16": {
+    "hero": "search-16 (UR Lessons)",
+    "villain": "search-16 (GW Allies)",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "villain_spec": {
+      "kind": "search",
+      "sims": 16
+    },
+    "metrics": {
+      "num_games": 400.0,
+      "wins": 89.0,
+      "win_rate": 0.2225,
+      "win_ci_lower": 0.18448762755400633,
+      "win_ci_upper": 0.2657918879788165,
+      "mean_steps": 102.6325,
+      "draws_or_caps": 0.0,
+      "games_on_play": 200.0,
+      "wins_on_play": 55.0,
+      "win_rate_on_play": 0.275,
+      "win_ci_lower_on_play": 0.21779604313809778,
+      "win_ci_upper_on_play": 0.34068465952514676,
+      "games_on_draw": 200.0,
+      "wins_on_draw": 34.0,
+      "win_rate_on_draw": 0.17,
+      "win_ci_lower_on_draw": 0.12427835351105657,
+      "win_ci_upper_on_draw": 0.22816001039503528,
+      "on_play_win_rate_any_deck": 0.5525,
+      "on_play_win_ci_lower": 0.5035012013389867,
+      "on_play_win_ci_upper": 0.6004999713980469
+    },
+    "turns": {
+      "mean": 18.855,
+      "median": 17.0,
+      "p95": 33.0,
+      "min": 9.0,
+      "max": 48.0
+    },
+    "steps": {
+      "mean": 102.6325,
+      "median": 80.0,
+      "p95": 247.0999999999999,
+      "min": 33.0,
+      "max": 611.0
+    },
+    "decision_profile": {
+      "ur": {
+        "decisions_per_game": {
+          "mean": 44.525,
+          "median": 39.0,
+          "p95": 88.0,
+          "min": 11.0,
+          "max": 126.0
+        },
+        "mean_by_kind": {
+          "choose_target": 2.7025,
+          "declare_attacker": 6.035,
+          "declare_blocker": 3.0575,
+          "discard_then_draw": 2.0175,
+          "look_and_select": 0.86,
+          "pay_or_not": 0.525,
+          "priority": 29.3275
+        }
+      },
+      "gw": {
+        "decisions_per_game": {
+          "mean": 58.1075,
+          "median": 39.0,
+          "p95": 176.0,
+          "min": 17.0,
+          "max": 488.0
+        },
+        "mean_by_kind": {
+          "choose_target": 3.94,
+          "declare_attacker": 12.0425,
+          "declare_blocker": 1.8225,
+          "look_and_select": 2.0775,
+          "pay_or_not": 0.1775,
+          "priority": 27.3875,
+          "scry": 1.745,
+          "waterbend": 8.915
+        }
+      }
+    },
+    "hero_search": {
+      "decisions": 17810.0,
+      "seconds": 503.7074761650292,
+      "simulations": 830736.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.028282283894723707,
+      "median_seconds_per_decision": 0.023331645992584527
+    },
+    "villain_search": {
+      "decisions": 23243.0,
+      "seconds": 879.9764127938543,
+      "simulations": 1176480.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.037859846525571325,
+      "median_seconds_per_decision": 0.02469479199498892
+    },
+    "wall_seconds": 399.0033482920844,
+    "engine_seconds": 1394.8244768319419
+  },
+  "search-64__search-64": {
+    "hero": "search-64 (UR Lessons)",
+    "villain": "search-64 (GW Allies)",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "villain_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "metrics": {
+      "num_games": 400.0,
+      "wins": 95.0,
+      "win_rate": 0.2375,
+      "win_ci_lower": 0.19841684319432581,
+      "win_ci_upper": 0.28157729312050656,
+      "mean_steps": 116.0825,
+      "draws_or_caps": 0.0,
+      "games_on_play": 200.0,
+      "wins_on_play": 37.0,
+      "win_rate_on_play": 0.185,
+      "win_ci_lower_on_play": 0.1373011632273606,
+      "win_ci_upper_on_play": 0.2445718205011816,
+      "games_on_draw": 200.0,
+      "wins_on_draw": 58.0,
+      "win_rate_on_draw": 0.29,
+      "win_ci_lower_on_draw": 0.23153926891257823,
+      "win_ci_upper_on_draw": 0.3563760535731166,
+      "on_play_win_rate_any_deck": 0.4475,
+      "on_play_win_ci_lower": 0.39950002860195316,
+      "on_play_win_ci_upper": 0.4964987986610133
+    },
+    "turns": {
+      "mean": 20.3925,
+      "median": 20.0,
+      "p95": 29.0,
+      "min": 11.0,
+      "max": 45.0
+    },
+    "steps": {
+      "mean": 116.0825,
+      "median": 103.5,
+      "p95": 214.0999999999999,
+      "min": 43.0,
+      "max": 415.0
+    },
+    "decision_profile": {
+      "ur": {
+        "decisions_per_game": {
+          "mean": 53.4925,
+          "median": 50.0,
+          "p95": 93.04999999999995,
+          "min": 19.0,
+          "max": 137.0
+        },
+        "mean_by_kind": {
+          "choose_target": 3.28,
+          "declare_attacker": 7.5075,
+          "declare_blocker": 4.6925,
+          "discard_then_draw": 2.3025,
+          "look_and_select": 0.4375,
+          "pay_or_not": 0.6075,
+          "priority": 34.665
+        }
+      },
+      "gw": {
+        "decisions_per_game": {
+          "mean": 62.59,
+          "median": 49.0,
+          "p95": 131.19999999999982,
+          "min": 17.0,
+          "max": 292.0
+        },
+        "mean_by_kind": {
+          "choose_target": 3.8375,
+          "declare_attacker": 14.0375,
+          "declare_blocker": 2.2825,
+          "look_and_select": 3.07,
+          "pay_or_not": 0.165,
+          "priority": 30.0225,
+          "scry": 1.24,
+          "waterbend": 7.935
+        }
+      }
+    },
+    "hero_search": {
+      "decisions": 21397.0,
+      "seconds": 3729.747200988466,
+      "simulations": 3920960.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.17431168860066673,
+      "median_seconds_per_decision": 0.13382304192055017
+    },
+    "villain_search": {
+      "decisions": 25036.0,
+      "seconds": 4780.101505114231,
+      "simulations": 4690624.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.19092912226850262,
+      "median_seconds_per_decision": 0.1366157079464756
+    },
+    "wall_seconds": 1764.1267185419565,
+    "engine_seconds": 8529.025578082888
+  },
+  "search-64__random": {
+    "hero": "search-64 (UR Lessons)",
+    "villain": "random (GW Allies)",
+    "hero_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "villain_spec": {
+      "kind": "random"
+    },
+    "metrics": {
+      "num_games": 400.0,
+      "wins": 344.0,
+      "win_rate": 0.86,
+      "win_ci_lower": 0.8225600194276627,
+      "win_ci_upper": 0.8905908793405672,
+      "mean_steps": 183.1625,
+      "draws_or_caps": 0.0,
+      "games_on_play": 200.0,
+      "wins_on_play": 162.0,
+      "win_rate_on_play": 0.81,
+      "win_ci_lower_on_play": 0.7499864142552061,
+      "win_ci_upper_on_play": 0.8583290620754351,
+      "games_on_draw": 200.0,
+      "wins_on_draw": 182.0,
+      "win_rate_on_draw": 0.91,
+      "win_ci_lower_on_draw": 0.8622332538615106,
+      "win_ci_upper_on_draw": 0.9423130212854665,
+      "on_play_win_rate_any_deck": 0.45,
+      "on_play_win_ci_lower": 0.40195136207927884,
+      "on_play_win_ci_upper": 0.4989999019806892
+    },
+    "turns": {
+      "mean": 24.205,
+      "median": 21.0,
+      "p95": 44.049999999999955,
+      "min": 12.0,
+      "max": 52.0
+    },
+    "steps": {
+      "mean": 183.1625,
+      "median": 118.5,
+      "p95": 527.3999999999996,
+      "min": 49.0,
+      "max": 695.0
+    },
+    "decision_profile": {
+      "ur": {
+        "decisions_per_game": {
+          "mean": 67.465,
+          "median": 59.0,
+          "p95": 126.04999999999995,
+          "min": 11.0,
+          "max": 169.0
+        },
+        "mean_by_kind": {
+          "choose_target": 3.075,
+          "declare_attacker": 13.0825,
+          "declare_blocker": 3.52,
+          "discard_then_draw": 2.41,
+          "look_and_select": 0.6375,
+          "pay_or_not": 0.7575,
+          "priority": 43.9825
+        }
+      },
+      "gw": {
+        "decisions_per_game": {
+          "mean": 115.6975,
+          "median": 61.0,
+          "p95": 420.04999999999995,
+          "min": 10.0,
+          "max": 542.0
+        },
+        "mean_by_kind": {
+          "choose_target": 4.92,
+          "declare_attacker": 11.06,
+          "declare_blocker": 3.595,
+          "look_and_select": 5.585,
+          "pay_or_not": 0.2325,
+          "priority": 54.38,
+          "scry": 2.74,
+          "waterbend": 33.185
+        }
+      }
+    },
+    "hero_search": {
+      "decisions": 26986.0,
+      "seconds": 4598.97364279849,
+      "simulations": 4867328.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.17042072344172868,
+      "median_seconds_per_decision": 0.13535064598545432
+    },
+    "villain_search": null,
+    "wall_seconds": 911.070436167065,
+    "engine_seconds": 4627.633371249656
+  },
+  "random__search-64": {
+    "hero": "random (UR Lessons)",
+    "villain": "search-64 (GW Allies)",
+    "hero_spec": {
+      "kind": "random"
+    },
+    "villain_spec": {
+      "kind": "search",
+      "sims": 64
+    },
+    "metrics": {
+      "num_games": 400.0,
+      "wins": 3.0,
+      "win_rate": 0.0075,
+      "win_ci_lower": 0.002553842962985238,
+      "win_ci_upper": 0.021816108027700218,
+      "mean_steps": 77.32,
+      "draws_or_caps": 0.0,
+      "games_on_play": 200.0,
+      "wins_on_play": 1.0,
+      "win_rate_on_play": 0.005,
+      "win_ci_lower_on_play": 0.0008831459893662051,
+      "win_ci_upper_on_play": 0.02777439986977148,
+      "games_on_draw": 200.0,
+      "wins_on_draw": 2.0,
+      "win_rate_on_draw": 0.01,
+      "win_ci_lower_on_draw": 0.0027466006037749346,
+      "win_ci_upper_on_draw": 0.03572248519617954,
+      "on_play_win_rate_any_deck": 0.4975,
+      "on_play_win_ci_lower": 0.44875800198627125,
+      "on_play_win_ci_upper": 0.5462895612167272
+    },
+    "turns": {
+      "mean": 16.065,
+      "median": 15.0,
+      "p95": 24.049999999999955,
+      "min": 11.0,
+      "max": 37.0
+    },
+    "steps": {
+      "mean": 77.32,
+      "median": 69.0,
+      "p95": 132.14999999999986,
+      "min": 39.0,
+      "max": 331.0
+    },
+    "decision_profile": {
+      "ur": {
+        "decisions_per_game": {
+          "mean": 36.7725,
+          "median": 33.0,
+          "p95": 63.0,
+          "min": 15.0,
+          "max": 131.0
+        },
+        "mean_by_kind": {
+          "choose_target": 2.3575,
+          "declare_attacker": 3.29,
+          "declare_blocker": 3.1075,
+          "discard_then_draw": 1.92,
+          "look_and_select": 0.25,
+          "pay_or_not": 0.29,
+          "priority": 25.5575
+        }
+      },
+      "gw": {
+        "decisions_per_game": {
+          "mean": 40.5475,
+          "median": 36.0,
+          "p95": 71.04999999999995,
+          "min": 18.0,
+          "max": 235.0
+        },
+        "mean_by_kind": {
+          "choose_target": 2.2175,
+          "declare_attacker": 12.875,
+          "declare_blocker": 1.3975,
+          "look_and_select": 0.6775,
+          "pay_or_not": 0.25,
+          "priority": 19.9575,
+          "scry": 1.565,
+          "waterbend": 1.6075
+        }
+      }
+    },
+    "hero_search": null,
+    "villain_search": {
+      "decisions": 16219.0,
+      "seconds": 2521.1973150520353,
+      "simulations": 3023936.0,
+      "cap_hits": 0.0,
+      "mean_seconds_per_decision": 0.1554471493342398,
+      "median_seconds_per_decision": 0.09642054210416973
+    },
+    "wall_seconds": 511.4279155000113,
+    "engine_seconds": 2532.262341291993
+  }
+}

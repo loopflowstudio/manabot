@@ -1053,6 +1053,8 @@ pub struct PyKeywords {
     pub defender: bool,
     #[pyo3(get, set)]
     pub menace: bool,
+    #[pyo3(get, set)]
+    pub hexproof: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1071,6 +1073,7 @@ impl From<KeywordData> for PyKeywords {
             lifelink: value.lifelink,
             defender: value.defender,
             menace: value.menace,
+            hexproof: value.hexproof,
         }
     }
 }
@@ -1208,6 +1211,7 @@ impl From<PyKeywords> for KeywordData {
             lifelink: value.lifelink,
             defender: value.defender,
             menace: value.menace,
+            hexproof: value.hexproof,
         }
     }
 }
@@ -1238,6 +1242,9 @@ pub struct PyPermanent {
     pub is_animated: bool,
     #[pyo3(get, set)]
     pub has_exile_link: bool,
+    /// Effective keywords (printed + until-EOT grants).
+    #[pyo3(get, set)]
+    pub keywords: PyKeywords,
 }
 
 #[cfg(feature = "python")]
@@ -1255,6 +1262,7 @@ impl From<PermanentData> for PyPermanent {
             toughness: value.toughness,
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
+            keywords: value.keywords.into(),
         }
     }
 }
@@ -1274,6 +1282,7 @@ impl From<PyPermanent> for PermanentData {
             toughness: value.toughness,
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
+            keywords: value.keywords.into(),
         }
     }
 }
@@ -1679,23 +1688,29 @@ impl PyObservation {
                     "is_kindred": card.card_types.is_kindred,
                     "is_battle": card.card_types.is_battle,
                 },
-                "keywords": {
-                    "flying": card.keywords.flying,
-                    "reach": card.keywords.reach,
-                    "haste": card.keywords.haste,
-                    "vigilance": card.keywords.vigilance,
-                    "trample": card.keywords.trample,
-                    "first_strike": card.keywords.first_strike,
-                    "double_strike": card.keywords.double_strike,
-                    "deathtouch": card.keywords.deathtouch,
-                    "lifelink": card.keywords.lifelink,
-                    "defender": card.keywords.defender,
-                    "menace": card.keywords.menace,
-                },
+                "keywords": keywords_json(&card.keywords),
                 "mana_cost": {
                     "cost": card.mana_cost.cost,
                     "mana_value": card.mana_cost.mana_value,
                 }
+            })
+        }
+
+        fn keywords_json(keywords: &PyKeywords) -> Value {
+            json!({
+                "flying": keywords.flying,
+                "reach": keywords.reach,
+                "haste": keywords.haste,
+                "flash": keywords.flash,
+                "vigilance": keywords.vigilance,
+                "trample": keywords.trample,
+                "first_strike": keywords.first_strike,
+                "double_strike": keywords.double_strike,
+                "deathtouch": keywords.deathtouch,
+                "lifelink": keywords.lifelink,
+                "defender": keywords.defender,
+                "menace": keywords.menace,
+                "hexproof": keywords.hexproof,
             })
         }
 
@@ -1706,6 +1721,7 @@ impl PyObservation {
                 "tapped": permanent.tapped,
                 "damage": permanent.damage,
                 "is_summoning_sick": permanent.is_summoning_sick,
+                "keywords": keywords_json(&permanent.keywords),
             })
         }
 
@@ -1938,6 +1954,74 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         env.action_count().map_err(map_agent_err)
+    }
+
+    // ------------------------------------------------------------------
+    // Scenario / state-injection helpers (flow/scenario.rs).
+    //
+    // FOR TEST AND MEASUREMENT HARNESSES ONLY — they mutate state directly,
+    // bypassing the rules engine (no events, no triggers, no costs). Used by
+    // manabot/verify/competency.py to construct scored mid-game positions.
+    // Inject at a priority decision, then call scenario_refresh() once.
+    // ------------------------------------------------------------------
+
+    /// Scenario harness: set a player's life total directly.
+    fn scenario_set_life(&self, player: usize, life: i32) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_set_life(player, life).map_err(map_agent_err)
+    }
+
+    /// Scenario harness: move a player's entire hand to the bottom of their
+    /// library.
+    fn scenario_clear_hand(&self, player: usize) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_clear_hand(player).map_err(map_agent_err)
+    }
+
+    /// Scenario harness: move one card named `name` from the player's
+    /// library (or graveyard) into their hand.
+    fn scenario_force_card_in_hand(&self, player: usize, name: &str) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_force_card_in_hand(player, name)
+            .map_err(map_agent_err)
+    }
+
+    /// Scenario harness: put a card named `name` onto the battlefield as a
+    /// new permanent (no ETB triggers). `ready` clears summoning sickness.
+    /// Returns the new permanent index.
+    #[pyo3(signature = (player, name, ready=true))]
+    fn scenario_force_battlefield(
+        &self,
+        player: usize,
+        name: &str,
+        ready: bool,
+    ) -> PyResult<usize> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.scenario_force_battlefield(player, name, ready)
+            .map_err(map_agent_err)
+    }
+
+    /// Scenario harness: recompute the current priority action space after
+    /// injections and return a fresh observation.
+    fn scenario_refresh(&self) -> PyResult<PyObservation> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let obs = env.scenario_refresh().map_err(map_agent_err)?;
+        Ok(PyObservation::from(obs))
     }
 
     /// Resample hidden information (opponent hand + both library orders)
