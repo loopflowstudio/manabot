@@ -371,6 +371,22 @@ impl Env {
         })
     }
 
+    /// Build a batched rollout pool from the current decision point.
+    /// See [`crate::agent::rollout_pool::RolloutPool`].
+    pub fn rollout_pool(
+        &self,
+        worlds: usize,
+        rollouts: usize,
+        seed: u64,
+        max_steps: usize,
+    ) -> Result<crate::agent::rollout_pool::RolloutPool, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.rollout_pool called before reset".to_string()))?;
+        crate::agent::rollout_pool::RolloutPool::from_game(game, worlds, rollouts, seed, max_steps)
+    }
+
     pub fn random_action_index(&mut self) -> Result<usize, AgentError> {
         let game = self
             .game

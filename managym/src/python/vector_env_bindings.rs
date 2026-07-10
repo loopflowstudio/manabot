@@ -22,6 +22,7 @@ use crate::{
             EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
+        rollout_pool::RolloutPool,
         vector_env::VectorEnv,
     },
     infra::profiler::InfoDict,
@@ -131,10 +132,65 @@ impl PyVectorEnv {
     }
 
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>) -> PyResult<()> {
-        let n = self.num_envs;
-        let c = self.config;
+        self.buffers = Some(read_observation_buffers(
+            &buffers,
+            self.num_envs,
+            &self.config,
+        )?);
+        Ok(())
+    }
 
-        self.buffers = Some(ObservationBuffers {
+    fn reset_all_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        player_configs: Vec<PyPlayerConfig>,
+    ) -> PyResult<()> {
+        let configs: Vec<PlayerConfig> =
+            player_configs.into_iter().map(PlayerConfig::from).collect();
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
+                write_buffers
+                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+            })
+        })
+    }
+
+    fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.step_into(&actions, |env_index, obs, reward, terminated, truncated| {
+                write_buffers
+                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+            })
+        })
+    }
+
+    /// Per-env `skip_trivial` collapse counters for the current games.
+    /// Each counter resets when its env's game resets.
+    fn skip_trivial_counts(&self) -> Vec<usize> {
+        self.inner.skip_trivial_counts()
+    }
+
+    /// Per-env index of the player holding the current decision (-1 if no
+    /// decision is pending).
+    fn current_agent_indices(&self) -> Vec<i64> {
+        self.inner.current_agent_indices()
+    }
+
+    fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
+        self.last_info
+            .iter()
+            .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
+            .collect()
+    }
+}
+
+#[cfg(feature = "python")]
+fn read_observation_buffers(
+    buffers: &Bound<'_, PyDict>,
+    n: usize,
+    c: &ObservationEncoderConfig,
+) -> PyResult<ObservationBuffers> {
+    Ok(ObservationBuffers {
             agent_player: require_numpy_array(
                 &buffers,
                 "agent_player",
@@ -257,46 +313,7 @@ impl PyVectorEnv {
             rewards: require_numpy_array(&buffers, "rewards", &[n], "float64")?.unbind(),
             terminated: require_numpy_array(&buffers, "terminated", &[n], "uint8")?.unbind(),
             truncated: require_numpy_array(&buffers, "truncated", &[n], "uint8")?.unbind(),
-        });
-        Ok(())
-    }
-
-    fn reset_all_into_buffers(
-        &mut self,
-        py: Python<'_>,
-        player_configs: Vec<PyPlayerConfig>,
-    ) -> PyResult<()> {
-        let configs: Vec<PlayerConfig> =
-            player_configs.into_iter().map(PlayerConfig::from).collect();
-        self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-            })
-        })
-    }
-
-    fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
-        self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.step_into(&actions, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-            })
-        })
-    }
-
-    /// Per-env `skip_trivial` collapse counters for the current games.
-    /// Each counter resets when its env's game resets.
-    fn skip_trivial_counts(&self) -> Vec<usize> {
-        self.inner.skip_trivial_counts()
-    }
-
-    fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
-        self.last_info
-            .iter()
-            .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
-            .collect()
-    }
+    })
 }
 
 #[cfg(feature = "python")]
@@ -328,9 +345,119 @@ impl PyVectorEnv {
     }
 }
 
+/// Batched policy-rollout pool for one flat-MC search decision.
+///
+/// Created via `Env.rollout_pool(...)`. All simulations of the decision run
+/// simultaneously: `encode_active()` / `step_active(actions)` write each
+/// active simulation's encoded observation into caller-owned numpy buffers
+/// (same layout as `VectorEnv.set_buffers`, leading dim = capacity) and
+/// return the active slot indices, so a policy network can pick every
+/// rollout action with one batched forward pass per step.
+#[cfg(feature = "python")]
+#[pyclass(name = "RolloutPool")]
+pub struct PyRolloutPool {
+    inner: RolloutPool,
+    config: ObservationEncoderConfig,
+    buffers: Option<ObservationBuffers>,
+}
+
+#[cfg(feature = "python")]
+impl PyRolloutPool {
+    pub fn from_inner(inner: RolloutPool) -> Self {
+        Self {
+            inner,
+            config: ObservationEncoderConfig::default(),
+            buffers: None,
+        }
+    }
+
+    fn run_with_buffers<R: Send>(
+        &mut self,
+        py: Python<'_>,
+        run: impl FnOnce(
+                &mut RolloutPool,
+                SendWriteBuffers,
+                ObservationEncoderConfig,
+            ) -> Result<R, AgentError>
+            + Send,
+    ) -> PyResult<R> {
+        let buffers = self
+            .buffers
+            .take()
+            .ok_or_else(|| PyRuntimeError::new_err("set_buffers() must be called first"))?;
+        let config = self.config;
+        let inner = &mut self.inner;
+
+        let result = with_send_write_buffers(py, &buffers, |write_buffers| {
+            py.allow_threads(|| run(inner, write_buffers, config))
+                .map_err(map_agent_err)
+        });
+        self.buffers = Some(buffers);
+        result
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyRolloutPool {
+    #[getter]
+    fn num_slots(&self) -> usize {
+        self.inner.num_slots()
+    }
+
+    #[getter]
+    fn num_actions(&self) -> usize {
+        self.inner.num_actions()
+    }
+
+    #[getter]
+    fn active_count(&self) -> usize {
+        self.inner.active_count()
+    }
+
+    /// Attach caller-owned numpy buffers with leading dimension `capacity`
+    /// (>= num_slots). The rewards/terminated/truncated buffers are required
+    /// for layout parity with VectorEnv but are never written.
+    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
+        if capacity < self.inner.num_slots() {
+            return Err(PyValueError::new_err(format!(
+                "buffer capacity {capacity} < num_slots {}",
+                self.inner.num_slots()
+            )));
+        }
+        self.buffers = Some(read_observation_buffers(&buffers, capacity, &self.config)?);
+        Ok(())
+    }
+
+    /// Encode observations for every active slot; returns their indices.
+    fn encode_active(&mut self, py: Python<'_>) -> PyResult<Vec<usize>> {
+        self.run_with_buffers(py, |inner, write_buffers, config| {
+            inner.encode_active_into(|slot_index, obs| {
+                write_buffers.encode_observation(slot_index, obs, &config)
+            })
+        })
+    }
+
+    /// Step every active slot with `actions[slot_index]`; returns the slot
+    /// indices still active afterwards (their observations re-encoded).
+    fn step_active(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<Vec<usize>> {
+        self.run_with_buffers(py, move |inner, write_buffers, config| {
+            inner.step_active_into(&actions, |slot_index, obs| {
+                write_buffers.encode_observation(slot_index, obs, &config)
+            })
+        })
+    }
+
+    /// (scores, simulations, cap_hits) — mean playout score per root action.
+    fn scores(&self) -> (Vec<f64>, u64, u64) {
+        self.inner.scores()
+    }
+}
+
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PyVectorEnv>()
+    m.add_class::<PyVectorEnv>()?;
+    m.add_class::<PyRolloutPool>()
 }
 
 #[cfg(feature = "python")]
