@@ -2,12 +2,12 @@ use managym::{agent::action::ActionType, flow::turn::StepKind};
 
 use super::helpers::*;
 
-/// Grey Ogre (2/2) with 1 non-lethal damage, positioned before cleanup.
+/// Gray Ogre (2/2) with 1 non-lethal damage, positioned before cleanup.
 /// Needs 3 Mountains (2R cost), so we play one land per turn for 3 turns.
 fn setup_damaged_creature_before_cleanup() -> (Scenario, managym::state::game_object::PermanentId) {
     let mut s = Scenario::new(ogre_deck(), mountain_deck(), 111);
 
-    // Play one Mountain per turn for 3 turns to afford Grey Ogre (2R).
+    // Play one Mountain per turn for 3 turns to afford Gray Ogre (2R).
     for i in 0..3 {
         s.advance_to_active_step(0, StepKind::Main);
         s.force_card_in_hand(0, "Mountain");
@@ -19,15 +19,15 @@ fn setup_damaged_creature_before_cleanup() -> (Scenario, managym::state::game_ob
         s.pass_priority();
     }
 
-    // Cast Grey Ogre on turn 4.
+    // Cast Gray Ogre on turn 4.
     s.advance_to_active_step(0, StepKind::Main);
-    s.force_card_in_hand(0, "Grey Ogre");
+    s.force_card_in_hand(0, "Gray Ogre");
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     s.pass_priority();
     s.pass_priority();
 
     let ogre_id = s
-        .battlefield_permanents_named(0, "Grey Ogre")
+        .battlefield_permanents_named(0, "Gray Ogre")
         .into_iter()
         .next()
         .expect("ogre should be on battlefield");

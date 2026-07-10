@@ -151,15 +151,17 @@ class ObservationEncoder:
         self.num_event_entity_kinds = len(EventEntityKindEnum.__members__)
 
         # Define dimensions for players, cards, permanents.
-        # Player: life + is_active + zones + phase/step one-hots + gy lessons.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 1
+        # Player: life + is_active + zones + phase/step one-hots + gy
+        # lessons + until-end-of-combat mana.
+        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 2
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + validity.
         self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4) + 1
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
-        # can't-be-blocked-this-turn, validity.
-        self.permanent_dim = 6 + 1
+        # can't-be-blocked-this-turn, effective power/toughness, animated
+        # (earthbent land), exile-linkage (Jailer), validity.
+        self.permanent_dim = 10 + 1
         self.event_dim = 7
 
         # Action space dimension: action type + validity bit.
@@ -288,6 +290,7 @@ class ObservationEncoder:
             arr[step_start + step] = 1.0
 
         arr[step_start + self.num_steps] = float(player.graveyard_lessons) / 10.0
+        arr[step_start + self.num_steps + 1] = float(player.combat_mana) / 10.0
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -399,6 +402,10 @@ class ObservationEncoder:
         arr[3] = float(perm.is_summoning_sick)
         arr[4] = float(perm.plus1_counters) / 10.0
         arr[5] = float(perm.cant_be_blocked_this_turn)
+        arr[6] = float(perm.power) / 10.0
+        arr[7] = float(perm.toughness) / 10.0
+        arr[8] = float(perm.is_animated)
+        arr[9] = float(perm.has_exile_link)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

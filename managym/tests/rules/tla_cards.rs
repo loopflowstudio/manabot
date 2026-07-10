@@ -180,7 +180,7 @@ fn enthusiasts_scenario() -> (Scenario, PermanentId) {
         ("Plains", 20),
         ("Avatar Enthusiasts", 8),
         ("South Pole Voyager", 8),
-        ("Grey Ogre", 4),
+        ("Gray Ogre", 4),
     ]);
     let mut s = Scenario::new(list.clone(), list, 11);
     let enthusiasts = s.force_permanent_on_battlefield(0, "Avatar Enthusiasts");
@@ -199,9 +199,8 @@ fn avatar_enthusiasts_counter_when_another_ally_enters() {
 
     assert_eq!(counters(&s, enthusiasts), 1);
     // Counters contribute to P/T: 2/2 base + 1 counter = 3/3.
-    let card = &s.game().state.cards[permanent(&s, enthusiasts).card];
-    assert_eq!(permanent(&s, enthusiasts).effective_power(card), 3);
-    assert_eq!(permanent(&s, enthusiasts).effective_toughness(card), 3);
+    assert_eq!(s.game().effective_power(enthusiasts), 3);
+    assert_eq!(s.game().effective_toughness(enthusiasts), 3);
 }
 
 /// ...but NOT when a non-Ally creature enters...
@@ -209,7 +208,7 @@ fn avatar_enthusiasts_counter_when_another_ally_enters() {
 fn avatar_enthusiasts_no_counter_for_non_ally() {
     let (mut s, enthusiasts) = enthusiasts_scenario();
 
-    enters_battlefield_with_triggers(&mut s, 0, "Grey Ogre");
+    enters_battlefield_with_triggers(&mut s, 0, "Gray Ogre");
     resolve_all(&mut s);
 
     assert_eq!(counters(&s, enthusiasts), 0);
@@ -562,7 +561,7 @@ fn battlefield_card(s: &Scenario, permanent_id: PermanentId) -> CardId {
 #[test]
 fn attack_trigger_creates_tapped_and_attacking_token() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 43);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
@@ -589,7 +588,7 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
     assert!(permanent(&s, tokens[0]).tapped);
     assert!(permanent(&s, tokens[0]).attacking);
 
-    // Unblocked: Grey Ogre (2) + token (1) = 3 damage.
+    // Unblocked: Gray Ogre (2) + token (1) = 3 damage.
     s.advance_to_active_step(0, StepKind::EndOfCombat);
     s.assert_life(1, 17);
 }
@@ -599,8 +598,8 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
 #[test]
 fn one_or_more_attack_trigger_fires_once() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 47);
-    let ogre_a = s.force_permanent_on_battlefield(0, "Grey Ogre");
-    let ogre_b = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre_a = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_b = s.force_permanent_on_battlefield(0, "Gray Ogre");
     for ogre in [ogre_a, ogre_b] {
         s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
     }
@@ -657,7 +656,7 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
 #[test]
 fn becomes_tapped_fires_when_attacker_taps() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 59);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
@@ -739,7 +738,7 @@ fn tapped_for_mana_trigger() {
 #[test]
 fn attack_tap_is_not_tapped_for_mana() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 71);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
@@ -769,7 +768,7 @@ fn attack_tap_is_not_tapped_for_mana() {
 #[test]
 fn dies_trigger_fires_on_death() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 73);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
         &mut s,
@@ -794,7 +793,7 @@ fn dies_trigger_fires_on_death() {
 #[test]
 fn bounce_is_not_death() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 79);
-    let ogre = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
         &mut s,
@@ -823,7 +822,7 @@ fn bounce_is_not_death() {
 #[test]
 fn block_restriction_respects_effective_power() {
     let mut s = Scenario::new(ogre_only_deck(), ogre_only_deck(), 83);
-    let attacker = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[attacker].as_mut().unwrap().summoning_sick = false;
     let attacker_card = battlefield_card(&s, attacker);
     s.game_mut().state.cards[attacker_card].block_restriction =
@@ -833,8 +832,8 @@ fn block_restriction_respects_effective_power() {
             ..Default::default()
         });
 
-    let weak = s.force_permanent_on_battlefield(1, "Grey Ogre");
-    let strong = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let weak = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let strong = s.force_permanent_on_battlefield(1, "Gray Ogre");
     // The "strong" ogre has a +1/+1 counter: effective power 3 > 2.
     s.game_mut().state.permanents[strong].as_mut().unwrap().plus1_counters = 1;
 
@@ -873,13 +872,13 @@ fn block_restriction_respects_effective_power() {
 #[test]
 fn cant_be_blocked_this_turn_blocks_all_blocks() {
     let mut s = Scenario::new(ogre_only_deck(), ogre_only_deck(), 89);
-    let attacker = s.force_permanent_on_battlefield(0, "Grey Ogre");
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[attacker].as_mut().unwrap().summoning_sick = false;
     s.game_mut().state.permanents[attacker]
         .as_mut()
         .unwrap()
         .cant_be_blocked_this_turn = true;
-    s.force_permanent_on_battlefield(1, "Grey Ogre");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();

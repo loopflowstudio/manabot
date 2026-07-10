@@ -377,7 +377,7 @@ mod tests {
                     ("Mountain".to_string(), 12usize),
                     ("Forest".to_string(), 12usize),
                     ("Llanowar Elves".to_string(), 18usize),
-                    ("Grey Ogre".to_string(), 18usize),
+                    ("Gray Ogre".to_string(), 18usize),
                 ]),
             ),
             PlayerConfig::new(
@@ -386,7 +386,7 @@ mod tests {
                     ("Mountain".to_string(), 12usize),
                     ("Forest".to_string(), 12usize),
                     ("Llanowar Elves".to_string(), 18usize),
-                    ("Grey Ogre".to_string(), 18usize),
+                    ("Gray Ogre".to_string(), 18usize),
                 ]),
             ),
         ]

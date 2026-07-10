@@ -85,11 +85,11 @@ fn pyroclasm_kills_small_creatures_on_both_sides() {
     assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
 
     // Board: 2/2 ogres on both sides, one 0/8 wall for player 0.
-    s.force_permanent_on_battlefield(0, "Grey Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(0, "Wall of Stone");
-    s.force_permanent_on_battlefield(1, "Grey Ogre");
-    assert_eq!(s.battlefield_permanents_named(0, "Grey Ogre").len(), 1);
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 1);
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
 
     s.force_card_in_hand(0, "Pyroclasm");
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
@@ -97,8 +97,8 @@ fn pyroclasm_kills_small_creatures_on_both_sides() {
     s.pass_priority();
 
     // Both ogres (toughness 2) die; the wall (toughness 8) survives.
-    assert!(s.battlefield_permanents_named(0, "Grey Ogre").is_empty());
-    assert!(s.battlefield_permanents_named(1, "Grey Ogre").is_empty());
+    assert!(s.battlefield_permanents_named(0, "Gray Ogre").is_empty());
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
     assert_eq!(s.battlefield_permanents_named(0, "Wall of Stone").len(), 1);
 }
 

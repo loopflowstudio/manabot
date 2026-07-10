@@ -1,4 +1,5 @@
-use super::mana::ManaCost;
+use super::card::Keywords;
+use super::mana::{Mana, ManaCost};
 use super::predicate::CardPredicate;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,6 +21,11 @@ impl Ability {
     /// At most one effect per ability may carry a target.
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         self.effects().iter().find_map(|effect| effect.target_spec())
+    }
+
+    /// "Up to one target" — the controller may decline choosing a target.
+    pub fn target_optional(&self) -> bool {
+        self.effects().iter().any(|effect| effect.target_optional())
     }
 }
 
@@ -48,6 +54,27 @@ pub enum TriggerCondition {
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `TurnState::cards_drawn_this_turn`).
     YouDrawNthCardThisTurn { n: u32 },
+    /// The inner condition only fires while `active_if` holds for the
+    /// ability's controller. Used for conditionally-granted triggered
+    /// abilities ("has firebending 2 as long as there's a Lesson card in
+    /// your graveyard") and the fire-time half of intervening-if clauses
+    /// (CR 603.4; re-check at resolution with an effect branch).
+    ActiveIf {
+        active_if: StaticCondition,
+        condition: Box<TriggerCondition>,
+    },
+}
+
+/// A game-state condition for conditional statics and intervening-if
+/// checks, evaluated for a specific controller ("you").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StaticCondition {
+    /// "as long as there are `count` or more [predicate] cards in your
+    /// graveyard".
+    GraveyardAtLeast {
+        count: usize,
+        predicate: CardPredicate,
+    },
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -173,6 +200,66 @@ pub enum Effect {
     /// equal to their power to the last target. Targeting is declared on
     /// the card (`CardDefinition::targeting`).
     TargetCreaturesDealPowerDamageToLastTarget,
+    /// Earthbend N: target land you control becomes a 0/0 creature with
+    /// haste that's still a land; put `count` +1/+1 counters on it. A
+    /// delayed trigger returns it to the battlefield tapped when it dies
+    /// or is exiled.
+    Earthbend {
+        count: i32,
+        target: TargetSpec,
+    },
+    /// Delayed-trigger payload (earthbend): return the source card from
+    /// the graveyard or exile to the battlefield tapped.
+    ReturnSourceToBattlefieldTapped,
+    /// "Exile [target] until this creature leaves the battlefield." The
+    /// exile only happens if the source is still on the battlefield when
+    /// this resolves (CR 603.6e pragmatics); the linked card returns
+    /// immediately (no stack) when the source leaves.
+    ExileUntilSourceLeaves {
+        target: TargetSpec,
+    },
+    /// Add mana to the resolving player's pool. `until_end_of_combat`
+    /// routes it to the combat pool (firebending — persists across combat
+    /// steps, empties at end of combat).
+    AddMana {
+        mana: Mana,
+        until_end_of_combat: bool,
+    },
+    /// The target gets +power/+toughness until end of turn.
+    BuffTarget {
+        power: i32,
+        toughness: i32,
+        target: TargetSpec,
+    },
+    /// Untap the target.
+    UntapTarget {
+        target: TargetSpec,
+    },
+    /// The target gains the set keywords until end of turn.
+    GrantKeywordsToTarget {
+        keywords: Keywords,
+        target: TargetSpec,
+    },
+    /// Run `then` only if the frame's primary target currently matches
+    /// [predicate] ("if that creature is an Ally, ...").
+    IfTargetMatches {
+        predicate: CardPredicate,
+        then: Vec<Effect>,
+    },
+    /// Run the inner effects once per chosen target, with that target as
+    /// the primary target (Fancy Footwork: "untap one or two target
+    /// creatures; they each get +2/+2"). Inner effects must not suspend.
+    ForEachTarget {
+        effects: Vec<Effect>,
+    },
+    /// Put `count` +1/+1 counters on each battlefield permanent the
+    /// resolving player controls matching [predicate]; `other` excludes
+    /// the source permanent.
+    PutCountersOnEachMatching {
+        count: i32,
+        predicate: CardPredicate,
+        other: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -187,6 +274,11 @@ pub enum TargetSpec {
     CreatureYouControl,
     /// "target creature an opponent controls".
     CreatureOpponentControls,
+    /// "target land you control" (earthbend).
+    LandYouControl,
+    /// "target [predicate] permanent an opponent controls" (Earth Kingdom
+    /// Jailer: artifact/creature/enchantment with mana value 3+).
+    PermanentOpponentControls { predicate: CardPredicate },
 }
 
 /// One targeting clause of a spell: "[up to] N target [spec]".
@@ -215,6 +307,11 @@ impl Effect {
             Effect::DealDamage { target, .. } => Some(target),
             Effect::CounterSpell { target } => Some(target),
             Effect::PutCounters { target, .. } => Some(target),
+            Effect::Earthbend { target, .. } => Some(target),
+            Effect::ExileUntilSourceLeaves { target } => Some(target),
+            Effect::BuffTarget { target, .. } => Some(target),
+            Effect::UntapTarget { target } => Some(target),
+            Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::IfKicked { then, otherwise }
             | Effect::IfGraveyardAtLeast {
@@ -223,6 +320,9 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
+            Effect::IfTargetMatches { then, .. } => {
+                then.iter().find_map(|effect| effect.target_spec())
+            }
             Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }
@@ -238,7 +338,17 @@ impl Effect {
             | Effect::Learn
             | Effect::Modal { .. }
             | Effect::CounterUnlessPays { .. }
+            | Effect::ReturnSourceToBattlefieldTapped
+            | Effect::AddMana { .. }
+            | Effect::ForEachTarget { .. }
+            | Effect::PutCountersOnEachMatching { .. }
             | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
         }
+    }
+
+    /// Whether the effect's target is "up to one" (the trigger's controller
+    /// may decline to choose a target).
+    pub fn target_optional(&self) -> bool {
+        matches!(self, Effect::ExileUntilSourceLeaves { .. })
     }
 }

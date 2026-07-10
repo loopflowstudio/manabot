@@ -34,7 +34,7 @@ STANDARD_DECK = {
     "Mountain": 12,
     "Forest": 12,
     "Llanowar Elves": 18,
-    "Grey Ogre": 18,
+    "Gray Ogre": 18,
 }
 MOUNTAIN_DECK = {"Mountain": 20}
 
@@ -44,7 +44,7 @@ MOUNTAIN_DECK = {"Mountain": 20}
 INTERACTIVE_DECK = {
     "Island": 12,
     "Mountain": 12,
-    "Grey Ogre": 6,
+    "Gray Ogre": 6,
     "Wind Drake": 6,
     "Man-o'-War": 4,
     "Raging Goblin": 4,
@@ -52,6 +52,43 @@ INTERACTIVE_DECK = {
     "Counterspell": 4,
     "Ancestral Recall": 3,
     "Pyroclasm": 3,
+}
+
+# Milestone-1 two-deck slice (wave/rules/01-two-deck-slice.md): the actual
+# 40-card cube decks the engine's TLA slice was built for.
+UR_LESSONS_DECK = {
+    "Island": 9,
+    "Mountain": 8,
+    "Tiger-Seal": 2,
+    "Otter-Penguin": 2,
+    "Fire Nation Cadets": 2,
+    "First-Time Flyer": 2,
+    "Forecasting Fortune Teller": 1,
+    "Dragonfly Swarm": 1,
+    "Firebending Lesson": 4,
+    "Igneous Inspiration": 2,
+    "Pop Quiz": 2,
+    "Divide by Zero": 2,
+    "It'll Quench Ya!": 2,
+    "Accumulate Wisdom": 2,
+}
+
+GW_ALLIES_DECK = {
+    "Plains": 9,
+    "Forest": 8,
+    "Water Tribe Rallier": 2,
+    "Invasion Reinforcements": 2,
+    "Compassionate Healer": 2,
+    "Earth Kingdom Jailer": 2,
+    "White Lotus Reinforcements": 2,
+    "Earth King's Lieutenant": 2,
+    "Kyoshi Warriors": 2,
+    "Badgermole Cub": 2,
+    "Suki, Kyoshi Warrior": 1,
+    "South Pole Voyager": 1,
+    "Allies at Last": 2,
+    "Yip Yip!": 1,
+    "Fancy Footwork": 2,
 }
 
 

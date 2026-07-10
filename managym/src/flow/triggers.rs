@@ -7,7 +7,6 @@ use crate::{
     state::{
         ability::{Ability, TargetSpec, TriggerCondition, TriggerSubject},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        predicate::CardPredicate,
         stack_object::{StackObject, TriggeredAbilityOnStack},
         target::Target as ActionTarget,
         zone::ZoneType,
@@ -59,29 +58,40 @@ impl Game {
                 }
                 Some(Some(target_spec)) => {
                     let target_spec = target_spec.clone();
+                    let optional = self.trigger_target_optional(&trigger);
                     let legal_targets =
                         self.legal_targets_for_spec(&target_spec, trigger.controller);
                     if legal_targets.is_empty() {
+                        if optional {
+                            // "Up to one target" with none available: the
+                            // trigger still goes on the stack (and does
+                            // nothing on resolution).
+                            self.place_triggered_ability_on_stack(trigger, None);
+                        }
                         // CR 603.3d — Triggered abilities with no legal required targets are removed.
                         continue;
                     }
 
                     let controller = trigger.controller;
                     self.state.pending_trigger_choice = Some(trigger);
+                    let mut actions: Vec<Action> = legal_targets
+                        .into_iter()
+                        .map(|legal_target| Action::ChooseTarget {
+                            player: controller,
+                            target: match legal_target {
+                                Target::Player(p) => ActionTarget::Player(p),
+                                Target::Permanent(p) => ActionTarget::Permanent(p),
+                                Target::StackSpell(c) => ActionTarget::StackSpell(c),
+                            },
+                        })
+                        .collect();
+                    if optional {
+                        actions.push(Action::Decline { player: controller });
+                    }
                     return Some(ActionSpace {
                         player: Some(controller),
                         kind: ActionSpaceKind::ChooseTarget,
-                        actions: legal_targets
-                            .into_iter()
-                            .map(|legal_target| Action::ChooseTarget {
-                                player: controller,
-                                target: match legal_target {
-                                    Target::Player(p) => ActionTarget::Player(p),
-                                    Target::Permanent(p) => ActionTarget::Permanent(p),
-                                    Target::StackSpell(c) => ActionTarget::StackSpell(c),
-                                },
-                            })
-                            .collect(),
+                        actions,
                         focus: Vec::new(),
                     });
                 }
@@ -94,14 +104,49 @@ impl Game {
     /// Outer `None`: the ability doesn't exist. Inner option: its target spec.
     fn trigger_target_spec<'a>(
         &'a self,
-        trigger: &PendingTrigger,
+        trigger: &'a PendingTrigger,
     ) -> Option<Option<&'a TargetSpec>> {
+        if let Some(effects) = &trigger.inline_effects {
+            // Delayed triggers carry their (targetless) effects inline.
+            return Some(effects.iter().find_map(|effect| effect.target_spec()));
+        }
         let ability = self
             .state
             .cards
             .get(trigger.source_card.0)
             .and_then(|card| card.abilities.get(trigger.ability_index))?;
         Some(ability.target_spec())
+    }
+
+    /// Whether the pending trigger's target is "up to one" (a Decline
+    /// action is offered alongside the legal targets).
+    fn trigger_target_optional(&self, trigger: &PendingTrigger) -> bool {
+        if trigger.inline_effects.is_some() {
+            return false;
+        }
+        self.state
+            .cards
+            .get(trigger.source_card.0)
+            .and_then(|card| card.abilities.get(trigger.ability_index))
+            .is_some_and(|ability| ability.target_optional())
+    }
+
+    /// Decline choosing a target for the pending "up to one target"
+    /// trigger — it goes on the stack with no targets.
+    pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
+        let Some(pending_trigger) = self.state.pending_trigger_choice.take() else {
+            return Err(AgentError("no pending target choice".to_string()));
+        };
+        if pending_trigger.controller != player {
+            self.state.pending_trigger_choice = Some(pending_trigger);
+            return Err(AgentError("wrong player for target selection".to_string()));
+        }
+        if !self.trigger_target_optional(&pending_trigger) {
+            self.state.pending_trigger_choice = Some(pending_trigger);
+            return Err(AgentError("trigger target is not optional".to_string()));
+        }
+        self.place_triggered_ability_on_stack(pending_trigger, None);
+        Ok(())
     }
 
     fn pop_next_pending_trigger(&mut self) -> Option<PendingTrigger> {
@@ -139,6 +184,7 @@ impl Game {
             ability_index: trigger.ability_index,
             targets,
             context: trigger.context,
+            inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
             source_card: trigger.source_card,
@@ -158,7 +204,9 @@ impl Game {
             TargetSpec::Creature
             | TargetSpec::CreatureOrPlayer
             | TargetSpec::CreatureYouControl
-            | TargetSpec::CreatureOpponentControls => {
+            | TargetSpec::CreatureOpponentControls
+            | TargetSpec::LandYouControl
+            | TargetSpec::PermanentOpponentControls { .. } => {
                 let mut out = Vec::new();
                 if matches!(target_spec, TargetSpec::CreatureOrPlayer) {
                     out.push(Target::Player(PlayerId(0)));
@@ -255,10 +303,30 @@ impl Game {
                 controller,
                 enqueue_order: self.state.trigger_enqueue_counter,
                 context,
+                inline_effects: None,
             });
             self.state.trigger_enqueue_counter =
                 self.state.trigger_enqueue_counter.saturating_add(1);
         }
+    }
+
+    /// Enqueue a fired delayed trigger with inline effects (no
+    /// `Card::abilities` entry to reference).
+    pub(crate) fn enqueue_delayed_trigger(
+        &mut self,
+        source_card: CardId,
+        controller: PlayerId,
+        effects: Vec<crate::state::ability::Effect>,
+    ) {
+        self.state.pending_triggers.push(PendingTrigger {
+            source_card,
+            ability_index: 0,
+            controller,
+            enqueue_order: self.state.trigger_enqueue_counter,
+            context: None,
+            inline_effects: Some(effects),
+        });
+        self.state.trigger_enqueue_counter = self.state.trigger_enqueue_counter.saturating_add(1);
     }
 
     /// Cards whose triggered abilities can see this event: every permanent on
@@ -301,6 +369,18 @@ impl Game {
         event: &GameEvent,
     ) -> bool {
         match (condition, event) {
+            // Conditionally-granted abilities: the ability only exists (and
+            // so only triggers) while the condition holds for its
+            // controller (CR 603.4 fire-time check).
+            (TriggerCondition::ActiveIf { active_if, condition }, _) => {
+                self.check_static_condition(active_if, source_controller)
+                    && self.trigger_condition_fires(
+                        condition,
+                        source_card,
+                        source_controller,
+                        event,
+                    )
+            }
             (
                 TriggerCondition::EntersTheBattlefield { subject },
                 GameEvent::CardMoved {
@@ -468,19 +548,5 @@ impl Game {
         self.state.permanents[permanent_id]
             .as_ref()
             .is_some_and(|permanent| permanent.card != source_card)
-    }
-
-    /// Match a battlefield permanent against a predicate using its effective
-    /// power (counters and until-EOT modifiers included).
-    pub(crate) fn permanent_matches_predicate(
-        &self,
-        permanent_id: PermanentId,
-        predicate: &CardPredicate,
-    ) -> bool {
-        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return false;
-        };
-        let card = &self.state.cards[permanent.card];
-        predicate.matches_card_with_power(card, permanent.effective_power(card))
     }
 }

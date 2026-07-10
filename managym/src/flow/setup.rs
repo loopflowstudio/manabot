@@ -82,6 +82,8 @@ impl Game {
                 observation_events: Vec::new(),
                 pending_triggers: Vec::new(),
                 pending_trigger_choice: None,
+                delayed_triggers: Vec::new(),
+                exile_links: Vec::new(),
                 suspended_decision: None,
                 trigger_enqueue_counter: 0,
                 rng,

@@ -8,7 +8,7 @@
 >
 > **Read the findings below with a large caveat.** Every one of them was
 > derived on the deck at `manabot/infra/hypers.py:13` — `Mountain 12, Forest 12,
-> Llanowar Elves 18, Grey Ogre 18`. No instants, no removal, no counterspells,
+> Llanowar Elves 18, Gray Ogre 18`. No instants, no removal, no counterspells,
 > no card draw, no mass removal. That is a vanilla creature-combat game, not
 > Magic: the only legal decisions are play-land, play-creature, attack, block.
 > The engine was never the limitation (`cardsets/alpha.rs:115` implements

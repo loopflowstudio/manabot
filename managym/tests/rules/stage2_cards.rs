@@ -106,11 +106,11 @@ fn stack_spell_card(s: &Scenario, name: &str) -> CardId {
 
 fn glider_kids_scry_setup(seed: u64) -> Scenario {
     let mut s = Scenario::new(
-        deck(&[("Island", 24), ("Glider Kids", 16)]),
-        deck(&[("Plains", 40)]),
+        deck(&[("Plains", 24), ("Glider Kids", 16)]),
+        deck(&[("Island", 40)]),
         seed,
     );
-    force_lands(&mut s, 0, "Island", 2);
+    force_lands(&mut s, 0, "Plains", 3);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Glider Kids");
     s.advance_to_active_step(0, StepKind::Main);
@@ -148,6 +148,40 @@ fn glider_kids_scry_keep_leaves_top_card() {
     let top = library_top(&s, 0);
     assert!(s.take_action_by_type(ActionType::ScryKeep));
     assert_eq!(library_top(&s, 0), top);
+}
+
+/// Glider Kids has flying (oracle: {2}{W} 2/3 "Flying / When this creature
+/// enters, scry 1.") — a ground creature can't block it.
+#[test]
+fn glider_kids_flies_over_ground_blockers() {
+    let mut s = Scenario::new(
+        deck(&[("Plains", 24), ("Glider Kids", 16)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 16)]),
+        25,
+    );
+    let kids = s.force_permanent_on_battlefield(0, "Glider Kids");
+    let _elf = s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    s.game_mut().state.permanents[kids]
+        .as_mut()
+        .expect("permanent should exist")
+        .summoning_sick = false;
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::DeclareBlockers);
+
+    assert!(
+        !s.action_space().actions.iter().any(|action| {
+            matches!(
+                action,
+                Action::DeclareBlocker {
+                    attacker: Some(_),
+                    ..
+                }
+            )
+        }),
+        "ground creature should have no legal block against the flying Glider Kids"
+    );
 }
 
 /// The deciding agent sees the revealed card in its observation (zone
@@ -191,59 +225,60 @@ fn determinize_pins_scry_revealed_cards_on_top() {
 // Firebending Lesson — kicker (cast-time PAY_OR_NOT): 2 vs 5 damage.
 // ---------------------------------------------------------------------------
 
-fn firebending_setup(seed: u64, mountains: usize) -> Scenario {
+fn firebending_setup(seed: u64, mountains: usize) -> (Scenario, PermanentId) {
     let mut s = Scenario::new(
         deck(&[("Mountain", 24), ("Firebending Lesson", 16)]),
-        deck(&[("Plains", 40)]),
+        deck(&[("Plains", 24), ("Wall of Stone", 16)]),
         seed,
     );
+    let wall = s.force_permanent_on_battlefield(1, "Wall of Stone");
     force_lands(&mut s, 0, "Mountain", mountains);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Firebending Lesson");
     s.advance_to_active_step(0, StepKind::Main);
-    s
+    (s, wall)
 }
 
 #[test]
 fn firebending_lesson_kicked_deals_five() {
-    let mut s = firebending_setup(31, 5);
+    let (mut s, wall) = firebending_setup(31, 5);
     cast_only(&mut s);
     let space = s.action_space();
     assert_eq!(space.kind, ActionSpaceKind::PayOrNot);
     assert_eq!(space.player, Some(PlayerId(0)));
     assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
-    // All five mountains paid for {1}{R} + kicker {3}.
+    assert!(s.choose_target(Target::Permanent(wall)));
+    // All five mountains paid for {R} + kicker {4}.
     assert_eq!(s.untapped_permanents_named(0, "Mountain"), 0);
     s.pass_priority();
     s.pass_priority();
-    s.assert_life(1, 15);
+    assert_eq!(permanent(&s, wall).damage, 5);
 }
 
 #[test]
 fn firebending_lesson_unkicked_deals_two() {
-    let mut s = firebending_setup(32, 5);
+    let (mut s, wall) = firebending_setup(32, 5);
     cast_only(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wall)));
     s.pass_priority();
     s.pass_priority();
-    s.assert_life(1, 18);
+    assert_eq!(permanent(&s, wall).damage, 2);
 }
 
 /// With only enough mana for the base cost, the kicker choice is not
-/// offered — casting goes straight to targeting.
+/// offered - casting goes straight to targeting.
 #[test]
 fn firebending_lesson_kicker_not_offered_when_unaffordable() {
-    let mut s = firebending_setup(33, 2);
+    let (mut s, wall) = firebending_setup(33, 2);
     cast_only(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wall)));
     s.pass_priority();
     s.pass_priority();
-    s.assert_life(1, 18);
+    assert_eq!(permanent(&s, wall).damage, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +289,7 @@ fn firebending_lesson_kicker_not_offered_when_unaffordable() {
 fn quench_setup(seed: u64, p1_mountains: usize) -> Scenario {
     let mut s = Scenario::new(
         deck(&[("Island", 24), ("It'll Quench Ya!", 16)]),
-        deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         seed,
     );
     force_lands(&mut s, 0, "Island", 2);
@@ -262,14 +297,14 @@ fn quench_setup(seed: u64, p1_mountains: usize) -> Scenario {
     clear_hand(&mut s, 0);
     clear_hand(&mut s, 1);
     s.force_card_in_hand(0, "It'll Quench Ya!");
-    s.force_card_in_hand(1, "Grey Ogre");
+    s.force_card_in_hand(1, "Gray Ogre");
     s.advance_to_active_step(1, StepKind::Main);
-    // P1 casts Grey Ogre, then passes; P0 responds with the counter.
+    // P1 casts Gray Ogre, then passes; P0 responds with the counter.
     cast_only(&mut s);
     s.pass_priority(); // P1 passes
     cast_only(&mut s); // P0 casts It'll Quench Ya!
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
-    let ogre = stack_spell_card(&s, "Grey Ogre");
+    let ogre = stack_spell_card(&s, "Gray Ogre");
     assert!(s.choose_target(Target::StackSpell(ogre)));
     s.pass_priority();
     s.pass_priority(); // It'll Quench Ya! resolves -> pay-or-not for P1
@@ -284,11 +319,11 @@ fn quench_controller_declines_and_spell_is_countered() {
     assert_eq!(space.player, Some(PlayerId(1)), "the spell's controller decides");
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
 
-    // Grey Ogre countered; both spells in graveyards; stack empty.
+    // Gray Ogre countered; both spells in graveyards; stack empty.
     assert_eq!(s.game().state.stack_objects.len(), 0);
     assert_eq!(s.zone_size(1, ZoneType::Graveyard), 1);
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 0);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
 }
 
 #[test]
@@ -300,7 +335,7 @@ fn quench_controller_pays_and_spell_resolves() {
     assert_eq!(s.game().state.stack_objects.len(), 1);
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 1);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
 }
 
 #[test]
@@ -312,7 +347,7 @@ fn quench_pay_option_absent_when_controller_cannot_pay() {
     assert_eq!(space.actions.len(), 1);
     assert_eq!(space.actions[0].action_type(), ActionType::DeclineChoice);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 0);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +434,7 @@ fn igneous_inspiration_deals_three_then_learns() {
 fn divide_by_zero_bounces_spell_from_stack() {
     let mut s = Scenario::new(
         deck(&[("Island", 24), ("Divide by Zero", 16)]),
-        deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         61,
     );
     force_lands(&mut s, 0, "Island", 3);
@@ -407,12 +442,12 @@ fn divide_by_zero_bounces_spell_from_stack() {
     clear_hand(&mut s, 0);
     clear_hand(&mut s, 1);
     s.force_card_in_hand(0, "Divide by Zero");
-    s.force_card_in_hand(1, "Grey Ogre");
+    s.force_card_in_hand(1, "Gray Ogre");
     s.advance_to_active_step(1, StepKind::Main);
-    cast_only(&mut s); // P1 casts Grey Ogre
+    cast_only(&mut s); // P1 casts Gray Ogre
     s.pass_priority();
     cast_only(&mut s); // P0 responds with Divide by Zero
-    let ogre = stack_spell_card(&s, "Grey Ogre");
+    let ogre = stack_spell_card(&s, "Gray Ogre");
     assert!(s.choose_target(Target::StackSpell(ogre)));
     s.pass_priority();
     s.pass_priority();
@@ -430,11 +465,11 @@ fn divide_by_zero_bounces_spell_from_stack() {
 fn divide_by_zero_bounces_permanent_but_not_lands() {
     let mut s = Scenario::new(
         deck(&[("Island", 24), ("Divide by Zero", 16)]),
-        deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         62,
     );
     force_lands(&mut s, 0, "Island", 3);
-    let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     clear_hand(&mut s, 0);
     clear_hand(&mut s, 1);
     s.force_card_in_hand(0, "Divide by Zero");
@@ -444,11 +479,11 @@ fn divide_by_zero_bounces_permanent_but_not_lands() {
     // Lands (mana value 0) are not legal targets; the Ogre is.
     let space = s.action_space().clone();
     assert_eq!(space.kind, ActionSpaceKind::ChooseTarget);
-    assert_eq!(space.actions.len(), 1, "only the Grey Ogre is targetable");
+    assert_eq!(space.actions.len(), 1, "only the Gray Ogre is targetable");
     assert!(s.choose_target(Target::Permanent(ogre)));
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 0);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
     assert_eq!(s.zone_size(1, ZoneType::Hand), 1);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
 }
@@ -660,15 +695,15 @@ fn badgermole_cub_composes_with_waterbend_payment() {
 #[test]
 fn allies_at_last_affinity_and_two_attackers() {
     let mut s = Scenario::new(
-        deck(&[("Plains", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
-        deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
+        deck(&[("Forest", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         91,
     );
     let w1 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
     let w2 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
-    let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
-    // Two Allies -> {4}{W} costs {2}{W}: three plains suffice.
-    force_lands(&mut s, 0, "Plains", 3);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    // Two Allies -> {2}{G} costs {G}: one forest suffices.
+    force_lands(&mut s, 0, "Forest", 1);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Allies at Last");
     s.advance_to_active_step(0, StepKind::Main);
@@ -684,13 +719,13 @@ fn allies_at_last_affinity_and_two_attackers() {
     let space = s.action_space().clone();
     assert_eq!(space.actions.len(), 1);
     assert!(s.choose_target(Target::Permanent(ogre)));
-    // Affinity was applied: the cast succeeded on three lands.
+    // Affinity was applied: the cast succeeded on a single forest.
     assert_eq!(s.game().state.stack_objects.len(), 1);
 
     s.pass_priority();
     s.pass_priority();
     // Each 3/3 warrior dealt 3 damage to the 2/2 Ogre; it died.
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 0);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
     assert_eq!(s.zone_size(1, ZoneType::Graveyard), 1);
     s.assert_life(1, 20);
 }
@@ -698,13 +733,13 @@ fn allies_at_last_affinity_and_two_attackers() {
 #[test]
 fn allies_at_last_up_to_zero_attackers_is_legal() {
     let mut s = Scenario::new(
-        deck(&[("Plains", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
-        deck(&[("Mountain", 24), ("Grey Ogre", 16)]),
+        deck(&[("Forest", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         92,
     );
     let _w1 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
-    let ogre = s.force_permanent_on_battlefield(1, "Grey Ogre");
-    force_lands(&mut s, 0, "Plains", 4);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    force_lands(&mut s, 0, "Forest", 4);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Allies at Last");
     s.advance_to_active_step(0, StepKind::Main);
@@ -716,7 +751,7 @@ fn allies_at_last_up_to_zero_attackers_is_legal() {
     s.pass_priority();
     s.pass_priority();
     // Nothing happened; the Ogre survives.
-    assert_eq!(s.battlefield_permanents_named(1, "Grey Ogre").len(), 1);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -764,14 +799,14 @@ fn ward_asks_spell_controller_and_counters_on_decline() {
 
 #[test]
 fn ward_paid_lets_the_spell_resolve() {
-    let (mut s, aerialist) = ward_setup(102, 3);
+    let (mut s, _aerialist) = ward_setup(102, 3);
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::PayCost));
     s.pass_priority();
     s.pass_priority();
-    // Bolt resolved: 3 damage marked on the 2/4 Aerialist.
-    assert_eq!(permanent(&s, aerialist).damage, 3);
-    assert_eq!(s.battlefield_permanents_named(0, "Waterfall Aerialist").len(), 1);
+    // Bolt resolved: 3 damage kills the 3/1 Aerialist (lethal SBA).
+    assert_eq!(s.battlefield_permanents_named(0, "Waterfall Aerialist").len(), 0);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
 }
 
 #[test]
@@ -786,7 +821,7 @@ fn ward_does_not_trigger_for_controllers_own_spell() {
         deck(&[("Plains", 40)]),
         103,
     );
-    let aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
+    let _aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
     force_lands(&mut s, 0, "Mountain", 1);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Lightning Bolt");
@@ -795,9 +830,9 @@ fn ward_does_not_trigger_for_controllers_own_spell() {
     s.choose_target_named("Waterfall Aerialist");
     s.pass_priority();
     s.pass_priority();
-    // No ward pay-or-not; the bolt resolved directly.
+    // No ward pay-or-not; the bolt resolved directly and killed the 3/1.
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
-    assert_eq!(permanent(&s, aerialist).damage, 3);
+    assert_eq!(s.battlefield_permanents_named(0, "Waterfall Aerialist").len(), 0);
 }
 
 // ---------------------------------------------------------------------------

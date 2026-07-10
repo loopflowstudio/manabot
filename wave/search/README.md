@@ -42,7 +42,7 @@ Three things fall out, and they are the reason to do this before anything else:
 `manabot/infra/hypers.py:13-20` defines the deck both players use:
 
 ```
-Mountain 12, Forest 12, Llanowar Elves 18, Grey Ogre 18
+Mountain 12, Forest 12, Llanowar Elves 18, Gray Ogre 18
 ```
 
 No instants. No removal. No counterspells. No card draw. No mass removal. The
