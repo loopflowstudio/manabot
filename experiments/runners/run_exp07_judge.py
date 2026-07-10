@@ -10,7 +10,7 @@ Policies sample stochastically from masked softmax — the exp-00c/01/02/03
 protocol.
 
 Usage:
-    python -m manabot.verify.run_exp07_judge --student .runs/exp07/student_r0.pt \
+    uv run experiments/runners/run_exp07_judge.py --student .runs/exp07/student_r0.pt \
         --name r0 --out experiments/data/exp-07-expert-iteration.json
 """
 
@@ -111,7 +111,7 @@ def main() -> None:
         show("vs random", result["metrics"], result["wall_seconds"])
 
     # 2. Ladder rungs (search villains need engine-side playouts; process pool).
-    from manabot.verify.run_flat_mc import run_matchup
+    from run_flat_mc import run_matchup
 
     student_spec = {
         "kind": "checkpoint",
@@ -138,7 +138,7 @@ def main() -> None:
 
     # 3. Behavioral profile.
     if not args.skip_profile and "profile" not in section:
-        from manabot.verify.run_distill_judge import behavior_profile
+        from run_distill_judge import behavior_profile
 
         print(f"[run ] {args.name} profile: {args.profile_games} games", flush=True)
         section["profile"] = behavior_profile(

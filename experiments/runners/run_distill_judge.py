@@ -9,7 +9,7 @@ Plus behavioral profiles (cast_when_able / passed_when_able) for the BC and
 PPO policies via the same capture_evaluation instrument used in exp-01.
 
 Usage:
-    python -m manabot.verify.run_distill_judge \
+    uv run experiments/runners/run_distill_judge.py \
         --bc .runs/exp03/bc_policy.pt --ppo .runs/<ppo>/step_N.pt \
         --games 400 --workers 8 --out experiments/data/exp-03-distillation.json
 """
@@ -131,7 +131,7 @@ def main() -> None:
         results = json.loads(out_path.read_text())
 
     from manabot.sim.flat_mc import spec_name
-    from manabot.verify.run_flat_mc import run_matchup
+    from run_flat_mc import run_matchup
 
     matchups = build_matchups(args.bc, args.ppo, args.games)
     for index, (hero_spec, villain_spec, games) in enumerate(matchups):

@@ -6,7 +6,7 @@ manifest entry. Wall-clock and per-worker engine seconds are logged — that is
 the teacher cost.
 
 Usage:
-    python -m manabot.verify.run_distill_datagen --games 480 --workers 4 \
+    uv run experiments/runners/run_distill_datagen.py --games 480 --workers 4 \
         --sims 64 --out-dir .runs/exp03/dataset
 """
 

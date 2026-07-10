@@ -7,7 +7,7 @@ balancing alternates which seat (play/draw) the UR player occupies, so the
 hero win rate IS the UR per-deck win rate.
 
 Usage:
-    python -m manabot.verify.run_two_deck_matchup --games 400 --workers 8 \
+    uv run experiments/runners/run_two_deck_matchup.py --games 400 --workers 8 \
         --out experiments/data/exp-08-two-deck-matchup.json
 """
 

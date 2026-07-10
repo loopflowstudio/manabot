@@ -8,7 +8,7 @@ per the exp-00 accounting convention); in-loop periodic eval is disabled so
 every training second is learning.
 
 Usage:
-    python -m manabot.verify.run_distill_ppo --total-timesteps 950272 \
+    uv run experiments/runners/run_distill_ppo.py --total-timesteps 950272 \
         --seed 1 --label exp03-ppo-matched --log .runs/exp03/ppo_log.json
 """
 

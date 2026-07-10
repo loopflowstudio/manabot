@@ -10,7 +10,7 @@ Three phases, resumable via the output JSON:
        (P2, the honest comparison).
 
 Usage:
-    python -m manabot.verify.run_exp07_p2 --student .runs/exp07/student_r0.pt \
+    uv run experiments/runners/run_exp07_p2.py --student .runs/exp07/student_r0.pt \
         --sims 16 --games 100 --out experiments/data/exp-07-p2.json
 """
 
@@ -169,7 +169,7 @@ def main() -> None:
         flush=True,
     )
 
-    from manabot.verify.run_flat_mc import run_matchup
+    from run_flat_mc import run_matchup
 
     # Phase B — equal sims.
     key = f"equal_sims_{args.sims}"

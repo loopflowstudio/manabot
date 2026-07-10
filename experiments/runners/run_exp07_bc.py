@@ -6,7 +6,7 @@ driver (seat-balanced), and keeps the best by win rate (val accuracy as the
 tiebreak). All sweep wall-clock is billed to the round's training cost.
 
 Usage:
-    python -m manabot.verify.run_exp07_bc --data-dir .runs/exp07/dataset_r0 \
+    uv run experiments/runners/run_exp07_bc.py --data-dir .runs/exp07/dataset_r0 \
         --out .runs/exp07/student_r0.pt --log .runs/exp07/bc_r0.json \
         --taus 0.03,0.05,0.1 --include-hard --quick-games 200 --device mps
 """

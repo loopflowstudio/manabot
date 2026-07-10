@@ -6,7 +6,7 @@ trainer-format checkpoint, and writes a JSON log with per-epoch curves and
 exact wall-clock.
 
 Usage:
-    python -m manabot.verify.run_distill_bc --data-dir .runs/exp03/dataset \
+    uv run experiments/runners/run_distill_bc.py --data-dir .runs/exp03/dataset \
         --out .runs/exp03/bc_policy.pt --log .runs/exp03/bc_log.json
 """
 

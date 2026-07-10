@@ -4,7 +4,7 @@ Runs the pre-registered matchup matrix seat-balanced, in parallel across
 processes, and writes one JSON blob per matchup so partial progress survives.
 
 Usage:
-    python -m manabot.verify.run_flat_mc --games 200 --workers 8 \
+    uv run experiments/runners/run_flat_mc.py --games 200 --workers 8 \
         --out experiments/data/exp-02-flat-mc.json
 """
 
