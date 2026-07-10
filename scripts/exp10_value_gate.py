@@ -215,6 +215,85 @@ def cmd_match(args: argparse.Namespace) -> None:
         print(f"saved {args.out}")
 
 
+def cmd_agree(args: argparse.Namespace) -> None:
+    """Degeneracy probe: how often does value-search pick V-greedy's action?
+
+    Walks value-search self-play; at every decision with >1 valid action,
+    scores the state with both players and compares argmax choices. High
+    agreement means 1-step-then-V search is (near-)degenerate with V-greedy
+    and a deeper leaf is needed for the gate to be meaningful.
+    """
+
+    from manabot.env import Env, Match, Reward
+    from manabot.infra.hypers import MatchHypers, RewardHypers
+    from manabot.env import ObservationSpace
+    from manabot.sim.value import (
+        VGreedyPlayer,
+        ValueSearchPlayer,
+        load_value_scorer,
+    )
+    from manabot.verify.util import INTERACTIVE_DECK
+
+    scorer_search = load_value_scorer(args.value, device=args.device)
+    scorer_greedy = load_value_scorer(args.value, device="cpu")
+    search = ValueSearchPlayer(
+        args.sims, scorer_search, depth=args.depth, seed=args.seed
+    )
+    greedy = VGreedyPlayer(scorer_greedy, seed=args.seed + 1)
+
+    match = Match(
+        MatchHypers(
+            hero="agree-a",
+            villain="agree-b",
+            hero_deck=dict(INTERACTIVE_DECK),
+            villain_deck=dict(INTERACTIVE_DECK),
+        )
+    )
+    env = Env(
+        match,
+        ObservationSpace(),
+        Reward(RewardHypers()),
+        seed=args.seed,
+        auto_reset=False,
+        enable_profiler=False,
+        enable_behavior_tracking=False,
+    )
+    decisions = 0
+    agreements = 0
+    score_gaps: list[float] = []
+    for game in range(args.games):
+        obs, _ = env.reset(seed=args.seed + game)
+        done = False
+        while not done:
+            num_valid = int(np.sum(obs["actions_valid"] > 0))
+            action = search.act(env, obs)
+            if num_valid > 1:
+                greedy_action = greedy.act(env, obs)
+                decisions += 1
+                agreements += int(action == greedy_action)
+                score_gaps.append(
+                    float(
+                        search.last_scores[action]
+                        - search.last_scores[greedy_action]
+                    )
+                )
+            obs, _, terminated, truncated, _ = env.step(action)
+            done = bool(terminated or truncated)
+    summary = {
+        "sims": args.sims,
+        "depth": args.depth,
+        "games": args.games,
+        "decisions": decisions,
+        "agreement": agreements / max(1, decisions),
+        "mean_score_gap_when_disagree": (
+            float(np.mean([g for g in score_gaps if g > 0])) if any(
+                g > 0 for g in score_gaps
+            ) else 0.0
+        ),
+    }
+    print(json.dumps(summary, indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -250,6 +329,15 @@ def main() -> None:
     p.add_argument("--device", default="cpu")
     p.add_argument("--out", default=None)
     p.set_defaults(fn=cmd_assess)
+
+    p = sub.add_parser("agree", help="value-search vs V-greedy choice agreement")
+    p.add_argument("--value", required=True)
+    p.add_argument("--sims", type=int, default=64)
+    p.add_argument("--depth", type=int, default=0)
+    p.add_argument("--games", type=int, default=20)
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default="cpu")
+    p.set_defaults(fn=cmd_agree)
 
     p = sub.add_parser("match", help="seat-balanced head-to-head")
     p.add_argument("--hero", required=True, help="player spec JSON")
