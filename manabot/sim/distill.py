@@ -1,6 +1,6 @@
 """Search-as-teacher distillation: dataset generation + behavior cloning.
 
-Exp-03 (wave/search C4). The teacher is the flat determinized MC searcher from
+Exp-03 (wave/intelligence C4). The teacher is the flat determinized MC searcher from
 exp-02 (manabot.sim.flat_mc.FlatMCPlayer); the student is a fresh
 manabot.model.agent.Agent trained by cross-entropy on the teacher's chosen
 action at every recorded decision.
@@ -337,7 +337,7 @@ def soft_targets_from_scores(
     τ trades off teacher sharpness against playout noise: at N sims/action
     the per-score standard error is ~sqrt(p(1-p)/N) (≈0.03 at N=256), so τ
     well below that amplifies noise, τ >> score spreads flattens the teacher
-    away. Exp-07 sweeps τ; see reports/exp-07-expert-iteration.md.
+    away. Exp-07 sweeps τ; see experiments/exp-07-expert-iteration.md.
     """
 
     invalid = scores < 0

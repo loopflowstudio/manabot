@@ -1,6 +1,6 @@
 # First Light
 
-> **Status: closed. Superseded by [wave/search](../search/README.md).**
+> **Status: closed. Superseded by [wave/intelligence](../search/README.md).**
 >
 > Goal 5 (auxiliary prediction heads) is superseded, not abandoned. Aux heads
 > were the strategy-neutral fix for credit assignment; lookahead is a better
@@ -22,7 +22,7 @@
 > *beats* the shaped recipe by ~15 points while the shaping produced
 > cast-everything policies, one net-harmful. The original pass-collapse
 > observation (unsourced, pre-bugfix code, hero-on-play single-seed evals)
-> appears to have been an artifact. See `reports/exp-04-potential-shaping.md`
+> appears to have been an artifact. See `experiments/exp-04-potential-shaping.md`
 > addenda.
 
 ## Vision
@@ -73,7 +73,7 @@ the causal-chain metrics remain the right instruments.
 3. ~~Clean observation space~~ done
 4. ~~Verification harness~~ done
 5. ~~Add auxiliary prediction heads for dense training signal~~ superseded by
-   [wave/search](../search/README.md) goals 3-5: search generates the dense
+   [wave/intelligence](../search/README.md) goals 3-5: search generates the dense
    signal aux heads were meant to approximate, and it does so without injecting
    a strategic prior. Retained as the fallback if search fails its goal-4 gate.
 

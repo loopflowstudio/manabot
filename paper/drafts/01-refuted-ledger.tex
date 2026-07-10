@@ -166,7 +166,7 @@ Distillation (\texttt{manabot/sim/distill.py}) is pure behavior cloning: play \s
 
 \subsection{The cycle}
 
-Work proceeds in numbered cycles. Each begins with a written question, a \emph{pre-registered prediction}, and a cost cap; each ends with a report in \texttt{reports/} recording whether the prediction held. Of the seven predictions registered so far, three were refuted, one was confirmed but in the wrong direction, and three held. We report all of them.
+Work proceeds in numbered cycles. Each begins with a written question, a \emph{pre-registered prediction}, and a cost cap; each ends with a report in \texttt{experiments/} recording whether the prediction held. Of the seven predictions registered so far, three were refuted, one was confirmed but in the wrong direction, and three held. We report all of them.
 
 \subsection{Seat contamination}
 \label{sec:seat}
@@ -448,7 +448,7 @@ We set out to train an agent to play \textit{Magic: The Gathering} and instead b
 
 The through-line is that none of these facts were discoverable without seat-balanced evaluation, Wilson intervals, and predictions written down before the run. That protocol cost nothing and invalidated more of our work than any algorithmic change has yet repaired. If this paper has a thesis, it is that in a domain this noisy, \textbf{measurement is the capability}, and everything else is downstream.
 
-\paragraph{Reproducibility.} All experiments are recorded under \texttt{reports/} with raw data in \texttt{reports/data/}. Provenance commits: \texttt{e38f20b} (cost basis), \texttt{b884038} (decision profile), \texttt{f019e7a} (seat-balanced baselines). Rules coverage is machine-tracked in \texttt{docs/rules\_coverage.yaml}.
+\paragraph{Reproducibility.} All experiments are recorded under \texttt{experiments/} with raw data in \texttt{experiments/data/}. Provenance commits: \texttt{e38f20b} (cost basis), \texttt{b884038} (decision profile), \texttt{f019e7a} (seat-balanced baselines). Rules coverage is machine-tracked in \texttt{docs/rules\_coverage.yaml}.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}

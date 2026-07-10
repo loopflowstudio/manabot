@@ -171,7 +171,7 @@ Measured on an Apple M4 Max. Environment stepping alone: $90{,}898$ steps/s at o
 
 That statement was true but incomplete: most of the inference tax was self-inflicted. Three layers of fix --- removing a debug tax from the agent's hot path (eagerly formatted logging forcing device syncs, per-call mask allocations, a per-sample Python loop), a batched driver that runs one masked forward for many concurrent games over the zero-copy buffers the Rust envs write into, and moving that batched forward to the M4's GPU --- lifted net-in-the-loop throughput from $2{,}035$ to $\mathbf{24{,}474}$ obs/sec ($12.0\times$; $6.4\times$ against a same-day re-measurement of the baseline under identical machine load). The layers are not independent: MPS at batch 16 is useless and only becomes $\approx6\times$ CPU at batch 256 and above, so batching is what makes the GPU usable at all; CPU-only the model is genuinely compute-bound at $\approx$7.3k obs/sec. Two conditional facts matter for anyone reproducing this: \textbf{MPS does not multiplex across processes} --- four workers sharing the GPU deliver roughly one worker's throughput --- so in-the-loop data generation must batch across games within one process, and the same 400-game evaluation that took $\sim$10 minutes of process-pool time now runs in 9 seconds.
 
-Torch's share of the loop fell from $97.2\%$ to $74.8\%$; the environment is visible in the profile again ($25.2\%$) for the first time since the engine work, and the next lever is observation-transfer consolidation, not further network optimization. All numbers trace to \texttt{reports/exp-07-expert-iteration.md}.
+Torch's share of the loop fell from $97.2\%$ to $74.8\%$; the environment is visible in the profile again ($25.2\%$) for the first time since the engine work, and the next lever is observation-transfer consolidation, not further network optimization. All numbers trace to \texttt{experiments/exp-07-expert-iteration.md}.
 
 \subsection{The trigger substrate}
 \label{sec:triggers}
@@ -232,7 +232,7 @@ On the creature deck, moving first wins $94\%$ of games between two uniform-rand
 
 \paragraph{The cost axis.} Strength is meaningless unbudgeted. We book measured wall-clock time at an AWS \texttt{g5.xlarge} on-demand rate of \$1.006/hr. An early measurement priced $10^{6}$ steps at \$0.44; the later vectorized harness ran roughly four times faster, so the ledger uses each experiment's realized time rather than a universal per-step conversion. This is an accounting proxy, not an incurred cloud bill: all experiments ran on one laptop. Hardware, batching, and pricing changes limit comparisons outside this paper.
 
-\paragraph{Pre-registration.} Each experimental cycle opens with a written question, a prediction, and a cost cap, and closes with a report in \texttt{reports/} recording whether the prediction held. Of seven predictions registered by the first four cycles, three were refuted outright; the cycles since have refuted four more, including both halves of the expert-iteration prediction (\S\ref{sec:newworld}), the claim that search would narrow a cross-deck gap, and the claim that a control deck's win rate would stay flat in search strength (\S\ref{sec:competency}). We publish all of them.
+\paragraph{Pre-registration.} Each experimental cycle opens with a written question, a prediction, and a cost cap, and closes with a report in \texttt{experiments/} recording whether the prediction held. Of seven predictions registered by the first four cycles, three were refuted outright; the cycles since have refuted four more, including both halves of the expert-iteration prediction (\S\ref{sec:newworld}), the claim that search would narrow a cross-deck gap, and the claim that a control deck's win rate would stay flat in search strength (\S\ref{sec:competency}). We publish all of them.
 
 \section{Reference Baselines}
 \label{sec:baselines}
@@ -352,7 +352,7 @@ n w em ep \\
 \subsection{The second generation: distillation from \searchn{256}, and a failed crank of expert iteration}
 \label{sec:newworld}
 
-The results above predate the Milestone-1 observation-shape changes; every checkpoint behind them is dimensionally dead in the current engine. The first cycle run in the current world (\texttt{reports/exp-07-expert-iteration.md}) re-established the distillation baseline at a higher teacher budget and then attempted the obvious next step --- closing the AlphaZero-style loop \citep{anthony2017exit,silver2018alphazero}. Both halves of that attempt were pre-registered, and both were refuted.
+The results above predate the Milestone-1 observation-shape changes; every checkpoint behind them is dimensionally dead in the current engine. The first cycle run in the current world (\texttt{experiments/exp-07-expert-iteration.md}) re-established the distillation baseline at a higher teacher budget and then attempted the obvious next step --- closing the AlphaZero-style loop \citep{anthony2017exit,silver2018alphazero}. Both halves of that attempt were pre-registered, and both were refuted.
 
 \paragraph{The round-0 student.} Behavior cloning on 600 \searchn{256} self-play games (80{,}568 decisions, hard arg\-max targets) yields \texttt{student\_r0}: $87.0\%\ci{83.3}{89.9}$ against random over 400 seat-balanced games, at estimated ladder strength $N\approx7$ (it splits with \searchn{8}, $44.5\%\ci{37.8}{51.4}$), for roughly \$2.90 of data generation and training. A temperature sweep over soft targets $p\propto\exp(\text{score}/\tau)$ found strength \emph{monotone in target sharpness}: hard argmax won ($88.0\%$ on the quick evaluation), $\tau=0.02$ scored $84.0\%$, $\tau=0.05$ scored $80.0\%$, and larger $\tau$ was clearly worse. At 256 simulations per action the argmax is already low-noise; softening mostly re-injects the teacher's rollout noise floor.
 
@@ -383,7 +383,7 @@ S4 race-vs-block & keep the blockers back & $\mathbf{0.04}$ & $0.02$ & $0.01$ & 
 S5 hold-up-quench & hold mana, counter the threat & $\mathbf{0.14}$ & $0.01$ & $0.08$ & $0.03$ \\
 \bottomrule
 \end{tabular}
-\caption{Correct-line rate, 100 runs per cell; Wilson intervals in \texttt{reports/exp-09-control-competency.md}. Bold marks scenarios where uniform random beats every search strength. No agent exceeds $0.39$ anywhere, and the $N{=}256$ vs.\ $N{=}16$ difference is at most $0.02$ on every scenario.}
+\caption{Correct-line rate, 100 runs per cell; Wilson intervals in \texttt{experiments/exp-09-control-competency.md}. Bold marks scenarios where uniform random beats every search strength. No agent exceeds $0.39$ anywhere, and the $N{=}256$ vs.\ $N{=}16$ difference is at most $0.02$ on every scenario.}
 \label{tab:competency}
 \end{table}
 
@@ -523,7 +523,7 @@ The repository contains the engine, the learner, the search player, the distilla
 \item \texttt{managym/} --- the Rust engine, its 162 rules-cited tests, and the Scryfall conformance tripwire. \texttt{cargo test}.
 \item \texttt{manabot/} --- Gymnasium wrapper, PPO, \texttt{FlatMCPlayer}, the batched inference driver, distillation.
 \item \texttt{manabot/verify/} --- the seat-balanced evaluation harness and the control-competency suite (\texttt{competency.py}). Use these; do not write your own.
-\item \texttt{reports/} --- one report per experimental cycle; checked-in raw JSON is included for the search, distillation, shaping, expert-iteration, matchup, and competency evaluations.
+\item \texttt{experiments/} --- one report per experimental cycle; checked-in raw JSON is included for the search, distillation, shaping, expert-iteration, matchup, and competency evaluations.
 \item \texttt{docs/rules\_coverage.yaml} --- machine-tracked scope. If your card needs a rule not listed here, it is Challenge \ref{ch:rules}.
 \end{itemize}
 
@@ -535,7 +535,7 @@ We set out to train an agent to play \textit{Magic: The Gathering}, and built an
 
 On the interactive mirror, the cheapest search reaches $91.7\%$ against random, while the best learned-from-scratch point estimate is $75.5\%$; the strongest learned policy overall is distilled from search ($87.0\%$, ladder $N\approx7$), and the one attempt to iterate that recipe degraded it. Meanwhile the search family that anchors the ladder fails all five control-competency scenarios --- uniform random beats it on three --- so the platform now measures a second axis, behavior, on which no current agent scores at all. This is a local baseline, not a verdict on learning. It defines the next experiments: stronger opponents, history-conditioned beliefs, information-set planning judged by the competency suite, zero-shot card transfer, and a broader rules substrate. The instrument is usable; the measurements reveal how much remains.
 
-\paragraph{Reproducibility.} All experimental cycles have reports under \texttt{reports/}; checked-in JSON under \texttt{reports/data/} covers the search, distillation, shaping, expert-iteration, two-deck-matchup, and competency evaluations, while earlier reports give provenance and reproduction commands. Provenance commits: \texttt{e38f20b} (cost basis), \texttt{b884038} (decision profile), \texttt{f019e7a} (seat-balanced baselines). Win-rate intervals are Wilson $95\%$.
+\paragraph{Reproducibility.} All experimental cycles have reports under \texttt{experiments/}; checked-in JSON under \texttt{experiments/data/} covers the search, distillation, shaping, expert-iteration, two-deck-matchup, and competency evaluations, while earlier reports give provenance and reproduction commands. Provenance commits: \texttt{e38f20b} (cost basis), \texttt{b884038} (decision profile), \texttt{f019e7a} (seat-balanced baselines). Win-rate intervals are Wilson $95\%$.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}

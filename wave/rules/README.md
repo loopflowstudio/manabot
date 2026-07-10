@@ -1,6 +1,8 @@
 # Rules
 
-> **Status: active with a destination** (updated 2026-07-09). The destination
+> **Status: parked** (2026-07-10, owner call — parallelizable but not now;
+> resumes when an experiment pulls a capability or the owner unparks it).
+> Destination unchanged (updated 2026-07-09): The destination
 > pool is the owner's cube — https://cubecobra.com/cube/list/elemental — and
 > the path is capability-ordered:
 >

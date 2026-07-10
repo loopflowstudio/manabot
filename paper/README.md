@@ -1,5 +1,13 @@
 # The manabot paper
 
+> **Charter change (2026-07-10):** this document serves *internal
+> understanding first*. Its job is that the owner can state, for every result:
+> what was measured, why the mechanism explanation is believed, and what would
+> change our mind. Publication is a later fork of a subset, not the goal;
+> polish beyond that bar is explicitly out of scope. Sections may be terse.
+> The per-cycle integration required by the main wave's Pacing rule happens
+> here.
+
 A standing snapshot of the paper we would write today: manabot as a **research
 platform** for *Magic: The Gathering*, with calibrated baselines and a stated set
 of open challenge areas for others to build on. Sections are expected to be thin;
@@ -62,7 +70,7 @@ make watch              # rebuild on save
 
 ## Where the numbers come from
 
-Every figure traces to a report in `reports/`, which is the source of truth. When
+Every figure traces to a report in `experiments/`, which is the source of truth. When
 a report lands, update the paper.
 
 | Paper section | Report |
@@ -95,7 +103,7 @@ successes/trials and checked to reproduce that bound.
   `bc-fifth` policies. Those matchups are cheap and would sharpen Table 2.
 - ~~The 4×Ancestral-Recall deck-quality probe (23.7% → 78.25%) cited in the
   calibration section has no standalone report yet~~ — resolved:
-  `reports/exp-08b-ancestral-dose.md` (single-seed-batch caveat noted there).
+  `experiments/exp-08b-ancestral-dose.md` (single-seed-batch caveat noted there).
 - There is no controlled comparison with the contemporaneous MTG-Causal-RL
   benchmark; the paper currently positions the two systems from their reported
   interfaces and scopes.
