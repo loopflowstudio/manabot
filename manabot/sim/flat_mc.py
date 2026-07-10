@@ -130,6 +130,9 @@ class FlatMCPlayer:
         self._seed = seed
         self._calls = 0
         self.stats = SearchStats()
+        #: Raw per-action playout scores from the most recent act() call
+        #: (win-probability estimates in [0, 1], engine action order).
+        self.last_scores: np.ndarray | None = None
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         del obs  # search reads the raw engine state, not the encoding
@@ -148,6 +151,7 @@ class FlatMCPlayer:
         self.stats.simulations += int(simulations)
         self.stats.cap_hits += int(cap_hits)
         self.stats.decision_seconds.append(elapsed)
+        self.last_scores = np.asarray(scores, dtype=np.float32)
         return int(np.argmax(scores))
 
 
@@ -205,6 +209,8 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
 
     Specs:
         {"kind": "search", "sims": 64, "max_steps": 2000}
+        {"kind": "policy_search", "sims": 16, "checkpoint": "/abs/path.pt",
+         "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
         {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
     Returns (player, observation_space_or_None). Checkpoint players carry the
@@ -224,6 +230,29 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
             ),
             None,
         )
+    if kind == "policy_search":
+        from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
+
+        agent, obs_space = load_checkpoint_agent(spec["checkpoint"])
+        sampler = BatchedSampler(
+            agent,
+            epsilon=float(spec.get("epsilon", 0.1)),
+            temperature=float(spec.get("temperature", 1.0)),
+            seed=seed,
+            device=str(spec.get("device", "cpu")),
+        )
+        policy_plies = spec.get("policy_plies")
+        return (
+            PolicyRolloutMCPlayer(
+                int(spec["sims"]),
+                sampler,
+                rollouts_per_world=int(spec.get("rollouts_per_world", 1)),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                policy_plies=int(policy_plies) if policy_plies is not None else None,
+                seed=seed,
+            ),
+            obs_space,
+        )
     if kind == "random":
         return RandomMatchupPlayer(seed=seed), None
     if kind == "checkpoint":
@@ -239,6 +268,8 @@ def spec_name(spec: dict[str, Any]) -> str:
     kind = spec["kind"]
     if kind == "search":
         return f"search-{spec['sims']}"
+    if kind == "policy_search":
+        return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
         return spec.get("name", spec["path"])
     return kind

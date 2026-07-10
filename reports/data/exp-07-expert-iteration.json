@@ -1,0 +1,474 @@
+{
+  "r0": {
+    "vs_random": {
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 348.0,
+        "win_rate": 0.87,
+        "win_ci_lower": 0.8334914191139058,
+        "win_ci_upper": 0.8994692268423305,
+        "mean_steps": 141.735,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 173.0,
+        "win_rate_on_play": 0.865,
+        "win_ci_lower_on_play": 0.8107074954488286,
+        "win_ci_upper_on_play": 0.9055349202307972,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 175.0,
+        "win_rate_on_draw": 0.875,
+        "win_ci_lower_on_draw": 0.8219846471534161,
+        "win_ci_upper_on_draw": 0.9138808484078432
+      },
+      "wall_seconds": 8.83356704202015
+    },
+    "ladder": {
+      "search-8": {
+        "hero": "r0",
+        "villain": "search-8",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r0.pt",
+          "name": "r0",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 8
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 89.0,
+          "win_rate": 0.445,
+          "win_ci_lower": 0.3778048169746545,
+          "win_ci_upper": 0.5142682436763608,
+          "mean_steps": 131.81,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 50.0,
+          "win_rate_on_play": 0.5,
+          "win_ci_lower_on_play": 0.40382982859014716,
+          "win_ci_upper_on_play": 0.5961701714098528,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 39.0,
+          "win_rate_on_draw": 0.39,
+          "win_ci_lower_on_draw": 0.300167219319702,
+          "win_ci_upper_on_draw": 0.4879716383250184
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 12407.0,
+          "seconds": 115.62421241763514,
+          "simulations": 279808.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.009319272379917396,
+          "median_seconds_per_decision": 0.006108416942879558,
+          "mean_sims_per_decision": 22.552430079793666,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 46.304526292020455,
+        "engine_seconds": 140.5304192090407
+      },
+      "search-16": {
+        "hero": "r0",
+        "villain": "search-16",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r0.pt",
+          "name": "r0",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 16
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 74.0,
+          "win_rate": 0.37,
+          "win_ci_lower": 0.3061249750375242,
+          "win_ci_upper": 0.4387749865012393,
+          "mean_steps": 138.295,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 38.0,
+          "win_rate_on_play": 0.38,
+          "win_ci_lower_on_play": 0.29097449200134384,
+          "win_ci_upper_on_play": 0.47790426179289663,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 36.0,
+          "win_rate_on_draw": 0.36,
+          "win_ci_lower_on_draw": 0.2727107459049014,
+          "win_ci_upper_on_draw": 0.4576478001883791
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 13412.0,
+          "seconds": 196.1741911318386,
+          "simulations": 623136.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.014626766413050895,
+          "median_seconds_per_decision": 0.01106510404497385,
+          "mean_sims_per_decision": 46.46107963018193,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 73.43722191592678,
+        "engine_seconds": 216.36323966702912
+      },
+      "search-32": {
+        "hero": "r0",
+        "villain": "search-32",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r0.pt",
+          "name": "r0",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 32
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 67.0,
+          "win_rate": 0.335,
+          "win_ci_lower": 0.27323980968742656,
+          "win_ci_upper": 0.4029793722656195,
+          "mean_steps": 133.475,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 16.0,
+          "win_rate_on_play": 0.16,
+          "win_ci_lower_on_play": 0.10095202349473717,
+          "win_ci_upper_on_play": 0.24420444558894416,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 51.0,
+          "win_rate_on_draw": 0.51,
+          "win_ci_lower_on_draw": 0.41347840477434145,
+          "win_ci_upper_on_draw": 0.6057816990761385
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 12888.0,
+          "seconds": 340.3513956058305,
+          "simulations": 1171840.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.026408395065629305,
+          "median_seconds_per_decision": 0.020871333486866206,
+          "mean_sims_per_decision": 90.92489137181875,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 109.83571091596968,
+        "engine_seconds": 359.1513577500591
+      },
+      "search-64": {
+        "hero": "r0",
+        "villain": "search-64",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r0.pt",
+          "name": "r0",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 64
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 41.0,
+          "win_rate": 0.205,
+          "win_ci_lower": 0.15486094831106376,
+          "win_ci_upper": 0.2662581951807456,
+          "mean_steps": 134.43,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 21.0,
+          "win_rate_on_play": 0.21,
+          "win_ci_lower_on_play": 0.14165549531645785,
+          "win_ci_upper_on_play": 0.2998014930196232,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 20.0,
+          "win_rate_on_draw": 0.2,
+          "win_ci_lower_on_draw": 0.1333659225590988,
+          "win_ci_upper_on_draw": 0.28883096192650237
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 13567.0,
+          "seconds": 739.3864916083403,
+          "simulations": 2453184.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.0544988937575249,
+          "median_seconds_per_decision": 0.04513237497303635,
+          "mean_sims_per_decision": 180.81993071423307,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 211.63209070893936,
+        "engine_seconds": 758.1624072490958
+      }
+    },
+    "profile": {
+      "num_games": 400.0,
+      "win_rate": 0.8825,
+      "win_rate_on_play": 0.965,
+      "win_rate_on_draw": 0.8,
+      "cast_when_able": 0.511551440685299,
+      "could_spell": 11557.0,
+      "spell_casts": 5912.0,
+      "passed_when_able": 0.3765990438041091,
+      "could_pass": 15478.0,
+      "pass_count": 5829.0,
+      "attacked_when_able": 1.0,
+      "landed_when_able": 0.4858926017422962,
+      "mean_steps": 120.0175
+    }
+  },
+  "r1": {
+    "vs_random": {
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 280.0,
+        "win_rate": 0.7,
+        "win_ci_lower": 0.6533618692890616,
+        "win_ci_upper": 0.7428330744710661,
+        "mean_steps": 145.915,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 140.0,
+        "win_rate_on_play": 0.7,
+        "win_ci_lower_on_play": 0.6332080400667355,
+        "win_ci_upper_on_play": 0.7592535575659362,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 140.0,
+        "win_rate_on_draw": 0.7,
+        "win_ci_lower_on_draw": 0.6332080400667355,
+        "win_ci_upper_on_draw": 0.7592535575659362
+      },
+      "wall_seconds": 8.124675791012123
+    },
+    "ladder": {
+      "search-8": {
+        "hero": "r1",
+        "villain": "search-8",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r1.pt",
+          "name": "r1",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 8
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 56.0,
+          "win_rate": 0.28,
+          "win_ci_lower": 0.22236792842635128,
+          "win_ci_upper": 0.3459243141777101,
+          "mean_steps": 132.105,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 36.0,
+          "win_rate_on_play": 0.36,
+          "win_ci_lower_on_play": 0.2727107459049014,
+          "win_ci_upper_on_play": 0.4576478001883791,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 20.0,
+          "win_rate_on_draw": 0.2,
+          "win_ci_lower_on_draw": 0.1333659225590988,
+          "win_ci_upper_on_draw": 0.28883096192650237
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 13205.0,
+          "seconds": 114.85703961853869,
+          "simulations": 288312.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.00869799618466783,
+          "median_seconds_per_decision": 0.006933707976713777,
+          "mean_sims_per_decision": 21.833547898523285,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 43.75812654104084,
+        "engine_seconds": 137.93966470693704
+      },
+      "search-16": {
+        "hero": "r1",
+        "villain": "search-16",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r1.pt",
+          "name": "r1",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 16
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 29.0,
+          "win_rate": 0.145,
+          "win_ci_lower": 0.10289285135306411,
+          "win_ci_upper": 0.2004878128489437,
+          "mean_steps": 121.98,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 6.0,
+          "win_rate_on_play": 0.06,
+          "win_ci_lower_on_play": 0.027785745266656618,
+          "win_ci_upper_on_play": 0.12476968531222504,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 23.0,
+          "win_rate_on_draw": 0.23,
+          "win_ci_lower_on_draw": 0.15843154746876406,
+          "win_ci_upper_on_draw": 0.321545648568277
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 12647.0,
+          "seconds": 230.65148831228726,
+          "simulations": 588496.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.018237644367224422,
+          "median_seconds_per_decision": 0.014700041967444122,
+          "mean_sims_per_decision": 46.532458290503676,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 85.27592829195783,
+        "engine_seconds": 251.82065808400512
+      },
+      "search-32": {
+        "hero": "r1",
+        "villain": "search-32",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r1.pt",
+          "name": "r1",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 32
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 34.0,
+          "win_rate": 0.17,
+          "win_ci_lower": 0.12427835351105657,
+          "win_ci_upper": 0.22816001039503528,
+          "mean_steps": 119.185,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 20.0,
+          "win_rate_on_play": 0.2,
+          "win_ci_lower_on_play": 0.1333659225590988,
+          "win_ci_upper_on_play": 0.28883096192650237,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 14.0,
+          "win_rate_on_draw": 0.14,
+          "win_ci_lower_on_draw": 0.08526265754464904,
+          "win_ci_upper_on_draw": 0.2213736038380724
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 12348.0,
+          "seconds": 499.0661436164519,
+          "simulations": 1157568.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.040416759282187555,
+          "median_seconds_per_decision": 0.030451292055658996,
+          "mean_sims_per_decision": 93.74538386783284,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 168.367051665904,
+        "engine_seconds": 522.0649754580809
+      },
+      "search-64": {
+        "hero": "r1",
+        "villain": "search-64",
+        "hero_spec": {
+          "kind": "checkpoint",
+          "path": ".runs/exp07/student_r1.pt",
+          "name": "r1",
+          "deterministic": false
+        },
+        "villain_spec": {
+          "kind": "search",
+          "sims": 64
+        },
+        "metrics": {
+          "num_games": 200.0,
+          "wins": 21.0,
+          "win_rate": 0.105,
+          "win_ci_lower": 0.06970696246193729,
+          "win_ci_upper": 0.15518138221353622,
+          "mean_steps": 114.575,
+          "draws_or_caps": 0.0,
+          "games_on_play": 100.0,
+          "wins_on_play": 12.0,
+          "win_rate_on_play": 0.12,
+          "win_ci_lower_on_play": 0.06999337365267776,
+          "win_ci_upper_on_play": 0.1981226800290837,
+          "games_on_draw": 100.0,
+          "wins_on_draw": 9.0,
+          "win_rate_on_draw": 0.09,
+          "win_ci_lower_on_draw": 0.048071995163884884,
+          "win_ci_upper_on_draw": 0.16226374696643667
+        },
+        "hero_search": null,
+        "villain_search": {
+          "decisions": 12147.0,
+          "seconds": 845.2595327161252,
+          "simulations": 2315520.0,
+          "cap_hits": 0.0,
+          "mean_seconds_per_decision": 0.06958586751594018,
+          "median_seconds_per_decision": 0.05233058403246105,
+          "mean_sims_per_decision": 190.624845640899,
+          "cap_hit_rate": 0.0
+        },
+        "wall_seconds": 238.15318666608073,
+        "engine_seconds": 863.106790500111
+      }
+    },
+    "profile": {
+      "num_games": 400.0,
+      "win_rate": 0.6925,
+      "win_rate_on_play": 0.84,
+      "win_rate_on_draw": 0.545,
+      "cast_when_able": 0.6069585613760751,
+      "could_spell": 12790.0,
+      "spell_casts": 7763.0,
+      "passed_when_able": 0.2803780378037804,
+      "could_pass": 17776.0,
+      "pass_count": 4984.0,
+      "attacked_when_able": 1.0,
+      "landed_when_able": 0.5957824902262765,
+      "mean_steps": 152.625
+    },
+    "vs_r0": {
+      "metrics": {
+        "num_games": 400.0,
+        "wins": 103.0,
+        "win_rate": 0.2575,
+        "win_ci_lower": 0.2170975795094459,
+        "win_ci_upper": 0.3025160511813992,
+        "mean_steps": 147.75,
+        "draws_or_caps": 0.0,
+        "games_on_play": 200.0,
+        "wins_on_play": 45.0,
+        "win_rate_on_play": 0.225,
+        "win_ci_lower_on_play": 0.1726228378691562,
+        "win_ci_upper_on_play": 0.28774246538592035,
+        "games_on_draw": 200.0,
+        "wins_on_draw": 58.0,
+        "win_rate_on_draw": 0.29,
+        "win_ci_lower_on_draw": 0.23153926891257823,
+        "win_ci_upper_on_draw": 0.3563760535731166
+      },
+      "wall_seconds": 10.750115041038953
+    }
+  }
+}
