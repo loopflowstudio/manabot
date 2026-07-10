@@ -131,6 +131,37 @@ impl RolloutPool {
         self.slots.len()
     }
 
+    /// Index of the deciding player the pool scores for.
+    pub fn hero_index(&self) -> usize {
+        self.hero.0
+    }
+
+    /// Acting player index per slot (-1 for slots no longer active).
+    ///
+    /// Value-at-leaf search needs this: the encoded observation of an active
+    /// slot is from its acting player's perspective, so a hero-perspective
+    /// leaf value is V when the actor is the hero and 1-V otherwise.
+    pub fn acting_players(&self) -> Vec<i64> {
+        self.slots
+            .iter()
+            .map(|slot| {
+                if !slot.active {
+                    return -1;
+                }
+                slot.game
+                    .action_space()
+                    .and_then(|space| space.player)
+                    .map(|player| player.0 as i64)
+                    .unwrap_or(-1)
+            })
+            .collect()
+    }
+
+    /// Root action index per slot (slot layout is (world, action, rollout)).
+    pub fn root_actions(&self) -> Vec<usize> {
+        self.slots.iter().map(|slot| slot.root_action).collect()
+    }
+
     pub fn num_actions(&self) -> usize {
         self.num_actions
     }
@@ -273,7 +304,7 @@ mod tests {
                     ("Mountain".to_string(), 12usize),
                     ("Forest".to_string(), 12usize),
                     ("Llanowar Elves".to_string(), 18usize),
-                    ("Grey Ogre".to_string(), 18usize),
+                    ("Gray Ogre".to_string(), 18usize),
                 ]),
             ),
             PlayerConfig::new(
@@ -282,7 +313,7 @@ mod tests {
                     ("Mountain".to_string(), 12usize),
                     ("Forest".to_string(), 12usize),
                     ("Llanowar Elves".to_string(), 18usize),
-                    ("Grey Ogre".to_string(), 18usize),
+                    ("Gray Ogre".to_string(), 18usize),
                 ]),
             ),
         ];
