@@ -22,9 +22,9 @@ from . import trace as trace_store, villain as villain_module
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
-# Mirror of manabot.verify.util.INTERACTIVE_DECK (copied so the server does
-# not import torch at startup; tests assert the two stay in sync).
-DEFAULT_DECK = {
+# Mirrors of manabot.verify.util deck constants (copied so the server does
+# not import torch at startup; tests assert they stay in sync).
+INTERACTIVE_DECK = {
     "Island": 12,
     "Mountain": 12,
     "Grey Ogre": 6,
@@ -36,6 +36,58 @@ DEFAULT_DECK = {
     "Ancestral Recall": 3,
     "Pyroclasm": 3,
 }
+UR_LESSONS_DECK = {
+    "Island": 9,
+    "Mountain": 8,
+    "Tiger-Seal": 2,
+    "Otter-Penguin": 2,
+    "Fire Nation Cadets": 2,
+    "First-Time Flyer": 2,
+    "Forecasting Fortune Teller": 1,
+    "Dragonfly Swarm": 1,
+    "Firebending Lesson": 4,
+    "Igneous Inspiration": 2,
+    "Pop Quiz": 2,
+    "Divide by Zero": 2,
+    "It'll Quench Ya!": 2,
+    "Accumulate Wisdom": 2,
+}
+GW_ALLIES_DECK = {
+    "Plains": 9,
+    "Forest": 8,
+    "Water Tribe Rallier": 2,
+    "Invasion Reinforcements": 2,
+    "Compassionate Healer": 2,
+    "Earth Kingdom Jailer": 2,
+    "White Lotus Reinforcements": 2,
+    "Earth King's Lieutenant": 2,
+    "Kyoshi Warriors": 2,
+    "Badgermole Cub": 2,
+    "Suki, Kyoshi Warrior": 1,
+    "South Pole Voyager": 1,
+    "Allies at Last": 2,
+    "Yip Yip!": 1,
+    "Fancy Footwork": 2,
+}
+
+# Decks selectable by name over the wire (new_game.config hero_deck /
+# villain_deck may be one of these keys instead of a {card: count} object).
+NAMED_DECKS: dict[str, dict[str, int]] = {
+    "interactive": INTERACTIVE_DECK,
+    "ur_lessons": UR_LESSONS_DECK,
+    "gw_allies": GW_ALLIES_DECK,
+}
+DECK_DISPLAY_NAMES = {
+    "interactive": "Interactive",
+    "ur_lessons": "UR Lessons",
+    "gw_allies": "GW Allies",
+    "custom": "Custom",
+}
+# Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
+DEFAULT_HERO_DECK_NAME = "ur_lessons"
+DEFAULT_VILLAIN_DECK_NAME = "gw_allies"
+# Backwards-compatible alias (tests and older callers).
+DEFAULT_DECK = INTERACTIVE_DECK
 
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
@@ -400,11 +452,27 @@ def _parse_flag(data: dict[str, Any], key: str, default: bool) -> bool:
     return value
 
 
-def _normalize_deck(value: Any, fallback: dict[str, int]) -> dict[str, int]:
+def _normalize_deck(value: Any, fallback_name: str) -> tuple[dict[str, int], str]:
+    """Resolve a wire deck config to ``(deck, deck_name)``.
+
+    Accepts a named deck (one of NAMED_DECKS), a {card: count} object
+    (recorded as "custom"), or None (the named fallback).
+    """
     if value is None:
-        return dict(fallback)
+        return dict(NAMED_DECKS[fallback_name]), fallback_name
+    if isinstance(value, str):
+        if value not in NAMED_DECKS:
+            raise ValueError(
+                "Unknown deck name: "
+                + repr(value)
+                + ". Valid decks: "
+                + ", ".join(sorted(NAMED_DECKS))
+            )
+        return dict(NAMED_DECKS[value]), value
     if not isinstance(value, dict):
-        raise ValueError("Deck config must be an object of {card_name: count}.")
+        raise ValueError(
+            "Deck config must be a deck name or an object of {card_name: count}."
+        )
 
     deck: dict[str, int] = {}
     for card_name, count in value.items():
@@ -420,7 +488,7 @@ def _normalize_deck(value: Any, fallback: dict[str, int]) -> dict[str, int]:
             raise ValueError(f"Deck count for '{card_name}' must be non-negative.")
         deck[card_name] = normalized_count
 
-    return deck
+    return deck, "custom"
 
 
 def _parse_game_config(config: Any) -> GameConfig:
@@ -468,9 +536,18 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_checkpoint = checkpoint_value
         villain_deterministic = bool(data.get("villain_deterministic", False))
 
+    hero_deck, hero_deck_name = _normalize_deck(
+        data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
+    )
+    villain_deck, villain_deck_name = _normalize_deck(
+        data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
+    )
+
     return GameConfig(
-        hero_deck=_normalize_deck(data.get("hero_deck"), DEFAULT_DECK),
-        villain_deck=_normalize_deck(data.get("villain_deck"), DEFAULT_DECK),
+        hero_deck=hero_deck,
+        villain_deck=villain_deck,
+        hero_deck_name=hero_deck_name,
+        villain_deck_name=villain_deck_name,
         villain_type=villain_type,
         seed=seed,
         villain_sims=villain_sims,
@@ -490,6 +567,8 @@ class GameSession:
         self.villain_policy: VillainPolicy | None = None
         self.trace: Trace | None = None
         self.trace_id: str | None = None
+        # Display names for the current matchup, echoed on every payload.
+        self.deck_names: dict[str, str] | None = None
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
@@ -526,6 +605,10 @@ class GameSession:
         ]
         self.obs, _ = self.env.reset(player_configs)
 
+        self.deck_names = {
+            "hero": DECK_DISPLAY_NAMES.get(config.hero_deck_name, "Custom"),
+            "villain": DECK_DISPLAY_NAMES.get(config.villain_deck_name, "Custom"),
+        }
         self.trace = Trace(
             config=config,
             events=[],
@@ -768,6 +851,8 @@ class GameSession:
                 "winner": _winner_for_hero(self.obs),
                 "stops": self._stops_payload(),
             }
+            if self.deck_names:
+                payload["deck_names"] = dict(self.deck_names)
             if log:
                 payload["log"] = log
             if auto_passed:
@@ -780,6 +865,8 @@ class GameSession:
             "actions": describe_actions(self.obs),
             "stops": self._stops_payload(),
         }
+        if self.deck_names:
+            payload["deck_names"] = dict(self.deck_names)
         if log:
             payload["log"] = log
         if auto_passed:

@@ -204,6 +204,7 @@ class GameSocketController {
         message.log ?? [],
         message.stops,
         message.auto_passed ?? 0,
+        message.deck_names,
       );
       if (message.session_id && message.resume_token) {
         saveResumeCredentials({
@@ -223,6 +224,7 @@ class GameSocketController {
         message.log ?? [],
         message.stops,
         message.auto_passed ?? 0,
+        message.deck_names,
       );
       this.flushQueue();
       return;

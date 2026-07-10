@@ -96,9 +96,18 @@ export interface TraceConfig {
   villain_deck: Record<string, number>;
   villain_type: string;
   seed?: number | null;
+  hero_deck_name?: string;
+  villain_deck_name?: string;
   villain_sims?: number | null;
   villain_checkpoint?: string | null;
   villain_deterministic?: boolean;
+}
+
+// Display names for the current matchup, echoed by the server on every
+// observation/game_over payload.
+export interface DeckNames {
+  hero: string;
+  villain: string;
 }
 
 export interface TraceEvent {
@@ -144,6 +153,7 @@ export type ServerMessage =
       actions: ActionOption[];
       log?: string[];
       stops?: StopsConfig;
+      deck_names?: DeckNames;
       auto_passed?: number;
       session_id?: string;
       resume_token?: string;
@@ -154,6 +164,7 @@ export type ServerMessage =
       winner: number | null;
       log?: string[];
       stops?: StopsConfig;
+      deck_names?: DeckNames;
       auto_passed?: number;
     }
   | { type: 'error'; message: string };

@@ -1,8 +1,15 @@
+import {
+  loadStoredDeckSelection,
+  saveStoredDeckSelection,
+  type DeckChoice,
+  type DeckSelection,
+} from './decks';
 import { deriveObservationNotes } from './log';
 import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
 import type {
   ActionOption,
   ConnectionState,
+  DeckNames,
   GameLogEntry,
   Observation,
   OpponentConfig,
@@ -53,6 +60,12 @@ export class GameStore {
   opponentChoice = $state<OpponentChoice>('search-64');
   checkpointPath = $state('');
   checkpointDeterministic = $state(false);
+  // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
+  // localStorage and sent with new_game.
+  decks = $state<DeckSelection>(loadStoredDeckSelection());
+  // Display names for the live matchup, echoed by the server on every
+  // payload — what the game header renders.
+  deckNames = $state<DeckNames | null>(null);
   // Priority stops (MTGO-style auto-pass). Loaded from localStorage, sent
   // with new_game, and overwritten by the server's effective-config echo.
   stops = $state<StopsConfig>(loadStoredStops());
@@ -85,6 +98,14 @@ export class GameStore {
     this.checkpointDeterministic = next;
   }
 
+  setHeroDeck(next: DeckChoice): void {
+    this.updateDecks({ ...this.decks, hero: next });
+  }
+
+  setVillainDeck(next: DeckChoice): void {
+    this.updateDecks({ ...this.decks, villain: next });
+  }
+
   opponentConfig(): OpponentConfig {
     return buildOpponentConfig(
       this.opponentChoice,
@@ -96,6 +117,8 @@ export class GameStore {
   newGameConfig(): Record<string, unknown> {
     return {
       ...this.opponentConfig(),
+      hero_deck: this.decks.hero,
+      villain_deck: this.decks.villain,
       stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },
       stop_on_stack: this.stops.stop_on_stack,
       auto_pass: this.stops.auto_pass,
@@ -143,6 +166,7 @@ export class GameStore {
     log: string[] = [],
     stops?: StopsConfig,
     autoPassed = 0,
+    deckNames?: DeckNames,
   ): void {
     const previous = this.observation;
 
@@ -157,6 +181,7 @@ export class GameStore {
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
+    this.applyDeckNames(deckNames);
 
     if (sessionId) {
       this.sessionId = sessionId;
@@ -176,6 +201,7 @@ export class GameStore {
     log: string[] = [],
     stops?: StopsConfig,
     autoPassed = 0,
+    deckNames?: DeckNames,
   ): void {
     const previous = this.observation;
 
@@ -190,6 +216,7 @@ export class GameStore {
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
+    this.applyDeckNames(deckNames);
 
     this.appendLogLines('villain', log);
     this.appendAutoPassNote(autoPassed);
@@ -236,6 +263,17 @@ export class GameStore {
   private updateStops(next: StopsConfig): void {
     this.stops = next;
     saveStoredStops(next);
+  }
+
+  private updateDecks(next: DeckSelection): void {
+    this.decks = next;
+    saveStoredDeckSelection(next);
+  }
+
+  private applyDeckNames(deckNames: DeckNames | undefined): void {
+    if (deckNames) {
+      this.deckNames = deckNames;
+    }
   }
 
   private appendAutoPassNote(autoPassed: number): void {
