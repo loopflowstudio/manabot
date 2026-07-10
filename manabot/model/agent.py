@@ -9,7 +9,6 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
-from manabot.env.observation import ActionEnum
 from manabot.infra import AgentHypers
 from manabot.infra.log import getLogger
 
@@ -85,25 +84,35 @@ class Agent(nn.Module):
             layer_init(nn.Linear(embed_dim, 1)),
         )
         self.logger.info(f"Policy head: ({embed_dim} -> 1)")
-        self.logger.debug(
-            f"[INIT] Policy head first layer weight norm: {self.policy_head[0].weight.norm(2).item():.4f}"
-        )
         self.logger.info(f"Value head: ({embed_dim} -> 1)")
-        self.logger.debug(
-            f"[INIT] Value head first layer weight norm: {self.value_head[0].weight.norm(2).item():.4f}"
-        )
+
+        # Static ownership mask over the concatenated object sequence
+        # (agent player, opponent player, agent cards, opponent cards,
+        # agent permanents, opponent permanents).
+        is_agent_template = torch.cat(
+            [
+                torch.ones(1, dtype=torch.bool),
+                torch.zeros(1, dtype=torch.bool),
+                torch.ones(enc.cards_per_player, dtype=torch.bool),
+                torch.zeros(enc.cards_per_player, dtype=torch.bool),
+                torch.ones(enc.perms_per_player, dtype=torch.bool),
+                torch.zeros(enc.perms_per_player, dtype=torch.bool),
+            ]
+        ).unsqueeze(0)
+        self.register_buffer("_is_agent_template", is_agent_template)
+
+        # When True, forward() stashes raw pre-mask logits on
+        # self.last_raw_logits for offline diagnosis. Off by default: the
+        # detach/cpu copy is measurable in the inference hot path.
+        self.debug = False
+        self.last_raw_logits: Optional[torch.Tensor] = None
 
     def forward(
         self, obs: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        log = self.logger.getChild("forward")
         objects, is_agent, validity = self._gather_object_embeddings(obs)
-        log.debug(f"[SHAPES] Objects shape: {objects.shape}")
-        log.debug(f"[SHAPES] Is agent shape: {is_agent.shape}")
-        log.debug(f"[SHAPES] Validity shape: {validity.shape}")
 
         key_padding_mask = validity == 0
-        log.debug(f"[SHAPES] Key padding mask shape: {key_padding_mask.shape}")
 
         if self.hypers.attention_on:
             post_attention_objects = self.attention(
@@ -111,25 +120,15 @@ class Agent(nn.Module):
             )
         else:
             post_attention_objects = objects
-        log.debug(
-            f"[SHAPES] Post attention objects shape: {post_attention_objects.shape}"
-        )
 
         informed_actions = self._gather_informed_actions(obs, post_attention_objects)
-        log.debug(f"[SHAPES] Informed actions shape: {informed_actions.shape}")
 
         logits_before_mask = self.policy_head(informed_actions).squeeze(-1)
-        # Save raw logits for later debugging if needed (e.g., for attack logging)
-        self.last_raw_logits = logits_before_mask.detach().cpu()
-        log.debug(
-            f"[LOGITS] Raw logits: mean={logits_before_mask.mean().item():.4f}, std={logits_before_mask.std().item():.4f}"
-        )
+        if self.debug:
+            # Save raw logits for offline diagnosis (scripts/diagnose_*).
+            self.last_raw_logits = logits_before_mask.detach().cpu()
         logits = logits_before_mask.masked_fill(obs["actions_valid"] == 0, -1e8)
-        log.debug(
-            f"[LOGITS] Masked logits: mean={logits.mean().item():.4f}, std={logits.std().item():.4f}"
-        )
         value = self.value_head(post_attention_objects).squeeze(-1)
-        log.debug(f"[SHAPES] Value output shape: {value.shape}")
         return logits, value
 
     def _add_focus(
@@ -138,21 +137,10 @@ class Agent(nn.Module):
         post_attention_objects: torch.Tensor,
         action_focus: torch.Tensor,
     ) -> torch.Tensor:
-        log = self.logger.getChild("add_focus")
         B, max_actions, embed_dim = actions.shape
-        log.debug(
-            f"[SHAPES] Batch: {B}, max_actions: {max_actions}, embed_dim: {embed_dim}"
-        )
-        log.debug(
-            f"[SHAPES] post_attention_objects shape: {post_attention_objects.shape}"
-        )
-        log.debug(f"[SHAPES] action_focus shape: {action_focus.shape}")
-        log.debug(f"[ATTACK DEBUG] Raw action_focus indices: {action_focus.tolist()}")
 
         valid_mask = (action_focus != -1).unsqueeze(-1).float()
-        log.debug(f"[ATTACK DEBUG] Valid mask: {valid_mask.squeeze(-1).tolist()}")
-        action_focus = action_focus.clone()
-        action_focus[action_focus == -1] = 0
+        action_focus = action_focus.clamp(min=0)
 
         focus_indices = (
             action_focus.unsqueeze(-1)
@@ -164,40 +152,23 @@ class Agent(nn.Module):
         )
         focus_embeds = torch.gather(post_attention_focus_objects, 2, focus_indices)
         focus_embeds = focus_embeds * valid_mask
-        focus_flat = focus_embeds.view(B, max_actions, -1)
-        actions_with_focus = torch.cat([actions, focus_flat], dim=-1)
-        log.debug(f"[SHAPES] Actions with focus shape: {actions_with_focus.shape}")
-        return actions_with_focus
+        focus_flat = focus_embeds.reshape(B, max_actions, -1)
+        return torch.cat([actions, focus_flat], dim=-1)
 
     def _gather_informed_actions(
         self, obs: Dict[str, torch.Tensor], post_attention_objects: torch.Tensor
     ) -> torch.Tensor:
-        log = self.logger.getChild("gather_informed_actions")
         actions = self.action_embedding(obs["actions"][..., :-1])
         valid_mask = obs["actions_valid"].unsqueeze(-1)
         actions = actions * valid_mask
         actions_with_focus = self._add_focus(
             actions, post_attention_objects, obs["action_focus"]
         )
-        log.debug(f"[SHAPES] Action embedding output shape: {actions.shape}")
-        log.debug(f"[SHAPES] Actions with focus shape: {actions_with_focus.shape}")
         return self.action_layer(actions_with_focus)
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        log = self.logger.getChild("gather_object_embeddings")
-        device = obs["agent_player"].device
-        log.debug(f"[SHAPES] Device: {device}")
-        log.debug(f"[SHAPES] Obs['agent_player'] shape: {obs['agent_player'].shape}")
-        log.debug(
-            f"[SHAPES] Obs['opponent_player'] shape: {obs['opponent_player'].shape}"
-        )
-        log.debug(f"[SHAPES] Obs['agent_cards'] shape: {obs['agent_cards'].shape}")
-        log.debug(
-            f"[SHAPES] Obs['opponent_cards'] shape: {obs['opponent_cards'].shape}"
-        )
-
         enc_agent_player = self.player_embedding(obs["agent_player"])
         enc_opp_player = self.player_embedding(obs["opponent_player"])
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
@@ -216,53 +187,10 @@ class Agent(nn.Module):
             dim=1,
         )
 
-        agent_player_is_agent = torch.ones(
-            enc_agent_player.shape[0],
-            enc_agent_player.shape[1],
-            dtype=torch.bool,
-            device=device,
-        )
-        opponent_player_is_agent = torch.zeros(
-            enc_opp_player.shape[0],
-            enc_opp_player.shape[1],
-            dtype=torch.bool,
-            device=device,
-        )
-        agent_cards_is_agent = torch.ones(
-            enc_agent_cards.shape[0],
-            enc_agent_cards.shape[1],
-            dtype=torch.bool,
-            device=device,
-        )
-        opp_cards_is_agent = torch.zeros(
-            enc_opp_cards.shape[0],
-            enc_opp_cards.shape[1],
-            dtype=torch.bool,
-            device=device,
-        )
-        agent_perms_is_agent = torch.ones(
-            enc_agent_perms.shape[0],
-            enc_agent_perms.shape[1],
-            dtype=torch.bool,
-            device=device,
-        )
-        opp_perms_is_agent = torch.zeros(
-            enc_opp_perms.shape[0],
-            enc_opp_perms.shape[1],
-            dtype=torch.bool,
-            device=device,
-        )
-        is_agent = torch.cat(
-            [
-                agent_player_is_agent,
-                opponent_player_is_agent,
-                agent_cards_is_agent,
-                opp_cards_is_agent,
-                agent_perms_is_agent,
-                opp_perms_is_agent,
-            ],
-            dim=1,
-        )
+        # The object layout is static, so the ownership mask is a registered
+        # buffer expanded to the batch instead of six per-call allocations.
+        batch = objects.shape[0]
+        is_agent = self._is_agent_template.expand(batch, -1)
 
         validity = torch.cat(
             [
@@ -275,10 +203,6 @@ class Agent(nn.Module):
             ],
             dim=1,
         )
-
-        log.debug(f"[SHAPES] Combined objects shape: {objects.shape}")
-        log.debug(f"[SHAPES] Combined is_agent shape: {is_agent.shape}")
-        log.debug(f"[SHAPES] Combined validity shape: {validity.shape}")
         return objects, is_agent, validity
 
     def get_action_and_value(
@@ -287,25 +211,12 @@ class Agent(nn.Module):
         action: Optional[torch.Tensor] = None,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        log = self.logger.getChild("get_action_and_value")
         logits, value = self.forward(obs)
         if (obs["actions_valid"].sum(dim=-1) == 0).any():
             raise ValueError("No valid actions available")
         dist = torch.distributions.Categorical(logits=logits)
         if action is None:
             action = logits.argmax(dim=-1) if deterministic else dist.sample()
-        # For each sample, if the chosen action equals DECLARE_ATTACKER (attack), log extra details
-        for i, act in enumerate(action):
-            if act.item() == ActionEnum.DECLARE_ATTACKER:
-                log.debug(
-                    f"[ATTACK DEBUG] Sample {i} attack selected. "
-                    f"[ATTACK DEBUG] Raw logits: {self.last_raw_logits[i].tolist()}, "
-                    f"[ATTACK DEBUG] Masked logits: {logits[i].detach().cpu().tolist()}, "
-                    f"[ATTACK DEBUG] Valid actions: {obs['actions_valid'][i].detach().cpu().tolist()}"
-                )
-        log.debug(f"[SHAPES] Selected action shape: {action.shape}")
-        log.debug(f"[SHAPES] Log prob shape: {dist.log_prob(action).shape}")
-        log.debug(f"[SHAPES] Entropy shape: {dist.entropy().shape}")
         return action, dist.log_prob(action), dist.entropy(), value
 
     def get_value(self, obs: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -323,10 +234,7 @@ class MaxPoolingLayer(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        log = getLogger(__name__).getChild("MaxPoolingLayer")
-        log.debug(f"[SHAPES] Input to MaxPoolingLayer: {x.shape}")
         pooled, _ = torch.max(x, dim=self.dim)
-        log.debug(f"[SHAPES] Output of MaxPoolingLayer: {pooled.shape}")
         return pooled
 
 
@@ -349,11 +257,7 @@ class ProjectionLayer(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        log = getLogger(__name__).getChild("ProjectionLayer")
-        log.debug(f"[SHAPES] Input to ProjectionLayer: {x.shape}")
-        output = self.projection(x)
-        log.debug(f"[SHAPES] Output of ProjectionLayer: {output.shape}")
-        return output
+        return self.projection(x)
 
 
 class GameObjectAttention(nn.Module):
@@ -387,43 +291,23 @@ class GameObjectAttention(nn.Module):
         is_agent: torch.Tensor,
         key_padding_mask: torch.BoolTensor,
     ) -> torch.Tensor:
-        log = self.logger.getChild("forward")
-        log.debug(f"[SHAPES] Objects: {objects.shape}")
-        log.debug(f"[SHAPES] Is agent: {is_agent.shape}")
-        log.debug(f"[SHAPES] Key padding mask: {key_padding_mask.shape}")
-
         perspective_scale = torch.where(is_agent.unsqueeze(-1), 1.0, -1.0)
-        log.debug(f"[SHAPES] Perspective vector shape: {self.perspective.shape}")
         owned_objects = objects + perspective_scale * self.perspective
-        log.debug(f"[SHAPES] Owned objects shape: {owned_objects.shape}")
 
         attn_out, _ = self.mha(
             owned_objects,
             owned_objects,
             owned_objects,
             key_padding_mask=key_padding_mask,
+            need_weights=False,
         )
-        log.debug(f"[SHAPES] Attention output shape: {attn_out.shape}")
 
         x = self.norm1(owned_objects + attn_out)
-        log.debug(f"[SHAPES] After first normalization: {x.shape}")
-
         mlp_out = self.mlp(x)
-        log.debug(f"[SHAPES] MLP output shape: {mlp_out.shape}")
-
         post_norm = self.norm2(x + mlp_out)
-        log.debug(f"[SHAPES] After second normalization: {post_norm.shape}")
 
         mask = (~key_padding_mask).unsqueeze(-1).float()
-        post_norm = post_norm * mask  # broadcasting over last dim works correctly
-
-        # Use expanded mask for the assertion to ensure the masked positions are truly zero.
-        if torch.any(key_padding_mask):
-            if not torch.all(post_norm[mask.expand_as(post_norm) == 0] == 0):
-                self.logger.error(
-                    "Attention mask failure: nonzero values in masked positions"
-                )
-        return post_norm
+        return post_norm * mask
 
 
 def layer_init(
@@ -431,7 +315,4 @@ def layer_init(
 ) -> nn.Module:
     torch.nn.init.orthogonal_(layer.weight, gain)
     torch.nn.init.constant_(layer.bias, bias_const)
-    getLogger(__name__).debug(
-        f"[INIT] Initialized layer {layer} with weight norm {layer.weight.norm(2).item():.4f}"
-    )
     return layer
