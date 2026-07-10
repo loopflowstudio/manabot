@@ -39,7 +39,26 @@ P2/P3 already armed half its tripwire.
 
 ## Deviation from plan: the inherited artifacts were dimensionally dead
 
-TODO(worlds)
+The plan was to train V on exp-07's r0/r0b shards (600g search-256 self-play,
+80,568 decisions, winner+seat labels present) and judge against the inherited
+`student_r0.pt`. Neither is usable on current main: commit `6339bbd`
+("observations: Stage-3 agent visibility") landed after exp-07 forked and
+changed the observation encoding (player_dim 27→28, permanent_dim 7→11), so
+every exp-07 checkpoint and shard is dimensionally dead in the merged world —
+the same world-break exp-07 itself documented for pre-stage-2 artifacts.
+Feature re-mapping was rejected (inserted, not appended, features; silent
+misalignment risk in the experiment that decides the wave's direction).
+
+Fallback (anticipated in the cycle plan): regenerate everything in the
+stage-3 world —
+
+1. fresh search-256 (W=64 x R=4) self-play, 600 games, terminal outcome
+   recorded per decision (`.runs/exp10/dataset_v0`, 8 provenance-tagged
+   shards, 4 engine-only workers);
+2. a fresh BC student distilled from those shards with exp-07's selected
+   recipe (hard argmax targets, lr 1e-3, 10 epochs) as the policy baseline
+   (`student_bc.pt`) — this replaces "student_r0" in every judged matchup
+   below and gives V's encoder its warm start.
 
 ## Task 1 — Value head
 
