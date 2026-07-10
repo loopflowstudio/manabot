@@ -276,6 +276,7 @@ class PolicyRolloutMCPlayer:
         rollouts_per_world: int = 1,
         max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
         max_rollout_plies: int = 500,
+        policy_plies: int | None = None,
         seed: int = 0,
     ):
         if sims < 1:
@@ -286,6 +287,11 @@ class PolicyRolloutMCPlayer:
         self.sims = self.worlds * self.rollouts
         self.max_steps = max_steps
         self.max_rollout_plies = max_rollout_plies
+        #: Hybrid rollouts: the policy plays the first `policy_plies` plies
+        #: of every simulation (the part adjacent to the decision), then the
+        #: engine finishes uniformly-random to terminal at ~0.2 ms/playout
+        #: (RolloutPool.finish_random). None = policy to terminal.
+        self.policy_plies = policy_plies
         self._seed = seed
         self._calls = 0
         self.stats = PolicySearchStats()
@@ -313,6 +319,10 @@ class PolicyRolloutMCPlayer:
         plies = 0
         while active:
             plies += 1
+            if self.policy_plies is not None and plies > self.policy_plies:
+                # Hybrid: hand the tails to the engine's random playout.
+                pool.finish_random()
+                break
             rows = np.asarray(active, dtype=np.int64)
             if plies > self.max_rollout_plies:
                 # Safety valve: finish stragglers with random actions so a

@@ -216,6 +216,35 @@ impl RolloutPool {
         Ok(still_active)
     }
 
+    /// Finish every still-active slot with uniformly-random play to
+    /// terminal, entirely engine-side (no observation encoding). Used for
+    /// hybrid rollouts: the policy plays the first K plies, the random tail
+    /// costs ~0.2 ms/playout. Respects the per-slot step budget; slots that
+    /// exhaust it count as cap hits and score 0.5.
+    pub fn finish_random(&mut self) -> Result<usize, AgentError> {
+        let mut finished = 0usize;
+        for slot in self.slots.iter_mut() {
+            if !slot.active {
+                continue;
+            }
+            let remaining = self.max_steps.saturating_sub(slot.steps).max(1);
+            let mut hit_cap = false;
+            let outcome = slot.game.random_playout(remaining, Some(&mut hit_cap))?;
+            if hit_cap {
+                self.cap_hits += 1;
+            }
+            self.totals[slot.root_action] += match outcome {
+                Some(winner) if winner == self.hero.0 => 1.0,
+                Some(_) => 0.0,
+                None => 0.5,
+            };
+            slot.active = false;
+            self.active_count -= 1;
+            finished += 1;
+        }
+        Ok(finished)
+    }
+
     /// Mean playout score per root action, plus (simulations, cap_hits).
     /// Valid once `active_count() == 0`; callable earlier for debugging
     /// (unfinished slots simply have not contributed yet).

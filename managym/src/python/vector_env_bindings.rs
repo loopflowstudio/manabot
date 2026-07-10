@@ -438,6 +438,13 @@ impl PyRolloutPool {
         })
     }
 
+    /// Finish all still-active slots with engine-side random play to
+    /// terminal (hybrid rollouts). Returns the number of slots finished.
+    fn finish_random(&mut self, py: Python<'_>) -> PyResult<usize> {
+        let inner = &mut self.inner;
+        py.allow_threads(|| inner.finish_random().map_err(map_agent_err))
+    }
+
     /// (scores, simulations, cap_hits) — mean playout score per root action.
     fn scores(&self) -> (Vec<f64>, u64, u64) {
         self.inner.scores()

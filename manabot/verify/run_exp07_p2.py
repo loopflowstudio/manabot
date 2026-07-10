@@ -96,6 +96,13 @@ def main() -> None:
     parser.add_argument("--device", type=str, default="mps")
     parser.add_argument("--epsilon", type=float, default=0.1)
     parser.add_argument(
+        "--policy-plies",
+        type=int,
+        default=None,
+        help="hybrid rollouts: policy plays this many plies, engine random-"
+        "finishes the tail (None = policy to terminal)",
+    )
+    parser.add_argument(
         "--equal-wallclock-sims",
         type=int,
         default=None,
@@ -120,6 +127,7 @@ def main() -> None:
         "checkpoint": args.student,
         "device": args.device,
         "epsilon": args.epsilon,
+        "policy_plies": args.policy_plies,
         "name": f"psearch-{args.sims}",
     }
 

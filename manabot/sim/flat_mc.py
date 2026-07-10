@@ -225,12 +225,14 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
             seed=seed,
             device=str(spec.get("device", "cpu")),
         )
+        policy_plies = spec.get("policy_plies")
         return (
             PolicyRolloutMCPlayer(
                 int(spec["sims"]),
                 sampler,
                 rollouts_per_world=int(spec.get("rollouts_per_world", 1)),
                 max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                policy_plies=int(policy_plies) if policy_plies is not None else None,
                 seed=seed,
             ),
             obs_space,
