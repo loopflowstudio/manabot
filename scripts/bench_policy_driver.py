@@ -6,7 +6,7 @@ Net-in-loop throughput of the batched rollout driver (exp-07, wave goal 1).
 Every surfaced decision on K parallel streams is answered by the policy net
 (both seats), so obs/sec here is directly comparable to the historical
 inference-on numbers from scripts/bench_breakdown.py (2.0k SPS at 16 envs,
-reports/sps-closeout.md).
+experiments/sps-closeout.md).
 
 Usage:
     python scripts/bench_policy_driver.py --streams 256 --steps 200 --device mps

@@ -1,6 +1,6 @@
 """Flat determinized Monte Carlo player and seat-balanced matchup evaluation.
 
-The searcher (exp-02, wave/search C3) runs entirely on engine throughput: at
+The searcher (exp-02, wave/intelligence C3) runs entirely on engine throughput: at
 each of its decision points it asks the Rust engine (managym.Env.flat_mc_scores)
 to evaluate every legal action by W determinized worlds x R uniformly-random
 playouts per action, then plays the argmax. No network, no training.
