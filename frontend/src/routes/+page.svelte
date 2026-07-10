@@ -212,6 +212,7 @@
       <div class="flex flex-col gap-4">
         <ActionPanel
           actions={filteredActions}
+          actionSpaceKind={gameStore.actionSpaceKind}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedActionIndexes}
           disabled={gameStore.gameOver}

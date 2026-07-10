@@ -205,6 +205,7 @@ class GameSocketController {
         message.stops,
         message.auto_passed ?? 0,
         message.deck_names,
+        message.action_space ?? '',
       );
       if (message.session_id && message.resume_token) {
         saveResumeCredentials({

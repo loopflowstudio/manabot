@@ -44,9 +44,24 @@ export function buildOpponentConfig(
   return { villain_type: 'search', villain_sims: sims };
 }
 
+// Decision prompts for the non-priority action-space kinds (mid-resolution
+// choices surfaced by the engine). Keys are ActionSpaceEnum names echoed by
+// the server in the observation payload's `action_space` field.
+export const DECISION_PROMPTS: Record<string, string> = {
+  SCRY: 'Scry — keep each card on top or put it on the bottom.',
+  LOOK_AND_SELECT: 'Look at the revealed cards — choose what to take.',
+  PAY_OR_NOT: 'Optional cost — pay it or decline.',
+  MODAL: 'Choose a mode.',
+  DISCARD_THEN_DRAW: 'Learn — discard a card to draw a card, or keep your hand.',
+  WATERBEND: 'Waterbend — tap permanents to help pay the cost.',
+  CHOOSE_TARGET: 'Choose a target.',
+};
+
 export class GameStore {
   observation = $state<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
+  // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
+  actionSpaceKind = $state<string>('');
   actionLog = $state<GameLogEntry[]>([]);
   gameOver = $state(false);
   winner = $state<number | null>(null);
@@ -167,12 +182,14 @@ export class GameStore {
     stops?: StopsConfig,
     autoPassed = 0,
     deckNames?: DeckNames,
+    actionSpaceKind = '',
   ): void {
     const previous = this.observation;
 
     this.updateSeq += 1;
     this.observation = observation;
     this.actions = actions;
+    this.actionSpaceKind = actionSpaceKind;
     this.gameOver = observation.game_over;
     this.winner = null;
     this.errorMessage = null;
@@ -208,6 +225,7 @@ export class GameStore {
     this.updateSeq += 1;
     this.observation = observation;
     this.actions = [];
+    this.actionSpaceKind = '';
     this.gameOver = true;
     this.winner = winner;
     this.errorMessage = null;
@@ -289,6 +307,7 @@ export class GameStore {
   private resetMatchState(): void {
     this.observation = null;
     this.actions = [];
+    this.actionSpaceKind = '';
     this.gameOver = false;
     this.winner = null;
     this.actionLog = [];

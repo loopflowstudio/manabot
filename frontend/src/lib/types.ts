@@ -151,6 +151,9 @@ export type ServerMessage =
       type: 'observation';
       data: Observation;
       actions: ActionOption[];
+      // ActionSpaceEnum name (PRIORITY, SCRY, PAY_OR_NOT, MODAL, ...) — what
+      // kind of decision the hero is being asked to make.
+      action_space?: string;
       log?: string[];
       stops?: StopsConfig;
       deck_names?: DeckNames;

@@ -15,7 +15,13 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 # Local imports
-from manabot.env.observation import ActionEnum, PhaseEnum, StepEnum, ZoneEnum
+from manabot.env.observation import (
+    ActionEnum,
+    ActionSpaceEnum,
+    PhaseEnum,
+    StepEnum,
+    ZoneEnum,
+)
 import managym
 
 from . import trace as trace_store, villain as villain_module
@@ -305,7 +311,11 @@ def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
     return names
 
 
-def _format_action(action: managym.Action, names: dict[int, str]) -> str:
+def _format_action(
+    action: managym.Action,
+    names: dict[int, str],
+    space_kind: str = "",
+) -> str:
     """Render a legal action in Magic terms with card names.
 
     Focus semantics (managym observation.rs action_focus):
@@ -314,6 +324,10 @@ def _format_action(action: managym.Action, names: dict[int, str]) -> str:
       DECLARE_BLOCKER:        [blocker_permanent_id, attacker_permanent_id?]
                               (one entry means "this creature does not block")
       CHOOSE_TARGET:          [player_id or permanent_id]
+      SCRY_* / SELECT_CARD:   [card_id] (library cards revealed by the
+                              pending decision are in the observation)
+      TAP_FOR_COST:           [permanent_id]
+      DECLINE/PAY/MODE:       [resolving or cast card_id]
       PASS_PRIORITY:          []
     """
     action_name = _enum_name(ActionEnum, action.action_type)
@@ -334,6 +348,26 @@ def _format_action(action: managym.Action, names: dict[int, str]) -> str:
         return f"{first}: do not block"
     if action_name == "CHOOSE_TARGET" and first:
         return f"Target {first}"
+    # Mid-resolution decision actions (scry / look-and-select / learn /
+    # pay-or-not / modal / waterbend) in Magic terms.
+    if action_name == "SCRY_KEEP" and first:
+        return f"Keep {first} on top"
+    if action_name == "SCRY_BOTTOM" and first:
+        return f"Put {first} on the bottom"
+    if action_name == "SELECT_CARD" and first:
+        if space_kind == "DISCARD_THEN_DRAW":
+            return f"Discard {first}, then draw a card"
+        return f"Put {first} into your hand"
+    if action_name == "DECLINE_CHOICE":
+        if space_kind == "DISCARD_THEN_DRAW":
+            return "Keep your hand (do not discard)"
+        return "Decline"
+    if action_name == "PAY_COST":
+        return f"Pay the cost ({first})" if first else "Pay the cost"
+    if action_name == "CHOOSE_MODE":
+        return f"Choose a mode ({first})" if first else "Choose a mode"
+    if action_name == "TAP_FOR_COST" and first:
+        return f"Tap {first} to help pay"
 
     label = ACTION_LABELS.get(action_name, action_name)
     if first:
@@ -344,6 +378,7 @@ def _format_action(action: managym.Action, names: dict[int, str]) -> str:
 def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     names = _build_id_to_name(obs)
+    space_kind = _enum_name(ActionSpaceEnum, int(obs.action_space.action_space_type))
     for index, action in enumerate(obs.action_space.actions):
         focus = [int(value) for value in action.focus]
         results.append(
@@ -351,7 +386,7 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
                 "index": index,
                 "type": _enum_name(ActionEnum, action.action_type),
                 "focus": focus,
-                "description": _format_action(action, names),
+                "description": _format_action(action, names, space_kind),
             }
         )
     return results
@@ -863,6 +898,9 @@ class GameSession:
             "type": "observation",
             "data": data,
             "actions": describe_actions(self.obs),
+            "action_space": _enum_name(
+                ActionSpaceEnum, int(self.obs.action_space.action_space_type)
+            ),
             "stops": self._stops_payload(),
         }
         if self.deck_names:
