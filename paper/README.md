@@ -93,9 +93,9 @@ successes/trials and checked to reproduce that bound.
   ladder's pilot now provably fails the competency suite.
 - Ladder strength is **unmeasured** for the terminal-only, potential-Φ, and
   `bc-fifth` policies. Those matchups are cheap and would sharpen Table 2.
-- The 4×Ancestral-Recall deck-quality probe (23.7% → 78.25%) cited in the
-  calibration section has no standalone report yet; it needs one to satisfy
-  the every-number-traces rule.
+- ~~The 4×Ancestral-Recall deck-quality probe (23.7% → 78.25%) cited in the
+  calibration section has no standalone report yet~~ — resolved:
+  `reports/exp-08b-ancestral-dose.md` (single-seed-batch caveat noted there).
 - There is no controlled comparison with the contemporaneous MTG-Causal-RL
   benchmark; the paper currently positions the two systems from their reported
   interfaces and scopes.
