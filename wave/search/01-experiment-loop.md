@@ -195,6 +195,22 @@ stronger search. Each iteration adds a chart point. The goal-4 gate
 (search-with-V beats V-greedy) sits between C5 and any value-guided search.
 Ladder strength and the exploitability check ride every iteration.
 
+### C7 — Expert iteration lands in the new world
+
+**Q:** Does one full crank of the closed loop (distill → student becomes
+rollout policy → stronger teacher → re-distill) climb the ladder — and does
+batched inference finally unblock it?
+
+First cycle on the post-stage-2 world (CARD_DIM 37; all prior checkpoints
+dimensionally dead). Pre-registered predictions (verbatim in
+`reports/exp-07-expert-iteration.md`): P1 batched inference ≥10x (2k → ≥20k
+obs/sec); P2 policy-rollout search beats random-rollout search at equal
+wall-clock (>55%); P3 the R1 student beats the R0 student head-to-head
+(>55%) and places ≥ N=16.
+
+**RESULT (2026-07-09):** see `reports/exp-07-expert-iteration.md`.
+(Placeholder — filled at cycle close.)
+
 ## Protocol amendments
 
 Amendments are allowed; silent amendments are not. Each is dated and lands

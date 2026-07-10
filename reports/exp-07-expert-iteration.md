@@ -126,6 +126,62 @@ The 400-game vs-random matchup ran in **9 seconds** on the batched driver
 (historically ~10 minutes of process-pool time) — task 1 paying rent
 immediately.
 
+## Task 2 — Policy rollouts inside search (P2)
+
+### Mechanism
+
+`Env.rollout_pool(worlds, rollouts, seed, max_steps)` (Rust) clones the
+current decision into worlds x rollouts simulations per legal action —
+worlds determinized from the deciding player and shared across actions
+(common random numbers), root actions pre-applied. `encode_active()` /
+`step_active(actions)` expose every still-running simulation's encoded
+observation in caller-owned buffers, so one batched net forward picks all
+rollout actions per ply (`PolicyRolloutMCPlayer`); the sampler plays *both*
+seats of the determinized worlds, ε-greedy mixed with random (ε=0.1).
+Scoring matches `flat_mc_scores` exactly (1/0/0.5, step cap).
+
+**Hybrid rollouts** (`policy_plies=K`): the policy plays the first K plies
+of every simulation — the part adjacent to the root decision, where holding
+or spending interaction is decided — then `RolloutPool.finish_random()`
+completes the tails engine-side at ~0.2 ms/playout with no encoding. This
+is what makes a policy-rollout teacher affordable (below).
+
+### Throughput reality (the honest part)
+
+Measured with the trained R0 student on the shared M4 Max:
+
+- Random-rollout search: 18.3 ms/dec at N=16 (2,905 playouts/s, pure Rust;
+  exp-02 measured 7 ms/dec on a quiet box — same code, box load differs).
+- Policy rollouts cost ~9–16 ms per rollout ply regardless of batch size:
+  the per-forward *dispatch* cost (obs slicing, host→device, kernel launch,
+  sample round-trip) dominates at pool-sized batches (40–500 slots), so K
+  (plies) is the cost lever and N (sims) is nearly free.
+- psearch-16 with K=60: 545 ms/dec, 91 playouts/s, mean 57 plies/playout —
+  a **~30x wall-clock premium per decision** over random-rollout search at
+  equal sims, i.e. ~160x per playout (0.21 ms → ~34 ms with hybrid tails).
+- **MPS does not multiplex across processes.** Four worker processes
+  sharing the GPU deliver roughly one process's aggregate throughput
+  (measured: a 5th consumer sees ~53 ms/forward at batch ~55 vs ~6 ms
+  solo). The task-1 batching wins do NOT compound with process-parallel
+  datagen — batching across games within one process is the (future) fix.
+- Box load during all task-2/4 measurements: the machine was shared with
+  other agents (load average 30–96); absolute ms/dec here are upper bounds.
+
+### Deployed teacher v2 and the budget decision (documented per spec)
+
+At the measured contended rates, any config above ~200 ms/dec cannot
+produce 600 self-play games (~87k decisions) inside this cycle's compute
+cap. Configs considered: N=32/K=30 (479 ms/dec — 2.9 h floor, rejected),
+N=16/K=20 (~550 ms/dec contended, rejected), **N=8/K=8, ε=0.1 (deployed)**
+— 8 policy plies ≈ the immediate response window after the root action,
+which is exactly where exp-01/02 located the interaction-vs-racing signal.
+The rest of each rollout is engine-random. This is the sims/budget the
+throughput affords; a quieter box or in-process cross-game batching lifts
+it.
+
+RESULT-P2: (pending — psearch-8/K=8 vs search-8 at equal sims, and vs
+search-N* at equal wall-clock, N* set by same-day probes.)
+
 ## Status
 
-RUNNING — P2 / R1 sections pending.
+RUNNING — P2 matchups / R1 sections pending.
