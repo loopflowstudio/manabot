@@ -270,8 +270,11 @@ loses to "spend the same wall-clock on more random playouts."
 | R1 datagen (600g psearch-8, pooled driver; incl. 2 aborted process-parallel starts) | ~40 min |
 | R1 BC (fresh + aggregate) | ~5 min |
 | R1 judge + P2 matchups (concurrent) | ~20 min |
-| report, docs, tests, commits | ~45 min |
-| **session total** | **~6.7 h ≈ $6.74** (cap 8 h) |
+| report, docs, tests, commits | ~35 min |
+| **session total (measured at close)** | **~5.2 h ≈ $5.23** (cap 8 h) |
+
+(Phases overlapped with coding/waiting; the itemized rows sum above the
+wall because heavy phases ran in the background of authoring work.)
 
 Strength-vs-cost ledger points (cumulative project training spend):
 R0 student **87.0% vs random / ladder ≈7 at ~$2.9 of datagen+train wall**
