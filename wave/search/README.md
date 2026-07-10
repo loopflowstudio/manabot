@@ -217,6 +217,17 @@ tries to close it.
    metric to regress. That is the point — it restores dynamic range.
 1. **Batched inference.** 2.0k → 50k+ SPS with inference. Batch across envs,
    eliminate per-step syncs, trace/compile the actor.
+   **Status (2026-07-09, pulled and landed at C7):** 2.0k → **24.5k obs/sec**
+   net-in-loop (12x) via hot-path cleanup (`manabot/model/agent.py` was
+   evaluating debug f-strings with `.item()` syncs every forward), a generic
+   batched driver (`manabot/sim/rollout.py`: one forward for K streams /
+   all rollouts of a search decision), and MPS at batch ≥256 (which only
+   batching makes usable). CPU-only ceiling is 7.3k — the 64-dim agent is now
+   genuinely compute-bound (attention over ~166 objects), not overhead-bound;
+   torch fell from 97% of step time to 75%, env stepping is visible again
+   (25%). The remaining gap to 50k is obs-transfer consolidation (17 per-key
+   host→GPU copies), not per-step syncs. Numbers:
+   `reports/exp-07-expert-iteration.md`.
 2. **Instrument the decision profile.** Forced-move collapse already ships
    (`skip_trivial`, on by default) — but `skip_trivial_count` is write-only and
    no report records `mean_steps`. Expose the counter to Python; log surfaced
