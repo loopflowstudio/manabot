@@ -254,3 +254,7 @@ def test_probed_games_smoke():
     assert out["records"][1]["hero_seat"] == 1
     for probe in out["probes"]:
         assert probe["counter_casts"] <= probe["counter_windows"]
+        # bolt_biggest counts max-power picks among multi-creature boards
+        # only, so it can never exceed the number of multi-choice decisions.
+        assert probe["bolt_biggest"] <= probe["bolt_multi_choice"]
+        assert probe["hold_breaks"] <= probe["hold_windows"]

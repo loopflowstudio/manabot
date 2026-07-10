@@ -919,7 +919,12 @@ class BehaviorProbe:
             (card, perm) for card, perm in _battlefield_pairs(raw, "opponent")
             if bool(card.card_types.is_creature)
         ]
-        if len(villain_creatures) >= 2:
+        # Target-quality is only meaningful when there was a real choice
+        # among enemy creatures: bolt_biggest counts max-power picks among
+        # multi-creature boards only, so bolt_biggest / bolt_multi_choice
+        # is a proper rate in [0, 1].
+        multi = len(villain_creatures) >= 2
+        if multi:
             self.bolt_multi_choice += 1
         if focus == int(raw.opponent.id):
             self.bolt_face += 1
@@ -927,7 +932,7 @@ class BehaviorProbe:
         for card, perm in villain_creatures:
             if int(perm.id) == focus:
                 max_power = max(int(p.power) for _, p in villain_creatures)
-                if int(perm.power) >= max_power:
+                if multi and int(perm.power) >= max_power:
                     self.bolt_biggest += 1
                 return
         for card, perm in _battlefield_pairs(raw, "agent"):
