@@ -25,7 +25,7 @@ order:
 3. **Human games are data.** Traced like every other game, replayable in the
    existing viewer; the off-model action stream a human naturally produces is
    the surprise-ledger stress test the beliefs wave will eventually need
-   (wave/beliefs, dormant).
+   (wave/search/02-beliefs-design.md, dormant).
 
 ### Not here
 
@@ -71,7 +71,7 @@ That line is the new wave.
    consequence ("attacks with X, Y, Z" is one beat, "Pyroclasm → sweep" is
    one beat). Click-to-skip. One thinking indicator per composition, not per
    micro-decision. Implementation rides with the C5 deadline-searcher work.
-5. Trigger-linked, later: when wave/beliefs activates, the table becomes the
+5. Trigger-linked, later: when wave/search/02-beliefs-design.md activates, the table becomes the
    bluff observatory — the first place a human is shown a calibrated
    represent-the-Counterspell line and has to decide whether to play into it.
 

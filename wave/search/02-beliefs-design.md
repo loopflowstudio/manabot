@@ -1,4 +1,23 @@
-# Beliefs
+# Beliefs (design doc — folded into the search wave 2026-07-10)
+
+> Formerly `wave/beliefs/`. Search and beliefs are one arc: decision-time
+> planning under hidden information. This doc is the design half; activation
+> criteria unchanged.
+>
+> **Caveats added 2026-07-10 (advisor review):**
+> 1. The "announcement-proof" license below is stated too broadly. Naive
+>    public-policy reductions in 2p0s can yield equilibria that do not
+>    correspond to the original game; regularization/representation conditions
+>    matter — see Sokota et al., ICML 2023
+>    (https://proceedings.mlr.press/v202/sokota23a.html). Treat the section as
+>    intuition, not license; the reduction needs those conditions when built.
+> 2. Not every delayed-planning failure is strategy fusion. exp-09's S2
+>    (hold-the-wipe) shows the random continuation failing to execute
+>    "wait, then wipe" — a rollout/planning deficit expressible under FULL
+>    information. Strategy fusion specifically means future actions
+>    conditioning on hidden information unavailable at the information set.
+>    The 2x2 ablation (information x continuation) is the discriminator and
+>    should precede any mechanism claims.
 
 > **Status: dormant, trigger-armed** (2026-07-09). This wave activates when
 > the search wave's **Exit 1 tripwire** fires: two consecutive 10x rollout
