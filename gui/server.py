@@ -199,8 +199,14 @@ def _serialize_permanent(
         "tapped": bool(permanent.tapped),
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
-        "power": int(card.power) if card else None,
-        "toughness": int(card.toughness) if card else None,
+        # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
+        # SBA actually checks. Printed values ride alongside so the UI can
+        # show "4/4 (2/2)" on a buffed permanent.
+        "power": int(permanent.power),
+        "toughness": int(permanent.toughness),
+        "base_power": int(card.power) if card else None,
+        "base_toughness": int(card.toughness) if card else None,
+        "plus1_counters": int(permanent.plus1_counters),
     }
 
 
