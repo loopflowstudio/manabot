@@ -179,9 +179,155 @@ The rest of each rollout is engine-random. This is the sims/budget the
 throughput affords; a quieter box or in-process cross-game batching lifts
 it.
 
-RESULT-P2: (pending — psearch-8/K=8 vs search-8 at equal sims, and vs
-search-N* at equal wall-clock, N* set by same-day probes.)
+### P2 results (deployed teacher: psearch-8, K=8, ε=0.1; 100 games each)
 
-## Status
+Same-day probes on the quieter evening box: psearch-8/K=8 = **65 ms/dec**
+(414 playouts/s, 3.3k net obs/s); random-rollout search-8 = **10.4 ms/dec**
+(2,585 playouts/s) → playouts/sec ratio ≈ **1:6.2**; equal-wall-clock
+opponent N* = 50.
 
-RUNNING — P2 matchups / R1 sections pending.
+| matchup | psearch-8 win rate | wall check (hero vs villain ms/dec) |
+|---|---|---|
+| equal sims: vs search-8 | 56.0% [46.2, 65.3] | 65 vs 10 |
+| equal wall-clock: vs search-50 | **31.0%** [22.8, 40.6] | 96 vs 59 |
+
+**P2 verdict: REFUTED.** At equal sims, policy rollouts show a positive but
+non-significant edge (56.0%, CI spans 50%) — the mechanism is not dead. At
+equal wall-clock — the pre-registered, honest comparison — the random-
+rollout searcher's ~6x playout advantage wins decisively (psearch took
+31.0%, and note the realized wall was *tilted in psearch's favor*, 96 vs
+59 ms/dec, making the refutation conservative). Rollout quality did not
+come close to buying back the throughput premium on this deck at this
+model size.
+
+## Task 4 — Round 1: closing the loop (P3)
+
+**Teacher v2** = psearch-8 (K=8, ε=0.1, R0-student rollouts) — the budget
+choice documented above. **Datagen:** 600 games / 68,204 decisions in
+**1,507 s** via the pooled driver (45.2 dec/s — vs ~6 dec/s for the
+4-process attempt it replaced; the cross-game batched driver is what made
+round 1 possible at all). Seat-0 win 42.3%.
+
+**Retrain: fresh, not fine-tuned** (justified: keeps each round's student a
+clean function of its teacher's data; R0 showed 10 epochs from scratch
+reaches the quick-eval plateau; warm-starting anchors to R0's blind spots
+when the loop's gains should flow through the teacher). Hard targets (per
+the R0 sweep). An R0+R1 aggregate variant was also trained to exercise the
+staleness diagnostic.
+
+| student | quick 200g vs random | judged 400g vs random |
+|---|---|---|
+| R0 (search-256 teacher) | 88.0% | **87.0%** [83.3, 89.9] |
+| R1 fresh (psearch-8 teacher) | 73.5% | **70.0%** [65.3, 74.3] |
+| R1 aggregate (R0+R1 data) | 78.5% | — |
+
+### R1 judge + head-to-head
+
+| matchup | R1 win rate |
+|---|---|
+| vs random (400g) | 70.0% [65.3, 74.3] |
+| vs search-8 (200g) | 28.0% [22.2, 34.6] |
+| vs search-16 (200g) | 14.5% [10.3, 20.0] |
+| vs search-32 (200g) | 17.0% [12.4, 22.8] |
+| vs search-64 (200g) | 10.5% [7.0, 15.5] |
+| **vs R0 student (400g, head-to-head)** | **25.8%** [21.7, 30.3] |
+
+R1 ladder ≈ N=3–4 (vs R0's ≈7). Behavior: cast_when_able 0.607,
+passed_when_able 0.280 — more aggressive than R0 (0.512/0.377), consistent
+with noisier, shallower search labels.
+
+Staleness diagnostic (aggregate variant, rounds {0,1}): final val_loss
+0.9941 aggregate vs val_loss_fresh 0.9568 — fresh-round loss *lower*, no
+stale-label divergence pattern; the diagnostic is armed and produces the
+split as designed.
+
+**P3 verdict: REFUTED.** One crank of the loop *degraded* the student:
+25.8% head-to-head vs R0 (needed >55%), ladder ≈4 (needed ≥16). Diagnosis:
+the loop's label quality collapsed, not its mechanism. R0 distilled argmax-
+of-256-playouts labels; the affordable teacher v2 could only argmax 8
+noisy policy-rollout scores per action — a worse label source than the
+random-rollout teacher it replaced (P2's wall-clock result is the same
+fact seen from the other side). Expert iteration on this engine currently
+loses to "spend the same wall-clock on more random playouts."
+
+## Prediction verdicts
+
+| prediction | verdict | number |
+|---|---|---|
+| **P1** ≥10x net-in-loop (2k → ≥20k obs/sec) | **CONFIRMED** | 24,474 obs/sec = 12.0x |
+| **P2** policy rollouts win at equal wall-clock (>55%) | **REFUTED** | 31.0% [22.8, 40.6] (equal sims: 56.0%, n.s.) |
+| **P3** R1 beats R0 (>55%) and ladder ≥16 | **REFUTED** | 25.8% [21.7, 30.3]; ladder ≈4 |
+
+## Cost ledger (wall-clock at $1.006/hr, exp-00 accounting)
+
+| item | wall |
+|---|---:|
+| setup, builds, task-1 infra + benchmarks | ~75 min |
+| R0 datagen (600g search-256; incl. a reaped first run, 1 shard salvaged) | ~157 min |
+| R0 BC (prelim + full sweeps, 8 configs total) | ~9 min |
+| R0 judge (400g + 4 rungs + profile) | ~9 min |
+| Task-2 infra (RolloutPool, hybrid tails) + probes + aborted P2 configs | ~45 min |
+| R1 datagen (600g psearch-8, pooled driver; incl. 2 aborted process-parallel starts) | ~40 min |
+| R1 BC (fresh + aggregate) | ~5 min |
+| R1 judge + P2 matchups (concurrent) | ~20 min |
+| report, docs, tests, commits | ~45 min |
+| **session total** | **~6.7 h ≈ $6.74** (cap 8 h) |
+
+Strength-vs-cost ledger points (cumulative project training spend):
+R0 student **87.0% vs random / ladder ≈7 at ~$2.9 of datagen+train wall**
+(first new-world point); R1 student 70.0% / ladder ≈4 (negative point,
+kept for honesty).
+
+## Caveats
+
+- **The teacher is still deaf and strategy-fused** (exp-03 caveat carries):
+  policy rollouts change the rollout prior, not the determinization
+  blindness — that is the beliefs wave's problem, untouched here.
+- **Teacher v2 was budget-thin** (8 sims, 8 policy plies): P3's refutation
+  convicts *this cycle's affordable loop*, not expert iteration in
+  principle. The equal-sims edge (56.0%, n.s.) says the mechanism deserves
+  one retry at N≥64 policy-sims once per-forward dispatch cost drops
+  (in-process batching already demonstrated 45 dec/s at N=8; N=64 needs
+  either ~8x that or a smaller/faster net).
+- **Shared box**: all absolute ms/dec measured under load from concurrent
+  agents (load average 17–96); ratios (policy-vs-random cost, win rates)
+  are trustworthy, absolute throughput is a lower bound. The P1 baseline
+  was reproduced same-day under the same load (3.8k) for honesty.
+- **MPS does not multiplex across processes** — discovered mid-cycle, cost
+  two aborted datagen starts, fixed by the pooled driver. Future
+  net-in-loop datagen must batch in-process.
+- **Vectorized eval finish-order bias**: run_vector_games records games as
+  they finish under per-seat quotas; if win correlates with game length
+  this mildly biases early-stopped tails. Quotas ≫ streams/seat keep the
+  effect small; matchup-harness numbers (ladder) are unaffected.
+- Exploitability probe: still not run (deferred since exp-03); every
+  ladder number remains provisional against it.
+- Judge sampling is stochastic-unseeded per the historical protocol;
+  repeat matchups drift ~±1 point.
+
+## Next question (C8)
+
+The loop fails on label economics: 0.21 ms random playouts buy more truth
+per dollar than 34 ms policy playouts. Two forks, one experiment each:
+(a) **make policy playouts cheap** — distill the student into a ~10k-param
+fast rollout net (or quantize/compile) and re-run P2's wall-clock test; or
+(b) **abandon rollout-policy improvement and gate on goal 4** — train a
+value head on the R0 dataset's outcome labels and test *search-with-V vs
+V-greedy* (the pre-registered gate), which sidesteps per-ply inference
+entirely at leaf-eval time. Given Exit 2's tripwire (two consecutive
+sub-2-point rounds), (b) is the priority: if V-guided search also fails,
+the wave exits toward model-free.
+
+## Provenance
+
+- Branch: `exp-07-expert-iteration` off `origin/main` (a3bfab2, includes
+  rules stage 2).
+- Datasets: `.runs/exp07/dataset_r0{,b}` (600g search-256, 80,568
+  decisions), `.runs/exp07/dataset_r1` (600g psearch-8, 68,204 decisions);
+  shards carry provenance tags (round, teacher spec, git commit).
+- Students: `.runs/exp07/student_r0.pt` (=`student_best.pt`),
+  `student_r1.pt`, `aggregate/student_r1_agg.pt`; BC logs `bc_*.json`.
+- Judge data: `reports/data/exp-07-expert-iteration.json`; P2:
+  `reports/data/exp-07-p2.json`.
+- Machine: Apple M4 Max (shared), Python 3.12 isolated venv,
+  WANDB_MODE=disabled, torch 2.10 (cpu+mps).
