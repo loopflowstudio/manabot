@@ -4,4 +4,5 @@ pub mod env;
 pub mod observation;
 pub mod observation_encoder;
 pub mod opponent;
+pub mod rollout_pool;
 pub mod vector_env;

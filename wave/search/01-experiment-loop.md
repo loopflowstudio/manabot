@@ -243,6 +243,38 @@ stronger search. Each iteration adds a chart point. The goal-4 gate
 (search-with-V beats V-greedy) sits between C5 and any value-guided search.
 Ladder strength and the exploitability check ride every iteration.
 
+### C7 — Expert iteration lands in the new world
+
+**Q:** Does one full crank of the closed loop (distill → student becomes
+rollout policy → stronger teacher → re-distill) climb the ladder — and does
+batched inference finally unblock it?
+
+First cycle on the post-stage-2 world (CARD_DIM 37; all prior checkpoints
+dimensionally dead). Pre-registered predictions (verbatim in
+`reports/exp-07-expert-iteration.md`): P1 batched inference ≥10x (2k → ≥20k
+obs/sec); P2 policy-rollout search beats random-rollout search at equal
+wall-clock (>55%); P3 the R1 student beats the R0 student head-to-head
+(>55%) and places ≥ N=16.
+
+**RESULT (2026-07-09):** P1 **confirmed** — 2.0k → 24.5k obs/sec (12x;
+agent hot-path cleanup + batched driver + MPS, which only batching makes
+usable; CPU is now compute-bound at 7.3k). P2 **refuted** — at equal
+wall-clock, search with R0-student rollouts loses 31.0% [22.8, 40.6] to
+random-rollout search (equal sims: 56.0%, n.s.; policy playouts cost ~6x
+per playout even with 8-ply hybrid tails). P3 **refuted** — one crank of
+the loop *degraded* the student: R1 (distilled from the affordable
+psearch-8 teacher) loses 25.8% [21.7, 30.3] head-to-head to R0 and drops
+to ladder ≈4; R0 (search-256 teacher) is the new-world frontier at
+**87.0% vs random, ladder ≈7**. Secondary findings: soft score-
+distribution targets are mildly *harmful* at N=256 (hard argmax won the
+sweep); MPS does not multiplex across processes, so net-in-loop datagen
+must batch across games in-process (pooled driver: 45 dec/s, ~7x the
+process-parallel rate). Diagnosis: the loop fails on label economics —
+0.21 ms random playouts buy more label truth per dollar than ~34 ms
+policy playouts. Exit-2's tripwire is half-armed (one sub-2-point round);
+C8 should run the goal-4 gate (search-with-V vs V-greedy) before any
+second crank. See `reports/exp-07-expert-iteration.md`.
+
 ## Protocol amendments
 
 Amendments are allowed; silent amendments are not. Each is dated and lands
@@ -360,9 +392,9 @@ unit.
 | Wave goal | Cycle |
 | --- | --- |
 | 0 real deck | C1 |
-| 1 batched inference | pulled at C5 |
+| 1 batched inference | **landed at C7** (2.0k → 24.5k obs/sec) |
 | 2 decision profile | C0 |
-| 3 determinized search | C3 (flat), C5 (tree/policy rollouts) |
-| 4 gate: assess V | C5+ entry condition |
-| 5 search as teacher | C4 (static), C5+ (iterated) |
+| 3 determinized search | C3 (flat), C7 (policy rollouts — wall-clock negative) |
+| 4 gate: assess V | C8 entry condition |
+| 5 search as teacher | C4 (static, positive), C7 (iterated, negative) |
 | 6 headline metric | the chart, every cycle |
