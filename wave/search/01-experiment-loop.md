@@ -195,6 +195,39 @@ stronger search. Each iteration adds a chart point. The goal-4 gate
 (search-with-V beats V-greedy) sits between C5 and any value-guided search.
 Ladder strength and the exploitability check ride every iteration.
 
+### C6 — Does the expanded world change the answers?
+
+**Q:** The rules waves grow the observation/action space under every policy
+we train; at what point does representation growth itself become a training
+cost?
+
+- **C6a** Same game, bigger representation: rules Stage 1+2 dims (CARD_DIM
+  37, PERMANENT_DIM 7, PLAYER_DIM 27, ACTION_TYPE_DIM 14, mid-resolution
+  decision kinds) on the C1 deck, exp-04's E2a recipe unchanged
+  (terminal-only, dev preset, 3 seeds). Pre-registered: seeds land in E2a's
+  60–75% band → benign; all <55% → adverse (suspects: action-type one-hot
+  dilution, card-feature dilution).
+- **C6b** Pool expansion on the real matchup: UR Lessons vs GW Allies (the
+  two-deck slice), first training exposure of the Stage-2 decision kinds
+  (scry / look-and-select / pay-or-not / modal / learn / waterbend) and of
+  an asymmetric matchup. Queued on rules stage 3.
+
+**RESULT (2026-07-09, C6a):** benign — **confirmed**. Training-path smoke
+clean (200 random-vs-random games through the vector env, zero
+crashes/NaNs/reward violations); 3 seeds judged seat-balanced 400g vs
+random: **69.3 / 77.3 / 73.5%** (E2a control 75.5 / 64.5 / 60.0%;
+deal-averaged re-judge 77.3 / 70.3 / 66.5%, LBs ≥ .617), same
+patience-shaped behavioral signature, no seed near the adverse tripwire.
+Params 100,354 → 101,506 (+1.1%); training SPS 2,472 → 3,013 (+22%) on the
+exp-03 calibration recipe. Unregistered yield: **the judging harness had
+been evaluating one deal per run since exp-00** — `Env.reset(seed=...)`
+never reached the engine, so every historical 400-game eval was 400
+stochastic rollouts of a single deal, and exp-00c's per-seat random
+baselines (23.1% on-play interactive, 93.4% on-play standard) are deal
+artifacts; deal-averaged, random mirror play is near seat-parity (~48.6%
+on-play, 3000 games). Fixed (Python-only) + regression-tested; judging is
+deal-averaged from now on. See `reports/exp-06-newworld-training.md`.
+
 ## Protocol amendments
 
 Amendments are allowed; silent amendments are not. Each is dated and lands
@@ -236,6 +269,19 @@ The collapse ratio is **~12%**, not "nearly all off-turn windows." Zero
 single-action leaks in ~150k decisions (the mechanism is sound), but the
 volume story told in this wave's own strategy section overstated it. Combat
 declaration, not priority passing, dominates surfaced decisions.
+
+### A5 — Deal-averaged evaluation (2026-07-09, after C6a)
+
+C6a found that `Env.reset(seed=...)` never reached the engine: every
+evaluation run since exp-00 played all its games on a single deal
+(`reports/exp-06-newworld-training.md`). Henceforth: evaluations vary the
+deal per game (the fixed harness does this by default), and per-seat
+win-rate splits from single-deal-era reports are not quotable as game facts
+— including exp-00c's 23.1%/76.9% interactive-deck seat baselines and the
+93.4% STANDARD_DECK figure cited in A1 (seat *balancing* remains required;
+deal-averaged random mirror play measures near seat-parity, ~48.6% on-play
+over 3000 games). Wilson CIs from that era are conditional on the run's
+deal.
 
 ## Pre-registered exits
 

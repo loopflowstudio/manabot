@@ -234,3 +234,45 @@ class TestEnvironment:
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+class TestResetSeed:
+    """reset(seed=...) must reach the engine, not just gymnasium's np_random.
+
+    Historically the wrapper dropped the seed on the floor: managym.Env has no
+    set_seed and its reset() reuses the constructor seed, so every reset
+    replayed the identical deal. The evaluation harness passes
+    seed=base+game_index per game and silently evaluated a single deal per
+    run (found in exp-06).
+    """
+
+    @staticmethod
+    def _deal(env: Env) -> list[tuple]:
+        obs = env.last_raw_obs
+        return [
+            (c.registry_key, int(c.zone))
+            for c in list(obs.agent_cards) + list(obs.opponent_cards)
+        ]
+
+    def test_reset_seed_changes_deal(self, env):
+        env.reset(seed=100)
+        deal_a = self._deal(env)
+        env.reset(seed=200)
+        deal_b = self._deal(env)
+        assert deal_a != deal_b, "different reset seeds must produce different deals"
+
+    def test_reset_seed_reproducible(self, sample_match, observation_space, reward):
+        env_a = Env(sample_match, observation_space, reward, seed=1, auto_reset=False)
+        env_b = Env(sample_match, observation_space, reward, seed=2, auto_reset=False)
+        env_a.reset(seed=300)
+        env_b.reset(seed=300)
+        assert self._deal(env_a) == self._deal(env_b), (
+            "same reset seed must reproduce the same deal"
+        )
+
+    def test_reset_without_seed_keeps_engine(self, env):
+        env.reset()
+        deal_a = self._deal(env)
+        env.reset()
+        deal_b = self._deal(env)
+        assert deal_a == deal_b, "unseeded reset keeps the constructor seed"
