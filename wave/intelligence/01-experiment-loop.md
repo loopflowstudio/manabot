@@ -290,6 +290,39 @@ student scores 44.8% vs search-4 in the post-audit world (ladder <4, was ≈7
 in its home world). Compute ~1.25 h / ~$1.25 booked. See
 `reports/exp-11-curriculum-exploitability.md`.
 
+### C10 — The goal-4 value gate (exp-10)
+
+**Q:** Does search on top of a learned value head still improve on the value
+head (search-with-V > V-greedy) — the pre-registered condition that makes
+search a policy improvement operator — and does V-at-leaves beat random
+rollouts at equal wall-clock (the economics that failed for policy rollouts
+in C7)?
+
+Pre-registered (verbatim in `experiments/exp-10-value-gate.md`): P1 Spearman
+≥0.6 vs rollout ground truth with an aggro-pattern per-bucket bias; P2 the
+gate at >55% over 400g; P3 value-search beats random-rollout search at equal
+wall-clock at some N.
+
+**RESULT (2026-07-10): the gate PASSES — search-with-V beats V-greedy
+60.25% [55.4, 64.9]** (400g seat-balanced, deal-diverse), clearing the
+pre-registered 55% bar with the CI. **P3 refuted**: the per-leaf speedup is
+real (~2.8x per decision at N=64) but value-search loses 38.5% [32.0, 45.4]
+to search-16 at wall-clock parity and 23.5% [18.2, 29.8] to search-64 — V
+is not a rollout substitute at this quality. **P1 refuted on the threshold** deal-diverse
+(Spearman 0.485; pessimistic in every bucket, no predicted board-ahead
+optimism; ordering near-noise, 0.12-0.32, in undecided mid-game buckets —
+scalar V is blind where decisions live). Instrument event that reframes the
+cycle: the first full battery and the entire training corpus predate the A5
+seed fix — the 225 training games span **3 opening deals** (verified by
+opening-hand hashing), and every deal-narrow judging number was re-run
+deal-diverse before being quoted (the re-run *strengthened* the gate, 57.5%
+→ 60.25%, and dissolved a violent 19/96 seat split and a fake
+non-transitivity). Verdict for the wave: the improvement operator exists,
+the scalar-V treatment does not pay — proceed to D1 (the 2x2 diagnosis),
+not a value crank. Compute ~13.5 h wall booked (~5 h productive) vs 6 h cap
+— exceeded, breakdown in the report. See
+`experiments/exp-10-value-gate.md`.
+
 ## Protocol amendments
 
 Amendments are allowed; silent amendments are not. Each is dated and lands
@@ -423,7 +456,7 @@ unit.
 | 1 batched inference | **landed at C7** (2.0k → 24.5k obs/sec) |
 | 2 decision profile | C0 |
 | 3 determinized search | C3 (flat), C7 (policy rollouts — wall-clock negative) |
-| 4 gate: assess V | C9 entry condition (C8 ran the owner-requested curriculum/exploitability probe) |
+| 4 gate: assess V | **ran at C10** (gate passes 60.25% deal-diverse; economics refuted — V no rollout substitute) |
 | 6 exploitability sanity check | **ran at C8** (student robust: exploiter ≤26%) |
 | 5 search as teacher | C4 (static, positive), C7 (iterated, negative) |
 | 6 headline metric | the chart, every cycle |

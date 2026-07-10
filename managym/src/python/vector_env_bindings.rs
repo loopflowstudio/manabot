@@ -405,6 +405,24 @@ impl PyRolloutPool {
         self.inner.active_count()
     }
 
+    /// Index of the deciding player the pool scores for.
+    #[getter]
+    fn hero_index(&self) -> usize {
+        self.inner.hero_index()
+    }
+
+    /// Acting player index per slot (-1 for slots no longer active). The
+    /// encoded observation of an active slot is from this player's
+    /// perspective — value-at-leaf scoring flips V for non-hero actors.
+    fn acting_players(&self) -> Vec<i64> {
+        self.inner.acting_players()
+    }
+
+    /// Root action index per slot (layout is (world, action, rollout)).
+    fn root_actions(&self) -> Vec<usize> {
+        self.inner.root_actions()
+    }
+
     /// Attach caller-owned numpy buffers with leading dimension `capacity`
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.

@@ -213,6 +213,9 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
          "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
         {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
+        {"kind": "value_greedy", "checkpoint": "/abs/value.pt", "device": "cpu"}
+        {"kind": "value_search", "sims": 64, "checkpoint": "/abs/value.pt",
+         "depth": 0, "rollouts_per_world": 1, "device": "cpu"}
     Returns (player, observation_space_or_None). Checkpoint players carry the
     ObservationSpace their encoder was trained with.
     """
@@ -253,6 +256,37 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
             ),
             obs_space,
         )
+    if kind == "value_greedy":
+        from manabot.sim.value import VGreedyPlayer, load_value_scorer
+
+        scorer = load_value_scorer(
+            spec["checkpoint"], device=str(spec.get("device", "cpu"))
+        )
+        return (
+            VGreedyPlayer(
+                scorer,
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                seed=seed,
+            ),
+            None,
+        )
+    if kind == "value_search":
+        from manabot.sim.value import ValueSearchPlayer, load_value_scorer
+
+        scorer = load_value_scorer(
+            spec["checkpoint"], device=str(spec.get("device", "cpu"))
+        )
+        return (
+            ValueSearchPlayer(
+                int(spec["sims"]),
+                scorer,
+                rollouts_per_world=int(spec.get("rollouts_per_world", 1)),
+                depth=int(spec.get("depth", 0)),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                seed=seed,
+            ),
+            None,
+        )
     if kind == "random":
         return RandomMatchupPlayer(seed=seed), None
     if kind == "checkpoint":
@@ -272,6 +306,11 @@ def spec_name(spec: dict[str, Any]) -> str:
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
         return spec.get("name", spec["path"])
+    if kind == "value_greedy":
+        return spec.get("name", "vgreedy")
+    if kind == "value_search":
+        depth = int(spec.get("depth", 0))
+        return spec.get("name", f"vsearch-{spec['sims']}-d{depth}")
     return kind
 
 
