@@ -29,7 +29,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 | exp | question | verdict |
 |---|---|---|
-| [00](exp-00-decision-profile.md) / [00-cost](exp-00-cost-basis.md) / [00c](exp-00c-seat-balanced-baselines.md) | calibrate the instrument | 194 decisions/game; seat advantage 94% (inverts on interactive deck); single-init baselines meaningless; $0.44/1M steps |
+| [00](exp-00-decision-profile.md) / [00-cost](exp-00-cost-basis.md) / [00c](exp-00c-seat-balanced-baselines.md) | calibrate the instrument | 194 decisions/game; single-init baselines meaningless; $0.44/1M steps. ~~Per-seat findings (94%/23.1% on-play)~~ deal artifacts per exp-06 — deal-averaged random mirrors are at parity (repro_06) |
 | [01](exp-01-c1-training.md) | does the shaped recipe survive a real deck? | no — 0/3 seeds; one seat-parasitic; `cast_when_able` flipped sign |
 | [02](exp-02-flat-mc.md) | how much intelligence is free? | search-256 = 99% vs random at $0; every trained policy below N=16 |
 | [03](exp-03-distillation.md) | is distillation cheaper than RL? | yes — 90.5% vs matched-cost PPO's 52.7%; ladder ≈ N=8 at 1ms |
