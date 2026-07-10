@@ -75,6 +75,57 @@ reproduction of the baseline (3,841) the lift is 6.4x; the 10x needs the
 GPU, which only batching unlocks; CPU-only the ceiling is 7.3k (3.6x),
 compute-bound, not overhead-bound.
 
+## Task 3 — Round 0: new-world distillation
+
+**Teacher:** search-256 (random rollouts, W=64 x R=4), self-play mirror on
+INTERACTIVE_DECK. **Dataset:** 600 games / 80,568 decisions (145 decisions/
+game, seat-0 win 55.8% in the r0b tranche), every decision recording the
+full encoded observation, the argmax action, and the raw per-action playout
+score vector (soft-target source). Shards carry provenance tags (round,
+teacher spec, git commit).
+
+**Soft-target design** (exp-05 not merged to main, so registered fresh
+here): targets p ∝ exp(score/τ) over valid actions. At N=256 the per-score
+Monte Carlo s.e. is ~sqrt(p(1-p)/256) ≈ 0.03, so τ well below ~0.03
+amplifies playout noise and τ >> typical score gaps flattens the teacher.
+Swept τ on a 150-game preliminary tranche ({hard, 0.02, 0.05, 0.1, 0.2};
+0.1/0.2 clearly worse: 71.0%/60.0% vs random) then {hard, 0.02, 0.05} on
+the full data, selected by 200-game quick eval + val accuracy:
+
+| targets | quick 200g vs random | val acc (vs teacher argmax) |
+|---|---|---|
+| **hard argmax (selected)** | **88.0%** [82.8, 91.8] | 0.5333 |
+| soft τ=0.02 | 84.0% [78.3, 88.4] | 0.5299 |
+| soft τ=0.05 | 80.0% [73.9, 85.0] | 0.5257 |
+
+**Finding: soft targets do not help at N=256 on this deck** — strength is
+monotone in target sharpness; the hard argmax control won. (CIs overlap
+between hard and τ=0.02; the ordering is consistent across both the
+preliminary and full sweeps.) With 256 sims/action the argmax is already
+low-noise, and softening mostly injects the teacher's rollout noise floor.
+R0 student = hard config, lr 1e-3 x 10 epochs, fresh 100k-param Agent.
+
+### R0 judge (standard protocol: seat-balanced, stochastic sampling, Wilson 95%)
+
+| matchup | R0 win rate | on play | on draw |
+|---|---|---|---|
+| vs random (400g) | **87.0%** [83.3, 89.9] | 86.5% | 87.5% |
+| vs search-8 (200g) | 44.5% [37.8, 51.4] | 50.0% | 39.0% |
+| vs search-16 (200g) | 37.0% [30.6, 43.9] | 38.0% | 36.0% |
+| vs search-32 (200g) | 33.5% [27.3, 40.3] | 16.0% | 51.0% |
+| vs search-64 (200g) | 20.5% [15.5, 26.6] | 21.0% | 20.0% |
+
+**Ladder ≈ N=7 (just under 8;** the search-8 CI includes 50%, the point
+estimate does not reach it). Behavioral profile (400g): cast_when_able
+0.512, passed_when_able 0.377 — the teacher's patience inherited, no aggro
+fingerprint. Note: this is the FIRST trained policy in the post-stage-2
+world (new dims); ladder rungs are not directly comparable to exp-03's
+old-world N≈8 — the deck rules and observation space both changed.
+
+The 400-game vs-random matchup ran in **9 seconds** on the batched driver
+(historically ~10 minutes of process-pool time) — task 1 paying rent
+immediately.
+
 ## Status
 
-RUNNING — remaining sections filled in as phases complete.
+RUNNING — P2 / R1 sections pending.
