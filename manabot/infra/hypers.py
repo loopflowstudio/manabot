@@ -32,7 +32,7 @@ class BaseHypersModel(BaseModel):
 
 class ObservationSpaceHypers(BaseHypersModel):
     max_cards_per_player: int = 60
-    max_permanents_per_player: int = 30
+    max_permanents_per_player: int = 40
     max_actions: int = 20
     max_focus_objects: int = 2
     max_events: int = 32

@@ -11,7 +11,10 @@
 use std::collections::BTreeMap;
 
 use managym::{
-    agent::action::{Action, ActionSpaceKind, ActionType},
+    agent::{
+        action::{Action, ActionSpaceKind, ActionType},
+        observation::Observation,
+    },
     flow::turn::StepKind,
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
@@ -948,6 +951,30 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     assert_eq!(s.game().effective_pt(kyoshi), (5, 5));
     assert!(permanent(&s, kyoshi).temp_keywords.flying);
 
+    // The granted keyword is agent-visible: the permanent entry carries
+    // effective keywords (flying), while the card entry keeps the printed
+    // keywords (no flying on Kyoshi Warriors).
+    let obs = Observation::new(s.game(), &[]);
+    let kyoshi_object_id = permanent(&s, kyoshi).id.0 as i32;
+    let kyoshi_perm = obs
+        .agent_permanents
+        .iter()
+        .chain(obs.opponent_permanents.iter())
+        .find(|perm| perm.id == kyoshi_object_id)
+        .expect("Kyoshi Warriors permanent should be observable");
+    assert!(kyoshi_perm.keywords.flying, "granted flying must be encoded");
+    assert!(!kyoshi_perm.keywords.hexproof);
+    let kyoshi_card = obs
+        .agent_cards
+        .iter()
+        .chain(obs.opponent_cards.iter())
+        .find(|card| card.name == "Kyoshi Warriors")
+        .expect("Kyoshi Warriors card should be observable");
+    assert!(
+        !kyoshi_card.keywords.flying,
+        "card entry keeps printed keywords"
+    );
+
     // On the non-Ally: +2/+2 but no flying.
     cast_only(&mut s);
     assert!(s.choose_target(Target::Permanent(penguin)));
@@ -1022,6 +1049,23 @@ fn avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting() {
 
     let keywords = permanent(&s, kyoshi).temp_keywords.clone();
     assert!(keywords.flying && keywords.first_strike && keywords.lifelink && keywords.hexproof);
+
+    // All four grants are agent-visible on the permanent entry.
+    let obs = Observation::new(s.game(), &[]);
+    let kyoshi_object_id = permanent(&s, kyoshi).id.0 as i32;
+    let kyoshi_perm = obs
+        .agent_permanents
+        .iter()
+        .chain(obs.opponent_permanents.iter())
+        .find(|perm| perm.id == kyoshi_object_id)
+        .expect("Kyoshi Warriors permanent should be observable");
+    assert!(
+        kyoshi_perm.keywords.flying
+            && kyoshi_perm.keywords.first_strike
+            && kyoshi_perm.keywords.lifelink
+            && kyoshi_perm.keywords.hexproof,
+        "granted keywords (incl. hexproof) must be encoded"
+    );
 
     // The opponent's Bolt cannot target the hexproof creature: the only
     // remaining legal target is a player, so targeting it is impossible.
