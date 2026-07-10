@@ -14,6 +14,11 @@ chart:
   at inference) beats determinized search-at-N rollouts, interpolated. Sanity
   check: exploitability probe (a from-scratch agent trained against the frozen
   policy must not exceed ~65% win rate, or the ladder number is a lie).
+  *The probe finally ran (C8, exp-11): a dedicated 262k-step PPO exploiter
+  reaches only 23.5–26.0% vs the frozen exp-07 student — the frontier's
+  placement survives its sanity check. One amendment from the same run:
+  ladder numbers are world-relative (the conformance audit moved every rung),
+  so chart points need a world tag.*
 - **x — cumulative training cost**: dollars (local runs priced at market
   GPU-hour rates for honesty) and GPU-hours, log scale.
 
@@ -227,6 +232,43 @@ policy playouts. Exit-2's tripwire is half-armed (one sub-2-point round);
 C8 should run the goal-4 gate (search-with-V vs V-greedy) before any
 second crank. See `reports/exp-07-expert-iteration.md`.
 
+### C8 — Opponent curriculum + the exploitability probe (exp-11)
+
+**Q:** Does training against the frozen student beat training against random
+(owner-requested: "train against the student and see if it improves
+performance") — and can a from-scratch PPO exploiter crack the student (the
+goal-6 sanity check, deferred since C4)?
+
+Machinery pulled by the experiment: the net-opponent training path
+(`manabot/sim/net_opponent.py` — seat-routed micro-step collection over
+exp-07's batched per-seat driver; learner-only terminal-reward transitions;
+frozen-net / live-self / random opponent seats), plus a dimension port for
+the pre-conformance-audit student checkpoint (validated: 86.5% vs random,
+matching its documented 87–88%).
+
+Pre-registered (verbatim in `reports/exp-11-curriculum-exploitability.md`):
+P1 vs-student PPO loses on the vs-random metric but wins on the ladder and
+vs-student; P2 the exploiter reaches 55–65% vs the frozen student (≥65% =
+ladder placement officially inflated; <55% = the student is robust).
+
+**RESULT (2026-07-09):** P2 **refuted below the band — the student is
+robust**: the dedicated exploiter reaches **23.5% / 26.0%** (seeds 1/2,
+400g, Wilson CIs), and no arm of any kind exceeds 29.8%; the ladder's
+sanity check finally ran and the frontier's placement survives. P1
+**refuted on both clauses**: vs-student arms lose nothing on the vs-random
+metric (71.2/71.2 vs 61.0/73.8) and gain no separation vs-student or on the
+ladder (mild edge at search-16, worse at search-4) — opponent strength was
+neither the predicted trade-off nor a free lunch. The unregistered winner
+is **true self-play**: best or tied-best on every column (77.0/70.0 vs
+random, 29.8/28.0 vs student, 41.2/34.5 vs search-4, 26.2/22.2 vs
+search-16) at the same cost as the random arm. Opponent installs strategy:
+vs-student arms are forced aggressive (cast_when_able 0.86–0.89),
+vs-random arms drift passive (0.11–0.35), self-play sits between. Caveat
+that amends the chart: **ladder numbers are world-relative** — the ported
+student scores 44.8% vs search-4 in the post-audit world (ladder <4, was ≈7
+in its home world). Compute ~1.25 h / ~$1.25 booked. See
+`reports/exp-11-curriculum-exploitability.md`.
+
 ## Protocol amendments
 
 Amendments are allowed; silent amendments are not. Each is dated and lands
@@ -347,6 +389,7 @@ unit.
 | 1 batched inference | **landed at C7** (2.0k → 24.5k obs/sec) |
 | 2 decision profile | C0 |
 | 3 determinized search | C3 (flat), C7 (policy rollouts — wall-clock negative) |
-| 4 gate: assess V | C8 entry condition |
+| 4 gate: assess V | C9 entry condition (C8 ran the owner-requested curriculum/exploitability probe) |
+| 6 exploitability sanity check | **ran at C8** (student robust: exploiter ≤26%) |
 | 5 search as teacher | C4 (static, positive), C7 (iterated, negative) |
 | 6 headline metric | the chart, every cycle |
