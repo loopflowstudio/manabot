@@ -1,4 +1,4 @@
-"""Control-competency measurement suite (exp-09, wave/search C9).
+"""Control-competency measurement suite (exp-09, wave/intelligence C9).
 
 Can an agent play reactive/control Magic, or does it just look like it can?
 Two instruments, built to discriminate H1 ("GW/aggro is structurally

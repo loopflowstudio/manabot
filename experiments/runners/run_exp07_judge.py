@@ -1,4 +1,4 @@
-"""Exp-07 (wave/search C7): judge a distilled student (standard protocol).
+"""Exp-07 (wave/intelligence C7): judge a distilled student (standard protocol).
 
 Matrix per student:
     1. student vs random — seat-balanced, batched vector driver;

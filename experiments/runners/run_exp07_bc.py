@@ -1,4 +1,4 @@
-"""Exp-07 (wave/search C7) Tasks 3/4: distill a student from search self-play.
+"""Exp-07 (wave/intelligence C7) Tasks 3/4: distill a student from search self-play.
 
 Sweeps the soft-target temperature (plus a hard-argmax control), trains one
 student per config, quick-evaluates each vs random with the batched vector

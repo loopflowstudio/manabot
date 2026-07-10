@@ -4,7 +4,7 @@ Date: 2026-07-09
 
 ## Pre-registered prediction
 
-Quoted verbatim from `wave/search/01-experiment-loop.md` (C0, written before any
+Quoted verbatim from `wave/intelligence/01-experiment-loop.md` (C0, written before any
 measurement):
 
 > **Prediction:** surfaced decisions/game (both players) lands in 40–120, well

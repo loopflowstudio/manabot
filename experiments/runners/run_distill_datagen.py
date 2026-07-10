@@ -1,4 +1,4 @@
-"""Exp-03 (wave/search C4) Task 1: search-64 self-play dataset generation.
+"""Exp-03 (wave/intelligence C4) Task 1: search-64 self-play dataset generation.
 
 Plays search-vs-search self-play games in parallel worker processes; each
 worker writes one .npz shard of (observation, search action) decisions plus a

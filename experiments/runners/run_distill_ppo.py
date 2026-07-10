@@ -1,4 +1,4 @@
-"""Exp-03 (wave/search C4) Task 3: matched-cost PPO baseline.
+"""Exp-03 (wave/intelligence C4) Task 3: matched-cost PPO baseline.
 
 Runs the first_light_shaped_v1 recipe on INTERACTIVE_DECK (the exp-01 deck
 rebind) with total_timesteps sized by the caller so PPO's training wall-clock

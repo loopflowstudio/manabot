@@ -1,4 +1,4 @@
-"""Exp-03 (wave/search C4) Task 2: behavior-clone a fresh Agent on search data.
+"""Exp-03 (wave/intelligence C4) Task 2: behavior-clone a fresh Agent on search data.
 
 Runs a small (lr x epochs) sweep — ALL of it is billed to the BC cost — picks
 the config with the best validation accuracy, saves that policy as a

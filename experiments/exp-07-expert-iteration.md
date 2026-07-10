@@ -1,4 +1,4 @@
-# Exp-07 — Expert Iteration (wave/search C7)
+# Exp-07 — Expert Iteration (wave/intelligence C7)
 
 Date: 2026-07-09
 Machine: Apple M4 Max (shared with a Rust build agent and a 3-seed training

@@ -222,7 +222,7 @@ not "we ran ReBeL on Magic."
   wave transplants
 - Schmid et al., *Student of Games* (2023) — the unified treatment
 - Kreps & Wilson, *Sequential Equilibria* (1982) — off-path beliefs
-- wave/search/README.md — Exit 1 (activation trigger), goal-4 gate,
+- wave/intelligence/README.md — Exit 1 (activation trigger), goal-4 gate,
   strategy-fusion section
 - experiments/exp-02-flat-mc.md — the searcher whose blind spots this wave exists
   to fix

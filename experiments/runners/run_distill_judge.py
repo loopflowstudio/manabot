@@ -1,4 +1,4 @@
-"""Exp-03 (wave/search C4) Task 4: judge the BC policy vs matched-cost PPO.
+"""Exp-03 (wave/intelligence C4) Task 4: judge the BC policy vs matched-cost PPO.
 
 Matchup matrix (seat-balanced, Wilson CIs, per-seat rates; resumable JSON):
     1. bc vs random

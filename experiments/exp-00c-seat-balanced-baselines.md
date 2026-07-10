@@ -9,7 +9,7 @@ STANDARD_DECK is **93.4%** for the on-the-play player, and that untrained
 inits vary 13%–89% vs random — so every historical hero-on-the-play "vs
 random" number is seat-contaminated, and single-init untrained baselines are
 meaningless. Protocol amendments A1 (seat balancing) and A2 (multi-init
-baselines) in `wave/search/01-experiment-loop.md` mandate the fix; amendment
+baselines) in `wave/intelligence/01-experiment-loop.md` mandate the fix; amendment
 A3 pre-registers the interactive-deck environment predictions scored below.
 
 ## Pre-registered predictions (quoted from amendment A3, registered before these runs)

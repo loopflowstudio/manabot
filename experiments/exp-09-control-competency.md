@@ -1,6 +1,6 @@
 # exp-09 — Control competency: can the pilot play reactive Magic?
 
-Date: 2026-07-09 (wave/search C9)
+Date: 2026-07-09 (wave/intelligence C9)
 
 ## Question
 

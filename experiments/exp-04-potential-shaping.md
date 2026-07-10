@@ -1,6 +1,6 @@
 # exp-04: E2c — potential-based shaping (does dense signal need the aggro fingerprint?)
 
-**Cycle:** C2 (wave/search/01-experiment-loop.md) · **Date:** 2026-07-09 ·
+**Cycle:** C2 (wave/intelligence/01-experiment-loop.md) · **Date:** 2026-07-09 ·
 **Recipe:** first-light dev preset (4 envs, 262k steps, random opponent),
 INTERACTIVE_DECK both players — identical to E2b except the reward ·
 **Runs:** `c2-potential-s{1,2,3}` in `.runs/verify.sqlite` (worktree).

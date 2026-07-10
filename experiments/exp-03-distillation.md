@@ -1,6 +1,6 @@
 # exp-03: distillation — per dollar, does supervised learning from search beat PPO from scratch?
 
-**Cycle:** C4 (wave/search/01-experiment-loop.md) · **Date:** 2026-07-09 ·
+**Cycle:** C4 (wave/intelligence/01-experiment-loop.md) · **Date:** 2026-07-09 ·
 **Deck:** INTERACTIVE_DECK both players ·
 **Teacher:** search-64 (flat determinized MC, exp-02: 95.0% vs random, 31 ms/decision) ·
 **Student:** fresh default Agent (100,354 params, attention on) ·

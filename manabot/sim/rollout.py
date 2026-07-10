@@ -1,6 +1,6 @@
 """Batched policy inference for rollouts: eval, datagen, and search.
 
-Exp-07 (wave/search C7, goal 1). The historical net-in-loop path ran one
+Exp-07 (wave/intelligence C7, goal 1). The historical net-in-loop path ran one
 forward pass per decision at tiny batch (2.0k SPS at 16 envs, 97% of step
 time in torch — experiments/sps-closeout.md). This module makes batching the
 default for every policy-in-the-loop consumer:

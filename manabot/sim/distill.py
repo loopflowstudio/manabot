@@ -1,6 +1,6 @@
 """Search-as-teacher distillation: dataset generation + behavior cloning.
 
-Exp-03 (wave/search C4). The teacher is the flat determinized MC searcher from
+Exp-03 (wave/intelligence C4). The teacher is the flat determinized MC searcher from
 exp-02 (manabot.sim.flat_mc.FlatMCPlayer); the student is a fresh
 manabot.model.agent.Agent trained by cross-entropy on the teacher's chosen
 action at every recorded decision.

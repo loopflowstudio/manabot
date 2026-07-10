@@ -21,11 +21,11 @@ order:
 2. **Human games are a benchmark no self-play loop can fake.** Win rate vs.
    the project's owner, a real Magic player, on the interactive-deck mirror is
    the first human-anchored strength measurement — and the demo that anchors
-   the release bar (wave/search/01-experiment-loop.md, Release bar).
+   the release bar (wave/intelligence/01-experiment-loop.md, Release bar).
 3. **Human games are data.** Traced like every other game, replayable in the
    existing viewer; the off-model action stream a human naturally produces is
    the surprise-ledger stress test the beliefs wave will eventually need
-   (wave/search/02-beliefs-design.md, dormant).
+   (wave/intelligence/02-beliefs-design.md, dormant).
 
 ### Not here
 
@@ -53,7 +53,7 @@ That line is the new wave.
    checkpoint (.pt), flat-MC search-at-N (31ms/decision at N=64 — real-time),
    random. INTERACTIVE_DECK mirror default. Hidden-info integrity asserted in
    tests (bot hand never in human-facing payloads). Step doc from the build
-   agent lands as `wave/search/02-play-interface.md`; relocate here on merge.
+   agent lands as `wave/intelligence/02-play-interface.md`; relocate here on merge.
 2. **First sessions**: Jack vs. search-64, then vs. the strongest C5 policy.
    Output is not a win/loss — it is the **competency checklist**: recognizable
    Magic skills observed or missing (block math, removal targeting, wipe
@@ -71,7 +71,7 @@ That line is the new wave.
    consequence ("attacks with X, Y, Z" is one beat, "Pyroclasm → sweep" is
    one beat). Click-to-skip. One thinking indicator per composition, not per
    micro-decision. Implementation rides with the C5 deadline-searcher work.
-5. Trigger-linked, later: when wave/search/02-beliefs-design.md activates, the table becomes the
+5. Trigger-linked, later: when wave/intelligence/02-beliefs-design.md activates, the table becomes the
    bluff observatory — the first place a human is shown a calibrated
    represent-the-Counterspell line and has to decide whether to play into it.
 

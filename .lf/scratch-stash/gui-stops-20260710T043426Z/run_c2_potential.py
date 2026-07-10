@@ -1,4 +1,4 @@
-"""E2c runner (wave/search C2): potential-based shaping on the interactive deck.
+"""E2c runner (wave/intelligence C2): potential-based shaping on the interactive deck.
 
 Dev-preset first-light run with the pay-per-event shaping replaced by
 potential-based shaping (gamma * Phi(s') - Phi(s), Phi(terminal) = 0).

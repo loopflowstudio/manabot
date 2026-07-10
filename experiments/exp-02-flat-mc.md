@@ -1,6 +1,6 @@
 # exp-02: flat determinized Monte Carlo — how much intelligence is free?
 
-**Cycle:** C3 (wave/search/01-experiment-loop.md) · **Date:** 2026-07-09 ·
+**Cycle:** C3 (wave/intelligence/01-experiment-loop.md) · **Date:** 2026-07-09 ·
 **Deck:** INTERACTIVE_DECK both players ·
 **Training cost:** $0 (no network, no GPU; pure engine throughput).
 **Total measurement cost:** 77.9M playouts, 4.5 CPU-core-hours, 42.5 min

@@ -1,4 +1,4 @@
-"""Exp-02 (wave/search C3) runner: flat determinized MC vs baselines.
+"""Exp-02 (wave/intelligence C3) runner: flat determinized MC vs baselines.
 
 Runs the pre-registered matchup matrix seat-balanced, in parallel across
 processes, and writes one JSON blob per matchup so partial progress survives.

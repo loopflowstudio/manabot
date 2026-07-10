@@ -1,4 +1,4 @@
-"""Exp-07 (wave/search C7) Task 2 measurements: policy rollouts inside search.
+"""Exp-07 (wave/intelligence C7) Task 2 measurements: policy rollouts inside search.
 
 Three phases, resumable via the output JSON:
     A. throughput probe — psearch-N self-play decisions: ms/decision,

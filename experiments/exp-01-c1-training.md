@@ -1,6 +1,6 @@
 # exp-01: C1 training — does the first-light recipe survive an interactive deck?
 
-**Cycle:** C1 (wave/search/01-experiment-loop.md) · **Date:** 2026-07-09 ·
+**Cycle:** C1 (wave/intelligence/01-experiment-loop.md) · **Date:** 2026-07-09 ·
 **Recipe:** `first_light_shaped_v1` unchanged (dev preset: 4 envs, 262k steps,
 random opponent, shaping land=0.03 / creature=0.06 / life_loss=0.01) ·
 **Deck:** INTERACTIVE_DECK both players (UR: Bolt 6, Counterspell 4,
