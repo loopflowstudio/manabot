@@ -18,7 +18,10 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 4. **Numbers trace.** Every number in any doc traces to a report; every
    report traces to store rows or data files. Refutations stay on the
    record, dated, never silently edited.
-5. **Protect the instrument.** Engine determinism, throughput, state
+5. **Seeds are the unit.** Game-level CIs quantify one checkpoint's eval
+   noise; claims about a *method* need independent training seeds and
+   cross-seed uncertainty. Three seeds are three data points.
+6. **Protect the instrument.** Engine determinism, throughput, state
    injection, and search primitives are what make experiments cheap —
    changes that break them are failing changes regardless of green tests.
 
