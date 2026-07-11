@@ -55,6 +55,9 @@ leads with two diagnostic instruments; their results choose the algorithm.
 
 ### D1 — the 2×2 ablation (information × continuation)
 
+> **Launch spec ready:** [04-2x2-diagnosis.md](04-2x2-diagnosis.md) — fully
+> self-contained brief for dispatching this cycle from a fresh context.
+
 On competency scenarios and micro-format matchups, cross:
 {hidden information, full information} × {random continuation, oracle/exact
 continuation}.
