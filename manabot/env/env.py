@@ -99,20 +99,15 @@ class Env(gym.Env):
         # Gymnasium requires calling this for seeding (if you use self.np_random)
         super().reset(seed=seed)
 
-        # managym.Env has no set_seed and its reset() reuses the constructor
-        # seed, so honoring a new seed requires rebuilding the engine. Without
-        # this, reset(seed=...) silently replays the identical deal (same
+        # Honor a new seed natively. Without reseeding the engine,
+        # reset(seed=...) silently replays the identical deal (same
         # shuffles/opening hands) for every value of seed — which is what the
         # evaluation harness had been doing historically (see
-        # reports/exp-06-newworld-training.md).
+        # experiments/exp-06-newworld-training.md). The native set_seed
+        # binding supersedes the engine-rebuild workaround exp-06 landed.
         if seed is not None and seed != self.seed:
             self.seed = seed
-            self._engine = managym.Env(
-                seed=self.seed,
-                skip_trivial=self.skip_trivial,
-                enable_profiler=self.enable_profiler,
-                enable_behavior_tracking=self.enable_behavior_tracking,
-            )
+            self._engine.set_seed(seed)
 
         match = self.match if not options else options.get("match", self.match)
 

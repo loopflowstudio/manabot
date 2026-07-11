@@ -1853,6 +1853,15 @@ impl PyEnv {
         Ok((PyObservation::from(obs), py_dict.into_any().unbind()))
     }
 
+    fn set_seed(&self, seed: u64) -> PyResult<()> {
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.set_seed(seed);
+        Ok(())
+    }
+
     fn step(
         &self,
         py: Python<'_>,

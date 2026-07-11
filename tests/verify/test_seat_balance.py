@@ -7,7 +7,9 @@ part that matters — that the swap actually reaches the engine (an asymmetric
 matchup whose winner is deck-determined must flip player index with the seat).
 """
 
-from manabot.env import Match
+import numpy as np
+
+from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.verify.decision_profile import (
     GameProfile,
     play_profile_games,
@@ -16,6 +18,14 @@ from manabot.verify.decision_profile import (
 from manabot.verify.util import STANDARD_DECK, build_hypers
 
 MOUNTAIN_ONLY = {"Mountain": 40}
+
+
+def _first_obs_signature(env: Env) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    raw = env.last_raw_obs
+    return (
+        tuple(card.name for card in raw.agent_cards),
+        tuple(card.name for card in raw.opponent_cards),
+    )
 
 
 def _make_profile(game_index: int, hero_seat: int, winner: int | None) -> GameProfile:
@@ -75,6 +85,29 @@ def test_summarize_profiles_reports_per_seat_win_rates():
     # Player 0 (on the play) won all four games regardless of role.
     assert summary["on_the_play_wins"] == 4
     assert summary["on_the_play_win_rate"] == 1.0
+
+
+def test_env_reset_seed_reaches_engine_rng():
+    hypers = build_hypers()
+    env = Env(
+        Match(hypers.match),
+        ObservationSpace(hypers.observation),
+        Reward(hypers.reward),
+        seed=0,
+        auto_reset=False,
+    )
+
+    obs_a, _ = env.reset(seed=123)
+    signature_a = _first_obs_signature(env)
+    obs_b, _ = env.reset(seed=123)
+    signature_b = _first_obs_signature(env)
+    obs_c, _ = env.reset(seed=124)
+    signature_c = _first_obs_signature(env)
+
+    np.testing.assert_array_equal(obs_a["agent_cards"], obs_b["agent_cards"])
+    assert signature_a == signature_b
+    assert signature_c != signature_a
+    assert not np.array_equal(obs_c["agent_cards"], obs_a["agent_cards"])
 
 
 def test_seat_balancing_alternates_and_swap_reaches_engine():
