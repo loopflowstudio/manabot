@@ -16,5 +16,6 @@ pub mod event_observations;
 pub mod interaction_spells;
 pub mod stage2_cards;
 pub mod stage3_cards;
+pub mod structured_offers;
 pub mod tla_cards;
 pub mod helpers;

@@ -36,6 +36,15 @@ impl Game {
             self.current_action_space = Some(action_space);
             return Err(error);
         }
+
+        Ok(self.finish_action_step())
+    }
+
+    /// Finish one externally committed action after its complete declaration
+    /// has been applied. Structured commands reuse this boundary so an atomic
+    /// cast-plus-target has the same SBA, priority, tracking, and consistency
+    /// behavior as the legacy positional path.
+    pub(crate) fn finish_action_step(&mut self) -> bool {
         self.state.priority.sba_done = false;
 
         let game_over = self.tick();
@@ -46,7 +55,17 @@ impl Game {
         }
         self.assert_stack_consistent();
 
-        Ok(game_over)
+        game_over
+    }
+
+    /// Publish a newly computed external decision and invalidate commands
+    /// decoded from every previously published structured offer set.
+    pub(crate) fn publish_action_space(&mut self, action_space: ActionSpace) {
+        self.decision_epoch = self
+            .decision_epoch
+            .checked_add(1)
+            .expect("decision epoch exhausted");
+        self.current_action_space = Some(action_space);
     }
 
     pub fn play(&mut self) {
@@ -63,13 +82,13 @@ impl Game {
         loop {
             let action_space = self.turn_tick();
             if self.is_game_over() {
-                self.current_action_space = Some(ActionSpace::game_over());
+                self.publish_action_space(ActionSpace::game_over());
                 return true;
             }
 
             if let Some(space) = action_space {
                 if !self.skip_trivial || space.actions.len() > 1 {
-                    self.current_action_space = Some(space);
+                    self.publish_action_space(space);
                     return false;
                 }
 

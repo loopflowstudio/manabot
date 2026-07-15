@@ -97,6 +97,13 @@ pub struct Game {
     pub state: GameState,
     pub skip_trivial: bool,
     pub current_action_space: Option<ActionSpace>,
+    /// Monotonic identity for the currently published external decision.
+    ///
+    /// This is deliberately narrower than the Game protocol's match revision
+    /// and prompt authority. Clones retain it so a command can be evaluated on
+    /// an exact search fork, while publishing any later decision invalidates
+    /// commands decoded from an older structured offer set.
+    pub(crate) decision_epoch: u64,
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],

@@ -5,4 +5,5 @@ pub mod observation;
 pub mod observation_encoder;
 pub mod opponent;
 pub mod rollout_pool;
+pub mod structured_offer;
 pub mod vector_env;
