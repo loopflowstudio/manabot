@@ -106,6 +106,7 @@ export interface ExperienceFrame {
   action_space: string;
   stops: StopsConfig;
   deck_names?: DeckNames;
+  asset_pack?: AssetPackReference | null;
   log?: string[];
   auto_passed?: number;
 }

@@ -74,7 +74,7 @@ VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
 PROTOCOL_VERSION = 1
 MAX_ACCEPTED_COMMANDS = 64
 CONTENT_HASH = "legacy-content-unversioned"
-ASSET_MANIFEST_HASH = "legacy-assets-unversioned"
+ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
 
 # MTGO-style priority stops. Stop keys are the human-facing step names; they
 # map onto the engine's StepEnum names (serialize_observation reports the same

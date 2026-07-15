@@ -3,7 +3,7 @@
     "protocol": 1,
     "engine_version": "managym-python-adapter",
     "content_hash": "legacy-content-unversioned",
-    "asset_manifest_hash": "legacy-assets-unversioned",
+    "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
     "reason": "explicit_resync",
     "frame": {
       "protocol": 1,
@@ -11,7 +11,7 @@
       "revision": 2,
       "frame_hash": "fixture-frame-hash",
       "content_hash": "legacy-content-unversioned",
-      "asset_manifest_hash": "legacy-assets-unversioned",
+      "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
       "status": "ready",
       "prompt": {
         "id": 3,

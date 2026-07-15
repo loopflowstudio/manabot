@@ -58,6 +58,7 @@ def test_pack_hash_and_backend_deck_views_derive_from_manifest():
     expected_hash = hashlib.sha256(PACK_MANIFEST_PATH.read_bytes()).hexdigest()
     assert CURATED_PACK.manifest_sha256 == expected_hash
     assert len(expected_hash) == 64
+    assert server.ASSET_MANIFEST_HASH == expected_hash
     assert server.UR_LESSONS_DECK == CURATED_PACK.hero_deck
     assert server.GW_ALLIES_DECK == CURATED_PACK.villain_deck
     assert server.DECK_DISPLAY_NAMES["ur_lessons"] == "UR Lessons"

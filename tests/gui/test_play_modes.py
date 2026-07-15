@@ -248,6 +248,15 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
             "villain": "GW Allies",
         }
         assert payload["asset_pack"] == server.CURATED_PACK.reference
+        assert payload["frame"]["asset_pack"] == server.CURATED_PACK.reference
+        assert (
+            payload["frame"]["asset_manifest_hash"]
+            == server.CURATED_PACK.manifest_sha256
+        )
+        assert (
+            payload["recovery"]["asset_manifest_hash"]
+            == server.CURATED_PACK.manifest_sha256
+        )
 
     trace_files = sorted(isolated_traces.glob("*.json"))
     assert trace_files
