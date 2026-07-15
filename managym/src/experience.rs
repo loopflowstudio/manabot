@@ -347,6 +347,18 @@ pub struct DeckNames {
     pub villain: String,
 }
 
+/// Exact installed presentation pack for an authored matchup.
+///
+/// Custom and legacy games have no pack reference, while curated games bind
+/// the human-facing assets to the same manifest digest carried by the frame.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssetPackReference {
+    pub id: String,
+    pub version: String,
+    pub manifest_sha256: String,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExperienceFrame {
@@ -365,6 +377,8 @@ pub struct ExperienceFrame {
     pub stops: StopsConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deck_names: Option<DeckNames>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asset_pack: Option<AssetPackReference>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

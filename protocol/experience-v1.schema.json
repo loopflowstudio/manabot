@@ -17,6 +17,27 @@
     "command"
   ],
   "$defs": {
+    "AssetPackReference": {
+      "description": "Exact installed presentation pack for an authored matchup.\n\nCustom and legacy games have no pack reference, while curated games bind\nthe human-facing assets to the same manifest digest carried by the frame.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "manifest_sha256"
+      ]
+    },
     "AuthorityStatus": {
       "type": "string",
       "enum": [
@@ -598,6 +619,16 @@
         },
         "asset_manifest_hash": {
           "type": "string"
+        },
+        "asset_pack": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetPackReference"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "auto_passed": {
           "type": [
