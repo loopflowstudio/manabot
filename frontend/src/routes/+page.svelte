@@ -9,6 +9,7 @@
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import { gameStore } from '$lib/game.svelte';
+  import { presentationPlayer } from '$lib/presentation.svelte';
   import { connect, disconnect, sendAction, sendNewGame, sendPassTurn, sendSetStops } from '$lib/socket.svelte';
   import type { ActionOption, StopSide } from '$lib/types';
 
@@ -211,6 +212,7 @@
         winner={gameStore.winner}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
+        {presentationPlayer}
       />
 
       <div class="flex flex-col gap-4">

@@ -6,9 +6,12 @@
   import Timeline from '$lib/components/Timeline.svelte';
   import { createReplayStore } from '$lib/replay.svelte';
   import { replayLogEntries } from '$lib/replay';
+  import { presentationLabelsFromObservation } from '$lib/presentation';
+  import { createPresentationPlayer } from '$lib/presentation.svelte';
   import type { Trace, TraceSummary } from '$lib/types';
 
   const replayStore = createReplayStore();
+  const presentationPlayer = createPresentationPlayer();
 
   onMount(() => {
     void loadTraces();
@@ -19,7 +22,11 @@
       return;
     }
     const timer = setInterval(() => {
-      replayStore.tick();
+      // A replay frame owns all of its ordered semantic beats. Do not replace
+      // them with the next authoritative frame mid-sequence.
+      if (!presentationPlayer.currentEvent) {
+        replayStore.tick();
+      }
     }, Math.max(1000 / replayStore.speed, 100));
     return () => clearInterval(timer);
   });
@@ -31,6 +38,17 @@
       ? logEntries[replayStore.currentFrameIndex - 1]?.id ?? null
       : null,
   );
+
+  $effect(() => {
+    if (!currentFrame) {
+      presentationPlayer.recover();
+      return;
+    }
+    presentationPlayer.recover(
+      currentFrame.presentation,
+      presentationLabelsFromObservation(currentFrame.observation),
+    );
+  });
 
   async function loadTraces(): Promise<void> {
     replayStore.setLoadingList(true);
@@ -139,6 +157,7 @@
             observation={currentFrame.observation}
             focusedIds={new Set()}
             winner={currentFrame.observation.game_over ? replayStore.trace.winner : undefined}
+            {presentationPlayer}
           />
         </div>
       {:else}

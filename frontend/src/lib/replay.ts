@@ -7,6 +7,7 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
         observation: trace.final_observation,
         actionDescription: null,
         actor: null,
+        presentation: [],
       },
     ];
   }
@@ -16,6 +17,7 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
       observation: trace.events[0].observation,
       actionDescription: null,
       actor: null,
+      presentation: [],
     },
   ];
 
@@ -28,6 +30,7 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
       observation: nextObservation,
       actionDescription: event.action_description,
       actor: event.actor,
+      presentation: event.presentation ?? [],
     });
   }
 

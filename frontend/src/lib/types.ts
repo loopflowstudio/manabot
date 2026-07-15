@@ -127,18 +127,65 @@ export interface CommandReceipt {
   resulting_frame_hash: string;
 }
 
-// The first protocol slice carries an empty list, but the boundary is explicit
-// so semantic presentation can populate it without changing frame authority.
+export interface ObjectRenderId {
+  entity: number;
+  incarnation: number;
+}
+
+export type SubjectRef =
+  | { kind: 'object'; id: ObjectRenderId }
+  | { kind: 'stack'; id: number }
+  | { kind: 'player'; id: number };
+
+export type PresentationImportance = 'ambient' | 'normal' | 'emphasized' | 'critical';
+
+/**
+ * Protocol-v1 semantic theater. Targeted/resolved are the first explicit
+ * additions beyond the original design sketch, because a target choice and a
+ * spell leaving the stack must not be reconstructed from snapshot diffs.
+ */
+export type PresentationKind =
+  | {
+      kind: 'cast';
+      object: ObjectRenderId;
+      controller: number;
+      stack: number;
+    }
+  | {
+      kind: 'targeted';
+      source: SubjectRef;
+      target: SubjectRef;
+    }
+  | {
+      kind: 'resolved';
+      stack: number;
+    }
+  | {
+      kind: 'damage';
+      source: SubjectRef | null;
+      target: SubjectRef;
+      amount: number;
+    }
+  | {
+      kind: 'destroyed';
+      objects: ObjectRenderId[];
+    }
+  | {
+      /** Actual creature death, including lethal damage and zero toughness. */
+      kind: 'died';
+      objects: ObjectRenderId[];
+    };
+
 export interface PresentationEvent {
   seq: number;
   from_revision: number;
   to_revision: number;
   caused_by: string | null;
   group: number;
-  importance: 'ambient' | 'normal' | 'emphasized' | 'critical';
+  importance: PresentationImportance;
   suggested_ms: number;
   sound: string | null;
-  kind: { kind: string; [key: string]: unknown };
+  kind: PresentationKind;
 }
 
 export interface FrameUpdate {
@@ -218,6 +265,8 @@ export interface TraceEvent {
   action: number;
   action_description: string;
   reward: number;
+  /** Optional until the trace writer persists protocol presentation events. */
+  presentation?: PresentationEvent[];
 }
 
 export interface Trace {
@@ -234,6 +283,7 @@ export interface ReplayFrame {
   observation: Observation;
   actionDescription: string | null;
   actor: 'hero' | 'villain' | null;
+  presentation: PresentationEvent[];
 }
 
 export type StopSide = 'my' | 'opponent';

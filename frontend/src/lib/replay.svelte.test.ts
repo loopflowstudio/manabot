@@ -89,6 +89,7 @@ describe('buildReplayFrames', () => {
     expect(frames).toHaveLength(3);
     expect(frames[0].observation.turn.turn_number).toBe(1);
     expect(frames[1].actionDescription).toBe('Play land: Mountain');
+    expect(frames[1].presentation).toEqual([]);
     expect(frames[1].observation.turn.turn_number).toBe(2);
     expect(frames[2].actionDescription).toBe('Pass priority');
     expect(frames[2].observation.game_over).toBe(true);
