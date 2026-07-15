@@ -4,7 +4,7 @@ use rand::seq::SliceRandom;
 
 use super::game_object::{CardId, PlayerId};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 #[repr(i32)]
 pub enum ZoneType {
     Library = 0,
@@ -16,7 +16,7 @@ pub enum ZoneType {
     Command = 6,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct ZoneManager {
     library: [Vec<CardId>; 2],
     hand: [Vec<CardId>; 2],

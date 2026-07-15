@@ -5,7 +5,7 @@ use super::{
     mana::Mana,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayerConfig {
     pub name: String,
     pub decklist: BTreeMap<String, usize>,
@@ -28,7 +28,7 @@ impl PlayerConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Player {
     pub id: ObjectId,
     pub index: usize,

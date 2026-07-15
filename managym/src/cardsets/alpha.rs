@@ -33,6 +33,20 @@ pub fn default_content_pack() -> Arc<ContentPack> {
     Arc::clone(DEFAULT_CONTENT_PACK.get_or_init(|| Arc::new(ContentPack::default())))
 }
 
+impl ContentPack {
+    /// Representation-neutral fingerprint of the immutable card definitions.
+    ///
+    /// Sorting by card name keeps benchmark snapshots stable across storage
+    /// changes and preserves the contract-v1 digest across W2-179's move to
+    /// shared definitions.
+    pub fn content_digest(&self) -> String {
+        let mut definitions: Vec<_> = self.definitions().collect();
+        definitions.sort_by(|left, right| left.name.cmp(&right.name));
+        let bytes = serde_json::to_vec(&definitions).expect("card definitions are serializable");
+        blake3::hash(&bytes).to_hex().to_string()
+    }
+}
+
 impl Default for ContentPack {
     fn default() -> Self {
         let mut out = Self {

@@ -5,12 +5,14 @@ edition = "2021"
 
 [lib]
 name = "managym"
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
 python = ["dep:pyo3"]
 
 [dependencies]
+blake3 = "1"
 rand = "0.8"
 rand_chacha = "0.3"
 pyo3 = { version = "0.22", optional = true, features = ["extension-module"] }

@@ -3,7 +3,7 @@ use crate::state::{
     target::Target,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
 pub enum ActionType {
     PriorityPlayLand = 0,
@@ -31,7 +31,7 @@ pub enum ActionType {
     TapForCost = 13,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Action {
     PlayLand {
         player: PlayerId,
@@ -120,7 +120,7 @@ impl Action {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
 pub enum ActionSpaceKind {
     GameOver = 0,
@@ -143,7 +143,7 @@ pub enum ActionSpaceKind {
     Waterbend = 10,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActionSpace {
     pub player: Option<PlayerId>,
     pub kind: ActionSpaceKind,

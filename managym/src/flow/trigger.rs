@@ -3,7 +3,7 @@ use crate::state::{
     game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PendingTrigger {
     pub source_card: CardId,
     /// Exact source object captured when the ability triggered. Synthetic
@@ -25,14 +25,14 @@ pub struct PendingTrigger {
 /// A one-shot delayed triggered ability (CR 603.7) watching a specific
 /// card's next departure from the battlefield. Removed once it fires or
 /// once the watched permanent leaves in a non-matching way.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DelayedTrigger {
     pub watched_card: CardId,
     pub controller: PlayerId,
     pub kind: DelayedTriggerKind,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DelayedTriggerKind {
     /// Earthbend: "When it dies or is exiled, return it to the battlefield
     /// tapped."
@@ -43,7 +43,7 @@ pub enum DelayedTriggerKind {
 /// Kingdom Jailer). When the exact `source` object leaves the battlefield the
 /// exiled card returns immediately — no trigger, no stack (CR 603.6e). A later
 /// incarnation of the same physical card is not the duration source.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
     pub source: ObjectRef,
     pub exiled_card: CardId,

@@ -1,6 +1,6 @@
 use crate::state::game_object::PlayerId;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct PriorityState {
     pub holder: PlayerId,
     pub consecutive_passes: usize,

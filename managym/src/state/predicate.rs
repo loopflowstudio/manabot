@@ -5,7 +5,7 @@
 use super::card::{Card, CardType};
 
 /// A structural predicate over cards. Every populated field must match.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardPredicate {
     /// Card must have this card type.
     pub card_type: Option<CardType>,

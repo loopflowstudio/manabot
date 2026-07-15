@@ -4,7 +4,7 @@ use super::{
     mana::Mana,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
     pub id: ObjectId,
     pub card: CardId,

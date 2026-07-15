@@ -1,7 +1,7 @@
 use super::ability::Effect;
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
     pub id: ObjectId,
     pub card: CardId,
@@ -15,7 +15,7 @@ pub struct SpellOnStack {
     pub kicked: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityOnStack {
     pub id: ObjectId,
     pub controller: PlayerId,
@@ -26,7 +26,7 @@ pub struct ActivatedAbilityOnStack {
     pub targets: Vec<Target>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredAbilityOnStack {
     pub id: ObjectId,
     pub controller: PlayerId,
@@ -44,7 +44,7 @@ pub struct TriggeredAbilityOnStack {
     pub inline_effects: Option<Vec<Effect>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StackObject {
     Spell(SpellOnStack),
     ActivatedAbility(ActivatedAbilityOnStack),

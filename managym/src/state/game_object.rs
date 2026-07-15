@@ -1,10 +1,10 @@
-use super::zone::ZoneType;
 use super::card::CardDefId;
+use super::zone::ZoneType;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ObjectId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct CardId(pub usize);
 
 /// Stable match-local identity of a physical card or token.
@@ -13,7 +13,7 @@ pub struct CardId(pub usize);
 /// rules identity in a distinct type prevents continuations from silently
 /// treating that storage index as the current rules object after a zone
 /// change. The adapter can move when the card-instance layout changes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct EntityId(pub usize);
 
 impl From<CardId> for EntityId {
@@ -29,7 +29,9 @@ impl From<EntityId> for CardId {
 }
 
 /// Monotonic rules-object generation for one physical entity.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize,
+)]
 pub struct Incarnation(pub u32);
 
 impl Incarnation {
@@ -43,13 +45,13 @@ impl Incarnation {
 /// An exact rules object. A zone change preserves `entity` but advances
 /// `incarnation` (CR 400.7), so old continuations cannot bind to a later
 /// object represented by the same physical card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ObjectRef {
     pub entity: EntityId,
     pub incarnation: Incarnation,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ObjectLookupError {
     MissingEntity,
     StaleIncarnation,
@@ -61,7 +63,7 @@ pub enum ObjectLookupError {
 /// This deliberately stores identity and mutable facts, not a cloned card
 /// definition. `definition_id` resolves through the match's immutable
 /// `ContentPack` and does not clone card semantics into mutable state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
     pub object_ref: ObjectRef,
     pub card: CardId,
@@ -72,13 +74,13 @@ pub struct ObjectLki {
     pub presentation_id: ObjectId,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct PermanentId(pub usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct PlayerId(pub usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum Target {
     Player(PlayerId),
     Permanent(PermanentId),
@@ -87,7 +89,7 @@ pub enum Target {
 
 // Typed index wrappers — prevent accidental cross-collection indexing.
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct CardVec<T>(pub Vec<T>);
 
 impl<T> Default for CardVec<T> {
@@ -125,7 +127,7 @@ impl<T> std::ops::IndexMut<CardId> for CardVec<T> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct PermanentVec<T>(pub Vec<T>);
 
 impl<T> Default for PermanentVec<T> {
@@ -163,7 +165,7 @@ impl<T> std::ops::IndexMut<PermanentId> for PermanentVec<T> {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct IdGenerator {
     next_id: u32,
 }
@@ -173,5 +175,9 @@ impl IdGenerator {
         let out = ObjectId(self.next_id);
         self.next_id += 1;
         out
+    }
+
+    pub fn watermark(&self) -> u32 {
+        self.next_id
     }
 }

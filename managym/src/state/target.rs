@@ -1,6 +1,6 @@
 use super::game_object::{CardId, PermanentId, PlayerId};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum Target {
     Player(PlayerId),
     Permanent(PermanentId),

@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod benchmark;
 pub mod cardsets;
 pub mod experience;
 pub mod flow;

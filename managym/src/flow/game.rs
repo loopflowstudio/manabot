@@ -64,7 +64,7 @@ pub struct GameState {
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
 /// KickerChoice? -> ChooseTargets (per requirement) -> payment; activating a
 /// waterbend ability walks Waterbend until the cost is paid.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice { player: PlayerId, card: CardId },

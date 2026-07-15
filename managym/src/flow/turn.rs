@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::state::game_object::PlayerId;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
 pub enum PhaseKind {
     // CR 500.1 — Turn phases in order.
@@ -13,7 +13,7 @@ pub enum PhaseKind {
     Ending = 4,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
 pub enum StepKind {
     // CR 501-514 — Step order for a standard two-player turn.
@@ -46,7 +46,7 @@ pub const PHASE_STEPS: [&[StepKind]; 5] = [
     &[StepKind::End, StepKind::Cleanup],
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
     pub active_player: PlayerId,
     pub turn_number: u32,

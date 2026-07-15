@@ -22,7 +22,7 @@ use crate::{
 
 /// What to do with the resolving object once its effects finish (CR 608.2m:
 /// a spell moves out of the stack as the final part of its resolution).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum FrameFinalize {
     /// Abilities: nothing to clean up.
     None,
@@ -33,7 +33,7 @@ pub enum FrameFinalize {
 
 /// Everything a resolving spell/ability needs while its effects execute,
 /// including what's left to do if it suspends for a decision.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct EffectFrame {
     /// The card whose spell or ability is resolving.
     pub source: Option<CardId>,
@@ -71,7 +71,7 @@ impl EffectFrame {
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Decision {
     /// Scry: decide keep-or-bottom for `remaining[0]`, then continue.
     Scry {
@@ -133,7 +133,7 @@ impl Decision {
 }
 
 /// A resolution paused on a decision.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SuspendedResolution {
     pub frame: EffectFrame,
     pub decision: Decision,

@@ -6,14 +6,14 @@ use crate::{
     },
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventEntity {
     Card(CardId),
     Permanent(PermanentId),
     Player(PlayerId),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
     CardMoved {
         card: CardId,
@@ -77,7 +77,7 @@ pub enum GameEvent {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum DamageTarget {
     Player(PlayerId),
     Permanent(PermanentId),

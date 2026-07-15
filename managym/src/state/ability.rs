@@ -2,7 +2,7 @@ use super::card::Keywords;
 use super::mana::{Mana, ManaCost};
 use super::predicate::CardPredicate;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Ability {
     Triggered {
         condition: TriggerCondition,
@@ -30,7 +30,7 @@ impl Ability {
 }
 
 /// The event that causes a triggered ability to trigger (CR 603.1).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
     /// "When [subject] enters the battlefield."
     EntersTheBattlefield { subject: TriggerSubject },
@@ -67,7 +67,7 @@ pub enum TriggerCondition {
 
 /// A game-state condition for conditional statics and intervening-if
 /// checks, evaluated for a specific controller ("you").
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticCondition {
     /// "as long as there are `count` or more [predicate] cards in your
     /// graveyard".
@@ -78,7 +78,7 @@ pub enum StaticCondition {
 }
 
 /// Which game objects an event-based trigger condition watches.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerSubject {
     /// The permanent this ability is on.
     This,
@@ -88,7 +88,7 @@ pub enum TriggerSubject {
     AnyYouControl(CardPredicate),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
     ReturnToHand {
         target: TargetSpec,
@@ -262,7 +262,7 @@ pub enum Effect {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TargetSpec {
     Creature,
     CreatureOrPlayer,
@@ -283,7 +283,7 @@ pub enum TargetSpec {
 
 /// One targeting clause of a spell: "[up to] N target [spec]".
 /// `min == 0` encodes "up to"; `max` bounds how many may be chosen.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TargetRequirement {
     pub spec: TargetSpec,
     pub min: usize,

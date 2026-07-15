@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[repr(u8)]
 pub enum Color {
     White = 0,
@@ -28,7 +28,7 @@ impl Color {
 
 pub type Colors = BTreeSet<Color>;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ManaCost {
     pub cost: [u8; 7],
     pub mana_value: u8,
@@ -120,7 +120,7 @@ impl ManaCost {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Mana {
     pub mana: [u8; 6],
 }

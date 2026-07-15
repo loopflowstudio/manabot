@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::state::game_object::PermanentId;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct CombatState {
     pub attackers: Vec<PermanentId>,
     pub attacker_to_blockers: BTreeMap<PermanentId, Vec<PermanentId>>,

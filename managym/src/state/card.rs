@@ -12,10 +12,10 @@ use super::{
 /// The numeric value deliberately matches the legacy `registry_key` exposed
 /// through observations so the Python and fixed-action ABIs do not change.
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct CardDefId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum CardType {
     Creature,
     Instant,
@@ -28,7 +28,7 @@ pub enum CardType {
     Battle,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardTypes {
     pub types: BTreeSet<CardType>,
 }
@@ -98,20 +98,20 @@ impl CardTypes {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ManaAbility {
     pub mana: Mana,
 }
 
 /// A triggered mana ability (CR 605.1b): "Whenever you tap a [predicate]
 /// for mana, add [mana]." Resolves immediately — no stack, no priority.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredManaAbility {
     pub predicate: CardPredicate,
     pub mana: Mana,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Keywords {
     pub flying: bool,
     pub reach: bool,
@@ -153,7 +153,7 @@ impl Keywords {
 }
 
 /// Characteristic-defining power (CR 604.3): recomputed on every read.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum PowerCda {
     /// "This creature's power is equal to the number of creatures you
     /// control." (Suki, Kyoshi Warrior.)
@@ -164,7 +164,7 @@ pub enum PowerCda {
 }
 
 /// Which battlefield permanents a static P/T buff applies to.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticScope {
     /// The source permanent itself ("This creature gets +1/+1 as long as
     /// ..." — First-Time Flyer).
@@ -178,7 +178,7 @@ pub enum StaticScope {
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
 /// +P/+T [as long as condition]". Applies only while the source is on the
 /// battlefield.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticPtBuff {
     pub scope: StaticScope,
     pub condition: Option<StaticCondition>,
@@ -186,7 +186,7 @@ pub struct StaticPtBuff {
     pub toughness: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
     pub mana_cost: ManaCost,
     /// Sacrifice the source permanent as an additional activation cost
@@ -200,7 +200,7 @@ pub struct ActivatedAbilityDefinition {
     pub effect: Effect,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
     pub name: String,
     pub mana_cost: Option<ManaCost>,
