@@ -209,16 +209,6 @@ export interface CommandReceipt {
   resulting_frame_hash: string;
 }
 
-export interface ObjectRenderId {
-  entity: number;
-  incarnation: number;
-}
-
-export type SubjectRef =
-  | { kind: 'object'; id: ObjectRenderId }
-  | { kind: 'stack'; id: number }
-  | { kind: 'player'; id: number };
-
 export type PresentationImportance = 'ambient' | 'normal' | 'emphasized' | 'critical';
 
 /**
