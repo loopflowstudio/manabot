@@ -84,8 +84,10 @@
     if (!canPassTurn || gameStore.fastForwarding) {
       return;
     }
+    if (!sendPassTurn()) {
+      return;
+    }
     gameStore.appendHeroAction('Pass turn (F6)');
-    sendPassTurn();
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -100,11 +102,13 @@
       return;
     }
 
+    if (!sendAction(action.index)) {
+      return;
+    }
     gameStore.appendHeroAction(action.description);
     gameStore.clearSelectedTarget();
     gameStore.clearFocus();
     hoveredTargetId = null;
-    sendAction(action.index);
   }
 
   function handleActionHover(action: ActionOption | null): void {

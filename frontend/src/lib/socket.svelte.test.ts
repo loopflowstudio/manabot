@@ -1,6 +1,20 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
-import { parseServerMessage } from './socket.svelte';
+import { gameStore } from './game.svelte';
+import { GameSocketController, parseServerMessage } from './socket.svelte';
+import type { ClientMessage, Command, RecoveryEnvelope } from './types';
+
+interface BoltProtocolFixture {
+  recovery: RecoveryEnvelope;
+  command: Command;
+}
+
+const boltProtocolFixture = JSON.parse(readFileSync(
+  new URL('../../../tests/gui/fixtures/protocol_v1_bolt_target.json', import.meta.url),
+  'utf8',
+)) as BoltProtocolFixture;
 
 describe('parseServerMessage', () => {
   it('parses observation payloads', () => {
@@ -59,8 +73,41 @@ describe('parseServerMessage', () => {
     expect(parseServerMessage('not-json')).toBeNull();
   });
 
+  it('parses protocol command outcomes', () => {
+    const parsed = parseServerMessage(JSON.stringify({
+      type: 'command_outcome',
+      status: 'rejected',
+      rejection: {
+        command_id: 'command-a',
+        code: 'stale_revision',
+        message: 'Stale revision.',
+        current_revision: 2,
+        current_prompt: 3,
+      },
+    }));
+
+    expect(parsed?.type).toBe('command_outcome');
+    if (parsed?.type === 'command_outcome') {
+      expect(parsed.status).toBe('rejected');
+    }
+  });
+
   it('rejects unsupported message types', () => {
     const parsed = parseServerMessage(JSON.stringify({ type: 'ping' }));
     expect(parsed).toBeNull();
+  });
+});
+
+describe('GameSocketController offline gameplay', () => {
+  it('does not queue offer commands or F6 against a future recovered frame', () => {
+    gameStore.prepareForNewGame();
+    gameStore.applyFrame(boltProtocolFixture.recovery.frame);
+    const controller = new GameSocketController();
+    const queue = (controller as unknown as { outboundQueue: ClientMessage[] }).outboundQueue;
+
+    expect(controller.sendAction(boltProtocolFixture.command.offer_id)).toBe(false);
+    expect(controller.sendPassTurn()).toBe(false);
+    expect(queue).toEqual([]);
+    expect(gameStore.fastForwarding).toBe(false);
   });
 });

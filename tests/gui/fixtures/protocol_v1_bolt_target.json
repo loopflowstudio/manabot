@@ -1,0 +1,111 @@
+{
+  "recovery": {
+    "protocol": 1,
+    "engine_version": "managym-python-adapter",
+    "content_hash": "legacy-content-unversioned",
+    "asset_manifest_hash": "legacy-assets-unversioned",
+    "reason": "explicit_resync",
+    "frame": {
+      "protocol": 1,
+      "match_id": "fixture-match",
+      "revision": 2,
+      "frame_hash": "fixture-frame-hash",
+      "content_hash": "legacy-content-unversioned",
+      "asset_manifest_hash": "legacy-assets-unversioned",
+      "status": "ready",
+      "prompt": {
+        "id": 3,
+        "actor": 0,
+        "kind": "choose_target",
+        "title": "Choose an action",
+        "instruction": "Choose an action"
+      },
+      "projection": {
+        "game_over": false,
+        "won": false,
+        "turn": {
+          "turn_number": 1,
+          "phase": "PRECOMBAT_MAIN",
+          "step": "PRECOMBAT_MAIN_STEP",
+          "active_player_id": 0,
+          "agent_player_id": 0
+        },
+        "agent": {
+          "player_index": 0,
+          "id": 0,
+          "is_active": true,
+          "is_agent": true,
+          "life": 20,
+          "zone_counts": {},
+          "library_count": 16,
+          "hand": [],
+          "graveyard": [],
+          "exile": [],
+          "stack": [],
+          "battlefield": []
+        },
+        "opponent": {
+          "player_index": 1,
+          "id": 1,
+          "is_active": false,
+          "is_agent": false,
+          "life": 20,
+          "zone_counts": {},
+          "library_count": 13,
+          "hand_hidden_count": 7,
+          "hand": [],
+          "graveyard": [],
+          "exile": [],
+          "stack": [],
+          "battlefield": []
+        }
+      },
+      "offers": [
+        {
+          "id": 0,
+          "actor": 0,
+          "verb": "choose",
+          "source": null,
+          "label": "Target Hero",
+          "help": null,
+          "choices": [],
+          "confirm_label": "Target Hero",
+          "action_type": "CHOOSE_TARGET",
+          "focus": [0]
+        },
+        {
+          "id": 1,
+          "actor": 0,
+          "verb": "choose",
+          "source": null,
+          "label": "Target Villain",
+          "help": null,
+          "choices": [],
+          "confirm_label": "Target Villain",
+          "action_type": "CHOOSE_TARGET",
+          "focus": [1]
+        }
+      ],
+      "winner": null,
+      "action_space": "CHOOSE_TARGET",
+      "stops": {
+        "my": ["main1", "main2"],
+        "opponent": ["end_step"],
+        "stop_on_stack": true,
+        "auto_pass": false
+      }
+    },
+    "presentation_tail": [],
+    "accepted_commands": [],
+    "replay_cursor": 2,
+    "checkpoint": null
+  },
+  "command": {
+    "command_id": "fixture-target-command",
+    "match_id": "fixture-match",
+    "expected_revision": 2,
+    "prompt_id": 3,
+    "offer_id": 1,
+    "answers": []
+  }
+}

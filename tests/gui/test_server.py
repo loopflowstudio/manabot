@@ -5,6 +5,7 @@ WebSocket integration tests for the GUI backend server.
 
 from datetime import timedelta
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -12,6 +13,12 @@ from fastapi.testclient import TestClient
 # Local imports
 from gui import server, trace as trace_store
 from gui.server import app
+
+PROTOCOL_V1_BOLT_FIXTURE = json.loads(
+    (Path(__file__).parent / "fixtures" / "protocol_v1_bolt_target.json").read_text(
+        encoding="utf-8"
+    )
+)
 
 
 def _pick_action(actions: list[dict]) -> int:
@@ -21,6 +28,151 @@ def _pick_action(actions: list[dict]) -> int:
             return int(action["index"])
 
     return int(actions[0]["index"])
+
+
+def _command(frame: dict, offer: dict, command_id: str) -> dict:
+    return {
+        "command_id": command_id,
+        "match_id": frame["match_id"],
+        "expected_revision": frame["revision"],
+        "prompt_id": frame["prompt"]["id"],
+        "offer_id": offer["id"],
+        "answers": [],
+    }
+
+
+def _offer(frame: dict, *, action_type: str, label: str | None = None) -> dict:
+    return next(
+        offer
+        for offer in frame["offers"]
+        if offer["action_type"] == action_type
+        and (label is None or offer["label"] == label)
+    )
+
+
+def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    config = {
+        "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
+        "villain_deck": {"Island": 20},
+        "villain_type": "passive",
+        "seed": 3,
+        "auto_pass": False,
+    }
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            initial = websocket.receive_json()
+            frame = initial["recovery"]["frame"]
+            assert frame["protocol"] == 1
+            assert _offer(frame, action_type="PRIORITY_PASS_PRIORITY")["verb"] == (
+                "pass_priority"
+            )
+
+            for action_type, label in (
+                ("PRIORITY_PLAY_LAND", None),
+                ("PRIORITY_CAST_SPELL", "Cast Lightning Bolt"),
+                ("CHOOSE_TARGET", "Target Villain"),
+                ("PRIORITY_PASS_PRIORITY", "Pass priority"),
+            ):
+                offer = _offer(frame, action_type=action_type, label=label)
+                command_id = f"bolt-{frame['revision']}"
+                if action_type == "CHOOSE_TARGET":
+                    fixture_frame = PROTOCOL_V1_BOLT_FIXTURE["recovery"]["frame"]
+                    for key in (
+                        "protocol",
+                        "revision",
+                        "status",
+                        "prompt",
+                        "offers",
+                        "action_space",
+                        "stops",
+                    ):
+                        assert frame[key] == fixture_frame[key]
+                    command_id = PROTOCOL_V1_BOLT_FIXTURE["command"]["command_id"]
+
+                command = _command(frame, offer, command_id)
+                if action_type == "CHOOSE_TARGET":
+                    fixture_command = PROTOCOL_V1_BOLT_FIXTURE["command"]
+                    for key in (
+                        "command_id",
+                        "expected_revision",
+                        "prompt_id",
+                        "offer_id",
+                        "answers",
+                    ):
+                        assert command[key] == fixture_command[key]
+                websocket.send_json({"type": "command", "command": command})
+                outcome = websocket.receive_json()
+                assert outcome["status"] == "accepted"
+                assert outcome["update"]["base_revision"] == frame["revision"]
+                frame = outcome["update"]["frame"]
+
+    assert frame["revision"] == 4
+    assert frame["projection"]["opponent"]["life"] == 17
+    record = next(iter(server.SESSION_REGISTRY.values()))
+    assert [event.action_description for event in record.game.trace.events[:3]] == [
+        "Play Mountain",
+        "Cast Lightning Bolt",
+        "Target Villain",
+    ]
+    assert any(
+        event.actor == "hero"
+        and event.action_description == "Pass priority"
+        and not event.auto
+        for event in record.game.trace.events
+    )
+
+
+def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    config = {
+        "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
+        "villain_deck": {"Island": 20},
+        "villain_type": "passive",
+        "seed": 3,
+        "auto_pass": False,
+    }
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            old_frame = websocket.receive_json()["frame"]
+            land_command = _command(
+                old_frame,
+                _offer(old_frame, action_type="PRIORITY_PLAY_LAND"),
+                "same-command",
+            )
+            stale_command = _command(
+                old_frame,
+                _offer(old_frame, action_type="PRIORITY_PASS_PRIORITY"),
+                "stale-command",
+            )
+
+            websocket.send_json({"type": "command", "command": land_command})
+            accepted = websocket.receive_json()
+            assert accepted["status"] == "accepted"
+            receipt = accepted["update"]["receipt"]
+
+            websocket.send_json({"type": "command", "command": land_command})
+            duplicate = websocket.receive_json()
+            assert duplicate["status"] == "duplicate"
+            assert duplicate["receipt"] == receipt
+            assert duplicate["recovery"]["reason"] == "duplicate_command"
+            assert duplicate["recovery"]["frame"]["revision"] == 1
+
+            websocket.send_json({"type": "command", "command": stale_command})
+            rejected = websocket.receive_json()
+            assert rejected["status"] == "rejected"
+            assert rejected["rejection"]["code"] == "stale_revision"
+            assert rejected["recovery"]["reason"] == "stale_command"
+            assert rejected["recovery"]["frame"]["revision"] == 1
+
+    record = next(iter(server.SESSION_REGISTRY.values()))
+    assert len(record.game.trace.events) == 1
 
 
 def test_websocket_new_game_action_loop_and_trace_output(monkeypatch, tmp_path):
@@ -101,7 +253,8 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
             first_action = _pick_action(payload["actions"])
             websocket.send_json({"type": "action", "index": first_action})
             payload = websocket.receive_json()
-            assert payload["type"] in {"observation", "game_over"}
+            assert payload["type"] == "observation"
+            frame_before_reconnect = payload["recovery"]["frame"]
 
         with client.websocket_connect("/ws/play") as resumed:
             resumed.send_json(
@@ -112,10 +265,13 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
                 }
             )
             resumed_payload = resumed.receive_json()
-            assert resumed_payload["type"] in {"observation", "game_over"}
-            if resumed_payload["type"] == "observation":
-                assert resumed_payload["session_id"] == session_id
-                assert resumed_payload["resume_token"] == resume_token
+            assert resumed_payload["type"] == "observation"
+            assert resumed_payload["session_id"] == session_id
+            assert resumed_payload["resume_token"] == resume_token
+            assert resumed_payload["recovery"]["reason"] == "reconnect"
+            resumed_frame = resumed_payload["recovery"]["frame"]
+            for key in ("match_id", "revision", "prompt"):
+                assert resumed_frame[key] == frame_before_reconnect[key]
 
 
 def test_websocket_rejects_invalid_resume_credentials(monkeypatch, tmp_path):

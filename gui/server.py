@@ -8,6 +8,8 @@ from __future__ import annotations
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
 from pathlib import Path
 import secrets
 from typing import Any
@@ -98,6 +100,10 @@ DEFAULT_DECK = INTERACTIVE_DECK
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
 VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
+PROTOCOL_VERSION = 1
+MAX_ACCEPTED_COMMANDS = 64
+CONTENT_HASH = "legacy-content-unversioned"
+ASSET_MANIFEST_HASH = "legacy-assets-unversioned"
 
 # MTGO-style priority stops. Stop keys are the human-facing step names; they
 # map onto the engine's StepEnum names (serialize_observation reports the same
@@ -157,6 +163,18 @@ class SessionRecord:
 
 
 SESSION_REGISTRY: dict[str, SessionRecord] = {}
+
+
+@dataclass(frozen=True)
+class PublishedPrompt:
+    """One immutable mapping from wire offer IDs to current engine actions."""
+
+    revision: int
+    prompt_id: int
+    action_space: str
+    action_by_offer: dict[int, int]
+    actions: list[dict[str, Any]]
+    offers: list[dict[str, Any]]
 
 
 def _enum_name(enum_type, value: Any) -> str:
@@ -292,9 +310,7 @@ def _permanent_names(
     the same alignment _serialize_player relies on.
     """
     battlefield_cards = [
-        card
-        for card in cards
-        if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+        card for card in cards if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
     ]
     names: dict[int, str] = {}
     for index, permanent in enumerate(permanents):
@@ -440,9 +456,7 @@ def _hero_is_active_player(obs: managym.Observation) -> bool:
     assuming ``obs.agent`` is the hero.
     """
     hero = (
-        obs.agent
-        if int(obs.agent.player_index) == HERO_PLAYER_INDEX
-        else obs.opponent
+        obs.agent if int(obs.agent.player_index) == HERO_PLAYER_INDEX else obs.opponent
     )
     return int(obs.turn.active_player_id) == int(hero.id)
 
@@ -452,6 +466,18 @@ def _pass_priority_index(actions: list[dict[str, Any]]) -> int | None:
         if action["type"] == "PRIORITY_PASS_PRIORITY":
             return int(action["index"])
     return None
+
+
+def _offer_verb(action_type: str) -> str:
+    return {
+        "PRIORITY_CAST_SPELL": "cast",
+        "PRIORITY_PLAY_LAND": "play_land",
+        "PRIORITY_ACTIVATE_ABILITY": "activate",
+        "PRIORITY_PASS_PRIORITY": "pass_priority",
+        "DECLARE_ATTACKER": "declare_attackers",
+        "DECLARE_BLOCKER": "declare_blockers",
+        "PAY_COST": "pay",
+    }.get(action_type, "choose")
 
 
 def _parse_stops(value: Any) -> dict[str, list[str]]:
@@ -569,9 +595,7 @@ def _parse_game_config(config: Any) -> GameConfig:
     if villain_type == "checkpoint":
         checkpoint_value = data.get("villain_checkpoint")
         if not isinstance(checkpoint_value, str) or not checkpoint_value:
-            raise ValueError(
-                "checkpoint villain requires a 'villain_checkpoint' path."
-            )
+            raise ValueError("checkpoint villain requires a 'villain_checkpoint' path.")
         if not Path(checkpoint_value).is_file():
             raise ValueError(f"Checkpoint not found: {checkpoint_value}")
         villain_checkpoint = checkpoint_value
@@ -624,6 +648,13 @@ class GameSession:
         self._f6_turn: int | None = None
         # Hero priority windows auto-passed since the last surfaced message.
         self._auto_passed_since_surface = 0
+        # Protocol-v1 adapter state. The engine remains authoritative; this
+        # layer only gives each surfaced positional action a stable envelope.
+        self.match_id = secrets.token_urlsafe(16)
+        self.revision = 0
+        self._next_prompt_id = 1
+        self.published_prompt: PublishedPrompt | None = None
+        self.accepted_commands: dict[str, dict[str, Any]] = {}
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -668,9 +699,14 @@ class GameSession:
         self.auto_pass = config.auto_pass
         self._f6_turn = None
         self._auto_passed_since_surface = 0
+        self.match_id = secrets.token_urlsafe(16)
+        self.revision = 0
+        self._next_prompt_id = 1
+        self.published_prompt = None
+        self.accepted_commands = {}
 
         self._advance()
-        return self._wire_message()
+        return self._wire_message(reason="initial_connect")
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
         if self.env is None or self.obs is None or self.trace is None:
@@ -691,7 +727,87 @@ class GameSession:
 
         self._step_and_record(actor="hero", action_index=action_index, actions=actions)
         self._advance()
+        self._advance_protocol_revision()
         return self._wire_message()
+
+    def hero_command(self, raw: Any) -> dict[str, Any]:
+        """Validate and apply one revision-bound protocol-v1 command.
+
+        Offer IDs are lowered through ``PublishedPrompt``. The client never
+        chooses or replays a raw engine action index on this path.
+        """
+        if self.env is None or self.obs is None or self.trace is None:
+            raise ValueError("No active game session. Send new_game first.")
+        if not isinstance(raw, dict):
+            raise ValueError("command must be an object.")
+
+        command_id = raw.get("command_id")
+        if not isinstance(command_id, str) or not command_id:
+            raise ValueError("command_id must be a non-empty string.")
+
+        # Check retries before any revision/match validation. A response may
+        # have been lost after the original command committed.
+        receipt = self.accepted_commands.get(command_id)
+        if receipt is not None:
+            return {
+                "type": "command_outcome",
+                "status": "duplicate",
+                "receipt": dict(receipt),
+                "recovery": self.current_recovery("duplicate_command"),
+            }
+
+        if raw.get("match_id") != self.match_id:
+            return self._reject_command(raw, "wrong_match", recover=False)
+
+        prompt = self.published_prompt
+        if prompt is None:
+            return self._reject_command(raw, "authority_busy", recover=True)
+        if raw.get("expected_revision") != prompt.revision:
+            return self._reject_command(raw, "stale_revision", recover=True)
+        if raw.get("prompt_id") != prompt.prompt_id:
+            return self._reject_command(raw, "stale_prompt", recover=True)
+
+        offer_id = raw.get("offer_id")
+        action_index = prompt.action_by_offer.get(offer_id)
+        if action_index is None:
+            return self._reject_command(raw, "unknown_offer", recover=True)
+        if raw.get("answers") != []:
+            return self._reject_command(raw, "invalid_selection", recover=False)
+        if self.obs.game_over:
+            return self._reject_command(raw, "authority_busy", recover=True)
+        if not _is_hero_turn(self.obs):
+            return self._reject_command(raw, "not_actor", recover=False)
+
+        base_revision = self.revision
+        self._step_and_record(
+            actor="hero",
+            action_index=action_index,
+            actions=prompt.actions,
+        )
+        self._advance()
+        self._advance_protocol_revision()
+        frame = self._experience_frame()
+        receipt = {
+            "command_id": command_id,
+            "actor": HERO_PLAYER_INDEX,
+            "accepted_at": base_revision,
+            "resulting_revision": self.revision,
+            "resulting_frame_hash": frame["frame_hash"],
+        }
+        self.accepted_commands[command_id] = receipt
+        while len(self.accepted_commands) > MAX_ACCEPTED_COMMANDS:
+            self.accepted_commands.pop(next(iter(self.accepted_commands)))
+
+        return {
+            "type": "command_outcome",
+            "status": "accepted",
+            "update": {
+                "base_revision": base_revision,
+                "frame": frame,
+                "presentation": [],
+                "receipt": receipt,
+            },
+        }
 
     def set_stops(
         self,
@@ -717,6 +833,7 @@ class GameSession:
             self.auto_pass = raw_auto_pass
 
         self._advance()
+        self._advance_protocol_revision()
         return self._wire_message()
 
     def pass_turn(self) -> dict[str, Any]:
@@ -730,12 +847,13 @@ class GameSession:
         if _is_hero_turn(self.obs) and _is_priority_space(self.obs):
             self._f6_turn = int(self.obs.turn.turn_number)
             self._advance()
+            self._advance_protocol_revision()
         return self._wire_message()
 
     def current_message(self) -> dict[str, Any]:
         if self.obs is None:
             raise ValueError("No active game session. Send new_game first.")
-        return self._wire_message()
+        return self._wire_message(reason="reconnect")
 
     def _step_and_record(
         self,
@@ -876,45 +994,171 @@ class GameSession:
         self._pending_villain_log = []
         return pending
 
-    def _wire_message(self) -> dict[str, Any]:
+    def _advance_protocol_revision(self) -> None:
+        self.revision += 1
+        self.published_prompt = None
+
+    def _publish_current_prompt(self) -> PublishedPrompt | None:
+        if self.obs is None or self.obs.game_over:
+            self.published_prompt = None
+            return None
+        if self.published_prompt is not None:
+            return self.published_prompt
+
+        actions = describe_actions(self.obs)
+        action_space = _enum_name(
+            ActionSpaceEnum, int(self.obs.action_space.action_space_type)
+        )
+        prompt_id = self._next_prompt_id
+        self._next_prompt_id += 1
+        action_by_offer = {
+            offer_id: int(action["index"]) for offer_id, action in enumerate(actions)
+        }
+        offers = [
+            {
+                "id": offer_id,
+                "actor": HERO_PLAYER_INDEX,
+                "verb": _offer_verb(str(action.get("type", ""))),
+                "source": None,
+                "label": action["description"],
+                "help": None,
+                "choices": [],
+                "confirm_label": action["description"],
+                # Temporary direct-manipulation bridge for the existing table.
+                "action_type": action.get("type", ""),
+                "focus": list(action.get("focus", [])),
+            }
+            for offer_id, action in enumerate(actions)
+        ]
+        self.published_prompt = PublishedPrompt(
+            revision=self.revision,
+            prompt_id=prompt_id,
+            action_space=action_space,
+            action_by_offer=action_by_offer,
+            actions=actions,
+            offers=offers,
+        )
+        return self.published_prompt
+
+    def _experience_frame(self) -> dict[str, Any]:
         if self.obs is None:
             raise RuntimeError("No observation available.")
 
+        prompt = self._publish_current_prompt()
         data = hero_view(self.obs)
         log = self._drain_pending_villain_log()
         auto_passed = self._auto_passed_since_surface
         self._auto_passed_since_surface = 0
         if self.obs.game_over:
             self._finalize_trace(end_reason="game_over")
-            payload = {
-                "type": "game_over",
-                "data": data,
-                "winner": _winner_for_hero(self.obs),
-                "stops": self._stops_payload(),
+        prompt_view = None
+        if prompt is not None:
+            title = (
+                "Your priority"
+                if prompt.action_space == "PRIORITY"
+                else "Choose an action"
+            )
+            prompt_view = {
+                "id": prompt.prompt_id,
+                "actor": HERO_PLAYER_INDEX,
+                "kind": prompt.action_space.lower(),
+                "title": title,
+                "instruction": "Choose an action",
             }
-            if self.deck_names:
-                payload["deck_names"] = dict(self.deck_names)
-            if log:
-                payload["log"] = log
-            if auto_passed:
-                payload["auto_passed"] = auto_passed
-            return payload
 
-        payload = {
-            "type": "observation",
-            "data": data,
-            "actions": describe_actions(self.obs),
-            "action_space": _enum_name(
-                ActionSpaceEnum, int(self.obs.action_space.action_space_type)
-            ),
+        frame_core = {
+            "protocol": PROTOCOL_VERSION,
+            "match_id": self.match_id,
+            "revision": self.revision,
+            "content_hash": CONTENT_HASH,
+            "asset_manifest_hash": ASSET_MANIFEST_HASH,
+            "status": "game_over" if self.obs.game_over else "ready",
+            "prompt": prompt_view,
+            # This first slice deliberately carries the established hero-view
+            # projection. Semantic table projection is a later migration.
+            "projection": data,
+            "offers": [] if prompt is None else prompt.offers,
+        }
+        frame_hash = hashlib.sha256(
+            json.dumps(frame_core, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        frame = {
+            **frame_core,
+            "frame_hash": frame_hash,
+            "winner": _winner_for_hero(self.obs),
+            "action_space": "" if prompt is None else prompt.action_space,
             "stops": self._stops_payload(),
         }
         if self.deck_names:
-            payload["deck_names"] = dict(self.deck_names)
+            frame["deck_names"] = dict(self.deck_names)
         if log:
-            payload["log"] = log
+            frame["log"] = log
         if auto_passed:
-            payload["auto_passed"] = auto_passed
+            frame["auto_passed"] = auto_passed
+        return frame
+
+    def current_recovery(self, reason: str) -> dict[str, Any]:
+        frame = self._experience_frame()
+        return {
+            "protocol": PROTOCOL_VERSION,
+            "engine_version": "managym-python-adapter",
+            "content_hash": CONTENT_HASH,
+            "asset_manifest_hash": ASSET_MANIFEST_HASH,
+            "reason": reason,
+            "frame": frame,
+            "presentation_tail": [],
+            "accepted_commands": list(self.accepted_commands.values()),
+            "replay_cursor": len(self.trace.events) if self.trace else 0,
+            "checkpoint": None,
+        }
+
+    def _wire_message(self, reason: str = "explicit_resync") -> dict[str, Any]:
+        """Compatibility wrapper carrying the protocol recovery envelope.
+
+        Existing GUI/table consumers retain their observation fields while the
+        protocol client reads the nested atomic frame. This wrapper disappears
+        when semantic projection replaces the legacy table shape.
+        """
+        recovery = self.current_recovery(reason)
+        frame = recovery["frame"]
+        prompt = self.published_prompt
+        payload: dict[str, Any] = {
+            "type": "game_over" if frame["projection"]["game_over"] else "observation",
+            "data": frame["projection"],
+            "winner": frame["winner"],
+            "actions": [] if prompt is None else prompt.actions,
+            "action_space": frame["action_space"],
+            "stops": frame["stops"],
+            "protocol": PROTOCOL_VERSION,
+            "frame": frame,
+            "recovery": recovery,
+        }
+        if "deck_names" in frame:
+            payload["deck_names"] = frame["deck_names"]
+        if "log" in frame:
+            payload["log"] = frame["log"]
+        if "auto_passed" in frame:
+            payload["auto_passed"] = frame["auto_passed"]
+        return payload
+
+    def _reject_command(
+        self, raw: dict[str, Any], code: str, *, recover: bool
+    ) -> dict[str, Any]:
+        prompt = self.published_prompt
+        rejection = {
+            "command_id": raw.get("command_id"),
+            "code": code,
+            "message": code.replace("_", " ").capitalize() + ".",
+            "current_revision": self.revision,
+            "current_prompt": None if prompt is None else prompt.prompt_id,
+        }
+        payload: dict[str, Any] = {
+            "type": "command_outcome",
+            "status": "rejected",
+            "rejection": rejection,
+        }
+        if recover:
+            payload["recovery"] = self.current_recovery("stale_command")
         return payload
 
     def _finalize_trace(self, end_reason: str) -> None:
@@ -1078,9 +1322,11 @@ async def play_socket(websocket: WebSocket) -> None:
                     response = record.game.new_game(request.get("config", {}))
                     record.touch()
                     response = _response_with_session(response, record)
-                elif message_type == "action":
-                    if "index" not in request:
+                elif message_type in {"action", "command"}:
+                    if message_type == "action" and "index" not in request:
                         raise ValueError("action messages require an 'index' field.")
+                    if message_type == "command" and "command" not in request:
+                        raise ValueError("command messages require a 'command' field.")
                     if attached_session_id is None:
                         raise ValueError("No active game session. Send new_game first.")
 
@@ -1089,7 +1335,12 @@ async def play_socket(websocket: WebSocket) -> None:
                         attached_session_id = None
                         raise ValueError("Session expired. Start a new game.")
 
-                    response = record.game.hero_action(request.get("index"))
+                    if message_type == "command":
+                        response = record.game.hero_command(request.get("command"))
+                    else:
+                        # Transitional compatibility for tests and older
+                        # clients. The shipped Svelte client uses commands.
+                        response = record.game.hero_action(request.get("index"))
                     record.touch()
                     response = _response_with_session(response, record)
                 elif message_type in {"set_stops", "pass_turn"}:

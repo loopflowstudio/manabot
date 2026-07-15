@@ -1,10 +1,15 @@
 import { browser } from '$app/environment';
 
 import { gameStore } from './game.svelte';
-import type { ClientMessage, ServerMessage } from './types';
+import type {
+  ClientMessage,
+  FrameUpdate,
+  RecoveryEnvelope,
+  ServerMessage,
+} from './types';
 
 const RESUME_STORAGE_KEY = 'manabot.gui.resume';
-const VALID_SERVER_TYPES = new Set(['observation', 'game_over', 'error']);
+const VALID_SERVER_TYPES = new Set(['observation', 'game_over', 'command_outcome', 'error']);
 
 interface ResumeCredentials {
   session_id: string;
@@ -63,13 +68,14 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   }
 }
 
-class GameSocketController {
+export class GameSocketController {
   private socket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionallyClosed = false;
   private pendingResume = false;
   private outboundQueue: ClientMessage[] = [];
+  private inFlightCommand: string | null = null;
 
   connect(): void {
     if (!browser) {
@@ -140,12 +146,37 @@ class GameSocketController {
   }
 
   sendNewGame(config?: Record<string, unknown>): void {
+    this.inFlightCommand = null;
     gameStore.prepareForNewGame();
     this.send(config ? { type: 'new_game', config } : { type: 'new_game' });
   }
 
-  sendAction(index: number): void {
-    this.send({ type: 'action', index });
+  sendAction(offerId: number): boolean {
+    const frame = gameStore.protocolFrame;
+    const prompt = frame?.prompt;
+    if (!frame || !prompt || this.inFlightCommand !== null) {
+      return false;
+    }
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      gameStore.setError('Connection changed. Recovering the latest game state.');
+      this.connect();
+      return false;
+    }
+
+    const commandId = crypto.randomUUID();
+    this.inFlightCommand = commandId;
+    this.socket.send(JSON.stringify({
+      type: 'command',
+      command: {
+        command_id: commandId,
+        match_id: frame.match_id,
+        expected_revision: frame.revision,
+        prompt_id: prompt.id,
+        offer_id: offerId,
+        answers: [],
+      },
+    } satisfies ClientMessage));
+    return true;
   }
 
   sendSetStops(): void {
@@ -158,9 +189,16 @@ class GameSocketController {
     });
   }
 
-  sendPassTurn(): void {
+  sendPassTurn(): boolean {
     gameStore.beginFastForward();
-    this.send({ type: 'pass_turn' });
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      gameStore.endFastForward();
+      gameStore.setError('Connection changed. Recovering the latest game state.');
+      this.connect();
+      return false;
+    }
+    this.socket.send(JSON.stringify({ type: 'pass_turn' } satisfies ClientMessage));
+    return true;
   }
 
   private send(message: ClientMessage): void {
@@ -194,20 +232,36 @@ class GameSocketController {
       return;
     }
 
-    if (message.type === 'observation') {
+    if (message.type === 'observation' || message.type === 'game_over') {
       this.pendingResume = false;
-      gameStore.applyObservation(
-        message.data,
-        message.actions,
-        message.session_id,
-        message.resume_token,
-        message.log ?? [],
-        message.stops,
-        message.auto_passed ?? 0,
-        message.deck_names,
-        message.action_space ?? '',
-      );
-      if (message.session_id && message.resume_token) {
+      this.inFlightCommand = null;
+      if (message.recovery) {
+        const sessionId = message.type === 'observation' ? message.session_id : undefined;
+        const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
+        this.applyRecovery(message.recovery, sessionId, resumeToken);
+      } else if (message.type === 'observation') {
+        gameStore.applyObservation(
+          message.data,
+          message.actions,
+          message.session_id,
+          message.resume_token,
+          message.log ?? [],
+          message.stops,
+          message.auto_passed ?? 0,
+          message.deck_names,
+          message.action_space ?? '',
+        );
+      } else {
+        gameStore.applyGameOver(
+          message.data,
+          message.winner,
+          message.log ?? [],
+          message.stops,
+          message.auto_passed ?? 0,
+          message.deck_names,
+        );
+      }
+      if (message.type === 'observation' && message.session_id && message.resume_token) {
         saveResumeCredentials({
           session_id: message.session_id,
           resume_token: message.resume_token,
@@ -217,17 +271,18 @@ class GameSocketController {
       return;
     }
 
-    if (message.type === 'game_over') {
-      this.pendingResume = false;
-      gameStore.applyGameOver(
-        message.data,
-        message.winner,
-        message.log ?? [],
-        message.stops,
-        message.auto_passed ?? 0,
-        message.deck_names,
-      );
-      this.flushQueue();
+    if (message.type === 'command_outcome') {
+      this.inFlightCommand = null;
+      if (message.status === 'accepted') {
+        this.applyUpdate(message.update);
+      } else if (message.status === 'duplicate') {
+        this.applyRecovery(message.recovery);
+      } else {
+        if (message.recovery) {
+          this.applyRecovery(message.recovery);
+        }
+        gameStore.setError(message.rejection.message);
+      }
       return;
     }
 
@@ -242,6 +297,39 @@ class GameSocketController {
 
     gameStore.endFastForward();
     gameStore.setError(message.message);
+  }
+
+  private applyUpdate(update: FrameUpdate): void {
+    const current = gameStore.protocolFrame;
+    if (current && current.match_id === update.frame.match_id) {
+      if (update.frame.revision <= current.revision) {
+        return;
+      }
+      if (update.base_revision !== current.revision) {
+        gameStore.setError('Game update gap detected. Reconnecting for recovery.');
+        this.disconnect();
+        this.connect();
+        return;
+      }
+    }
+    gameStore.applyFrame(update.frame);
+  }
+
+  private applyRecovery(
+    recovery: RecoveryEnvelope,
+    sessionId?: string,
+    resumeToken?: string,
+  ): void {
+    const current = gameStore.protocolFrame;
+    const next = recovery.frame;
+    if (
+      current
+      && current.match_id === next.match_id
+      && next.revision < current.revision
+    ) {
+      return;
+    }
+    gameStore.applyFrame(next, sessionId, resumeToken);
   }
 
   private scheduleReconnect(): void {
@@ -272,14 +360,14 @@ export function sendNewGame(config?: Record<string, unknown>): void {
   controller.sendNewGame(config);
 }
 
-export function sendAction(index: number): void {
-  controller.sendAction(index);
+export function sendAction(offerId: number): boolean {
+  return controller.sendAction(offerId);
 }
 
 export function sendSetStops(): void {
   controller.sendSetStops();
 }
 
-export function sendPassTurn(): void {
-  controller.sendPassTurn();
+export function sendPassTurn(): boolean {
+  return controller.sendPassTurn();
 }

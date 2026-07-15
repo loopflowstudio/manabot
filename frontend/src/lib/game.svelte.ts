@@ -10,6 +10,7 @@ import type {
   ActionOption,
   ConnectionState,
   DeckNames,
+  ExperienceFrame,
   GameLogEntry,
   Observation,
   OpponentConfig,
@@ -58,6 +59,7 @@ export const DECISION_PROMPTS: Record<string, string> = {
 };
 
 export class GameStore {
+  protocolFrame = $state<ExperienceFrame | null>(null);
   observation = $state<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
   // ActionSpaceEnum name for the current decision (PRIORITY, SCRY, ...).
@@ -212,6 +214,42 @@ export class GameStore {
     this.appendLogLines('system', deriveObservationNotes(previous, observation));
   }
 
+  applyFrame(
+    frame: ExperienceFrame,
+    sessionId?: string,
+    resumeToken?: string,
+  ): void {
+    this.protocolFrame = frame;
+    const actions = frame.offers.map((offer) => ({
+      index: offer.id,
+      type: offer.action_type,
+      focus: [...offer.focus],
+      description: offer.label,
+    }));
+    if (frame.projection.game_over) {
+      this.applyGameOver(
+        frame.projection,
+        frame.winner,
+        frame.log ?? [],
+        frame.stops,
+        frame.auto_passed ?? 0,
+        frame.deck_names,
+      );
+    } else {
+      this.applyObservation(
+        frame.projection,
+        actions,
+        sessionId,
+        resumeToken,
+        frame.log ?? [],
+        frame.stops,
+        frame.auto_passed ?? 0,
+        frame.deck_names,
+        frame.action_space,
+      );
+    }
+  }
+
   applyGameOver(
     observation: Observation,
     winner: number | null,
@@ -305,6 +343,7 @@ export class GameStore {
   }
 
   private resetMatchState(): void {
+    this.protocolFrame = null;
     this.observation = null;
     this.actions = [];
     this.actionSpaceKind = '';
