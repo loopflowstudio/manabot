@@ -69,6 +69,13 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
     }
     await route.continue();
   });
+  await page.routeWebSocket(
+    (url) => isPublicRequest(url.toString()),
+    async (socket) => {
+      publicRequests.push(socket.url());
+      await socket.close({ code: 1008, reason: 'offline verification' });
+    },
+  );
   page.on('websocket', (socket) => {
     if (isPublicRequest(socket.url())) {
       publicRequests.push(socket.url());
