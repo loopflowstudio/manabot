@@ -1,0 +1,7 @@
+flow: ship-wave
+area:
+  - gui/
+  - manabot/env/
+  - managym/src/
+  - tests/
+direction: [clarity]

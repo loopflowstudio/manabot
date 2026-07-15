@@ -1,84 +1,88 @@
 # Rules
 
-> **Status: parked** (2026-07-10, owner call — parallelizable but not now;
-> resumes when an experiment pulls a capability or the owner unparks it).
-> Destination unchanged (updated 2026-07-09): The destination
-> pool is the owner's cube — https://cubecobra.com/cube/list/elemental — and
-> the path is capability-ordered:
->
-> 1. **Milestone 1 — the two-deck slice** (UR Lessons vs GW Allies, lists in
->    review): implement the union of the two decklists, trace-tested. Sits
->    almost entirely inside the audit's evergreen substrate (targets, EOT
->    modifiers, tokens, +1/+1 counters, the trigger family, activated costs)
->    plus three pulled extras (waterbend, multi-target, exile-until-leaves).
->    Unlocks games in the cube's real texture AND the first non-mirror matchup.
-> 2. **Milestone 2 — TLA commons complete** (audit verdict, `00-pool-audit.md`:
->    TLA dominates FIN on every cube-relevant axis — 34 TLA commons are
->    literally cube cards, closure 58 vs 65, and the bendings are the cube's
->    identity mechanic on 59 unique cube cards). Completing it puts the cube
->    at ~80% weighted expressible. Earthbend arrives here regardless of any
->    two-deck-slice decision.
-> 3. **Milestone 3 — full cube closure:** the tail is MULTIFACE (12% of cube,
->    in neither commons set), sagas, replacement effects, vehicles, X-costs —
->    "done" is defined by ten named cards (The Legend of Kuruk et al., see
->    audit §Hardest).
->
-> Still no open-ended rules grinding: every rung is pulled by a named pool
-> with a named payoff. Completeness of the CR remains a non-goal;
-> completeness of *this cube* is a finish line.
+Rules owns the semantic kernel shared by human play, replay, training, and
+search. It is active again as of 2026-07-15 with a redesigned charter: make the
+creator-selected decks exact, expressive, inspectable, and cheap to branch
+without turning manabot into a general Magic platform.
 
-## Vision
+The prior capability-ordered content roadmap still supplies the card pressure:
+UR Lessons vs GW Allies, then TLA commons, then the curated cube's named tail.
+Those pools are acceptance suites for the kernel, not a reason to accumulate
+one-off card handlers. The detailed audit remains in `00-pool-audit.md`.
 
-Grow managym into a materially fuller implementation of Magic's rules while
-keeping every expansion testable, attributed to CR references, and shippable in
-small diffs.
+## Architecture principles
 
-The path starts with visibility (what is implemented vs not), then builds rule
-systems in dependency order: event system, priority/stack, targeting, triggers,
-keywords, SBA depth, layers, replacement, and card-driven validation.
+1. Immutable, versioned `ContentPack` definitions are separate from compact
+   dense `MatchState` facts.
+2. Rules boundaries carry typed identity domains, especially
+   `ObjectRef { entity, incarnation }`, with explicit last-known information.
+3. Curated card text compiles offline to checked-in typed semantic programs;
+   runtime natural-language parsing is outside the trusted path.
+4. The engine exposes structured legal offers and consumes atomic commands.
+   It does not materialize a capped flat action list and clone the game merely
+   to discover whether each candidate is legal.
+5. Replacement and prevention semantics operate on proposed events before
+   committed mutation; state-based actions and triggers reach an explicit
+   fixpoint.
+6. Product frames, presentation events, learning observations, and search
+   snapshots are projections of one authoritative match—not one god-object
+   serialized everywhere.
+7. Optimization follows a written search-state contract and benchmarks. Dense
+   state, safe forks, and undo are complementary tools.
 
-Two innovations distinguish this from other MTG engine efforts:
+## Portfolio
 
-1. **Declarative effect DSL** that is both executable by the engine and
-   encodable into the observation space — the agent can *see* what a card does
-   structurally and generalize across cards with shared mechanics.
+### Runtime state foundation
 
-2. **Trace-based test harness** where rule tests are scenario data (JSON), not
-   bespoke code. Scales to hundreds of rules without proportional test code
-   growth.
+Separate immutable card definitions from mutable facts, establish stable IDs
+and deterministic state hashing, and measure the current clone/step/RSS baseline
+before choosing a branching representation.
 
-### Not here
+### Identity and event semantics
 
-- Multiplayer/casual variants (8xx/9xx)
-- Automated upstream CR sync process (defer until core work is stable)
-- Compatibility mode split runtime
-- Multi-target spells (single-target first, extend later)
-- Cancel/rollback of in-progress casting (engine guarantees legal actions)
+Introduce incarnation-safe object references and LKI, then route zone changes,
+damage, life, counters, and destruction through proposed-event replacement,
+commit, trigger, and state-based-action stages.
 
-## Goals
+### Semantic programs and choice ABI
 
-1. Every implemented rule family has focused CR-cited trace tests (plus negative paths).
-2. Lightning Bolt and Man-o'-War land early to force stack/target/trigger behavior.
-3. Keyword abilities batch expands strategic depth cheaply after structural work.
-4. Rule expansion stages remain independently shippable (~500-1000 LOC per diff target).
-5. Training remains stable as branching factor and interaction depth grow — smoke
-   tested every stage, not bolted on at the end.
-6. Declarative DSL enables cross-card generalization in the observation space.
+Grow a typed effect/condition/selector/value IR from the curated deck suite and
+replace flat action enumeration with legal-by-construction offers for priority,
+targets, modes, payment, attackers, and blockers. Preserve an adapter for the
+current policy ABI long enough to compare it with structured decoding.
 
-## Risks
+### Search branching and verification
 
-- Rule-family coupling causes oversized refactors.
-- Card additions outpace engine semantics, creating false confidence.
-- RL instability from larger action spaces and longer horizons.
-- Ambiguous rule ownership without explicit CR citations.
-- DSL design locks in too early before enough cards exercise it.
+Specify `fork`, `mark`, `apply`, `rollback`, `snapshot`, and deterministic hash
+semantics. Benchmark compact full clone, compact clone plus undo, and dense
+page-COW fork plus undo at realistic worker × actor × rollout loads, using total
+rollout throughput and peak RSS as the decision metrics.
 
-## Metrics
+Build independent evidence around the kernel: reference-versus-optimized
+differential execution, property/metamorphic/fuzz tests, a pinned Phase oracle
+for the overlapping cards where practical, coverage/gap generation, and the
+ratio of new-card content changes to kernel changes.
 
-- `rules_coverage` entries with status `implemented_tested` (count, target +N per stage)
-- CR-cited trace tests added per stage (count)
-- Negative-path rule tests per stage (count >= 1 per family)
-- Invalid-action rate during training after each rules milestone (%)
-- Mean episode length and truncation rate before/after milestones
-- Average branching factor per decision point (tracked from stage 01)
-- Action space size distribution (tracked from stage 01)
+## Near-term sequence
+
+1. Establish definition/state separation and clone/rollout baselines.
+2. Land one incarnation/LKI vertical slice before further zone mechanics.
+3. Prototype structured offers on priority, Lightning Bolt targeting, and
+   declare attackers while retaining the old ABI for A/B measurement.
+4. Add proposed events before replacement-heavy cards.
+5. Run the three-way search-state benchmark before adopting HAMTs, page-COW, or
+   another representation by doctrine.
+6. Turn conformance gaps into a machine-generated worklist and make regression
+   evidence a CI gate.
+
+Reference designs live in `docs/research/semantic-kernel.md` and
+`docs/research/manabot-vs-phase.md`.
+
+## Non-goals
+
+- Comprehensive Rules coverage independent of the selected decks
+- Broad Commander, multiplayer, drafting, or casual-format support
+- Deckbuilding and general format-legality infrastructure in this wave
+- Runtime natural-language parsing of the full card catalog
+- Porting Phase's consumer AI or adopting persistent HAMTs by default
+- A flag-day rewrite that suspends a playable, trainable engine
