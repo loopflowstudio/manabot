@@ -28,6 +28,9 @@ class GameConfig:
     # "custom") — recorded so every trace is attributable to an exact matchup.
     hero_deck_name: str = "custom"
     villain_deck_name: str = "custom"
+    # Exact installed presentation pack for this oriented matchup. ``None``
+    # keeps legacy/custom games and old traces backwards-compatible.
+    asset_pack: dict[str, str] | None = None
     # Opponent parameters (recorded in traces so every game is attributable
     # to an exact opponent configuration).
     villain_sims: int | None = None  # search: simulations per legal action

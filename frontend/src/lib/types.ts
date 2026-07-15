@@ -106,6 +106,7 @@ export interface ExperienceFrame {
   action_space: string;
   stops: StopsConfig;
   deck_names?: DeckNames;
+  asset_pack?: AssetPackReference | null;
   log?: string[];
   auto_passed?: number;
 }
@@ -202,6 +203,13 @@ export interface TraceConfig {
   villain_sims?: number | null;
   villain_checkpoint?: string | null;
   villain_deterministic?: boolean;
+  asset_pack?: AssetPackReference | null;
+}
+
+export interface AssetPackReference {
+  id: string;
+  version: string;
+  manifest_sha256: string;
 }
 
 // Display names for the current matchup, echoed by the server on every
@@ -258,6 +266,7 @@ export type ServerMessage =
       log?: string[];
       stops?: StopsConfig;
       deck_names?: DeckNames;
+      asset_pack?: AssetPackReference | null;
       auto_passed?: number;
       session_id?: string;
       resume_token?: string;
@@ -271,6 +280,7 @@ export type ServerMessage =
       log?: string[];
       stops?: StopsConfig;
       deck_names?: DeckNames;
+      asset_pack?: AssetPackReference | null;
       auto_passed?: number;
       frame?: ExperienceFrame;
       recovery?: RecoveryEnvelope;

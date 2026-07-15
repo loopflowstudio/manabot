@@ -84,6 +84,8 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                     for key in (
                         "protocol",
                         "revision",
+                        "content_hash",
+                        "asset_manifest_hash",
                         "status",
                         "prompt",
                         "offers",

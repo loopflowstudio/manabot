@@ -19,11 +19,6 @@ const CHOICE_KINDS = new Set([
   'WATERBEND',
 ]);
 
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
-  'base64',
-);
-
 function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (message) => {
@@ -51,10 +46,6 @@ test('UR vs GW plays to terminal with deck names and choice prompts rendered', a
 }) => {
   test.setTimeout(600_000);
   const consoleErrors = collectConsoleErrors(page);
-
-  await page.route('https://api.scryfall.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: TINY_PNG }),
-  );
 
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
