@@ -1,6 +1,11 @@
 import { browser } from '$app/environment';
 
 import { gameStore } from './game.svelte';
+import {
+  presentationLabelsFromFrame,
+  validatePresentationUpdate,
+} from './presentation';
+import { presentationPlayer } from './presentation.svelte';
 import type {
   ClientMessage,
   FrameUpdate,
@@ -147,6 +152,7 @@ export class GameSocketController {
 
   sendNewGame(config?: Record<string, unknown>): void {
     this.inFlightCommand = null;
+    presentationPlayer.clear();
     gameStore.prepareForNewGame();
     this.send(config ? { type: 'new_game', config } : { type: 'new_game' });
   }
@@ -290,6 +296,7 @@ export class GameSocketController {
       this.pendingResume = false;
       clearResumeCredentials();
       this.outboundQueue = [];
+      presentationPlayer.clear();
       gameStore.markResumeFailed('Previous session expired or invalid. Start a new game.');
       this.disconnect();
       return;
@@ -312,7 +319,27 @@ export class GameSocketController {
         return;
       }
     }
+    // Canonical truth lands first. Presentation is optional theater over the
+    // committed frame and cannot delay or roll back authority.
     gameStore.applyFrame(update.frame);
+    try {
+      validatePresentationUpdate(
+        update.presentation,
+        update.base_revision,
+        update.frame.revision,
+      );
+      presentationPlayer.enqueue(
+        update.presentation,
+        presentationLabelsFromFrame(update.frame),
+      );
+    } catch (error) {
+      presentationPlayer.clear();
+      gameStore.setError(
+        error instanceof Error
+          ? `Presentation stream rejected: ${error.message}`
+          : 'Presentation stream rejected.',
+      );
+    }
   }
 
   private applyRecovery(
@@ -329,7 +356,22 @@ export class GameSocketController {
     ) {
       return;
     }
+    // Recovery always cancels any in-flight theater before resuming its
+    // viewer-safe tail. The complete frame remains authoritative either way.
     gameStore.applyFrame(next, sessionId, resumeToken);
+    try {
+      presentationPlayer.recover(
+        recovery.presentation_tail,
+        presentationLabelsFromFrame(next),
+      );
+    } catch (error) {
+      presentationPlayer.clear();
+      gameStore.setError(
+        error instanceof Error
+          ? `Recovery presentation rejected: ${error.message}`
+          : 'Recovery presentation rejected.',
+      );
+    }
   }
 
   private scheduleReconnect(): void {

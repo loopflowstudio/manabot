@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Observation } from '$lib/types';
+  import type { PresentationPlayer } from '$lib/presentation.svelte';
 
   import HoverPreview from './HoverPreview.svelte';
   import PermanentRow from './PermanentRow.svelte';
   import PlayerArea from './PlayerArea.svelte';
+  import PresentationStage from './PresentationStage.svelte';
 
   interface Props {
     observation: Observation;
@@ -14,6 +16,7 @@
     winner?: number | null;
     overlayActionLabel?: string | null;
     onOverlayAction?: () => void;
+    presentationPlayer?: PresentationPlayer;
   }
 
   let {
@@ -25,6 +28,7 @@
     winner = undefined,
     overlayActionLabel = null,
     onOverlayAction = undefined,
+    presentationPlayer = undefined,
   }: Props = $props();
 
   let previewName = $state<string | null>(null);
@@ -42,6 +46,10 @@
 </script>
 
 <section data-testid="game-board" class="relative space-y-4 rounded border border-slate-700 bg-slate-800 p-4">
+  {#if presentationPlayer}
+    <PresentationStage player={presentationPlayer} />
+  {/if}
+
   <div class="rounded border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-sm font-semibold text-slate-200">
     Turn {observation.turn.turn_number} · {observation.turn.phase} · {observation.turn.step}
   </div>

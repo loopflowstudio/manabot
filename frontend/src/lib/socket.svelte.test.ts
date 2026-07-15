@@ -3,8 +3,16 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { gameStore } from './game.svelte';
+import { LIGHTNING_BOLT_PRESENTATION } from './presentation';
+import { presentationPlayer } from './presentation.svelte';
 import { GameSocketController, parseServerMessage } from './socket.svelte';
-import type { ClientMessage, Command, RecoveryEnvelope } from './types';
+import type {
+  ClientMessage,
+  Command,
+  ExperienceFrame,
+  RecoveryEnvelope,
+  ServerMessage,
+} from './types';
 
 interface BoltProtocolFixture {
   recovery: RecoveryEnvelope;
@@ -15,6 +23,21 @@ const boltProtocolFixture = JSON.parse(readFileSync(
   new URL('../../../tests/gui/fixtures/protocol_v1_bolt_target.json', import.meta.url),
   'utf8',
 )) as BoltProtocolFixture;
+
+function frameAt(revision: number): ExperienceFrame {
+  return {
+    ...structuredClone(boltProtocolFixture.recovery.frame),
+    revision,
+    frame_hash: `frame-${revision}`,
+  };
+}
+
+function deliver(controller: GameSocketController, message: ServerMessage): void {
+  const testController = controller as unknown as {
+    handleRawMessage(raw: string): void;
+  };
+  testController.handleRawMessage(JSON.stringify(message));
+}
 
 describe('parseServerMessage', () => {
   it('parses observation payloads', () => {
@@ -109,5 +132,76 @@ describe('GameSocketController offline gameplay', () => {
     expect(controller.sendPassTurn()).toBe(false);
     expect(queue).toEqual([]);
     expect(gameStore.fastForwarding).toBe(false);
+  });
+});
+
+describe('GameSocketController presentation seam', () => {
+  it('commits the FrameUpdate before enqueueing its semantic events', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(42));
+    const controller = new GameSocketController();
+
+    deliver(controller, {
+      type: 'command_outcome',
+      status: 'accepted',
+      update: {
+        base_revision: 42,
+        frame: frameAt(43),
+        presentation: LIGHTNING_BOLT_PRESENTATION.events,
+        receipt: null,
+      },
+    });
+
+    expect(gameStore.protocolFrame?.revision).toBe(43);
+    expect(presentationPlayer.currentEvent?.seq).toBe(900);
+    expect(presentationPlayer.currentEvent?.to_revision).toBe(
+      gameStore.protocolFrame?.revision,
+    );
+  });
+
+  it('recovery cancels current theater and replaces it with the recovery tail', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.load(LIGHTNING_BOLT_PRESENTATION);
+    const controller = new GameSocketController();
+
+    deliver(controller, {
+      type: 'observation',
+      data: frameAt(43).projection,
+      actions: [],
+      recovery: {
+        ...structuredClone(boltProtocolFixture.recovery),
+        frame: frameAt(43),
+        presentation_tail: LIGHTNING_BOLT_PRESENTATION.events.slice(3),
+      },
+    });
+
+    expect(gameStore.protocolFrame?.revision).toBe(43);
+    expect(presentationPlayer.events.map((event) => event.seq)).toEqual([903, 904]);
+    expect(presentationPlayer.currentEvent?.kind.kind).toBe('damage');
+  });
+
+  it('keeps a committed frame when optional theater is malformed', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(42));
+    const controller = new GameSocketController();
+    const malformed = structuredClone(LIGHTNING_BOLT_PRESENTATION.events);
+    malformed[0].kind = { kind: 'snapshot_changed' } as never;
+
+    deliver(controller, {
+      type: 'command_outcome',
+      status: 'accepted',
+      update: {
+        base_revision: 42,
+        frame: frameAt(43),
+        presentation: malformed,
+        receipt: null,
+      },
+    });
+
+    expect(gameStore.protocolFrame?.revision).toBe(43);
+    expect(presentationPlayer.currentEvent).toBeNull();
+    expect(gameStore.errorMessage).toMatch(/Presentation stream rejected/);
   });
 });
