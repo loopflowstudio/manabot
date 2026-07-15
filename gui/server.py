@@ -27,11 +27,13 @@ from manabot.env.observation import (
 import managym
 
 from . import trace as trace_store, villain as villain_module
+from .curated_pack import CURATED_PACK
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
-# Mirrors of manabot.verify.util deck constants (copied so the server does
-# not import torch at startup; tests assert they stay in sync).
+# Interactive remains a lightweight mirror of manabot.verify.util. The two
+# curated defaults load from the installed manifest so the server does not
+# import torch at startup and does not carry a competing deck definition.
 INTERACTIVE_DECK = {
     "Island": 12,
     "Mountain": 12,
@@ -44,56 +46,25 @@ INTERACTIVE_DECK = {
     "Ancestral Recall": 3,
     "Pyroclasm": 3,
 }
-UR_LESSONS_DECK = {
-    "Island": 9,
-    "Mountain": 8,
-    "Tiger-Seal": 2,
-    "Otter-Penguin": 2,
-    "Fire Nation Cadets": 2,
-    "First-Time Flyer": 2,
-    "Forecasting Fortune Teller": 1,
-    "Dragonfly Swarm": 1,
-    "Firebending Lesson": 4,
-    "Igneous Inspiration": 2,
-    "Pop Quiz": 2,
-    "Divide by Zero": 2,
-    "It'll Quench Ya!": 2,
-    "Accumulate Wisdom": 2,
-}
-GW_ALLIES_DECK = {
-    "Plains": 9,
-    "Forest": 8,
-    "Water Tribe Rallier": 2,
-    "Invasion Reinforcements": 2,
-    "Compassionate Healer": 2,
-    "Earth Kingdom Jailer": 2,
-    "White Lotus Reinforcements": 2,
-    "Earth King's Lieutenant": 2,
-    "Kyoshi Warriors": 2,
-    "Badgermole Cub": 2,
-    "Suki, Kyoshi Warrior": 1,
-    "South Pole Voyager": 1,
-    "Allies at Last": 2,
-    "Yip Yip!": 1,
-    "Fancy Footwork": 2,
-}
+UR_LESSONS_DECK = dict(CURATED_PACK.hero_deck)
+GW_ALLIES_DECK = dict(CURATED_PACK.villain_deck)
 
 # Decks selectable by name over the wire (new_game.config hero_deck /
 # villain_deck may be one of these keys instead of a {card: count} object).
 NAMED_DECKS: dict[str, dict[str, int]] = {
     "interactive": INTERACTIVE_DECK,
-    "ur_lessons": UR_LESSONS_DECK,
-    "gw_allies": GW_ALLIES_DECK,
+    CURATED_PACK.hero_deck_id: UR_LESSONS_DECK,
+    CURATED_PACK.villain_deck_id: GW_ALLIES_DECK,
 }
 DECK_DISPLAY_NAMES = {
     "interactive": "Interactive",
-    "ur_lessons": "UR Lessons",
-    "gw_allies": "GW Allies",
+    CURATED_PACK.hero_deck_id: CURATED_PACK.hero_display_name,
+    CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
     "custom": "Custom",
 }
 # Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
-DEFAULT_HERO_DECK_NAME = "ur_lessons"
-DEFAULT_VILLAIN_DECK_NAME = "gw_allies"
+DEFAULT_HERO_DECK_NAME = CURATED_PACK.hero_deck_id
+DEFAULT_VILLAIN_DECK_NAME = CURATED_PACK.villain_deck_id
 # Backwards-compatible alias (tests and older callers).
 DEFAULT_DECK = INTERACTIVE_DECK
 
@@ -613,6 +584,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deck=villain_deck,
         hero_deck_name=hero_deck_name,
         villain_deck_name=villain_deck_name,
+        asset_pack=CURATED_PACK.reference_for(hero_deck_name, villain_deck_name),
         villain_type=villain_type,
         seed=seed,
         villain_sims=villain_sims,
@@ -634,6 +606,7 @@ class GameSession:
         self.trace_id: str | None = None
         # Display names for the current matchup, echoed on every payload.
         self.deck_names: dict[str, str] | None = None
+        self.asset_pack: dict[str, str] | None = None
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
@@ -681,6 +654,7 @@ class GameSession:
             "hero": DECK_DISPLAY_NAMES.get(config.hero_deck_name, "Custom"),
             "villain": DECK_DISPLAY_NAMES.get(config.villain_deck_name, "Custom"),
         }
+        self.asset_pack = dict(config.asset_pack) if config.asset_pack else None
         self.trace = Trace(
             config=config,
             events=[],
@@ -1091,6 +1065,9 @@ class GameSession:
         }
         if self.deck_names:
             frame["deck_names"] = dict(self.deck_names)
+        frame["asset_pack"] = (
+            dict(self.asset_pack) if self.asset_pack is not None else None
+        )
         if log:
             frame["log"] = log
         if auto_passed:
@@ -1135,6 +1112,8 @@ class GameSession:
         }
         if "deck_names" in frame:
             payload["deck_names"] = frame["deck_names"]
+        if "asset_pack" in frame:
+            payload["asset_pack"] = frame["asset_pack"]
         if "log" in frame:
             payload["log"] = frame["log"]
         if "auto_passed" in frame:

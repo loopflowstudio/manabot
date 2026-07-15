@@ -1,13 +1,20 @@
-// Named decks selectable in the play UI. Keys mirror gui/server.py
-// NAMED_DECKS; the server resolves them to full {card: count} lists and
-// echoes display names on every payload (deck_names).
-export const DECK_CHOICES = [
-  { key: 'ur_lessons', label: 'UR Lessons' },
-  { key: 'gw_allies', label: 'GW Allies' },
-  { key: 'interactive', label: 'Interactive' },
-] as const;
+import { CURATED_PACK } from './curated-pack';
 
-export type DeckChoice = (typeof DECK_CHOICES)[number]['key'];
+export type DeckChoice = 'ur_lessons' | 'gw_allies' | 'interactive';
+
+// The two curated choices and their defaults are derived from the installed
+// manifest. Interactive remains a backwards-compatible, uncurated option.
+export const DECK_CHOICES: readonly { key: DeckChoice; label: string }[] = [
+  {
+    key: CURATED_PACK.matchup.hero.deck_id as DeckChoice,
+    label: CURATED_PACK.matchup.hero.display_name,
+  },
+  {
+    key: CURATED_PACK.matchup.villain.deck_id as DeckChoice,
+    label: CURATED_PACK.matchup.villain.display_name,
+  },
+  { key: 'interactive', label: 'Interactive' },
+];
 
 const DECK_KEYS = new Set<string>(DECK_CHOICES.map((deck) => deck.key));
 
@@ -20,7 +27,10 @@ export interface DeckSelection {
 
 // Mirrors the server defaults: the Milestone-1 matchup, UR hero vs GW.
 export function defaultDeckSelection(): DeckSelection {
-  return { hero: 'ur_lessons', villain: 'gw_allies' };
+  return {
+    hero: CURATED_PACK.matchup.hero.deck_id as DeckChoice,
+    villain: CURATED_PACK.matchup.villain.deck_id as DeckChoice,
+  };
 }
 
 export function sanitizeDeckSelection(raw: unknown): DeckSelection | null {

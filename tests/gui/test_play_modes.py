@@ -247,6 +247,7 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
             "hero": "UR Lessons",
             "villain": "GW Allies",
         }
+        assert payload["asset_pack"] == server.CURATED_PACK.reference
 
     trace_files = sorted(isolated_traces.glob("*.json"))
     assert trace_files
@@ -255,6 +256,7 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
     assert trace["config"]["villain_deck_name"] == "gw_allies"
     assert trace["config"]["hero_deck"] == server.UR_LESSONS_DECK
     assert trace["config"]["villain_deck"] == server.GW_ALLIES_DECK
+    assert trace["config"]["asset_pack"] == server.CURATED_PACK.reference
 
 
 def test_named_deck_selection_and_custom_deck_names(isolated_traces):

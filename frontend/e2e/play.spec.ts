@@ -11,13 +11,6 @@ const DECISION_POINTS = 10;
 // in tests/gui/test_play_modes.py finish well under this.
 const MAX_ACTIONS = 1000;
 
-// 1x1 transparent PNG so card art requests resolve without hitting Scryfall
-// (offline CI) and without logging resource-load console errors.
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
-  'base64',
-);
-
 function collectConsoleErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (message) => {
@@ -38,10 +31,6 @@ function collectConsoleErrors(page: Page): string[] {
 
 test('play page reacts to the full game loop', async ({ page }) => {
   const consoleErrors = collectConsoleErrors(page);
-
-  await page.route('https://api.scryfall.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: TINY_PNG }),
-  );
 
   await page.goto('/');
 

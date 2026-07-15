@@ -9,11 +9,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 const MAX_ACTIONS = 1200;
 
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
-  'base64',
-);
-
 async function setCheckbox(page: Page, testId: string, checked: boolean): Promise<void> {
   const box = page.getByTestId(testId);
   if ((await box.isChecked()) !== checked) {
@@ -75,10 +70,6 @@ async function playUntilGameOver(page: Page): Promise<number> {
 test('stops cut the clicks needed to finish a game, log keeps narrating', async ({ page }) => {
   test.setTimeout(300_000);
 
-  await page.route('https://api.scryfall.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: TINY_PNG }),
-  );
-
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,
@@ -127,10 +118,6 @@ test('stops cut the clicks needed to finish a game, log keeps narrating', async 
 });
 
 test('F6 passes the turn from the keyboard', async ({ page }) => {
-  await page.route('https://api.scryfall.com/**', (route) =>
-    route.fulfill({ contentType: 'image/png', body: TINY_PNG }),
-  );
-
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,

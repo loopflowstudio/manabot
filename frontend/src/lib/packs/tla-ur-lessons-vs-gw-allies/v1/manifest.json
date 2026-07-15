@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "pack": {
+    "id": "tla-ur-lessons-vs-gw-allies",
+    "version": "1.0.0",
+    "title": "UR Lessons vs GW Allies"
+  },
+  "matchup": {
+    "hero": {
+      "deck_id": "ur_lessons",
+      "display_name": "UR Lessons",
+      "card_count": 41,
+      "cards": {
+        "Island": 9,
+        "Mountain": 8,
+        "Tiger-Seal": 2,
+        "Otter-Penguin": 2,
+        "Fire Nation Cadets": 2,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Dragonfly Swarm": 1,
+        "Firebending Lesson": 4,
+        "Igneous Inspiration": 2,
+        "Pop Quiz": 2,
+        "Divide by Zero": 2,
+        "It'll Quench Ya!": 2,
+        "Accumulate Wisdom": 2
+      }
+    },
+    "villain": {
+      "deck_id": "gw_allies",
+      "display_name": "GW Allies",
+      "card_count": 40,
+      "cards": {
+        "Plains": 9,
+        "Forest": 8,
+        "Water Tribe Rallier": 2,
+        "Invasion Reinforcements": 2,
+        "Compassionate Healer": 2,
+        "Earth Kingdom Jailer": 2,
+        "White Lotus Reinforcements": 2,
+        "Earth King's Lieutenant": 2,
+        "Kyoshi Warriors": 2,
+        "Badgermole Cub": 2,
+        "Suki, Kyoshi Warrior": 1,
+        "South Pole Voyager": 1,
+        "Allies at Last": 2,
+        "Yip Yip!": 1,
+        "Fancy Footwork": 2
+      }
+    },
+    "reachable_tokens": [
+      "Ally",
+      "Clue"
+    ]
+  },
+  "rights": {
+    "authored-treatment-v1": {
+      "asset_kind": "authored_treatment_data",
+      "contains_third_party_art": false,
+      "creator": "manabot contributors",
+      "copyright_notice": "Copyright status is not asserted; see NOTICE.md.",
+      "license": "NOASSERTION"
+    },
+    "card-identity-data": {
+      "asset_kind": "card_identity_metadata",
+      "contains_third_party_art": false,
+      "creator": "Scryfall and manabot contributors",
+      "copyright_notice": "Magic card identities are property of Wizards of the Coast and respective licensors; see NOTICE.md.",
+      "license": "NOASSERTION"
+    }
+  },
+  "fallback": {
+    "version": "fallback-v1",
+    "algorithm": "fnv1a-32-utf8",
+    "rights_ref": "authored-treatment-v1",
+    "palettes": [
+      ["#0f172a", "#1d4ed8", "#67e8f9"],
+      ["#1c1917", "#b45309", "#fbbf24"],
+      ["#052e16", "#15803d", "#86efac"],
+      ["#2e1065", "#7e22ce", "#e879f9"],
+      ["#3f0d12", "#be123c", "#fda4af"],
+      ["#172554", "#0f766e", "#99f6e4"]
+    ],
+    "motifs": ["current", "ember", "canopy", "constellation", "dawn", "stone"]
+  },
+  "identities": {
+    "Island": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "b2c6aa39-2d2a-459c-a555-fb48ba993373", "source_uri": "https://scryfall.com/search?q=oracleid%3Ab2c6aa39-2d2a-459c-a555-fb48ba993373", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#071a36", "#155e9b", "#9ce8ff"], "motif": "current", "seed": 101, "rights_ref": "authored-treatment-v1"}
+    },
+    "Mountain": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "a3fb7228-e76b-4e96-a40e-20b5fed75685", "source_uri": "https://scryfall.com/search?q=oracleid%3Aa3fb7228-e76b-4e96-a40e-20b5fed75685", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#2b0b08", "#b8321b", "#ffb34d"], "motif": "ember", "seed": 102, "rights_ref": "authored-treatment-v1"}
+    },
+    "Tiger-Seal": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "68f84643-c0f9-4d31-ba2e-38b65ab45d04", "source_uri": "https://scryfall.com/card/tla/75/tiger-seal", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#0b2038", "#2878a9", "#d6f5ff"], "motif": "tide", "seed": 103, "rights_ref": "authored-treatment-v1"}
+    },
+    "Otter-Penguin": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "e2171c48-a816-41b2-aa55-e0ba2503fd6a", "source_uri": "https://scryfall.com/card/tla/67/otter-penguin", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#091827", "#256b8f", "#bdefff"], "motif": "glide", "seed": 104, "rights_ref": "authored-treatment-v1"}
+    },
+    "Fire Nation Cadets": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "5ebfa3f5-f80a-4845-bba7-75c4ddb88682", "source_uri": "https://scryfall.com/card/tla/134/fire-nation-cadets", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#310c09", "#c23a1b", "#ffd166"], "motif": "formation", "seed": 105, "rights_ref": "authored-treatment-v1"}
+    },
+    "First-Time Flyer": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "cbbea4e2-4b36-4965-89b6-00d2a564f146", "source_uri": "https://scryfall.com/card/tla/49/first-time-flyer", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#10253c", "#3f83b7", "#dcf6ff"], "motif": "sky", "seed": 106, "rights_ref": "authored-treatment-v1"}
+    },
+    "Forecasting Fortune Teller": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "a5a05edd-2a30-414b-b766-f0651d5783f5", "source_uri": "https://scryfall.com/card/tla/51/forecasting-fortune-teller", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#101b3c", "#3859a8", "#d8e4ff"], "motif": "constellation", "seed": 107, "rights_ref": "authored-treatment-v1"}
+    },
+    "Dragonfly Swarm": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "83abf1d0-04e4-49e5-bf63-59f77829ffd1", "source_uri": "https://scryfall.com/card/tla/215/dragonfly-swarm", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#231038", "#a54267", "#8be7f5"], "motif": "swarm", "seed": 108, "rights_ref": "authored-treatment-v1"}
+    },
+    "Firebending Lesson": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "a9282f91-638e-414b-8b3d-9a99e30aec96", "source_uri": "https://scryfall.com/card/tla/138/firebending-lesson", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#35100a", "#d4431c", "#ffe08a"], "motif": "flame", "seed": 109, "rights_ref": "authored-treatment-v1"}
+    },
+    "Igneous Inspiration": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "2e31af8f-5e94-4888-857d-911253eac2cd", "source_uri": "https://scryfall.com/card/stx/107/igneous-inspiration", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#2c0909", "#b91c1c", "#fdba74"], "motif": "burst", "seed": 110, "rights_ref": "authored-treatment-v1"}
+    },
+    "Pop Quiz": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "dda9ac6c-1ab2-4f77-b499-f03d587163d8", "source_uri": "https://scryfall.com/card/stx/49/pop-quiz", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#0b1c35", "#2563a8", "#bae6fd"], "motif": "ripple", "seed": 111, "rights_ref": "authored-treatment-v1"}
+    },
+    "Divide by Zero": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "7b1c1a0c-f443-4eb5-a430-9eea886361ca", "source_uri": "https://scryfall.com/card/stx/41/divide-by-zero", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#081a2e", "#0369a1", "#a5f3fc"], "motif": "divide", "seed": 112, "rights_ref": "authored-treatment-v1"}
+    },
+    "It'll Quench Ya!": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "cb184995-700f-4900-994a-4ce7fd12f942", "source_uri": "https://scryfall.com/card/tla/58/itll-quench-ya!", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#09243a", "#0e7490", "#cffafe"], "motif": "splash", "seed": 113, "rights_ref": "authored-treatment-v1"}
+    },
+    "Accumulate Wisdom": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "a63eb744-71c4-447d-9372-c3a734f022c5", "source_uri": "https://scryfall.com/card/tla/44/accumulate-wisdom", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#11183a", "#4338ca", "#c7d2fe"], "motif": "wisdom", "seed": 114, "rights_ref": "authored-treatment-v1"}
+    },
+    "Plains": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "bc71ebf6-2056-41f7-be35-b2e5c34afa99", "source_uri": "https://scryfall.com/search?q=oracleid%3Abc71ebf6-2056-41f7-be35-b2e5c34afa99", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#3b3224", "#c9a85e", "#fff4c7"], "motif": "dawn", "seed": 115, "rights_ref": "authored-treatment-v1"}
+    },
+    "Forest": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6", "source_uri": "https://scryfall.com/search?q=oracleid%3Ab34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#09291b", "#287a43", "#b7efb0"], "motif": "canopy", "seed": 116, "rights_ref": "authored-treatment-v1"}
+    },
+    "Water Tribe Rallier": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "64acb083-a0a3-46ec-9c93-b2ac36878703", "source_uri": "https://scryfall.com/card/tla/42/water-tribe-rallier", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#142638", "#4c91a8", "#f3f0d0"], "motif": "banner", "seed": 117, "rights_ref": "authored-treatment-v1"}
+    },
+    "Invasion Reinforcements": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "185316ff-6fb7-4b5c-8a60-3238674562a6", "source_uri": "https://scryfall.com/card/tla/24/invasion-reinforcements", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#322f27", "#9c7f42", "#fff1b8"], "motif": "formation", "seed": 118, "rights_ref": "authored-treatment-v1"}
+    },
+    "Compassionate Healer": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "6ef464bd-2ed0-4f99-af4a-ebf276f55384", "source_uri": "https://scryfall.com/card/tla/13/compassionate-healer", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#312e2a", "#b79b57", "#fff8d9"], "motif": "halo", "seed": 119, "rights_ref": "authored-treatment-v1"}
+    },
+    "Earth Kingdom Jailer": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "1b799c30-4a43-403d-b822-0555bd513913", "source_uri": "https://scryfall.com/card/tla/16/earth-kingdom-jailer", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#29261d", "#88743e", "#e9ddae"], "motif": "stone", "seed": 120, "rights_ref": "authored-treatment-v1"}
+    },
+    "White Lotus Reinforcements": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "c55a4b25-ccc4-49de-9f98-a829c547a64d", "source_uri": "https://scryfall.com/card/tla/251/white-lotus-reinforcements", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#173322", "#6b8f51", "#fff4ce"], "motif": "lotus", "seed": 121, "rights_ref": "authored-treatment-v1"}
+    },
+    "Earth King's Lieutenant": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "9da9248d-1201-447f-b6c2-2b64af4f71c4", "source_uri": "https://scryfall.com/card/tla/217/earth-kings-lieutenant", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#1d3020", "#758b45", "#f2e7ae"], "motif": "crown", "seed": 122, "rights_ref": "authored-treatment-v1"}
+    },
+    "Kyoshi Warriors": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "b29abb09-75ea-431c-ab60-f2940d002e83", "source_uri": "https://scryfall.com/card/tla/26/kyoshi-warriors", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#222b22", "#6b7e4b", "#f8ecc8"], "motif": "fan", "seed": 123, "rights_ref": "authored-treatment-v1"}
+    },
+    "Badgermole Cub": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "2b0afb89-0944-4861-b9c3-e909e2ac215e", "source_uri": "https://scryfall.com/card/tla/167/badgermole-cub", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#13291b", "#3f7f45", "#c9e7a8"], "motif": "burrow", "seed": 124, "rights_ref": "authored-treatment-v1"}
+    },
+    "Suki, Kyoshi Warrior": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "9223488e-5206-4d43-90ef-387189dcee16", "source_uri": "https://scryfall.com/card/tla/243/suki-kyoshi-warrior", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#183024", "#718c4a", "#f4ddb0"], "motif": "warrior", "seed": 125, "rights_ref": "authored-treatment-v1"}
+    },
+    "South Pole Voyager": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "c5173332-68ad-456e-ad85-dd7475464d94", "source_uri": "https://scryfall.com/card/tla/35/south-pole-voyager", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#18313c", "#5f94a3", "#f3f0d3"], "motif": "voyage", "seed": 126, "rights_ref": "authored-treatment-v1"}
+    },
+    "Allies at Last": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "c15e5e93-2eff-407d-ae75-437e36ef85ba", "source_uri": "https://scryfall.com/card/tla/164/allies-at-last", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#12301d", "#3f8b45", "#dff0ad"], "motif": "unity", "seed": 127, "rights_ref": "authored-treatment-v1"}
+    },
+    "Yip Yip!": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "5453550f-9136-4568-baf8-c3d20e33fbb6", "source_uri": "https://scryfall.com/card/tla/43/yip-yip!", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#25313b", "#8294a3", "#fff1c2"], "motif": "bison", "seed": 128, "rights_ref": "authored-treatment-v1"}
+    },
+    "Fancy Footwork": {
+      "kind": "card",
+      "provenance": {"provider": "scryfall-oracle-cards", "oracle_id": "c5648a32-98b0-4625-aae1-ae56e0ef0197", "source_uri": "https://scryfall.com/card/tla/19/fancy-footwork", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#2f2d24", "#ab914e", "#fff2c2"], "motif": "step", "seed": 129, "rights_ref": "authored-treatment-v1"}
+    },
+    "Ally": {
+      "kind": "token",
+      "provenance": {"provider": "managym", "local_identity": "tla-token:Ally@1", "source_uri": "managym/src/cardsets/tla.rs", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#203324", "#719052", "#fff1c0"], "motif": "kinship", "seed": 130, "rights_ref": "authored-treatment-v1"}
+    },
+    "Clue": {
+      "kind": "token",
+      "provenance": {"provider": "managym", "local_identity": "core-token:Clue@1", "source_uri": "managym/src/cardsets/tla.rs", "retrieved_at": "2026-07-15", "rights_ref": "card-identity-data"},
+      "treatment": {"palette": ["#182b35", "#3b8292", "#f9d98c"], "motif": "clue", "seed": 131, "rights_ref": "authored-treatment-v1"}
+    }
+  }
+}
