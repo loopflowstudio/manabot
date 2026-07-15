@@ -1,39 +1,51 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, OnceLock},
+};
 
 use crate::state::{
     ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
     card::{
-        basic_land, ActivatedAbilityDefinition, Card, CardDefinition, CardType, CardTypes,
-        Keywords, ManaAbility,
+        basic_land, ActivatedAbilityDefinition, Card, CardDefId, CardDefinition, CardType,
+        CardTypes, Keywords, ManaAbility,
     },
-    game_object::{IdGenerator, ObjectId, PlayerId},
+    game_object::{ObjectId, PlayerId},
     mana::{Color, Mana, ManaCost},
 };
 
-#[derive(Clone, Debug)]
-struct RegisteredCard {
-    registry_key: ObjectId,
-    definition: CardDefinition,
-}
+pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug)]
-pub struct CardRegistry {
-    cards: BTreeMap<String, RegisteredCard>,
-    registry_key_gen: IdGenerator,
+pub struct ContentPack {
+    pub schema_version: u32,
+    cards_by_name: BTreeMap<String, CardDefId>,
+    definitions: Vec<Arc<CardDefinition>>,
 }
 
-impl Default for CardRegistry {
+/// Legacy Rust name retained for conformance callers. Match state owns a
+/// shared `Arc<ContentPack>` rather than cloning this value.
+pub type CardRegistry = ContentPack;
+
+static DEFAULT_CONTENT_PACK: OnceLock<Arc<ContentPack>> = OnceLock::new();
+
+/// Process-wide immutable pack used by ordinary matches and every search fork.
+pub fn default_content_pack() -> Arc<ContentPack> {
+    Arc::clone(DEFAULT_CONTENT_PACK.get_or_init(|| Arc::new(ContentPack::default())))
+}
+
+impl Default for ContentPack {
     fn default() -> Self {
         let mut out = Self {
-            cards: BTreeMap::new(),
-            registry_key_gen: IdGenerator::default(),
+            schema_version: CONTENT_PACK_SCHEMA_VERSION,
+            cards_by_name: BTreeMap::new(),
+            definitions: Vec::new(),
         };
         out.register_all_cards();
         out
     }
 }
 
-impl CardRegistry {
+impl ContentPack {
     pub fn register_all_cards(&mut self) {
         self.register_basic_lands();
         self.register_alpha();
@@ -55,30 +67,59 @@ impl CardRegistry {
                 effects: vec![Effect::CounterUnlessPays { cost: ward_cost }],
             });
         }
-        let registry_key = self.registry_key_gen.next_id();
-        let name = definition.name.clone();
-        self.cards.insert(
-            name,
-            RegisteredCard {
-                registry_key,
-                definition,
-            },
+        let definition_id = CardDefId(
+            self.definitions
+                .len()
+                .try_into()
+                .expect("content pack exceeds CardDefId capacity"),
         );
+        let name = definition.name.clone();
+        assert!(
+            self.cards_by_name.insert(name, definition_id).is_none(),
+            "duplicate card definition"
+        );
+        self.definitions.push(Arc::new(definition));
     }
 
     /// Iterate every registered card definition (conformance tests audit
     /// these against the Scryfall fixture).
     pub fn definitions(&self) -> impl Iterator<Item = &CardDefinition> {
-        self.cards.values().map(|registered| &registered.definition)
+        self.definitions.iter().map(Arc::as_ref)
+    }
+
+    /// Stable `(CardDefId, definition)` pairs for replay, measurement, and
+    /// content fingerprinting without inspecting the pack's storage layout.
+    pub fn definition_entries(&self) -> impl Iterator<Item = (CardDefId, &CardDefinition)> {
+        self.definitions
+            .iter()
+            .enumerate()
+            .map(|(index, definition)| (CardDefId(index as u32), definition.as_ref()))
+    }
+
+    pub fn len(&self) -> usize {
+        self.definitions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.definitions.is_empty()
+    }
+
+    pub fn definition_id(&self, name: &str) -> Option<CardDefId> {
+        self.cards_by_name.get(name).copied()
+    }
+
+    pub fn definition(&self, id: CardDefId) -> Option<&CardDefinition> {
+        self.definitions.get(id.0 as usize).map(Arc::as_ref)
     }
 
     pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
-        let registered = self.cards.get(name)?;
+        let definition_id = self.definition_id(name)?;
+        let definition = Arc::clone(self.definitions.get(definition_id.0 as usize)?);
         Some(Card::from_definition(
             object_id,
             owner,
-            registered.registry_key,
-            &registered.definition,
+            definition_id,
+            definition,
         ))
     }
 

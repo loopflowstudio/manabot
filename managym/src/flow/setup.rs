@@ -6,7 +6,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
-    cardsets::alpha::CardRegistry,
+    cardsets::alpha::default_content_pack,
     flow::{
         game::{Game, GameState},
         priority::PriorityState,
@@ -24,7 +24,7 @@ impl Game {
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
         let mut id_gen = IdGenerator::default();
-        let registry = CardRegistry::default();
+        let content = default_content_pack();
 
         let mut players = [
             Player::new(id_gen.next_id(), 0, player_configs[0].name.clone()),
@@ -38,7 +38,7 @@ impl Game {
         for (player_index, config) in player_configs.iter().enumerate() {
             for (name, qty) in &config.decklist {
                 for _ in 0..*qty {
-                    let card = registry
+                    let card = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .unwrap_or_else(|| panic!("unknown card in decklist: {name}"));
                     let card_id = CardId(cards.len());
@@ -88,7 +88,7 @@ impl Game {
                 trigger_enqueue_counter: 0,
                 rng,
                 id_gen,
-                card_registry: registry,
+                content,
             },
             skip_trivial,
             current_action_space: None,

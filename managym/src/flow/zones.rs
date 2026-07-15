@@ -113,7 +113,7 @@ impl Game {
         let object_id = self.state.id_gen.next_id();
         let Some(card) = self
             .state
-            .card_registry
+            .content
             .instantiate(name, controller, object_id)
         else {
             debug_assert!(false, "unknown token definition: {name}");

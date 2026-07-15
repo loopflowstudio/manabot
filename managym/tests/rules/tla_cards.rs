@@ -165,7 +165,7 @@ fn kyoshi_warriors_etb_creates_ally_token_via_stack() {
     assert_eq!(token_card.power, Some(1));
     assert_eq!(token_card.toughness, Some(1));
     assert_eq!(
-        token_card.colors,
+        token_card.colors(),
         managym::state::mana::Colors::from([managym::state::mana::Color::White])
     );
     assert_eq!(token.controller, PlayerId(0));

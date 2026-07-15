@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     ability::{Ability, Effect, StaticCondition, TargetRequirement},
@@ -6,6 +6,14 @@ use super::{
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
 };
+
+/// Stable index of an immutable card definition in a [`ContentPack`](crate::cardsets::alpha::ContentPack).
+///
+/// The numeric value deliberately matches the legacy `registry_key` exposed
+/// through observations so the Python and fixed-action ABIs do not change.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CardDefId(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CardType {
@@ -250,68 +258,32 @@ impl CardDefinition {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Card {
     pub id: ObjectId,
+    pub definition_id: CardDefId,
+    /// Compatibility name for the existing observation ABI. This is always
+    /// the numeric representation of `definition_id`.
     pub registry_key: ObjectId,
-    pub name: String,
-    pub mana_cost: Option<ManaCost>,
-    pub colors: Colors,
-    pub types: CardTypes,
-    pub supertypes: Vec<String>,
-    pub subtypes: Vec<String>,
-    pub abilities: Vec<Ability>,
-    pub mana_abilities: Vec<ManaAbility>,
-    pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
-    pub activated_abilities: Vec<ActivatedAbilityDefinition>,
-    pub spell_effects: Vec<Effect>,
-    pub targeting: Vec<TargetRequirement>,
-    pub kicker: Option<ManaCost>,
-    pub ward: Option<ManaCost>,
-    pub cost_reduction_per: Option<CardPredicate>,
-    pub keywords: Keywords,
-    pub block_restriction: Option<CardPredicate>,
-    pub is_token: bool,
-    pub power_cda: Option<PowerCda>,
-    pub static_pt_buffs: Vec<StaticPtBuff>,
-    pub text_box: String,
-    pub power: Option<i32>,
-    pub toughness: Option<i32>,
     pub owner: PlayerId,
+    definition: Arc<CardDefinition>,
 }
 
 impl Card {
     pub fn from_definition(
         id: ObjectId,
         owner: PlayerId,
-        registry_key: ObjectId,
-        definition: &CardDefinition,
+        definition_id: CardDefId,
+        definition: Arc<CardDefinition>,
     ) -> Self {
         Self {
             id,
-            registry_key,
-            name: definition.name.clone(),
-            mana_cost: definition.mana_cost.clone(),
-            colors: definition.colors(),
-            types: definition.types.clone(),
-            supertypes: definition.supertypes.clone(),
-            subtypes: definition.subtypes.clone(),
-            abilities: definition.abilities.clone(),
-            mana_abilities: definition.mana_abilities.clone(),
-            triggered_mana_abilities: definition.triggered_mana_abilities.clone(),
-            activated_abilities: definition.activated_abilities.clone(),
-            spell_effects: definition.spell_effects.clone(),
-            targeting: definition.targeting.clone(),
-            kicker: definition.kicker.clone(),
-            ward: definition.ward.clone(),
-            cost_reduction_per: definition.cost_reduction_per.clone(),
-            keywords: definition.keywords.clone(),
-            block_restriction: definition.block_restriction.clone(),
-            is_token: definition.is_token,
-            power_cda: definition.power_cda.clone(),
-            static_pt_buffs: definition.static_pt_buffs.clone(),
-            text_box: definition.text_box.clone(),
-            power: definition.power,
-            toughness: definition.toughness,
+            definition_id,
+            registry_key: ObjectId(definition_id.0),
             owner,
+            definition,
         }
+    }
+
+    pub fn shares_definition_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.definition, &other.definition)
     }
 
     pub fn has_subtype(&self, subtype: &str) -> bool {
@@ -335,6 +307,23 @@ impl Card {
             .find_map(|effect| effect.target_spec())
             .map(|spec| vec![TargetRequirement::one(spec.clone())])
             .unwrap_or_default()
+    }
+}
+
+impl std::ops::Deref for Card {
+    type Target = CardDefinition;
+
+    fn deref(&self) -> &Self::Target {
+        &self.definition
+    }
+}
+
+/// Preserve the existing Rust scenario-test seam without making ordinary
+/// match clones copy definitions. Mutating printed characteristics detaches
+/// only that physical card from the shared pack definition.
+impl std::ops::DerefMut for Card {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.definition)
     }
 }
 

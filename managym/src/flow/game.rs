@@ -1,11 +1,13 @@
 // game.rs
 // Core game structs: GameState and Game.
 
+use std::sync::Arc;
+
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
-    cardsets::alpha::CardRegistry,
+    cardsets::alpha::ContentPack,
     flow::{
         combat::CombatState,
         decision::SuspendedResolution,
@@ -49,7 +51,7 @@ pub struct GameState {
     pub trigger_enqueue_counter: u64,
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
-    pub card_registry: CardRegistry,
+    pub content: Arc<ContentPack>,
 }
 
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
