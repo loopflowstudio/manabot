@@ -1,0 +1,90 @@
+{
+  "actor": 0,
+  "kind": "priority",
+  "offers": [
+    {
+      "id": 0,
+      "actor": 0,
+      "verb": "cast",
+      "source": {
+        "kind": "object",
+        "id": {
+          "entity": 31,
+          "incarnation": 0
+        }
+      },
+      "label": "Cast Lightning Bolt",
+      "help": null,
+      "choices": [
+        {
+          "kind": "select",
+          "role": 1,
+          "label": "Target",
+          "candidates": {
+            "id": 0,
+            "depends_on": [],
+            "initial": [
+              {
+                "id": 0,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "player",
+                    "id": 0
+                  }
+                },
+                "label": "Hero",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 1,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "player",
+                    "id": 1
+                  }
+                },
+                "label": "Villain",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 2,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 77,
+                      "incarnation": 0
+                    }
+                  }
+                },
+                "label": "Gray Ogre",
+                "help": null,
+                "preview": null
+              }
+            ]
+          },
+          "min": 1,
+          "max": 1,
+          "ordered": false,
+          "distinct": true
+        }
+      ],
+      "confirm_label": "Cast"
+    },
+    {
+      "id": 1,
+      "actor": 0,
+      "verb": "pass_priority",
+      "source": null,
+      "label": "Pass priority",
+      "help": null,
+      "choices": [],
+      "confirm_label": "Pass"
+    }
+  ]
+}

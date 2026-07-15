@@ -142,7 +142,7 @@ impl Game {
             AgentError("scenario_refresh_priority: priority space has no player".to_string())
         })?;
         let actions = self.compute_player_actions(player);
-        self.current_action_space = Some(ActionSpace {
+        self.publish_action_space(ActionSpace {
             player: Some(player),
             kind: ActionSpaceKind::Priority,
             actions,
