@@ -29,6 +29,9 @@ export interface PermanentState {
   summoning_sick: boolean;
   power: number | null;
   toughness: number | null;
+  base_power: number | null;
+  base_toughness: number | null;
+  plus1_counters: number;
 }
 
 export interface PlayerState {
@@ -76,16 +79,94 @@ export interface PromptView {
   instruction: string;
 }
 
+export interface ObjectRenderId {
+  entity: number;
+  incarnation: number;
+}
+
+export type SubjectRef =
+  | { kind: 'object'; id: ObjectRenderId }
+  | { kind: 'stack'; id: number }
+  | { kind: 'player'; id: number };
+
+export type OfferVerb =
+  | 'cast'
+  | 'play_land'
+  | 'activate'
+  | 'pass_priority'
+  | 'declare_attackers'
+  | 'declare_blockers'
+  | 'choose'
+  | 'pay'
+  | 'special';
+
+export type CandidateValue =
+  | { kind: 'subject'; subject: SubjectRef }
+  | { kind: 'mode'; key: string }
+  | { kind: 'payment_plan'; id: string }
+  | { kind: 'boolean'; value: boolean };
+
+export interface Candidate {
+  id: number;
+  value: CandidateValue;
+  label: string;
+  help?: string | null;
+  preview?: string | null;
+}
+
+export interface CandidateSource {
+  id: number;
+  depends_on: number[];
+  initial?: Candidate[] | null;
+}
+
+export type ChoiceStep =
+  | {
+      kind: 'select';
+      role: number;
+      label: string;
+      candidates: CandidateSource;
+      min: number;
+      max: number;
+      ordered: boolean;
+      distinct: boolean;
+    }
+  | { kind: 'number'; role: number; label: string; min: number; max: number }
+  | {
+      kind: 'assign';
+      role: number;
+      label: string;
+      sources: CandidateSource;
+      destinations: CandidateSource;
+      min_per_source: number;
+      max_per_source: number;
+    }
+  | { kind: 'order'; role: number; label: string; candidates: CandidateSource }
+  | {
+      kind: 'payment';
+      role: number;
+      label: string;
+      plans: CandidateSource;
+      allow_auto: boolean;
+    };
+
+export type ChoiceAnswer =
+  | { kind: 'candidates'; role: number; candidates: number[] }
+  | { kind: 'number'; role: number; value: number }
+  | { kind: 'assignments'; role: number; pairs: [number, number][] }
+  | { kind: 'order'; role: number; candidates: number[] }
+  | { kind: 'payment'; role: number; plan: string };
+
 // Protocol-v1's first adapter slice wraps one current engine action in each
 // offer. action_type/focus are temporary bridges for the established table.
 export interface InteractionOffer {
   id: number;
   actor: number;
-  verb: string;
-  source: null;
+  verb: OfferVerb;
+  source: SubjectRef | null;
   label: string;
   help: string | null;
-  choices: [];
+  choices: ChoiceStep[];
   confirm_label: string;
   action_type: string;
   focus: number[];
@@ -98,7 +179,7 @@ export interface ExperienceFrame {
   frame_hash: string;
   content_hash: string;
   asset_manifest_hash: string;
-  status: 'ready' | 'game_over';
+  status: 'ready' | 'thinking' | 'resolving' | 'reconnecting' | 'game_over';
   prompt: PromptView | null;
   projection: Observation;
   offers: InteractionOffer[];
@@ -117,7 +198,7 @@ export interface Command {
   expected_revision: number;
   prompt_id: number;
   offer_id: number;
-  answers: [];
+  answers: ChoiceAnswer[];
 }
 
 export interface CommandReceipt {
@@ -127,16 +208,6 @@ export interface CommandReceipt {
   resulting_revision: number;
   resulting_frame_hash: string;
 }
-
-export interface ObjectRenderId {
-  entity: number;
-  incarnation: number;
-}
-
-export type SubjectRef =
-  | { kind: 'object'; id: ObjectRenderId }
-  | { kind: 'stack'; id: number }
-  | { kind: 'player'; id: number };
 
 export type PresentationImportance = 'ambient' | 'normal' | 'emphasized' | 'critical';
 
@@ -201,12 +272,25 @@ export interface RecoveryEnvelope {
   engine_version: string;
   content_hash: string;
   asset_manifest_hash: string;
-  reason: string;
+  reason:
+    | 'initial_connect'
+    | 'explicit_resync'
+    | 'revision_gap'
+    | 'reconnect'
+    | 'duplicate_command'
+    | 'stale_command'
+    | 'authority_restart';
   frame: ExperienceFrame;
   presentation_tail: PresentationEvent[];
   accepted_commands: CommandReceipt[];
   replay_cursor: number;
   checkpoint: string | null;
+}
+
+/** Root of the checked-in Rust-generated cross-language fixture. */
+export interface ProtocolV1ConformanceBundle {
+  recovery: RecoveryEnvelope;
+  command: Command;
 }
 
 export interface CommandRejection {

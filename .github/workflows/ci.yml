@@ -128,10 +128,54 @@ jobs:
             --set experiment.profiler_enabled=false \
             --set agent.attention_on=false
 
+  protocol-v1:
+    name: Protocol v1 Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          uv venv .venv --python 3.12
+          uv sync --extra dev
+
+      - name: Build Python extension
+        run: uv run --extra dev --with maturin maturin develop --release --manifest-path managym/Cargo.toml --features python
+
+      - name: Certify Rust and Python
+        run: |
+          cargo test --manifest-path managym/Cargo.toml --test experience_protocol_tests
+          uv run --extra dev pytest tests/gui/test_server.py -k protocol_v1 -q
+
+      - name: Certify TypeScript
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test -- --run src/lib/protocol-conformance.test.ts
+          npm run check
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [rust, python-unit, integration]
+    needs: [rust, python-unit, integration, protocol-v1]
     if: always()
     steps:
       - name: Check all jobs
@@ -139,8 +183,10 @@ jobs:
           echo "rust: ${{ needs.rust.result }}"
           echo "python-unit: ${{ needs.python-unit.result }}"
           echo "integration: ${{ needs.integration.result }}"
+          echo "protocol-v1: ${{ needs.protocol-v1.result }}"
           if [ "${{ needs.rust.result }}" != "success" ] || \
              [ "${{ needs.python-unit.result }}" != "success" ] || \
-             [ "${{ needs.integration.result }}" != "success" ]; then
+             [ "${{ needs.integration.result }}" != "success" ] || \
+             [ "${{ needs.protocol-v1.result }}" != "success" ]; then
             exit 1
           fi

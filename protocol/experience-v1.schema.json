@@ -1,0 +1,1412 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProtocolV1ConformanceBundle",
+  "description": "Shared executable fixture: one recovery frame and the command selected\nfrom that exact prompt. Keeping this root intentionally small makes the\ncurrent certification claim precise.",
+  "type": "object",
+  "properties": {
+    "command": {
+      "$ref": "#/$defs/Command"
+    },
+    "recovery": {
+      "$ref": "#/$defs/RecoveryEnvelope"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "recovery",
+    "command"
+  ],
+  "$defs": {
+    "AssetPackReference": {
+      "description": "Exact installed presentation pack for an authored matchup.\n\nCustom and legacy games have no pack reference, while curated games bind\nthe human-facing assets to the same manifest digest carried by the frame.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "manifest_sha256"
+      ]
+    },
+    "AuthorityStatus": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "thinking",
+        "resolving",
+        "reconnecting",
+        "game_over"
+      ]
+    },
+    "Candidate": {
+      "type": "object",
+      "properties": {
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "label": {
+          "type": "string"
+        },
+        "preview": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/CandidateValue"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "value",
+        "label"
+      ]
+    },
+    "CandidateSource": {
+      "type": "object",
+      "properties": {
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          }
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "initial": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/Candidate"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "depends_on"
+      ]
+    },
+    "CandidateValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "subject"
+            },
+            "subject": {
+              "$ref": "#/$defs/SubjectRef"
+            }
+          },
+          "required": [
+            "kind",
+            "subject"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "mode"
+            }
+          },
+          "required": [
+            "kind",
+            "key"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "payment_plan"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "boolean"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ]
+        }
+      ]
+    },
+    "ChoiceAnswer": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "candidates"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "candidates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "number"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "value": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "value"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "assignments"
+            },
+            "pairs": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "format": "uint32",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "integer",
+                    "format": "uint32",
+                    "minimum": 0
+                  }
+                ]
+              }
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "pairs"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "order"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "candidates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "payment"
+            },
+            "plan": {
+              "type": "string"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "plan"
+          ]
+        }
+      ]
+    },
+    "ChoiceStep": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "candidates": {
+              "$ref": "#/$defs/CandidateSource"
+            },
+            "distinct": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "select"
+            },
+            "label": {
+              "type": "string"
+            },
+            "max": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "min": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "ordered": {
+              "type": "boolean"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "label",
+            "candidates",
+            "min",
+            "max",
+            "ordered",
+            "distinct"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "number"
+            },
+            "label": {
+              "type": "string"
+            },
+            "max": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "min": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "label",
+            "min",
+            "max"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "destinations": {
+              "$ref": "#/$defs/CandidateSource"
+            },
+            "kind": {
+              "type": "string",
+              "const": "assign"
+            },
+            "label": {
+              "type": "string"
+            },
+            "max_per_source": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "min_per_source": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "sources": {
+              "$ref": "#/$defs/CandidateSource"
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "label",
+            "sources",
+            "destinations",
+            "min_per_source",
+            "max_per_source"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "candidates": {
+              "$ref": "#/$defs/CandidateSource"
+            },
+            "kind": {
+              "type": "string",
+              "const": "order"
+            },
+            "label": {
+              "type": "string"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "label",
+            "candidates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allow_auto": {
+              "type": "boolean"
+            },
+            "kind": {
+              "type": "string",
+              "const": "payment"
+            },
+            "label": {
+              "type": "string"
+            },
+            "plans": {
+              "$ref": "#/$defs/CandidateSource"
+            },
+            "role": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "role",
+            "label",
+            "plans",
+            "allow_auto"
+          ]
+        }
+      ]
+    },
+    "Command": {
+      "type": "object",
+      "properties": {
+        "answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChoiceAnswer"
+          }
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "match_id": {
+          "type": "string"
+        },
+        "offer_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "prompt_id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "match_id",
+        "expected_revision",
+        "prompt_id",
+        "offer_id",
+        "answers"
+      ]
+    },
+    "CommandReceipt": {
+      "type": "object",
+      "properties": {
+        "accepted_at": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "actor": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "command_id": {
+          "type": "string"
+        },
+        "resulting_frame_hash": {
+          "type": "string"
+        },
+        "resulting_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "actor",
+        "accepted_at",
+        "resulting_revision",
+        "resulting_frame_hash"
+      ]
+    },
+    "DeckNames": {
+      "type": "object",
+      "properties": {
+        "hero": {
+          "type": "string"
+        },
+        "villain": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "hero",
+        "villain"
+      ]
+    },
+    "ExperienceFrame": {
+      "type": "object",
+      "properties": {
+        "action_space": {
+          "type": "string"
+        },
+        "asset_manifest_hash": {
+          "type": "string"
+        },
+        "asset_pack": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetPackReference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "auto_passed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "deck_names": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeckNames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frame_hash": {
+          "type": "string"
+        },
+        "log": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "match_id": {
+          "type": "string"
+        },
+        "offers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InteractionOffer"
+          }
+        },
+        "projection": {
+          "$ref": "#/$defs/LegacyHeroObservation"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/AuthorityStatus"
+        },
+        "stops": {
+          "$ref": "#/$defs/StopsConfig"
+        },
+        "winner": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "match_id",
+        "revision",
+        "frame_hash",
+        "content_hash",
+        "asset_manifest_hash",
+        "status",
+        "projection",
+        "offers",
+        "action_space",
+        "stops"
+      ]
+    },
+    "InteractionOffer": {
+      "type": "object",
+      "properties": {
+        "action_type": {
+          "description": "Transitional bridge to today's positional engine action.",
+          "type": "string"
+        },
+        "actor": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChoiceStep"
+          }
+        },
+        "confirm_label": {
+          "type": "string"
+        },
+        "focus": {
+          "description": "Transitional direct-manipulation focus IDs for the current table.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "help": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubjectRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verb": {
+          "$ref": "#/$defs/OfferVerb"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "actor",
+        "verb",
+        "label",
+        "choices",
+        "confirm_label",
+        "action_type",
+        "focus"
+      ]
+    },
+    "LegacyCardTypesView": {
+      "type": "object",
+      "properties": {
+        "is_artifact": {
+          "type": "boolean"
+        },
+        "is_battle": {
+          "type": "boolean"
+        },
+        "is_creature": {
+          "type": "boolean"
+        },
+        "is_enchantment": {
+          "type": "boolean"
+        },
+        "is_land": {
+          "type": "boolean"
+        },
+        "is_planeswalker": {
+          "type": "boolean"
+        },
+        "is_spell": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "is_creature",
+        "is_land",
+        "is_spell",
+        "is_artifact",
+        "is_enchantment",
+        "is_planeswalker",
+        "is_battle"
+      ]
+    },
+    "LegacyCardView": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "mana_value": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "power": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "registry_key": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "toughness": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "types": {
+          "$ref": "#/$defs/LegacyCardTypesView"
+        },
+        "zone": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "registry_key",
+        "name",
+        "zone",
+        "owner_id",
+        "power",
+        "toughness",
+        "mana_value",
+        "types"
+      ]
+    },
+    "LegacyHeroObservation": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "game_over": {
+          "type": "boolean"
+        },
+        "opponent": {
+          "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "turn": {
+          "$ref": "#/$defs/LegacyTurnView"
+        },
+        "won": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "game_over",
+        "won",
+        "turn",
+        "agent",
+        "opponent"
+      ]
+    },
+    "LegacyPermanentView": {
+      "type": "object",
+      "properties": {
+        "base_power": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "base_toughness": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "controller_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "damage": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plus1_counters": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "power": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "summoning_sick": {
+          "type": "boolean"
+        },
+        "tapped": {
+          "type": "boolean"
+        },
+        "toughness": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "controller_id",
+        "tapped",
+        "damage",
+        "summoning_sick",
+        "plus1_counters"
+      ]
+    },
+    "LegacyPlayerView": {
+      "type": "object",
+      "properties": {
+        "battlefield": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyPermanentView"
+          }
+        },
+        "exile": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
+        "graveyard": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
+        "hand": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
+        "hand_hidden_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "is_active": {
+          "type": "boolean"
+        },
+        "is_agent": {
+          "type": "boolean"
+        },
+        "library_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "life": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "player_index": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "stack": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          }
+        },
+        "zone_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "player_index",
+        "id",
+        "is_active",
+        "is_agent",
+        "life",
+        "zone_counts",
+        "library_count",
+        "hand",
+        "graveyard",
+        "exile",
+        "stack",
+        "battlefield"
+      ]
+    },
+    "LegacyTurnView": {
+      "type": "object",
+      "properties": {
+        "active_player_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "agent_player_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "phase": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        },
+        "turn_number": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "turn_number",
+        "phase",
+        "step",
+        "active_player_id",
+        "agent_player_id"
+      ]
+    },
+    "ObjectRenderId": {
+      "type": "object",
+      "properties": {
+        "entity": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "incarnation": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entity",
+        "incarnation"
+      ]
+    },
+    "OfferVerb": {
+      "type": "string",
+      "enum": [
+        "cast",
+        "play_land",
+        "activate",
+        "pass_priority",
+        "declare_attackers",
+        "declare_blockers",
+        "choose",
+        "pay",
+        "special"
+      ]
+    },
+    "PresentationEvent": {
+      "description": "Presentation payloads remain opaque in this certification because the\nmerged adapter emits no semantic presentation events yet. The envelope and\nordering metadata are nevertheless fixed at the wire boundary.",
+      "type": "object",
+      "properties": {
+        "caused_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "group": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "importance": {
+          "$ref": "#/$defs/PresentationImportance"
+        },
+        "kind": true,
+        "seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "sound": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "suggested_ms": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "to_revision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "seq",
+        "from_revision",
+        "to_revision",
+        "group",
+        "importance",
+        "suggested_ms",
+        "kind"
+      ]
+    },
+    "PresentationImportance": {
+      "type": "string",
+      "enum": [
+        "ambient",
+        "normal",
+        "emphasized",
+        "critical"
+      ]
+    },
+    "PromptView": {
+      "type": "object",
+      "properties": {
+        "actor": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "id": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "instruction": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "actor",
+        "kind",
+        "title",
+        "instruction"
+      ]
+    },
+    "ProtocolVersion": {
+      "description": "The only version accepted by this module and its generated schema.",
+      "type": "integer",
+      "format": "uint16",
+      "maximum": 1,
+      "minimum": 1
+    },
+    "RecoveryEnvelope": {
+      "type": "object",
+      "properties": {
+        "accepted_commands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CommandReceipt"
+          }
+        },
+        "asset_manifest_hash": {
+          "type": "string"
+        },
+        "checkpoint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "engine_version": {
+          "type": "string"
+        },
+        "frame": {
+          "$ref": "#/$defs/ExperienceFrame"
+        },
+        "presentation_tail": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PresentationEvent"
+          }
+        },
+        "protocol": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
+        "reason": {
+          "$ref": "#/$defs/RecoveryReason"
+        },
+        "replay_cursor": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "engine_version",
+        "content_hash",
+        "asset_manifest_hash",
+        "reason",
+        "frame",
+        "presentation_tail",
+        "accepted_commands",
+        "replay_cursor"
+      ]
+    },
+    "RecoveryReason": {
+      "type": "string",
+      "enum": [
+        "initial_connect",
+        "explicit_resync",
+        "revision_gap",
+        "reconnect",
+        "duplicate_command",
+        "stale_command",
+        "authority_restart"
+      ]
+    },
+    "StopsConfig": {
+      "type": "object",
+      "properties": {
+        "auto_pass": {
+          "type": "boolean"
+        },
+        "my": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "opponent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stop_on_stack": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "my",
+        "opponent",
+        "stop_on_stack",
+        "auto_pass"
+      ]
+    },
+    "SubjectRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "kind": {
+              "type": "string",
+              "const": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "stack"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "player"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        }
+      ]
+    }
+  }
+}
