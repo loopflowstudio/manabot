@@ -1,6 +1,15 @@
 # Experience protocol: concrete v1 code sketch
 
-Status: design artifact, not integrated product code.
+Status: the positional-action adapter is integrated and its recovery/command
+slice is certified across Rust, Python, and TypeScript. The richer semantic
+projection, non-empty presentation vocabulary, and structured offer examples
+below remain the target design rather than a claim about current runtime code.
+
+The executable contract lives in `managym/src/experience.rs`. It generates
+`protocol/experience-v1.schema.json`; Rust, the live Python producer, and the
+TypeScript consumer all validate the same fixture in
+`protocol/fixtures/bolt-target.json`. See `protocol/README.md` for the exact
+certification boundary and regeneration command.
 
 This makes the proposed `ExperienceFrame`, `InteractionOffer`/`Command`,
 `PresentationEvent`, and `RecoveryEnvelope` concrete. The Rust definitions are

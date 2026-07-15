@@ -20,7 +20,7 @@ interface BoltProtocolFixture {
 }
 
 const boltProtocolFixture = JSON.parse(readFileSync(
-  new URL('../../../tests/gui/fixtures/protocol_v1_bolt_target.json', import.meta.url),
+  new URL('../../../protocol/fixtures/bolt-target.json', import.meta.url),
   'utf8',
 )) as BoltProtocolFixture;
 

@@ -9,16 +9,20 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
+from jsonschema import Draft202012Validator
 
 # Local imports
 from gui import server, trace as trace_store
 from gui.server import app
 
+PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 PROTOCOL_V1_BOLT_FIXTURE = json.loads(
-    (Path(__file__).parent / "fixtures" / "protocol_v1_bolt_target.json").read_text(
-        encoding="utf-8"
-    )
+    (PROTOCOL_DIR / "fixtures" / "bolt-target.json").read_text(encoding="utf-8")
 )
+PROTOCOL_V1_SCHEMA = json.loads(
+    (PROTOCOL_DIR / "experience-v1.schema.json").read_text(encoding="utf-8")
+)
+PROTOCOL_V1_VALIDATOR = Draft202012Validator(PROTOCOL_V1_SCHEMA)
 
 
 def _pick_action(actions: list[dict]) -> int:
@@ -106,6 +110,12 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         "answers",
                     ):
                         assert command[key] == fixture_command[key]
+                    record = next(iter(server.SESSION_REGISTRY.values()))
+                    live_bundle = {
+                        "recovery": record.game.current_recovery("explicit_resync"),
+                        "command": command,
+                    }
+                    PROTOCOL_V1_VALIDATOR.validate(live_bundle)
                 websocket.send_json({"type": "command", "command": command})
                 outcome = websocket.receive_json()
                 assert outcome["status"] == "accepted"
@@ -126,6 +136,15 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
         and not event.auto
         for event in record.game.trace.events
     )
+
+
+def test_protocol_v1_shared_fixture_matches_rust_generated_schema():
+    Draft202012Validator.check_schema(PROTOCOL_V1_SCHEMA)
+    PROTOCOL_V1_VALIDATOR.validate(PROTOCOL_V1_BOLT_FIXTURE)
+
+    invalid = json.loads(json.dumps(PROTOCOL_V1_BOLT_FIXTURE))
+    invalid["recovery"]["protocol"] = 2
+    assert list(PROTOCOL_V1_VALIDATOR.iter_errors(invalid))
 
 
 def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
