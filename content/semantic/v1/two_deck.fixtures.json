@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "kicker lowers to one explicit branch",
+      "program": "tla.firebending_lesson.spell",
+      "opcode_trace": ["branch", "then:deal_damage", "otherwise:deal_damage"]
+    },
+    {
+      "name": "graveyard threshold preserves non-draw top-card movement",
+      "program": "tla.accumulate_wisdom.spell",
+      "opcode_trace": ["branch", "then:put_top_cards_in_hand", "otherwise:look_and_select"]
+    },
+    {
+      "name": "linked exile remains a semantic operation",
+      "program": "tla.earth_kingdom_jailer.temporary_exile",
+      "opcode_trace": ["exile_until_source_leaves"]
+    },
+    {
+      "name": "multi-target iteration is explicit",
+      "program": "tla.fancy_footwork.spell",
+      "opcode_trace": ["for_each_target", "body:untap", "body:modify_pt"]
+    },
+    {
+      "name": "source upkeep action is name agnostic",
+      "program": "tla.tiger_seal.upkeep_tap",
+      "opcode_trace": ["tap"]
+    }
+  ]
+}
