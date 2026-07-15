@@ -13,7 +13,7 @@ use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
         ability::Effect,
-        game_object::{CardId, PlayerId, Target},
+        game_object::{CardId, ObjectRef, PlayerId, Target},
         mana::ManaCost,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -37,6 +37,9 @@ pub enum FrameFinalize {
 pub struct EffectFrame {
     /// The card whose spell or ability is resolving.
     pub source: Option<CardId>,
+    /// Exact battlefield source when the effect belongs to an ability of a
+    /// permanent. This intentionally does not follow `source` across zones.
+    pub source_ref: Option<ObjectRef>,
     /// The player the effects resolve for ("you").
     pub controller: PlayerId,
     /// For triggered abilities: how many times this ability has resolved

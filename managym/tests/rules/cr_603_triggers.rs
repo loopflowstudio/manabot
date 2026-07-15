@@ -2,7 +2,7 @@ use managym::{
     agent::action::ActionSpaceKind,
     flow::{trigger::PendingTrigger, turn::StepKind},
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{CardId, ObjectLookupError, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -129,6 +129,8 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
     s.game_mut().state.pending_triggers = vec![
         PendingTrigger {
             source_card: p1_source,
+            source_ref: None,
+            source_lki: None,
             ability_index: 0,
             controller: PlayerId(1),
             enqueue_order: 0,
@@ -137,6 +139,8 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
         },
         PendingTrigger {
             source_card: p0_source,
+            source_ref: None,
+            source_lki: None,
             ability_index: 0,
             controller: PlayerId(0),
             enqueue_order: 1,
@@ -187,6 +191,53 @@ fn cr_608_2b_trigger_with_illegal_target_does_nothing() {
     );
 }
 
+/// CR 400.7, 608.2b — leaving and returning does not make the new object the
+/// target of an ability that selected the old object.
+#[test]
+fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
+    let mut s = Scenario::new(manowar_deck(), island_deck(), 400_704);
+    cast_manowar_and_reach_target_choice(&mut s);
+    s.choose_target_named("Man-o'-War");
+
+    let old_permanent = s.battlefield_permanents_named(0, "Man-o'-War")[0];
+    let card = s.game().state.permanents[old_permanent]
+        .as_ref()
+        .expect("old permanent")
+        .card;
+    let old_ref = s
+        .game()
+        .current_object_ref(card)
+        .expect("old object ref");
+
+    s.game_mut().move_card(card, ZoneType::Hand);
+    s.game_mut().move_card(card, ZoneType::Battlefield);
+    // Ignore the new object's own ETB trigger; this scenario is specifically
+    // resolving the already-stacked trigger that targeted the old object.
+    s.game_mut().state.pending_triggers.clear();
+    let new_ref = s
+        .game()
+        .current_object_ref(card)
+        .expect("new object ref");
+    let new_permanent = s.game().state.card_to_permanent[card].expect("new permanent");
+
+    assert_eq!(old_ref.entity, new_ref.entity);
+    assert_ne!(old_ref.incarnation, new_ref.incarnation);
+    assert_eq!(
+        s.game().lookup_current_permanent(old_ref),
+        Err(ObjectLookupError::StaleIncarnation)
+    );
+
+    s.pass_priority();
+    s.pass_priority();
+
+    assert_eq!(
+        s.game().state.card_to_permanent[card],
+        Some(new_permanent),
+        "the new incarnation must remain on the battlefield"
+    );
+    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Battlefield));
+}
+
 /// CR 117.5, 704.3, 603.3 — SBAs are checked before pending triggers are flushed.
 #[test]
 fn cr_603_trigger_flush_happens_after_sba_check() {
@@ -201,6 +252,8 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
     let source = find_owned_card(&s, 0, "Man-o'-War");
     s.game_mut().state.pending_triggers.push(PendingTrigger {
         source_card: source,
+        source_ref: None,
+        source_lki: None,
         ability_index: 0,
         controller: PlayerId(0),
         enqueue_order: 0,

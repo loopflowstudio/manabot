@@ -494,6 +494,39 @@ fn jailer_killed_in_response_exiles_nothing() {
     assert!(s.game().state.exile_links.is_empty());
 }
 
+#[test]
+fn jailer_old_trigger_does_not_follow_reentered_source() {
+    let mut s = jailer_scenario(315);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre_card = permanent(&s, ogre).card;
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_and_resolve(&mut s);
+
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    let jailer = s.battlefield_permanents_named(0, "Earth Kingdom Jailer")[0];
+    let jailer_card = permanent(&s, jailer).card;
+    let old_ref = s.game().current_object_ref(jailer_card).expect("old Jailer ref");
+
+    s.game_mut().move_card(jailer_card, ZoneType::Hand);
+    s.game_mut().move_card(jailer_card, ZoneType::Battlefield);
+    // Ignore the later incarnation's ETB trigger and resolve only the old
+    // trigger already on the stack.
+    s.game_mut().state.pending_triggers.clear();
+    let new_ref = s.game().current_object_ref(jailer_card).expect("new Jailer ref");
+    assert_eq!(old_ref.entity, new_ref.entity);
+    assert_ne!(old_ref.incarnation, new_ref.incarnation);
+
+    s.pass_priority();
+    s.pass_priority();
+
+    assert_eq!(
+        s.game().state.zones.zone_of(ogre_card),
+        Some(ZoneType::Battlefield),
+        "the old trigger must not attach its duration to the new Jailer object"
+    );
+    assert!(s.game().state.exile_links.is_empty());
+}
+
 // ---------------------------------------------------------------------------
 // Static continuous effects — White Lotus Reinforcements (anthem),
 // First-Time Flyer (conditional self-buff), layer composition.

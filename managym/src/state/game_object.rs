@@ -1,8 +1,76 @@
+use super::zone::ZoneType;
+use super::card::CardDefId;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ObjectId(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CardId(pub usize);
+
+/// Stable match-local identity of a physical card or token.
+///
+/// `CardId` is the current storage authority for physical cards. Keeping the
+/// rules identity in a distinct type prevents continuations from silently
+/// treating that storage index as the current rules object after a zone
+/// change. The adapter can move when the card-instance layout changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EntityId(pub usize);
+
+impl From<CardId> for EntityId {
+    fn from(card: CardId) -> Self {
+        Self(card.0)
+    }
+}
+
+impl From<EntityId> for CardId {
+    fn from(entity: EntityId) -> Self {
+        Self(entity.0)
+    }
+}
+
+/// Monotonic rules-object generation for one physical entity.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Incarnation(pub u32);
+
+impl Incarnation {
+    pub const INITIAL: Self = Self(0);
+
+    pub fn checked_next(self) -> Option<Self> {
+        self.0.checked_add(1).map(Self)
+    }
+}
+
+/// An exact rules object. A zone change preserves `entity` but advances
+/// `incarnation` (CR 400.7), so old continuations cannot bind to a later
+/// object represented by the same physical card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ObjectRef {
+    pub entity: EntityId,
+    pub incarnation: Incarnation,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ObjectLookupError {
+    MissingEntity,
+    StaleIncarnation,
+    WrongZone,
+}
+
+/// Battlefield facts retained for a departed exact object.
+///
+/// This deliberately stores identity and mutable facts, not a cloned card
+/// definition. `definition_id` resolves through the match's immutable
+/// `ContentPack` and does not clone card semantics into mutable state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectLki {
+    pub object_ref: ObjectRef,
+    pub card: CardId,
+    pub from_zone: ZoneType,
+    pub owner: PlayerId,
+    pub controller: PlayerId,
+    pub definition_id: CardDefId,
+    pub presentation_id: ObjectId,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PermanentId(pub usize);

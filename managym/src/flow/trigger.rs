@@ -1,11 +1,16 @@
 use crate::state::{
     ability::Effect,
-    game_object::{CardId, PlayerId, Target},
+    game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingTrigger {
     pub source_card: CardId,
+    /// Exact source object captured when the ability triggered. Synthetic
+    /// test/delayed triggers may have no battlefield source.
+    pub source_ref: Option<ObjectRef>,
+    /// Definition/controller/presentation facts for that exact source.
+    pub source_lki: Option<ObjectLki>,
     pub ability_index: usize,
     pub controller: PlayerId,
     pub enqueue_order: u64,
@@ -35,10 +40,11 @@ pub enum DelayedTriggerKind {
 }
 
 /// "Exile [card] until [source] leaves the battlefield" linkage (Earth
-/// Kingdom Jailer). When `source_card` leaves the battlefield the exiled
-/// card returns immediately — no trigger, no stack (CR 603.6e).
+/// Kingdom Jailer). When the exact `source` object leaves the battlefield the
+/// exiled card returns immediately — no trigger, no stack (CR 603.6e). A later
+/// incarnation of the same physical card is not the duration source.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExileLink {
-    pub source_card: CardId,
+    pub source: ObjectRef,
     pub exiled_card: CardId,
 }

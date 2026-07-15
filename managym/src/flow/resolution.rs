@@ -70,6 +70,7 @@ impl Game {
 
         let frame = EffectFrame {
             source: Some(card),
+            source_ref: None,
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
@@ -121,6 +122,7 @@ impl Game {
 
         let frame = EffectFrame {
             source: Some(ability.source_card),
+            source_ref: self.current_object_ref(ability.source_card),
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
@@ -134,6 +136,14 @@ impl Game {
     }
 
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
+        let source_card = triggered
+            .source_lki
+            .map(|lki| lki.card)
+            .unwrap_or(triggered.source_card);
+        let source_controller = triggered
+            .source_lki
+            .map(|lki| lki.controller)
+            .unwrap_or(triggered.controller);
         let effects = if let Some(effects) = triggered.inline_effects.clone() {
             // Delayed triggers carry their effects inline.
             effects
@@ -141,7 +151,7 @@ impl Game {
             let Some(ability) = self
                 .state
                 .cards
-                .get(triggered.source_card.0)
+                .get(source_card.0)
                 .and_then(|card| card.abilities.get(triggered.ability_index))
                 .cloned()
             else {
@@ -159,7 +169,7 @@ impl Game {
         } else {
             triggered.ability_index
         };
-        let key = (triggered.source_card.0, ability_key);
+        let key = (source_card.0, ability_key);
         let count = self
             .state
             .turn
@@ -170,8 +180,9 @@ impl Game {
         let resolutions_this_turn = *count;
 
         let frame = EffectFrame {
-            source: Some(triggered.source_card),
-            controller: triggered.controller,
+            source: Some(source_card),
+            source_ref: triggered.source_ref,
+            controller: source_controller,
             resolutions_this_turn,
             kicked: false,
             targets: triggered.targets.clone(),
@@ -493,19 +504,18 @@ impl Game {
                 let Target::Permanent(permanent_id) = chosen else {
                     return None;
                 };
-                // CR 603.6e pragmatics (Banisher Priest ruling): if the
-                // source already left the battlefield, nothing is exiled.
-                let source_card = frame.source?;
-                if self.state.zones.zone_of(source_card) != Some(ZoneType::Battlefield) {
-                    return None;
-                }
+                // CR 603.6e pragmatics (Banisher Priest ruling): the exact
+                // source object must still exist. A later incarnation of the
+                // same physical card does not keep the old trigger alive.
+                let source_ref = frame.source_ref?;
+                self.lookup_current_permanent(source_ref).ok()?;
                 let permanent = self.state.permanents[permanent_id].as_ref()?;
                 let exiled_card = permanent.card;
                 let exiled_controller = permanent.controller;
                 self.move_card(exiled_card, ZoneType::Exile);
                 self.invalidate_mana_cache(exiled_controller);
                 self.state.exile_links.push(ExileLink {
-                    source_card,
+                    source: source_ref,
                     exiled_card,
                 });
                 None
@@ -585,6 +595,7 @@ impl Game {
                 for target in frame.targets.clone() {
                     let mut sub = EffectFrame {
                         source: frame.source,
+                        source_ref: frame.source_ref,
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,
@@ -671,6 +682,9 @@ impl Game {
     }
 
     fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
+        if let Some(source_ref) = frame.source_ref {
+            return self.lookup_current_permanent(source_ref).ok();
+        }
         let source_card = frame.source?;
         self.state.card_to_permanent[source_card]
     }

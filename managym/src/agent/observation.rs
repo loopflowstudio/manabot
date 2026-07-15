@@ -411,10 +411,13 @@ impl Observation {
             toughness,
             is_animated: permanent.animated,
             has_exile_link: game
-                .state
-                .exile_links
-                .iter()
-                .any(|link| link.source_card == permanent.card),
+                .permanent_object_ref(perm_id)
+                .is_some_and(|object_ref| {
+                    game.state
+                        .exile_links
+                        .iter()
+                        .any(|link| link.source == object_ref)
+                }),
             keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
         };
 

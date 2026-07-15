@@ -4,7 +4,7 @@
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
         permanent::Permanent,
         predicate::CardPredicate,
         stack_object::{SpellOnStack, StackObject},
@@ -124,6 +124,7 @@ impl Game {
         let card_id = CardId(self.state.cards.len());
         self.state.cards.push(card);
         self.state.card_to_permanent.push(None);
+        self.state.object_incarnations.push(Incarnation::INITIAL);
         self.move_card(card_id, ZoneType::Battlefield);
 
         if tapped_and_attacking {
@@ -201,7 +202,23 @@ impl Game {
     pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
         let owner = self.state.cards[card].owner;
         let old_zone = self.state.zones.zone_of(card);
+        if old_zone == Some(to_zone) {
+            // Reordering within one zone is not a zone change and does not
+            // create a new rules object (CR 400.7).
+            return;
+        }
+
         let mut event_controller = owner;
+        let departing_ref = old_zone.and_then(|_| self.current_object_ref(card));
+        let departing_lki = if old_zone == Some(ZoneType::Battlefield) {
+            self.snapshot_current_permanent(card)
+        } else {
+            None
+        };
+
+        if old_zone.is_some() {
+            self.advance_object_incarnation(card);
+        }
 
         if old_zone == Some(ZoneType::Battlefield) {
             if let Some(permanent_id) = self.state.card_to_permanent[card].take() {
@@ -210,6 +227,10 @@ impl Game {
                 }
                 self.state.permanents[permanent_id] = None;
             }
+        }
+
+        if let Some(lki) = departing_lki {
+            self.record_object_lki(lki);
         }
         if old_zone == Some(ZoneType::Stack) {
             if let Some(index) = self.find_spell_on_stack_index(card) {
@@ -239,7 +260,7 @@ impl Game {
         };
         self.emit(event);
         if old_zone == Some(ZoneType::Battlefield) {
-            self.handle_leaves_battlefield(card, to_zone);
+            self.handle_leaves_battlefield(card, departing_ref, to_zone);
         }
         self.process_game_events();
     }
@@ -247,7 +268,12 @@ impl Game {
     /// Leave-the-battlefield bookkeeping: fire one-shot delayed triggers
     /// (earthbend returns) and end "exiled until this leaves" durations
     /// (Jailer links — the exiled card returns immediately, no stack).
-    fn handle_leaves_battlefield(&mut self, card: CardId, to_zone: ZoneType) {
+    fn handle_leaves_battlefield(
+        &mut self,
+        card: CardId,
+        departing_ref: Option<ObjectRef>,
+        to_zone: ZoneType,
+    ) {
         // Delayed triggers watching this card fire on dies/exiled and are
         // dropped otherwise (they watched this battlefield stint only).
         let watching: Vec<_> = {
@@ -283,7 +309,7 @@ impl Game {
             let mut kept = Vec::new();
             let mut ended = Vec::new();
             for link in std::mem::take(&mut self.state.exile_links) {
-                if link.source_card == card {
+                if departing_ref.is_some_and(|object_ref| link.source == object_ref) {
                     ended.push(link);
                 } else {
                     kept.push(link);

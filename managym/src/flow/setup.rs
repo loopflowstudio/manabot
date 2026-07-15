@@ -13,7 +13,7 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        game_object::{CardId, CardVec, IdGenerator, PermanentVec, PlayerId},
+        game_object::{CardId, CardVec, IdGenerator, Incarnation, PermanentVec, PlayerId},
         player::{Player, PlayerConfig},
         zone::{ZoneManager, ZoneType},
     },
@@ -33,6 +33,7 @@ impl Game {
 
         let mut cards = CardVec::default();
         let mut card_to_permanent = CardVec::default();
+        let mut object_incarnations = CardVec::default();
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
@@ -44,6 +45,7 @@ impl Game {
                     let card_id = CardId(cards.len());
                     cards.push(card);
                     card_to_permanent.push(None);
+                    object_incarnations.push(Incarnation::INITIAL);
                     players[player_index].deck.push(card_id);
                 }
             }
@@ -70,6 +72,8 @@ impl Game {
                 cards,
                 permanents: PermanentVec::default(),
                 card_to_permanent,
+                object_incarnations,
+                object_lki: Default::default(),
                 players,
                 zones,
                 turn: TurnState::new(PlayerId(0)),

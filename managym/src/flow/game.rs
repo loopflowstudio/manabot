@@ -1,7 +1,7 @@
 // game.rs
 // Core game structs: GameState and Game.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use rand_chacha::ChaCha8Rng;
 
@@ -17,7 +17,10 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        game_object::{CardId, CardVec, IdGenerator, PermanentId, PermanentVec, PlayerId, Target},
+        game_object::{
+            CardId, CardVec, IdGenerator, Incarnation, ObjectLki, ObjectRef, PermanentId,
+            PermanentVec, PlayerId, Target,
+        },
         mana::Mana,
         stack_object::StackObject,
         zone::ZoneManager,
@@ -29,6 +32,10 @@ pub struct GameState {
     pub cards: CardVec<crate::state::card::Card>,
     pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
     pub card_to_permanent: CardVec<Option<PermanentId>>,
+    /// Current CR 400.7 generation for each stable physical card entity.
+    pub object_incarnations: CardVec<Incarnation>,
+    /// Last-known battlefield facts keyed by the departed exact object.
+    pub object_lki: BTreeMap<ObjectRef, ObjectLki>,
     pub players: [crate::state::player::Player; 2],
     pub zones: ZoneManager,
     pub turn: TurnState,

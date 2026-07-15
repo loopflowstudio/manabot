@@ -1,5 +1,5 @@
 use super::ability::Effect;
-use super::game_object::{CardId, ObjectId, PlayerId, Target};
+use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpellOnStack {
@@ -31,6 +31,8 @@ pub struct TriggeredAbilityOnStack {
     pub id: ObjectId,
     pub controller: PlayerId,
     pub source_card: CardId,
+    pub source_ref: Option<ObjectRef>,
+    pub source_lki: Option<ObjectLki>,
     pub source_card_registry_key: ObjectId,
     pub ability_index: usize,
     pub targets: Vec<Target>,

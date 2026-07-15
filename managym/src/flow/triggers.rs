@@ -173,13 +173,18 @@ impl Game {
         trigger: PendingTrigger,
         target: Option<Target>,
     ) {
-        let source_card_registry_key = self.state.cards[trigger.source_card].registry_key;
+        let source_card_registry_key = trigger
+            .source_lki
+            .map(|lki| crate::state::game_object::ObjectId(lki.definition_id.0))
+            .unwrap_or(self.state.cards[trigger.source_card].registry_key);
         let id = self.state.id_gen.next_id();
         let targets = target.into_iter().collect();
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
             id,
             controller: trigger.controller,
             source_card: trigger.source_card,
+            source_ref: trigger.source_ref,
+            source_lki: trigger.source_lki,
             source_card_registry_key,
             ability_index: trigger.ability_index,
             targets,
@@ -283,22 +288,29 @@ impl Game {
     }
 
     fn check_triggers_for_event(&mut self, event: &GameEvent) {
-        let mut fired: Vec<(CardId, usize, PlayerId)> = Vec::new();
-        for (source_card, source_controller) in self.trigger_ability_sources(event) {
+        let mut fired = Vec::new();
+        for (source_card, source_controller, source_lki) in self.trigger_ability_sources(event) {
             for (ability_index, ability) in
                 self.state.cards[source_card].abilities.iter().enumerate()
             {
                 let Ability::Triggered { condition, .. } = ability;
                 if self.trigger_condition_fires(condition, source_card, source_controller, event) {
-                    fired.push((source_card, ability_index, source_controller));
+                    fired.push((
+                        source_card,
+                        ability_index,
+                        source_controller,
+                        source_lki,
+                    ));
                 }
             }
         }
 
         let context = Self::trigger_context_for_event(event);
-        for (source_card, ability_index, controller) in fired {
+        for (source_card, ability_index, controller, source_lki) in fired {
             self.state.pending_triggers.push(PendingTrigger {
                 source_card,
+                source_ref: source_lki.map(|lki| lki.object_ref),
+                source_lki,
                 ability_index,
                 controller,
                 enqueue_order: self.state.trigger_enqueue_counter,
@@ -320,6 +332,8 @@ impl Game {
     ) {
         self.state.pending_triggers.push(PendingTrigger {
             source_card,
+            source_ref: None,
+            source_lki: None,
             ability_index: 0,
             controller,
             enqueue_order: self.state.trigger_enqueue_counter,
@@ -332,7 +346,14 @@ impl Game {
     /// Cards whose triggered abilities can see this event: every permanent on
     /// the battlefield, plus — for zone changes — the moved card itself, so
     /// that leave-the-battlefield abilities look back in time (CR 603.6c).
-    fn trigger_ability_sources(&self, event: &GameEvent) -> Vec<(CardId, PlayerId)> {
+    fn trigger_ability_sources(
+        &self,
+        event: &GameEvent,
+    ) -> Vec<(
+        CardId,
+        PlayerId,
+        Option<crate::state::game_object::ObjectLki>,
+    )> {
         let mut sources = Vec::new();
         for player in [PlayerId(0), PlayerId(1)] {
             for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
@@ -343,7 +364,11 @@ impl Game {
                     continue;
                 };
                 if !self.state.cards[card_id].abilities.is_empty() {
-                    sources.push((*card_id, permanent.controller));
+                    sources.push((
+                        *card_id,
+                        permanent.controller,
+                        self.snapshot_current_permanent(*card_id),
+                    ));
                 }
             }
         }
@@ -354,7 +379,15 @@ impl Game {
         {
             let on_battlefield = self.state.zones.zone_of(*card) == Some(ZoneType::Battlefield);
             if !on_battlefield && !self.state.cards[*card].abilities.is_empty() {
-                sources.push((*card, *controller));
+                let source_lki = self
+                    .state
+                    .object_lki
+                    .iter()
+                    .rev()
+                    .find_map(|(object_ref, lki)| {
+                        (object_ref.entity.0 == card.0).then_some(*lki)
+                    });
+                sources.push((*card, *controller, source_lki));
             }
         }
 
