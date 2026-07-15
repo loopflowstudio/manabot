@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 // play a full game to terminal against the random villain with the default
 // main-phase stops on, and assert the new-card UI moments render — the deck
 // names in the header, and at least one mid-resolution choice-kind decision
-// (scry / pay-or-not [kicker] / learn / look-and-select / modal / waterbend)
+// (scry / pay-or-not [kicker] / learn / look-and-select / waterbend)
 // surfacing as a decision prompt with clickable, labeled options.
 
 const MAX_ACTIONS_PER_GAME = 1500;
@@ -15,7 +15,6 @@ const CHOICE_KINDS = new Set([
   'SCRY',
   'LOOK_AND_SELECT',
   'PAY_OR_NOT',
-  'MODAL',
   'DISCARD_THEN_DRAW',
   'WATERBEND',
 ]);
