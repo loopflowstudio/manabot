@@ -9,108 +9,90 @@ pm:
 
 ## Objective
 
-Build learned and search-augmented Magic intelligence that composes over typed
-card programs and structured legal choices, transfers beyond memorized card
-identities, remains information-set honest, and advances toward measured
-superhuman play at practical compute cost.
+Build increasingly strong manabots by making runnable agents and search systems,
+playing them in authoritative Magic worlds, measuring what they actually do,
+and iterating toward superhuman performance. Typed card programs, structured
+commands, search, self-play, and Study evidence matter when they improve a
+working agent—not as prerequisites that must be proven in isolation before one
+may be built.
 
-The authored game and Study experience are part of the research loop: they make
-strong play enjoyable, expose what the agent considered, and produce versioned
-human and engine evidence. Intelligence owns the policy, search, training, and
-evaluation machinery behind those moments. It does not own rules authority or
-the Study product.
+The authored Etude Fantasia game and Study experience are part of the research
+loop. They create real opponents, decisions, human questions, and model-version
+comparisons. Intelligence owns the policies, search, training, evaluation, and
+evidence behind those experiences; it does not own rules authority or the Study
+product.
 
 ## Measures
 
-- A KataGo-shaped search teacher runs on the existing robust observation and
-  action ABI without waiting for semantic inputs, emits visit-distribution
-  policy targets and value or outcome targets with complete provenance, and is
-  evaluated against policy-only and frozen controls at matched compute.
-- A bounded overnight supervised experiment determines whether a student can
-  distill the search teacher: label quality, policy-target formulation,
-  optimization, capacity, and student inference cost are separated before a
-  failure is assigned to the architecture.
-- Tiny semantic representation katas distinguish equal-token programs whose
-  order, hierarchy, field roles, argument binding, or target and choice roles
-  differ; a structural encoder is compared with the current order-invariant
-  encoder at matched capacity and cost.
-- Semantic katas hold out compositions and card identities to distinguish
-  memorization from recombination of known operations, with CardDefId and name
-  ablations, zero-shot and limited-retraining evidence, and explicit failure on
-  unseen opcodes.
-- A semantic-conditioned gameplay integration Project is created only if the
-  teacher/distillation and semantic-kata gates both produce useful evidence.
-  That later Project runs the four-arm ablation: Card-ID plus legacy head,
-  Card-ID plus structured decoder, structural semantics plus structured
-  decoder, and held-out structural semantics plus structured decoder.
-- Later strength claims combine exact or approximate exploitability,
-  mechanism-level competencies, held-out transfer, and matched-compute
-  evaluation. A claim of superhuman play names its matchup/content boundary,
-  information boundary, compute budget, opponent cohort, seeds, and
-  uncertainty.
+- Every primary Project produces a runnable manabot, teacher, search system, or
+  training loop that executes against real `managym` positions and can be
+  exercised with one documented command.
+- Search teachers and students are compared in actual selected matchups at
+  explicit compute budgets, with legality, competencies, seat-balanced
+  strength, calibration, latency, throughput, label cost, and uncertainty.
+- A semantic policy consumes viewer-safe runtime facts, typed ability programs,
+  and structured legal offers, emits atomic `Command` values, and is evaluated
+  on real play—including held-out cards or compositions of known operations.
+- Ablations remove card identity, semantic structure, structured decoding, or
+  search at the boundary of a working prototype so their effects on learning,
+  transfer, strength, and systems cost are directly measurable.
+- Policy, search, robustness, and uncertainty evidence can be replayed through
+  the versioned Study contract without hidden-information leakage or invented
+  client-side meaning.
+- Any superhuman claim names the matchup and content boundary, information
+  boundary, model and opponent cohort, compute budget, seeds, competencies,
+  exploitability evidence where available, and uncertainty.
 
-## Diagnostic program
+## Operating loop
 
-Intelligence advances through bounded, pre-registered experiments, not a linear
-feature ladder. Every experiment states its prediction, matched controls,
-training seeds, wall-clock or compute cap, success and kill criteria, and the
-next branch for each plausible result. Overnight supervised training against a
-search teacher is one evidence-producing experiment, not a milestone by itself.
+Lead with building:
 
-The first two Projects run largely in parallel:
+1. make the thinnest end-to-end prototype that can act in the real engine;
+2. measure behavior, learning, strength, and cost;
+3. identify a surprising or confounded result;
+4. run the smallest diagnostic kata or ablation that separates the live
+   explanations;
+5. change the prototype and measure again.
 
-1. **Search Teacher & Distillation Loop.** Establish teacher quality on the
-   current ABI, generate attributable visit and value targets, and run one
-   cost-capped student experiment. Separate teacher weakness, target choice,
-   decoder legality, optimization, capacity, and inference cost.
-2. **Semantic Representation Katas.** Run tiny paired-program and held-out
-   recombination probes. Prove or falsify structural understanding before
-   paying for full gameplay integration; retain the order-invariant encoder as
-   a required negative control.
+Katas are diagnostic instruments, not admission exams. A new kata must name the
+prototype ambiguity it resolves and the decision its result will change. No
+chain of diagnostic work proceeds without returning to an end-to-end agent.
+Pre-registration remains useful for expensive comparisons and for preventing
+post-result threshold changes; it is not a burden of proof charged before a
+first prototype may exist.
 
-Only their joint evidence can promote **Semantic-Conditioned Gameplay Policy**
-as a later integration Project. Its four arms isolate choice grammar,
-structural semantics, and held-out transfer. A failed arm branches to the
-diagnosed component rather than automatically scaling model size or training.
-
-Planning follows only where those results point. Retain the information ×
-continuation 2×2 and exactly solvable microgame as diagnostic instruments:
-separate rollout/value failure, belief estimation, information-set inconsistency,
-and implementation defects before choosing tree search, weighted
-determinization, or public-belief/CFR machinery. Compute-conditioned search and
-opponent-league training are tested against policy-only and frozen controls, not
-assumed to be improvements.
+Prefer plausible architectures early. A small Transformer, graph Transformer,
+or tree-aware encoder that can represent sequence, hierarchy, field roles, and
+binding is a better prototype than extending an intentionally weak pooling
+architecture through a proof ladder. Keep simple baselines and destructive
+ablations beside it so improvements remain interpretable.
 
 ## Dependencies and bounds
 
-Rules owns typed semantic programs, `InteractionOffer`/`Command`, viewer-safe
-state, identity, exact fork/rollback, and branching representation. Intelligence
-may prototype against those versioned interfaces but does not close their KRs.
-Semantic katas and student scaffolding may start before the final branching
-representation is selected. The first bounded teacher may use the proven full
-clone baseline if its pre-registered cost cap fits; rollout-heavy search,
-self-play scaling, and league training wait for W2-198/W2-199 or an explicit
-benchmark decision to retain full clone.
+Rules owns typed programs, structured offers and commands, viewer-safe state,
+identity, and exact forks. Intelligence consumes those interfaces and reports
+pressure back through real workloads; it does not delay prototypes until every
+possible kernel representation is settled. A proven full-clone path is an
+acceptable first backend when it fits the measured budget.
 
-Study owns landmark selection, retry, comparison, explanation, and human-facing
-research consent. Intelligence emits versioned policy/search evidence through
-the merged `StudyArtifact`/`DecisionEvidence` boundary; it does not build a
+Study owns decision navigation, reveal, comparison, explanation, and human
+research consent. Intelligence emits attributable evidence; it does not build a
 second replay, legality, presentation, or hidden-information system.
 
-An external LLM may later serve as a teacher, baseline, or narrator over
-authoritative artifacts. It is not the inner-loop policy, rules oracle, or
-source of legal actions. Open-ended card coverage, deck building, format
-legality, Commander breadth, and generic natural-language card parsing remain
-out of scope.
+An external LLM may be a teacher, baseline, or grounded narrator. It is not the
+inner-loop rules oracle or source of legal actions. Open-ended card coverage,
+deck building, format legality, Commander breadth, and runtime natural-language
+card parsing remain out of scope.
 
 ## Evidence discipline
 
-Training seeds are the experimental unit. Comparisons pin content pack, engine,
-observation, action, model, opponent, and compute identities; headline claims
-have rerunnable scripts and raw results. Win rate alone is never sufficient:
-competency, legality, exploitability, information safety, matched cost, and
-transfer are reported separately.
+Prototype measurements begin with the first runnable version. Promote claims
+only after matched controls and multiple seeds exist. Pin content, engine,
+observation, action, model, opponent, and compute identities; retain raw
+rerunnable results. Win rate alone is insufficient: legality, competencies,
+information safety, calibration, throughput, transfer, and matched cost remain
+separate evidence.
 
-Concrete repository changes begin as Linear Tasks under one Intelligence
-Project. Tasks that change Rules or Study contracts stay in their providing
-waves and are represented here as explicit dependencies.
+Concrete repository changes begin as Linear Tasks under an Intelligence
+Project. Tasks that change Rules or Study authority stay in their providing
+waves and are represented here as dependencies exercised by a running system.
