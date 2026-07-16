@@ -11,9 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from manabot.env.observation import EventTypeEnum
 import managym
 
+from .enums import EventTypeEnum
 from .experience_protocol import PresentationEvent
 
 

@@ -1,0 +1,70 @@
+#!/bin/sh
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT" || exit 1
+
+error() {
+  code=$1
+  message=$2
+  printf 'MANABOT_PLAY_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
+    "$code" "$message" >&2
+  exit 2
+}
+
+command -v uv >/dev/null 2>&1 || \
+  error prerequisite.uv "uv is required; install it before running ./scripts/play"
+need_frontend=1
+for argument in "$@"; do
+  if [ "$argument" = "--no-frontend" ]; then
+    need_frontend=0
+  fi
+done
+if [ "$need_frontend" -eq 1 ]; then
+  command -v node >/dev/null 2>&1 || \
+    error prerequisite.node "Node is required; install a supported Node release"
+  command -v npm >/dev/null 2>&1 || \
+    error prerequisite.npm "npm is required; install it with Node"
+fi
+command -v rustc >/dev/null 2>&1 || \
+  error prerequisite.rust "Rust is required to build the managym extension"
+command -v cargo >/dev/null 2>&1 || \
+  error prerequisite.cargo "Cargo is required to build the managym extension"
+
+[ -f uv.lock ] || error lock.python "uv.lock is missing"
+[ -f managym/Cargo.lock ] || error lock.cargo "managym/Cargo.lock is missing"
+[ -f frontend/package-lock.json ] || \
+  error lock.frontend "frontend/package-lock.json is missing"
+[ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json ] || \
+  error pack.missing "the installed curated-pack manifest is missing"
+[ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/NOTICE.md ] || \
+  error pack.notice "the installed curated-pack notice is missing"
+
+marker=$(mktemp "${TMPDIR:-/tmp}/manabot-play-error.XXXXXX") || \
+  error launcher.internal "could not create the launcher error marker"
+rm -f "$marker"
+trap 'rm -f "$marker"' 0
+export MANABOT_PLAY_ERROR_MARKER=$marker
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
+uv run --python 3.12 --locked --only-group play-runtime scripts/play.py "$@" &
+uv_pid=$!
+forwarded_signal=0
+forward_signal() {
+  forwarded_signal=1
+  kill -"$1" "$uv_pid" 2>/dev/null || true
+}
+trap 'forward_signal TERM' HUP TERM
+trap 'forward_signal INT' INT
+wait "$uv_pid"
+status=$?
+if [ "$forwarded_signal" -eq 1 ] && kill -0 "$uv_pid" 2>/dev/null; then
+  wait "$uv_pid" 2>/dev/null || true
+fi
+trap - HUP INT TERM
+if [ "$status" -ne 0 ] && [ ! -f "$marker" ] && [ "$status" -ne 130 ] && \
+   [ "$status" -ne 143 ]; then
+  error lock.python "uv could not prepare or run the locked Python environment"
+fi
+exit "$status"

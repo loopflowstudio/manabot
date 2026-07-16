@@ -11,15 +11,15 @@ server, proxies `/api` and `/ws` to port 8000).
 
 ```bash
 # one command (repo root) — starts both, Ctrl-C stops both,
-# npm-installs frontend deps on first run:
-uv run scripts/play.py
+# installs locked local deps on first run:
+./scripts/play
 ```
 
 Manual equivalent (all Python through uv, per AGENTS.md):
 
 ```bash
-uv run uvicorn gui.server:app --port 8000     # terminal 1 — backend
-cd frontend && npm install && npm run dev     # terminal 2 — frontend
+uv run --python 3.12 --locked uvicorn gui.server:app --port 8000  # terminal 1
+cd frontend && npm ci && npm run dev                              # terminal 2
 ```
 
 Open http://localhost:5173 — that root route IS the play page. Pick an
@@ -97,7 +97,7 @@ trace config records the exact opponent for every game.
 
 ## Validation
 
-- `pytest tests/gui` — 17 green: existing server/session/trace tests plus
+- `uv run pytest tests/gui` — 17 green: existing server/session/trace tests plus
   new `tests/gui/test_play_modes.py` (full games vs search / random /
   checkpoint villains driven through the WebSocket as a scripted human,
   hidden-info assertions on every payload, config validation, action-label

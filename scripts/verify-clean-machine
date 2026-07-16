@@ -1,0 +1,90 @@
+#!/bin/sh
+
+set -u
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT" || exit 1
+
+proof_error() {
+  code=$1
+  message=$2
+  printf 'MANABOT_CLEAN_PROOF_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
+    "$code" "$message" >&2
+  exit 2
+}
+
+[ ! -e .venv ] || proof_error proof.dirty ".venv exists before the clean proof"
+[ ! -e frontend/node_modules ] || \
+  proof_error proof.dirty "frontend/node_modules exists before the clean proof"
+[ ! -e frontend/.svelte-kit ] || \
+  proof_error proof.dirty "frontend/.svelte-kit exists before the clean proof"
+[ ! -e frontend/build ] || \
+  proof_error proof.dirty "frontend/build exists before the clean proof"
+[ ! -e frontend/.vite ] || \
+  proof_error proof.dirty "frontend/.vite exists before the clean proof"
+[ ! -e frontend/test-results ] || \
+  proof_error proof.dirty "frontend/test-results exists before the clean proof"
+[ ! -e .cache ] || proof_error proof.dirty ".cache exists before the clean proof"
+[ ! -e managym/target ] || proof_error proof.dirty "managym/target exists before the clean proof"
+if find managym -maxdepth 1 -name '_managym*.so' -print -quit | grep -q .; then
+  proof_error proof.dirty "a managym native extension exists before the clean proof"
+fi
+if find gui/traces -name '*.json' -print -quit 2>/dev/null | grep -q .; then
+  proof_error proof.dirty "GUI traces exist before the clean proof"
+fi
+
+mkdir -p .cache/clean-machine
+log=$ROOT/.cache/clean-machine/launch.log
+receipt=$ROOT/.cache/clean-machine/proof.json
+api_port=${MANABOT_CLEAN_API_PORT:-18011}
+frontend_port=${MANABOT_CLEAN_FRONTEND_PORT:-15183}
+start_ms=$(uv run --no-project --python 3.12 python -c \
+  'import time; print(time.time_ns() // 1_000_000)') || \
+  proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
+
+./scripts/play --port "$api_port" --frontend-port "$frontend_port" >"$log" 2>&1 &
+launcher_pid=$!
+
+cleanup() {
+  terminate_tree() {
+    for child in $(pgrep -P "$1" 2>/dev/null); do
+      terminate_tree "$child"
+    done
+    kill -TERM "$1" 2>/dev/null || true
+  }
+  if kill -0 "$launcher_pid" 2>/dev/null; then
+    terminate_tree "$launcher_pid"
+  fi
+  wait "$launcher_pid" 2>/dev/null || true
+}
+trap cleanup 0 HUP INT TERM
+
+deadline=$((start_ms + 60000))
+while ! grep -q '^MANABOT_PLAY_READY ' "$log" 2>/dev/null; do
+  if ! kill -0 "$launcher_pid" 2>/dev/null; then
+    cat "$log" >&2
+    proof_error proof.launch "./scripts/play exited before readiness"
+  fi
+  now_ms=$(uv run --no-project --python 3.12 python -c \
+    'import time; print(time.time_ns() // 1_000_000)') || exit 2
+  if [ "$now_ms" -ge "$deadline" ]; then
+    cat "$log" >&2
+    proof_error proof.timeout "./scripts/play did not become ready within 60 seconds"
+  fi
+  sleep 0.1
+done
+
+MANABOT_EXTERNAL_SERVERS=1 \
+MANABOT_API_PORT=$api_port \
+MANABOT_FRONTEND_PORT=$frontend_port \
+MANABOT_CLEAN_START_MS=$start_ms \
+MANABOT_CLEAN_RECEIPT=$receipt \
+MANABOT_LAUNCH_LOG=$log \
+  npm --prefix frontend run test:e2e -- clean-machine.spec.ts
+status=$?
+if [ "$status" -ne 0 ]; then
+  cat "$log" >&2
+  exit "$status"
+fi
+
+cat "$receipt"

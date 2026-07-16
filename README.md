@@ -13,15 +13,15 @@ This repository contains both:
 git clone git@github.com:loopflowstudio/manabot.git
 cd manabot
 
-# Create a local environment
-uv venv .venv --python 3.12
-source .venv/bin/activate
+# Install locked Python dependencies
+uv sync --python 3.12 --extra dev
 
-# Install managym (Rust extension)
-pip install -e managym
+# Install the local managym extension
+uv run --python 3.12 --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
 
-# Install manabot
-pip install -e ".[dev]"
+# Or install and launch the exact browser matchup in one command
+./scripts/play
 ```
 
 ## Training
@@ -29,8 +29,8 @@ pip install -e ".[dev]"
 Manabot is primarily trained on Ubuntu machines in AWS and requires wandb credentials.
 
 ```bash
-manabot train --preset simple
-# or: python manabot/model/train.py --preset simple
+uv run manabot train --preset simple
+# or: uv run python manabot/model/train.py --preset simple
 ```
 
 ## Simulation
@@ -38,8 +38,8 @@ manabot train --preset simple
 Simulation pulls models from wandb. At small scales this can be done locally on CPU machines.
 
 ```bash
-manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
-# or: python manabot/sim/sim.py --preset sim --set sim.num_games=10
+uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
+# or: uv run python manabot/sim/sim.py --preset sim --set sim.num_games=10
 ```
 
 ## Testing
@@ -52,12 +52,13 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 cd ..
 
-# Install managym into the active venv
-pip install -e managym
+# Install managym into the uv-managed environment
+uv run --python 3.12 --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
 
 # Python tests (full + integration slice)
-pytest tests/
-pytest tests/env/ tests/agent/ -v
+uv run --extra dev pytest tests/
+uv run --extra dev pytest tests/env/ tests/agent/ -v
 ```
 
 ## Architecture

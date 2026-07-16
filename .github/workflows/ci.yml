@@ -39,26 +39,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: |
-            pyproject.toml
-            uv.lock
 
       - name: Install dependencies
-        run: |
-          pip install uv
-          uv venv .venv --python 3.12
-          source .venv/bin/activate
-          uv pip install -e ".[dev]"
+        run: uv sync --python 3.12 --extra dev
 
       - name: Run unit tests
-        run: |
-          source .venv/bin/activate
-          pytest tests/infra/ tests/ops/
+        run: uv run --python 3.12 --extra dev pytest tests/infra/ tests/ops/
 
   integration:
     name: Integration (${{ matrix.os }})
@@ -80,15 +70,10 @@ jobs:
           workspaces: |
             managym -> target
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: |
-            pyproject.toml
-            managym/pyproject.toml
-            uv.lock
 
       - name: Cache uv downloads
         uses: actions/cache@v4
@@ -99,34 +84,23 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Install dependencies
-        run: |
-          pip install uv maturin
-          uv venv .venv --python 3.12
-          source .venv/bin/activate
-          uv pip install -e ".[dev]"
+        run: uv sync --python 3.12 --extra dev --extra play
 
       - name: Build managym extension
-        run: |
-          source .venv/bin/activate
-          cd managym
-          maturin develop --features python
+        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
 
       - name: Integration tests
         run: |
-          source .venv/bin/activate
-          uv run pytest tests/env/ tests/agent/ tests/model/ \
+          uv run --python 3.12 --extra dev pytest tests/env/ tests/agent/ tests/model/ \
             tests/sim/test_structured_policy.py \
             tests/bench/test_structured_policy_benchmark.py
 
       - name: Enum smoke test
-        run: |
-          source .venv/bin/activate
-          python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
+        run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 
       - name: Training smoke test
         run: |
-          source .venv/bin/activate
-          python manabot/model/train.py \
+          uv run --python 3.12 python manabot/model/train.py \
             --set train.total_timesteps=128 \
             --set train.num_envs=2 \
             --set train.num_steps=8 \
@@ -166,7 +140,7 @@ jobs:
           uv sync --extra dev
 
       - name: Build Python extension
-        run: uv run --extra dev --with maturin maturin develop --release --manifest-path managym/Cargo.toml --features python
+        run: uv run --python 3.12 --extra play maturin develop --release --manifest-path managym/Cargo.toml --features python
 
       - name: Certify Rust and Python
         run: |
@@ -309,10 +283,47 @@ jobs:
           path: frontend/test-results/release
           if-no-files-found: warn
 
+  clean-machine-play:
+    name: Clean-machine Play
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv and CPython 3.12
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.9.22'
+          python-version: '3.12'
+          enable-cache: false
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Provision proof Chromium
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      - name: Prove clean launch and offline reload
+        run: ./scripts/verify-clean-machine
+
+      - name: Upload clean-machine receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-machine-play
+          path: |
+            .cache/clean-machine/proof.json
+            .cache/clean-machine/launch.log
+          if-no-files-found: warn
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference]
+    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference, clean-machine-play]
     if: always()
     steps:
       - name: Check all jobs
@@ -324,12 +335,14 @@ jobs:
           echo "semantic-coverage: ${{ needs.semantic-coverage.result }}"
           echo "semantic-conformance: ${{ needs.semantic-conformance.result }}"
           echo "visual_reference: ${{ needs.visual_reference.result }}"
+          echo "clean-machine-play: ${{ needs.clean-machine-play.result }}"
           if [ "${{ needs.rust.result }}" != "success" ] || \
              [ "${{ needs.python-unit.result }}" != "success" ] || \
              [ "${{ needs.integration.result }}" != "success" ] || \
              [ "${{ needs.protocol-v1.result }}" != "success" ] || \
              [ "${{ needs.semantic-coverage.result }}" != "success" ] || \
              [ "${{ needs.semantic-conformance.result }}" != "success" ] || \
-              [ "${{ needs.visual_reference.result }}" != "success" ]; then
+             [ "${{ needs.visual_reference.result }}" != "success" ] || \
+             [ "${{ needs.clean-machine-play.result }}" != "success" ]; then
             exit 1
           fi

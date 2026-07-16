@@ -24,6 +24,9 @@ dependencies = [
 manabot = "manabot.cli:main"
 
 [project.optional-dependencies]
+play = [
+    "maturin>=1.5,<2.0",
+]
 dev = [
     "pytest>=7.0.0",
     "httpx>=0.28.0",
@@ -34,6 +37,13 @@ dev = [
 ops = [
     "boto3>=1.35.0",
     "pyyaml>=6.0",
+]
+
+[dependency-groups]
+play-runtime = [
+    "fastapi>=0.116.0",
+    "maturin>=1.5,<2.0",
+    "uvicorn[standard]>=0.34.0",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -48,7 +58,7 @@ markers = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

@@ -22,8 +22,9 @@ import random
 from typing import TYPE_CHECKING, Callable
 
 # Local imports
-from manabot.env.observation import ActionEnum
 import managym
+
+from .enums import ActionEnum
 
 if TYPE_CHECKING:
     from .trace import GameConfig

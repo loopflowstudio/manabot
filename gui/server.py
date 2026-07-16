@@ -16,18 +16,11 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
-# Local imports
-from manabot.env.observation import (
-    ActionEnum,
-    ActionSpaceEnum,
-    PhaseEnum,
-    StepEnum,
-    ZoneEnum,
-)
 import managym
 
 from . import trace as trace_store, villain as villain_module
 from .curated_pack import CURATED_PACK
+from .enums import ActionEnum, ActionSpaceEnum, PhaseEnum, StepEnum, ZoneEnum
 from .experience_protocol import PROTOCOL_VERSION
 from .presentation import PresentationProjector
 from .trace import GameConfig, Trace, TraceEvent
