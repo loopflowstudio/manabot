@@ -1,14 +1,20 @@
-"""Run the first diagnostic search-supervised policy/value experiment.
+"""Run controlled search-supervised policy/value experiments.
 
-This runner deliberately says ``search``, not ``MCTS``. The current teacher is
-flat determinized Monte Carlo with equal rollouts per root action. It provides
-a score distribution and game outcome suitable for proving the joint
-policy/value learning substrate that a later PUCT/MCTS teacher can reuse.
+The default Teacher-0 arm uses flat determinized Monte Carlo. Teacher-1 uses
+multi-world PUCT with uniform priors, random leaf playouts, and real root visit
+counts. Teacher-1 is MCTS, but it is not yet neural PUCT or information-set
+consistent search.
 
-The two arms share data, initialization, split, optimizer, and policy targets:
+Teacher-0's two arms share the policy target and isolate value supervision:
 
 - ``policy_only``: policy loss only;
 - ``policy_value``: the same policy loss plus terminal value BCE.
+
+Teacher-1's arms share data, initialization, split, optimizer, capacity, and
+root-value supervision while isolating the policy label:
+
+- ``chosen_action``: one-hot supervision on the teacher's selected action;
+- ``visit_distribution``: the complete normalized root-visit distribution.
 
 Usage (smoke):
     uv run experiments/runners/run_search_supervised.py \
@@ -21,6 +27,13 @@ Usage (overnight):
         --out-dir .runs/search-supervised-overnight --games 2000 --workers 12 \
         --sims 128 --epochs 25 --batch-size 1024 --quick-games 400 \
         --teacher-probe-games 40 --student-teacher-games 40 --device mps
+
+Usage (Teacher-1 PUCT smoke):
+    uv run experiments/runners/run_search_supervised.py \
+        --teacher-kind determinized_puct --worlds 2 \
+        --out-dir .runs/puct-supervised-smoke --games 8 --workers 2 \
+        --sims 8 --epochs 2 --quick-games 8 --teacher-probe-games 4 \
+        --student-teacher-games 2 --teacher-min-win-rate 0.0 --device mps
 """
 
 from __future__ import annotations
@@ -44,7 +57,9 @@ import torch
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import MatchHypers, RewardHypers
 from manabot.sim.distill import (
+    ROOT_VALUE_KEY,
     SCORE_KEY,
+    VISIT_COUNT_KEY,
     _git_commit,
     load_shards,
     save_bc_checkpoint,
@@ -53,8 +68,11 @@ from manabot.sim.distill import (
 from manabot.sim.flat_mc import aggregate_records, load_checkpoint_agent, play_games
 from manabot.sim.rollout import BatchedSampler, RandomBatchController, run_vector_games
 from manabot.sim.search_supervised import (
+    CHOSEN_ACTION_TARGET,
+    ROOT_VALUE_TARGET,
     SCORE_SOFTMAX_TARGET,
     TERMINAL_OUTCOME_TARGET,
+    VISIT_DISTRIBUTION_TARGET,
     train_search_supervised,
 )
 from manabot.verify.util import INTERACTIVE_DECK
@@ -88,6 +106,40 @@ EXPERIMENT_CONTRACT = {
             "increase data/capacity or improve target formulation; do not infer "
             "teacher recovery from validation accuracy"
         ),
+    },
+}
+
+PUCT_EXPERIMENT_CONTRACT = {
+    "question": (
+        "At matched PUCT data, initialization, capacity, and optimization, do "
+        "root visit-distribution targets produce a more useful student than the "
+        "teacher's chosen action alone?"
+    ),
+    "prediction": (
+        "Visit supervision will retain more search information than one-hot "
+        "actions while the value head reproduces root values below a 0.25 "
+        "held-out Brier/MSE. Outcome calibration is a separate evaluation."
+    ),
+    "success_gates": {
+        "teacher_signal": "teacher win rate versus random >= configured threshold",
+        "policy_loss_improved": "held-out policy CE below the untrained baseline",
+        "policy_beats_uniform": (
+            "nontrivial held-out top-1 accuracy above uniform-over-legal"
+        ),
+        "value_beats_coin_brier": (
+            "held-out Brier/MSE to teacher root values < 0.25; this does not "
+            "establish outcome calibration"
+        ),
+        "visit_policy_noninferior": (
+            "visit-target win rate versus random no more than 0.10 below chosen-action"
+        ),
+    },
+    "failure_branches": {
+        "teacher_signal_fails": "improve tree selection or leaves before training",
+        "visits_fail_only": "inspect visit temperature, search budget, and target entropy",
+        "both_policy_arms_fail": "inspect representation, optimization, and data diversity",
+        "value_fails": "separate noisy root values from terminal-outcome supervision",
+        "validation_only": "treat gameplay distribution shift as leading diagnosis",
     },
 }
 
@@ -212,21 +264,32 @@ def _student_vs_random(
 
 
 def _dataset_diagnostics(
-    dataset: dict[str, np.ndarray], *, temperature: float
+    dataset: dict[str, np.ndarray], *, policy_target_kind: str, temperature: float
 ) -> dict[str, Any]:
-    scores = torch.as_tensor(dataset[SCORE_KEY], dtype=torch.float32)
-    targets = soft_targets_from_scores(scores, temperature)
+    if policy_target_kind == SCORE_SOFTMAX_TARGET:
+        scores = torch.as_tensor(dataset[SCORE_KEY], dtype=torch.float32)
+        targets = soft_targets_from_scores(scores, temperature)
+        sorted_signal = np.sort(
+            np.where(scores.numpy() >= 0, scores.numpy(), -np.inf), axis=1
+        )
+        signal_name = "score"
+    else:
+        visits = torch.as_tensor(dataset[VISIT_COUNT_KEY], dtype=torch.float32)
+        valid = torch.as_tensor(dataset["actions_valid"] > 0, dtype=torch.bool)
+        visits = visits.masked_fill(~valid, 0.0)
+        targets = visits / visits.sum(dim=-1, keepdim=True).clamp_min(1.0)
+        sorted_signal = np.sort(
+            np.where(valid.numpy(), targets.numpy(), -np.inf), axis=1
+        )
+        signal_name = "visit_probability"
     entropy = -(targets * targets.clamp_min(1e-12).log()).sum(dim=-1)
     actions = np.asarray(dataset["action"], dtype=np.int64)
     valid = np.asarray(dataset["actions_valid"]) > 0
     in_range = (actions >= 0) & (actions < valid.shape[1])
     legal = np.zeros(len(actions), dtype=bool)
     legal[in_range] = valid[np.arange(len(actions))[in_range], actions[in_range]]
-    sorted_scores = np.sort(
-        np.where(scores.numpy() >= 0, scores.numpy(), -np.inf), axis=1
-    )
-    if scores.shape[1] > 1:
-        margins = sorted_scores[:, -1] - sorted_scores[:, -2]
+    if sorted_signal.shape[1] > 1:
+        margins = sorted_signal[:, -1] - sorted_signal[:, -2]
         margins = margins[np.isfinite(margins)]
     else:
         margins = np.asarray([], dtype=np.float32)
@@ -234,16 +297,26 @@ def _dataset_diagnostics(
         "decisions": int(len(dataset["action"])),
         "games": int(len(np.unique(dataset["game_index"]))),
         "mean_valid_actions": float(np.mean(dataset["num_valid"])),
+        "policy_target_kind": policy_target_kind,
         "policy_temperature": temperature,
         "mean_target_entropy": float(entropy.mean().item()),
-        "mean_top_two_score_margin": float(np.mean(margins)) if len(margins) else None,
+        f"mean_top_two_{signal_name}_margin": (
+            float(np.mean(margins)) if len(margins) else None
+        ),
         "winnerless_rows": int(np.sum(dataset["winner"] < 0)),
         "invalid_teacher_actions": int(np.sum(~legal)),
         "action_mask_width": int(valid.shape[1]),
+        "mean_root_value": (
+            float(np.mean(dataset[ROOT_VALUE_KEY]))
+            if ROOT_VALUE_KEY in dataset
+            else None
+        ),
     }
 
 
-def _generate_dataset(args: argparse.Namespace, dataset_dir: Path) -> None:
+def _generate_dataset(
+    args: argparse.Namespace, dataset_dir: Path, teacher_spec: dict[str, Any]
+) -> None:
     command = [
         sys.executable,
         "experiments/runners/run_distill_datagen.py",
@@ -258,7 +331,82 @@ def _generate_dataset(args: argparse.Namespace, dataset_dir: Path) -> None:
         "--out-dir",
         str(dataset_dir),
     ]
+    if teacher_spec["kind"] != "search":
+        command.extend(["--teacher-json", json.dumps(teacher_spec, sort_keys=True)])
     subprocess.run(command, check=True)
+
+
+def _validate_dataset_manifest(
+    generator_manifest: dict[str, Any],
+    *,
+    args: argparse.Namespace,
+    teacher_spec: dict[str, Any],
+    policy_target_kind: str,
+    value_target_kind: str,
+    shard_paths: list[Path],
+) -> None:
+    """Fail closed when an existing dataset does not match this experiment.
+
+    A stale shard in a reused output directory can otherwise change the data,
+    teacher, or split while the top-level manifest records the new command.
+    That is evidence corruption, not a resumable run.
+    """
+
+    expected_teacher = {k: v for k, v in teacher_spec.items() if k != "device"}
+    provenance = generator_manifest.get("provenance") or {}
+    actual_teacher = provenance.get("teacher_spec")
+    actual_policy_target = generator_manifest.get("policy_target_kind")
+    actual_value_target = generator_manifest.get("value_target_kind")
+    # Teacher-0 shards generated before schema v2 did not copy target kinds to
+    # the manifest. Their exact flat-search teacher spec makes both targets
+    # unambiguous; tree teachers must always declare the new fields.
+    if actual_teacher and actual_teacher.get("kind") == "search":
+        actual_policy_target = actual_policy_target or SCORE_SOFTMAX_TARGET
+        actual_value_target = actual_value_target or TERMINAL_OUTCOME_TARGET
+
+    expected_scalars = {
+        "games": args.games,
+        "workers": args.workers,
+        "seed": args.seed,
+        "sims": args.sims,
+    }
+    mismatches = [
+        f"{key}={generator_manifest.get(key)!r} (expected {expected!r})"
+        for key, expected in expected_scalars.items()
+        if generator_manifest.get(key) != expected
+    ]
+    if actual_policy_target != policy_target_kind:
+        mismatches.append(
+            f"policy_target_kind={actual_policy_target!r} "
+            f"(expected {policy_target_kind!r})"
+        )
+    if actual_value_target != value_target_kind:
+        mismatches.append(
+            f"value_target_kind={actual_value_target!r} "
+            f"(expected {value_target_kind!r})"
+        )
+    if actual_teacher != expected_teacher:
+        mismatches.append(
+            f"teacher_spec={actual_teacher!r} (expected {expected_teacher!r})"
+        )
+
+    declared_shards = generator_manifest.get("shards") or []
+    declared_names = sorted(
+        Path(str(item.get("out_path"))).name
+        for item in declared_shards
+        if item.get("out_path")
+    )
+    actual_names = sorted(path.name for path in shard_paths)
+    if declared_names != actual_names:
+        mismatches.append(
+            f"shards={actual_names!r} (manifest declares {declared_names!r})"
+        )
+
+    if mismatches:
+        raise SystemExit(
+            "dataset manifest does not match the requested experiment: "
+            + "; ".join(mismatches)
+        )
 
 
 def main() -> None:
@@ -267,6 +415,18 @@ def main() -> None:
     parser.add_argument("--games", type=int, default=2000)
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--sims", type=int, default=128)
+    parser.add_argument(
+        "--teacher-kind",
+        choices=("flat_mc", "determinized_puct"),
+        default="flat_mc",
+    )
+    parser.add_argument(
+        "--worlds",
+        type=int,
+        default=4,
+        help="hidden-information worlds for determinized_puct",
+    )
+    parser.add_argument("--c-puct", type=float, default=1.5)
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -294,6 +454,10 @@ def main() -> None:
 
     if args.games < 2 or args.workers < 1 or args.sims < 1:
         raise SystemExit("games >= 2, workers >= 1, and sims >= 1 are required")
+    if args.worlds < 1 or (
+        args.teacher_kind == "determinized_puct" and args.worlds > args.sims
+    ):
+        raise SystemExit("worlds must be positive and no greater than PUCT sims")
     if args.quick_games < 2:
         raise SystemExit("quick-games must be >= 2 for a seat-balanced evaluation")
     if args.wall_cap_hours <= 0:
@@ -306,20 +470,74 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     config = vars(args).copy()
+    is_puct = args.teacher_kind == "determinized_puct"
+    if is_puct:
+        teacher_spec = {
+            "kind": "determinized_puct",
+            "sims": args.sims,
+            "worlds": args.worlds,
+            "c_puct": args.c_puct,
+        }
+        experiment = "puct-visit-vs-chosen-action-ablation-v1"
+        teacher_algorithm = "determinized_puct_uniform_prior_random_leaf"
+        policy_target_kind = VISIT_DISTRIBUTION_TARGET
+        value_target_kind = ROOT_VALUE_TARGET
+        explicit_limit = (
+            "neural PUCT, public-belief search, or information-set consistency"
+        )
+        contract = PUCT_EXPERIMENT_CONTRACT
+        arms = {
+            "chosen_action": {
+                "policy_target_kind": CHOSEN_ACTION_TARGET,
+                "value_target_kind": ROOT_VALUE_TARGET,
+                "value_weight": args.value_weight,
+            },
+            "visit_distribution": {
+                "policy_target_kind": VISIT_DISTRIBUTION_TARGET,
+                "value_target_kind": ROOT_VALUE_TARGET,
+                "value_weight": args.value_weight,
+            },
+        }
+    else:
+        teacher_spec = {"kind": "search", "sims": args.sims}
+        experiment = "search-supervised-policy-value-ablation-v1"
+        teacher_algorithm = "flat_determinized_monte_carlo"
+        policy_target_kind = SCORE_SOFTMAX_TARGET
+        value_target_kind = TERMINAL_OUTCOME_TARGET
+        explicit_limit = "MCTS visit-count supervision"
+        contract = EXPERIMENT_CONTRACT
+        arms = {
+            "policy_only": {
+                "policy_target_kind": SCORE_SOFTMAX_TARGET,
+                "value_target_kind": TERMINAL_OUTCOME_TARGET,
+                "value_weight": 0.0,
+            },
+            "policy_value": {
+                "policy_target_kind": SCORE_SOFTMAX_TARGET,
+                "value_target_kind": TERMINAL_OUTCOME_TARGET,
+                "value_weight": args.value_weight,
+            },
+        }
     manifest: dict[str, Any] = {
         "schema_version": 2,
-        "experiment": "search-supervised-policy-value-ablation-v1",
-        "teacher_algorithm": "flat_determinized_monte_carlo",
-        "target_kind": "masked_score_softmax_and_terminal_outcome",
-        "explicitly_not": "MCTS visit-count supervision",
+        "experiment": experiment,
+        "teacher_algorithm": teacher_algorithm,
+        "target_kind": f"{policy_target_kind}_and_{value_target_kind}",
+        "explicitly_not": explicit_limit,
         "status": "running",
         "started_at": datetime.now(UTC).isoformat(),
         "source_commit": _git_commit(),
-        "contract": EXPERIMENT_CONTRACT,
+        "contract": contract,
         "caps": {
             "wall_hours": args.wall_cap_hours,
             "teacher_selfplay_games": args.games,
-            "teacher_simulations_per_legal_action": args.sims,
+            "teacher_simulations": args.sims,
+            "teacher_budget_semantics": (
+                "total tree traversals per decision"
+                if is_puct
+                else "independent playouts per legal action"
+            ),
+            "teacher_worlds": args.worlds if is_puct else None,
             "training_epochs_per_arm": args.epochs,
             "evaluation_games_per_arm": args.quick_games,
             "teacher_gap_games_per_arm": args.student_teacher_games,
@@ -330,11 +548,14 @@ def main() -> None:
             "legal_action_mask": True,
             "teacher_action": True,
             "per_action_search_scores": True,
+            "root_visit_counts": is_puct,
+            "root_value": is_puct,
             "terminal_outcome": True,
             "replayable_engine_trajectory": False,
             "limitation": (
-                "Teacher-0 proves the runner and learner substrate; W2-234 still "
-                "requires offer/command trajectories and real MCTS visit targets."
+                "Decision shards are not replayable engine trajectories. Teacher-1 "
+                "adds real MCTS visits but remains determinization-based and uses "
+                "uniform priors plus random leaves."
             ),
         },
         "pinned_runtime": _runtime_contract(args.seed, args.device),
@@ -343,7 +564,6 @@ def main() -> None:
     }
     _atomic_json(manifest_path, manifest)
 
-    teacher_spec = {"kind": "search", "sims": args.sims}
     manifest["stages"]["teacher_probe"] = _matchup(
         teacher_spec,
         {"kind": "random"},
@@ -366,19 +586,39 @@ def main() -> None:
     if _wall_cap_exceeded(started, args.wall_cap_hours):
         _stop_at_wall_cap(manifest, manifest_path, started)
 
+    dataset_manifest_path = dataset_dir / "manifest.json"
     shard_paths = sorted(dataset_dir.glob("shard_*.npz"))
-    if not (
-        args.resume_dataset and shard_paths and (dataset_dir / "manifest.json").exists()
-    ):
-        _generate_dataset(args, dataset_dir)
+    if args.resume_dataset:
+        if not shard_paths or not dataset_manifest_path.exists():
+            raise SystemExit(
+                "--resume-dataset requires complete shards and dataset/manifest.json"
+            )
+    elif shard_paths or dataset_manifest_path.exists():
+        raise SystemExit(
+            "dataset directory already contains artifacts; use a new --out-dir or "
+            "--resume-dataset with an exactly matching manifest"
+        )
+    else:
+        _generate_dataset(args, dataset_dir, teacher_spec)
         shard_paths = sorted(dataset_dir.glob("shard_*.npz"))
     if not shard_paths:
         raise SystemExit(f"dataset generation produced no shards under {dataset_dir}")
+    generator_manifest = json.loads(dataset_manifest_path.read_text())
+    _validate_dataset_manifest(
+        generator_manifest,
+        args=args,
+        teacher_spec=teacher_spec,
+        policy_target_kind=policy_target_kind,
+        value_target_kind=value_target_kind,
+        shard_paths=shard_paths,
+    )
     dataset = load_shards([str(path) for path in shard_paths])
     manifest["stages"]["dataset"] = {
-        "generator_manifest": json.loads((dataset_dir / "manifest.json").read_text()),
+        "generator_manifest": generator_manifest,
         "diagnostics": _dataset_diagnostics(
-            dataset, temperature=args.policy_temperature
+            dataset,
+            policy_target_kind=policy_target_kind,
+            temperature=args.policy_temperature,
         ),
         "shards": [
             {"path": str(path), "bytes": path.stat().st_size, "sha256": _sha256(path)}
@@ -390,21 +630,24 @@ def main() -> None:
     if _wall_cap_exceeded(started, args.wall_cap_hours):
         _stop_at_wall_cap(manifest, manifest_path, started)
 
-    arms: dict[str, float] = {
-        "policy_only": 0.0,
-        "policy_value": args.value_weight,
-    }
     manifest["stages"]["arms"] = {}
-    for arm_index, (name, value_weight) in enumerate(arms.items()):
+    for arm_index, (name, arm_spec) in enumerate(arms.items()):
         if _wall_cap_exceeded(started, args.wall_cap_hours):
             _stop_at_wall_cap(manifest, manifest_path, started)
-        print(f"[{name}] value_weight={value_weight}", flush=True)
+        arm_policy_target = str(arm_spec["policy_target_kind"])
+        arm_value_target = str(arm_spec["value_target_kind"])
+        value_weight = float(arm_spec["value_weight"])
+        print(
+            f"[{name}] policy={arm_policy_target} value={arm_value_target} "
+            f"value_weight={value_weight}",
+            flush=True,
+        )
         arm_started = time.perf_counter()
         agent, obs_space, initial_validation, history = train_search_supervised(
             dataset,
             policy_temperature=args.policy_temperature,
-            policy_target_kind=SCORE_SOFTMAX_TARGET,
-            value_target_kind=TERMINAL_OUTCOME_TARGET,
+            policy_target_kind=arm_policy_target,
+            value_target_kind=arm_value_target,
             value_weight=value_weight,
             lr=args.lr,
             epochs=args.epochs,
@@ -424,8 +667,8 @@ def main() -> None:
                 "arm": name,
                 "value_weight": value_weight,
                 "policy_temperature": args.policy_temperature,
-                "policy_target_kind": SCORE_SOFTMAX_TARGET,
-                "value_target_kind": TERMINAL_OUTCOME_TARGET,
+                "policy_target_kind": arm_policy_target,
+                "value_target_kind": arm_value_target,
                 "dataset_shards": [
                     item["sha256"] for item in manifest["stages"]["dataset"]["shards"]
                 ],
@@ -446,6 +689,8 @@ def main() -> None:
             seed=args.seed + 30_000 + arm_index * 1_000,
         )
         arm_result = {
+            "policy_target_kind": arm_policy_target,
+            "value_target_kind": arm_value_target,
             "value_weight": value_weight,
             "checkpoint": str(checkpoint),
             "checkpoint_sha256": _sha256(checkpoint),
@@ -467,22 +712,22 @@ def main() -> None:
         manifest["stages"]["arms"][name] = arm_result
         _atomic_json(manifest_path, manifest)
 
-    policy_win = manifest["stages"]["arms"]["policy_only"]["gameplay_vs_random"][
+    baseline_name, challenger_name = tuple(arms)
+    baseline_win = manifest["stages"]["arms"][baseline_name]["gameplay_vs_random"][
         "win_rate"
     ]
-    joint_win = manifest["stages"]["arms"]["policy_value"]["gameplay_vs_random"][
+    challenger_win = manifest["stages"]["arms"][challenger_name]["gameplay_vs_random"][
         "win_rate"
     ]
-    manifest["gates"]["joint_policy_noninferior"] = joint_win >= policy_win - 0.10
+    comparison_gate = (
+        "visit_policy_noninferior" if is_puct else "joint_policy_noninferior"
+    )
+    manifest["gates"][comparison_gate] = challenger_win >= baseline_win - 0.10
     required_arm_gates = [
-        manifest["stages"]["arms"][name]["gates"][gate]
-        for name, gate in (
-            ("policy_only", "policy_loss_improved"),
-            ("policy_only", "policy_beats_uniform"),
-            ("policy_value", "policy_loss_improved"),
-            ("policy_value", "policy_beats_uniform"),
-            ("policy_value", "value_beats_coin_brier"),
-        )
+        value
+        for arm in manifest["stages"]["arms"].values()
+        for value in arm["gates"].values()
+        if value is not None
     ]
     manifest["status"] = (
         "completed_pass"

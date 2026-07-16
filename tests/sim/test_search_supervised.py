@@ -17,6 +17,7 @@ from manabot.sim.distill import (
 )
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.search_supervised import (
+    CHOSEN_ACTION_TARGET,
     ROOT_VALUE_TARGET,
     VISIT_DISTRIBUTION_TARGET,
     outcome_targets,
@@ -116,6 +117,8 @@ def test_policy_only_and_joint_arms_isolate_value_gradient() -> None:
 
     assert len(policy_history) == len(joint_history) == 2
     assert np.isfinite(initial_metrics.policy_loss)
+    assert np.isfinite(initial_metrics.policy_kl)
+    assert initial_metrics.policy_kl >= 0.0
     assert np.isfinite(joint_history[-1].validation.value_brier)
     assert joint_history[-1].validation.value_rows > 0
     for name, value in policy_only.state_dict().items():
@@ -180,3 +183,17 @@ def test_teacher_action_must_be_represented_by_legal_mask() -> None:
         ValueError, "teacher action must be present in the encoded legal mask"
     ):
         train_search_supervised(dataset, epochs=1)
+
+
+def test_chosen_action_target_supports_matched_mcts_ablation() -> None:
+    dataset = _dataset(seed=31)
+    _, _, initial, history = train_search_supervised(
+        dataset,
+        policy_target_kind=CHOSEN_ACTION_TARGET,
+        epochs=1,
+        batch_size=32,
+        val_fraction=0.25,
+        seed=7,
+    )
+    assert initial.policy_target_entropy == 0.0
+    assert np.isfinite(history[-1].validation.policy_loss)

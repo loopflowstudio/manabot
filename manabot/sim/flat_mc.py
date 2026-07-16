@@ -209,6 +209,8 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
 
     Specs:
         {"kind": "search", "sims": 64, "max_steps": 2000}
+        {"kind": "determinized_puct", "sims": 64, "worlds": 4,
+         "c_puct": 1.5, "max_steps": 2000}
         {"kind": "policy_search", "sims": 16, "checkpoint": "/abs/path.pt",
          "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
@@ -228,6 +230,19 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
                 rollouts_per_world=int(
                     spec.get("rollouts_per_world", DEFAULT_ROLLOUTS_PER_WORLD)
                 ),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                seed=seed,
+            ),
+            None,
+        )
+    if kind == "determinized_puct":
+        from manabot.sim.mcts import DeterminizedPuctPlayer
+
+        return (
+            DeterminizedPuctPlayer(
+                int(spec["sims"]),
+                worlds=int(spec.get("worlds", 4)),
+                c_puct=float(spec.get("c_puct", 1.5)),
                 max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
                 seed=seed,
             ),
@@ -302,6 +317,8 @@ def spec_name(spec: dict[str, Any]) -> str:
     kind = spec["kind"]
     if kind == "search":
         return f"search-{spec['sims']}"
+    if kind == "determinized_puct":
+        return spec.get("name", f"dpuct-{spec['sims']}-w{spec.get('worlds', 4)}")
     if kind == "policy_search":
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":

@@ -1,9 +1,8 @@
-"""Search-as-teacher distillation: dataset generation + behavior cloning.
+"""Search-as-teacher dataset generation and supervised distillation support.
 
-Exp-03 (wave/intelligence C4). The teacher is the flat determinized MC searcher from
-exp-02 (manabot.sim.flat_mc.FlatMCPlayer); the student is a fresh
-manabot.model.agent.Agent trained by cross-entropy on the teacher's chosen
-action at every recorded decision.
+Legacy datasets use flat determinized-MC scores and terminal outcomes. Tree
+teachers add root visit counts and root values while retaining the same
+viewer-safe observation, legal mask, chosen action, and provenance boundary.
 
 Dataset format (one .npz shard per worker):
     - one array per observation key (shape (D, *obs_shape), float32) — exactly
@@ -39,8 +38,8 @@ META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
 # per action (engine order), -1.0 padding on invalid slots. Present in shards
 # generated from exp-07 onward; loaders treat it as optional.
 SCORE_KEY = "scores"
-# Future tree-search teachers write per-edge root visit counts and optional
-# root values under these stable columns. Legacy flat-MC shards omit them.
+# Tree-search teachers write per-edge root visit counts and root values under
+# these stable columns. Legacy flat-MC shards omit them.
 VISIT_COUNT_KEY = "visit_counts"
 ROOT_VALUE_KEY = "root_value"
 
@@ -82,11 +81,11 @@ def generate_selfplay_shard(
     """Play teacher-vs-teacher self-play games, recording every decision.
 
     The teacher is any search player spec accepted by
-    manabot.sim.flat_mc.make_player (``{"kind": "search", ...}`` or
-    ``{"kind": "policy_search", ...}``); passing ``sims`` alone is shorthand
-    for the exp-03 random-rollout teacher. Every decision records the encoded
-    observation, the argmax action, and the raw per-action playout scores
-    (the soft target for distillation).
+    manabot.sim.flat_mc.make_player (flat search, policy search, or
+    determinized PUCT); passing ``sims`` alone is shorthand for the exp-03
+    random-rollout teacher. Every decision records the encoded observation,
+    chosen action, and raw per-action values. Tree teachers additionally emit
+    root visit counts and root values.
 
     Returns a summary dict (games, decisions, wall/search seconds, steps).
     When ``out_path`` is given the decisions are written there as an .npz.
@@ -120,10 +119,16 @@ def generate_selfplay_shard(
         make_player(teacher_spec, seed=seed * 2 + 1)[0],
         make_player(teacher_spec, seed=seed * 2 + 2)[0],
     ]
+    has_tree_targets = all(
+        hasattr(player, "last_visit_counts") and hasattr(player, "last_root_value")
+        for player in players
+    )
 
     max_actions = obs_space.encoder.max_actions
     obs_buffers: dict[str, list[np.ndarray]] = {key: [] for key in OBS_KEYS}
     score_rows: list[np.ndarray] = []
+    visit_rows: list[np.ndarray] = []
+    root_values: list[float] = []
     actions: list[int] = []
     game_indices: list[int] = []
     seats: list[int] = []
@@ -145,16 +150,37 @@ def generate_selfplay_shard(
             action = players[acting].act(env, obs)
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
+            encoded_valid_count = int(np.sum(obs["actions_valid"] > 0))
+            if action < 0 or action >= max_actions or obs["actions_valid"][action] <= 0:
+                raise RuntimeError(
+                    "teacher chose an action outside the encoded legal-action ABI"
+                )
             score_row = np.full(max_actions, -1.0, dtype=np.float32)
             raw_scores = players[acting].last_scores
             if raw_scores is not None:
-                k = min(len(raw_scores), max_actions)
-                score_row[:k] = raw_scores[:k]
+                if len(raw_scores) != encoded_valid_count:
+                    raise RuntimeError(
+                        "teacher legal surface does not fit the encoded action ABI"
+                    )
+                score_row[: len(raw_scores)] = raw_scores
             score_rows.append(score_row)
+            if has_tree_targets:
+                raw_visits = players[acting].last_visit_counts
+                root_value = players[acting].last_root_value
+                if raw_visits is None or root_value is None:
+                    raise RuntimeError("tree teacher did not publish search targets")
+                visit_row = np.zeros(max_actions, dtype=np.float32)
+                if len(raw_visits) != encoded_valid_count:
+                    raise RuntimeError(
+                        "tree visits do not fit the encoded legal-action ABI"
+                    )
+                visit_row[: len(raw_visits)] = raw_visits
+                visit_rows.append(visit_row)
+                root_values.append(float(root_value))
             actions.append(action)
             game_indices.append(game_index)
             seats.append(acting)
-            num_valids.append(int(np.sum(obs["actions_valid"] > 0)))
+            num_valids.append(encoded_valid_count)
             game_decisions.append(len(actions) - 1)
             obs, _, terminated, truncated, info = env.step(action)
             steps += 1
@@ -188,6 +214,13 @@ def generate_selfplay_shard(
         if score_rows
         else np.zeros((0, max_actions), dtype=np.float32)
     )
+    if has_tree_targets:
+        arrays[VISIT_COUNT_KEY] = (
+            np.stack(visit_rows)
+            if visit_rows
+            else np.zeros((0, max_actions), dtype=np.float32)
+        )
+        arrays[ROOT_VALUE_KEY] = np.asarray(root_values, dtype=np.float32)
 
     # Provenance tag (expert-iteration staleness accounting, exp-07): who
     # generated these labels, with what rollout policy, at which round, from
@@ -203,6 +236,10 @@ def generate_selfplay_shard(
         "git_commit": _git_commit(),
         "seed": seed,
         "game_offset": game_offset,
+        "policy_target_kind": (
+            "visit_distribution" if has_tree_targets else "score_softmax"
+        ),
+        "value_target_kind": "root_value" if has_tree_targets else "terminal_outcome",
     }
     arrays["provenance"] = np.array(_json.dumps(provenance))
 
@@ -217,6 +254,19 @@ def generate_selfplay_shard(
         "simulations": players[0].stats.simulations + players[1].stats.simulations,
         "cap_hits": players[0].stats.cap_hits + players[1].stats.cap_hits,
     }
+    if has_tree_targets:
+        search_stats.update(
+            tree_nodes=players[0].stats.tree_nodes + players[1].stats.tree_nodes,
+            worlds_sampled=(
+                players[0].stats.worlds_sampled + players[1].stats.worlds_sampled
+            ),
+            max_depth_sum=(
+                players[0].stats.max_depth_sum + players[1].stats.max_depth_sum
+            ),
+            max_depth_max=max(
+                players[0].stats.max_depth_max, players[1].stats.max_depth_max
+            ),
+        )
     return {
         "teacher": teacher_name,
         "provenance": provenance,
@@ -224,6 +274,8 @@ def generate_selfplay_shard(
         "decisions": len(actions),
         "wall_seconds": wall_seconds,
         "search": search_stats,
+        "policy_target_kind": provenance["policy_target_kind"],
+        "value_target_kind": provenance["value_target_kind"],
         "steps_per_game": steps_per_game,
         "winners": [w if w is not None else -1 for w in winners],
         "out_path": str(out_path) if out_path is not None else None,

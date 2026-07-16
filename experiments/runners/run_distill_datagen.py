@@ -1,9 +1,9 @@
-"""Exp-03 (wave/intelligence C4) Task 1: search-64 self-play dataset generation.
+"""Generate attributable search self-play shards in parallel.
 
-Plays search-vs-search self-play games in parallel worker processes; each
-worker writes one .npz shard of (observation, search action) decisions plus a
-manifest entry. Wall-clock and per-worker engine seconds are logged — that is
-the teacher cost.
+Each worker writes viewer observations, legal masks, chosen actions, outcomes,
+and teacher-specific targets. Flat Monte Carlo emits action scores; tree search
+also emits root visits and values. Wall-clock, engine time, simulations, and
+tree-growth diagnostics make label cost explicit.
 
 Usage:
     uv run experiments/runners/run_distill_datagen.py --games 480 --workers 4 \
@@ -99,6 +99,12 @@ def main() -> None:
     manifest = {
         "teacher": summaries[0]["teacher"] if summaries else None,
         "provenance": summaries[0].get("provenance") if summaries else None,
+        "policy_target_kind": (
+            summaries[0].get("policy_target_kind") if summaries else None
+        ),
+        "value_target_kind": (
+            summaries[0].get("value_target_kind") if summaries else None
+        ),
         "round": args.round,
         "games": int(sum(s["num_games"] for s in summaries)),
         "decisions": decisions,
@@ -118,6 +124,17 @@ def main() -> None:
         },
         "shards": summaries,
     }
+    if summaries and "tree_nodes" in summaries[0]["search"]:
+        for key in ("tree_nodes", "worlds_sampled", "max_depth_sum"):
+            manifest["search"][key] = float(
+                sum(s["search"][key] for s in summaries)
+            )
+        manifest["search"]["max_depth_max"] = float(
+            max(s["search"]["max_depth_max"] for s in summaries)
+        )
+        manifest["search"]["mean_max_depth"] = (
+            manifest["search"]["max_depth_sum"] / max(1.0, decisions)
+        )
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(
         f"done: {manifest['games']} games, {decisions} decisions, "

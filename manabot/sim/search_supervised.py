@@ -1,10 +1,10 @@
 """Joint policy/value supervision from search-generated self-play.
 
-This is the first KataGo-shaped training substrate in manabot: one shared
-encoder learns a policy distribution from search scores and a value from game
-outcomes.  The current teacher is flat determinized Monte Carlo, not MCTS, so
-``scores`` are converted to a masked softmax distribution rather than being
-misrepresented as visit counts.
+One shared encoder can learn a policy from flat-search scores, MCTS root
+visits, or chosen actions, and a value from terminal outcomes or teacher root
+values. Target kinds stay explicit so a score softmax is never misrepresented
+as a visit distribution and teacher-value imitation is not mistaken for
+outcome calibration.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from manabot.sim.distill import (
 
 SCORE_SOFTMAX_TARGET = "score_softmax"
 VISIT_DISTRIBUTION_TARGET = "visit_distribution"
+CHOSEN_ACTION_TARGET = "chosen_action"
 TERMINAL_OUTCOME_TARGET = "terminal_outcome"
 ROOT_VALUE_TARGET = "root_value"
 
@@ -36,6 +37,7 @@ ROOT_VALUE_TARGET = "root_value"
 @dataclass(frozen=True)
 class SearchSupervisedMetrics:
     policy_loss: float
+    policy_kl: float
     policy_accuracy: float
     policy_accuracy_nontrivial: float
     policy_target_entropy: float
@@ -105,6 +107,8 @@ def _validate_dataset(
         required.add(SCORE_KEY)
     elif policy_target_kind == VISIT_DISTRIBUTION_TARGET:
         required.add(VISIT_COUNT_KEY)
+    elif policy_target_kind == CHOSEN_ACTION_TARGET:
+        pass
     else:
         raise ValueError(f"unsupported policy target kind: {policy_target_kind}")
     if value_target_kind == ROOT_VALUE_TARGET:
@@ -146,7 +150,7 @@ def _validate_dataset(
             raise ValueError("every decision must have at least one scored action")
         if not np.array_equal(scores >= 0, valid_actions):
             raise ValueError("scored actions must exactly match the encoded legal mask")
-    else:
+    elif policy_target_kind == VISIT_DISTRIBUTION_TARGET:
         visits = np.asarray(dataset[VISIT_COUNT_KEY])
         if visits.shape != valid_actions.shape:
             raise ValueError("visit_counts must have shape (decisions, max_actions)")
@@ -180,6 +184,12 @@ def _policy_targets(
             dataset[SCORE_KEY][indices], dtype=torch.float32, device=device
         )
         return soft_targets_from_scores(scores, temperature)
+    if target_kind == CHOSEN_ACTION_TARGET:
+        actions = torch.as_tensor(
+            dataset["action"][indices], dtype=torch.long, device=device
+        )
+        width = int(dataset["actions_valid"].shape[1])
+        return torch.nn.functional.one_hot(actions, num_classes=width).to(torch.float32)
     visits = torch.as_tensor(
         dataset[VISIT_COUNT_KEY][indices], dtype=torch.float32, device=device
     )
@@ -202,7 +212,7 @@ def evaluate_search_supervised(
     batch_size: int = 512,
     device: torch.device | str = "cpu",
 ) -> SearchSupervisedMetrics:
-    """Evaluate policy-distribution and terminal-value targets."""
+    """Evaluate the declared policy and value targets on fixed decision rows."""
 
     _validate_dataset(
         dataset,
@@ -270,6 +280,7 @@ def evaluate_search_supervised(
     rows = max(1, len(indices))
     return SearchSupervisedMetrics(
         policy_loss=policy_loss / rows,
+        policy_kl=max(0.0, (policy_loss - policy_entropy) / rows),
         policy_accuracy=policy_correct / rows,
         policy_accuracy_nontrivial=policy_nontrivial_correct
         / max(1, policy_nontrivial_rows),
@@ -305,11 +316,11 @@ def train_search_supervised(
     SearchSupervisedMetrics,
     list[SearchSupervisedEpochStats],
 ]:
-    """Train one Agent jointly on search policy and terminal value targets.
+    """Train one Agent jointly on explicitly selected policy and value targets.
 
-    ``value_weight=0`` is the controlled policy-only arm. Both arms use this
-    exact optimizer, split, target distribution, initialization seed, and
-    batching path so the value objective is the only experimental difference.
+    Callers are responsible for matched experimental arms. The Teacher-0
+    runner uses ``value_weight=0`` to isolate value supervision; Teacher-1
+    holds root-value supervision fixed while changing the policy target.
     """
 
     _validate_dataset(
@@ -407,7 +418,8 @@ def train_search_supervised(
         if log:
             print(
                 f"  epoch {epoch}: policy {stats.train_policy_loss:.4f}/"
-                f"{validation.policy_loss:.4f} value {stats.train_value_loss:.4f}/"
+                f"{validation.policy_loss:.4f} kl {validation.policy_kl:.4f} "
+                f"value {stats.train_value_loss:.4f}/"
                 f"{validation.value_loss:.4f} brier {validation.value_brier:.4f} "
                 f"policy_acc {validation.policy_accuracy_nontrivial:.4f}",
                 flush=True,
