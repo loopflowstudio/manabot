@@ -1,8 +1,10 @@
 """Tests for the search-supervised policy/value training substrate."""
 
 from pathlib import Path
+import time
 
 import numpy as np
+import pytest
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
@@ -197,3 +199,17 @@ def test_chosen_action_target_supports_matched_mcts_ablation() -> None:
     )
     assert initial.policy_target_entropy == 0.0
     assert np.isfinite(history[-1].validation.policy_loss)
+
+
+def test_training_fails_closed_at_expired_wall_deadline() -> None:
+    dataset = _dataset(seed=37)
+
+    with pytest.raises(TimeoutError, match="wall deadline"):
+        train_search_supervised(
+            dataset,
+            epochs=2,
+            batch_size=32,
+            val_fraction=0.25,
+            seed=11,
+            deadline_monotonic=time.perf_counter() - 1.0,
+        )

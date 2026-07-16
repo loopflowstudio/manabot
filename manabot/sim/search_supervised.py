@@ -10,6 +10,7 @@ outcome calibration.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 import numpy as np
@@ -309,6 +310,7 @@ def train_search_supervised(
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
     initial_agent_state: dict[str, Any] | None = None,
+    deadline_monotonic: float | None = None,
     log: bool = False,
 ) -> tuple[
     Agent,
@@ -359,6 +361,8 @@ def train_search_supervised(
     history: list[SearchSupervisedEpochStats] = []
 
     for epoch in range(epochs):
+        if deadline_monotonic is not None and time.perf_counter() >= deadline_monotonic:
+            raise TimeoutError("search-supervised training reached its wall deadline")
         agent.train()
         order = train_idx.copy()
         rng.shuffle(order)
