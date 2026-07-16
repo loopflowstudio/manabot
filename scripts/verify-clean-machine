@@ -42,6 +42,10 @@ start_ms=$(uv run --no-project --python 3.12 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
   proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
 
+# Keep the 60-second gate without starting a new uv and Python process on every
+# readiness poll and competing with the cold Cargo/npm build.
+sleep 60 &
+readiness_timer_pid=$!
 ./scripts/play --port "$api_port" --frontend-port "$frontend_port" >"$log" 2>&1 &
 launcher_pid=$!
 
@@ -56,23 +60,27 @@ cleanup() {
     terminate_tree "$launcher_pid"
   fi
   wait "$launcher_pid" 2>/dev/null || true
+  if [ -n "$readiness_timer_pid" ]; then
+    kill -TERM "$readiness_timer_pid" 2>/dev/null || true
+    wait "$readiness_timer_pid" 2>/dev/null || true
+  fi
 }
 trap cleanup 0 HUP INT TERM
 
-deadline=$((start_ms + 60000))
 while ! grep -q '^ETUDE_PLAY_READY ' "$log" 2>/dev/null; do
   if ! kill -0 "$launcher_pid" 2>/dev/null; then
     cat "$log" >&2
     proof_error proof.launch "./scripts/play exited before readiness"
   fi
-  now_ms=$(uv run --no-project --python 3.12 python -c \
-    'import time; print(time.time_ns() // 1_000_000)') || exit 2
-  if [ "$now_ms" -ge "$deadline" ]; then
+  if ! kill -0 "$readiness_timer_pid" 2>/dev/null; then
     cat "$log" >&2
     proof_error proof.timeout "./scripts/play did not become ready within 60 seconds"
   fi
   sleep 0.1
 done
+kill -TERM "$readiness_timer_pid" 2>/dev/null || true
+wait "$readiness_timer_pid" 2>/dev/null || true
+readiness_timer_pid=
 
 ETUDE_EXTERNAL_SERVERS=1 \
 ETUDE_API_PORT=$api_port \

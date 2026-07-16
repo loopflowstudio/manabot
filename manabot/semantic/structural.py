@@ -150,7 +150,9 @@ def project_static_relations(token_symbols: Sequence[str]) -> StructuralProjecti
         if role is None or not role.startswith("local:"):
             continue
         owner = field_owner.get(index)
-        owner_name = _payload(token_symbols[owner], "field") if owner is not None else None
+        owner_name = (
+            _payload(token_symbols[owner], "field") if owner is not None else None
+        )
         inside_target = any(
             token_symbols[ancestor] == "structure:target_begin"
             for ancestor in ancestors[index]
@@ -167,18 +169,12 @@ def project_static_relations(token_symbols: Sequence[str]) -> StructuralProjecti
             declaration = declarations[role]
         except KeyError as error:
             raise StructuralSemanticError(f"dangling local role {role!r}") from error
-        relation_sets["role_declaration_to_reference"].add(
-            (declaration, reference)
-        )
-        relation_sets["role_reference_to_declaration"].add(
-            (reference, declaration)
-        )
+        relation_sets["role_declaration_to_reference"].add((declaration, reference))
+        relation_sets["role_reference_to_declaration"].add((reference, declaration))
 
     return StructuralProjection(
         depth=tuple(depths),
-        relations={
-            name: tuple(sorted(relation_sets[name])) for name in RELATION_NAMES
-        },
+        relations={name: tuple(sorted(relation_sets[name])) for name in RELATION_NAMES},
     )
 
 
@@ -286,12 +282,8 @@ class RelationalAttentionBlock(nn.Module):
         self.norm_attention = nn.LayerNorm(d_model)
         self.qkv = nn.Linear(d_model, d_model * 3)
         self.attention_output = nn.Linear(d_model, d_model)
-        self.distance_bias = nn.Parameter(
-            torch.zeros(heads, distance_clip * 2 + 1)
-        )
-        self.relation_bias = nn.Parameter(
-            torch.zeros(heads, len(RELATION_NAMES))
-        )
+        self.distance_bias = nn.Parameter(torch.zeros(heads, distance_clip * 2 + 1))
+        self.relation_bias = nn.Parameter(torch.zeros(heads, len(RELATION_NAMES)))
         self.norm_ff = nn.LayerNorm(d_model)
         self.ff = nn.Sequential(
             nn.Linear(d_model, d_ff), nn.GELU(), nn.Linear(d_ff, d_model)
@@ -312,9 +304,7 @@ class RelationalAttentionBlock(nn.Module):
         query = query.transpose(1, 2)
         key = key.transpose(1, 2)
         value = value.transpose(1, 2)
-        scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(
-            self.head_dim
-        )
+        scores = torch.matmul(query, key.transpose(-1, -2)) / math.sqrt(self.head_dim)
 
         positions = torch.arange(length, device=values.device)
         distances = (positions.unsqueeze(0) - positions.unsqueeze(1)).clamp(
@@ -326,8 +316,10 @@ class RelationalAttentionBlock(nn.Module):
         )
         scores = scores.masked_fill(~mask[:, None, None, :], -torch.inf)
         attention = torch.softmax(scores, dim=-1)
-        attended = torch.matmul(attention, value).transpose(1, 2).reshape(
-            batch_size, length, self.d_model
+        attended = (
+            torch.matmul(attention, value)
+            .transpose(1, 2)
+            .reshape(batch_size, length, self.d_model)
         )
         values = values + self.attention_output(attended)
         return values + self.ff(self.norm_ff(values))
@@ -351,9 +343,7 @@ class RelationalSemanticEncoder(nn.Module):
         self.token_kind_embedding = nn.Embedding(token_kind_count, d_model)
         self.summary_token = nn.Parameter(torch.empty(d_model))
         nn.init.normal_(self.summary_token, mean=0.0, std=d_model**-0.5)
-        self.block = RelationalAttentionBlock(
-            d_model=d_model, heads=heads, d_ff=d_ff
-        )
+        self.block = RelationalAttentionBlock(d_model=d_model, heads=heads, d_ff=d_ff)
         self.final_norm = nn.LayerNorm(d_model)
         # The common-width context projection keeps the model near the landed
         # bag arm's capacity while remaining part of the timed representation.
@@ -394,6 +384,77 @@ class RelationalSemanticEncoder(nn.Module):
         return self.context(self.final_norm(encoded[:, 0]))
 
 
+class RelationalMessageSemanticEncoder(RelationalSemanticEncoder):
+    """One-block encoder whose summary can consume explicit relation links."""
+
+    def __init__(
+        self,
+        token_count: int,
+        token_kind_count: int,
+        *,
+        d_model: int = 24,
+        heads: int = 2,
+        d_ff: int = 28,
+    ) -> None:
+        super().__init__(
+            token_count,
+            token_kind_count,
+            d_model=d_model,
+            heads=heads,
+            d_ff=d_ff,
+        )
+        self.relation_embeddings = nn.Parameter(
+            torch.empty(len(RELATION_NAMES), d_model)
+        )
+        nn.init.normal_(self.relation_embeddings, mean=0.0, std=d_model**-0.5)
+
+    def forward(self, batch: KataBatch) -> torch.Tensor:
+        batch_size, token_count = batch.token_ids.shape
+        positions = torch.arange(token_count, device=batch.token_ids.device)
+        positions = positions.unsqueeze(0).expand(batch_size, -1)
+        base = (
+            self.token_embedding(batch.token_ids)
+            + self.token_kind_embedding(batch.token_kinds)
+            + _sinusoidal(positions, self.d_model)
+            + _sinusoidal(batch.depth, self.d_model)
+        )
+
+        adjacency = batch.relations.to(base.dtype)
+        linked_count = adjacency.sum(dim=-1)
+        linked_sum = torch.einsum("brij,bjd->brid", adjacency, base)
+        linked_mean = linked_sum / linked_count.clamp_min(1).unsqueeze(-1)
+        active = linked_count > 0
+        messages = (
+            linked_mean + self.relation_embeddings.reshape(1, -1, 1, self.d_model)
+        ) * active.unsqueeze(-1)
+        active_relations = active.sum(dim=1).clamp_min(1).unsqueeze(-1)
+        values = base + messages.sum(dim=1) / active_relations
+
+        summary = self.summary_token.reshape(1, 1, -1).expand(batch_size, -1, -1)
+        values = torch.cat([summary, values], dim=1)
+        mask = torch.cat(
+            [
+                torch.ones((batch_size, 1), dtype=torch.bool, device=values.device),
+                batch.token_mask,
+            ],
+            dim=1,
+        )
+        relation_count = batch.relations.shape[1]
+        relations = torch.zeros(
+            (
+                batch_size,
+                relation_count,
+                token_count + 1,
+                token_count + 1,
+            ),
+            dtype=batch.relations.dtype,
+            device=batch.relations.device,
+        )
+        relations[:, :, 1:, 1:] = batch.relations
+        encoded = self.block(values, mask, relations)
+        return self.context(self.final_norm(encoded[:, 0]))
+
+
 class KataProbeModel(nn.Module):
     def __init__(self, encoder: nn.Module, probe: KataProbe) -> None:
         super().__init__()
@@ -401,9 +462,7 @@ class KataProbeModel(nn.Module):
         self.probe = probe
 
     def forward(self, batch: KataBatch) -> torch.Tensor:
-        return self.probe(
-            self.encoder(batch), batch.families, batch.candidate_orders
-        )
+        return self.probe(self.encoder(batch), batch.families, batch.candidate_orders)
 
 
 def build_matched_models(
@@ -430,8 +489,27 @@ def build_matched_models(
     )
 
 
+def build_relation_message_model(
+    *,
+    token_count: int,
+    token_kind_count: int,
+    seed: int,
+) -> KataProbeModel:
+    """Build the conditional relation-message arm with the matched probe."""
+
+    torch.manual_seed(seed + 1_000_000)
+    probe = KataProbe(probe_dim=24)
+    torch.manual_seed(seed + 3_000_000)
+    encoder = RelationalMessageSemanticEncoder(
+        token_count, token_kind_count, d_model=24, heads=2, d_ff=28
+    )
+    return KataProbeModel(encoder, probe)
+
+
 def trainable_parameter_count(model: nn.Module) -> int:
-    return sum(parameter.numel() for parameter in model.parameters() if parameter.requires_grad)
+    return sum(
+        parameter.numel() for parameter in model.parameters() if parameter.requires_grad
+    )
 
 
 def trainable_parameter_bytes(model: nn.Module) -> int:

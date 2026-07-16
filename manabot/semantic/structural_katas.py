@@ -87,7 +87,11 @@ def _filler(index: int, *, excluded: frozenset[str] = frozenset()) -> dict[str, 
         ("draw_cards", "count"),
     ]
     op, field = next(
-        choice for choice in (choices[index % len(choices) :] + choices[: index % len(choices)]) if choice[0] not in excluded
+        choice
+        for choice in (
+            choices[index % len(choices) :] + choices[: index % len(choices)]
+        )
+        if choice[0] not in excluded
     )
     return {"op": op, field: 100 + index}
 
@@ -273,8 +277,7 @@ def build_source() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
                 }
     definitions.sort(key=lambda row: row["key"])
     cards = [
-        {"definition": definition["key"], "count": 1}
-        for definition in definitions
+        {"definition": definition["key"], "count": 1} for definition in definitions
     ]
     return (
         {
@@ -338,10 +341,14 @@ def oracle_label(family: str, program: Mapping[str, Any]) -> int:
 
     instructions = list(_walk_instructions(program["instructions"]))
     if family == "order":
-        positions = {row["op_name"]: index for index, (row, _) in enumerate(instructions)}
+        positions = {
+            row["op_name"]: index for index, (row, _) in enumerate(instructions)
+        }
         return int(positions["draw_cards"] < positions["gain_life"])
     if family == "hierarchy":
-        draw_path = next(path for row, path in instructions if row["op_name"] == "draw_cards")
+        draw_path = next(
+            path for row, path in instructions if row["op_name"] == "draw_cards"
+        )
         return int(bool(draw_path) and draw_path[0] == "then")
     if family == "field_role":
         row = next(row for row, _ in instructions if row["op_name"] == "modify_pt")
@@ -400,11 +407,17 @@ def validate_oracle_fixtures(path: Path = ORACLE_PATH) -> dict[str, Any]:
                     f"oracle fixture {family}.{case}: expected {expected}, got {actual}"
                 )
             checked.append(f"{family}.{case}")
-    return {"path": str(path.relative_to(ROOT)), "sha256": sha256_bytes(path.read_bytes()), "checked": checked}
+    return {
+        "path": str(path.relative_to(ROOT)),
+        "sha256": sha256_bytes(path.read_bytes()),
+        "checked": checked,
+    }
 
 
 def _histogram(values: Sequence[Any]) -> str:
-    return canonical_json(dict(sorted(Counter(values).items(), key=lambda item: str(item[0]))))
+    return canonical_json(
+        dict(sorted(Counter(values).items(), key=lambda item: str(item[0])))
+    )
 
 
 def _selector_histogram(program: Mapping[str, Any]) -> str:
@@ -441,7 +454,9 @@ def _overlap_matrix(values: Mapping[str, set[str]]) -> dict[str, int]:
     }
 
 
-def _audit(programs: Sequence[dict[str, Any]], pairs: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def _audit(
+    programs: Sequence[dict[str, Any]], pairs: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
     split_values: dict[str, dict[str, set[str]]] = {
         name: {split: set() for split in PAIR_SPLITS}
         for name in (
@@ -469,7 +484,9 @@ def _audit(programs: Sequence[dict[str, Any]], pairs: Sequence[dict[str, Any]]) 
         if any(overlap[name].values()):
             raise StructuralKataError(f"unexpected {name} split overlap")
     if any(value != len(KATA_FAMILIES) for value in overlap["skeleton_id"].values()):
-        raise StructuralKataError("intentional skeleton overlap must contain five families")
+        raise StructuralKataError(
+            "intentional skeleton overlap must contain five families"
+        )
 
     fields = (
         "condition_variant",
@@ -517,7 +534,9 @@ def _audit(programs: Sequence[dict[str, Any]], pairs: Sequence[dict[str, Any]]) 
 
     pair_labels = {
         pair["pair_id"]: sorted(
-            program["label"] for program in programs if program["pair_id"] == pair["pair_id"]
+            program["label"]
+            for program in programs
+            if program["pair_id"] == pair["pair_id"]
         )
         for pair in pairs
     }
@@ -534,11 +553,15 @@ def _audit(programs: Sequence[dict[str, Any]], pairs: Sequence[dict[str, Any]]) 
     }
 
 
-def build_suite(source: Mapping[str, Any], metadata: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+def build_suite(
+    source: Mapping[str, Any], metadata: Mapping[str, Mapping[str, Any]]
+) -> dict[str, Any]:
     if sha256_bytes(COMPILER_PATH.read_bytes()) != EXPECTED_COMPILER_SHA256:
         raise StructuralKataError("compiler bytes differ from the pinned contract")
     if sha256_bytes(SCHEMA_PATH.read_bytes()) != EXPECTED_SCHEMA_SHA256:
-        raise StructuralKataError("learning-schema bytes differ from the pinned contract")
+        raise StructuralKataError(
+            "learning-schema bytes differ from the pinned contract"
+        )
     oracle = validate_oracle_fixtures()
     ir, coverage = compile_source(source)
     pack = _pack_from_ir(ir)
@@ -585,7 +608,9 @@ def build_suite(source: Mapping[str, Any], metadata: Mapping[str, Mapping[str, A
             "selector_histogram": _selector_histogram(program),
             "model_input": {
                 "token_ids": list(token_ids),
-                "token_kinds": [int(value) for value in pack.catalog.token_kind[start:end]],
+                "token_kinds": [
+                    int(value) for value in pack.catalog.token_kind[start:end]
+                ],
                 "token_symbols": list(token_symbols),
                 **projection.to_dict(),
             },
@@ -712,7 +737,9 @@ def validate_suite(suite: Mapping[str, Any]) -> None:
     _audit(programs, pairs)
 
 
-def build_contract(source_bytes: bytes, suite_bytes: bytes, oracle_bytes: bytes) -> dict[str, Any]:
+def build_contract(
+    source_bytes: bytes, suite_bytes: bytes, oracle_bytes: bytes
+) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "id": SUITE_ID,
@@ -896,10 +923,15 @@ def records_to_batch(
                 for source, target in edges:
                     relations[index, relation, source, target] = True
         families[index] = FAMILY_INDEX[record["family"]]
-        flip = int(
-            hashlib.sha256(f"{record['pair_id']}:{seed}".encode("utf-8")).hexdigest(),
-            16,
-        ) % 2
+        flip = (
+            int(
+                hashlib.sha256(
+                    f"{record['pair_id']}:{seed}".encode("utf-8")
+                ).hexdigest(),
+                16,
+            )
+            % 2
+        )
         candidate_orders[index] = torch.tensor((0, 1) if flip == 0 else (1, 0))
         labels[index] = int(record["label"])
     return KataBatch(
@@ -912,6 +944,80 @@ def records_to_batch(
         candidate_orders=candidate_orders,
         labels=labels,
     )
+
+
+class KataTensorCatalog:
+    """Content-addressed static tensors with seed-specific ordering at selection."""
+
+    def __init__(
+        self,
+        records: Sequence[Mapping[str, Any]],
+        *,
+        suite_sha256: str,
+    ) -> None:
+        if not records:
+            raise StructuralKataError("cannot build an empty tensor catalog")
+        if len({str(record["program_hash"]) for record in records}) != len(records):
+            raise StructuralKataError("tensor catalog program hashes must be unique")
+        self.suite_sha256 = suite_sha256
+        self._records = tuple(records)
+        self._row_by_hash = {
+            str(record["program_hash"]): index
+            for index, record in enumerate(self._records)
+        }
+        self._lengths = tuple(int(record["token_length"]) for record in self._records)
+        self._pair_ids = tuple(str(record["pair_id"]) for record in self._records)
+        self._full = records_to_batch(self._records, seed=0, include_relations=True)
+        self._empty_relations = torch.zeros_like(self._full.relations)
+        self._candidate_orders_by_seed: dict[int, torch.Tensor] = {}
+
+    def _candidate_orders(self, seed: int) -> torch.Tensor:
+        orders = self._candidate_orders_by_seed.get(seed)
+        if orders is None:
+            rows = []
+            for pair_id in self._pair_ids:
+                flip = (
+                    int(
+                        hashlib.sha256(f"{pair_id}:{seed}".encode("utf-8")).hexdigest(),
+                        16,
+                    )
+                    % 2
+                )
+                rows.append((0, 1) if flip == 0 else (1, 0))
+            orders = torch.tensor(rows, dtype=torch.long)
+            self._candidate_orders_by_seed[seed] = orders
+        return orders
+
+    def batch(
+        self,
+        records: Sequence[Mapping[str, Any]],
+        *,
+        seed: int,
+        include_relations: bool = True,
+    ) -> KataBatch:
+        if not records:
+            raise StructuralKataError("cannot select an empty tensor-catalog batch")
+        try:
+            row_values = [
+                self._row_by_hash[str(record["program_hash"])] for record in records
+            ]
+        except KeyError as error:
+            raise StructuralKataError("record is absent from tensor catalog") from error
+        indexes = torch.tensor(row_values, dtype=torch.long)
+        width = max(self._lengths[index] for index in row_values)
+        relation_source = (
+            self._full.relations if include_relations else self._empty_relations
+        )
+        return KataBatch(
+            token_ids=self._full.token_ids[indexes, :width],
+            token_kinds=self._full.token_kinds[indexes, :width],
+            token_mask=self._full.token_mask[indexes, :width],
+            depth=self._full.depth[indexes, :width],
+            relations=relation_source[indexes, :, :width, :width],
+            families=self._full.families[indexes],
+            candidate_orders=self._candidate_orders(seed)[indexes],
+            labels=self._full.labels[indexes],
+        )
 
 
 def canonical_probabilities(model: nn.Module, batch: KataBatch) -> torch.Tensor:
@@ -974,14 +1080,18 @@ def _family_balanced_indexes(batch: KataBatch, step: int, seed: int) -> torch.Te
     for family_index in range(5):
         candidates = torch.where(batch.families == family_index)[0].tolist()
         count = 13 if family_index in extra_families else 12
-        indexes.extend(int(value) for value in rng.choice(candidates, size=count, replace=False))
+        indexes.extend(
+            int(value) for value in rng.choice(candidates, size=count, replace=False)
+        )
     rng.shuffle(indexes)
     return torch.tensor(indexes, dtype=torch.long)
 
 
 def _loss(model: nn.Module, batch: KataBatch) -> torch.Tensor:
     logits = model(batch)
-    targets = (batch.candidate_orders == batch.labels.unsqueeze(1)).to(torch.long).argmax(1)
+    targets = (
+        (batch.candidate_orders == batch.labels.unsqueeze(1)).to(torch.long).argmax(1)
+    )
     losses = []
     for family_index in range(5):
         mask = batch.families == family_index
@@ -1005,6 +1115,9 @@ def train_model(
     best_nll = math.inf
     best_step = -1
     best_state: dict[str, torch.Tensor] | None = None
+    maximum_training_accuracy = 0.0
+    first_99_train_step: int | None = None
+    trajectory: list[dict[str, float | int]] = []
     started = perf_counter_ns()
     for step in range(1, steps + 1):
         model.train()
@@ -1015,7 +1128,20 @@ def train_model(
         loss.backward()
         optimizer.step()
         if step % validation_interval == 0:
+            training_accuracy = metric_summary(model, train)["accuracy"]
             validation_nll = metric_summary(model, validation)["nll"]
+            maximum_training_accuracy = max(
+                maximum_training_accuracy, training_accuracy
+            )
+            if first_99_train_step is None and training_accuracy >= 0.99:
+                first_99_train_step = step
+            trajectory.append(
+                {
+                    "step": step,
+                    "training_accuracy": training_accuracy,
+                    "validation_nll": validation_nll,
+                }
+            )
             if validation_nll < best_nll:
                 best_nll = validation_nll
                 best_step = step
@@ -1031,6 +1157,9 @@ def train_model(
         "optimizer_steps": steps,
         "presented_examples": steps * 64,
         "selected_checkpoint_step": best_step,
+        "maximum_training_accuracy": maximum_training_accuracy,
+        "first_99_train_step": first_99_train_step,
+        "trajectory": trajectory,
         "wall_clock_seconds": (perf_counter_ns() - started) / 1_000_000_000,
     }
 
@@ -1052,8 +1181,12 @@ def paired_symmetry_audit(
         if len(indexes) != 2:
             raise StructuralKataError("symmetry audit requires complete pairs")
         left, right = indexes
-        maximum = max(maximum, float((probabilities[left] - probabilities[right]).abs().max()))
-        disagreements += int(probabilities[left].argmax() != probabilities[right].argmax())
+        maximum = max(
+            maximum, float((probabilities[left] - probabilities[right]).abs().max())
+        )
+        disagreements += int(
+            probabilities[left].argmax() != probabilities[right].argmax()
+        )
     return {
         "maximum_paired_probability_difference": maximum,
         "paired_prediction_disagreements": disagreements,

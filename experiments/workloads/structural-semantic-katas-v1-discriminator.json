@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "structural-semantic-katas-v1-discriminator",
+  "status": "pre_registered_results_pending",
+  "claim_boundary": "This experiment may nominate one static encoder candidate for W2-213. It does not establish semantic recombination, dynamic binding, card transfer, executable rules parity, gameplay strength, or integration readiness, and it does not start W2-213.",
+  "authority": {
+    "compiler_path": "manabot/semantic/compiler.py",
+    "compiler_sha256": "f10f34d7b2e458a0ea01b124261a0c0fbbda4648e4452f277254aa6cc3250367",
+    "learning_schema_path": "content/semantic/v1/learning_schema.json",
+    "learning_schema_sha256": "a156c592414d0d4838c5423e2cb471fc49a4450f21d62e5e5c198ba948ae7034",
+    "oracle_path": "experiments/katas/structural-semantic-katas-v1.oracles.json",
+    "oracle_sha256": "87a3e918f513c4bd8bfc4d29634440d0c1c6526542078b88b3f1e50b4e165c11",
+    "source_path": "experiments/katas/structural-semantic-katas-v1.source.json",
+    "source_sha256": "1a61c10d15a0ed5aa2746f4bb4fb9773db841c0c6affffe8cad21fac32ef5f2d",
+    "suite_path": "experiments/katas/structural-semantic-katas-v1.json",
+    "suite_sha256": "5595ce579017c4ec84b8746cb30a3f4bb09a69e4801ccaf7748467f7bec2f948"
+  },
+  "model_seeds": [21401, 21402, 21403, 21404, 21405],
+  "stages": {
+    "bag_v1": {
+      "conditional": false,
+      "architecture": "bag_v1",
+      "maximum_steps_per_seed": 800,
+      "include_relations": false
+    },
+    "relational_semantic_encoder_v1_opt4000": {
+      "conditional": false,
+      "architecture": "relational_semantic_encoder_v1",
+      "only_changed_factor": "maximum_steps_per_seed",
+      "maximum_steps_per_seed": 4000,
+      "include_relations": true
+    },
+    "relational_message_encoder_v1": {
+      "conditional": "run_iff_any_optimization_seed_never_reaches_99_percent_full_training_accuracy",
+      "architecture": "relational_semantic_encoder_v1_plus_one_hop_relation_message",
+      "only_changed_factor": "pre_attention_relation_message",
+      "additional_parameters": 192,
+      "maximum_steps_per_seed": 4000,
+      "include_relations": true
+    }
+  },
+  "training": {
+    "python_minor": "3.12",
+    "device": "cpu",
+    "torch_threads": 1,
+    "deterministic_algorithms": true,
+    "optimizer": "adamw",
+    "learning_rate": 0.003,
+    "weight_decay": 0.0,
+    "batch_size": 64,
+    "validation_interval": 20,
+    "checkpoint_selection": "lowest_validation_nll_earliest_step_tiebreak",
+    "capacity_trigger": "maximum_full_training_accuracy_at_any_validation_checkpoint",
+    "capacity_trigger_minimum_each_seed": 0.99,
+    "test_access": "only_after_all_selected_checkpoints_for_an_arm_are_fixed"
+  },
+  "performance": {
+    "paths": ["online_projector_e2e", "cached_projector_e2e", "model_only"],
+    "batch1_warmups": 200,
+    "batch1_samples": 2000,
+    "throughput_batch_size": 128,
+    "throughput_warmups": 20,
+    "throughput_samples": 100,
+    "cold_catalog_build_reported_separately": true,
+    "cached_equivalence": "exact_tensors_logits_and_metrics_before_timing"
+  },
+  "gates": {
+    "bag_accuracy_every_family_seed": 0.5,
+    "bag_maximum_paired_probability_difference": 0.000001,
+    "parameter_difference_fraction_maximum": 0.05,
+    "structural_train_accuracy_each_seed_minimum": 0.99,
+    "structural_validation_accuracy_each_seed_minimum": 0.95,
+    "structural_aggregate_test_accuracy_minimum": 0.95,
+    "structural_per_family_test_accuracy_minimum": 0.90,
+    "per_family_uplift_minimum": 0.40,
+    "aggregate_uplift_t95_lower_minimum_exclusive": 0.35,
+    "structural_brier_maximum": 0.10,
+    "structural_nll_maximum": 0.35,
+    "cached_batch1_p95_ratio_maximum": 2.5,
+    "cached_batch128_throughput_ratio_minimum": 0.40
+  },
+  "budget": {
+    "maximum_trained_arms": 3,
+    "seeds": 5,
+    "maximum_optimizer_steps": 44000,
+    "maximum_presented_examples": 2816000,
+    "maximum_wall_clock_seconds": 1800,
+    "cpu_cores": 1,
+    "maximum_retries": 0,
+    "substituted_seeds": 0
+  },
+  "predictions": {
+    "bag_exact_symmetry": true,
+    "optimization_arm_fits_all_seeds": true,
+    "conditional_message_arm_fits_if_triggered": true,
+    "modal_terminal": "KILL_REDESIGN model_execution_cost"
+  },
+  "terminal_decisions": [
+    "NOMINATE_FOR_W2_213 <arm>",
+    "KILL_REDESIGN instrument_invalid",
+    "KILL_REDESIGN structural_generalization",
+    "KILL_REDESIGN structural_capacity",
+    "KILL_REDESIGN projector_execution_cost",
+    "KILL_REDESIGN model_execution_cost",
+    "KILL_REDESIGN budget_exceeded"
+  ]
+}
