@@ -1,0 +1,1151 @@
+{
+  "decision_count": 8,
+  "decisions": [
+    {
+      "automatic": false,
+      "event_cursor": 1000,
+      "frame": {
+        "action_space": "PRIORITY",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "c681cc968356d7a10bdb8c5e2b17c69eb01846cf5e94d83ebba43e505604748e",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "PASS",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Pass priority",
+            "focus": [],
+            "help": null,
+            "id": 0,
+            "label": "Pass priority",
+            "source": null,
+            "verb": "pass_priority"
+          },
+          {
+            "action_type": "CAST",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Cast public spell",
+            "focus": [
+              31
+            ],
+            "help": null,
+            "id": 1,
+            "label": "Cast public spell",
+            "source": null,
+            "verb": "cast"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "PRECOMBAT_MAIN_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 100,
+          "instruction": "Choose an action",
+          "kind": "priority",
+          "title": "Recorded decision 0"
+        },
+        "protocol": 1,
+        "revision": 10,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "CAST",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Cast public spell",
+        "focus": [
+          31
+        ],
+        "help": null,
+        "id": 1,
+        "label": "Cast public spell",
+        "source": null,
+        "verb": "cast"
+      },
+      "ordinal": 0,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-0",
+        "expected_revision": 10,
+        "match_id": "fixture-match",
+        "offer_id": 1,
+        "prompt_id": 100
+      },
+      "presentation": [
+        {
+          "caused_by": "study-index-command-0",
+          "from_revision": 10,
+          "group": 100,
+          "importance": "critical",
+          "kind": {
+            "amount": 3,
+            "kind": "damage",
+            "source": null,
+            "target": {
+              "id": 1,
+              "kind": "player"
+            }
+          },
+          "seq": 100,
+          "sound": null,
+          "suggested_ms": 0,
+          "to_revision": 11
+        }
+      ]
+    },
+    {
+      "automatic": false,
+      "event_cursor": 1010,
+      "frame": {
+        "action_space": "PRIORITY",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "af2094b60c365cd6dd984c9aa9a6175cd18090783456c898a47b5fbb8252bf0e",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "PASS",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Pass priority",
+            "focus": [],
+            "help": null,
+            "id": 10,
+            "label": "Pass priority",
+            "source": null,
+            "verb": "pass_priority"
+          },
+          {
+            "action_type": "CAST",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Respond with spell",
+            "focus": [
+              41
+            ],
+            "help": null,
+            "id": 11,
+            "label": "Respond with spell",
+            "source": null,
+            "verb": "cast"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [
+              {
+                "id": 41,
+                "mana_value": 2,
+                "name": "Public stack spell",
+                "owner_id": 0,
+                "power": 0,
+                "registry_key": 41,
+                "toughness": 0,
+                "types": {
+                  "is_artifact": false,
+                  "is_battle": false,
+                  "is_creature": false,
+                  "is_enchantment": false,
+                  "is_land": false,
+                  "is_planeswalker": false,
+                  "is_spell": true
+                },
+                "zone": "STACK"
+              }
+            ],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "PRECOMBAT_MAIN_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 101,
+          "instruction": "Choose an action",
+          "kind": "priority",
+          "title": "Recorded decision 1"
+        },
+        "protocol": 1,
+        "revision": 11,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "PASS",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Pass priority",
+        "focus": [],
+        "help": null,
+        "id": 10,
+        "label": "Pass priority",
+        "source": null,
+        "verb": "pass_priority"
+      },
+      "ordinal": 1,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-1",
+        "expected_revision": 11,
+        "match_id": "fixture-match",
+        "offer_id": 10,
+        "prompt_id": 101
+      },
+      "presentation": [
+        {
+          "caused_by": "study-index-command-1",
+          "from_revision": 11,
+          "group": 110,
+          "importance": "normal",
+          "kind": {
+            "kind": "resolved",
+            "stack": 4100
+          },
+          "seq": 110,
+          "sound": null,
+          "suggested_ms": 0,
+          "to_revision": 12
+        }
+      ]
+    },
+    {
+      "automatic": false,
+      "event_cursor": 1020,
+      "frame": {
+        "action_space": "CHOOSE_TARGET",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "c64412e2f4c288c038dcf5d8886a54011cf1755be83a16db0097f319281b3a6a",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "CHOOSE_TARGET",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Target hero",
+            "focus": [
+              0
+            ],
+            "help": null,
+            "id": 20,
+            "label": "Target hero",
+            "source": null,
+            "verb": "choose"
+          },
+          {
+            "action_type": "CHOOSE_TARGET",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Target villain",
+            "focus": [
+              1
+            ],
+            "help": null,
+            "id": 21,
+            "label": "Target villain",
+            "source": null,
+            "verb": "choose"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "PRECOMBAT_MAIN_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 102,
+          "instruction": "Choose an action",
+          "kind": "choose_target",
+          "title": "Recorded decision 2"
+        },
+        "protocol": 1,
+        "revision": 12,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "CHOOSE_TARGET",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Target villain",
+        "focus": [
+          1
+        ],
+        "help": null,
+        "id": 21,
+        "label": "Target villain",
+        "source": null,
+        "verb": "choose"
+      },
+      "ordinal": 2,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-2",
+        "expected_revision": 12,
+        "match_id": "fixture-match",
+        "offer_id": 21,
+        "prompt_id": 102
+      },
+      "presentation": [
+        {
+          "caused_by": "study-index-command-2",
+          "from_revision": 12,
+          "group": 120,
+          "importance": "emphasized",
+          "kind": {
+            "kind": "targeted",
+            "source": {
+              "id": {
+                "entity": 31,
+                "incarnation": 0
+              },
+              "kind": "object"
+            },
+            "target": {
+              "id": 1,
+              "kind": "player"
+            }
+          },
+          "seq": 120,
+          "sound": null,
+          "suggested_ms": 0,
+          "to_revision": 13
+        }
+      ]
+    },
+    {
+      "automatic": false,
+      "event_cursor": 1030,
+      "frame": {
+        "action_space": "DECLARE_ATTACKER",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "bf2bfd0b4c65d7d4c3ef4f4c6eacd3ce78fac1fd43c554538df00198c7b2786d",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "NO_ATTACK",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Keep scout back",
+            "focus": [
+              51
+            ],
+            "help": null,
+            "id": 30,
+            "label": "Keep scout back",
+            "source": null,
+            "verb": "declare_attackers"
+          },
+          {
+            "action_type": "ATTACK",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Attack with scout",
+            "focus": [
+              51
+            ],
+            "help": null,
+            "id": 31,
+            "label": "Attack with scout",
+            "source": null,
+            "verb": "declare_attackers"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "DECLARE_ATTACKERS_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 103,
+          "instruction": "Choose an action",
+          "kind": "declare_attacker",
+          "title": "Recorded decision 3"
+        },
+        "protocol": 1,
+        "revision": 13,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "ATTACK",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Attack with scout",
+        "focus": [
+          51
+        ],
+        "help": null,
+        "id": 31,
+        "label": "Attack with scout",
+        "source": null,
+        "verb": "declare_attackers"
+      },
+      "ordinal": 3,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-3",
+        "expected_revision": 13,
+        "match_id": "fixture-match",
+        "offer_id": 31,
+        "prompt_id": 103
+      },
+      "presentation": [
+        {
+          "caused_by": "study-index-command-3",
+          "from_revision": 13,
+          "group": 130,
+          "importance": "critical",
+          "kind": {
+            "attackers": [
+              {
+                "entity": 51,
+                "incarnation": 0
+              }
+            ],
+            "defender": {
+              "id": 1,
+              "kind": "player"
+            },
+            "kind": "attack_group"
+          },
+          "seq": 130,
+          "sound": null,
+          "suggested_ms": 0,
+          "to_revision": 14
+        }
+      ]
+    },
+    {
+      "automatic": false,
+      "event_cursor": 1040,
+      "frame": {
+        "action_space": "DECLARE_ATTACKER",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "5efa7b335125ec6c58ff18fc2ec8cd33e09dd6adff45418dc488f29e77e01317",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "NO_ATTACK",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Keep adept back",
+            "focus": [
+              52
+            ],
+            "help": null,
+            "id": 40,
+            "label": "Keep adept back",
+            "source": null,
+            "verb": "declare_attackers"
+          },
+          {
+            "action_type": "ATTACK",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Attack with adept",
+            "focus": [
+              52
+            ],
+            "help": null,
+            "id": 41,
+            "label": "Attack with adept",
+            "source": null,
+            "verb": "declare_attackers"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "DECLARE_ATTACKERS_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 104,
+          "instruction": "Choose an action",
+          "kind": "declare_attacker",
+          "title": "Recorded decision 4"
+        },
+        "protocol": 1,
+        "revision": 14,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "ATTACK",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Attack with adept",
+        "focus": [
+          52
+        ],
+        "help": null,
+        "id": 41,
+        "label": "Attack with adept",
+        "source": null,
+        "verb": "declare_attackers"
+      },
+      "ordinal": 4,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-4",
+        "expected_revision": 14,
+        "match_id": "fixture-match",
+        "offer_id": 41,
+        "prompt_id": 104
+      },
+      "presentation": [
+        {
+          "caused_by": "study-index-command-4",
+          "from_revision": 14,
+          "group": 140,
+          "importance": "normal",
+          "kind": {
+            "attackers": [
+              {
+                "entity": 52,
+                "incarnation": 0
+              }
+            ],
+            "defender": {
+              "id": 1,
+              "kind": "player"
+            },
+            "kind": "attack_group"
+          },
+          "seq": 140,
+          "sound": null,
+          "suggested_ms": 0,
+          "to_revision": 15
+        }
+      ]
+    },
+    {
+      "automatic": false,
+      "event_cursor": 1050,
+      "frame": {
+        "action_space": "DECLARE_BLOCKER",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "d41eb43d2c7dee76adf6db48c540d93ee4236e837aba80fad615a472946f4ec5",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "NO_BLOCK",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Take the hit",
+            "focus": [
+              61
+            ],
+            "help": null,
+            "id": 50,
+            "label": "Take the hit",
+            "source": null,
+            "verb": "declare_blockers"
+          },
+          {
+            "action_type": "BLOCK",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Block the attacker",
+            "focus": [
+              61
+            ],
+            "help": null,
+            "id": 51,
+            "label": "Block the attacker",
+            "source": null,
+            "verb": "declare_blockers"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "DECLARE_BLOCKERS_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 105,
+          "instruction": "Choose an action",
+          "kind": "declare_blocker",
+          "title": "Recorded decision 5"
+        },
+        "protocol": 1,
+        "revision": 15,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "BLOCK",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Block the attacker",
+        "focus": [
+          61
+        ],
+        "help": null,
+        "id": 51,
+        "label": "Block the attacker",
+        "source": null,
+        "verb": "declare_blockers"
+      },
+      "ordinal": 5,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-5",
+        "expected_revision": 15,
+        "match_id": "fixture-match",
+        "offer_id": 51,
+        "prompt_id": 105
+      },
+      "presentation": [
+        {
+          "caused_by": "study-index-command-5",
+          "from_revision": 15,
+          "group": 150,
+          "importance": "emphasized",
+          "kind": {
+            "attacker": {
+              "entity": 62,
+              "incarnation": 0
+            },
+            "blockers": [
+              {
+                "entity": 61,
+                "incarnation": 0
+              }
+            ],
+            "kind": "blocked"
+          },
+          "seq": 150,
+          "sound": null,
+          "suggested_ms": 0,
+          "to_revision": 16
+        }
+      ]
+    },
+    {
+      "automatic": true,
+      "event_cursor": 1060,
+      "frame": {
+        "action_space": "PRIORITY",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "20595d57f9c2895d4f614594a1d7ba37cd9f83285a1926421ddd0c9cdadf03ec",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "PASS",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Pass priority",
+            "focus": [],
+            "help": null,
+            "id": 60,
+            "label": "Pass priority",
+            "source": null,
+            "verb": "pass_priority"
+          },
+          {
+            "action_type": "CAST",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Cast optional spell",
+            "focus": [
+              71
+            ],
+            "help": null,
+            "id": 61,
+            "label": "Cast optional spell",
+            "source": null,
+            "verb": "cast"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "POSTCOMBAT_MAIN_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 106,
+          "instruction": "Choose an action",
+          "kind": "priority",
+          "title": "Recorded decision 6"
+        },
+        "protocol": 1,
+        "revision": 16,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "PASS",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Pass priority",
+        "focus": [],
+        "help": null,
+        "id": 60,
+        "label": "Pass priority",
+        "source": null,
+        "verb": "pass_priority"
+      },
+      "ordinal": 6,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-6",
+        "expected_revision": 16,
+        "match_id": "fixture-match",
+        "offer_id": 60,
+        "prompt_id": 106
+      },
+      "presentation": []
+    },
+    {
+      "automatic": false,
+      "event_cursor": 1070,
+      "frame": {
+        "action_space": "CHOOSE_TARGET",
+        "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "content_hash": "legacy-content-unversioned",
+        "frame_hash": "ded8b6bdb7dae71619e9620125d8cdf3f17c2534e3531a329bcda47589da33f1",
+        "match_id": "fixture-match",
+        "offers": [
+          {
+            "action_type": "CHOOSE_TARGET",
+            "actor": 0,
+            "choices": [],
+            "confirm_label": "Only legal target",
+            "focus": [
+              1
+            ],
+            "help": null,
+            "id": 70,
+            "label": "Only legal target",
+            "source": null,
+            "verb": "choose"
+          }
+        ],
+        "projection": {
+          "agent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "library_count": 16,
+            "life": 20,
+            "player_index": 0,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "game_over": false,
+          "opponent": {
+            "battlefield": [],
+            "exile": [],
+            "graveyard": [],
+            "hand": [],
+            "hand_hidden_count": 7,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "library_count": 13,
+            "life": 20,
+            "player_index": 1,
+            "stack": [],
+            "zone_counts": {}
+          },
+          "turn": {
+            "active_player_id": 0,
+            "agent_player_id": 0,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "END_STEP",
+            "turn_number": 2
+          },
+          "won": false
+        },
+        "prompt": {
+          "actor": 0,
+          "id": 107,
+          "instruction": "Choose an action",
+          "kind": "choose_target",
+          "title": "Recorded decision 7"
+        },
+        "protocol": 1,
+        "revision": 17,
+        "status": "ready",
+        "stops": {
+          "auto_pass": false,
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true
+        },
+        "winner": null
+      },
+      "offer": {
+        "action_type": "CHOOSE_TARGET",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Only legal target",
+        "focus": [
+          1
+        ],
+        "help": null,
+        "id": 70,
+        "label": "Only legal target",
+        "source": null,
+        "verb": "choose"
+      },
+      "ordinal": 7,
+      "played": {
+        "answers": [],
+        "command_id": "study-index-command-7",
+        "expected_revision": 17,
+        "match_id": "fixture-match",
+        "offer_id": 70,
+        "prompt_id": 107
+      },
+      "presentation": []
+    }
+  ],
+  "source_replay_id": "study-index/curated-recorded-decisions-v1",
+  "version": 1
+}

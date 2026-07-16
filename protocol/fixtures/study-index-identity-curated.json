@@ -1,0 +1,27 @@
+{
+  "analysis_budget": {
+    "id": "study-fixture-64n-8w-8r",
+    "max_nodes": 64,
+    "rollouts_per_world": 8,
+    "sampled_worlds": 8
+  },
+  "artifact_id": "study-decision-index-curated-v1",
+  "content_pack": {
+    "asset_manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+    "content_hash": "legacy-content-unversioned",
+    "id": "tla-ur-lessons-vs-gw-allies",
+    "version": "1.0.0"
+  },
+  "engine": {
+    "build_sha256": "3194068e434f1e2f050c99a33f5fb6eb35e2437e07c2e233c01a565ee01f09e0",
+    "version": "managym-python-adapter"
+  },
+  "knowledge_scope": "historical_viewer",
+  "match_id": "fixture-match",
+  "model": {
+    "checkpoint_sha256": "9168f071c207a4daec4b396b9c829fdf0936fe37c786bd6d1c3d93c37cb15a78",
+    "id": "structured-policy-v1"
+  },
+  "source_replay_id": "study-index/curated-recorded-decisions-v1",
+  "source_replay_sha256": "de5a3a75fc303419fddc9ae374fb22b737f5b105968a5f80b9d8d7ff1759b978"
+}

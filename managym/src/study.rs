@@ -9,7 +9,10 @@ use std::collections::BTreeSet;
 use schemars::JsonSchema;
 use serde::{de, Deserialize, Deserializer, Serialize};
 
-use crate::experience::{Command, ExperienceFrame, InteractionOffer, OfferId, PlayerId, PromptId};
+use crate::experience::{
+    Command, ExperienceFrame, InteractionOffer, OfferId, PlayerId, PresentationEvent, PromptId,
+    ReplayCursor,
+};
 
 #[derive(Clone, Copy, Debug, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(transparent)]
@@ -82,6 +85,276 @@ pub struct StudyIdentity {
     pub model: ModelIdentity,
     pub analysis_budget: AnalysisBudgetIdentity,
     pub knowledge_scope: KnowledgeScope,
+}
+
+/// One exact historical decision supplied by Game's canonical replay seam.
+///
+/// Study consumes these objects as recorded. It never reconstructs a frame,
+/// offer, command, or semantic event span from adjacent snapshots.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordedDecision {
+    pub ordinal: u32,
+    pub event_cursor: ReplayCursor,
+    pub automatic: bool,
+    pub frame: ExperienceFrame,
+    pub offer: InteractionOffer,
+    pub played: Command,
+    pub presentation: Vec<PresentationEvent>,
+}
+
+/// Closed, viewer-safe input boundary for the pure Study index consumer.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordedDecisionInput {
+    pub version: StudyVersion,
+    pub source_replay_id: String,
+    pub decision_count: u32,
+    pub decisions: Vec<RecordedDecision>,
+}
+
+impl RecordedDecisionInput {
+    pub fn validate(&self) -> Result<(), String> {
+        if usize::try_from(self.decision_count).ok() != Some(self.decisions.len()) {
+            return Err("declared decision count does not match input length".into());
+        }
+
+        let mut previous_cursor = None;
+        for (expected_ordinal, decision) in self.decisions.iter().enumerate() {
+            if usize::try_from(decision.ordinal).ok() != Some(expected_ordinal) {
+                return Err(format!(
+                    "decision {}: ordinals must be contiguous and preserve source order",
+                    decision.ordinal
+                ));
+            }
+            if previous_cursor.is_some_and(|cursor| decision.event_cursor.0 <= cursor) {
+                return Err(format!(
+                    "decision {}: event cursors must strictly increase",
+                    decision.ordinal
+                ));
+            }
+            previous_cursor = Some(decision.event_cursor.0);
+            validate_recorded_decision(decision)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct StudyDecisionId(pub String);
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StudyDecisionKind {
+    Priority,
+    Targeting,
+    Attack,
+    Block,
+    Other,
+}
+
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum LandmarkReason {
+    PriorityCommitment,
+    PriorityResponse,
+    TargetSelection,
+    AttackDeclaration,
+    BlockDeclaration,
+    BranchingChoice,
+    PublicSemanticImpact,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StudyDecision {
+    pub id: StudyDecisionId,
+    pub ordinal: u32,
+    pub viewer: PlayerId,
+    pub event_cursor: ReplayCursor,
+    pub automatic: bool,
+    pub kind: StudyDecisionKind,
+    pub frame: ExperienceFrame,
+    pub offer: InteractionOffer,
+    pub played: Command,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RankedStudyLandmark {
+    pub decision_id: StudyDecisionId,
+    pub rank: u8,
+    pub reasons: Vec<LandmarkReason>,
+}
+
+/// Lossless navigation index plus a deliberately separate recommendation list.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StudyDecisionIndex {
+    pub version: StudyVersion,
+    pub identity: StudyIdentity,
+    pub decisions: Vec<StudyDecision>,
+    pub landmarks: Vec<RankedStudyLandmark>,
+}
+
+impl StudyDecisionIndex {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.identity.knowledge_scope != KnowledgeScope::HistoricalViewer {
+            return Err("study v1 requires historical_viewer knowledge".into());
+        }
+
+        let mut ids = BTreeSet::new();
+        let mut previous_cursor = None;
+        for (expected_ordinal, decision) in self.decisions.iter().enumerate() {
+            let context = format!("decision {}", decision.ordinal);
+            if usize::try_from(decision.ordinal).ok() != Some(expected_ordinal) {
+                return Err(format!(
+                    "{context}: ordinals must be contiguous and preserve source order"
+                ));
+            }
+            if previous_cursor.is_some_and(|cursor| decision.event_cursor.0 <= cursor) {
+                return Err(format!("{context}: event cursors must strictly increase"));
+            }
+            previous_cursor = Some(decision.event_cursor.0);
+            if !ids.insert(decision.id.clone()) {
+                return Err(format!("{context}: duplicate study decision id"));
+            }
+            validate_index_decision(decision, &self.identity, &context)?;
+        }
+
+        if self.landmarks.len() > 7 {
+            return Err("study decision index cannot recommend more than seven landmarks".into());
+        }
+        let mut landmark_ids = BTreeSet::new();
+        for (offset, landmark) in self.landmarks.iter().enumerate() {
+            let expected_rank = u8::try_from(offset + 1).map_err(|error| error.to_string())?;
+            if landmark.rank != expected_rank {
+                return Err("landmark ranks must be contiguous and one-based".into());
+            }
+            let decision = self
+                .decisions
+                .iter()
+                .find(|decision| decision.id == landmark.decision_id)
+                .ok_or_else(|| "landmark references a missing decision".to_string())?;
+            if !landmark_ids.insert(landmark.decision_id.clone()) {
+                return Err("a decision can be recommended only once".into());
+            }
+            if decision.automatic || decision.frame.offers.len() <= 1 {
+                return Err("automatic or forced decisions cannot be landmarks".into());
+            }
+            if landmark.reasons.is_empty() {
+                return Err("landmark reasons cannot be empty".into());
+            }
+            let reason_set = landmark.reasons.iter().copied().collect::<BTreeSet<_>>();
+            if reason_set.len() != landmark.reasons.len()
+                || reason_set.into_iter().collect::<Vec<_>>() != landmark.reasons
+            {
+                return Err("landmark reasons must be unique and enum-ordered".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+fn validate_recorded_decision(decision: &RecordedDecision) -> Result<(), String> {
+    let context = format!("decision {}", decision.ordinal);
+    let prompt = decision
+        .frame
+        .prompt
+        .as_ref()
+        .ok_or_else(|| format!("{context}: decision frame has no prompt"))?;
+    if prompt.actor != decision.offer.actor {
+        return Err(format!("{context}: prompt and offer actors differ"));
+    }
+    let frame_offer = decision
+        .frame
+        .offers
+        .iter()
+        .find(|offer| offer.id == decision.offer.id)
+        .ok_or_else(|| format!("{context}: selected offer is absent from frame"))?;
+    if serde_json::to_value(frame_offer).map_err(|error| error.to_string())?
+        != serde_json::to_value(&decision.offer).map_err(|error| error.to_string())?
+    {
+        return Err(format!(
+            "{context}: selected offer differs from frame offer"
+        ));
+    }
+    if decision.played.match_id != decision.frame.match_id
+        || decision.played.expected_revision != decision.frame.revision
+        || decision.played.prompt_id != prompt.id
+        || decision.played.offer_id != decision.offer.id
+    {
+        return Err(format!("{context}: played command identity drifted"));
+    }
+    if !decision.frame.projection.opponent.hand.is_empty() {
+        return Err(format!(
+            "{context}: opponent-private hand identities are forbidden"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_index_decision(
+    decision: &StudyDecision,
+    identity: &StudyIdentity,
+    context: &str,
+) -> Result<(), String> {
+    let frame = &decision.frame;
+    if frame.match_id.0 != identity.match_id {
+        return Err(format!(
+            "{context}: frame match does not match study identity"
+        ));
+    }
+    if frame.content_hash.0 != identity.content_pack.content_hash
+        || frame.asset_manifest_hash.0 != identity.content_pack.asset_manifest_sha256
+    {
+        return Err(format!("{context}: frame content pack hashes drifted"));
+    }
+    if let Some(asset_pack) = frame.asset_pack.as_ref() {
+        if asset_pack.id != identity.content_pack.id
+            || asset_pack.version != identity.content_pack.version
+            || asset_pack.manifest_sha256 != identity.content_pack.asset_manifest_sha256
+        {
+            return Err(format!("{context}: frame asset pack identity drifted"));
+        }
+    }
+    if !frame.projection.opponent.hand.is_empty() {
+        return Err(format!(
+            "{context}: opponent-private hand identities are forbidden"
+        ));
+    }
+    let prompt = frame
+        .prompt
+        .as_ref()
+        .ok_or_else(|| format!("{context}: decision frame has no prompt"))?;
+    if prompt.actor != decision.viewer || decision.offer.actor != decision.viewer {
+        return Err(format!(
+            "{context}: viewer, prompt, or offer binding drifted"
+        ));
+    }
+    let frame_offer = frame
+        .offers
+        .iter()
+        .find(|offer| offer.id == decision.offer.id)
+        .ok_or_else(|| format!("{context}: selected offer is absent from frame"))?;
+    if serde_json::to_value(frame_offer).map_err(|error| error.to_string())?
+        != serde_json::to_value(&decision.offer).map_err(|error| error.to_string())?
+    {
+        return Err(format!(
+            "{context}: selected offer differs from frame offer"
+        ));
+    }
+    if decision.played.match_id != frame.match_id
+        || decision.played.expected_revision != frame.revision
+        || decision.played.prompt_id != prompt.id
+        || decision.played.offer_id != decision.offer.id
+    {
+        return Err(format!("{context}: played command identity drifted"));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]

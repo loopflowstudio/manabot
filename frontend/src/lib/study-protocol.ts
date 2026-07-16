@@ -2,6 +2,7 @@ import type {
   Command,
   ExperienceFrame,
   InteractionOffer,
+  PresentationEvent,
 } from './types';
 
 export const STUDY_VERSION = 1 as const;
@@ -43,6 +44,66 @@ export interface StudyIdentity {
   model: ModelIdentity;
   analysis_budget: AnalysisBudgetIdentity;
   knowledge_scope: KnowledgeScope;
+}
+
+export interface RecordedDecision {
+  ordinal: number;
+  event_cursor: number;
+  automatic: boolean;
+  frame: ExperienceFrame;
+  offer: InteractionOffer;
+  played: Command;
+  presentation: PresentationEvent[];
+}
+
+export interface RecordedDecisionInput {
+  version: StudyVersion;
+  source_replay_id: string;
+  decision_count: number;
+  decisions: RecordedDecision[];
+}
+
+export type StudyDecisionKind =
+  | 'priority'
+  | 'targeting'
+  | 'attack'
+  | 'block'
+  | 'other';
+
+export const LANDMARK_REASONS = [
+  'priority_commitment',
+  'priority_response',
+  'target_selection',
+  'attack_declaration',
+  'block_declaration',
+  'branching_choice',
+  'public_semantic_impact',
+] as const;
+export type LandmarkReason = (typeof LANDMARK_REASONS)[number];
+
+export interface StudyDecision {
+  id: string;
+  ordinal: number;
+  viewer: number;
+  event_cursor: number;
+  automatic: boolean;
+  kind: StudyDecisionKind;
+  frame: ExperienceFrame;
+  offer: InteractionOffer;
+  played: Command;
+}
+
+export interface RankedStudyLandmark {
+  decision_id: string;
+  rank: number;
+  reasons: LandmarkReason[];
+}
+
+export interface StudyDecisionIndex {
+  version: StudyVersion;
+  identity: StudyIdentity;
+  decisions: StudyDecision[];
+  landmarks: RankedStudyLandmark[];
 }
 
 export interface DecisionAlternative {
@@ -302,4 +363,146 @@ export function assertViewerSafeStudyArtifact(artifact: StudyArtifact): void {
       fail(`${landmark.id}: invalid uncertainty`);
     }
   }
+}
+
+function assertRecordedBinding(
+  frame: ExperienceFrame,
+  offer: InteractionOffer,
+  played: Command,
+  viewer: number,
+  context: string,
+): void {
+  if (frame.prompt === null) {
+    fail(`${context}: decision frame has no prompt`);
+  }
+  if (frame.prompt.actor !== viewer || offer.actor !== viewer) {
+    fail(`${context}: viewer, prompt, or offer binding drifted`);
+  }
+  const frameOffer = frame.offers.find(({ id }) => id === offer.id);
+  if (frameOffer === undefined || !sameJson(frameOffer, offer)) {
+    fail(`${context}: selected offer differs from frame offer`);
+  }
+  if (
+    played.match_id !== frame.match_id
+    || played.expected_revision !== frame.revision
+    || played.prompt_id !== frame.prompt.id
+    || played.offer_id !== offer.id
+  ) {
+    fail(`${context}: played command identity drifted`);
+  }
+  if (frame.projection.opponent.hand.length !== 0) {
+    fail(`${context}: opponent-private hand identities are forbidden`);
+  }
+}
+
+/** Validate the closed canonical-decision consumer boundary after JSON Schema. */
+export function assertViewerSafeRecordedDecisionInput(
+  input: RecordedDecisionInput,
+): void {
+  if (input.decision_count !== input.decisions.length) {
+    fail('declared decision count does not match input length');
+  }
+  let previousCursor: number | undefined;
+  input.decisions.forEach((decision, ordinal) => {
+    const context = `decision ${decision.ordinal}`;
+    if (decision.ordinal !== ordinal) {
+      fail(`${context}: ordinals must be contiguous and preserve source order`);
+    }
+    if (previousCursor !== undefined && decision.event_cursor <= previousCursor) {
+      fail(`${context}: event cursors must strictly increase`);
+    }
+    previousCursor = decision.event_cursor;
+    if (decision.frame.prompt === null) {
+      fail(`${context}: decision frame has no prompt`);
+    }
+    assertRecordedBinding(
+      decision.frame,
+      decision.offer,
+      decision.played,
+      decision.frame.prompt.actor,
+      context,
+    );
+  });
+}
+
+/** Validate the complete navigation index and separate landmark references. */
+export function assertViewerSafeStudyDecisionIndex(index: StudyDecisionIndex): void {
+  if (index.identity.knowledge_scope !== 'historical_viewer') {
+    fail('study v1 requires historical_viewer knowledge');
+  }
+
+  const decisionIds = new Set<string>();
+  let previousCursor: number | undefined;
+  index.decisions.forEach((decision, ordinal) => {
+    const context = `decision ${decision.ordinal}`;
+    if (decision.ordinal !== ordinal) {
+      fail(`${context}: ordinals must be contiguous and preserve source order`);
+    }
+    if (previousCursor !== undefined && decision.event_cursor <= previousCursor) {
+      fail(`${context}: event cursors must strictly increase`);
+    }
+    previousCursor = decision.event_cursor;
+    if (decisionIds.has(decision.id)) {
+      fail(`${context}: duplicate study decision id`);
+    }
+    decisionIds.add(decision.id);
+    if (decision.frame.match_id !== index.identity.match_id) {
+      fail(`${context}: frame match does not match study identity`);
+    }
+    const pack = index.identity.content_pack;
+    if (
+      decision.frame.content_hash !== pack.content_hash
+      || decision.frame.asset_manifest_hash !== pack.asset_manifest_sha256
+    ) {
+      fail(`${context}: frame content pack hashes drifted`);
+    }
+    if (
+      decision.frame.asset_pack !== null
+      && decision.frame.asset_pack !== undefined
+      && (
+        decision.frame.asset_pack.id !== pack.id
+        || decision.frame.asset_pack.version !== pack.version
+        || decision.frame.asset_pack.manifest_sha256 !== pack.asset_manifest_sha256
+      )
+    ) {
+      fail(`${context}: frame asset pack identity drifted`);
+    }
+    assertRecordedBinding(
+      decision.frame,
+      decision.offer,
+      decision.played,
+      decision.viewer,
+      context,
+    );
+  });
+
+  if (index.landmarks.length > 7) {
+    fail('study decision index cannot recommend more than seven landmarks');
+  }
+  const recommended = new Set<string>();
+  index.landmarks.forEach((landmark, offset) => {
+    if (landmark.rank !== offset + 1) {
+      fail('landmark ranks must be contiguous and one-based');
+    }
+    const decision = index.decisions.find(({ id }) => id === landmark.decision_id);
+    if (decision === undefined) {
+      fail('landmark references a missing decision');
+    }
+    if (recommended.has(landmark.decision_id)) {
+      fail('a decision can be recommended only once');
+    }
+    recommended.add(landmark.decision_id);
+    if (decision.automatic || decision.frame.offers.length <= 1) {
+      fail('automatic or forced decisions cannot be landmarks');
+    }
+    if (landmark.reasons.length === 0) {
+      fail('landmark reasons cannot be empty');
+    }
+    const expectedReasons = [...new Set(landmark.reasons)].sort(
+      (left, right) => LANDMARK_REASONS.indexOf(left) - LANDMARK_REASONS.indexOf(right),
+    );
+    if (!sameJson(landmark.reasons, expectedReasons)) {
+      fail('landmark reasons must be unique and enum-ordered');
+    }
+  });
 }

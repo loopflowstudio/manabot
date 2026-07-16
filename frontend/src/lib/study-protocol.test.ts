@@ -7,7 +7,11 @@ import { describe, expect, it } from 'vitest';
 import {
   STUDY_VERSION,
   assertViewerSafeStudyArtifact,
+  assertViewerSafeRecordedDecisionInput,
+  assertViewerSafeStudyDecisionIndex,
+  type RecordedDecisionInput,
   type StudyArtifact,
+  type StudyDecisionIndex,
 } from './study-protocol';
 
 interface SchemaNode {
@@ -32,6 +36,30 @@ const fixture: unknown = JSON.parse(
 const sourceReplay: unknown = JSON.parse(
   readFileSync(new URL('../../../protocol/fixtures/bolt-target.json', import.meta.url), 'utf8'),
 );
+const recordedDecisionSchema = JSON.parse(
+  readFileSync(
+    new URL('../../../protocol/study-recorded-decisions-v1.schema.json', import.meta.url),
+    'utf8',
+  ),
+) as SchemaNode;
+const decisionIndexSchema = JSON.parse(
+  readFileSync(new URL('../../../protocol/study-index-v1.schema.json', import.meta.url), 'utf8'),
+) as SchemaNode;
+const recordedDecisionFixture: unknown = JSON.parse(
+  readFileSync(
+    new URL(
+      '../../../protocol/fixtures/recorded-match-decisions-curated.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
+);
+const decisionIndexFixture: unknown = JSON.parse(
+  readFileSync(
+    new URL('../../../protocol/fixtures/study-decision-index-curated.json', import.meta.url),
+    'utf8',
+  ),
+);
 const source = ts.createSourceFile(
   'study-protocol.ts',
   readFileSync(new URL('./study-protocol.ts', import.meta.url), 'utf8'),
@@ -41,6 +69,10 @@ const source = ts.createSourceFile(
 );
 const validate = new Ajv2020({ strict: false, validateFormats: false })
   .compile<StudyArtifact>(schema);
+const validateRecordedDecisions = new Ajv2020({ strict: false, validateFormats: false })
+  .compile<RecordedDecisionInput>(recordedDecisionSchema);
+const validateDecisionIndex = new Ajv2020({ strict: false, validateFormats: false })
+  .compile<StudyDecisionIndex>(decisionIndexSchema);
 
 function sorted(values: readonly string[]): string[] {
   return [...values].sort();
@@ -110,6 +142,36 @@ describe('study protocol v1', () => {
     expect(JSON.parse(JSON.stringify(artifact))).toEqual(fixture);
   });
 
+  it('preserves every canonical decision while ranking a separate landmark list', () => {
+    expect(
+      validateRecordedDecisions(recordedDecisionFixture),
+      JSON.stringify(validateRecordedDecisions.errors),
+    ).toBe(true);
+    expect(
+      validateDecisionIndex(decisionIndexFixture),
+      JSON.stringify(validateDecisionIndex.errors),
+    ).toBe(true);
+    const recorded = structuredClone(recordedDecisionFixture) as RecordedDecisionInput;
+    const index = structuredClone(decisionIndexFixture) as StudyDecisionIndex;
+    expect(() => assertViewerSafeRecordedDecisionInput(recorded)).not.toThrow();
+    expect(() => assertViewerSafeStudyDecisionIndex(index)).not.toThrow();
+    expect(recorded.decision_count).toBe(8);
+    expect(index.decisions).toHaveLength(8);
+    expect(index.landmarks).toHaveLength(5);
+    for (const [ordinal, decision] of index.decisions.entries()) {
+      expect(decision.ordinal).toBe(ordinal);
+      expect(decision.event_cursor).toBe(recorded.decisions[ordinal].event_cursor);
+      expect(decision.frame).toEqual(recorded.decisions[ordinal].frame);
+      expect(decision.offer).toEqual(recorded.decisions[ordinal].offer);
+      expect(decision.played).toEqual(recorded.decisions[ordinal].played);
+    }
+    const recommended = new Set(index.landmarks.map(({ decision_id }) => decision_id));
+    expect(recommended.has(index.decisions[3].id)).toBe(true);
+    expect(recommended.has(index.decisions[4].id)).toBe(false);
+    expect(recommended.has(index.decisions[6].id)).toBe(false);
+    expect(recommended.has(index.decisions[7].id)).toBe(false);
+  });
+
   it('keeps TypeScript fields and requiredness aligned to the Rust schema', () => {
     expectShape('StudyArtifact', schema);
     for (const name of [
@@ -136,6 +198,20 @@ describe('study protocol v1', () => {
     }
     expect(schema.$defs?.StudyVersion.minimum).toBe(STUDY_VERSION);
     expect(schema.$defs?.StudyVersion.maximum).toBe(STUDY_VERSION);
+
+    expectShape('RecordedDecisionInput', recordedDecisionSchema);
+    expectShape('StudyDecisionIndex', decisionIndexSchema);
+    for (const [name, root] of [
+      ['RecordedDecision', recordedDecisionSchema],
+      ['StudyDecision', decisionIndexSchema],
+      ['RankedStudyLandmark', decisionIndexSchema],
+    ] as const) {
+      const node = root.$defs?.[name];
+      if (!node) {
+        throw new Error(`missing Rust schema definition ${name}`);
+      }
+      expectShape(name, node);
+    }
   });
 
   it('rejects opponent-private hand identities at the study boundary', () => {
@@ -176,6 +252,40 @@ describe('study protocol v1', () => {
     expect(validate(promptDrift)).toBe(true);
     expect(() => assertViewerSafeStudyArtifact(promptDrift)).toThrow(
       /viewer, prompt, or offer binding/,
+    );
+  });
+
+  it('rejects private decisions and malformed landmark references at new boundaries', () => {
+    const privateInput = structuredClone(recordedDecisionFixture) as RecordedDecisionInput;
+    privateInput.decisions[0].frame.projection.opponent.hand.push({
+      id: 99,
+      registry_key: 99,
+      name: 'Secret Counterspell',
+      zone: 'HAND',
+      owner_id: 0,
+      power: 0,
+      toughness: 0,
+      mana_value: 2,
+      types: {
+        is_creature: false,
+        is_land: false,
+        is_spell: true,
+        is_artifact: false,
+        is_enchantment: false,
+        is_planeswalker: false,
+        is_battle: false,
+      },
+    });
+    expect(validateRecordedDecisions(privateInput)).toBe(true);
+    expect(() => assertViewerSafeRecordedDecisionInput(privateInput)).toThrow(
+      /opponent-private hand/,
+    );
+
+    const invalidIndex = structuredClone(decisionIndexFixture) as StudyDecisionIndex;
+    invalidIndex.landmarks[0].decision_id = 'missing-decision';
+    expect(validateDecisionIndex(invalidIndex)).toBe(true);
+    expect(() => assertViewerSafeStudyDecisionIndex(invalidIndex)).toThrow(
+      /missing decision/,
     );
   });
 });

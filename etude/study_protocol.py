@@ -10,6 +10,7 @@ from etude.experience_protocol import (
     Command,
     ExperienceFrame,
     InteractionOffer,
+    PresentationEvent,
     ProtocolModel,
     UInt8,
     UInt32,
@@ -57,6 +58,194 @@ class StudyIdentity(ProtocolModel):
     model: ModelIdentity
     analysis_budget: AnalysisBudgetIdentity
     knowledge_scope: KnowledgeScope
+
+
+class RecordedDecision(ProtocolModel):
+    ordinal: UInt32
+    event_cursor: UInt64
+    automatic: bool
+    frame: ExperienceFrame
+    offer: InteractionOffer
+    played: Command
+    presentation: list[PresentationEvent]
+
+
+class RecordedDecisionInput(ProtocolModel):
+    version: Literal[1]
+    source_replay_id: str
+    decision_count: UInt32
+    decisions: list[RecordedDecision]
+
+    @model_validator(mode="after")
+    def validate_chronology_and_bindings(self) -> "RecordedDecisionInput":
+        if self.decision_count != len(self.decisions):
+            raise ValueError("declared decision count does not match input length")
+        previous_cursor: int | None = None
+        for expected_ordinal, decision in enumerate(self.decisions):
+            context = f"decision {decision.ordinal}"
+            if decision.ordinal != expected_ordinal:
+                raise ValueError(
+                    f"{context}: ordinals must be contiguous and preserve source order"
+                )
+            if previous_cursor is not None and decision.event_cursor <= previous_cursor:
+                raise ValueError(f"{context}: event cursors must strictly increase")
+            previous_cursor = decision.event_cursor
+            self._validate_decision(decision, context)
+        return self
+
+    @staticmethod
+    def _validate_decision(decision: RecordedDecision, context: str) -> None:
+        frame = decision.frame
+        prompt = frame.prompt
+        if prompt is None:
+            raise ValueError(f"{context}: decision frame has no prompt")
+        if prompt.actor != decision.offer.actor:
+            raise ValueError(f"{context}: prompt and offer actors differ")
+        frame_offer = next(
+            (offer for offer in frame.offers if offer.id == decision.offer.id), None
+        )
+        if frame_offer is None or frame_offer != decision.offer:
+            raise ValueError(f"{context}: selected offer differs from frame offer")
+        if (
+            decision.played.match_id != frame.match_id
+            or decision.played.expected_revision != frame.revision
+            or decision.played.prompt_id != prompt.id
+            or decision.played.offer_id != decision.offer.id
+        ):
+            raise ValueError(f"{context}: played command identity drifted")
+        if frame.projection.opponent.hand:
+            raise ValueError(
+                f"{context}: opponent-private hand identities are forbidden"
+            )
+
+
+class StudyDecisionKind(str, Enum):
+    PRIORITY = "priority"
+    TARGETING = "targeting"
+    ATTACK = "attack"
+    BLOCK = "block"
+    OTHER = "other"
+
+
+class LandmarkReason(str, Enum):
+    PRIORITY_COMMITMENT = "priority_commitment"
+    PRIORITY_RESPONSE = "priority_response"
+    TARGET_SELECTION = "target_selection"
+    ATTACK_DECLARATION = "attack_declaration"
+    BLOCK_DECLARATION = "block_declaration"
+    BRANCHING_CHOICE = "branching_choice"
+    PUBLIC_SEMANTIC_IMPACT = "public_semantic_impact"
+
+
+class StudyDecision(ProtocolModel):
+    id: str
+    ordinal: UInt32
+    viewer: UInt8
+    event_cursor: UInt64
+    automatic: bool
+    kind: StudyDecisionKind
+    frame: ExperienceFrame
+    offer: InteractionOffer
+    played: Command
+
+
+class RankedStudyLandmark(ProtocolModel):
+    decision_id: str
+    rank: UInt8
+    reasons: list[LandmarkReason]
+
+
+class StudyDecisionIndex(ProtocolModel):
+    version: Literal[1]
+    identity: StudyIdentity
+    decisions: list[StudyDecision]
+    landmarks: list[RankedStudyLandmark]
+
+    @model_validator(mode="after")
+    def validate_bindings_and_recommendations(self) -> "StudyDecisionIndex":
+        if self.identity.knowledge_scope is not KnowledgeScope.HISTORICAL_VIEWER:
+            raise ValueError("study v1 requires historical_viewer knowledge")
+
+        ids: set[str] = set()
+        previous_cursor: int | None = None
+        for expected_ordinal, decision in enumerate(self.decisions):
+            context = f"decision {decision.ordinal}"
+            if decision.ordinal != expected_ordinal:
+                raise ValueError(
+                    f"{context}: ordinals must be contiguous and preserve source order"
+                )
+            if previous_cursor is not None and decision.event_cursor <= previous_cursor:
+                raise ValueError(f"{context}: event cursors must strictly increase")
+            previous_cursor = decision.event_cursor
+            if decision.id in ids:
+                raise ValueError(f"{context}: duplicate study decision id")
+            ids.add(decision.id)
+            self._validate_decision(decision, context)
+
+        if len(self.landmarks) > 7:
+            raise ValueError(
+                "study decision index cannot recommend more than seven landmarks"
+            )
+        landmark_ids: set[str] = set()
+        reason_order = list(LandmarkReason)
+        decisions_by_id = {decision.id: decision for decision in self.decisions}
+        for expected_rank, landmark in enumerate(self.landmarks, start=1):
+            if landmark.rank != expected_rank:
+                raise ValueError("landmark ranks must be contiguous and one-based")
+            decision = decisions_by_id.get(landmark.decision_id)
+            if decision is None:
+                raise ValueError("landmark references a missing decision")
+            if landmark.decision_id in landmark_ids:
+                raise ValueError("a decision can be recommended only once")
+            landmark_ids.add(landmark.decision_id)
+            if decision.automatic or len(decision.frame.offers) <= 1:
+                raise ValueError("automatic or forced decisions cannot be landmarks")
+            if not landmark.reasons:
+                raise ValueError("landmark reasons cannot be empty")
+            expected_reasons = sorted(set(landmark.reasons), key=reason_order.index)
+            if landmark.reasons != expected_reasons:
+                raise ValueError("landmark reasons must be unique and enum-ordered")
+        return self
+
+    def _validate_decision(self, decision: StudyDecision, context: str) -> None:
+        frame = decision.frame
+        pack = self.identity.content_pack
+        if frame.match_id != self.identity.match_id:
+            raise ValueError(f"{context}: frame match does not match study identity")
+        if (
+            frame.content_hash != pack.content_hash
+            or frame.asset_manifest_hash != pack.asset_manifest_sha256
+        ):
+            raise ValueError(f"{context}: frame content pack hashes drifted")
+        if frame.asset_pack is not None and (
+            frame.asset_pack.id != pack.id
+            or frame.asset_pack.version != pack.version
+            or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
+        ):
+            raise ValueError(f"{context}: frame asset pack identity drifted")
+        if frame.projection.opponent.hand:
+            raise ValueError(
+                f"{context}: opponent-private hand identities are forbidden"
+            )
+        prompt = frame.prompt
+        if (
+            prompt is None
+            or prompt.actor != decision.viewer
+            or decision.offer.actor != decision.viewer
+        ):
+            raise ValueError(f"{context}: viewer, prompt, or offer binding drifted")
+        frame_offer = next(
+            (offer for offer in frame.offers if offer.id == decision.offer.id), None
+        )
+        if frame_offer is None or frame_offer != decision.offer:
+            raise ValueError(f"{context}: selected offer differs from frame offer")
+        if (
+            decision.played.match_id != frame.match_id
+            or decision.played.expected_revision != frame.revision
+            or decision.played.prompt_id != prompt.id
+            or decision.played.offer_id != decision.offer.id
+        ):
+            raise ValueError(f"{context}: played command identity drifted")
 
 
 class DecisionAlternative(ProtocolModel):
@@ -179,7 +368,9 @@ class StudyArtifact(ProtocolModel):
         if len(alternative_ids) != len(landmark.alternatives):
             raise ValueError(f"{context}: duplicate alternative")
         for alternative in landmark.alternatives:
-            self._validate_command(alternative.command, landmark, context, selected=False)
+            self._validate_command(
+                alternative.command, landmark, context, selected=False
+            )
 
         evidence = landmark.evidence
         for label, ids in (
@@ -231,8 +422,6 @@ class StudyArtifact(ProtocolModel):
             or command.expected_revision != landmark.frame.revision
             or command.prompt_id != landmark.prompt_id
             or (selected and command.offer_id != landmark.offer_id)
-            or not any(
-                offer.id == command.offer_id for offer in landmark.frame.offers
-            )
+            or not any(offer.id == command.offer_id for offer in landmark.frame.offers)
         ):
             raise ValueError(f"{context}: command identity drifted")
