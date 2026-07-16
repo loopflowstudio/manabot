@@ -39,6 +39,10 @@ META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
 # per action (engine order), -1.0 padding on invalid slots. Present in shards
 # generated from exp-07 onward; loaders treat it as optional.
 SCORE_KEY = "scores"
+# Future tree-search teachers write per-edge root visit counts and optional
+# root values under these stable columns. Legacy flat-MC shards omit them.
+VISIT_COUNT_KEY = "visit_counts"
+ROOT_VALUE_KEY = "root_value"
 
 
 # -----------------------------------------------------------------------------
@@ -192,9 +196,7 @@ def generate_selfplay_shard(
 
     provenance = {
         "round": round_index,
-        "teacher_spec": {
-            k: v for k, v in teacher_spec.items() if k != "device"
-        },
+        "teacher_spec": {k: v for k, v in teacher_spec.items() if k != "device"},
         "teacher_name": teacher_name,
         "rollout_policy_checkpoint": teacher_spec.get("checkpoint"),
         "generating_opponent": teacher_name,
@@ -249,8 +251,9 @@ def load_shards(
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)
-    if all(SCORE_KEY in s for s in shards):
-        keys.append(SCORE_KEY)
+    for optional_key in (SCORE_KEY, VISIT_COUNT_KEY, ROOT_VALUE_KEY):
+        if all(optional_key in shard for shard in shards):
+            keys.append(optional_key)
     out = {key: np.concatenate([s[key] for s in shards]) for key in keys}
 
     round_cols = []
@@ -261,9 +264,7 @@ def load_shards(
             shard_round = int(_json.loads(str(shard["provenance"])).get("round", -1))
         else:
             shard_round = -1
-        round_cols.append(
-            np.full(len(shard["action"]), shard_round, dtype=np.int16)
-        )
+        round_cols.append(np.full(len(shard["action"]), shard_round, dtype=np.int16))
     out["round"] = np.concatenate(round_cols)
 
     # Game indices are only unique within a round's shard set; offset them
@@ -327,9 +328,7 @@ def _batch_tensors(
     return obs, target
 
 
-def soft_targets_from_scores(
-    scores: torch.Tensor, temperature: float
-) -> torch.Tensor:
+def soft_targets_from_scores(scores: torch.Tensor, temperature: float) -> torch.Tensor:
     """Distribution over actions from raw flat-MC scores.
 
     Scores are Monte Carlo win-probability estimates in [0, 1] (padding
