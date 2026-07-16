@@ -42,5 +42,28 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [11](exp-11-curriculum-exploitability.md) | does a stronger opponent teach better? | self-play quietly wins; the opponent installs the strategy; student robust (exploiter ≤26%) |
 | [W2-214](w2-214-structural-semantic-katas.md) | can a bounded structural encoder break the bag encoder's exact symmetry on five static semantic relations? | instrument valid; bag exactly 50%; relational arm learned order/hierarchy but failed the pre-registered trainability and cost gates — redesign optimization/capacity before interpreting the remaining katas |
 
+### Teacher program (W2-234)
+
+| report | question | verdict |
+|---|---|---|
+| [teacher0](w2-234-teacher0.md) | can a search-supervised policy/value student learn from Teacher-0? | proceed to scale-up — joint policy/value matches policy-only CE/top-1, improves held-out value Brier 0.2536→0.2043, 71%→73% vs random |
+| [teacher1](w2-234-teacher1.md) | does the determinized PUCT substrate work end-to-end? | substrate pass — tree search, node reuse, alternating backup, self-play shards all function; priors still uniform, playouts random |
+| [teacher1-pilot](w2-234-teacher1-pilot.md) | do budgets 8/32/128 give strong, legal, affordable targets? | **preregistered, unrun** — fail-closed until the terminal Teacher-0 manifest and control lock exist |
+
+### Platform evidence (W2)
+
+| report | claim proven |
+|---|---|
+| [card-conformance-audit](card-conformance-audit.md) | 55 registered cards audited vs Scryfall; 20 shell mismatches fixed; fixture + tripwire test |
+| [milestone-1](milestone-1-two-deck-slice.md) | all four rules stages landed for the UR-Lessons-vs-GW-Allies slice |
+| [opcode-alignment-v1](opcode-alignment-v1.md) | semantic-program-only encoder: 91.7% zero-shot held-out cluster accuracy vs 0.0% for opaque card-id arms |
+| [structured-policy-decoder](structured-policy-decoder.md) | structured decoder matches legacy adapter exactly (6435/6435 actions) at comparable latency — migration evidence |
+| [w2-179](w2-179-content-pack-local-diagnostic.md) | immutable ContentPack / mutable Card seam with deterministic CardDefId hashing |
+| [w2-182](w2-182-search-branching-v1.md) | full-clone branching baseline: 2,194 sims/s, clone p50 4.5µs |
+| [w2-198](w2-198-compact-clone-undo-v1.md) | compact clone+undo at parity with full clone (2,097 sims/s) with journal accounting |
+| [w2-208](w2-208-content-pack-clone-allocations.md) | exact clones share the immutable ContentPack by Arc pointer |
+| [w2-215](w2-215-semantic-projection.md) | viewer projection baseline: ~53 tokens/object p50, ~9.9µs hot projection, zero failures |
+| [w2-223](w2-223-typed-ir-interpreter.md) | generic fail-closed interpreter executes all 31 admitted programs by opcode — no card-name dispatch |
+
 (Older platform docs: [first-light-run-1](first-light-run-1.md),
 [sps-closeout](sps-closeout.md).)

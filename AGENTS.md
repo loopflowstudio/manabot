@@ -18,6 +18,13 @@ training infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config
 vars) correctly keeps manabot names. Frozen evidence — experiment IDs,
 contracts, receipts, wandb history — is never renamed.
 
+## Style
+
+- Package style guides live in each package README (`manabot/README.md`,
+  `managym/README.md`). Avoid transient comments that denote changes; pay
+  attention to file headers and README content; propose small, iterative
+  changes.
+
 ## Commands
 
 - **All Python commands run through uv.** This repo's environment is
