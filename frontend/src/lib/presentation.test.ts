@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  COMBAT_TO_TURN_PRESENTATION,
   LIGHTNING_BOLT_PRESENTATION,
   presentationBeat,
   presentationInspectorRows,
@@ -79,6 +80,64 @@ describe('Lightning Bolt presentation fixture', () => {
     expect(() =>
       validatePresentationTail(LIGHTNING_BOLT_PRESENTATION.events.slice(1), 900),
     ).toThrow(/cursor gap/);
+  });
+});
+
+describe('curated combat-to-turn presentation fixture', () => {
+  it('keeps table, replay, and inspector on the same ordered semantic facts', () => {
+    const live = createPresentationPlayer();
+    const replay = createPresentationPlayer();
+    live.enqueue(COMBAT_TO_TURN_PRESENTATION.events, COMBAT_TO_TURN_PRESENTATION.labels);
+    replay.load(COMBAT_TO_TURN_PRESENTATION);
+
+    const inspector = presentationInspectorRows(
+      COMBAT_TO_TURN_PRESENTATION.events,
+      COMBAT_TO_TURN_PRESENTATION.labels,
+    );
+    expect(COMBAT_TO_TURN_PRESENTATION.events.map((event) => event.kind.kind)).toEqual([
+      'attack_group',
+      'blocked',
+      'damage',
+      'damage',
+      'died',
+      'turn_started',
+    ]);
+    expect(inspector.map((row) => row.event)).toEqual(COMBAT_TO_TURN_PRESENTATION.events);
+
+    const liveBeats = [];
+    const replayBeats = [];
+    while (live.currentBeat && replay.currentBeat) {
+      liveBeats.push(live.currentBeat);
+      replayBeats.push(replay.currentBeat);
+      live.advance();
+      replay.advance();
+    }
+    expect(liveBeats).toEqual(replayBeats);
+    expect(liveBeats.map((beat) => beat.detail)).toEqual([
+      'Badgermole Cub attacks Hero.',
+      'Otter-Penguin blocks Badgermole Cub.',
+      'Otter-Penguin deals 2 damage to Badgermole Cub.',
+      'Badgermole Cub deals 1 damage to Otter-Penguin.',
+      'Otter-Penguin, Badgermole Cub die.',
+      "Hero's turn begins.",
+    ]);
+  });
+
+  it('supports skip, fast-forward, and reduced motion without changing combat facts', () => {
+    const player = createPresentationPlayer();
+    player.load(COMBAT_TO_TURN_PRESENTATION);
+    const facts = structuredClone(player.events);
+
+    player.setFastForward(true);
+    expect(player.effectiveDurationMs).toBe(125);
+    player.setReducedMotion(true);
+    expect(player.effectiveDurationMs).toBe(100);
+    player.skipCurrent();
+    expect(player.currentEvent?.kind.kind).toBe('blocked');
+    player.finishSequence();
+
+    expect(player.events).toEqual(facts);
+    expect(player.remaining).toBe(0);
   });
 });
 

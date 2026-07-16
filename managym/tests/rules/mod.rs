@@ -17,6 +17,7 @@ pub mod cr_704_sba;
 pub mod event_observations;
 pub mod helpers;
 pub mod interaction_spells;
+pub mod presentation_events;
 pub mod stage2_cards;
 pub mod stage3_cards;
 pub mod structured_attacker_offers;

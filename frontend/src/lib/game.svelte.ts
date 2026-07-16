@@ -173,6 +173,7 @@ export class GameStore {
     autoPassed = 0,
     deckNames?: DeckNames,
     actionSpaceKind = '',
+    deriveNotes = true,
   ): void {
     const previous = this.observation;
 
@@ -199,7 +200,9 @@ export class GameStore {
 
     this.appendLogLines('villain', log);
     this.appendAutoPassNote(autoPassed);
-    this.appendLogLines('system', deriveObservationNotes(previous, observation));
+    if (deriveNotes) {
+      this.appendLogLines('system', deriveObservationNotes(previous, observation));
+    }
   }
 
   applyFrame(
@@ -222,6 +225,7 @@ export class GameStore {
         frame.stops,
         frame.auto_passed ?? 0,
         frame.deck_names,
+        false,
       );
     } else {
       this.applyObservation(
@@ -234,6 +238,7 @@ export class GameStore {
         frame.auto_passed ?? 0,
         frame.deck_names,
         frame.action_space,
+        false,
       );
     }
   }
@@ -245,6 +250,7 @@ export class GameStore {
     stops?: StopsConfig,
     autoPassed = 0,
     deckNames?: DeckNames,
+    deriveNotes = true,
   ): void {
     const previous = this.observation;
 
@@ -264,7 +270,9 @@ export class GameStore {
 
     this.appendLogLines('villain', log);
     this.appendAutoPassNote(autoPassed);
-    this.appendLogLines('system', deriveObservationNotes(previous, observation));
+    if (deriveNotes) {
+      this.appendLogLines('system', deriveObservationNotes(previous, observation));
+    }
   }
 
   prepareForNewGame(): void {

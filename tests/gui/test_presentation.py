@@ -66,21 +66,22 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     target = session.hero_command(target_command)
     live_events = target["update"]["presentation"]
 
-    assert [event["kind"]["kind"] for event in live_events] == [
+    bolt_events = live_events[:5]
+    assert [event["kind"]["kind"] for event in bolt_events] == [
         "cast",
         "targeted",
         "resolved",
         "damage",
         "died",
     ]
-    assert [event["seq"] for event in live_events] == list(range(5))
+    assert [event["seq"] for event in live_events] == list(range(len(live_events)))
     assert all(event["from_revision"] == 1 for event in live_events)
     assert all(event["to_revision"] == 2 for event in live_events)
     assert all(event["caused_by"] == "command-target" for event in live_events)
-    assert live_events[3]["kind"]["amount"] == 3
+    assert bolt_events[3]["kind"]["amount"] == 3
 
-    target_id = live_events[1]["kind"]["target"]["id"]
-    assert live_events[4]["kind"]["objects"] == [target_id]
+    target_id = bolt_events[1]["kind"]["target"]["id"]
+    assert bolt_events[4]["kind"]["objects"] == [target_id]
     battlefield = target["update"]["frame"]["projection"]["opponent"]["battlefield"]
     assert all(permanent["id"] != target_id["entity"] for permanent in battlefield)
 
@@ -123,13 +124,17 @@ def test_recovery_cursor_slices_tail_and_recovers_from_gaps(tmp_path):
     _command(session, "Cast Lightning Bolt", "command-cast")
     target = _command(session, "Target Gray Ogre", "command-target")
     events = target["update"]["presentation"]
+    assert session.presentation_events == events
+    head = session.presentation.next_seq
 
     partial = session.current_recovery("reconnect", presentation_cursor=3)
     assert partial["presentation_cursor"] == 3
-    assert [event["seq"] for event in partial["presentation_tail"]] == [3, 4]
+    assert partial["presentation_tail"] == [
+        event for event in events if event["seq"] >= 3
+    ]
 
-    at_head = session.current_recovery("reconnect", presentation_cursor=5)
-    assert at_head["presentation_cursor"] == 5
+    at_head = session.current_recovery("reconnect", presentation_cursor=head)
+    assert at_head["presentation_cursor"] == head
     assert at_head["presentation_tail"] == []
 
     # A cursor beyond the authority head is a gap. The complete frame remains

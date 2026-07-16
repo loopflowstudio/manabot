@@ -37,6 +37,7 @@ pub(crate) enum ProposedEvent {
         source: Option<ObjectRef>,
         target: ProposedDamageTarget,
         amount: i32,
+        combat: bool,
     },
     LifeChange {
         player: PlayerId,
@@ -86,6 +87,7 @@ impl Game {
                 source,
                 target,
                 amount,
+                ..
             } => {
                 *amount > 0
                     && source.is_none_or(|object_ref| self.object_ref_is_known(object_ref))
@@ -257,7 +259,8 @@ impl Game {
                 source,
                 target,
                 amount,
-            } => self.commit_damage(source, target, amount),
+                combat,
+            } => self.commit_damage(source, target, amount, combat),
             ProposedEvent::LifeChange { player, delta } => self.commit_life_change(player, delta),
             ProposedEvent::Destroy { target } => {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {

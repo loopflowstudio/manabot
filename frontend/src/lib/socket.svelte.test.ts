@@ -173,6 +173,31 @@ describe('GameSocketController presentation seam', () => {
     );
   });
 
+  it('does not narrate protocol updates by diffing their snapshots', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(42));
+    const controller = new GameSocketController();
+    const next = frameAt(43);
+    next.projection.agent.life -= 3;
+
+    deliver(controller, {
+      type: 'command_outcome',
+      status: 'accepted',
+      update: {
+        base_revision: 42,
+        frame: next,
+        presentation: LIGHTNING_BOLT_PRESENTATION.events,
+        receipt: null,
+      },
+    });
+
+    expect(gameStore.actionLog.map((entry) => entry.text).join('\n')).not.toContain(
+      'Hero life:',
+    );
+    expect(presentationPlayer.currentEvent?.kind.kind).toBe('cast');
+  });
+
   it('recovery cancels current theater and replaces it with the recovery tail', () => {
     gameStore.prepareForNewGame();
     presentationPlayer.load(LIGHTNING_BOLT_PRESENTATION);

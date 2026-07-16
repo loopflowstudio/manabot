@@ -1,10 +1,26 @@
 use crate::{
     flow::turn::StepKind,
     state::{
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{CardId, Incarnation, ObjectId, PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
 };
+
+/// Viewer-safe exact identity captured while a rules object still exists.
+///
+/// This is committed domain-event data, not a presentation queue: the
+/// experience adapter decides which typed `PresentationEvent` to project.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ObjectEventRef {
+    pub entity: ObjectId,
+    pub incarnation: Incarnation,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EventSubject {
+    Object(ObjectEventRef),
+    Player(PlayerId),
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventEntity {
@@ -69,8 +85,29 @@ pub enum GameEvent {
         player: PlayerId,
         attackers: Vec<PermanentId>,
     },
+    /// Viewer-safe attacker identities captured at declaration completion.
+    CombatAttackersDeclared {
+        player: PlayerId,
+        defender: PlayerId,
+        attackers: Vec<ObjectEventRef>,
+    },
+    /// Final legal assignments after the complete blocker declaration loop.
+    BlockersDeclared {
+        assignments: Vec<(ObjectEventRef, Vec<ObjectEventRef>)>,
+    },
+    /// Combat damage in native assignment order.
+    CombatDamageDealt {
+        source: ObjectEventRef,
+        target: EventSubject,
+        amount: u32,
+    },
+    /// One simultaneous state-based death batch in deterministic object order.
+    PermanentsDied {
+        objects: Vec<ObjectEventRef>,
+    },
     TurnStarted {
         player: PlayerId,
+        turn_number: u32,
     },
     StepStarted {
         step: StepKind,

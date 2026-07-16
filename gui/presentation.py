@@ -1,11 +1,9 @@
 """Authority-side projection of committed engine facts into presentation events.
 
-This vertical slice intentionally recognizes one authored sequence: Lightning
-Bolt cast at one target, resolving for damage, and (when the committed zone
-event proves it) that target dying. Meaning comes from server-authored
-interaction offers confirmed by ``recent_events``; observation snapshots are
-used only as a viewer-safe identity/name catalog, never diffed to invent game
-facts.
+The projector recognizes the authored Lightning Bolt and combat-to-turn
+sequences. Meaning comes from server-authored interaction offers confirmed by
+``recent_events``; observation snapshots are viewer-safe label catalogs only
+and are never diffed to invent game facts.
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from manabot.env.observation import EventTypeEnum, ZoneEnum
+from manabot.env.observation import EventTypeEnum
 import managym
 
 from .experience_protocol import PresentationEvent
@@ -57,8 +55,14 @@ def _object_id(value: int) -> dict[str, int]:
     return {"entity": int(value), "incarnation": 0}
 
 
+def _event_object_id(event: managym.EventData, *, source: bool) -> dict[str, int]:
+    entity = event.source_id if source else event.target_id
+    incarnation = event.source_incarnation if source else event.target_incarnation
+    return {"entity": int(entity), "incarnation": int(incarnation)}
+
+
 class PresentationProjector:
-    """Stateful match-local projector for the authored Bolt sequence."""
+    """Stateful match-local projection of committed authored sequences."""
 
     def __init__(self) -> None:
         self._next_seq = 0
@@ -145,6 +149,7 @@ class PresentationProjector:
         ]
         for event in resolved_events:
             self._observe_resolution(observation, event, events)
+        self._observe_combat_death_and_turn(events)
 
     def drain(
         self,
@@ -228,6 +233,7 @@ class PresentationProjector:
         resolved: managym.EventData,
         events: list[managym.EventData],
     ) -> None:
+        del observation
         bolt = self._active_bolts.get(int(resolved.source_id))
         if bolt is None:
             return
@@ -265,33 +271,128 @@ class PresentationProjector:
                 )
             )
 
-        death_move_committed = any(
-            _event_type(event) == "CARD_MOVED"
-            and int(event.from_zone) == int(ZoneEnum.BATTLEFIELD)
-            and int(event.to_zone) == int(ZoneEnum.GRAVEYARD)
-            for event in events
-        )
-        battlefield_ids = {
-            int(permanent.id)
-            for permanent in [
-                *observation.agent_permanents,
-                *observation.opponent_permanents,
-            ]
-        }
-        dead_targets = [
-            target["id"]
-            for target in bolt.targets
-            if target["kind"] == "object"
-            and int(target["id"]["entity"]) not in battlefield_ids
-        ]
-        if death_move_committed and dead_targets:
-            self._facts.append(
-                _PresentationFact(
-                    importance="critical",
-                    suggested_ms=650,
-                    sound="creature.died",
-                    kind={"kind": "died", "objects": dead_targets},
-                )
-            )
-
         del self._active_bolts[bolt.source_event_id]
+
+    def _observe_combat_death_and_turn(self, events: list[managym.EventData]) -> None:
+        index = 0
+        while index < len(events):
+            event = events[index]
+            event_type = _event_type(event)
+
+            if event_type == "COMBAT_ATTACKERS_DECLARED":
+                attackers: list[dict[str, int]] = []
+                defender = int(event.target_id)
+                while (
+                    index < len(events)
+                    and _event_type(events[index]) == "COMBAT_ATTACKERS_DECLARED"
+                ):
+                    attackers.append(_event_object_id(events[index], source=True))
+                    index += 1
+                self._facts.append(
+                    _PresentationFact(
+                        importance="emphasized",
+                        suggested_ms=500,
+                        sound="combat.attack",
+                        kind={
+                            "kind": "attack_group",
+                            "attackers": attackers,
+                            "defender": {"kind": "player", "id": defender},
+                        },
+                    )
+                )
+                continue
+
+            if event_type == "BLOCKERS_DECLARED":
+                assignments: dict[tuple[int, int], list[dict[str, int]]] = {}
+                while (
+                    index < len(events)
+                    and _event_type(events[index]) == "BLOCKERS_DECLARED"
+                ):
+                    current = events[index]
+                    attacker = _event_object_id(current, source=True)
+                    key = (attacker["entity"], attacker["incarnation"])
+                    assignments.setdefault(key, []).append(
+                        _event_object_id(current, source=False)
+                    )
+                    index += 1
+                for (entity, incarnation), blockers in assignments.items():
+                    self._facts.append(
+                        _PresentationFact(
+                            importance="normal",
+                            suggested_ms=450,
+                            sound="combat.block",
+                            kind={
+                                "kind": "blocked",
+                                "attacker": {
+                                    "entity": entity,
+                                    "incarnation": incarnation,
+                                },
+                                "blockers": blockers,
+                            },
+                        )
+                    )
+                continue
+
+            if event_type == "COMBAT_DAMAGE_DEALT":
+                target = (
+                    {
+                        "kind": "object",
+                        "id": _event_object_id(event, source=False),
+                    }
+                    if int(event.target_kind) == int(managym.EventEntityKindEnum.OBJECT)
+                    else {"kind": "player", "id": int(event.target_id)}
+                )
+                self._facts.append(
+                    _PresentationFact(
+                        importance="critical",
+                        suggested_ms=500,
+                        sound="combat.damage",
+                        kind={
+                            "kind": "damage",
+                            "source": {
+                                "kind": "object",
+                                "id": _event_object_id(event, source=True),
+                            },
+                            "target": target,
+                            "amount": int(event.amount),
+                        },
+                    )
+                )
+                index += 1
+                continue
+
+            if event_type == "PERMANENTS_DIED":
+                objects: list[dict[str, int]] = []
+                batch_size = max(1, int(event.amount))
+                while (
+                    index < len(events)
+                    and _event_type(events[index]) == "PERMANENTS_DIED"
+                    and len(objects) < batch_size
+                ):
+                    objects.append(_event_object_id(events[index], source=True))
+                    index += 1
+                self._facts.append(
+                    _PresentationFact(
+                        importance="critical",
+                        suggested_ms=650,
+                        sound="creature.died",
+                        kind={"kind": "died", "objects": objects},
+                    )
+                )
+                continue
+
+            if event_type == "TURN_STARTED":
+                self._facts.append(
+                    _PresentationFact(
+                        importance="emphasized",
+                        suggested_ms=350,
+                        sound="turn.start",
+                        kind={
+                            "kind": "turn_started",
+                            "player": int(event.source_id),
+                            "turn_number": int(event.amount),
+                        },
+                    )
+                )
+
+            index += 1

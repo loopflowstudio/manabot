@@ -1,7 +1,7 @@
 use crate::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::{
-        event::{EventEntity, GameEvent},
+        event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
         turn::{PhaseKind, StepKind},
     },
@@ -182,6 +182,11 @@ pub enum EventType {
     SpellResolved = 4,
     SpellCountered = 5,
     AbilityTriggered = 6,
+    CombatAttackersDeclared = 7,
+    BlockersDeclared = 8,
+    CombatDamageDealt = 9,
+    PermanentsDied = 10,
+    TurnStarted = 11,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,6 +196,7 @@ pub enum EventEntityKind {
     Card = 1,
     Permanent = 2,
     Player = 3,
+    Object = 4,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -206,12 +212,20 @@ pub struct EventData {
     /// The learning event tensor remains intentionally unchanged.
     pub from_zone: i32,
     pub to_zone: i32,
+    /// Exact viewer identity metadata for object subjects; -1 otherwise.
+    /// These additive fields are excluded from the fixed learning tensor.
+    pub source_incarnation: i32,
+    pub target_incarnation: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionOption {
     pub action_type: ActionType,
     pub focus: Vec<i32>,
+    /// Native yes/no declaration metadata for prompt copy. The learning
+    /// encoder ignores it; the experience adapter uses it to distinguish
+    /// attack/block from decline choices without relying on array position.
+    pub declared: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -269,6 +283,11 @@ impl Observation {
                             .into_iter()
                             .map(|id| id.0 as i32)
                             .collect(),
+                        declared: match action {
+                            Action::DeclareAttacker { attack, .. } => Some(*attack),
+                            Action::DeclareBlocker { attacker, .. } => Some(attacker.is_some()),
+                            _ => None,
+                        },
                     })
                     .collect(),
                 focus: space.focus.iter().map(|id| id.0 as i32).collect(),
@@ -294,7 +313,7 @@ impl Observation {
             opponent_cards: Vec::new(),
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
-            recent_events: recent_events.iter().filter_map(Self::event_data).collect(),
+            recent_events: recent_events.iter().flat_map(Self::event_data).collect(),
         };
 
         obs.populate_cards(game, agent_player);
@@ -549,7 +568,7 @@ impl Observation {
         }
     }
 
-    fn event_data(event: &GameEvent) -> Option<EventData> {
+    fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
             GameEvent::CardMoved {
@@ -561,7 +580,7 @@ impl Observation {
                 let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
-                Some(data)
+                vec![data]
             }
             GameEvent::DamageDealt {
                 source,
@@ -573,53 +592,155 @@ impl Observation {
                     DamageTarget::Player(p) => EventEntity::Player(p),
                     DamageTarget::Permanent(p) => EventEntity::Permanent(p),
                 });
-                Some(Self::build_event_data(
+                vec![Self::build_event_data(
                     EventType::DamageDealt,
                     source_entity,
                     target_entity,
                     *amount as i32,
                     None,
-                ))
+                )]
             }
-            GameEvent::LifeChanged { player, old, new } => Some(Self::build_event_data(
+            GameEvent::LifeChanged { player, old, new } => vec![Self::build_event_data(
                 EventType::LifeChanged,
                 Some(EventEntity::Player(*player)),
                 Some(EventEntity::Player(*player)),
                 new - old,
                 None,
-            )),
-            GameEvent::SpellCast { card, .. } => Some(Self::card_event_data(
+            )],
+            GameEvent::SpellCast { card, .. } => vec![Self::card_event_data(
                 EventType::SpellCast,
                 *card,
                 PlayerId(0),
-            )),
-            GameEvent::SpellResolved { card } => Some(Self::card_event_data(
+            )],
+            GameEvent::SpellResolved { card } => vec![Self::card_event_data(
                 EventType::SpellResolved,
                 *card,
                 PlayerId(0),
-            )),
-            GameEvent::SpellCountered { card, .. } => Some(Self::card_event_data(
+            )],
+            GameEvent::SpellCountered { card, .. } => vec![Self::card_event_data(
                 EventType::SpellCountered,
                 *card,
                 PlayerId(0),
-            )),
+            )],
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
-            } => Some(Self::card_event_data(
+            } => vec![Self::card_event_data(
                 EventType::AbilityTriggered,
                 *source_card,
                 *controller,
-            )),
+            )],
+            GameEvent::CombatAttackersDeclared {
+                player,
+                defender,
+                attackers,
+            } => attackers
+                .iter()
+                .map(|attacker| {
+                    let mut data = Self::object_event_data(
+                        EventType::CombatAttackersDeclared,
+                        Some(*attacker),
+                        None,
+                        0,
+                        Some(*player),
+                    );
+                    data.target_kind = EventEntityKind::Player as i32;
+                    data.target_id = defender.0 as i32;
+                    data
+                })
+                .collect(),
+            GameEvent::BlockersDeclared { assignments } => assignments
+                .iter()
+                .flat_map(|(attacker, blockers)| {
+                    blockers.iter().map(|blocker| {
+                        Self::object_event_data(
+                            EventType::BlockersDeclared,
+                            Some(*attacker),
+                            Some(*blocker),
+                            0,
+                            None,
+                        )
+                    })
+                })
+                .collect(),
+            GameEvent::CombatDamageDealt {
+                source,
+                target,
+                amount,
+            } => {
+                let mut data = match target {
+                    EventSubject::Object(target) => Self::object_event_data(
+                        EventType::CombatDamageDealt,
+                        Some(*source),
+                        Some(*target),
+                        *amount as i32,
+                        None,
+                    ),
+                    EventSubject::Player(_) => Self::object_event_data(
+                        EventType::CombatDamageDealt,
+                        Some(*source),
+                        None,
+                        *amount as i32,
+                        None,
+                    ),
+                };
+                if let EventSubject::Player(player) = target {
+                    data.target_kind = EventEntityKind::Player as i32;
+                    data.target_id = player.0 as i32;
+                }
+                vec![data]
+            }
+            GameEvent::PermanentsDied { objects } => objects
+                .iter()
+                .map(|object| {
+                    Self::object_event_data(
+                        EventType::PermanentsDied,
+                        Some(*object),
+                        None,
+                        objects.len() as i32,
+                        None,
+                    )
+                })
+                .collect(),
+            GameEvent::TurnStarted {
+                player,
+                turn_number,
+            } => vec![Self::build_event_data(
+                EventType::TurnStarted,
+                Some(EventEntity::Player(*player)),
+                None,
+                *turn_number as i32,
+                Some(*player),
+            )],
             // Internal trigger-plumbing events; the underlying state changes
             // are already visible via CardMoved / permanent state.
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::AttackersDeclared { .. }
-            | GameEvent::TurnStarted { .. }
-            | GameEvent::StepStarted { .. } => None,
+            | GameEvent::StepStarted { .. } => Vec::new(),
         }
+    }
+
+    fn object_event_data(
+        event_type: EventType,
+        source: Option<ObjectEventRef>,
+        target: Option<ObjectEventRef>,
+        amount: i32,
+        controller: Option<PlayerId>,
+    ) -> EventData {
+        let mut data = Self::build_event_data(event_type, None, None, amount, controller);
+        if let Some(source) = source {
+            data.source_kind = EventEntityKind::Object as i32;
+            data.source_id = source.entity.0 as i32;
+            data.source_incarnation = source.incarnation.0 as i32;
+        }
+        if let Some(target) = target {
+            data.target_kind = EventEntityKind::Object as i32;
+            data.target_id = target.entity.0 as i32;
+            data.target_incarnation = target.incarnation.0 as i32;
+        }
+        data
     }
 
     fn card_event_data(event_type: EventType, card: CardId, controller: PlayerId) -> EventData {
@@ -652,6 +773,8 @@ impl Observation {
             controller_id: controller.map_or(-1, |player| player.0 as i32),
             from_zone: -1,
             to_zone: -1,
+            source_incarnation: -1,
+            target_incarnation: -1,
         }
     }
 
@@ -934,6 +1057,8 @@ impl Observation {
                     "controller_id": event.controller_id,
                     "from_zone": event.from_zone,
                     "to_zone": event.to_zone,
+                    "source_incarnation": event.source_incarnation,
+                    "target_incarnation": event.target_incarnation,
                 })
             }).collect::<Vec<_>>(),
         })

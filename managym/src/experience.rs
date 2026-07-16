@@ -434,9 +434,8 @@ pub enum PresentationImportance {
 }
 
 /// Viewer-safe semantic presentation payload shared by Rust, Python, and the
-/// TypeScript table. It is deliberately smaller than the future vocabulary in
-/// the architecture design: protocol v1 certifies only kinds already consumed
-/// by the merged presentation player.
+/// TypeScript table. Rules code produces these facts; clients may choose
+/// timing and composition but never reconstruct them from frame differences.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum PresentationKind {
@@ -463,6 +462,18 @@ pub enum PresentationKind {
     },
     Died {
         objects: Vec<ObjectRenderId>,
+    },
+    AttackGroup {
+        attackers: Vec<ObjectRenderId>,
+        defender: SubjectRef,
+    },
+    Blocked {
+        attacker: ObjectRenderId,
+        blockers: Vec<ObjectRenderId>,
+    },
+    TurnStarted {
+        player: PlayerId,
+        turn_number: u32,
     },
 }
 

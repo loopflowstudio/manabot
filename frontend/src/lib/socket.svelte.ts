@@ -383,6 +383,10 @@ export class GameSocketController {
     }
     // Recovery always cancels any in-flight theater before resuming its
     // viewer-safe tail. The complete frame remains authoritative either way.
+    const presentationLabels = mergePresentationLabels(
+      ...(current ? [presentationLabelsFromFrame(current)] : []),
+      presentationLabelsFromFrame(next),
+    );
     gameStore.applyFrame(next, sessionId, resumeToken);
     try {
       this.presentationCursor = validatePresentationTail(
@@ -391,7 +395,7 @@ export class GameSocketController {
       );
       presentationPlayer.recover(
         recovery.presentation_tail,
-        presentationLabelsFromFrame(next),
+        presentationLabels,
       );
       this.persistResumeState(sessionId, resumeToken);
     } catch (error) {

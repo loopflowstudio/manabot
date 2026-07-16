@@ -5,23 +5,19 @@ import type {
   PlayerState,
   PresentationEvent,
   PresentationImportance,
+  PresentationLabels,
   SubjectRef,
 } from './types';
+import curatedCombatToTurn from './fixtures/curated-combat-to-turn.json';
 
 export type {
   ObjectRenderId,
   PresentationEvent,
   PresentationImportance,
   PresentationKind,
+  PresentationLabels,
   SubjectRef,
 } from './types';
-
-/** Display names are a viewer-safe projection sidecar, never rules facts. */
-export interface PresentationLabels {
-  objects: Record<string, string>;
-  players: Record<string, string>;
-  stacks: Record<string, string>;
-}
 
 export interface PresentationSequence {
   id: string;
@@ -193,6 +189,28 @@ function validatePresentationKind(value: unknown, seq: number): void {
         validateObjectRenderId(object, 'kind.objects[]', seq);
       }
       return;
+    case 'attack_group':
+      if (!Array.isArray(value.attackers)) {
+        throw new Error(`Presentation event ${seq} has invalid kind.attackers`);
+      }
+      for (const attacker of value.attackers) {
+        validateObjectRenderId(attacker, 'kind.attackers[]', seq);
+      }
+      validateSubjectRef(value.defender, 'kind.defender', seq);
+      return;
+    case 'blocked':
+      validateObjectRenderId(value.attacker, 'kind.attacker', seq);
+      if (!Array.isArray(value.blockers)) {
+        throw new Error(`Presentation event ${seq} has invalid kind.blockers`);
+      }
+      for (const blocker of value.blockers) {
+        validateObjectRenderId(blocker, 'kind.blockers[]', seq);
+      }
+      return;
+    case 'turn_started':
+      requireInteger(value.player, 'kind.player', seq);
+      requireInteger(value.turn_number, 'kind.turn_number', seq);
+      return;
     default:
       throw new Error(`Presentation event ${seq} has unsupported kind ${value.kind}`);
   }
@@ -313,6 +331,25 @@ export function presentationBeat(
       detail = `${objects.join(', ')} ${objects.length === 1 ? 'dies' : 'die'}.`;
       break;
     }
+    case 'attack_group': {
+      const attackers = event.kind.attackers.map((object) => objectLabel(object, labels));
+      heading = 'Attackers declared';
+      detail = `${attackers.join(', ')} ${attackers.length === 1 ? 'attacks' : 'attack'} ${subjectLabel(event.kind.defender, labels)}.`;
+      break;
+    }
+    case 'blocked': {
+      const attacker = objectLabel(event.kind.attacker, labels);
+      const blockers = event.kind.blockers.map((object) => objectLabel(object, labels));
+      heading = 'Blockers declared';
+      detail = `${blockers.join(', ')} ${blockers.length === 1 ? 'blocks' : 'block'} ${attacker}.`;
+      break;
+    }
+    case 'turn_started': {
+      const player = labels.players[String(event.kind.player)] ?? `Player ${event.kind.player}`;
+      heading = `Turn ${event.kind.turn_number}`;
+      detail = `${player}'s turn begins.`;
+      break;
+    }
   }
 
   return {
@@ -427,3 +464,7 @@ export const LIGHTNING_BOLT_PRESENTATION: PresentationSequence = {
     },
   ],
 };
+
+/** Rust/Python-authority recording shared by table, replay, and inspector tests. */
+export const COMBAT_TO_TURN_PRESENTATION =
+  curatedCombatToTurn as PresentationSequence;

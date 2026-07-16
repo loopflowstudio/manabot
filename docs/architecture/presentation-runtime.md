@@ -69,6 +69,22 @@ adapter therefore certifies incarnation zero and reuses the visible spell card
 ID as the stack render ID. The display-label bridge leaves other exact
 references unnamed instead of guessing.
 
+W2-203 extends this same projector with committed combat-domain facts. Native
+rules sites add exact, viewer-safe identities to `recent_events` when attacker
+and blocker declaration completes, combat damage is assigned, state-based
+deaths commit, and a turn starts. The projector consumes those facts in native
+order and emits `attack_group`, `blocked`, `damage`, `died`, and
+`turn_started`. It does not compare observations. The fixed Rust and Python
+learning encoders filter these additive presentation-only event types, so
+policy inputs remain unchanged.
+
+Combat prompts also expose native declaration metadata. This distinguishes
+`Attack with X` from `Do not attack with X` without interpreting option
+position in the client; blocker choices remain authority-published legal
+offers. The same event dictionaries are returned live, persisted on the
+transition's final trace step, replayed through the shared player, and mapped
+to decision-inspector rows.
+
 Recovery uses one complete `ExperienceFrame` plus a bounded, match-local ledger
 of the same events returned by live updates and persisted in replay. The cursor
 names the first returned event; an empty tail keeps that cursor unchanged. If a
@@ -78,5 +94,5 @@ retained address. The ledger keeps the latest 256 events and is deliberately
 not a durable cross-process checkpoint.
 
 Upgrading the viewer projection to exact render identities is separate.
-Converting either concern into arbitrary snapshot-diff text would break the
-contract.
+Converting that concern, recovery, or any combat fact into arbitrary
+snapshot-diff text would break the contract.

@@ -1,0 +1,107 @@
+{
+  "id": "ur-lessons-vs-gw-allies-combat-v1",
+  "title": "Otter-Penguin blocks Badgermole Cub before the next turn",
+  "labels": {
+    "objects": {
+      "83:0": "Otter-Penguin",
+      "84:0": "Badgermole Cub"
+    },
+    "players": {
+      "0": "Hero",
+      "1": "Opponent"
+    },
+    "stacks": {}
+  },
+  "events": [
+    {
+      "seq": 1,
+      "from_revision": 1,
+      "to_revision": 2,
+      "caused_by": "curated-combat-1",
+      "group": 1,
+      "importance": "emphasized",
+      "suggested_ms": 500,
+      "sound": "combat.attack",
+      "kind": {
+        "kind": "attack_group",
+        "attackers": [{ "entity": 84, "incarnation": 0 }],
+        "defender": { "kind": "player", "id": 0 }
+      }
+    },
+    {
+      "seq": 2,
+      "from_revision": 2,
+      "to_revision": 3,
+      "caused_by": "curated-combat-2",
+      "group": 2,
+      "importance": "normal",
+      "suggested_ms": 450,
+      "sound": "combat.block",
+      "kind": {
+        "kind": "blocked",
+        "attacker": { "entity": 84, "incarnation": 0 },
+        "blockers": [{ "entity": 83, "incarnation": 0 }]
+      }
+    },
+    {
+      "seq": 3,
+      "from_revision": 2,
+      "to_revision": 3,
+      "caused_by": "curated-combat-2",
+      "group": 3,
+      "importance": "critical",
+      "suggested_ms": 500,
+      "sound": "combat.damage",
+      "kind": {
+        "kind": "damage",
+        "source": { "kind": "object", "id": { "entity": 83, "incarnation": 0 } },
+        "target": { "kind": "object", "id": { "entity": 84, "incarnation": 0 } },
+        "amount": 2
+      }
+    },
+    {
+      "seq": 4,
+      "from_revision": 2,
+      "to_revision": 3,
+      "caused_by": "curated-combat-2",
+      "group": 4,
+      "importance": "critical",
+      "suggested_ms": 500,
+      "sound": "combat.damage",
+      "kind": {
+        "kind": "damage",
+        "source": { "kind": "object", "id": { "entity": 84, "incarnation": 0 } },
+        "target": { "kind": "object", "id": { "entity": 83, "incarnation": 0 } },
+        "amount": 1
+      }
+    },
+    {
+      "seq": 5,
+      "from_revision": 2,
+      "to_revision": 3,
+      "caused_by": "curated-combat-2",
+      "group": 5,
+      "importance": "critical",
+      "suggested_ms": 650,
+      "sound": "creature.died",
+      "kind": {
+        "kind": "died",
+        "objects": [
+          { "entity": 83, "incarnation": 0 },
+          { "entity": 84, "incarnation": 0 }
+        ]
+      }
+    },
+    {
+      "seq": 6,
+      "from_revision": 2,
+      "to_revision": 3,
+      "caused_by": "curated-combat-2",
+      "group": 6,
+      "importance": "emphasized",
+      "suggested_ms": 350,
+      "sound": "turn.start",
+      "kind": { "kind": "turn_started", "player": 0, "turn_number": 3 }
+    }
+  ]
+}

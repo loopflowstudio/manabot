@@ -1,4 +1,8 @@
 import type { GameLogEntry, ReplayFrame, Trace } from './types';
+import {
+  mergePresentationLabels,
+  presentationLabelsFromObservation,
+} from './presentation';
 
 export function buildReplayFrames(trace: Trace): ReplayFrame[] {
   if (trace.events.length === 0) {
@@ -8,6 +12,7 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
         actionDescription: null,
         actor: null,
         presentation: [],
+        presentationLabels: presentationLabelsFromObservation(trace.final_observation),
       },
     ];
   }
@@ -18,6 +23,7 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
       actionDescription: null,
       actor: null,
       presentation: [],
+      presentationLabels: presentationLabelsFromObservation(trace.events[0].observation),
     },
   ];
 
@@ -31,6 +37,10 @@ export function buildReplayFrames(trace: Trace): ReplayFrame[] {
       actionDescription: event.action_description,
       actor: event.actor,
       presentation: event.presentation ?? [],
+      presentationLabels: mergePresentationLabels(
+        presentationLabelsFromObservation(event.observation),
+        presentationLabelsFromObservation(nextObservation),
+      ),
     });
   }
 

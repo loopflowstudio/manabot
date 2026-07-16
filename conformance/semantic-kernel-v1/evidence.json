@@ -12,28 +12,28 @@
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 144,
       "outcome": "terminal",
-      "final_state_hash": "v1:4ff63cfccc892ee726bbf824736f17317162537f88654bd7a15c6065051c1ef7"
+      "final_state_hash": "v1:2358f637485135b04e261db59a2908d2b8bad550af624c64132f9ca6887073d5"
     },
     {
       "case_id": "gw-vs-ur-5eee",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 105,
       "outcome": "terminal",
-      "final_state_hash": "v1:011bcd1d1580abb8dfeb0651915bdc64f31c31f50f949b956fb0f8f8ec8025cd"
+      "final_state_hash": "v1:2bdcbf12e5c561d34447496ed4c84793516a740ab2697804105c0b6e8631d51d"
     },
     {
       "case_id": "ur-vs-gw-5eef",
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 90,
       "outcome": "terminal",
-      "final_state_hash": "v1:a52b50e412ff47ae5fd9b90d30d9d0e1be2c2e49fe3dc3b97000e6fb8028ac9a"
+      "final_state_hash": "v1:b6da028ddde1219132cd837b944bf008fe92897fea417c50bddc091d36648b4e"
     },
     {
       "case_id": "gw-vs-ur-5ef0",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 221,
       "outcome": "terminal",
-      "final_state_hash": "v1:1b5be688ffc94deb2c099413541581edf0e5c5501c669ea75bc7945cc5c103e0"
+      "final_state_hash": "v1:3d83b400d40fa2c14b913cd1722ef2a416974a762dcd26627dad19bdb3517d61"
     }
   ],
   "exercised_prompt_kinds": [

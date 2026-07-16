@@ -140,7 +140,7 @@ impl Game {
                 .collect();
 
             if !was_blocked {
-                self.apply_player_damage(attacker_ref, defender, attacker_power);
+                self.apply_combat_player_damage(attacker_ref, defender, attacker_power);
                 continue;
             }
 
@@ -153,7 +153,7 @@ impl Game {
                     continue;
                 }
                 let blocker_power = self.effective_power(*blocker_id).max(0);
-                self.apply_permanent_damage(blocker_ref, attacker_id, blocker_power);
+                self.apply_combat_permanent_damage(blocker_ref, attacker_id, blocker_power);
             }
 
             let mut remaining_damage = attacker_power;
@@ -174,12 +174,12 @@ impl Game {
                     needed_damage
                 };
                 let assigned = remaining_damage.min(lethal);
-                self.apply_permanent_damage(attacker_ref, blocker_id, assigned);
+                self.apply_combat_permanent_damage(attacker_ref, blocker_id, assigned);
                 remaining_damage -= assigned;
             }
 
             if attacker_has_trample && remaining_damage > 0 {
-                self.apply_player_damage(attacker_ref, defender, remaining_damage);
+                self.apply_combat_player_damage(attacker_ref, defender, remaining_damage);
             }
         }
     }

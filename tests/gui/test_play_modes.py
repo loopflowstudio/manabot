@@ -6,6 +6,7 @@ integrity of every human-facing payload.
 """
 
 import json
+from pathlib import Path
 import random
 from types import SimpleNamespace
 
@@ -17,6 +18,12 @@ from gui import server, trace as trace_store
 from gui.server import app
 
 MAX_HERO_MOVES = 3000
+CURATED_COMBAT_FIXTURE = json.loads(
+    (
+        Path(__file__).parents[2]
+        / "frontend/src/lib/fixtures/curated-combat-to-turn.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _assert_hero_payload_is_clean(payload: dict) -> None:
@@ -267,6 +274,122 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
     assert trace["config"]["villain_deck"] == server.GW_ALLIES_DECK
     assert trace["config"]["asset_pack"] == server.CURATED_PACK.reference
 
+    presentation = [
+        beat for event in trace["events"] for beat in event.get("presentation", [])
+    ]
+    kinds = [beat["kind"]["kind"] for beat in presentation]
+    assert {"attack_group", "damage", "died", "turn_started"} <= set(kinds)
+    assert [beat["seq"] for beat in presentation] == sorted(
+        beat["seq"] for beat in presentation
+    )
+    assert all(beat["to_revision"] >= beat["from_revision"] for beat in presentation)
+
+
+def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
+    isolated_traces,
+):
+    """One exact UR-vs-GW position crosses every semantic event consumer."""
+
+    from manabot.env.observation import ActionEnum
+
+    def attacking_villain(_env, obs):
+        for index, action in enumerate(obs.action_space.actions):
+            if (
+                int(action.action_type) == int(ActionEnum.DECLARE_ATTACKER)
+                and action.declared is True
+            ):
+                return index
+        for index, action in enumerate(obs.action_space.actions):
+            if int(action.action_type) == int(ActionEnum.PRIORITY_PASS_PRIORITY):
+                return index
+        return 0
+
+    session = server.GameSession(trace_dir=isolated_traces)
+    session.new_game(
+        {
+            "villain_type": "passive",
+            "seed": 203,
+            "hero_deck": "ur_lessons",
+            "villain_deck": "gw_allies",
+            "auto_pass": False,
+        }
+    )
+    assert session.env is not None
+    session.env.scenario_clear_hand(0)
+    session.env.scenario_clear_hand(1)
+    session.env.scenario_force_battlefield(0, "Otter-Penguin", True)
+    session.env.scenario_force_battlefield(1, "Badgermole Cub", True)
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+    session.villain_policy = attacking_villain
+
+    live_presentation = []
+    for step in range(500):
+        frame = session._experience_frame()
+        assert frame["prompt"] is not None
+        prompt = session.published_prompt
+        assert prompt is not None
+
+        chosen = 0
+        if prompt.action_space == "DECLARE_BLOCKER":
+            chosen = next(
+                index
+                for index, action in enumerate(prompt.actions)
+                if action["declared"] is True
+            )
+        elif prompt.action_space == "DECLARE_ATTACKER":
+            chosen = next(
+                index
+                for index, action in enumerate(prompt.actions)
+                if action["declared"] is False
+            )
+        else:
+            chosen = next(
+                index
+                for index, action in enumerate(prompt.actions)
+                if action["type"] == "PRIORITY_PASS_PRIORITY"
+            )
+
+        outcome = session.hero_command(
+            {
+                "command_id": f"curated-combat-{step}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": frame["offers"][chosen]["id"],
+                "answers": [],
+            }
+        )
+        assert outcome["status"] == "accepted"
+        live_presentation.extend(outcome["update"]["presentation"])
+        kinds = [beat["kind"]["kind"] for beat in live_presentation]
+        if "died" in kinds and "turn_started" in kinds[kinds.index("died") + 1 :]:
+            break
+    else:
+        pytest.fail("curated combat tape did not reach the next turn")
+
+    assert session.trace is not None
+    trace_presentation = [
+        beat for event in session.trace.events for beat in event.presentation
+    ]
+    assert trace_presentation == live_presentation
+    live_kinds = [beat["kind"]["kind"] for beat in live_presentation]
+    combat_start = live_kinds.index("attack_group")
+    curated_tape = live_presentation[combat_start:]
+    assert live_kinds[combat_start:] == [
+        "attack_group",
+        "blocked",
+        "damage",
+        "damage",
+        "died",
+        "turn_started",
+    ]
+    assert curated_tape == CURATED_COMBAT_FIXTURE["events"]
+    recovery = session.current_recovery("explicit_resync")
+    assert recovery["presentation_cursor"] == live_presentation[0]["seq"]
+    assert recovery["presentation_tail"] == live_presentation
+    assert all(beat["caused_by"] for beat in live_presentation)
+
 
 def test_named_deck_selection_and_custom_deck_names(isolated_traces):
     config = server._parse_game_config(
@@ -281,8 +404,10 @@ def test_named_deck_selection_and_custom_deck_names(isolated_traces):
         server._parse_game_config({"hero_deck": "not_a_deck"})
 
 
-def _stub_action(action_type: int, focus: list[int]) -> SimpleNamespace:
-    return SimpleNamespace(action_type=action_type, focus=focus)
+def _stub_action(
+    action_type: int, focus: list[int], declared: bool | None = None
+) -> SimpleNamespace:
+    return SimpleNamespace(action_type=action_type, focus=focus, declared=declared)
 
 
 def test_format_action_uses_magic_terms():
@@ -306,6 +431,10 @@ def test_format_action_uses_magic_terms():
         (
             _stub_action(int(ActionEnum.DECLARE_ATTACKER), [20]),
             "Attack with Gray Ogre",
+        ),
+        (
+            _stub_action(int(ActionEnum.DECLARE_ATTACKER), [20], False),
+            "Do not attack with Gray Ogre",
         ),
         (
             _stub_action(int(ActionEnum.DECLARE_BLOCKER), [21, 20]),

@@ -53,6 +53,10 @@ class TraceEvent:
     action: int
     action_description: str
     reward: float
+    # Authoritative semantic beats caused by this exact engine step. Live play,
+    # replay, and the decision-inspector seam consume these same persisted
+    # objects; no consumer reconstructs them from observation differences.
+    presentation: list[dict[str, Any]] = field(default_factory=list)
     # True when the server auto-passed this priority window (stops system /
     # F6), False for decisions the human actually clicked. Competency metrics
     # must not credit auto-passes as deliberate passes.

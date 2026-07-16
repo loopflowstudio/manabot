@@ -386,13 +386,34 @@ class DiedPresentation(ProtocolModel):
     objects: list[ObjectRenderId]
 
 
+class AttackGroupPresentation(ProtocolModel):
+    kind: Literal["attack_group"]
+    attackers: list[ObjectRenderId]
+    defender: SubjectRef
+
+
+class BlockedPresentation(ProtocolModel):
+    kind: Literal["blocked"]
+    attacker: ObjectRenderId
+    blockers: list[ObjectRenderId]
+
+
+class TurnStartedPresentation(ProtocolModel):
+    kind: Literal["turn_started"]
+    player: UInt8
+    turn_number: UInt32
+
+
 PresentationKind: TypeAlias = Annotated[
     CastPresentation
     | TargetedPresentation
     | ResolvedPresentation
     | DamagePresentation
     | DestroyedPresentation
-    | DiedPresentation,
+    | DiedPresentation
+    | AttackGroupPresentation
+    | BlockedPresentation
+    | TurnStartedPresentation,
     Field(discriminator="kind"),
 ]
 

@@ -590,6 +590,11 @@ pub enum EventTypeEnum {
     SpellResolved = EventType::SpellResolved as i32,
     SpellCountered = EventType::SpellCountered as i32,
     AbilityTriggered = EventType::AbilityTriggered as i32,
+    CombatAttackersDeclared = EventType::CombatAttackersDeclared as i32,
+    BlockersDeclared = EventType::BlockersDeclared as i32,
+    CombatDamageDealt = EventType::CombatDamageDealt as i32,
+    PermanentsDied = EventType::PermanentsDied as i32,
+    TurnStarted = EventType::TurnStarted as i32,
 }
 
 #[cfg(feature = "python")]
@@ -609,6 +614,16 @@ impl EventTypeEnum {
     const SPELL_COUNTERED: Self = Self::SpellCountered;
     #[classattr]
     const ABILITY_TRIGGERED: Self = Self::AbilityTriggered;
+    #[classattr]
+    const COMBAT_ATTACKERS_DECLARED: Self = Self::CombatAttackersDeclared;
+    #[classattr]
+    const BLOCKERS_DECLARED: Self = Self::BlockersDeclared;
+    #[classattr]
+    const COMBAT_DAMAGE_DEALT: Self = Self::CombatDamageDealt;
+    #[classattr]
+    const PERMANENTS_DIED: Self = Self::PermanentsDied;
+    #[classattr]
+    const TURN_STARTED: Self = Self::TurnStarted;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -628,6 +643,7 @@ pub enum EventEntityKindEnum {
     Card = EventEntityKind::Card as i32,
     Permanent = EventEntityKind::Permanent as i32,
     Player = EventEntityKind::Player as i32,
+    Object = EventEntityKind::Object as i32,
 }
 
 #[cfg(feature = "python")]
@@ -641,6 +657,8 @@ impl EventEntityKindEnum {
     const PERMANENT: Self = Self::Permanent;
     #[classattr]
     const PLAYER: Self = Self::Player;
+    #[classattr]
+    const OBJECT: Self = Self::Object;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -1296,6 +1314,8 @@ pub struct PyAction {
     pub action_type: ActionEnum,
     #[pyo3(get, set)]
     pub focus: Vec<i32>,
+    #[pyo3(get, set)]
+    pub declared: Option<bool>,
 }
 
 #[cfg(feature = "python")]
@@ -1320,6 +1340,10 @@ pub struct PyEventData {
     pub from_zone: i32,
     #[pyo3(get, set)]
     pub to_zone: i32,
+    #[pyo3(get, set)]
+    pub source_incarnation: i32,
+    #[pyo3(get, set)]
+    pub target_incarnation: i32,
 }
 
 #[cfg(feature = "python")]
@@ -1333,12 +1357,20 @@ impl From<EventData> for PyEventData {
                 x if x == EventType::SpellCast as i32 => EventTypeEnum::SpellCast,
                 x if x == EventType::SpellResolved as i32 => EventTypeEnum::SpellResolved,
                 x if x == EventType::SpellCountered as i32 => EventTypeEnum::SpellCountered,
-                _ => EventTypeEnum::AbilityTriggered,
+                x if x == EventType::AbilityTriggered as i32 => EventTypeEnum::AbilityTriggered,
+                x if x == EventType::CombatAttackersDeclared as i32 => {
+                    EventTypeEnum::CombatAttackersDeclared
+                }
+                x if x == EventType::BlockersDeclared as i32 => EventTypeEnum::BlockersDeclared,
+                x if x == EventType::CombatDamageDealt as i32 => EventTypeEnum::CombatDamageDealt,
+                x if x == EventType::PermanentsDied as i32 => EventTypeEnum::PermanentsDied,
+                _ => EventTypeEnum::TurnStarted,
             },
             source_kind: match value.source_kind {
                 x if x == EventEntityKind::Card as i32 => EventEntityKindEnum::Card,
                 x if x == EventEntityKind::Permanent as i32 => EventEntityKindEnum::Permanent,
                 x if x == EventEntityKind::Player as i32 => EventEntityKindEnum::Player,
+                x if x == EventEntityKind::Object as i32 => EventEntityKindEnum::Object,
                 _ => EventEntityKindEnum::None,
             },
             source_id: value.source_id,
@@ -1346,6 +1378,7 @@ impl From<EventData> for PyEventData {
                 x if x == EventEntityKind::Card as i32 => EventEntityKindEnum::Card,
                 x if x == EventEntityKind::Permanent as i32 => EventEntityKindEnum::Permanent,
                 x if x == EventEntityKind::Player as i32 => EventEntityKindEnum::Player,
+                x if x == EventEntityKind::Object as i32 => EventEntityKindEnum::Object,
                 _ => EventEntityKindEnum::None,
             },
             target_id: value.target_id,
@@ -1353,6 +1386,8 @@ impl From<EventData> for PyEventData {
             controller_id: value.controller_id,
             from_zone: value.from_zone,
             to_zone: value.to_zone,
+            source_incarnation: value.source_incarnation,
+            target_incarnation: value.target_incarnation,
         }
     }
 }
@@ -1370,6 +1405,8 @@ impl From<PyEventData> for EventData {
             controller_id: value.controller_id,
             from_zone: value.from_zone,
             to_zone: value.to_zone,
+            source_incarnation: value.source_incarnation,
+            target_incarnation: value.target_incarnation,
         }
     }
 }
@@ -1380,6 +1417,7 @@ impl From<ActionOption> for PyAction {
         Self {
             action_type: value.action_type.into(),
             focus: value.focus,
+            declared: value.declared,
         }
     }
 }
@@ -1390,6 +1428,7 @@ impl From<PyAction> for ActionOption {
         Self {
             action_type: value.action_type.into(),
             focus: value.focus,
+            declared: value.declared,
         }
     }
 }
@@ -1812,6 +1851,8 @@ impl PyObservation {
                         "controller_id": event.controller_id,
                         "from_zone": event.from_zone,
                         "to_zone": event.to_zone,
+                        "source_incarnation": event.source_incarnation,
+                        "target_incarnation": event.target_incarnation,
                     })
                 })
                 .collect::<Vec<_>>(),

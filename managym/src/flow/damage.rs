@@ -3,7 +3,7 @@
 
 use crate::{
     flow::{
-        event::{DamageTarget, GameEvent},
+        event::{DamageTarget, EventSubject, GameEvent},
         game::Game,
         proposed_event::{ProposedDamageTarget, ProposedEvent},
     },
@@ -21,6 +21,7 @@ impl Game {
             source,
             target: ProposedDamageTarget::Player(player),
             amount,
+            combat: false,
         });
     }
 
@@ -37,6 +38,38 @@ impl Game {
             source,
             target: ProposedDamageTarget::Object(target),
             amount,
+            combat: false,
+        });
+    }
+
+    pub(crate) fn apply_combat_player_damage(
+        &mut self,
+        source: Option<ObjectRef>,
+        player: PlayerId,
+        amount: i32,
+    ) {
+        self.apply_proposed_event(ProposedEvent::Damage {
+            source,
+            target: ProposedDamageTarget::Player(player),
+            amount,
+            combat: true,
+        });
+    }
+
+    pub(crate) fn apply_combat_permanent_damage(
+        &mut self,
+        source: Option<ObjectRef>,
+        permanent_id: PermanentId,
+        amount: i32,
+    ) {
+        let Some(target) = self.permanent_object_ref(permanent_id) else {
+            return;
+        };
+        self.apply_proposed_event(ProposedEvent::Damage {
+            source,
+            target: ProposedDamageTarget::Object(target),
+            amount,
+            combat: true,
         });
     }
 
@@ -45,6 +78,7 @@ impl Game {
         source: Option<ObjectRef>,
         target: ProposedDamageTarget,
         amount: i32,
+        combat: bool,
     ) -> bool {
         if amount <= 0 {
             return false;
@@ -60,6 +94,9 @@ impl Game {
                 .then(|| self.source_controller(object_ref))
                 .flatten()
         });
+        let combat_source = combat
+            .then(|| source.and_then(|object_ref| self.object_event_ref(object_ref)))
+            .flatten();
 
         match target {
             ProposedDamageTarget::Player(player) => {
@@ -75,6 +112,13 @@ impl Game {
                     target: DamageTarget::Player(player),
                     amount: amount as u32,
                 });
+                if let Some(source) = combat_source {
+                    self.emit_observation_event(GameEvent::CombatDamageDealt {
+                        source,
+                        target: EventSubject::Player(player),
+                        amount: amount as u32,
+                    });
+                }
                 self.emit(GameEvent::LifeChanged {
                     player,
                     old: old_life,
@@ -82,6 +126,7 @@ impl Game {
                 });
             }
             ProposedDamageTarget::Object(object_ref) => {
+                let event_target = self.object_event_ref(object_ref);
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
                     return false;
                 };
@@ -97,6 +142,13 @@ impl Game {
                     target: DamageTarget::Permanent(permanent_id),
                     amount: amount as u32,
                 });
+                if let (Some(source), Some(target)) = (combat_source, event_target) {
+                    self.emit_observation_event(GameEvent::CombatDamageDealt {
+                        source,
+                        target: EventSubject::Object(target),
+                        amount: amount as u32,
+                    });
+                }
             }
         }
 

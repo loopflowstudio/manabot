@@ -114,6 +114,11 @@ class EventTypeEnum(IntEnum):
     SPELL_RESOLVED = 4
     SPELL_COUNTERED = 5
     ABILITY_TRIGGERED = 6
+    COMBAT_ATTACKERS_DECLARED = 7
+    BLOCKERS_DECLARED = 8
+    COMBAT_DAMAGE_DEALT = 9
+    PERMANENTS_DIED = 10
+    TURN_STARTED = 11
 
 
 class EventEntityKindEnum(IntEnum):
@@ -123,6 +128,7 @@ class EventEntityKindEnum(IntEnum):
     CARD = 1
     PERMANENT = 2
     PLAYER = 3
+    OBJECT = 4
 
 
 # -----------------------------------------------------------------------------
@@ -477,9 +483,18 @@ class ObservationEncoder:
         log = getLogger(__name__).getChild("encode_events")
         arr = np.zeros((self.max_events, self.event_dim), dtype=np.float32)
         valid = np.zeros((self.max_events,), dtype=np.float32)
-        if len(events) > self.max_events:
-            log.warning(f"Event list truncated: {len(events)} -> {self.max_events}")
-        ordered_events = events[-self.max_events :]
+        # Values after ABILITY_TRIGGERED are viewer presentation facts. They
+        # share the committed event window but never alter the policy tensor.
+        learning_events = [
+            event
+            for event in events
+            if int(event.event_type) <= int(EventTypeEnum.ABILITY_TRIGGERED)
+        ]
+        if len(learning_events) > self.max_events:
+            log.warning(
+                f"Event list truncated: {len(learning_events)} -> {self.max_events}"
+            )
+        ordered_events = learning_events[-self.max_events :]
         for i, event in enumerate(ordered_events):
             arr[i] = np.array(
                 [

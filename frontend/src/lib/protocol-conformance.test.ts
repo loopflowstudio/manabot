@@ -200,9 +200,14 @@ describe('experience protocol v1 conformance', () => {
     expect(
       fixture.recovery.frame.offers.some((offer) => offer.id === command.offer_id),
     ).toBe(true);
-    expect(fixture.recovery.presentation_tail.map((event) => event.kind.kind)).toEqual(
-      PRESENTATION_KIND_NAMES,
-    );
+    expect(fixture.recovery.presentation_tail.map((event) => event.kind.kind)).toEqual([
+      'cast',
+      'targeted',
+      'resolved',
+      'damage',
+      'destroyed',
+      'died',
+    ]);
     expect(fixture.recovery.presentation_cursor).toBe(900);
     expect(fixture.recovery.presentation_tail.map((event) => event.seq)).toEqual(
       [900, 901, 902, 903, 904, 905],

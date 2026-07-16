@@ -78,6 +78,9 @@ UNION_VARIANTS = {
         "DamagePresentation",
         "DestroyedPresentation",
         "DiedPresentation",
+        "AttackGroupPresentation",
+        "BlockedPresentation",
+        "TurnStartedPresentation",
     ),
 }
 

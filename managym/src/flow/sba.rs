@@ -2,9 +2,9 @@
 // State-based actions.
 
 use crate::{
-    flow::game::Game,
+    flow::{event::GameEvent, game::Game},
     state::{
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -31,7 +31,7 @@ impl Game {
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
-        let mut candidates: Vec<(ObjectRef, PlayerId, bool)> = Vec::new();
+        let mut candidates = Vec::new();
         for permanent_id in self
             .state
             .permanents
@@ -55,15 +55,19 @@ impl Game {
             let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
                 continue;
             };
-            candidates.push((object_ref, permanent.controller, destroy));
+            let Some(event_ref) = self.object_event_ref(object_ref) else {
+                continue;
+            };
+            candidates.push((object_ref, event_ref, permanent.controller, destroy));
         }
-        candidates.sort_by_key(|(object_ref, _, _)| *object_ref);
+        candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
 
         // CR 704.3 — all applicable SBAs are one simultaneous event. Commits
         // have a deterministic ObjectRef order for replay, while every death
         // event sees the same pre-batch trigger-source snapshot.
         let trigger_sources = self.snapshot_trigger_sources();
-        for (object_ref, controller, destroy) in candidates {
+        let mut died = Vec::new();
+        for (object_ref, event_ref, controller, destroy) in candidates {
             let committed = if destroy {
                 // CR 704.5g destruction has its own proposal before the
                 // consequent battlefield-to-graveyard move.
@@ -74,8 +78,12 @@ impl Game {
             };
             if committed {
                 performed = true;
+                died.push(event_ref);
                 self.invalidate_mana_cache(controller);
             }
+        }
+        if !died.is_empty() {
+            self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
 
         // CR 704.5d — A token in a zone other than the battlefield ceases to

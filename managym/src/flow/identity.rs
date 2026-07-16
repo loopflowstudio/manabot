@@ -3,7 +3,7 @@
 
 use crate::{
     agent::action::ActionSpace,
-    flow::game::Game,
+    flow::{event::ObjectEventRef, game::Game},
     state::{
         card::CardDefinition,
         game_object::{
@@ -86,6 +86,25 @@ impl Game {
 
     pub fn object_lki(&self, object_ref: ObjectRef) -> Option<&ObjectLki> {
         self.state.object_lki.get(&object_ref)
+    }
+
+    /// Capture the stable viewer identity for a current or departed object.
+    pub(crate) fn object_event_ref(&self, object_ref: ObjectRef) -> Option<ObjectEventRef> {
+        let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {
+            self.state.permanents[permanent_id].as_ref()?.id
+        } else if let Some(lki) = self.object_lki(object_ref) {
+            lki.presentation_id
+        } else {
+            self.state.cards.get(CardId::from(object_ref.entity).0)?.id
+        };
+        Some(ObjectEventRef {
+            entity,
+            incarnation: object_ref.incarnation,
+        })
+    }
+
+    pub(crate) fn permanent_event_ref(&self, permanent_id: PermanentId) -> Option<ObjectEventRef> {
+        self.object_event_ref(self.permanent_object_ref(permanent_id)?)
     }
 
     /// Resolve a departed object's immutable meaning through the match's

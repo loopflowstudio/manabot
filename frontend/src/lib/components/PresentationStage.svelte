@@ -56,7 +56,7 @@
         <div class="flex shrink-0 gap-2">
           <button
             type="button"
-            class={`rounded border px-2.5 py-1.5 text-xs font-semibold ${
+            class={`rounded border px-2.5 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${
               player.speed > 1
                 ? 'border-amber-300 bg-amber-300/20 text-amber-100'
                 : 'border-slate-600 bg-slate-900 text-slate-200 hover:border-slate-400'
@@ -68,14 +68,14 @@
           </button>
           <button
             type="button"
-            class="rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-400"
+            class="rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
             onclick={() => player.skipCurrent()}
           >
             Skip beat
           </button>
           <button
             type="button"
-            class="rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-400"
+            class="rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
             onclick={() => player.finishSequence()}
           >
             Finish

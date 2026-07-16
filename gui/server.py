@@ -311,6 +311,7 @@ def _format_action(
     action: managym.Action,
     names: dict[int, str],
     space_kind: str = "",
+    declared: bool | None = None,
 ) -> str:
     """Render a legal action in Magic terms with card names.
 
@@ -327,6 +328,8 @@ def _format_action(
       PASS_PRIORITY:          []
     """
     action_name = _enum_name(ActionEnum, action.action_type)
+    if declared is None:
+        declared = getattr(action, "declared", None)
     focus_names = [names.get(int(value)) for value in action.focus]
     first = focus_names[0] if focus_names else None
 
@@ -337,7 +340,11 @@ def _format_action(
     if action_name == "PRIORITY_CAST_SPELL" and first:
         return f"Cast {first}"
     if action_name == "DECLARE_ATTACKER" and first:
-        return f"Attack with {first}"
+        return (
+            f"Do not attack with {first}"
+            if declared is False
+            else f"Attack with {first}"
+        )
     if action_name == "DECLARE_BLOCKER" and first:
         if len(focus_names) >= 2 and focus_names[1]:
             return f"Block {focus_names[1]} with {first}"
@@ -382,7 +389,10 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
                 "index": index,
                 "type": _enum_name(ActionEnum, action.action_type),
                 "focus": focus,
-                "description": _format_action(action, names, space_kind),
+                "declared": action.declared,
+                "description": _format_action(
+                    action, names, space_kind, action.declared
+                ),
             }
         )
     return results

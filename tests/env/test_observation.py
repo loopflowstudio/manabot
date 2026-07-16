@@ -162,6 +162,23 @@ class TestEnumParity:
                 EventTypeEnum.ABILITY_TRIGGERED,
                 managym.EventTypeEnum.ABILITY_TRIGGERED,
             ),
+            (
+                EventTypeEnum.COMBAT_ATTACKERS_DECLARED,
+                managym.EventTypeEnum.COMBAT_ATTACKERS_DECLARED,
+            ),
+            (
+                EventTypeEnum.BLOCKERS_DECLARED,
+                managym.EventTypeEnum.BLOCKERS_DECLARED,
+            ),
+            (
+                EventTypeEnum.COMBAT_DAMAGE_DEALT,
+                managym.EventTypeEnum.COMBAT_DAMAGE_DEALT,
+            ),
+            (
+                EventTypeEnum.PERMANENTS_DIED,
+                managym.EventTypeEnum.PERMANENTS_DIED,
+            ),
+            (EventTypeEnum.TURN_STARTED, managym.EventTypeEnum.TURN_STARTED),
         ],
     )
     def test_event_type_enum(self, py_enum, cpp_enum):
@@ -174,6 +191,7 @@ class TestEnumParity:
             (EventEntityKindEnum.CARD, managym.EventEntityKindEnum.CARD),
             (EventEntityKindEnum.PERMANENT, managym.EventEntityKindEnum.PERMANENT),
             (EventEntityKindEnum.PLAYER, managym.EventEntityKindEnum.PLAYER),
+            (EventEntityKindEnum.OBJECT, managym.EventEntityKindEnum.OBJECT),
         ],
     )
     def test_event_entity_kind_enum(self, py_enum, cpp_enum):
@@ -364,8 +382,13 @@ class TestObservationEncoder:
 
     def test_event_features_round_trip(self, observation_space, observation, hypers):
         encoded = observation_space.encode(observation)
-        events = observation.recent_events[-hypers.max_events :]
-        valid_count = min(len(observation.recent_events), hypers.max_events)
+        learning_events = [
+            event
+            for event in observation.recent_events
+            if int(event.event_type) <= int(EventTypeEnum.ABILITY_TRIGGERED)
+        ]
+        events = learning_events[-hypers.max_events :]
+        valid_count = min(len(learning_events), hypers.max_events)
 
         assert int(encoded["events_valid"].sum()) == valid_count
         for i, event in enumerate(events):

@@ -68,6 +68,8 @@ export interface ActionOption {
   index: number;
   type: string;
   focus: number[];
+  /** Native yes/no declaration intent for combat prompts. */
+  declared?: boolean | null;
   description: string;
 }
 
@@ -239,6 +241,9 @@ export const PRESENTATION_KIND_NAMES = [
   'damage',
   'destroyed',
   'died',
+  'attack_group',
+  'blocked',
+  'turn_started',
 ] as const;
 
 /**
@@ -276,6 +281,21 @@ export type PresentationKind =
       /** Actual creature death, including lethal damage and zero toughness. */
       kind: 'died';
       objects: ObjectRenderId[];
+    }
+  | {
+      kind: 'attack_group';
+      attackers: ObjectRenderId[];
+      defender: SubjectRef;
+    }
+  | {
+      kind: 'blocked';
+      attacker: ObjectRenderId;
+      blockers: ObjectRenderId[];
+    }
+  | {
+      kind: 'turn_started';
+      player: number;
+      turn_number: number;
     };
 
 export interface PresentationEvent {
@@ -407,11 +427,19 @@ export interface Trace {
   timestamp: string;
 }
 
+/** Viewer-safe names captured from authoritative projections around a beat. */
+export interface PresentationLabels {
+  objects: Record<string, string>;
+  players: Record<string, string>;
+  stacks: Record<string, string>;
+}
+
 export interface ReplayFrame {
   observation: Observation;
   actionDescription: string | null;
   actor: 'hero' | 'villain' | null;
   presentation: PresentationEvent[];
+  presentationLabels: PresentationLabels;
 }
 
 export type StopSide = 'my' | 'opponent';

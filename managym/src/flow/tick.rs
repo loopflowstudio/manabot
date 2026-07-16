@@ -136,9 +136,13 @@ impl Game {
     fn on_step_start(&mut self, step: StepKind) {
         self.state.priority.start_round(self.active_player());
         if step == StepKind::Untap {
-            self.state.events.push(GameEvent::TurnStarted {
-                player: self.active_player(),
-            });
+            let player = self.active_player();
+            let event = GameEvent::TurnStarted {
+                player,
+                turn_number: self.state.turn.turn_number,
+            };
+            self.state.events.push(event.clone());
+            self.emit_observation_event(event);
         }
         // Emitted (not just logged) so step-based triggers such as
         // "at the beginning of your upkeep" can see it.
@@ -212,8 +216,19 @@ impl Game {
                     if !attackers.is_empty() {
                         self.emit(GameEvent::AttackersDeclared {
                             player: active,
-                            attackers,
+                            attackers: attackers.clone(),
                         });
+                        let attackers = attackers
+                            .into_iter()
+                            .filter_map(|permanent| self.permanent_event_ref(permanent))
+                            .collect::<Vec<_>>();
+                        if !attackers.is_empty() {
+                            self.emit_observation_event(GameEvent::CombatAttackersDeclared {
+                                player: active,
+                                defender: self.non_active_player(),
+                                attackers,
+                            });
+                        }
                     }
                     return None;
                 };
@@ -240,6 +255,32 @@ impl Game {
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();
+                    let assignments: Vec<_> = self
+                        .state
+                        .combat
+                        .as_ref()
+                        .map(|combat| {
+                            combat
+                                .attacker_to_blockers
+                                .iter()
+                                .map(|(attacker, blockers)| (*attacker, blockers.clone()))
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let assignments = assignments
+                        .into_iter()
+                        .filter_map(|(attacker, blockers)| {
+                            let attacker = self.permanent_event_ref(attacker)?;
+                            let blockers = blockers
+                                .into_iter()
+                                .filter_map(|blocker| self.permanent_event_ref(blocker))
+                                .collect::<Vec<_>>();
+                            (!blockers.is_empty()).then_some((attacker, blockers))
+                        })
+                        .collect::<Vec<_>>();
+                    if !assignments.is_empty() {
+                        self.emit_observation_event(GameEvent::BlockersDeclared { assignments });
+                    }
                     return None;
                 };
                 let attackers = combat.attackers.clone();

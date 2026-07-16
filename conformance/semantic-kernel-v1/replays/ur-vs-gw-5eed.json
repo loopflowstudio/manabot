@@ -12,13 +12,13 @@
   "choice_seed": 49374,
   "max_commands": 2000,
   "initial_checkpoint": {
-    "state_hash": "v1:4cc2bbb6ae412ebeb5afbd00216b5bdee628dfdb694c02932919ebec433f7268",
+    "state_hash": "v1:adab415394feaa59f353b57aedbe8bbd69f0a30f67cc138a0b8e11f7d879898e",
     "action_space_digest": "4ed00d6eec14d612dce1fb436f3338e9d9074316f14f4ce20520783bb6b817fa",
     "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
     "event_boundary": [
       5,
       0,
-      4
+      5
     ],
     "game_over": false,
     "winner": null
@@ -35,13 +35,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9249f2552a1f419cb21794c632ded5a2628e688d142c32c87fa20ced2f943799",
+        "state_hash": "v1:b4825ba08d2efae0ddeeeb7d6b0d3190ef3e451177fadadff865a205529ab729",
         "action_space_digest": "ea5889a4f3f09522a328754467e234de842149a21ceb9364a17ab30dc8687bfd",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           21,
           0,
-          19
+          21
         ],
         "game_over": false,
         "winner": null
@@ -58,13 +58,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:713276d84ac988e086cbb783712224c43e484b52e2abd487b15675fde95fc11e",
+        "state_hash": "v1:43a1c38ad39cf5c8330399dd039fdfc36b99e094738fb105c205f4ce4d1d336f",
         "action_space_digest": "1a0118ab4b66f298b95bd1192ccec8348d10621eb07889bbaf2e9b57d66c9eb1",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           37,
           0,
-          34
+          37
         ],
         "game_over": false,
         "winner": null
@@ -81,13 +81,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b0d6e7f182d031aad21739bcb3d74658eb08bf927fdbeee6c73e78cd59d0b460",
+        "state_hash": "v1:35eebc526f4cda99867468cf9bdf4ad245d1374e9ae82d69b0c0284a9a23c2a9",
         "action_space_digest": "cd39137fd41f65deed8167b7b94e0a6c90a94320024f301d0c6395b1cc26c573",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           38,
           0,
-          35
+          38
         ],
         "game_over": false,
         "winner": null
@@ -103,13 +103,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9957697468a52ee429cb3c7f3808e14161184270aaa572faa38fe9cd8a9b6dac",
+        "state_hash": "v1:e4fd3bf98a0771451dfbc78ecfa0b08dd771016546281d393e07b0f6418f6dab",
         "action_space_digest": "cd39137fd41f65deed8167b7b94e0a6c90a94320024f301d0c6395b1cc26c573",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           44,
           0,
-          41
+          44
         ],
         "game_over": false,
         "winner": null
@@ -126,13 +126,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:6d2a0f7485b2be6359d2d79cac80bb5ff110e50bbd92fd5f7a2445180cef9356",
+        "state_hash": "v1:98207e0502b63c144fa02c297306b75d2ed98cb8ab27a97bed5c7fb81f593cdc",
         "action_space_digest": "560bb5f4624249cc2c85420b15203503c43aa4e1c1b45c34684194e6c0a1ff4d",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           59,
           0,
-          55
+          59
         ],
         "game_over": false,
         "winner": null
@@ -148,13 +148,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:eb1c591c818bb5c39088e07e8858b84ed61ae40d6eca2edcbdfc89a213618bbf",
+        "state_hash": "v1:b2a161d86cdf2af8ce24bdfa9e23dc3d9e142d4501fa9ee3687c9d1d7421829f",
         "action_space_digest": "560bb5f4624249cc2c85420b15203503c43aa4e1c1b45c34684194e6c0a1ff4d",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           65,
           0,
-          61
+          65
         ],
         "game_over": false,
         "winner": null
@@ -171,13 +171,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:fc861fecb653d76ec630ee1aff1a348eceae846667a6f28b35d2dfc4750f7507",
+        "state_hash": "v1:30f485565d61b02bd2eb8085c1c4c9da854dd2cdc8b0d5d5ed77d51bcae9c3c1",
         "action_space_digest": "0768e9f2ea2fd0d1d4380ac5fa30f4d01b5df6d2fa2531b95235996d6105a939",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           66,
           0,
-          62
+          66
         ],
         "game_over": false,
         "winner": null
@@ -193,13 +193,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:17ec2f039cab82e9f6945a362a4216b93e76beef06f447bcd72fadb4f62b3ffb",
+        "state_hash": "v1:4ddc3bd45a9230a794009f78877696952c5886cd5cf3b573702f05cfe9855ccf",
         "action_space_digest": "7c6d460591bb95324fad4e0e1a1ef5a507f9800b294d90eb1d4d6a8d898a0691",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           67,
           0,
-          63
+          67
         ],
         "game_over": false,
         "winner": null
@@ -215,13 +215,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7d9712b4d29420d3da89cda202fc3a782d780827b895659a4312b1da1cac8b19",
+        "state_hash": "v1:652588e55e86a6afd40b323a0b308ebc5c887bea42ed52c41930591ab37f2e14",
         "action_space_digest": "7c6d460591bb95324fad4e0e1a1ef5a507f9800b294d90eb1d4d6a8d898a0691",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           71,
           0,
-          66
+          71
         ],
         "game_over": false,
         "winner": null
@@ -238,13 +238,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:79d77655bd1038a6a3be38175530142dce3c93cbedb25be64157ef2df4ae7e4f",
+        "state_hash": "v1:0133db3dc23ef34abb4ee4bc7b93e468dddb6e9548f9fb1e5e88009162817d39",
         "action_space_digest": "042bc395b169843bd69e3013e93ccae6a5a77f47b2be2c190bc64a5a84160c2a",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           83,
           0,
-          78
+          83
         ],
         "game_over": false,
         "winner": null
@@ -261,13 +261,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:de9fcc271637ea18ca4294d9fdc80873e94e3d27acd35b9fa68d914e2b2feb27",
+        "state_hash": "v1:81358ceb2123ca7c102bf8e2ea4ad65a695c8c3a5308703313ecf7fb80e83927",
         "action_space_digest": "16088fd46252cac2bfcf58c022e6603772e2981389b1565f286f942ff4ee3413",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           84,
           0,
-          79
+          84
         ],
         "game_over": false,
         "winner": null
@@ -284,13 +284,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:3e4ae8b62f2440fd6fa16f0d123e86fb321512ba40ea84fa34709e46d1a8aae4",
+        "state_hash": "v1:339712b3340dd50ac3ca11f414f3b3ab28609de33b8a678336b15277411316c0",
         "action_space_digest": "8b0b388572840f921fcb1e4445fcb4703e780bdb3056cc1352cbfc9a154e568d",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           93,
           1,
-          88
+          93
         ],
         "game_over": false,
         "winner": null
@@ -308,13 +308,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:ff77765aab42e62400af70746bd1bf3582a6c44ae255422aae8c9d7d2bf7b52b",
+        "state_hash": "v1:e2870a02618e8fc760fd16494c11856bcb833f15b6f50dcf8f21025868023cc1",
         "action_space_digest": "a20bd6107fa7a1045f0f19dfa41ad1561673eed910dfca3da7c80bab12c68a48",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           96,
           1,
-          91
+          97
         ],
         "game_over": false,
         "winner": null
@@ -332,13 +332,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7072f81160ebf1bf90bb7666abf0cd870c8ce8f70947bba02247c63db20d62d2",
+        "state_hash": "v1:c683c600eb834b5df3121d76b177471e01482ba3fe081332ae9adff733229211",
         "action_space_digest": "3cbb02595f259d19b51528b64921038d15277e0c134f32216821c4ac1134ea2e",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           96,
           1,
-          91
+          97
         ],
         "game_over": false,
         "winner": null
@@ -356,13 +356,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:3ccef3c184b65e707afa62675035c485d97549f41217d6c9d0175f23952e2056",
+        "state_hash": "v1:87ca53a1dddbd318d7a151fead8cf601601f1971e809babb42cac8913125600f",
         "action_space_digest": "65b4d4c3198a92dde1535c0426aa89ee5801927b627a014edf4ff52454b82d12",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           108,
           0,
-          102
+          113
         ],
         "game_over": false,
         "winner": null
@@ -378,13 +378,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:313fd28518437b4ae586e5c66399a9cdd0fc82f4eb18682ce8b1c588a6ebf700",
+        "state_hash": "v1:9b179ed69fd60943ebc3587fb2b73897bf5b7a5c59510dc69f9d3ce5bc2a27ee",
         "action_space_digest": "65b4d4c3198a92dde1535c0426aa89ee5801927b627a014edf4ff52454b82d12",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           111,
           0,
-          105
+          116
         ],
         "game_over": false,
         "winner": null
@@ -401,13 +401,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:985f67a4c5a767ba2ed20149ddf42deb4496ec1bdf6f080f64f432f9201c57b8",
+        "state_hash": "v1:868d99e2951925c1459d2944e6bef98f34ff8e656341a615fc0936ae1defd73e",
         "action_space_digest": "6c92f5d688b1573b5f72d448b6d84c455ac10b03085e85de80809d923ca1019a",
         "pending_choice_digest": "6c7b74ec09d09564d080418ffea975f0bf86eb7d59a0efd97e4e537895816531",
         "event_boundary": [
           111,
           0,
-          105
+          116
         ],
         "game_over": false,
         "winner": null
@@ -426,13 +426,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:4ebddaaa29526ec34e611d01a53c9c3a0012fa0f652a7a15274cc54fe243a4bc",
+        "state_hash": "v1:04774121553c2545cd773092538e80b36fda9334fb09cf6ade605b88046fde8f",
         "action_space_digest": "17656ec9820dc29f976dd1096ea4d055d809165d851c6fd17c419aaf897257eb",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           121,
           0,
-          115
+          126
         ],
         "game_over": false,
         "winner": null
@@ -449,13 +449,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:ae8afb880ddaf9a86d2a05f1bbf91cbe06f27dfcabc7585522f5bae6e57d8921",
+        "state_hash": "v1:cf0e7487f5b6fd121c46766a48f450a4488267c5cf17ee8bb8e1d7ec97217206",
         "action_space_digest": "7d04f3d39765afe5e5b8edd6d483682d1780027296892bf61b44fc328d95dad8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           124,
           1,
-          118
+          129
         ],
         "game_over": false,
         "winner": null
@@ -473,13 +473,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a1b2c67012d4ff1ebf810e02bd1101d311168c2767b8a028b4bed70d8439a801",
+        "state_hash": "v1:95d34c56dcfec8190637b4c24992283873276993be638b860091a3e187ada68f",
         "action_space_digest": "745060384bace7fa132abd9d622686b1a18f1798888a86ca707f6dd914114961",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           137,
           0,
-          130
+          142
         ],
         "game_over": false,
         "winner": null
@@ -496,13 +496,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:3bc8043f18251805435b01d2f673a128f2703a7881c864e2cc5c2bd73ada6a7c",
+        "state_hash": "v1:1a7d60494ae5b7340dd21890e8962791cfe9520953525ffae8a2cd31319bd1c8",
         "action_space_digest": "5e567b0c8b1c41e3b1f7dd13e2740fbcf72c235a04e9215480700da820e70ecf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           140,
           1,
-          133
+          145
         ],
         "game_over": false,
         "winner": null
@@ -520,13 +520,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cf49aad62bf9dfaeb79e9781097737a40a55624797982a393662fda7ebf314cd",
+        "state_hash": "v1:bb38566ebbe27cd6d00e40d00d3107be2a221229a1ede22b129fa70bec239994",
         "action_space_digest": "d9ea43dbb5a531f80d9484ff9959ae5536897334f4f8d24e1a58caa8dbee48d9",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           151,
           0,
-          143
+          157
         ],
         "game_over": false,
         "winner": null
@@ -542,13 +542,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:c398c9d8f1458f18d5a922478d37418029cd1e05727d2e87819e3b2059a18c79",
+        "state_hash": "v1:fbbca377846c4f361a99c0f6dd6a5be9768185779233264f9fd9744de10218e7",
         "action_space_digest": "d9ea43dbb5a531f80d9484ff9959ae5536897334f4f8d24e1a58caa8dbee48d9",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           154,
           0,
-          146
+          160
         ],
         "game_over": false,
         "winner": null
@@ -564,13 +564,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:239f1d1a26ded2b9b5d732751af11165f5479644271d9906bfb01dd28b14f589",
+        "state_hash": "v1:282701ede0db81a8bcff19e8bd6abe8e425eaa7e5838e3a782f4d551ca7a1293",
         "action_space_digest": "eab94dc3d2312588f95710a5fe6b94fa8c568d8e2dc09c57e491ef3568012288",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           155,
           0,
-          147
+          161
         ],
         "game_over": false,
         "winner": null
@@ -586,13 +586,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:89307a55162ad326107954f4d8ac02fbc85c9e665923e29135a703a1bddfd270",
+        "state_hash": "v1:51a29ff254e56223fab5b00ae6d6ed8cffc35326e81f862d85b618a55cb012be",
         "action_space_digest": "d9ea43dbb5a531f80d9484ff9959ae5536897334f4f8d24e1a58caa8dbee48d9",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           156,
           0,
-          148
+          162
         ],
         "game_over": false,
         "winner": null
@@ -609,13 +609,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:ea5d54484d17e211dfb2952bea057d9f56dc341659ed18ace59512bb1412b6c5",
+        "state_hash": "v1:b7b4e9a35ec0cdb54c8c39b9a8a61e3227c70da5b0ca6c0af2e3c31f429de859",
         "action_space_digest": "f775329871da152824c99260f2f762ae5b443b5c306a8256cc0729b64be73b61",
         "pending_choice_digest": "9e14d39e005fd1788d8a60bc0439f4779905c13ec8f17bffd010e50d560e90c8",
         "event_boundary": [
           156,
           0,
-          148
+          162
         ],
         "game_over": false,
         "winner": null
@@ -634,13 +634,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:ea5d54484d17e211dfb2952bea057d9f56dc341659ed18ace59512bb1412b6c5",
+        "state_hash": "v1:b7b4e9a35ec0cdb54c8c39b9a8a61e3227c70da5b0ca6c0af2e3c31f429de859",
         "action_space_digest": "1c7bcf8db14d5ee48ee3f35a9063a35d7cc7572c8712a2aee2307ae8337230a7",
         "pending_choice_digest": "ee586d9e825699af6e5678c83ca5e4a9b0bfbaecad6621f1f72384f933610b35",
         "event_boundary": [
           156,
           0,
-          148
+          162
         ],
         "game_over": false,
         "winner": null
@@ -659,13 +659,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cb7e63d8dbf45b438a996e5d1b0734a960f8153e35fb1ae70f8540b123a2b18c",
+        "state_hash": "v1:7c5a3988a2a4af0d1251a64100bfdb87f1456641e62632b6588f5087801e51e2",
         "action_space_digest": "42f2f362d4858731a97b127fe6d34458da79e62edee44a8efa22651a9ff2fb4f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           164,
           0,
-          156
+          170
         ],
         "game_over": false,
         "winner": null
@@ -682,13 +682,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:0a3d32260b2149afb4cffe66fadecd0df3ab145fb213770857ebd5110b3d731b",
+        "state_hash": "v1:41f310b52ae49047d6107d189af50d27ddc7f27bc6875d65ab57ca592579fcf2",
         "action_space_digest": "7d04f3d39765afe5e5b8edd6d483682d1780027296892bf61b44fc328d95dad8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           173,
           1,
-          165
+          179
         ],
         "game_over": false,
         "winner": null
@@ -706,13 +706,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b29d9dde26f16e8c3e63a54f5726d42f88ca3e75d382341397e24c0a006d51c3",
+        "state_hash": "v1:9c815152db2b82945bc6cc5203793e18d9dbdd6bf953bfdd367a6a7cbb357437",
         "action_space_digest": "d9387b2ffeaec112ae92977b45a6eb0655d14a95737d9e328133d02c6bab6ad0",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           181,
           0,
-          173
+          189
         ],
         "game_over": false,
         "winner": null
@@ -729,13 +729,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:238b7ba99b4c96f9ae1add0c1454b6ad8ce736e0b84f25ac64e4bee4f06f3b75",
+        "state_hash": "v1:79679700c0a27fe1823a172ae8284dd641ba56cac0b6003a28bd176b14912a9e",
         "action_space_digest": "daba60b051da69713bef31a40b338819589daa51f9b78e2e2566577d078cc9af",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           191,
           0,
-          182
+          199
         ],
         "game_over": false,
         "winner": null
@@ -752,13 +752,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:fec8dacbd07896fb19011286456149bab606217ac1e8f18ab538fefad21b3920",
+        "state_hash": "v1:33cacb56a2328c04bfa3b365116f512342984d211d8a1c4a007243d5501bec0c",
         "action_space_digest": "5e567b0c8b1c41e3b1f7dd13e2740fbcf72c235a04e9215480700da820e70ecf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           194,
           1,
-          185
+          202
         ],
         "game_over": false,
         "winner": null
@@ -776,13 +776,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:1bce224b067e8bd0a524d2cbfa77a0863086e9ce9bd6ec4744af7275849e4b6e",
+        "state_hash": "v1:fad919d6e3f881e215bb3a4bd2f006e4d59ac4c7cdb1fc62b9c11d20b96dacc8",
         "action_space_digest": "8a8fbd1a3a9b2973cf2b7f2e53f11603b411fe4ef318014987720abad049cbdb",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           211,
           0,
-          201
+          221
         ],
         "game_over": false,
         "winner": null
@@ -799,13 +799,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cc10f0b7de99b24ff8a7baaf3850e8d7ef1533d9ee0c65ecd6bea615f3481edd",
+        "state_hash": "v1:c922bf77752c97036be68290ae15af42bd46f43a2d65e4a6b749b91240c4b1a4",
         "action_space_digest": "60f01b3eab5ce5595933808f192e7be0c6a3be435d22410edf46bf42d10de563",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           219,
           0,
-          209
+          229
         ],
         "game_over": false,
         "winner": null
@@ -822,13 +822,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:d3813ddb322534aebfb43867842c0713f872a77f5ea00bbc26cf87f0744e71c1",
+        "state_hash": "v1:9aebc8c3ed1e0346d2e6ad44cccacb7b580dbde43169f919720b26d639e91337",
         "action_space_digest": "7d04f3d39765afe5e5b8edd6d483682d1780027296892bf61b44fc328d95dad8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           222,
           1,
-          212
+          232
         ],
         "game_over": false,
         "winner": null
@@ -846,13 +846,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:11033be8705a7044b3697af4c7af6d46f01252a0b46a4efe4d40e29d343ac6bc",
+        "state_hash": "v1:7c2a33fbb9abe80a0559fee60d6037a890f97765133c1b1d882767348842c9c5",
         "action_space_digest": "1572c35712acf459273325539d58a7f7fbb85087d3f800df097da906da1be5e7",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           235,
           0,
-          224
+          245
         ],
         "game_over": false,
         "winner": null
@@ -869,13 +869,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:8d94df23aa601f7c186d05d3a59bc23b096c99ae877a25bf4e99f3203de1868d",
+        "state_hash": "v1:d03273bfca3e6bccce8c43e32681aa24ec12f5754c5165a5bf0839ef4b35cb29",
         "action_space_digest": "b524108e7d6c94830b815e566d67855d5ee9335436b32cc8f31e90acfe5440a3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           236,
           0,
-          225
+          246
         ],
         "game_over": false,
         "winner": null
@@ -891,13 +891,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9959db80f8783575fa2652219b1b262682c6f138b46bf1cb4b184bb16435ab7a",
+        "state_hash": "v1:fbca882de44ccd70027354494cac717ce901aee7bfda549fa4daca175caaa5d8",
         "action_space_digest": "5e567b0c8b1c41e3b1f7dd13e2740fbcf72c235a04e9215480700da820e70ecf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           238,
           1,
-          227
+          248
         ],
         "game_over": false,
         "winner": null
@@ -915,13 +915,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cf49a5fe559e7d4366e59f72248c01020cffb45dcd4186582ccbbf9cf3f63b23",
+        "state_hash": "v1:5d77aed8dc44992306cf2dba811d4833e16f3b561dd8d145d8a0553bc84dd03c",
         "action_space_digest": "b524108e7d6c94830b815e566d67855d5ee9335436b32cc8f31e90acfe5440a3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           246,
           0,
-          235
+          258
         ],
         "game_over": false,
         "winner": null
@@ -938,13 +938,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:6abaef5b4e86a136ceea4825849365a910db249dcffd8e8ef86e2a4da6377657",
+        "state_hash": "v1:e359d0f6e63a5b24393a31f2fd6661ab6091ca5eb142ea6e369d065edbe72586",
         "action_space_digest": "5a167e2fea4fff490931b09fcc99e8f56331e7867ed0fc0fafd913151015032d",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           261,
           0,
-          249
+          273
         ],
         "game_over": false,
         "winner": null
@@ -961,13 +961,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7767085ba4db4defd3272c65e67733ed3024a9a14448253b0c4b466d97c5b168",
+        "state_hash": "v1:a97c572e401428dc1506577822ae2ddd78052a912c00286268c6521d38315282",
         "action_space_digest": "c7ab78d2b9a24fd81dc494e38124bd341f029322486410e54d27cafbc8d2520d",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           268,
           0,
-          256
+          280
         ],
         "game_over": false,
         "winner": null
@@ -983,13 +983,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:bcb76be1c11a425762f4d86ceeba888c7e03bfe819812454dfa15b6fb9afa2ab",
+        "state_hash": "v1:863fd0544cacf3439337ca67e251e34a3a3bd0428b5650f7759639f2c30776b7",
         "action_space_digest": "7caa88ce232c5e074bf5c4987ff3ab27638a6d43b96ec4a929f83f053dbb53b0",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           270,
           1,
-          258
+          282
         ],
         "game_over": false,
         "winner": null
@@ -1007,13 +1007,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:e2fd135280e3e4307dd9dff16468f50e899b85e175f3f2daca384099aa6e50f5",
+        "state_hash": "v1:e69b984ad24ef0ccc5bfac1b000e152dc1086136e33bb5a0253957b1fd1bbd4d",
         "action_space_digest": "7d04f3d39765afe5e5b8edd6d483682d1780027296892bf61b44fc328d95dad8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           271,
           2,
-          259
+          283
         ],
         "game_over": false,
         "winner": null
@@ -1031,13 +1031,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7eae5d7112322f1062d28e6276a4e10ec357368478cdcfcd53f0a54dfb3000b6",
+        "state_hash": "v1:5bf81c7eccc1cfacae86dd9541d803ca1d219dc3e8a9e6e7bfd6fce3788c268b",
         "action_space_digest": "34005e8616909d20548b401b6f35e0c219018804e758fddfe7939caa8a5f9a33",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           275,
           1,
-          263
+          288
         ],
         "game_over": false,
         "winner": null
@@ -1055,13 +1055,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:f74d6a64cde0d3a718094b2d20b73557a986472cb729ee874da09584d1e0c4c9",
+        "state_hash": "v1:a45e8a59e0f4e8b1ea806ca4da7aba5f9d3691b664c05040312d0eed549d2eb9",
         "action_space_digest": "c7ab78d2b9a24fd81dc494e38124bd341f029322486410e54d27cafbc8d2520d",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           283,
           0,
-          271
+          301
         ],
         "game_over": false,
         "winner": null
@@ -1077,13 +1077,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:f535faa351cbea617d6ea07c601e5a43f885e65ae7e0eafd9b0774dced9fadf8",
+        "state_hash": "v1:e7dab70cf3554ede4403ea71b629e2b9fdb59009b05c406492b80dc842b7461d",
         "action_space_digest": "29ff2429a1a2e18ad15c2d639e5e7f38d38c3b96c4a6ec9b82f5041d92b5166a",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           292,
           0,
-          279
+          310
         ],
         "game_over": false,
         "winner": null
@@ -1099,13 +1099,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:036cb6751d871e2e0587002997336bfc203fb759f0885914591bd4f25f9efada",
+        "state_hash": "v1:f4ec5b39267f062c2ae5a8c7dd2ba217138434ab4d0974b75850c3a774f5f73f",
         "action_space_digest": "5e567b0c8b1c41e3b1f7dd13e2740fbcf72c235a04e9215480700da820e70ecf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           294,
           1,
-          281
+          312
         ],
         "game_over": false,
         "winner": null
@@ -1123,13 +1123,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:0b102da15c4774b153198b49b7d9e9e810475089d2943a0757bde51ea1cd6f63",
+        "state_hash": "v1:a59770a3223980e7951a7754e53917846bfc0340e233472204fab024b32254fe",
         "action_space_digest": "29ff2429a1a2e18ad15c2d639e5e7f38d38c3b96c4a6ec9b82f5041d92b5166a",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           302,
           0,
-          289
+          322
         ],
         "game_over": false,
         "winner": null
@@ -1146,13 +1146,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b2b25afb060f1a050f354edcd8ddcdbe5b434fbf4f757bed7babc58d8fc2cdab",
+        "state_hash": "v1:37f4ecc9c9212fe5fa51e90f5341ec88aec80893390f887ab387bb990500339b",
         "action_space_digest": "0c01215eba3aad7809d628908fa1a5e767459d9be63fc23f9c89393944016a1e",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           303,
           0,
-          290
+          323
         ],
         "game_over": false,
         "winner": null
@@ -1168,13 +1168,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:1e0f3c45b404ec7fef644769b6b8414513048f0bf13ef955fa01a8c95d6e6e1b",
+        "state_hash": "v1:99234f1b572d3422c244f60fe1f0f7dee751cd0405317f6307656583ed8f1df4",
         "action_space_digest": "387315e9570e08fb1cef52688c948b3fa3269584ff512d5da052dc8be8fb19fb",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           312,
           0,
-          298
+          332
         ],
         "game_over": false,
         "winner": null
@@ -1190,13 +1190,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:de1833bff78cce7f00001c672344479d1ac726c3dc9262f683a3db7ec74b8ba8",
+        "state_hash": "v1:ec1d092ccd0fba6f5637b40c27cf255816bdea75d11e35d9cffc8b6fa787d6a0",
         "action_space_digest": "6f7e7bf6a06db1c428d16bc54974b367a6ee270771f9b11d66195645c939dacf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           314,
           1,
-          300
+          334
         ],
         "game_over": false,
         "winner": null
@@ -1214,13 +1214,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:02fa65ea9326347cd563a180df5f23c0cf33efee3974ed78863d17d605506952",
+        "state_hash": "v1:f239ad99795ad97121be67f374ac54de111220a9f98ca4964a3912a845862a51",
         "action_space_digest": "8966b945ed4cc25e42425b4e0c72fba11cf1a37ac317dcc78d2a85f1354586f4",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           314,
           1,
-          300
+          334
         ],
         "game_over": false,
         "winner": null
@@ -1238,13 +1238,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:549acc95e401f56db1dd8c58fbe630569e7e26136c93d2234af69dd96589b8f0",
+        "state_hash": "v1:e731011033080ace2ed8e0a07d487acf2364cf9defe6765b3be8c1dcd673abf5",
         "action_space_digest": "7caa88ce232c5e074bf5c4987ff3ab27638a6d43b96ec4a929f83f053dbb53b0",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           314,
           1,
-          300
+          334
         ],
         "game_over": false,
         "winner": null
@@ -1262,13 +1262,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:bc1b7212b60a4bdf92c7563061b6c5c10026b25990ae11cb6562d27539f797d2",
+        "state_hash": "v1:11ea733b5c656d63b384c111781670c31956975170e5fd8aed53a2a9a86fc0c3",
         "action_space_digest": "7d04f3d39765afe5e5b8edd6d483682d1780027296892bf61b44fc328d95dad8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           315,
           2,
-          301
+          335
         ],
         "game_over": false,
         "winner": null
@@ -1286,13 +1286,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:2fb447a255e42ad62fc3cda0d3c763e1913baf878ece3a456d4c9c460df1cb15",
+        "state_hash": "v1:bbddd28b8a3a631d2b31aeb2b528648c9e06ed6508580a3e95829a5e53a92009",
         "action_space_digest": "387315e9570e08fb1cef52688c948b3fa3269584ff512d5da052dc8be8fb19fb",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           328,
           0,
-          314
+          352
         ],
         "game_over": false,
         "winner": null
@@ -1308,13 +1308,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:58dbb85a4f0d22224bc0a20d01eb2e78604cd1e25114a64e374f02da46e7a4f4",
+        "state_hash": "v1:aecd9ed2bff5f006b6825fe4d7c9b222662d6a0f51128f5889d2467d7a741497",
         "action_space_digest": "1d06f491ccce308a2ea000c01df4ebe4210c7abaca6b6b9f0b3b08da4dac5488",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           336,
           0,
-          321
+          360
         ],
         "game_over": false,
         "winner": null
@@ -1330,13 +1330,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9c918ef9d5e5cf659168ea9eb1471cc6bf41b01b935c42c157498a0042f8cc01",
+        "state_hash": "v1:f7cf7de58b959f92be91d611a36bdbf8ae20027a364960065cb3eb8864fd3241",
         "action_space_digest": "33166938e8ec48fe44f86afccd504ebba1bbc4623ee530d04a865b180b8b8a37",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           337,
           0,
-          322
+          361
         ],
         "game_over": false,
         "winner": null
@@ -1353,13 +1353,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:16cb08e63530b54c6819fa8d7ab53b08515bf4a17af5223be35ea710dfd55d1d",
+        "state_hash": "v1:0253f2216be48b25e5c38aea757526e58c4a5192c78667823c3c1d9064dafb07",
         "action_space_digest": "faf3d65de858863f62dfd5e5cdd845985bf3306fb61f24a1c48d787554ca600c",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           338,
           0,
-          323
+          362
         ],
         "game_over": false,
         "winner": null
@@ -1376,13 +1376,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:8aa1edb54700168a9d5d46b2c8bab48314151a19fd7fd4c403778bbce6eea7bc",
+        "state_hash": "v1:5138cac370da418c20fb3425b7f0f95e9d25a6af5ca8e819046e48e758356c72",
         "action_space_digest": "1d06f491ccce308a2ea000c01df4ebe4210c7abaca6b6b9f0b3b08da4dac5488",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           341,
           0,
-          326
+          365
         ],
         "game_over": false,
         "winner": null
@@ -1398,13 +1398,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:59e5c5147f53388ab0e02277f69929c766b2c5a1dcdde83e81d09ada4b3989e7",
+        "state_hash": "v1:8d064b5758102a24084d64eb685ce0f00c22f80af6aff5146ec0191ebeef26a1",
         "action_space_digest": "3eb5553de5f5dd456447b77bfefe4228c9aa744ca8b00b11645da70de1bceae3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           343,
           0,
-          328
+          367
         ],
         "game_over": false,
         "winner": null
@@ -1420,13 +1420,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:360a6a045e64444a9ae478b494194f69751471750b352e42de3f7078bf7ccaed",
+        "state_hash": "v1:64c61612ec000e2f4f9bc7208d96c0b604738a0fc27811b841517285dca2c6fc",
         "action_space_digest": "3eb5553de5f5dd456447b77bfefe4228c9aa744ca8b00b11645da70de1bceae3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           344,
           0,
-          329
+          368
         ],
         "game_over": false,
         "winner": null
@@ -1444,13 +1444,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cf904c689a2ae6dd2654f812b4434199d2d0ef4380e4cc599239becde515dff3",
+        "state_hash": "v1:6a9620a9357c997905fc0b173363c0c2f59b9b60d3378d05144f8b10bbf2d9cc",
         "action_space_digest": "3eb5553de5f5dd456447b77bfefe4228c9aa744ca8b00b11645da70de1bceae3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           346,
           0,
-          331
+          370
         ],
         "game_over": false,
         "winner": null
@@ -1468,13 +1468,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:c7bab273411d4f70c8593e274eb869e8cdcefb60842ff2864a94267cb14172a3",
+        "state_hash": "v1:a80de57f35a54d5824f5c0fa49f470e3dafbe30035533a92e7a754cf76d176f2",
         "action_space_digest": "3eb5553de5f5dd456447b77bfefe4228c9aa744ca8b00b11645da70de1bceae3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           348,
           0,
-          333
+          372
         ],
         "game_over": false,
         "winner": null
@@ -1491,13 +1491,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:e1cb7f1e0db8d569462a5ee0230ccbe9cdffe75218cf44acec695f7ee65378b5",
+        "state_hash": "v1:b1b8773923e97762e28cf7292f3af9428534927fa3ebb9362c4a8233ed2d7325",
         "action_space_digest": "629bcbd5b2571b621ddb5273ccf1d279812c2c897430df4b4ea4e0757eb19c05",
         "pending_choice_digest": "27074598355bb1b1e80f1d3b7de7102a8ff34bfbada9906fee02d8c0e70758b7",
         "event_boundary": [
           348,
           0,
-          333
+          372
         ],
         "game_over": false,
         "winner": null
@@ -1516,13 +1516,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7f800732cf5386af012e717505bb535f44b246e929a95f204024013d2ae1efcf",
+        "state_hash": "v1:3e1c4ef5325b237165ab65a2fbade76e636affbac2a3634360ee3f870a26d9a8",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           353,
           0,
-          338
+          377
         ],
         "game_over": false,
         "winner": null
@@ -1538,13 +1538,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:bdbeaf473a6be1bfdacc5b71a8692c8b6271c45f26c33a130efe4e8311eb2089",
+        "state_hash": "v1:59e42b35291cb6ef0c3385856b8afb3d7a10090a787bc9a506bea62ff50b40a9",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           356,
           0,
-          341
+          380
         ],
         "game_over": false,
         "winner": null
@@ -1560,13 +1560,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:354627b8ecffc513c89478b40f510386995ba3a22583a9b99e9b84998aaefdf9",
+        "state_hash": "v1:23991d077bf084deada370fa6386904064913773263d8e9df5771b77449ecfbf",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           356,
           0,
-          341
+          380
         ],
         "game_over": false,
         "winner": null
@@ -1582,13 +1582,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:37ca1908cd1a9d487612e304c98a0599328d95308325959a5197030a38cb22c6",
+        "state_hash": "v1:29378ae8c807f4d1ae5076f1b44fd0beba2d53aa5a6bf811fb67241c3b0b62ec",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           356,
           0,
-          341
+          380
         ],
         "game_over": false,
         "winner": null
@@ -1604,13 +1604,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a8d9cfaa20961236654ea2a29b21d5fb7deba0250d0e314eec900f1ff52b927e",
+        "state_hash": "v1:7dd875891f4fc0aee5b42d69d702e3affaae1eb5f3e488ace984945194a52130",
         "action_space_digest": "5e567b0c8b1c41e3b1f7dd13e2740fbcf72c235a04e9215480700da820e70ecf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           357,
           1,
-          342
+          381
         ],
         "game_over": false,
         "winner": null
@@ -1628,13 +1628,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:07a91676c1a7f842050ea80962f001c082c81edac71fecd40460ecb957794fb8",
+        "state_hash": "v1:a80b84c5aee7f3bfb38654c975df4c9073aa89d413725081626714b9eef69490",
         "action_space_digest": "61f58088e420e93f24dad1aebbf2ead4cbeeffbb7185e086dbf35339f98a836e",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           374,
           0,
-          358
+          400
         ],
         "game_over": false,
         "winner": null
@@ -1650,13 +1650,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:4220a0f2a7403cac00864e675d087f1ae4491b29e3c22d881845eb5885dd2c1f",
+        "state_hash": "v1:23b2b2d3fb7a071548a547de2edd5b6b34697c6f1e7f2df3526bab53cb6159d4",
         "action_space_digest": "2410240303b6a4728370518abf7845a043663e75b8d03c33c1176bdde6d0c95f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           376,
           1,
-          360
+          402
         ],
         "game_over": false,
         "winner": null
@@ -1674,13 +1674,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:f164ec55b74ce656135255c92160840dc188bd3fa92320156419aec72d2f292f",
+        "state_hash": "v1:b6cd4ff4c571e8c37cc09f33f2431e2b53ea0c6642368d17078684a4fddcded7",
         "action_space_digest": "6f7e7bf6a06db1c428d16bc54974b367a6ee270771f9b11d66195645c939dacf",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           377,
           2,
-          361
+          403
         ],
         "game_over": false,
         "winner": null
@@ -1698,13 +1698,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9685b35f652e732fc1644a322bb359b61361aec2ecdec5bbfdfd253a0e2d92e7",
+        "state_hash": "v1:9e477be2587b3087b5e08365640c476d80af853536975da2f64e4b66090750c4",
         "action_space_digest": "8966b945ed4cc25e42425b4e0c72fba11cf1a37ac317dcc78d2a85f1354586f4",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           377,
           2,
-          361
+          403
         ],
         "game_over": false,
         "winner": null
@@ -1722,13 +1722,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:c02462d54554e19494732df74f30b8e39d10e474985039a045f78c350eb1d8bc",
+        "state_hash": "v1:b725b01fd65a3e3d20817efaae0a51a728fcfa13f0ab54196a46159a5b5e4e2a",
         "action_space_digest": "7caa88ce232c5e074bf5c4987ff3ab27638a6d43b96ec4a929f83f053dbb53b0",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           377,
           2,
-          361
+          403
         ],
         "game_over": false,
         "winner": null
@@ -1746,13 +1746,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:23a1b44bae1f33eb9dbbb8359c061af0efdd158451decb0cbb11b255cd73d27b",
+        "state_hash": "v1:ec9a81ac09e22cc8da09f8f10b7669ead5289a0f71ce8af592ba79c5d6bb6d19",
         "action_space_digest": "7d04f3d39765afe5e5b8edd6d483682d1780027296892bf61b44fc328d95dad8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           377,
           2,
-          361
+          403
         ],
         "game_over": false,
         "winner": null
@@ -1770,13 +1770,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:d82156b4bc914bed91ff9abc058beb70ba01c679567c0296bc8a861890ab9279",
+        "state_hash": "v1:339f14f6ded1e6cd42c977aa0b3bc6233d22a968f5d6c71c49cb01a36f451296",
         "action_space_digest": "b60965c9c236f4870ee94d7deb9075b1a58b134663285a19dec017c77a52ee27",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           379,
           1,
-          363
+          406
         ],
         "game_over": false,
         "winner": null
@@ -1794,13 +1794,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:bd1635f3acbbd429e5898a918b6940dbbe9d757a88fc2438ae0fe7f63264aa8f",
+        "state_hash": "v1:1727276d21c0319ca2877a2a3eb911c554786492ac000662cb163f554b33cfc0",
         "action_space_digest": "61f58088e420e93f24dad1aebbf2ead4cbeeffbb7185e086dbf35339f98a836e",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           386,
           0,
-          370
+          415
         ],
         "game_over": false,
         "winner": null
@@ -1817,13 +1817,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:e1e5367c8296b3277c1670db2a7fce27631e7b19b2dd7b5d3b11c5d90ac226cd",
+        "state_hash": "v1:75694ffac01beb0acce67045a90507fda3252aa59644b4430f6458067e0b895c",
         "action_space_digest": "924491dab590927c05e2039e775d79db41c941aebd8628a84d261bfe2060fe71",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           387,
           0,
-          371
+          416
         ],
         "game_over": false,
         "winner": null
@@ -1840,13 +1840,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a54ada35bb99937f6d54edd55fa079d330a3ecf3757041c93d1959238355c9d8",
+        "state_hash": "v1:f22c3080cc0a2f77259cccc338a6e92d1ac7908c8048c070b057d25249025d86",
         "action_space_digest": "a719b5324a992edc366622160a8349541c19aa2231e427d8c9dbe4a52e6825cc",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           394,
           0,
-          378
+          423
         ],
         "game_over": false,
         "winner": null
@@ -1863,13 +1863,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:959a81dd6d18bb17e4e7778a5b595f812cb9863f54f3e07409bab25e87a0a440",
+        "state_hash": "v1:8cbc2cdf30fb0e56833abd3a53ebdda60849f3f2c4c04544bbd788fe1294b56c",
         "action_space_digest": "53bf7126138cbb8e53c78f12d417038d2f03ef81f22145957dd9efc899073efe",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           402,
           1,
-          386
+          431
         ],
         "game_over": false,
         "winner": null
@@ -1888,13 +1888,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:32614ba5a6be451db048b82863ec9a958a5e4783ee797d384a54a92cdc873466",
+        "state_hash": "v1:45b9e7bc7c2662a8d51bf0506c64d2c06970ee43fef6ca26f861b29afdce1fc0",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           409,
           0,
-          392
+          438
         ],
         "game_over": false,
         "winner": null
@@ -1912,13 +1912,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b0d7631f72833a6f306a500235d02802c774ea0f8d531947e5f0e0ecbfc3b2b5",
+        "state_hash": "v1:df936eee3dbf6033247eaa5301110dd10bd5f5b5a736c9a9f284b14c7ca71287",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           411,
           0,
-          394
+          440
         ],
         "game_over": false,
         "winner": null
@@ -1936,13 +1936,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:8bc87edb5f11a441df91c2b734966cc4ff3cc58a3de29a145a09aa86baacf367",
+        "state_hash": "v1:afaba56b4cfda23999288f17cfceb5fe4df4f820c94af895c4d2527dd944220c",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           413,
           0,
-          396
+          442
         ],
         "game_over": false,
         "winner": null
@@ -1958,13 +1958,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:175b55dd2ec2d60802f17c9722e000d75457a06ff15da91c5279559e2f0f740e",
+        "state_hash": "v1:7d41fac3433e9e4d30a81bd728c7136d7eeb994241d7830b5181c02564adeb64",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           413,
           0,
-          396
+          442
         ],
         "game_over": false,
         "winner": null
@@ -1980,13 +1980,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:4b3ca8eb23d5f2c85dfb4ce4c821c792900a0efa84b89bea9e46026248ab0cae",
+        "state_hash": "v1:c1242d43927aa0184f21c5e765ef19eb01561f0e2e997b3990e7e66a8502de25",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           413,
           0,
-          396
+          442
         ],
         "game_over": false,
         "winner": null
@@ -2002,13 +2002,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:02a15ae73bd67cfc3043479ac3a23ae9227bb923e58d0f0e8eeeed71af1bd358",
+        "state_hash": "v1:0231c30ce87a131dd4a1ec057ea8a27222c4a4e320f64d7d915b4ed339cd5bcc",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           416,
           0,
-          399
+          445
         ],
         "game_over": false,
         "winner": null
@@ -2026,13 +2026,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:947e662d1ca159af103c49e55f3097773b624badb64015a8b83fb9d43430fb13",
+        "state_hash": "v1:85fff47c6797e083152452e96b8394ef37ce2c440e643d9f82230248436301e8",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           418,
           0,
-          401
+          447
         ],
         "game_over": false,
         "winner": null
@@ -2050,13 +2050,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:43b714d0a93608f51f9349ab836cde0333aef86846d7948fc1b33a5e71c87d0c",
+        "state_hash": "v1:b68291fbcb155c05df7f36056dc9892e730c3e5b179e52036c07f2ed9591092b",
         "action_space_digest": "7caf6bda3c8bbb88e42c400b86653e12a89284480297c0f6e270374095d25dae",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           423,
           1,
-          406
+          452
         ],
         "game_over": false,
         "winner": null
@@ -2074,13 +2074,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:2836fb1c82ef963fad7745c0c4d8a38ef0ad96a7e1e8f70c895aff1711c6c25b",
+        "state_hash": "v1:4660e2d8289839b826e52383e6ba8ed2816f0feb275b7a865a704694c7e694fd",
         "action_space_digest": "6dda742edbf12cde834ca327ef4010286f7dafb783761dfe4ee6d9acb6d7967f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           436,
           0,
-          418
+          465
         ],
         "game_over": false,
         "winner": null
@@ -2097,13 +2097,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:3204cbfb4c64e8303936d8e25ad9a676d8ead008f2ba1526dca55c1b16606a00",
+        "state_hash": "v1:090bafbbe1ad8d4abc9cbe8fed7281c8177dfa275946d7563af100f37261058d",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           443,
           0,
-          425
+          472
         ],
         "game_over": false,
         "winner": null
@@ -2119,13 +2119,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7d4f64dab2fc5d944258a67b20b22fcecbeef50c24a1ed55fc1447a97da56ecf",
+        "state_hash": "v1:48643c555abf64450cd9e345ad9838c8966b9e7b30bbabf54471b0c85d5e91fd",
         "action_space_digest": "9c4505e7d2ce451f31cb0f2a27ec8c01a7032c7ceff1566a16b8911885db4eb5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           443,
           0,
-          425
+          472
         ],
         "game_over": false,
         "winner": null
@@ -2141,13 +2141,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:efd26f179e0ca5f0b77c388369a39746cb97e2eecdc928d596abf315b1fc4ce9",
+        "state_hash": "v1:137d64fd9896d572f41bc79835ed3f8e66a952d2d97bfcc395f386e890bcaff4",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           444,
           0,
-          426
+          473
         ],
         "game_over": false,
         "winner": null
@@ -2165,13 +2165,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a7318c43c765c0096a8851497c08946c23598d04ed4405cb744ec43a2a6c351e",
+        "state_hash": "v1:5fed808cfc11318675c24a4633fe2bb22dfcf59a232d4c742f7c2be174f3f4c9",
         "action_space_digest": "04c0da6bcdec5e238e45b20b6d5a018cba732f329d8347691aa7dab9dc5bcff2",
         "pending_choice_digest": "d0e2c9cc238e687ae739eaafb6a6634f361b6841cb035bb381d453dc9c40744e",
         "event_boundary": [
           444,
           0,
-          426
+          473
         ],
         "game_over": false,
         "winner": null
@@ -2188,13 +2188,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:558cf3defea3c4b5b7e2c7143878692e89e215765f5cc4366286c8f8109a8603",
+        "state_hash": "v1:e9e86835515dbf50c8c8996d61123898c7745bd8532f9b7f49a74a776647ff3b",
         "action_space_digest": "1306ecba226c63aeecbdcaf4d481cc78d39fc81bddfa3bfdc809c48c05bb6410",
         "pending_choice_digest": "4df519eb9f20c098544a45f4c94b734876fd1dfb7e4e2ce15a2332c0c4700e46",
         "event_boundary": [
           445,
           1,
-          427
+          474
         ],
         "game_over": false,
         "winner": null
@@ -2211,13 +2211,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:6ed06d1807c1e8f50a0065b3ce56e45efdc1f8b90ebb29fb6a2b99d1d1484220",
+        "state_hash": "v1:dde454cc7719341afaed81fb18398f290d54919b53e6ec002c04b028d075982a",
         "action_space_digest": "e0972cbb2b6e55d918b8f18446c76d0240465832d394e352c5f7354cf94cb572",
         "pending_choice_digest": "1e72a8654153e5b24ac0fe0ab43131a6fa6d5008df2977de09a9be0c328c3664",
         "event_boundary": [
           446,
           2,
-          428
+          475
         ],
         "game_over": false,
         "winner": null
@@ -2234,13 +2234,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b7907394277e130dec952e6c479a6197211ca1ecfad63101e4e54ac20ef1e1e7",
+        "state_hash": "v1:f9504d0e08db3f0a45c1c275066eeaabed80aa794a59cc5f286887e0487247a8",
         "action_space_digest": "6ebab2a8723884daa2631d5c4922f0d272caf669323f4595b0f8c88912494b9d",
         "pending_choice_digest": "a74761d73175492cb889031731ef25130e06a187fe5675ccfd3783ffb38a6f35",
         "event_boundary": [
           447,
           3,
-          429
+          476
         ],
         "game_over": false,
         "winner": null
@@ -2257,13 +2257,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7d3f19d6baae52130a3abc05c25aff12841c9a3fd88c2e9041f57b078b3db239",
+        "state_hash": "v1:b68792a3a1604fb6c0edf580666c60f5a9ff90282b3961968b7b455e23dc0a61",
         "action_space_digest": "2f1dc8bec4f09b2966e9bc71dbafab62edbdbdda53824701faa17c2ebd27e451",
         "pending_choice_digest": "1b88ddc199d0f2efa2190e60e700b553e0ae4e0901e7371088f913df5dd186d1",
         "event_boundary": [
           448,
           4,
-          430
+          477
         ],
         "game_over": false,
         "winner": null
@@ -2280,13 +2280,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:d34fe48ea047637c3af5ba13cf6806cbb4f5184726fad3ef562f857885702ef8",
+        "state_hash": "v1:3d11a40710875153aae5b9c94d49b574b9dc1ebc46db322a126353428ff0e414",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           449,
           0,
-          431
+          478
         ],
         "game_over": false,
         "winner": null
@@ -2302,13 +2302,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:53e76cd021493c587195b111162a3ea321fb66d8b20c809975df77a9c842c0fe",
+        "state_hash": "v1:954fbaa05803eba151f714f7ca0ce101229ab1857f6db5a1dad6ccfc59728f21",
         "action_space_digest": "b3f1b6a5d292740f1042479e5553014d64c01db702f9ab5267afe1641dad887f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           449,
           0,
-          431
+          478
         ],
         "game_over": false,
         "winner": null
@@ -2324,13 +2324,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:2b820eedffdee0a02f5f6830774bea24c2b5d3b3e67a723ab4647bb50a7ad0d7",
+        "state_hash": "v1:39ce3fed50de80a537277071d1eab559005e314cbaa639d733b4a547543ddd1b",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           449,
           0,
-          431
+          478
         ],
         "game_over": false,
         "winner": null
@@ -2346,13 +2346,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:1449ecb351e46a7dd0ac03c0019ce692e370bdf4d0f83ce5f6cf44e64cef418c",
+        "state_hash": "v1:53c7946faae17d5265f712e0efe1859009db131cb004161b8076d3c7585eef40",
         "action_space_digest": "75f05b3622f8de9a309a3f5e4ed033012c4ff0afba027807978cf50eba1fd66a",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           450,
           1,
-          432
+          479
         ],
         "game_over": false,
         "winner": null
@@ -2370,13 +2370,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a4b0c21a5c251e5ef7d911bf820ce728ad6e6f1e4a283de2532946c9430bbc43",
+        "state_hash": "v1:683a2a4744b4df29c7641115b008eaa436af8e34d092b8a2c25fc372cbc5cd19",
         "action_space_digest": "2410240303b6a4728370518abf7845a043663e75b8d03c33c1176bdde6d0c95f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           450,
           1,
-          432
+          479
         ],
         "game_over": false,
         "winner": null
@@ -2394,13 +2394,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:6e806ec58fd64e86a79c0a57fa44d377cdf79d0c9c194096a4b9d484c59e37ae",
+        "state_hash": "v1:2f7bf38d6858089126fc136f3b68b11b56f2a9e5d0c9ecb1633fd3230928af2b",
         "action_space_digest": "8966b945ed4cc25e42425b4e0c72fba11cf1a37ac317dcc78d2a85f1354586f4",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           450,
           1,
-          432
+          479
         ],
         "game_over": false,
         "winner": null
@@ -2418,13 +2418,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:f432c38bd8f823a187a5d134870fd944409e0349d82a5efc9ebc15dbb7523ca3",
+        "state_hash": "v1:6521d09cc1f4e42b0f72ba94a1ccc39a5058c0eb68e93c28733d6a83adf062a6",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           450,
           0,
-          432
+          479
         ],
         "game_over": false,
         "winner": null
@@ -2442,13 +2442,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:11c20e7b7a719a29495231ab7628a7cafb4213cf4109e951825749c7c4733400",
+        "state_hash": "v1:938b5dd86fa4a1ba3945001193b22e3a23d32b3b9e2ac24162a9e092db07bb71",
         "action_space_digest": "2548a0162376360e987fb90b23ca5a9cdd63a78568cba5d6206f6899b550b9f8",
         "pending_choice_digest": "d0e2c9cc238e687ae739eaafb6a6634f361b6841cb035bb381d453dc9c40744e",
         "event_boundary": [
           450,
           0,
-          432
+          479
         ],
         "game_over": false,
         "winner": null
@@ -2465,13 +2465,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:eb643ccbddd1edfbf8d2f07ad032367e94701f7c688c27269961e1ac5805a792",
+        "state_hash": "v1:e68f3490db09403a4339799eab1c79626f21e72839b3f1f4b66cdcdea60ad636",
         "action_space_digest": "3a8c8de701869ddfe13fab79e76dbb4aee5548b60361a13de3730a082b868d84",
         "pending_choice_digest": "4df519eb9f20c098544a45f4c94b734876fd1dfb7e4e2ce15a2332c0c4700e46",
         "event_boundary": [
           451,
           1,
-          433
+          480
         ],
         "game_over": false,
         "winner": null
@@ -2487,13 +2487,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:775ad98b6ba9aa65f7194e10944a419b1a43f6691009a8ef1a33bd87be617a04",
+        "state_hash": "v1:de7322a01ca74acfdf6132849914a7dba4e9f29a57f2d302a401d763c30bd53a",
         "action_space_digest": "42e8a0c0f9a4f3f1c0267fdfcc5e3dceea9f7ef2af8fbe9c61459ee2bf9d9779",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           455,
           0,
-          437
+          484
         ],
         "game_over": false,
         "winner": null
@@ -2510,13 +2510,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:8ab5905752d8ffb0e6d769169fb4b66b3702f4d8823cc6a7ffdba26ec5d346ab",
+        "state_hash": "v1:964b828b2ac630f47dcd3223d53c514cabbd6f51892e4438acce140c049870ad",
         "action_space_digest": "280339bced1dc27c73e394e60990423aa3922e0f9274e9ce1062b30a2151f029",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           460,
           0,
-          442
+          489
         ],
         "game_over": false,
         "winner": null
@@ -2532,13 +2532,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cc86008b51bd32742966dbd128d97e1f568a6149d636a346bb434d44ac8c28c5",
+        "state_hash": "v1:0b9831e39c7b74be841d19a890bf2ac229be0840c00f92665d7cb6b700cc354b",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           465,
           0,
-          446
+          494
         ],
         "game_over": false,
         "winner": null
@@ -2556,13 +2556,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:fd437dad9b56d8c4614c57b7e937d82e1401ca8b7fe1e4bcd9fbb9e1f54fff3c",
+        "state_hash": "v1:45b94106ee0c543ea17e06f3f09ed465c83b406d6271929531cd838152519d4b",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           467,
           0,
-          448
+          496
         ],
         "game_over": false,
         "winner": null
@@ -2578,13 +2578,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:5f1acf14194a485fe643e76d77810ec51184cb94ead30cb8c0f5105c1370a439",
+        "state_hash": "v1:0e80d14f45b86de895b5c2fc422dc32ebfe501d71e48787f76004560d1229587",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           467,
           0,
-          448
+          496
         ],
         "game_over": false,
         "winner": null
@@ -2602,13 +2602,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:fd5a0f798e219ff20d39e61e959f76309e16f6132417abb737769d95f6844a86",
+        "state_hash": "v1:05ac9e6a831abf1706b2e598b37fdc56968095c9e7cf2a8e2d46892b5027f928",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           469,
           0,
-          450
+          498
         ],
         "game_over": false,
         "winner": null
@@ -2624,13 +2624,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:bca976cbb5371f4ab8d421863ffcd03bcf22044a5b6cff07b5e880a95c04048f",
+        "state_hash": "v1:f59c375d5d919e8b2991833124061766de25b34c2a1859ac39df38f300b69a39",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           469,
           0,
-          450
+          498
         ],
         "game_over": false,
         "winner": null
@@ -2648,13 +2648,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:cbad279d6de618043bfdfb496ccdedff02e5994f1168e7183f6efa71a589999f",
+        "state_hash": "v1:eaa21bc920ea32609169ec09ff384ba842cbd6d877f4769ef5a153a9c418cef5",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           471,
           0,
-          452
+          500
         ],
         "game_over": false,
         "winner": null
@@ -2670,13 +2670,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b4ee35d421bc7fbb3f7c79e96c47e39abcfb8089b1d0d45a729ad6538f16c640",
+        "state_hash": "v1:1163fd3fe41a83acac136e49866c238cf3e037d9ce3201416e6b0babd52eed24",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           471,
           0,
-          452
+          500
         ],
         "game_over": false,
         "winner": null
@@ -2692,13 +2692,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:7194ffc872e34aa9527f3862b9e4e44f7b7af475e4313780481b0b4ff267e175",
+        "state_hash": "v1:0bc95a080c0bcc3359b60fad56a16edd69085912f47e2328b93f83d48ac39045",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           474,
           0,
-          455
+          503
         ],
         "game_over": false,
         "winner": null
@@ -2714,13 +2714,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9e27e5ec4b12ea5b9b0754335d722cd13450846b4937ab5aec71f155f37e9a32",
+        "state_hash": "v1:951dd05eebc4bd43589cb9c6f67e31e4375c2f64845214ad1983d2d671b7623a",
         "action_space_digest": "32106b4bd2021846b0731a15657b22a976e9d3dc8d2c7e0a0de02407ba1b0906",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           475,
           0,
-          456
+          504
         ],
         "game_over": false,
         "winner": null
@@ -2736,13 +2736,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:317d642c0a2deb8e8e168f15d202e6986f124a346bb99da62d806c10800ff680",
+        "state_hash": "v1:987cfdfb34ac9af28a8ab0af6fc4d7fa901fc0c366911d9a303206af35481ae7",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           476,
           0,
-          457
+          505
         ],
         "game_over": false,
         "winner": null
@@ -2760,13 +2760,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:600e84acd8c6f699df7d72714b80e3a0218607406167135f5e60fb9724bad281",
+        "state_hash": "v1:005822dc65f953039fc0c53dcf08705f2906588aa0b45677bbfdda23258a2a54",
         "action_space_digest": "7caf6bda3c8bbb88e42c400b86653e12a89284480297c0f6e270374095d25dae",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           479,
           1,
-          460
+          508
         ],
         "game_over": false,
         "winner": null
@@ -2784,13 +2784,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:ceca546b4f1ba01f0fce201b5ca44c89ba36d48e9d393ac4a83b444e79994f41",
+        "state_hash": "v1:66d24e4667008dc15c145c80a71e22d9a4321fa43e8a6eab70318d5f6438b889",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           482,
           0,
-          463
+          512
         ],
         "game_over": false,
         "winner": null
@@ -2806,13 +2806,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:dae2cd7dbf22e92a10250f1ec105110adc2c14f166c581d1b42ac3f9e089ca20",
+        "state_hash": "v1:fe8d9251d22222c55653c6a871743fbbd6eca2b8dad318692a1f3bf1c3785796",
         "action_space_digest": "051d71ff8b08c1249523238b904f9ba33c3ce64b287302a862adeafdf77d21e3",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           483,
           1,
-          464
+          513
         ],
         "game_over": false,
         "winner": null
@@ -2830,13 +2830,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:b7b62f7ebc30e1f1cdeb22149b5080ae956d00946a1b7ddc0379e2eb55868c1d",
+        "state_hash": "v1:3f5bd187800c9303f87cc4ffcdedd643f3402383d77150c88c93cbf96d37d3a3",
         "action_space_digest": "53bb205bb57f54fc16535f026d41aab3ac6905ab496b84eccd387e10e6c8acb6",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           483,
           1,
-          464
+          513
         ],
         "game_over": false,
         "winner": null
@@ -2854,13 +2854,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:11958868097b89c61b55fee67f9f687889333820101fdf0dcfec940c90189061",
+        "state_hash": "v1:79278f8eef6b3bd41bf26323ca306d402f26811e5cabf44350b2c7281f08f76d",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           483,
           0,
-          464
+          513
         ],
         "game_over": false,
         "winner": null
@@ -2876,13 +2876,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:52e61813c210d25058b12d6cc300800f293ccd31030a50f7ea83979f4cdb9c10",
+        "state_hash": "v1:7000dc12bbb9fd908df191001e574da9cc2e4893fc72149c01d82cd83bbe4bb1",
         "action_space_digest": "0cc3d010d8e79261716ca35a598d9e175d24bfc34e73517ad6cf8f889dcdc516",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           486,
           0,
-          467
+          517
         ],
         "game_over": false,
         "winner": null
@@ -2900,13 +2900,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a0f2eb32255b303963cac23be87991a403853cc770e5a9e7bd3b1c067cb2eb9e",
+        "state_hash": "v1:95d0ca2ed485bb6403ff2b3cd5b161ac7b21d89d65076451aab25ac6be1eb7b1",
         "action_space_digest": "aec7cfa948eba32866d108ddbbbca4c87d2ef087df739e815946910fea5ccc06",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           488,
           0,
-          469
+          519
         ],
         "game_over": false,
         "winner": null
@@ -2922,13 +2922,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:894f1446e1fc1a6098446b79eca6804590ce09b3ae7d537890ef7ceef5f233ef",
+        "state_hash": "v1:ff5673a42793e9334abe6b240c691c8de09fe24d799bb5e4f7ff728cf635acf6",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           493,
           0,
-          473
+          524
         ],
         "game_over": false,
         "winner": null
@@ -2946,13 +2946,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:0b9e153e26e639d048352343beb297f6a000a3d83c7ebaa215c4744db9a50771",
+        "state_hash": "v1:8b62763c3cb18c9718cf5f2f0434407b6f41a70d81e9c5487252bd618e77194a",
         "action_space_digest": "fb2d36c4c31b6b35be5837849108cee8f75189d4918fbb09ff5637a9cf7c4421",
         "pending_choice_digest": "d0e2c9cc238e687ae739eaafb6a6634f361b6841cb035bb381d453dc9c40744e",
         "event_boundary": [
           493,
           0,
-          473
+          524
         ],
         "game_over": false,
         "winner": null
@@ -2969,13 +2969,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:0cfe41b2f4759c26281dd9000ab024fcd1980b6ca18b86a51cb442ba9a1a390e",
+        "state_hash": "v1:3fd89ba65d4407d44261b734b66f8e92c70917b70dd45ddc105807d6fd7d0b26",
         "action_space_digest": "56151c5c7254d265792fa5f5c431243fbb50154bd45872bfaec0b364b200198f",
         "pending_choice_digest": "4df519eb9f20c098544a45f4c94b734876fd1dfb7e4e2ce15a2332c0c4700e46",
         "event_boundary": [
           494,
           1,
-          474
+          525
         ],
         "game_over": false,
         "winner": null
@@ -2992,13 +2992,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:207f10531ffe3744db32a0fbfe182d8af3a198977d5cd3d1164983a1b8c768d5",
+        "state_hash": "v1:c0e32de345c6da260cf2a0541f2928516c888abc182ae6bd61d1d80e4cdf91e8",
         "action_space_digest": "5261fcd2a598eeaeb0710b03710221c5d5c08ec4c350a6cd48fdbd5c4d4c8788",
         "pending_choice_digest": "1e72a8654153e5b24ac0fe0ab43131a6fa6d5008df2977de09a9be0c328c3664",
         "event_boundary": [
           495,
           2,
-          475
+          526
         ],
         "game_over": false,
         "winner": null
@@ -3015,13 +3015,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:a385430d797545ccb4fb7d1bb2b4c3540060bf4ad03ec62640fb03a53153e0d1",
+        "state_hash": "v1:62726bfe9d4cd0e64edc2fac15d113524c0a6be8c5e88c445052115743383a2c",
         "action_space_digest": "ffd2264ce62afbae6406f9cba129dae674fd7adfc21e10bab840769403514cbe",
         "pending_choice_digest": "a74761d73175492cb889031731ef25130e06a187fe5675ccfd3783ffb38a6f35",
         "event_boundary": [
           496,
           3,
-          476
+          527
         ],
         "game_over": false,
         "winner": null
@@ -3038,13 +3038,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9203876aec6f876b1e062fcee7fc4137e31f3d8d54c273653ece50da8c0861bc",
+        "state_hash": "v1:b9835b0de2af219c21ba1d2b7bdac85cac1c65e4dd6ab89c50fb85bd1a76bf98",
         "action_space_digest": "0c303d89fe07813313996cb524fdd7b169872ddaeabeceb0bf75a3abc6598484",
         "pending_choice_digest": "1b88ddc199d0f2efa2190e60e700b553e0ae4e0901e7371088f913df5dd186d1",
         "event_boundary": [
           497,
           4,
-          477
+          528
         ],
         "game_over": false,
         "winner": null
@@ -3061,13 +3061,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:8947116fd18d714f17fb9a72bd62a5572c6bf5166048fb62c46b41020cf4e4d6",
+        "state_hash": "v1:45d21c1365d4caac089a88049f1af652bd266fdeff80690916fb28517d7de0d5",
         "action_space_digest": "e0114d8a0ff9b31cae5e82f68d3a11b1b325be2ce9f72d15af0193c33888b6b5",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           498,
           0,
-          478
+          529
         ],
         "game_over": false,
         "winner": null
@@ -3085,13 +3085,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:c7ae16de910b243ef89c3dd47bea7b3295c407e7a2448c325e4026f66316a8f0",
+        "state_hash": "v1:8378bc41f8efe3d92ed97bb71e03620ebc4d12f968729eec33851d19d07a4584",
         "action_space_digest": "1cbe462f67dda5efa7126361d2aafa4cfe509523fac0d14b644f71c82fb2b4a6",
         "pending_choice_digest": "d0e2c9cc238e687ae739eaafb6a6634f361b6841cb035bb381d453dc9c40744e",
         "event_boundary": [
           498,
           0,
-          478
+          529
         ],
         "game_over": false,
         "winner": null
@@ -3108,13 +3108,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:8a80e7d81ef719a0dec50f1a86a076a61b1fa7ee421d2bb5fc9ec8edfd39b47a",
+        "state_hash": "v1:d044e3173e33459642cec09b290c3a74fa8718e8cc370b96704422b8d135bba6",
         "action_space_digest": "7e058a2520c59c5b31404c9b427069ff704b00647235407e8e3585bb5ef44882",
         "pending_choice_digest": "4df519eb9f20c098544a45f4c94b734876fd1dfb7e4e2ce15a2332c0c4700e46",
         "event_boundary": [
           499,
           1,
-          479
+          530
         ],
         "game_over": false,
         "winner": null
@@ -3130,13 +3130,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:20e0ba973761bd91a04da1d5a94a533069c0357d0bab5e3ce9f6208d0b394a15",
+        "state_hash": "v1:ba687ddbb92ffb2844109ca23ff06f1732a997a6e35bac0a30113c21131dc1c2",
         "action_space_digest": "892c40d82e54215649b86dccb43eca411a7c96d58f728d4aa4b162896d773cc2",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           503,
           0,
-          483
+          534
         ],
         "game_over": false,
         "winner": null
@@ -3153,13 +3153,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:f4290a651fa3c0000155b795939b3e2f8f70fe8bf4997b38b4f6a4410c497bbc",
+        "state_hash": "v1:366a9f1dd5f5ef86a72450d8863ef8f6ddcaba87bf1c0b62a461268ff6951086",
         "action_space_digest": "505114de95cee7f06c31c07a398dc76474c1f4b27148009e209ba83680ff605e",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           504,
           0,
-          484
+          535
         ],
         "game_over": false,
         "winner": null
@@ -3175,13 +3175,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:9e15929559d9a562fb92c2d86ad5fee25ae8c0a5ca6bae4e82c92533f5ed59ff",
+        "state_hash": "v1:21ef96fab411fae4953bd6d9fad3da256065df46e3b9bb3e35ea6df0f5e316d2",
         "action_space_digest": "01a56d13bbb0c0cbe8f800c8da486dc7bfcc1eafb009883dddfe048b12029bbd",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           508,
           0,
-          488
+          539
         ],
         "game_over": false,
         "winner": null
@@ -3198,13 +3198,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:d82517f287230eb7b600059b799c7f9dc5eda9c61188d1d9e2e4e14a6551f18b",
+        "state_hash": "v1:b6f882a348c46d0d745c81cdf2e2be7fc286d46d50beb0da0c631fe76a203c08",
         "action_space_digest": "021fe170e0a31b4faa68f9898d4eb4d3faf8e36d56837fd92fc226056685f52f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           514,
           0,
-          494
+          545
         ],
         "game_over": false,
         "winner": null
@@ -3223,13 +3223,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:60779a10b605f2008103433d7545c56ad21c14120b5364dcc34d5990f42b2910",
+        "state_hash": "v1:3c148f3688584bfdbb13302e1f2e05ec2d538d1f295b96593b5f1a0ceb7497a0",
         "action_space_digest": "280339bced1dc27c73e394e60990423aa3922e0f9274e9ce1062b30a2151f029",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           515,
           0,
-          495
+          546
         ],
         "game_over": false,
         "winner": null
@@ -3246,13 +3246,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:5036611354e0bc3b7643caf06d9374fb6f6fd1f2510171e1d840a92f6d140028",
+        "state_hash": "v1:ae448dc91e4e65bc422316c52295d2a2b35637ef1c496a1d42f02b024270d3ea",
         "action_space_digest": "c062b1692d93a9be3eedff182325835d6377a1e0fd1cf4ed8018aa03684ec81f",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           516,
           0,
-          496
+          547
         ],
         "game_over": false,
         "winner": null
@@ -3269,13 +3269,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:87a2555f4e15607579b2fdfbfe8685dccae9a4434d9e27855f96df8e9acbafba",
+        "state_hash": "v1:cb00f29566ded6e6af18d4be204ad126005761c8718172851d6f7a3f9349ae1b",
         "action_space_digest": "c40dc1ff49fe85f6339861e7e9a654fb648abebf50bd6ddb7d3ac08bb097461f",
         "pending_choice_digest": "c9ed405c47ae4300ab1aae40864d835c400d3f1d93f210bc892c7a94fc7215e0",
         "event_boundary": [
           516,
           0,
-          496
+          547
         ],
         "game_over": false,
         "winner": null
@@ -3294,13 +3294,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:42f9a363bc0160298b8849427b41e2ceb754e2fc7beb65d8285aaf51a3ca07cc",
+        "state_hash": "v1:8cebbcdc601fb73983d534cce774c3a04e3e7be165175d554587363664326074",
         "action_space_digest": "6756e2dad2013017dade88f80a91f586f02e531b4741d860f757f6631be51b49",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           524,
           1,
-          504
+          555
         ],
         "game_over": false,
         "winner": null
@@ -3318,13 +3318,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:264a236301cbf8b71c7224e836c40e3bd886e03675ba7603890a675020399d4e",
+        "state_hash": "v1:a8f321847f0fd8fe79484440f878cdbe473ceca450a0cac6a1679312b976c581",
         "action_space_digest": "7caa88ce232c5e074bf5c4987ff3ab27638a6d43b96ec4a929f83f053dbb53b0",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           524,
           1,
-          504
+          555
         ],
         "game_over": false,
         "winner": null
@@ -3342,13 +3342,13 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v1:4ff63cfccc892ee726bbf824736f17317162537f88654bd7a15c6065051c1ef7",
+        "state_hash": "v1:2358f637485135b04e261db59a2908d2b8bad550af624c64132f9ca6887073d5",
         "action_space_digest": "2f49f6b069fdf9d36c4284635494111aeeeee0bb13428f98efffa281e475c9d6",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
           535,
           0,
-          515
+          569
         ],
         "game_over": true,
         "winner": 1
@@ -3357,13 +3357,13 @@
   ],
   "outcome": "terminal",
   "final_checkpoint": {
-    "state_hash": "v1:4ff63cfccc892ee726bbf824736f17317162537f88654bd7a15c6065051c1ef7",
+    "state_hash": "v1:2358f637485135b04e261db59a2908d2b8bad550af624c64132f9ca6887073d5",
     "action_space_digest": "2f49f6b069fdf9d36c4284635494111aeeeee0bb13428f98efffa281e475c9d6",
     "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
     "event_boundary": [
       535,
       0,
-      515
+      569
     ],
     "game_over": true,
     "winner": 1

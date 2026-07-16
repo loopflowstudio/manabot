@@ -520,8 +520,14 @@ fn encode_actions(
 }
 
 fn encode_events(events: &[EventData], max_events: usize, out: &mut [f32], out_valid: &mut [f32]) {
-    let start_index = events.len().saturating_sub(max_events);
-    for (event_index, event) in events.iter().skip(start_index).enumerate() {
+    // Presentation-only domain facts are additive to `recent_events`, but the
+    // fixed policy ABI must remain byte-for-byte compatible.
+    let learning_events = events
+        .iter()
+        .filter(|event| event.event_type <= 6)
+        .collect::<Vec<_>>();
+    let start_index = learning_events.len().saturating_sub(max_events);
+    for (event_index, event) in learning_events.into_iter().skip(start_index).enumerate() {
         let row_start = event_index * EVENT_DIM;
         let row = &mut out[row_start..row_start + EVENT_DIM];
         row[0] = event.event_type as f32;
@@ -606,14 +612,17 @@ mod tests {
                     ActionOption {
                         action_type: ActionType::PriorityCastSpell,
                         focus: vec![111, 333],
+                        declared: None,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
                         focus: vec![444],
+                        declared: None,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
                         focus: vec![999],
+                        declared: Some(true),
                     },
                 ],
                 focus: Vec::new(),
@@ -657,6 +666,8 @@ mod tests {
                     controller_id: 10,
                     from_zone: -1,
                     to_zone: -1,
+                    source_incarnation: -1,
+                    target_incarnation: -1,
                 },
                 EventData {
                     event_type: 2,
@@ -668,6 +679,21 @@ mod tests {
                     controller_id: -1,
                     from_zone: -1,
                     to_zone: -1,
+                    source_incarnation: -1,
+                    target_incarnation: -1,
+                },
+                EventData {
+                    event_type: 11,
+                    source_kind: 3,
+                    source_id: 10,
+                    target_kind: 0,
+                    target_id: -1,
+                    amount: 2,
+                    controller_id: 10,
+                    from_zone: -1,
+                    to_zone: -1,
+                    source_incarnation: -1,
+                    target_incarnation: -1,
                 },
             ],
         }

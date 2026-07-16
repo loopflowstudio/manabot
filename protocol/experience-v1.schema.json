@@ -1181,7 +1181,7 @@
       ]
     },
     "PresentationKind": {
-      "description": "Viewer-safe semantic presentation payload shared by Rust, Python, and the\nTypeScript table. It is deliberately smaller than the future vocabulary in\nthe architecture design: protocol v1 certifies only kinds already consumed\nby the merged presentation player.",
+      "description": "Viewer-safe semantic presentation payload shared by Rust, Python, and the\nTypeScript table. Rules code produces these facts; clients may choose\ntiming and composition but never reconstruct them from frame differences.",
       "oneOf": [
         {
           "type": "object",
@@ -1317,6 +1317,80 @@
           "required": [
             "kind",
             "objects"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "attackers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "defender": {
+              "$ref": "#/$defs/SubjectRef"
+            },
+            "kind": {
+              "type": "string",
+              "const": "attack_group"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "attackers",
+            "defender"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "attacker": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "blockers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "blocked"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "attacker",
+            "blockers"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "turn_started"
+            },
+            "player": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "turn_number": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "player",
+            "turn_number"
           ]
         }
       ]
