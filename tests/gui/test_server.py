@@ -13,6 +13,7 @@ from jsonschema import Draft202012Validator
 
 # Local imports
 from gui import server, trace as trace_store
+from gui.experience_protocol import ProtocolV1ConformanceBundle
 from gui.server import app
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
@@ -116,6 +117,13 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         "command": command,
                     }
                     PROTOCOL_V1_VALIDATOR.validate(live_bundle)
+                    python_bundle = ProtocolV1ConformanceBundle.model_validate(
+                        live_bundle
+                    )
+                    assert (
+                        python_bundle.model_dump(mode="json", exclude_unset=True)
+                        == live_bundle
+                    )
                 websocket.send_json({"type": "command", "command": command})
                 outcome = websocket.receive_json()
                 assert outcome["status"] == "accepted"
@@ -141,6 +149,11 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
 def test_protocol_v1_shared_fixture_matches_rust_generated_schema():
     Draft202012Validator.check_schema(PROTOCOL_V1_SCHEMA)
     PROTOCOL_V1_VALIDATOR.validate(PROTOCOL_V1_BOLT_FIXTURE)
+    python_bundle = ProtocolV1ConformanceBundle.model_validate(PROTOCOL_V1_BOLT_FIXTURE)
+    assert (
+        python_bundle.model_dump(mode="json", exclude_unset=True)
+        == PROTOCOL_V1_BOLT_FIXTURE
+    )
 
     invalid = json.loads(json.dumps(PROTOCOL_V1_BOLT_FIXTURE))
     invalid["recovery"]["protocol"] = 2

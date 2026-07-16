@@ -89,16 +89,19 @@ export type SubjectRef =
   | { kind: 'stack'; id: number }
   | { kind: 'player'; id: number };
 
-export type OfferVerb =
-  | 'cast'
-  | 'play_land'
-  | 'activate'
-  | 'pass_priority'
-  | 'declare_attackers'
-  | 'declare_blockers'
-  | 'choose'
-  | 'pay'
-  | 'special';
+export const OFFER_VERBS = [
+  'cast',
+  'play_land',
+  'activate',
+  'pass_priority',
+  'declare_attackers',
+  'declare_blockers',
+  'choose',
+  'pay',
+  'special',
+] as const;
+
+export type OfferVerb = (typeof OFFER_VERBS)[number];
 
 export type CandidateValue =
   | { kind: 'subject'; subject: SubjectRef }
@@ -110,14 +113,14 @@ export interface Candidate {
   id: number;
   value: CandidateValue;
   label: string;
-  help?: string | null;
-  preview?: string | null;
+  help: string | null;
+  preview: string | null;
 }
 
 export interface CandidateSource {
   id: number;
   depends_on: number[];
-  initial?: Candidate[] | null;
+  initial: Candidate[] | null;
 }
 
 export type ChoiceStep =
@@ -173,13 +176,13 @@ export interface InteractionOffer {
 }
 
 export interface ExperienceFrame {
-  protocol: 1;
+  protocol: ProtocolVersion;
   match_id: string;
   revision: number;
   frame_hash: string;
   content_hash: string;
   asset_manifest_hash: string;
-  status: 'ready' | 'thinking' | 'resolving' | 'reconnecting' | 'game_over';
+  status: AuthorityStatus;
   prompt: PromptView | null;
   projection: Observation;
   offers: InteractionOffer[];
@@ -209,7 +212,34 @@ export interface CommandReceipt {
   resulting_frame_hash: string;
 }
 
-export type PresentationImportance = 'ambient' | 'normal' | 'emphasized' | 'critical';
+export const PROTOCOL_VERSION = 1 as const;
+export type ProtocolVersion = typeof PROTOCOL_VERSION;
+
+export const AUTHORITY_STATUSES = [
+  'ready',
+  'thinking',
+  'resolving',
+  'reconnecting',
+  'game_over',
+] as const;
+export type AuthorityStatus = (typeof AUTHORITY_STATUSES)[number];
+
+export const PRESENTATION_IMPORTANCES = [
+  'ambient',
+  'normal',
+  'emphasized',
+  'critical',
+] as const;
+export type PresentationImportance = (typeof PRESENTATION_IMPORTANCES)[number];
+
+export const PRESENTATION_KIND_NAMES = [
+  'cast',
+  'targeted',
+  'resolved',
+  'damage',
+  'destroyed',
+  'died',
+] as const;
 
 /**
  * Protocol-v1 semantic theater. Targeted/resolved are the first explicit
@@ -268,18 +298,11 @@ export interface FrameUpdate {
 }
 
 export interface RecoveryEnvelope {
-  protocol: 1;
+  protocol: ProtocolVersion;
   engine_version: string;
   content_hash: string;
   asset_manifest_hash: string;
-  reason:
-    | 'initial_connect'
-    | 'explicit_resync'
-    | 'revision_gap'
-    | 'reconnect'
-    | 'duplicate_command'
-    | 'stale_command'
-    | 'authority_restart';
+  reason: RecoveryReason;
   frame: ExperienceFrame;
   presentation_tail: PresentationEvent[];
   accepted_commands: CommandReceipt[];
@@ -292,6 +315,17 @@ export interface ProtocolV1ConformanceBundle {
   recovery: RecoveryEnvelope;
   command: Command;
 }
+
+export const RECOVERY_REASONS = [
+  'initial_connect',
+  'explicit_resync',
+  'revision_gap',
+  'reconnect',
+  'duplicate_command',
+  'stale_command',
+  'authority_restart',
+] as const;
+export type RecoveryReason = (typeof RECOVERY_REASONS)[number];
 
 export interface CommandRejection {
   command_id: string;

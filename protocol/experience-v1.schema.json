@@ -52,10 +52,7 @@
       "type": "object",
       "properties": {
         "help": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "id": {
           "type": "integer",
@@ -66,10 +63,7 @@
           "type": "string"
         },
         "preview": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "value": {
           "$ref": "#/$defs/CandidateValue"
@@ -79,7 +73,9 @@
       "required": [
         "id",
         "value",
-        "label"
+        "label",
+        "help",
+        "preview"
       ]
     },
     "CandidateSource": {
@@ -100,19 +96,14 @@
           "minimum": 0
         },
         "initial": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/$defs/Candidate"
-          }
+          "$ref": "#/$defs/RequiredNullable5"
         }
       },
       "additionalProperties": false,
       "required": [
         "id",
-        "depends_on"
+        "depends_on",
+        "initial"
       ]
     },
     "CandidateValue": {
@@ -128,6 +119,7 @@
               "$ref": "#/$defs/SubjectRef"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "subject"
@@ -144,6 +136,7 @@
               "const": "mode"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "key"
@@ -160,6 +153,7 @@
               "const": "payment_plan"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "id"
@@ -176,6 +170,7 @@
               "type": "boolean"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "value"
@@ -207,6 +202,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -231,6 +227,7 @@
               "format": "int32"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -271,6 +268,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -299,6 +297,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -322,6 +321,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -370,6 +370,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -406,6 +407,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -449,6 +451,7 @@
               "$ref": "#/$defs/CandidateSource"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -479,6 +482,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -509,6 +513,7 @@
               "minimum": 0
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "role",
@@ -676,14 +681,7 @@
           "$ref": "#/$defs/LegacyHeroObservation"
         },
         "prompt": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PromptView"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/RequiredNullable"
         },
         "protocol": {
           "$ref": "#/$defs/ProtocolVersion"
@@ -700,13 +698,7 @@
           "$ref": "#/$defs/StopsConfig"
         },
         "winner": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0
+          "$ref": "#/$defs/RequiredNullable6"
         }
       },
       "additionalProperties": false,
@@ -718,8 +710,10 @@
         "content_hash",
         "asset_manifest_hash",
         "status",
+        "prompt",
         "projection",
         "offers",
+        "winner",
         "action_space",
         "stops"
       ]
@@ -756,10 +750,7 @@
           }
         },
         "help": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "id": {
           "type": "integer",
@@ -770,14 +761,7 @@
           "type": "string"
         },
         "source": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SubjectRef"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/RequiredNullable4"
         },
         "verb": {
           "$ref": "#/$defs/OfferVerb"
@@ -788,7 +772,9 @@
         "id",
         "actor",
         "verb",
+        "source",
         "label",
+        "help",
         "choices",
         "confirm_label",
         "action_type",
@@ -916,18 +902,10 @@
       "type": "object",
       "properties": {
         "base_power": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "base_toughness": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "controller_id": {
           "type": "integer",
@@ -944,10 +922,7 @@
           "minimum": 0
         },
         "name": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "plus1_counters": {
           "type": "integer",
@@ -955,11 +930,7 @@
           "minimum": 0
         },
         "power": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "$ref": "#/$defs/RequiredNullable3"
         },
         "summoning_sick": {
           "type": "boolean"
@@ -968,20 +939,21 @@
           "type": "boolean"
         },
         "toughness": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "int32"
+          "$ref": "#/$defs/RequiredNullable3"
         }
       },
       "additionalProperties": false,
       "required": [
         "id",
+        "name",
         "controller_id",
         "tapped",
         "damage",
         "summoning_sick",
+        "power",
+        "toughness",
+        "base_power",
+        "base_toughness",
         "plus1_counters"
       ]
     },
@@ -1146,14 +1118,10 @@
       ]
     },
     "PresentationEvent": {
-      "description": "Presentation payloads remain opaque in this certification because the\nmerged adapter emits no semantic presentation events yet. The envelope and\nordering metadata are nevertheless fixed at the wire boundary.",
       "type": "object",
       "properties": {
         "caused_by": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "from_revision": {
           "type": "integer",
@@ -1168,17 +1136,16 @@
         "importance": {
           "$ref": "#/$defs/PresentationImportance"
         },
-        "kind": true,
+        "kind": {
+          "$ref": "#/$defs/PresentationKind"
+        },
         "seq": {
           "type": "integer",
           "format": "uint64",
           "minimum": 0
         },
         "sound": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "suggested_ms": {
           "type": "integer",
@@ -1196,9 +1163,11 @@
         "seq",
         "from_revision",
         "to_revision",
+        "caused_by",
         "group",
         "importance",
         "suggested_ms",
+        "sound",
         "kind"
       ]
     },
@@ -1209,6 +1178,147 @@
         "normal",
         "emphasized",
         "critical"
+      ]
+    },
+    "PresentationKind": {
+      "description": "Viewer-safe semantic presentation payload shared by Rust, Python, and the\nTypeScript table. It is deliberately smaller than the future vocabulary in\nthe architecture design: protocol v1 certifies only kinds already consumed\nby the merged presentation player.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "integer",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "cast"
+            },
+            "object": {
+              "$ref": "#/$defs/ObjectRenderId"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "object",
+            "controller",
+            "stack"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "targeted"
+            },
+            "source": {
+              "$ref": "#/$defs/SubjectRef"
+            },
+            "target": {
+              "$ref": "#/$defs/SubjectRef"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "target"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "resolved"
+            },
+            "stack": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "stack"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "kind": {
+              "type": "string",
+              "const": "damage"
+            },
+            "source": {
+              "$ref": "#/$defs/RequiredNullable4"
+            },
+            "target": {
+              "$ref": "#/$defs/SubjectRef"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "source",
+            "target",
+            "amount"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "destroyed"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "died"
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ObjectRenderId"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "objects"
+          ]
+        }
       ]
     },
     "PromptView": {
@@ -1264,10 +1374,7 @@
           "type": "string"
         },
         "checkpoint": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "$ref": "#/$defs/RequiredNullable2"
         },
         "content_hash": {
           "type": "string"
@@ -1306,7 +1413,8 @@
         "frame",
         "presentation_tail",
         "accepted_commands",
-        "replay_cursor"
+        "replay_cursor",
+        "checkpoint"
       ]
     },
     "RecoveryReason": {
@@ -1320,6 +1428,63 @@
         "stale_command",
         "authority_restart"
       ]
+    },
+    "RequiredNullable": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PromptView"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "RequiredNullable2": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "RequiredNullable3": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "int32"
+    },
+    "RequiredNullable4": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SubjectRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "RequiredNullable5": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      }
+    },
+    "RequiredNullable6": {
+      "description": "A nullable wire value whose key must still be present.\n\nSerde otherwise treats a missing ``Option`` field as ``None``, and schemars\nmarks it optional. This transparent wrapper keeps null on the wire while\nmaking presence part of the generated contract.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint8",
+      "maximum": 255,
+      "minimum": 0
     },
     "StopsConfig": {
       "type": "object",
@@ -1364,6 +1529,7 @@
               "const": "object"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "id"
@@ -1382,6 +1548,7 @@
               "const": "stack"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "id"
@@ -1401,6 +1568,7 @@
               "const": "player"
             }
           },
+          "additionalProperties": false,
           "required": [
             "kind",
             "id"

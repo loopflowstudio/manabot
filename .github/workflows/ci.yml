@@ -163,6 +163,7 @@ jobs:
       - name: Certify Rust and Python
         run: |
           cargo test --manifest-path managym/Cargo.toml --test experience_protocol_tests
+          uv run --extra dev pytest tests/gui/test_experience_protocol.py -q
           uv run --extra dev pytest tests/gui/test_server.py -k protocol_v1 -q
 
       - name: Certify TypeScript

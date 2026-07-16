@@ -1,4 +1,4 @@
-use managym::experience::{ProtocolV1ConformanceBundle, ProtocolVersion};
+use managym::experience::{PresentationKind, ProtocolV1ConformanceBundle, ProtocolVersion};
 use schemars::schema_for;
 
 const FIXTURE: &str = include_str!("../../protocol/fixtures/bolt-target.json");
@@ -32,6 +32,35 @@ fn bolt_target_bundle_round_trips_through_rust_authority_types() {
         .offers
         .iter()
         .any(|offer| offer.id == bundle.command.offer_id));
+    assert!(matches!(
+        bundle.recovery.presentation_tail.as_slice(),
+        [
+            managym::experience::PresentationEvent {
+                kind: PresentationKind::Cast { .. },
+                ..
+            },
+            managym::experience::PresentationEvent {
+                kind: PresentationKind::Targeted { .. },
+                ..
+            },
+            managym::experience::PresentationEvent {
+                kind: PresentationKind::Resolved { .. },
+                ..
+            },
+            managym::experience::PresentationEvent {
+                kind: PresentationKind::Damage { .. },
+                ..
+            },
+            managym::experience::PresentationEvent {
+                kind: PresentationKind::Destroyed { .. },
+                ..
+            },
+            managym::experience::PresentationEvent {
+                kind: PresentationKind::Died { .. },
+                ..
+            }
+        ]
+    ));
 
     let round_trip = serde_json::to_value(bundle).expect("bundle serializes");
     assert_eq!(round_trip, source);
@@ -69,6 +98,36 @@ fn unsupported_protocol_versions_fail_at_the_rust_boundary() {
     assert!(error
         .to_string()
         .contains("unsupported experience protocol"));
+}
+
+#[test]
+fn required_nullable_fields_and_closed_presentation_kinds_are_enforced() {
+    let source: serde_json::Value = serde_json::from_str(FIXTURE).expect("fixture JSON");
+    for (parent_pointer, field) in [
+        ("/recovery", "checkpoint"),
+        ("/recovery/frame", "prompt"),
+        ("/recovery/frame", "winner"),
+        ("/recovery/frame/offers/0", "source"),
+        ("/recovery/frame/offers/0", "help"),
+        ("/recovery/presentation_tail/0", "caused_by"),
+        ("/recovery/presentation_tail/0", "sound"),
+        ("/recovery/presentation_tail/3/kind", "source"),
+    ] {
+        let mut invalid = source.clone();
+        invalid
+            .pointer_mut(parent_pointer)
+            .and_then(serde_json::Value::as_object_mut)
+            .expect("fixture parent object")
+            .remove(field);
+        assert!(
+            serde_json::from_value::<ProtocolV1ConformanceBundle>(invalid).is_err(),
+            "missing {parent_pointer}/{field} must fail"
+        );
+    }
+
+    let mut unknown = source;
+    unknown["recovery"]["presentation_tail"][0]["kind"]["client_only"] = serde_json::json!(true);
+    serde_json::from_value::<ProtocolV1ConformanceBundle>(unknown).unwrap_err();
 }
 
 #[test]

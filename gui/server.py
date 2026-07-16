@@ -28,6 +28,7 @@ import managym
 
 from . import trace as trace_store, villain as villain_module
 from .curated_pack import CURATED_PACK
+from .experience_protocol import PROTOCOL_VERSION
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
@@ -71,7 +72,6 @@ DEFAULT_DECK = INTERACTIVE_DECK
 MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
 VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
-PROTOCOL_VERSION = 1
 MAX_ACCEPTED_COMMANDS = 64
 CONTENT_HASH = "legacy-content-unversioned"
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256

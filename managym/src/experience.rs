@@ -40,6 +40,32 @@ macro_rules! string_id {
     };
 }
 
+/// A nullable wire value whose key must still be present.
+///
+/// Serde otherwise treats a missing ``Option`` field as ``None``, and schemars
+/// marks it optional. This transparent wrapper keeps null on the wire while
+/// making presence part of the generated contract.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(transparent)]
+#[schemars(transparent)]
+pub struct RequiredNullable<T>(pub Option<T>);
+
+impl<T> RequiredNullable<T> {
+    pub fn as_ref(&self) -> Option<&T> {
+        self.0.as_ref()
+    }
+}
+
+fn deserialize_required_nullable<'de, D, T>(
+    deserializer: D,
+) -> Result<RequiredNullable<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(RequiredNullable)
+}
+
 /// The only version accepted by this module and its generated schema.
 #[derive(Clone, Copy, Debug, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
@@ -90,7 +116,7 @@ pub struct ObjectRenderId {
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum SubjectRef {
     Object { id: ObjectRenderId },
     Stack { id: StackRenderId },
@@ -112,7 +138,7 @@ pub enum OfferVerb {
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum CandidateValue {
     Subject { subject: SubjectRef },
     Mode { key: String },
@@ -126,8 +152,10 @@ pub struct Candidate {
     pub id: CandidateId,
     pub value: CandidateValue,
     pub label: String,
-    pub help: Option<String>,
-    pub preview: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub help: RequiredNullable<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub preview: RequiredNullable<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -135,11 +163,12 @@ pub struct Candidate {
 pub struct CandidateSource {
     pub id: CandidateSourceId,
     pub depends_on: Vec<RoleId>,
-    pub initial: Option<Vec<Candidate>>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub initial: RequiredNullable<Vec<Candidate>>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum ChoiceStep {
     Select {
         role: RoleId,
@@ -183,9 +212,11 @@ pub struct InteractionOffer {
     pub id: OfferId,
     pub actor: PlayerId,
     pub verb: OfferVerb,
-    pub source: Option<SubjectRef>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub source: RequiredNullable<SubjectRef>,
     pub label: String,
-    pub help: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub help: RequiredNullable<String>,
     pub choices: Vec<ChoiceStep>,
     pub confirm_label: String,
     /// Transitional bridge to today's positional engine action.
@@ -195,7 +226,7 @@ pub struct InteractionOffer {
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
 pub enum ChoiceAnswer {
     Candidates {
         role: RoleId,
@@ -280,15 +311,20 @@ pub struct LegacyCardView {
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
     pub id: u32,
-    pub name: Option<String>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub name: RequiredNullable<String>,
     pub controller_id: u32,
     pub tapped: bool,
     pub damage: i32,
     pub summoning_sick: bool,
-    pub power: Option<i32>,
-    pub toughness: Option<i32>,
-    pub base_power: Option<i32>,
-    pub base_toughness: Option<i32>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub power: RequiredNullable<i32>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub toughness: RequiredNullable<i32>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub base_power: RequiredNullable<i32>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub base_toughness: RequiredNullable<i32>,
     pub plus1_counters: u32,
 }
 
@@ -369,10 +405,12 @@ pub struct ExperienceFrame {
     pub content_hash: ContentHash,
     pub asset_manifest_hash: AssetManifestHash,
     pub status: AuthorityStatus,
-    pub prompt: Option<PromptView>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub prompt: RequiredNullable<PromptView>,
     pub projection: LegacyHeroObservation,
     pub offers: Vec<InteractionOffer>,
-    pub winner: Option<PlayerId>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub winner: RequiredNullable<PlayerId>,
     pub action_space: String,
     pub stops: StopsConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -394,21 +432,53 @@ pub enum PresentationImportance {
     Critical,
 }
 
-/// Presentation payloads remain opaque in this certification because the
-/// merged adapter emits no semantic presentation events yet. The envelope and
-/// ordering metadata are nevertheless fixed at the wire boundary.
+/// Viewer-safe semantic presentation payload shared by Rust, Python, and the
+/// TypeScript table. It is deliberately smaller than the future vocabulary in
+/// the architecture design: protocol v1 certifies only kinds already consumed
+/// by the merged presentation player.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields, tag = "kind", rename_all = "snake_case")]
+pub enum PresentationKind {
+    Cast {
+        object: ObjectRenderId,
+        controller: PlayerId,
+        stack: StackRenderId,
+    },
+    Targeted {
+        source: SubjectRef,
+        target: SubjectRef,
+    },
+    Resolved {
+        stack: StackRenderId,
+    },
+    Damage {
+        #[serde(deserialize_with = "deserialize_required_nullable")]
+        source: RequiredNullable<SubjectRef>,
+        target: SubjectRef,
+        amount: i32,
+    },
+    Destroyed {
+        objects: Vec<ObjectRenderId>,
+    },
+    Died {
+        objects: Vec<ObjectRenderId>,
+    },
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PresentationEvent {
     pub seq: PresentationSeq,
     pub from_revision: Revision,
     pub to_revision: Revision,
-    pub caused_by: Option<CommandId>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub caused_by: RequiredNullable<CommandId>,
     pub group: PresentationGroupId,
     pub importance: PresentationImportance,
     pub suggested_ms: u32,
-    pub sound: Option<String>,
-    pub kind: serde_json::Value,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub sound: RequiredNullable<String>,
+    pub kind: PresentationKind,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -445,7 +515,8 @@ pub struct RecoveryEnvelope {
     pub presentation_tail: Vec<PresentationEvent>,
     pub accepted_commands: Vec<CommandReceipt>,
     pub replay_cursor: ReplayCursor,
-    pub checkpoint: Option<CheckpointId>,
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    pub checkpoint: RequiredNullable<CheckpointId>,
 }
 
 /// Shared executable fixture: one recovery frame and the command selected

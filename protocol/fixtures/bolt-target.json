@@ -95,7 +95,119 @@
         "auto_pass": false
       }
     },
-    "presentation_tail": [],
+    "presentation_tail": [
+      {
+        "seq": 900,
+        "from_revision": 1,
+        "to_revision": 2,
+        "caused_by": "fixture-target-command",
+        "group": 700,
+        "importance": "emphasized",
+        "suggested_ms": 650,
+        "sound": "spell.cast",
+        "kind": {
+          "kind": "cast",
+          "object": {
+            "entity": 31,
+            "incarnation": 0
+          },
+          "controller": 0,
+          "stack": 4001
+        }
+      },
+      {
+        "seq": 901,
+        "from_revision": 1,
+        "to_revision": 2,
+        "caused_by": "fixture-target-command",
+        "group": 701,
+        "importance": "normal",
+        "suggested_ms": 500,
+        "sound": null,
+        "kind": {
+          "kind": "targeted",
+          "source": {
+            "kind": "stack",
+            "id": 4001
+          },
+          "target": {
+            "kind": "player",
+            "id": 1
+          }
+        }
+      },
+      {
+        "seq": 902,
+        "from_revision": 1,
+        "to_revision": 2,
+        "caused_by": "fixture-target-command",
+        "group": 702,
+        "importance": "ambient",
+        "suggested_ms": 350,
+        "sound": null,
+        "kind": {
+          "kind": "resolved",
+          "stack": 4001
+        }
+      },
+      {
+        "seq": 903,
+        "from_revision": 1,
+        "to_revision": 2,
+        "caused_by": null,
+        "group": 703,
+        "importance": "critical",
+        "suggested_ms": 700,
+        "sound": "damage.player",
+        "kind": {
+          "kind": "damage",
+          "source": null,
+          "target": {
+            "kind": "player",
+            "id": 1
+          },
+          "amount": 3
+        }
+      },
+      {
+        "seq": 904,
+        "from_revision": 1,
+        "to_revision": 2,
+        "caused_by": null,
+        "group": 704,
+        "importance": "normal",
+        "suggested_ms": 300,
+        "sound": null,
+        "kind": {
+          "kind": "destroyed",
+          "objects": [
+            {
+              "entity": 77,
+              "incarnation": 0
+            }
+          ]
+        }
+      },
+      {
+        "seq": 905,
+        "from_revision": 1,
+        "to_revision": 2,
+        "caused_by": null,
+        "group": 705,
+        "importance": "normal",
+        "suggested_ms": 450,
+        "sound": "creature.died",
+        "kind": {
+          "kind": "died",
+          "objects": [
+            {
+              "entity": 77,
+              "incarnation": 0
+            }
+          ]
+        }
+      }
+    ],
     "accepted_commands": [],
     "replay_cursor": 2,
     "checkpoint": null
