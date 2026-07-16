@@ -8,152 +8,119 @@ machine identity.
 
 Etude Fantasia trains and studies a **manabot**. This repository contains:
 
-- **Etude Fantasia**: the authored play, replay, and study experience
+- **Etude** (`etude`, Python + Svelte frontend): the authored play, replay,
+  and study experience
 - **Manabot** (`manabot`, Python): the trainable agent, search and learning
   library, Gymnasium wrappers, and experiment tracking
 - **managym** (Rust): the deterministic game and search environment, with PyO3
   Python bindings
 
-## Installation
+<img src="frontend/e2e/visual-references/v1/board-developed.png"
+     alt="An Etude Fantasia board mid-game" width="440">
+
+## Play
+
+You need [uv](https://docs.astral.sh/uv/), Node, and a Rust toolchain. Then:
 
 ```bash
-# Clone the repo
 git clone git@github.com:loopflowstudio/etude.git
 cd etude
-
-# Install locked Python dependencies
-uv sync --python 3.12 --extra dev
-
-# Install the local managym extension
-uv run --python 3.12 --extra play maturin develop --release \
-  --manifest-path managym/Cargo.toml --features python
-
-# Or install and launch the exact browser matchup in one command
 ./scripts/play
 ```
 
-## Training
+One command installs locked dependencies, builds the engine, starts the
+backend and frontend, and opens the curated matchup against a trained manabot
+in your browser. Ctrl-C stops both services. The path from a fresh checkout
+to play is itself under test: `./scripts/verify-clean-machine` proves launch
+within 60 seconds, offline reload, and session recovery, and CI records the
+receipt (see [docs/clean-machine-play.md](docs/clean-machine-play.md)).
 
-Manabots are primarily trained on Ubuntu machines in AWS and require W&B credentials.
+## Study
+
+A finished game is study material. The Study surface restores consequential
+decisions as the player understood them, shows what else was worth
+considering, and lets you retry a line before the reveal — all projections of
+the same rules authority that played the game. The experience protocol,
+viewer-safe decision artifacts, and study schema are in place
+([protocol/](protocol/README.md)); the guided review experience is being
+built under [wave/study/](wave/study/GOAL.md).
+
+## Train a manabot
 
 ```bash
 uv run manabot train --preset simple
-# or: uv run python manabot/model/train.py --preset simple
 ```
 
-## Simulation
+Serious runs train on Ubuntu machines in AWS and track to Weights & Biases.
+Simulation pulls trained models and can run locally on CPU. See
+[manabot/README.md](manabot/README.md) for the training and simulation
+quickstart, presets, and the current world's live baselines.
 
-Simulation pulls models from wandb. At small scales this can be done locally on CPU machines.
+## The research ledger
+
+Etude's research program is preregistered and reproducible: every experiment
+states its prediction, budget, and kill criteria before running, and negative
+results are recorded alongside positive ones.
+
+- [experiments/](experiments/README.md) — the experiment ledger and frozen
+  contracts
+- [WORLDS.md](WORLDS.md) — observation/action world versioning and which
+  baselines are alive
+- [wave/](wave/README.md) — the active portfolios: rules, game, study,
+  intelligence
+- [docs/research/](docs/README.md) — platform comparisons and deep dives
+- [paper/](paper/README.md) — the paper
+
+## Development
 
 ```bash
-uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
-# or: uv run python manabot/sim/sim.py --preset sim --set sim.num_games=10
-```
+# Install locked Python dependencies
+uv sync --python 3.12 --extra dev
 
-## Testing
-
-```bash
-# Rust checks
-cd managym
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-cd ..
-
-# Install managym into the uv-managed environment
+# Build and install the managym extension
 uv run --python 3.12 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-# Python tests (full + integration slice)
+# Rust checks (CI runs cargo test in debug; validate in debug before landing)
+cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cargo test && cd ..
+
+# Python tests
 uv run --extra dev pytest tests/
-uv run --extra dev pytest tests/env/ tests/agent/ -v
 ```
 
-## Architecture
+Architecture and style live with their packages: [etude/](etude/README.md),
+[manabot/](manabot/README.md), [managym/](managym/README.md). Agent and
+contributor conventions are in [AGENTS.md](AGENTS.md).
 
-### Manabot (Python)
+## Map of the repository
 
-1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
-   - `VectorEnv`: vectorized environment backed by `managym.VectorEnv`
-   - `ObservationSpace`: Observation space encoding
-   - `Match`: Game configuration (decklists, etc.)
-   - `Reward`: Reward function
-
-2. **`manabot.model`**: trainable policy and value models
-   - `Agent`: Shared value/policy network
-   - `Trainer`: PPO trainer
-
-3. **`manabot.sim`**: search, data generation, and game simulation
-   - `Player`: Agent implementations (learned or random)
-   - `Sim`: Multi-game simulation runner
-
-4. **`manabot.infra`**: training infrastructure
-   - `Experiment`: W&B/TensorBoard tracking
-   - `Hypers`: Pydantic config model
-   - `Profiler`: Performance profiling
-
-### managym (Rust)
-
-1. **`managym/src/agent/`**: RL-facing API (`Env`, action spaces, observations)
-2. **`managym/src/flow/`**: Game progression (turns, priority, combat)
-3. **`managym/src/state/`**: Core game state (cards, players, zones, mana)
-4. **`managym/src/cardsets/`**: Card implementations
-5. **`managym/src/infra/`**: Logging and profiler infrastructure
-6. **`managym/src/python/`**: PyO3 bindings and Rust→Python conversions
-
-Dependencies flow: python → agent → flow → state/infra
-
-## Style Guide
-
-### Python (Manabot)
-
-```python
-"""
-filename.py
-One-line purpose of file
-
-Instructions for collaborators on how to approach understanding and editing.
-"""
-
-# Standard library
-import os
-from typing import Dict, List
-
-# Third-party imports
-from torch import Tensor
-
-# Manabot imports
-from manabot.env import ObservationSpace
-
-# Local imports
-from .sibling import Thing
-```
-
-### Rust (managym)
-
-```rust
-// filename.rs
-// One-line purpose of file
-
-use crate::flow::game::Game;
-use crate::state::player::PlayerId;
-```
-
-Prefer explicit types and focused modules. Keep game behavior in enums +
-`match` expressions instead of inheritance-like abstractions.
+| Path | What it is |
+|---|---|
+| `etude/` | Experience server: authoritative play, presentation, study protocol, curated packs |
+| `frontend/` | Etude's Svelte client |
+| `manabot/` | The trainable agent: env wrappers, models, search, training, verification |
+| `managym/` | Rust rules engine and vectorized environment (PyO3 bindings) |
+| `protocol/` | Versioned experience/study schemas certified across Rust, Python, TypeScript |
+| `content/` | Curated deck content compiled to typed semantic IR |
+| `conformance/` | Semantic kernel conformance fixtures |
+| `experiments/` | Preregistered experiment ledger, contracts, receipts |
+| `wave/` | Active research/product portfolios and their charters |
+| `docs/` | Architecture, research, rules, and benchmark documentation |
+| `paper/` | The paper |
+| `ops/` | AWS training infrastructure and container images |
+| `scripts/` | Entry points (`play`, `verify-clean-machine`) and benchmarks |
 
 ## Naming
 
-Etude Fantasia is the full project and product name; Etude is the short name.
-Manabot is not a former name to erase: it is the agent Etude trains and the
-Python library that implements its learning and search systems. Existing
-`manabot.*` contract/schema identifiers and experiment receipts therefore keep
-their names and remain reproducible.
+- **Etude Fantasia** — the full project name and the product experience.
+- **Etude** — the short name wherever brevity or machine identity matters:
+  repository, service namespaces, and ordinary prose after first mention.
+  Always ASCII (never "Étude").
+- **manabot** — the agent, and the Python training library/CLI. Indefinite
+  noun: you train *a* manabot.
+- **managym** — the rules environment the agent lives in.
 
-## LLM Collaboration
-
-When working with this codebase:
-- Avoid transient comments that denote changes
-- Pay attention to file headers and README content
-- Propose small, iterative changes
-- End responses with full implementations, clarifying questions, and notes on what was left out
+If it faces the player, it is Etude; if it trains or evaluates the agent, it
+is manabot; if it is the world, it is managym. Manabot is not a former name
+to erase: existing `manabot.*` contract/schema identifiers, experiment
+receipts, and wandb history keep their names and remain reproducible.
