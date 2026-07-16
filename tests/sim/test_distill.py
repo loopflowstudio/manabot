@@ -44,6 +44,22 @@ def test_generate_selfplay_shard_records_both_seats(tmp_path):
     assert int(dataset["num_valid"].min()) >= 2
 
 
+def test_generate_selfplay_shard_publishes_only_complete_atomic_file(tmp_path):
+    shard = tmp_path / "shard_00.npz"
+    fingerprint = "test-run-fingerprint"
+    summary = generate_selfplay_shard(
+        num_games=1,
+        sims=1,
+        seed=17,
+        out_path=shard,
+        dataset_run_fingerprint=fingerprint,
+    )
+    assert shard.is_file()
+    assert not list(tmp_path.glob(".*.tmp"))
+    assert summary["provenance"]["dataset_run_fingerprint"] == fingerprint
+    assert summary["provenance"]["num_games"] == 1
+
+
 def test_split_by_game_has_no_leakage(tmp_path):
     dataset = _tiny_dataset(tmp_path)
     train_idx, val_idx = split_by_game(dataset, val_fraction=0.34, seed=0)
@@ -75,8 +91,7 @@ def test_train_bc_learns_and_checkpoint_roundtrips(tmp_path):
     # Loaded policy reproduces the trained policy's logits exactly.
     idx = np.arange(min(8, len(dataset["action"])))
     obs = {
-        key: torch.as_tensor(dataset[key][idx], dtype=torch.float32)
-        for key in OBS_KEYS
+        key: torch.as_tensor(dataset[key][idx], dtype=torch.float32) for key in OBS_KEYS
     }
     with torch.no_grad():
         original_logits, _ = agent.forward(obs)

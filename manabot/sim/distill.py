@@ -19,6 +19,7 @@ teacher decision and both seats' decisions are recorded.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import time
 from typing import Any
@@ -77,6 +78,7 @@ def generate_selfplay_shard(
     out_path: str | Path | None = None,
     max_steps_per_game: int = 5000,
     round_index: int = 0,
+    dataset_run_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     """Play teacher-vs-teacher self-play games, recording every decision.
 
@@ -236,6 +238,8 @@ def generate_selfplay_shard(
         "git_commit": _git_commit(),
         "seed": seed,
         "game_offset": game_offset,
+        "num_games": num_games,
+        "dataset_run_fingerprint": dataset_run_fingerprint,
         "policy_target_kind": (
             "visit_distribution" if has_tree_targets else "score_softmax"
         ),
@@ -246,7 +250,15 @@ def generate_selfplay_shard(
     if out_path is not None:
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(out_path, **arrays)
+        temporary = out_path.with_name(f".{out_path.name}.{os.getpid()}.tmp")
+        try:
+            with temporary.open("wb") as destination:
+                np.savez_compressed(destination, **arrays)
+                destination.flush()
+                os.fsync(destination.fileno())
+            temporary.replace(out_path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     search_stats = {
         "decisions": players[0].stats.decisions + players[1].stats.decisions,

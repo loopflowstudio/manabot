@@ -315,7 +315,11 @@ def _dataset_diagnostics(
 
 
 def _generate_dataset(
-    args: argparse.Namespace, dataset_dir: Path, teacher_spec: dict[str, Any]
+    args: argparse.Namespace,
+    dataset_dir: Path,
+    teacher_spec: dict[str, Any],
+    *,
+    resume: bool = False,
 ) -> None:
     command = [
         sys.executable,
@@ -326,6 +330,8 @@ def _generate_dataset(
         str(args.workers),
         "--sims",
         str(args.sims),
+        "--games-per-shard",
+        str(args.games_per_shard),
         "--seed",
         str(args.seed),
         "--out-dir",
@@ -333,6 +339,8 @@ def _generate_dataset(
     ]
     if teacher_spec["kind"] != "search":
         command.extend(["--teacher-json", json.dumps(teacher_spec, sort_keys=True)])
+    if resume:
+        command.append("--resume")
     subprocess.run(command, check=True)
 
 
@@ -369,6 +377,7 @@ def _validate_dataset_manifest(
         "workers": args.workers,
         "seed": args.seed,
         "sims": args.sims,
+        "games_per_shard": args.games_per_shard,
     }
     mismatches = [
         f"{key}={generator_manifest.get(key)!r} (expected {expected!r})"
@@ -416,6 +425,12 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--sims", type=int, default=128)
     parser.add_argument(
+        "--games-per-shard",
+        type=int,
+        default=8,
+        help="durable datagen checkpoint granularity",
+    )
+    parser.add_argument(
         "--teacher-kind",
         choices=("flat_mc", "determinized_puct"),
         default="flat_mc",
@@ -448,12 +463,14 @@ def main() -> None:
     parser.add_argument(
         "--resume-dataset",
         action="store_true",
-        help="reuse complete shard data already present under OUT_DIR/dataset",
+        help="resume an exact partial dataset or reuse an exact complete dataset",
     )
     args = parser.parse_args()
 
     if args.games < 2 or args.workers < 1 or args.sims < 1:
         raise SystemExit("games >= 2, workers >= 1, and sims >= 1 are required")
+    if args.games_per_shard < 1:
+        raise SystemExit("games-per-shard must be positive")
     if args.worlds < 1 or (
         args.teacher_kind == "determinized_puct" and args.worlds > args.sims
     ):
@@ -589,10 +606,10 @@ def main() -> None:
     dataset_manifest_path = dataset_dir / "manifest.json"
     shard_paths = sorted(dataset_dir.glob("shard_*.npz"))
     if args.resume_dataset:
-        if not shard_paths or not dataset_manifest_path.exists():
-            raise SystemExit(
-                "--resume-dataset requires complete shards and dataset/manifest.json"
-            )
+        if not dataset_manifest_path.exists():
+            raise SystemExit("--resume-dataset requires dataset/manifest.json")
+        _generate_dataset(args, dataset_dir, teacher_spec, resume=True)
+        shard_paths = sorted(dataset_dir.glob("shard_*.npz"))
     elif shard_paths or dataset_manifest_path.exists():
         raise SystemExit(
             "dataset directory already contains artifacts; use a new --out-dir or "
@@ -604,6 +621,10 @@ def main() -> None:
     if not shard_paths:
         raise SystemExit(f"dataset generation produced no shards under {dataset_dir}")
     generator_manifest = json.loads(dataset_manifest_path.read_text())
+    if generator_manifest.get("status") != "completed":
+        raise SystemExit(
+            "dataset generator did not complete; rerun with --resume-dataset"
+        )
     _validate_dataset_manifest(
         generator_manifest,
         args=args,
