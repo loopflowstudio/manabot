@@ -613,7 +613,7 @@ impl Game {
         };
         let source_permanent_object_id = permanent.id;
         let source_card = permanent.card;
-        let source_card_registry_key = self.state.cards[source_card].registry_key;
+        let source_definition_id = self.state.cards[source_card].definition_id;
         let Some(ability) = self.state.cards[source_card]
             .activated_abilities
             .get(ability_index)
@@ -633,7 +633,7 @@ impl Game {
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
             controller: player,
-            source_card_registry_key,
+            source_definition_id,
             source_card,
             source_permanent_object_id,
             ability_index,

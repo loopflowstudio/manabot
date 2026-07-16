@@ -1,6 +1,7 @@
 pub mod ability;
 pub mod card;
 pub mod game_object;
+pub mod hash;
 pub mod mana;
 pub mod permanent;
 pub mod player;

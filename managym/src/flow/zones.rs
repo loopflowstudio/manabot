@@ -180,7 +180,7 @@ impl Game {
                 id: self.state.id_gen.next_id(),
                 card,
                 controller,
-                source_card_registry_key: self.state.cards[card].registry_key,
+                source_definition_id: self.state.cards[card].definition_id,
                 targets,
                 target_req_indices,
                 kicked,

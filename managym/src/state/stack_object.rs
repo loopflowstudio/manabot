@@ -1,4 +1,5 @@
 use super::ability::Effect;
+use super::card::CardDefId;
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -6,7 +7,10 @@ pub struct SpellOnStack {
     pub id: ObjectId,
     pub card: CardId,
     pub controller: PlayerId,
-    pub source_card_registry_key: ObjectId,
+    /// Immutable meaning of the source card. The serialized field name stays
+    /// legacy-compatible for benchmark snapshots and observation adapters.
+    #[serde(rename = "source_card_registry_key")]
+    pub source_definition_id: CardDefId,
     pub targets: Vec<Target>,
     /// Which targeting requirement (index into the card's
     /// `target_requirements()`) each entry of `targets` was chosen for.
@@ -19,7 +23,8 @@ pub struct SpellOnStack {
 pub struct ActivatedAbilityOnStack {
     pub id: ObjectId,
     pub controller: PlayerId,
-    pub source_card_registry_key: ObjectId,
+    #[serde(rename = "source_card_registry_key")]
+    pub source_definition_id: CardDefId,
     pub source_card: CardId,
     pub source_permanent_object_id: ObjectId,
     pub ability_index: usize,
@@ -33,7 +38,8 @@ pub struct TriggeredAbilityOnStack {
     pub source_card: CardId,
     pub source_ref: Option<ObjectRef>,
     pub source_lki: Option<ObjectLki>,
-    pub source_card_registry_key: ObjectId,
+    #[serde(rename = "source_card_registry_key")]
+    pub source_definition_id: CardDefId,
     pub ability_index: usize,
     pub targets: Vec<Target>,
     /// Object from the triggering event that the ability's effects
@@ -68,12 +74,19 @@ impl StackObject {
         }
     }
 
-    pub fn source_card_registry_key(&self) -> ObjectId {
+    pub fn source_definition_id(&self) -> CardDefId {
         match self {
-            StackObject::Spell(spell) => spell.source_card_registry_key,
-            StackObject::ActivatedAbility(ability) => ability.source_card_registry_key,
-            StackObject::TriggeredAbility(triggered) => triggered.source_card_registry_key,
+            StackObject::Spell(spell) => spell.source_definition_id,
+            StackObject::ActivatedAbility(ability) => ability.source_definition_id,
+            StackObject::TriggeredAbility(triggered) => triggered.source_definition_id,
         }
+    }
+
+    /// Legacy numeric observation projection. Internal state uses
+    /// [`CardDefId`]; the current Python/observation ABI still exposes an
+    /// integer registry key with the same value.
+    pub fn source_card_registry_key(&self) -> ObjectId {
+        ObjectId(self.source_definition_id().0)
     }
 
     pub fn source_permanent_object_id(&self) -> Option<ObjectId> {

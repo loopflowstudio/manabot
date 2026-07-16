@@ -10,4 +10,5 @@ pub mod state;
 pub use agent::env::Env;
 pub use agent::vector_env::VectorEnv;
 pub use flow::game::Game;
+pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
 pub use state::player::PlayerConfig;

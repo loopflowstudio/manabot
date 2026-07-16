@@ -173,10 +173,10 @@ impl Game {
         trigger: PendingTrigger,
         target: Option<Target>,
     ) {
-        let source_card_registry_key = trigger
+        let source_definition_id = trigger
             .source_lki
-            .map(|lki| crate::state::game_object::ObjectId(lki.definition_id.0))
-            .unwrap_or(self.state.cards[trigger.source_card].registry_key);
+            .map(|lki| lki.definition_id)
+            .unwrap_or(self.state.cards[trigger.source_card].definition_id);
         let id = self.state.id_gen.next_id();
         let targets = target.into_iter().collect();
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
@@ -185,7 +185,7 @@ impl Game {
             source_card: trigger.source_card,
             source_ref: trigger.source_ref,
             source_lki: trigger.source_lki,
-            source_card_registry_key,
+            source_definition_id,
             ability_index: trigger.ability_index,
             targets,
             context: trigger.context,
