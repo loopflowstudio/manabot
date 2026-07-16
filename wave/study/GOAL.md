@@ -2,7 +2,7 @@
 pm:
   provider: linear
   linear_initiative: 1f18f754-dbad-44c0-a90a-4a51941aed88
-  linear_team: 60558c53-2169-49f8-a76a-1f4586705aa9
+  linear_team: feadac43-5d63-412e-b6f6-39424a13f45a
 ---
 
 # Study
@@ -18,9 +18,9 @@ Magic play.
 
 ## Measures
 
-- A completed creator-selected matchup opens directly into a guided review that
-  identifies a small number of meaningful decision landmarks rather than
-  replaying raw engine actions.
+- A completed creator-selected matchup opens into a deterministic semantic
+  timeline where every historical player decision is directly addressable;
+  3–7 ranked landmarks guide the first review without gating free navigation.
 - Every policy, search, uncertainty, and robustness claim records the viewer's
   information boundary plus content-pack, engine, model, state, and analysis
   identities; hindsight is separate and unmistakable.
@@ -33,6 +33,10 @@ Magic play.
 - Bookmarks, annotations, shared decisions, and model-version comparisons are
   reproducible and viewer-safe, and any research use of human study behavior is
   transparent and attributable.
+- Self-study keeps engine judgment sealed until reveal while preserving the
+  historical command as subtle context; a shared question can seal both the
+  historical command and engine evidence until the recipient responds or
+  explicitly reveals them.
 - Desktop and mobile study flows keep the Magic table primary and pass
   deterministic release-stack interaction, accessibility, latency, and visual
   evidence gates.
@@ -50,11 +54,19 @@ labelled hindsight lens and never contaminate the default evidence or research
 trace. Policy mass, search value, visits, robustness across sampled worlds, and
 uncertainty remain distinct quantities.
 
-The design standard is: triage like Chess.com, explore on the board like OGS,
-retain 17Lands-style replay and sharing ergonomics, and explain hidden-information
-Magic decisions in a way those perfect-information games cannot. Prefer a few
-grounded plans and short contingent continuations over an omniscient evaluation
-bar, raw event log, generic coach prose, or persistent variation-tree clutter.
+The design standard is: triage like Chess.com, navigate and explore trees like
+chess and OGS analysis boards, retain 17Lands-style replay and shareable-position
+ergonomics, and grow toward poker-solver-quality range and counterfactual study
+only as the evidence supports it. Prefer a few grounded plans and short
+contingent continuations over an omniscient evaluation bar, raw event log,
+generic coach prose, or persistent variation-tree clutter.
+
+Poker solvers are a north star, not a vocabulary shortcut. The evidence ladder
+is exact historical positions; policy and search comparisons; robustness across
+sampled hidden worlds; learned beliefs and ranges; range-conditioned
+counterfactuals; then approximate subgame equilibrium, regret, or
+exploitability. Do not ship an empty Ranges surface or use equilibrium language
+before the corresponding objects and measurements exist.
 
 Concrete repository changes begin as Linear Tasks under one Study Project.
 Projects must prove player-visible improvements or a durable evidence frontier;

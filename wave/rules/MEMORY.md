@@ -56,6 +56,11 @@
   every transfer/performance result.
 - Replace flat enumerate-then-clone-and-validate action lists with structured offers that are legal by construction and admit structured policy decoders.
 - The search contract likely combines safe snapshot forks outside a rollout with dense transactional execution and mark/rollback inside it.
+- The same exact fork contract must accept a viewer-safe historical Study
+  identity, preserve the immutable source trace, execute structured commands,
+  and return to the original state and event cursor without leaking private
+  information. Study consumes this contract rather than inventing a UI-local
+  branch model.
 - Benchmark compact full clone, compact clone plus undo, and dense page-COW fork plus undo at realistic worker x actor x rollout load. Decide on rollout throughput and peak RSS, not clone latency alone.
 - Use a readable reference reducer and optimized executor as differential oracles. Explore Phase as a pinned conformance oracle and opponent pool, not as the primary training backend.
 - Verification should become mechanical: conformance CI, gap-analysis worklists, property/metamorphic/differential/fuzz testing, and a content-change to kernel-change ratio that can trigger a redesign kill decision.

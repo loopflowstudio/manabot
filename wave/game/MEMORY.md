@@ -13,6 +13,9 @@
 - Commands bind to revision + prompt + offer and carry a stable command ID.
 - Presentation consumes semantic events; it does not infer meaning by diffing
   arbitrary snapshots.
+- Canonical replay exposes a stable address for every historical player
+  decision. Study may rank highlights, but it does not define or reconstruct
+  the replay timeline.
 - Offline command queues must not replay gameplay decisions into a newer state.
 - Curated assets are versioned content, not opportunistic runtime fetches.
 - WASM is deferred until adapter benchmarks show a product benefit.
