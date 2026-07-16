@@ -2,7 +2,11 @@
 // Zone management, card movement, and utility methods on Game.
 
 use crate::{
-    flow::{event::GameEvent, game::Game},
+    flow::{
+        event::GameEvent,
+        game::Game,
+        proposed_event::{BattlefieldEntry, ProposedEvent},
+    },
     state::{
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
         permanent::Permanent,
@@ -125,12 +129,18 @@ impl Game {
         self.state.cards.push(card);
         self.state.card_to_permanent.push(None);
         self.state.object_incarnations.push(Incarnation::INITIAL);
-        self.move_card(card_id, ZoneType::Battlefield);
+        self.move_card_with_entry(
+            card_id,
+            ZoneType::Battlefield,
+            BattlefieldEntry {
+                tapped: tapped_and_attacking,
+                ..BattlefieldEntry::default()
+            },
+        );
 
         if tapped_and_attacking {
             if let Some(permanent_id) = self.state.card_to_permanent[card_id] {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.tapped = true;
                     permanent.attacking = true;
                 }
                 // A token put onto the battlefield attacking joins combat but
@@ -200,16 +210,37 @@ impl Game {
     }
 
     pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
+        self.move_card_with_entry(card, to_zone, BattlefieldEntry::default());
+    }
+
+    pub(crate) fn move_card_with_entry(
+        &mut self,
+        card: CardId,
+        to_zone: ZoneType,
+        entry: BattlefieldEntry,
+    ) {
+        let from = self.state.zones.zone_of(card);
+        let object = from.and_then(|_| self.current_object_ref(card));
+        self.apply_proposed_event(ProposedEvent::ZoneMove {
+            card,
+            object,
+            from,
+            to: to_zone,
+            entry,
+        });
+    }
+
+    pub(crate) fn commit_zone_move(
+        &mut self,
+        card: CardId,
+        departing_ref: Option<ObjectRef>,
+        old_zone: Option<ZoneType>,
+        to_zone: ZoneType,
+        entry: BattlefieldEntry,
+    ) -> bool {
         let owner = self.state.cards[card].owner;
-        let old_zone = self.state.zones.zone_of(card);
-        if old_zone == Some(to_zone) {
-            // Reordering within one zone is not a zone change and does not
-            // create a new rules object (CR 400.7).
-            return;
-        }
 
         let mut event_controller = owner;
-        let departing_ref = old_zone.and_then(|_| self.current_object_ref(card));
         let departing_lki = if old_zone == Some(ZoneType::Battlefield) {
             self.snapshot_current_permanent(card)
         } else {
@@ -242,8 +273,10 @@ impl Game {
 
         if to_zone == ZoneType::Battlefield {
             let permanent_id = PermanentId(self.state.permanents.len());
-            let permanent =
+            let mut permanent =
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
+            permanent.tapped = entry.tapped;
+            permanent.plus1_counters = entry.plus_one_counters.max(0);
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
             if self.state.card_to_permanent.len() <= card.0 {
@@ -263,6 +296,7 @@ impl Game {
             self.handle_leaves_battlefield(card, departing_ref, to_zone);
         }
         self.process_game_events();
+        true
     }
 
     /// Leave-the-battlefield bookkeeping: fire one-shot delayed triggers

@@ -24,6 +24,7 @@ impl Game {
             return;
         }
 
+        let mut to_put_in_graveyard = Vec::new();
         let mut to_destroy = Vec::new();
         for permanent_id in self
             .state
@@ -38,12 +39,15 @@ impl Game {
             let zero_toughness = self.permanent_is_creature(permanent_id)
                 && self.effective_toughness(permanent_id) <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
-            if zero_toughness || self.has_lethal_damage(permanent_id) {
+            if zero_toughness {
+                to_put_in_graveyard.push(permanent_id);
+            } else if self.has_lethal_damage(permanent_id) {
                 to_destroy.push(permanent_id);
             }
         }
 
-        for permanent_id in to_destroy {
+        // CR 704.5f is a zone move, not destruction.
+        for permanent_id in to_put_in_graveyard {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
@@ -51,6 +55,20 @@ impl Game {
             let controller = permanent.controller;
             self.move_card(card, ZoneType::Graveyard);
             self.invalidate_mana_cache(controller);
+        }
+
+        // CR 704.5g destruction has its own proposal before committing the
+        // consequent battlefield-to-graveyard zone move.
+        for permanent_id in to_destroy {
+            let Some(controller) = self.state.permanents[permanent_id]
+                .as_ref()
+                .map(|permanent| permanent.controller)
+            else {
+                continue;
+            };
+            if self.destroy_permanent(permanent_id) {
+                self.invalidate_mana_cache(controller);
+            }
         }
 
         // CR 704.5d — A token in a zone other than the battlefield ceases to

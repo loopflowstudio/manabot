@@ -70,7 +70,7 @@ impl Game {
 
         let frame = EffectFrame {
             source: Some(card),
-            source_ref: None,
+            source_ref: self.current_object_ref(card),
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
@@ -233,10 +233,10 @@ impl Game {
                 }
                 match chosen {
                     Target::Player(player) => {
-                        self.apply_player_damage(frame.source, player, *amount);
+                        self.apply_player_damage(frame.source_ref, player, *amount);
                     }
                     Target::Permanent(permanent_id) => {
-                        self.apply_permanent_damage(frame.source, permanent_id, *amount);
+                        self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
                     }
                     Target::StackSpell(_) => {}
                 }
@@ -269,7 +269,7 @@ impl Game {
                 for player in [PlayerId(0), PlayerId(1)] {
                     for permanent_id in self.battlefield_permanents(player) {
                         if self.permanent_is_creature(permanent_id) {
-                            self.apply_permanent_damage(frame.source, permanent_id, *amount);
+                            self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
                         }
                     }
                 }
@@ -287,8 +287,8 @@ impl Game {
                 None
             }
             Effect::PutCountersOnSource { count } => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.plus1_counters += count;
+                if let Some(permanent_id) = self.source_permanent_id(frame) {
+                    self.change_plus_one_counters(permanent_id, *count);
                 }
                 None
             }
@@ -298,9 +298,7 @@ impl Game {
                     return None;
                 }
                 if let Target::Permanent(permanent_id) = chosen {
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.plus1_counters += count;
-                    }
+                    self.change_plus_one_counters(permanent_id, *count);
                 }
                 None
             }
@@ -439,13 +437,10 @@ impl Game {
                     if !self.permanent_is_battlefield_creature(*attacker_id) {
                         continue;
                     }
-                    let Some(attacker_perm) = self.state.permanents[*attacker_id].as_ref() else {
-                        continue;
-                    };
-                    let attacker_card = attacker_perm.card;
+                    let attacker_ref = self.permanent_object_ref(*attacker_id);
                     let power = self.effective_power(*attacker_id);
                     if power > 0 {
-                        self.apply_permanent_damage(Some(attacker_card), victim, power);
+                        self.apply_permanent_damage(attacker_ref, victim, power);
                     }
                 }
                 None
@@ -462,11 +457,11 @@ impl Game {
                     let permanent = self.state.permanents[permanent_id].as_mut()?;
                     // The land becomes a 0/0 creature with haste that's
                     // still a land (base 0/0 by construction — lands print
-                    // no P/T) and picks up the counters.
+                    // no P/T).
                     permanent.animated = true;
-                    permanent.plus1_counters += count;
                     (permanent.card, permanent.controller)
                 };
+                self.change_plus_one_counters(permanent_id, *count);
                 // Delayed trigger: when it dies or is exiled, return it to
                 // the battlefield tapped (CR 603.7 one-shot).
                 self.state.delayed_triggers.push(DelayedTrigger {
@@ -482,15 +477,14 @@ impl Game {
                     self.state.zones.zone_of(card),
                     Some(ZoneType::Graveyard) | Some(ZoneType::Exile)
                 ) {
-                    self.move_card(card, ZoneType::Battlefield);
-                    // Enters tapped — set directly, no "becomes tapped"
-                    // event (CR 613.10-style: entering tapped is not a
-                    // tap).
-                    if let Some(permanent_id) = self.state.card_to_permanent[card] {
-                        if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                            permanent.tapped = true;
-                        }
-                    }
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::BattlefieldEntry {
+                            tapped: true,
+                            ..crate::flow::proposed_event::BattlefieldEntry::default()
+                        },
+                    );
                     let owner = self.state.cards[card].owner;
                     self.invalidate_mana_cache(owner);
                 }
@@ -628,9 +622,7 @@ impl Game {
                     if !self.permanent_matches_predicate(permanent_id, predicate) {
                         continue;
                     }
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.plus1_counters += count;
-                    }
+                    self.change_plus_one_counters(permanent_id, *count);
                 }
                 None
             }

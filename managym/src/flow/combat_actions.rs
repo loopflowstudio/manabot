@@ -114,10 +114,10 @@ impl Game {
         let defender = self.non_active_player();
 
         for attacker_id in combat.attackers.iter().copied() {
-            let Some(attacker) = self.state.permanents[attacker_id].as_ref() else {
+            if self.state.permanents[attacker_id].is_none() {
                 continue;
-            };
-            let attacker_card_id = attacker.card;
+            }
+            let attacker_ref = self.permanent_object_ref(attacker_id);
             if !self.creature_deals_damage_in_pass(attacker_id, pass) {
                 continue;
             }
@@ -140,20 +140,20 @@ impl Game {
                 .collect();
 
             if !was_blocked {
-                self.apply_player_damage(Some(attacker_card_id), defender, attacker_power);
+                self.apply_player_damage(attacker_ref, defender, attacker_power);
                 continue;
             }
 
             for blocker_id in &blockers {
-                let Some(blocker) = self.state.permanents[*blocker_id].as_ref() else {
+                if self.state.permanents[*blocker_id].is_none() {
                     continue;
-                };
-                let blocker_card = blocker.card;
+                }
+                let blocker_ref = self.permanent_object_ref(*blocker_id);
                 if !self.creature_deals_damage_in_pass(*blocker_id, pass) {
                     continue;
                 }
                 let blocker_power = self.effective_power(*blocker_id).max(0);
-                self.apply_permanent_damage(Some(blocker_card), attacker_id, blocker_power);
+                self.apply_permanent_damage(blocker_ref, attacker_id, blocker_power);
             }
 
             let mut remaining_damage = attacker_power;
@@ -174,12 +174,12 @@ impl Game {
                     needed_damage
                 };
                 let assigned = remaining_damage.min(lethal);
-                self.apply_permanent_damage(Some(attacker_card_id), blocker_id, assigned);
+                self.apply_permanent_damage(attacker_ref, blocker_id, assigned);
                 remaining_damage -= assigned;
             }
 
             if attacker_has_trample && remaining_damage > 0 {
-                self.apply_player_damage(Some(attacker_card_id), defender, remaining_damage);
+                self.apply_player_damage(attacker_ref, defender, remaining_damage);
             }
         }
     }

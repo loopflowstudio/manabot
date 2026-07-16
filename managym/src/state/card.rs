@@ -186,6 +186,27 @@ pub struct StaticPtBuff {
     pub toughness: i32,
 }
 
+/// Declarative replacement/prevention effects supported by the curated
+/// proposed-event slice (CR 614-616).
+///
+/// This is intentionally not a general replacement language. The event
+/// pipeline applies matching definitions once in deterministic source order;
+/// unsupported affected-player ordering choices are documented alongside the
+/// pipeline.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ReplacementEffect {
+    /// Prevent `amount` damage that would be dealt to this permanent's
+    /// controller or a permanent they control.
+    PreventDamageToController { amount: i32 },
+    /// Double damage that would be dealt to this permanent's controller or a
+    /// permanent they control. This driver makes ordering observable.
+    DoubleDamageToController,
+    /// This object enters the battlefield tapped (CR 614.1c).
+    EntersTapped,
+    /// This object enters with +1/+1 counters already present (CR 614.1c).
+    EntersWithPlusOneCounters { count: i32 },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
     pub mana_cost: ManaCost,
@@ -238,6 +259,11 @@ pub struct CardDefinition {
     /// Static continuous P/T effects this card projects while on the
     /// battlefield (anthems, conditional self-buffs).
     pub static_pt_buffs: Vec<StaticPtBuff>,
+    /// Replacement/prevention definitions consumed by the proposed-event
+    /// pipeline. Empty vectors are omitted so existing content-pack digests
+    /// remain stable until production content actually adopts the feature.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub replacement_effects: Vec<ReplacementEffect>,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,

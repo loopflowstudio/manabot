@@ -57,8 +57,4 @@ impl Player {
             combat_mana_pool: Mana::default(),
         }
     }
-
-    pub fn take_damage(&mut self, damage: i32) {
-        self.life -= damage;
-    }
 }

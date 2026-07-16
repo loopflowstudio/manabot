@@ -11,6 +11,7 @@ pub mod cr_514_cleanup;
 pub mod cr_601_casting;
 pub mod cr_602_activated_abilities;
 pub mod cr_603_triggers;
+pub mod cr_614_replacement;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;
 pub mod event_observations;

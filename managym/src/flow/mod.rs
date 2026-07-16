@@ -9,6 +9,7 @@ pub mod identity;
 pub mod mana;
 pub mod play;
 pub mod priority;
+pub mod proposed_event;
 pub mod resolution;
 pub mod sba;
 pub mod scenario;
