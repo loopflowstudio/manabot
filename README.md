@@ -48,9 +48,11 @@ built under [wave/study/](wave/study/GOAL.md).
 ## Train a manabot
 
 ```bash
-uv run manabot train --preset simple
+uv run manabot train
 ```
 
+The default preset trains a small manabot on your laptop's CPU in under a
+minute — no accounts, no GPU — and saves checkpoints to `.runs/local/`.
 Serious runs train on Ubuntu machines in AWS and track to Weights & Biases.
 Simulation pulls trained models and can run locally on CPU. See
 [manabot/README.md](manabot/README.md) for the training and simulation

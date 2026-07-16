@@ -32,6 +32,12 @@ def test_apply_set_overrides_creates_nested_keys():
     assert out["x"]["y"] is True
 
 
+def test_local_preset_needs_no_credentials():
+    cfg = load_train_config(preset="local", set_overrides=[])
+    assert cfg.experiment.wandb is False
+    assert cfg.experiment.device == "cpu"
+
+
 def test_load_train_config_with_overrides():
     cfg = load_train_config(
         preset="local",

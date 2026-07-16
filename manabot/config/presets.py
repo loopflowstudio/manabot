@@ -17,6 +17,8 @@ TRAIN_PRESETS = {
         "experiment": {
             "exp_name": "local",
             "profiler_enabled": True,
+            # The certified laptop path: no W&B credentials, no CUDA.
+            "wandb": False,
         },
     },
     "simple": {

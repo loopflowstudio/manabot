@@ -11,11 +11,13 @@ uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 ```
 
-The default `local` preset is a bounded smoke-scale run for laptops. The
-`simple` and `attention` presets are real training runs: they expect a CUDA
-machine (in practice Ubuntu on AWS — see [ops/](../ops/README.md)) and track
-to the `manabot` Weights & Biases project. Simulation pulls trained models
-from W&B and runs locally on CPU at small scales.
+The default `local` preset is the certified laptop path: it trains a small
+manabot on CPU in under a minute, needs no W&B account or CUDA, and saves
+checkpoints to `.runs/local/step_N.pt`. The `simple` and `attention` presets
+are real training runs: they expect a CUDA machine (in practice Ubuntu on
+AWS — see [ops/](../ops/README.md)) and track to the `manabot` Weights &
+Biases project. Simulation pulls trained models from W&B and runs locally on
+CPU at small scales.
 
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.
