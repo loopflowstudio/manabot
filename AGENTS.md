@@ -1,5 +1,23 @@
 Never add "Co-Authored by:" tags in commits
 
+## Naming
+
+- **Etude Fantasia** — the full project name and the product experience.
+- **Etude** — the short name wherever brevity or machine identity matters:
+  repository, service namespaces, and ordinary prose after first mention.
+  Always ASCII (never "Étude").
+- **manabot** — the agent, and the Python training library/CLI. Indefinite
+  noun: you train *a* manabot.
+- **managym** — the rules environment the agent lives in.
+
+Boundary rule for anything those lines don't settle: if it faces the player,
+it is Etude; if it trains or evaluates the agent, it is manabot; if it is the
+world, it is managym. So the play server, experience protocol, curated packs,
+and their env/error namespaces (`ETUDE_PLAY_*`) take Etude names, while
+training infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config
+vars) correctly keeps manabot names. Frozen evidence — experiment IDs,
+contracts, receipts, wandb history — is never renamed.
+
 ## Commands
 
 - **All Python commands run through uv.** This repo's environment is
