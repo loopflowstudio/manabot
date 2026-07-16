@@ -40,6 +40,29 @@ Assumptions frozen before results:
 - 48 games provide a bounded admission signal, not seed-level method evidence
   equivalent to three independently trained policies.
 
+## Pre-run review amendment (2026-07-16)
+
+Before any control lock was created or Teacher-1 gate was executed, parent
+review required the admission boundary to reject foreign-host calibration and
+non-finite or negative latency measurements. The runner now binds the contract,
+current runtime, control lock, and calibration artifact to the same host
+identity; validates both measured p50 values and their relative gap; and applies
+the contract's `max_realized_p50_gap` rather than a duplicated threshold. The
+contract's pinned `pilot_source_sha256` was updated to the resulting reviewed
+runner. No matchup, seed, budget, prediction, quality gate, or continuation
+branch changed, and this amendment supplies no Teacher-1 result or Project KR
+2-5 evidence.
+
+A second pre-run review found that architecture plus software identity was not
+enough to prove the declared Apple M4 Max host, and that the calibration's
+reported relative gap was trusted instead of recomputed. The lock boundary now
+binds `host.chip` to the current `machdep.cpu.brand_string` (with the same
+processor fallback used by the branching benchmark), requires a positive
+Teacher-1 p50 denominator, derives `abs(flat_p50 - teacher_p50) / teacher_p50`,
+rejects any inconsistent reported gap, and applies the contract threshold to
+that derived value. This change also occurred before any control lock or
+Teacher-1 run and does not alter the experiment or authorize training.
+
 ## Frozen contract
 
 The machine-readable source of truth is

@@ -15,8 +15,10 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 import json
+import math
 from pathlib import Path
 import platform
+import subprocess
 import time
 from typing import Any
 
@@ -101,14 +103,86 @@ def _load_contract(path: Path) -> tuple[dict[str, Any], str]:
     return contract, canonical_sha256(contract)
 
 
+_HOST_IDENTITY_FIELDS = (
+    "chip",
+    "machine",
+    "operating_system",
+    "python",
+    "torch",
+    "mps_available",
+)
+
+
+def _cpu_model() -> str | None:
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except OSError:
+        result = None
+    cpu_model = result.stdout.strip() if result is not None else ""
+    return cpu_model or platform.processor() or None
+
+
+def _current_host_identity() -> dict[str, Any]:
+    macos_version = platform.mac_ver()[0]
+    return {
+        "chip": _cpu_model(),
+        "machine": platform.machine(),
+        "operating_system": f"macOS {macos_version}" if macos_version else "",
+        "python": platform.python_version(),
+        "torch": torch.__version__,
+        "mps_available": bool(torch.backends.mps.is_available()),
+    }
+
+
+def _contract_host_identity(contract: dict[str, Any]) -> dict[str, Any]:
+    expected = contract.get("host") or {}
+    missing = [field for field in _HOST_IDENTITY_FIELDS if field not in expected]
+    if missing:
+        raise ContractError(f"contract host identity is missing fields: {missing}")
+    return {field: expected[field] for field in _HOST_IDENTITY_FIELDS}
+
+
+def _finite_nonnegative(value: Any, *, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ContractError(f"latency calibration {field} must be numeric")
+    measured = float(value)
+    if not math.isfinite(measured) or measured < 0:
+        raise ContractError(
+            f"latency calibration {field} must be finite and nonnegative"
+        )
+    return measured
+
+
 def _load_control_lock(
-    path: Path, *, contract_hash: str, budgets: list[int]
+    path: Path,
+    *,
+    contract: dict[str, Any],
+    contract_hash: str,
+    current_host: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str]:
+    budgets = [int(value) for value in contract["teacher"]["budgets"]]
+    expected_host = _contract_host_identity(contract)
+    actual_host = current_host or _current_host_identity()
+    if actual_host != expected_host:
+        raise ContractError(
+            f"current host identity {actual_host!r} != contract {expected_host!r}"
+        )
+    max_gap = _finite_nonnegative(
+        contract.get("gates", {}).get("max_realized_p50_gap"),
+        field="contract max_realized_p50_gap",
+    )
     lock = _load_json(path)
     if lock.get("schema_version") != 1:
         raise ContractError("control lock schema_version must be 1")
     if lock.get("contract_sha256") != contract_hash:
         raise ContractError("control lock does not bind to this contract")
+    if lock.get("host") != expected_host:
+        raise ContractError("control lock host identity does not bind to the contract")
     checkpoint = lock.get("checkpoint_control") or {}
     checkpoint_path = Path(str(checkpoint.get("path", "")))
     expected_checkpoint_hash = checkpoint.get("sha256")
@@ -138,8 +212,11 @@ def _load_control_lock(
     if file_sha256(calibration_path) != calibration.get("sha256"):
         raise ContractError("latency calibration SHA-256 does not match the lock")
     calibration_payload = _load_json(calibration_path)
-    if calibration_payload.get("host") != lock.get("host"):
-        raise ContractError("latency calibration and control lock hosts differ")
+    if calibration_payload.get("host") != expected_host:
+        raise ContractError(
+            "latency calibration host identity does not bind to the contract and "
+            "current runtime"
+        )
     matched = lock.get("flat_sims_per_action_by_teacher_budget") or {}
     missing = [budget for budget in budgets if str(budget) not in matched]
     if missing:
@@ -155,9 +232,33 @@ def _load_control_lock(
             raise ContractError(
                 f"latency calibration does not support Teacher-1 budget {budget}"
             )
-        if float(comparison.get("relative_p50_gap", 1.0)) > 0.10:
+        teacher_p50 = _finite_nonnegative(
+            comparison.get("teacher_p50_decision_ms"),
+            field=f"matches.{budget}.teacher_p50_decision_ms",
+        )
+        if teacher_p50 <= 0:
             raise ContractError(
-                f"Teacher-0 control for Teacher-1 budget {budget} is not within 10%"
+                f"latency calibration matches.{budget}.teacher_p50_decision_ms "
+                "must be positive to derive relative_p50_gap"
+            )
+        flat_p50 = _finite_nonnegative(
+            comparison.get("flat_p50_decision_ms"),
+            field=f"matches.{budget}.flat_p50_decision_ms",
+        )
+        reported_gap = _finite_nonnegative(
+            comparison.get("relative_p50_gap"),
+            field=f"matches.{budget}.relative_p50_gap",
+        )
+        derived_gap = abs(flat_p50 - teacher_p50) / teacher_p50
+        if not math.isclose(reported_gap, derived_gap, rel_tol=1e-9, abs_tol=1e-12):
+            raise ContractError(
+                f"latency calibration matches.{budget}.relative_p50_gap "
+                f"{reported_gap} does not match derived gap {derived_gap}"
+            )
+        if derived_gap > max_gap:
+            raise ContractError(
+                f"Teacher-0 control for Teacher-1 budget {budget} exceeds "
+                f"contract max_realized_p50_gap {max_gap}: {derived_gap}"
             )
     return lock, canonical_sha256(lock)
 
@@ -531,20 +632,13 @@ def run_teacher_gate(
 ) -> dict[str, Any]:
     contract, contract_hash = _load_contract(contract_path)
     budgets = [int(value) for value in contract["teacher"]["budgets"]]
-    lock, lock_hash = _load_control_lock(
-        control_lock_path, contract_hash=contract_hash, budgets=budgets
-    )
     runtime = runtime_fingerprints(seed=int(contract["seeds"]["runtime"]))
     validate_runtime_fingerprints(contract["expected_fingerprints"], runtime)
-    expected_host = contract["host"]
-    actual_host = {
-        "machine": platform.machine(),
-        "python": platform.python_version(),
-        "torch": torch.__version__,
-    }
-    expected_host_subset = {key: expected_host[key] for key in actual_host}
-    if actual_host != expected_host_subset:
-        raise ContractError(f"host runtime {actual_host!r} != {expected_host_subset!r}")
+    lock, lock_hash = _load_control_lock(
+        control_lock_path,
+        contract=contract,
+        contract_hash=contract_hash,
+    )
 
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = out_dir / "manifest.json"

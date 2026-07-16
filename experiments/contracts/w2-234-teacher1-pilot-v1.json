@@ -117,7 +117,7 @@
     "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
     "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
     "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
-    "pilot_source_sha256": "341fc4e1bd710ac1a4e55bfaf548d29c76fc88fdb3a75728ce7cf7267ccb867b",
+    "pilot_source_sha256": "40af43d7eeea333ce7a20792774487abcfacff7137f1f30ef9afe1e3a3844f21",
     "world": "w2"
   },
   "experiment": "w2-234-teacher1-admission-v1",
