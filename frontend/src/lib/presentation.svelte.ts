@@ -1,5 +1,6 @@
 import {
   copyPresentationEvents,
+  mergePresentationLabels,
   presentationBeat,
   type PresentationBeat,
   type PresentationEvent,
@@ -81,7 +82,7 @@ export class PresentationPlayer {
     }
 
     this.events = [...this.events, ...incoming];
-    this.labels = structuredClone(labels);
+    this.labels = mergePresentationLabels(this.labels, labels);
     if (incoming.length > 0) {
       this.playing = true;
     }

@@ -202,6 +202,10 @@ pub struct EventData {
     pub target_id: i32,
     pub amount: i32,
     pub controller_id: i32,
+    /// Committed CardMoved zone metadata; -1 for other event kinds.
+    /// The learning event tensor remains intentionally unchanged.
+    pub from_zone: i32,
+    pub to_zone: i32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -549,12 +553,16 @@ impl Observation {
         use crate::flow::event::DamageTarget;
         match event {
             GameEvent::CardMoved {
-                card, controller, ..
-            } => Some(Self::card_event_data(
-                EventType::CardMoved,
-                *card,
-                *controller,
-            )),
+                card,
+                from,
+                to,
+                controller,
+            } => {
+                let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
+                data.from_zone = from.map_or(-1, |zone| zone as i32);
+                data.to_zone = *to as i32;
+                Some(data)
+            }
             GameEvent::DamageDealt {
                 source,
                 target,
@@ -642,6 +650,8 @@ impl Observation {
             target_id,
             amount,
             controller_id: controller.map_or(-1, |player| player.0 as i32),
+            from_zone: -1,
+            to_zone: -1,
         }
     }
 
@@ -922,6 +932,8 @@ impl Observation {
                     "target_id": event.target_id,
                     "amount": event.amount,
                     "controller_id": event.controller_id,
+                    "from_zone": event.from_zone,
+                    "to_zone": event.to_zone,
                 })
             }).collect::<Vec<_>>(),
         })

@@ -41,6 +41,18 @@ export interface PresentationBeat {
   ariaLabel: string;
 }
 
+export function mergePresentationLabels(
+  ...sources: readonly PresentationLabels[]
+): PresentationLabels {
+  const merged: PresentationLabels = { objects: {}, players: {}, stacks: {} };
+  for (const source of sources) {
+    Object.assign(merged.objects, source.objects);
+    Object.assign(merged.players, source.players);
+    Object.assign(merged.stacks, source.stacks);
+  }
+  return merged;
+}
+
 export interface PresentationInspectorRow extends PresentationBeat {
   causedBy: string | null;
   event: PresentationEvent;

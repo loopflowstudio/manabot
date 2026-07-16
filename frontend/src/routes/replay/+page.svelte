@@ -6,7 +6,10 @@
   import Timeline from '$lib/components/Timeline.svelte';
   import { createReplayStore } from '$lib/replay.svelte';
   import { replayLogEntries } from '$lib/replay';
-  import { presentationLabelsFromObservation } from '$lib/presentation';
+  import {
+    mergePresentationLabels,
+    presentationLabelsFromObservation,
+  } from '$lib/presentation';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
   import type { Trace, TraceSummary } from '$lib/types';
 
@@ -46,7 +49,14 @@
     }
     presentationPlayer.recover(
       currentFrame.presentation,
-      presentationLabelsFromObservation(currentFrame.observation),
+      mergePresentationLabels(
+        ...(replayStore.currentFrameIndex > 0
+          ? [presentationLabelsFromObservation(
+              replayStore.frames[replayStore.currentFrameIndex - 1].observation,
+            )]
+          : []),
+        presentationLabelsFromObservation(currentFrame.observation),
+      ),
     );
   });
 

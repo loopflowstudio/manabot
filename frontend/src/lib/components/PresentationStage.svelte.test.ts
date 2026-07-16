@@ -19,5 +19,9 @@ describe('PresentationStage', () => {
     expect(body).toContain('Hero casts Lightning Bolt.');
     expect(body).toContain('Skip beat');
     expect(body).toContain('Fast-forward');
+    // Native buttons preserve pointer activation plus Enter/Space keyboard
+    // activation without a parallel interaction model.
+    expect(body.match(/<button/g)).toHaveLength(3);
+    expect(body.match(/type="button"/g)).toHaveLength(3);
   });
 });

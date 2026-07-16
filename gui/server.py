@@ -29,6 +29,7 @@ import managym
 from . import trace as trace_store, villain as villain_module
 from .curated_pack import CURATED_PACK
 from .experience_protocol import PROTOCOL_VERSION
+from .presentation import PresentationProjector
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
@@ -628,6 +629,7 @@ class GameSession:
         self._next_prompt_id = 1
         self.published_prompt: PublishedPrompt | None = None
         self.accepted_commands: dict[str, dict[str, Any]] = {}
+        self.presentation = PresentationProjector()
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -678,8 +680,16 @@ class GameSession:
         self._next_prompt_id = 1
         self.published_prompt = None
         self.accepted_commands = {}
+        self.presentation.reset()
 
         self._advance()
+        # Initial setup is an authority snapshot, not a command transition.
+        # Do not let any setup facts leak into the first accepted command.
+        self.presentation.drain(
+            from_revision=self.revision,
+            to_revision=self.revision,
+            caused_by=None,
+        )
         return self._wire_message(reason="initial_connect")
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
@@ -699,9 +709,16 @@ class GameSession:
         if action_index < 0 or action_index >= len(actions):
             raise ValueError(f"Action index out of range: {action_index}")
 
+        base_revision = self.revision
+        trace_start = len(self.trace.events)
         self._step_and_record(actor="hero", action_index=action_index, actions=actions)
         self._advance()
         self._advance_protocol_revision()
+        self._commit_presentation(
+            base_revision=base_revision,
+            caused_by=None,
+            trace_start=trace_start,
+        )
         return self._wire_message()
 
     def hero_command(self, raw: Any) -> dict[str, Any]:
@@ -753,6 +770,7 @@ class GameSession:
             return self._reject_command(raw, "not_actor", recover=False)
 
         base_revision = self.revision
+        trace_start = len(self.trace.events)
         self._step_and_record(
             actor="hero",
             action_index=action_index,
@@ -760,6 +778,11 @@ class GameSession:
         )
         self._advance()
         self._advance_protocol_revision()
+        presentation = self._commit_presentation(
+            base_revision=base_revision,
+            caused_by=command_id,
+            trace_start=trace_start,
+        )
         frame = self._experience_frame()
         receipt = {
             "command_id": command_id,
@@ -778,7 +801,7 @@ class GameSession:
             "update": {
                 "base_revision": base_revision,
                 "frame": frame,
-                "presentation": [],
+                "presentation": presentation,
                 "receipt": receipt,
             },
         }
@@ -806,8 +829,15 @@ class GameSession:
                 raise ValueError("auto_pass must be a boolean.")
             self.auto_pass = raw_auto_pass
 
+        base_revision = self.revision
+        trace_start = len(self.trace.events)
         self._advance()
         self._advance_protocol_revision()
+        self._commit_presentation(
+            base_revision=base_revision,
+            caused_by=None,
+            trace_start=trace_start,
+        )
         return self._wire_message()
 
     def pass_turn(self) -> dict[str, Any]:
@@ -819,9 +849,16 @@ class GameSession:
             raise ValueError("Game is already over. Start a new game.")
 
         if _is_hero_turn(self.obs) and _is_priority_space(self.obs):
+            base_revision = self.revision
+            trace_start = len(self.trace.events)
             self._f6_turn = int(self.obs.turn.turn_number)
             self._advance()
             self._advance_protocol_revision()
+            self._commit_presentation(
+                base_revision=base_revision,
+                caused_by=None,
+                trace_start=trace_start,
+            )
         return self._wire_message()
 
     def current_message(self) -> dict[str, Any]:
@@ -841,7 +878,13 @@ class GameSession:
 
         observation = serialize_observation(self.obs)
         action_description = actions[action_index]["description"]
+        self.presentation.note_action(
+            self.obs,
+            actions[action_index],
+            actor_index=HERO_PLAYER_INDEX if actor == "hero" else 1,
+        )
         next_obs, reward, _, _, _ = self.env.step(action_index)
+        self.presentation.observe(next_obs)
         if actor == "villain":
             self._pending_villain_log.append(f"Villain: {action_description}")
         self.trace.events.append(
@@ -971,6 +1014,37 @@ class GameSession:
     def _advance_protocol_revision(self) -> None:
         self.revision += 1
         self.published_prompt = None
+
+    def _commit_presentation(
+        self,
+        *,
+        base_revision: int,
+        caused_by: str | None,
+        trace_start: int,
+    ) -> list[dict[str, Any]]:
+        """Bind pending facts to one transition and persist that same array.
+
+        The final trace step of the transition owns the batch. Live play and
+        replay therefore consume byte-for-byte equivalent semantic facts;
+        neither path reconstructs meaning from observation snapshots.
+        """
+
+        presentation = self.presentation.drain(
+            from_revision=base_revision,
+            to_revision=self.revision,
+            caused_by=caused_by,
+        )
+        if (
+            presentation
+            and self.trace is not None
+            and len(self.trace.events) > trace_start
+        ):
+            index = len(self.trace.events) - 1
+            self.trace.events[index] = replace(
+                self.trace.events[index],
+                presentation=presentation,
+            )
+        return presentation
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:
         if self.obs is None or self.obs.game_over:

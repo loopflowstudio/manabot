@@ -108,6 +108,27 @@ describe('PresentationPlayer', () => {
     expect(player.events).toHaveLength(5);
   });
 
+  it('keeps pre-transition labels so a dead target remains named', () => {
+    const player = createPresentationPlayer();
+    player.enqueue(
+      LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2),
+      LIGHTNING_BOLT_PRESENTATION.labels,
+    );
+    player.finishSequence();
+
+    const postResolutionLabels = structuredClone(LIGHTNING_BOLT_PRESENTATION.labels);
+    delete postResolutionLabels.objects['77:0'];
+    player.enqueue(
+      LIGHTNING_BOLT_PRESENTATION.events.slice(2),
+      postResolutionLabels,
+    );
+    player.advance();
+
+    expect(player.currentBeat?.detail).toBe(
+      'Lightning Bolt deals 3 damage to Ally token.',
+    );
+  });
+
   it('rejects a stale live batch by sequence number', () => {
     const player = createPresentationPlayer();
     player.enqueue(LIGHTNING_BOLT_PRESENTATION.events, LIGHTNING_BOLT_PRESENTATION.labels);

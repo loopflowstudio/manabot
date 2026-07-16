@@ -10,8 +10,14 @@ use managym::{
     agent::{
         action::{Action, ActionType},
         env::Env,
+        observation::{EventType, Observation},
     },
-    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
+    flow::event::GameEvent,
+    state::{
+        game_object::{CardId, PlayerId},
+        player::PlayerConfig,
+        zone::ZoneType,
+    },
     Game,
 };
 
@@ -42,6 +48,28 @@ fn make_game(seed: u64) -> Game {
     let p0 = PlayerConfig::new("hero", hero_counter_deck());
     let p1 = PlayerConfig::new("villain", villain_bomb_deck());
     Game::new(vec![p0, p1], seed, true)
+}
+
+#[test]
+fn observation_preserves_committed_card_move_zones() {
+    let game = make_game(5);
+    let observation = Observation::new(
+        &game,
+        &[GameEvent::CardMoved {
+            card: CardId(0),
+            from: Some(ZoneType::Battlefield),
+            to: ZoneType::Graveyard,
+            controller: PlayerId(1),
+        }],
+    );
+
+    let event = observation
+        .recent_events
+        .first()
+        .expect("card move should be observable");
+    assert_eq!(event.event_type, EventType::CardMoved as i32);
+    assert_eq!(event.from_zone, ZoneType::Battlefield as i32);
+    assert_eq!(event.to_zone, ZoneType::Graveyard as i32);
 }
 
 /// Injection + refresh produces a coherent position: exact hands, injected

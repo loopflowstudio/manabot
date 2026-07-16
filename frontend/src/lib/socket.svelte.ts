@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 
 import { gameStore } from './game.svelte';
 import {
+  mergePresentationLabels,
   presentationLabelsFromFrame,
   validatePresentationUpdate,
 } from './presentation';
@@ -321,6 +322,11 @@ export class GameSocketController {
     }
     // Canonical truth lands first. Presentation is optional theater over the
     // committed frame and cannot delay or roll back authority.
+    const labels = mergePresentationLabels(
+      presentationPlayer.labels,
+      ...(current ? [presentationLabelsFromFrame(current)] : []),
+      presentationLabelsFromFrame(update.frame),
+    );
     gameStore.applyFrame(update.frame);
     try {
       validatePresentationUpdate(
@@ -330,7 +336,7 @@ export class GameSocketController {
       );
       presentationPlayer.enqueue(
         update.presentation,
-        presentationLabelsFromFrame(update.frame),
+        labels,
       );
     } catch (error) {
       presentationPlayer.clear();

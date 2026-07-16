@@ -1316,6 +1316,10 @@ pub struct PyEventData {
     pub amount: i32,
     #[pyo3(get, set)]
     pub controller_id: i32,
+    #[pyo3(get, set)]
+    pub from_zone: i32,
+    #[pyo3(get, set)]
+    pub to_zone: i32,
 }
 
 #[cfg(feature = "python")]
@@ -1347,6 +1351,8 @@ impl From<EventData> for PyEventData {
             target_id: value.target_id,
             amount: value.amount,
             controller_id: value.controller_id,
+            from_zone: value.from_zone,
+            to_zone: value.to_zone,
         }
     }
 }
@@ -1362,6 +1368,8 @@ impl From<PyEventData> for EventData {
             target_id: value.target_id,
             amount: value.amount,
             controller_id: value.controller_id,
+            from_zone: value.from_zone,
+            to_zone: value.to_zone,
         }
     }
 }
@@ -1802,6 +1810,8 @@ impl PyObservation {
                         "target_id": event.target_id,
                         "amount": event.amount,
                         "controller_id": event.controller_id,
+                        "from_zone": event.from_zone,
+                        "to_zone": event.to_zone,
                     })
                 })
                 .collect::<Vec<_>>(),

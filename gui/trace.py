@@ -6,7 +6,7 @@ Trace dataclasses and JSON persistence helpers for GUI games.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import json
 import os
@@ -57,6 +57,10 @@ class TraceEvent:
     # F6), False for decisions the human actually clicked. Competency metrics
     # must not credit auto-passes as deliberate passes.
     auto: bool = False
+    # Ordered semantic facts committed by the same authority transition. Old
+    # traces omit this field and remain valid because replay treats it as an
+    # empty sequence.
+    presentation: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

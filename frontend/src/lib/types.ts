@@ -391,7 +391,7 @@ export interface TraceEvent {
   action: number;
   action_description: string;
   reward: number;
-  /** Optional until the trace writer persists protocol presentation events. */
+  /** Optional for backwards compatibility with traces written before v1. */
   presentation?: PresentationEvent[];
 }
 

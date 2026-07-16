@@ -655,6 +655,8 @@ mod tests {
                     target_id: -1,
                     amount: 0,
                     controller_id: 10,
+                    from_zone: -1,
+                    to_zone: -1,
                 },
                 EventData {
                     event_type: 2,
@@ -664,6 +666,8 @@ mod tests {
                     target_id: 20,
                     amount: -3,
                     controller_id: -1,
+                    from_zone: -1,
+                    to_zone: -1,
                 },
             ],
         }
