@@ -12,7 +12,7 @@ target/
 .lf/prompts/
 .venv/
 .uv-cache/
-gui/traces/*.json
+etude/traces/*.json
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/

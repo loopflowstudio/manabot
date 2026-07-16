@@ -23,7 +23,7 @@ RUN uv venv .venv --python 3.12 && \
     uv pip install -e "managym" && \
     uv pip install -e ".[dev]"
 
-COPY entry.sh /app/entry.sh
+COPY ops/test-entry.sh /app/entry.sh
 RUN chmod +x /app/entry.sh
 
 ENTRYPOINT ["/app/entry.sh"]
