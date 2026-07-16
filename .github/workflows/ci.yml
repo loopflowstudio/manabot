@@ -173,10 +173,35 @@ jobs:
           npm test -- --run src/lib/protocol-conformance.test.ts
           npm run check
 
+  semantic-coverage:
+    name: Semantic Coverage Gate
+    needs: [rust]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: |
+          uv venv .venv --python 3.12
+          uv sync --extra dev
+
+      - name: Check semantic coverage evidence
+        run: |
+          uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py -q
+          uv run scripts/generate_coverage_gaps.py --check
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [rust, python-unit, integration, protocol-v1]
+    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage]
     if: always()
     steps:
       - name: Check all jobs
@@ -185,9 +210,11 @@ jobs:
           echo "python-unit: ${{ needs.python-unit.result }}"
           echo "integration: ${{ needs.integration.result }}"
           echo "protocol-v1: ${{ needs.protocol-v1.result }}"
+          echo "semantic-coverage: ${{ needs.semantic-coverage.result }}"
           if [ "${{ needs.rust.result }}" != "success" ] || \
              [ "${{ needs.python-unit.result }}" != "success" ] || \
              [ "${{ needs.integration.result }}" != "success" ] || \
-             [ "${{ needs.protocol-v1.result }}" != "success" ]; then
+             [ "${{ needs.protocol-v1.result }}" != "success" ] || \
+             [ "${{ needs.semantic-coverage.result }}" != "success" ]; then
             exit 1
           fi

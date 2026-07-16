@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -25,18 +24,22 @@ def _source() -> dict:
     return json.loads(source_path.read_text(encoding="utf-8"))
 
 
-def _named_decks_from_server() -> dict[str, dict[str, int]]:
-    tree = ast.parse((ROOT / "gui" / "server.py").read_text(encoding="utf-8"))
-    wanted = {"UR_LESSONS_DECK", "GW_ALLIES_DECK"}
-    found: dict[str, dict[str, int]] = {}
-    for node in tree.body:
-        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
-            continue
-        target = node.targets[0]
-        if isinstance(target, ast.Name) and target.id in wanted:
-            found[target.id] = ast.literal_eval(node.value)
-    assert found.keys() == wanted
-    return found
+def _named_product_decks() -> dict[str, dict[str, int]]:
+    manifest_path = (
+        ROOT
+        / "frontend"
+        / "src"
+        / "lib"
+        / "packs"
+        / "tla-ur-lessons-vs-gw-allies"
+        / "v1"
+        / "manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return {
+        "UR_LESSONS_DECK": manifest["matchup"]["hero"]["cards"],
+        "GW_ALLIES_DECK": manifest["matchup"]["villain"]["cards"],
+    }
 
 
 def _deck_registry_counts(source: dict, deck_key: str) -> dict[str, int]:
@@ -71,7 +74,7 @@ def test_checked_in_ir_and_coverage_are_current_and_deterministic():
 
 def test_admission_manifest_matches_the_current_product_decks_exactly():
     source = _source()
-    named_decks = _named_decks_from_server()
+    named_decks = _named_product_decks()
 
     assert _deck_registry_counts(source, "ur_lessons") == named_decks["UR_LESSONS_DECK"]
     assert _deck_registry_counts(source, "gw_allies") == named_decks["GW_ALLIES_DECK"]

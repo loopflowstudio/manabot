@@ -1,0 +1,1841 @@
+{
+  "admission_history": [
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "upkeep and nth-draw triggers; tap and untap effects"
+      ],
+      "semantic_key": "tla.tiger_seal",
+      "sequence": 1
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "nth-draw triggers and conditional blocking restriction"
+      ],
+      "semantic_key": "tla.otter_penguin",
+      "sequence": 2
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "conditional attack triggers and end-of-combat mana"
+      ],
+      "semantic_key": "tla.fire_nation_cadets",
+      "sequence": 3
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "continuously recomputed conditional static power and toughness"
+      ],
+      "semantic_key": "tla.first_time_flyer",
+      "sequence": 4
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "artifact token creation and sacrifice-to-draw activation"
+      ],
+      "semantic_key": "tla.forecasting_fortune_teller",
+      "sequence": 5
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "dynamic power, ward payment, conditional death trigger"
+      ],
+      "semantic_key": "tla.dragonfly_swarm",
+      "sequence": 6
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "kicker payment and conditional spell resolution"
+      ],
+      "semantic_key": "tla.firebending_lesson",
+      "sequence": 7
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "mid-resolution learn choice"
+      ],
+      "semantic_key": "stx.igneous_inspiration",
+      "sequence": 8
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "mid-resolution learn choice"
+      ],
+      "semantic_key": "stx.pop_quiz",
+      "sequence": 9
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "spell-or-permanent targeting, stack bounce, learn choice"
+      ],
+      "semantic_key": "stx.divide_by_zero",
+      "sequence": 10
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "counter-unless-paid decision and payment"
+      ],
+      "semantic_key": "tla.itll_quench_ya",
+      "sequence": 11
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "look-N select and library-bottom continuation"
+      ],
+      "semantic_key": "tla.accumulate_wisdom",
+      "sequence": 12
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "waterbend payment and tapped-for-mana trigger"
+      ],
+      "semantic_key": "tla.water_tribe_rallier",
+      "sequence": 13
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "flash timing and token creation trigger"
+      ],
+      "semantic_key": "tla.invasion_reinforcements",
+      "sequence": 14
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "becomes-tapped trigger, life gain, and scry decision"
+      ],
+      "semantic_key": "tla.compassionate_healer",
+      "sequence": 15
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "optional filtered target and exile-until-source-leaves linkage"
+      ],
+      "semantic_key": "tla.earth_kingdom_jailer",
+      "sequence": 16
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "controller-scoped static anthem"
+      ],
+      "semantic_key": "tla.white_lotus_reinforcements",
+      "sequence": 17
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "multi-object counter placement and Ally predicates"
+      ],
+      "semantic_key": "tla.earth_kings_lieutenant",
+      "sequence": 18
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "creature token definitions and creation"
+      ],
+      "semantic_key": "tla.kyoshi_warriors",
+      "sequence": 19
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "earthbend land animation, counters, and linked return"
+      ],
+      "semantic_key": "tla.badgermole_cub",
+      "sequence": 20
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "dynamic creature-count power and tapped-attacking token"
+      ],
+      "semantic_key": "tla.suki_kyoshi_warrior",
+      "sequence": 21
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "another-Ally trigger and nth-resolution condition"
+      ],
+      "semantic_key": "tla.south_pole_voyager",
+      "sequence": 22
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "affinity reduction, multi-target selection, and power-derived damage"
+      ],
+      "semantic_key": "tla.allies_at_last",
+      "sequence": 23
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "conditional keyword grant to a targeted creature"
+      ],
+      "semantic_key": "tla.yip_yip",
+      "sequence": 24
+    },
+    {
+      "change_id": "milestone-1-two-deck-slice",
+      "classification": "kernel_changing",
+      "date": "2026-07-09",
+      "evidence_refs": [
+        "experiments/milestone-1-two-deck-slice.md"
+      ],
+      "kernel_surfaces": [
+        "up-to-two targets with per-target untap and modifier resolution"
+      ],
+      "semantic_key": "tla.fancy_footwork",
+      "sequence": 25
+    }
+  ],
+  "artifact_hash": "a0d7d1a877e4e3eb56fa6c6a17dd56df84b0c508f5a6069d2b068719db23e009",
+  "artifact_schema_version": 1,
+  "cards": [
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Forest",
+      "rule_families": [
+        "mana_and_payment"
+      ],
+      "semantic_atoms": [
+        "opcode:add_mana",
+        "program_kind:mana"
+      ],
+      "semantic_key": "basic.forest",
+      "support": "supported",
+      "tests": [
+        "mana_casting"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Island",
+      "rule_families": [
+        "mana_and_payment"
+      ],
+      "semantic_atoms": [
+        "opcode:add_mana",
+        "program_kind:mana"
+      ],
+      "semantic_key": "basic.island",
+      "support": "supported",
+      "tests": [
+        "mana_casting"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Mountain",
+      "rule_families": [
+        "mana_and_payment"
+      ],
+      "semantic_atoms": [
+        "opcode:add_mana",
+        "program_kind:mana"
+      ],
+      "semantic_key": "basic.mountain",
+      "support": "supported",
+      "tests": [
+        "mana_casting"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Plains",
+      "rule_families": [
+        "mana_and_payment"
+      ],
+      "semantic_atoms": [
+        "opcode:add_mana",
+        "program_kind:mana"
+      ],
+      "semantic_key": "basic.plains",
+      "support": "supported",
+      "tests": [
+        "mana_casting"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Divide by Zero",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "cost_feature:mana",
+        "opcode:learn",
+        "opcode:return_to_hand",
+        "program_kind:spell",
+        "selector:spell_or_permanent"
+      ],
+      "semantic_key": "stx.divide_by_zero",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "divide_by_zero"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Igneous Inspiration",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "damage",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "cost_feature:mana",
+        "opcode:deal_damage",
+        "opcode:learn",
+        "program_kind:spell",
+        "selector:creature_or_player"
+      ],
+      "semantic_key": "stx.igneous_inspiration",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "igneous_inspiration"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Pop Quiz",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "mana_and_payment",
+        "spells_and_resolution"
+      ],
+      "semantic_atoms": [
+        "cost_feature:mana",
+        "opcode:draw_cards",
+        "opcode:learn",
+        "program_kind:spell"
+      ],
+      "semantic_key": "stx.pop_quiz",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "pop_quiz_learn"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Accumulate Wisdom",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "conditional_semantics",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "condition:graveyard_at_least",
+        "cost_feature:mana",
+        "opcode:branch",
+        "opcode:look_and_select",
+        "opcode:put_top_cards_in_hand",
+        "predicate:any",
+        "predicate:subtype",
+        "program_kind:spell"
+      ],
+      "semantic_key": "tla.accumulate_wisdom",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "accumulate_wisdom"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Allies at Last",
+      "rule_families": [
+        "damage",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "cost_feature:affinity",
+        "cost_feature:mana",
+        "opcode:deal_power_damage",
+        "predicate:subtype",
+        "program_kind:spell",
+        "selector:creature_opponent_controls",
+        "selector:creature_you_control"
+      ],
+      "semantic_key": "tla.allies_at_last",
+      "support": "supported",
+      "tests": [
+        "allies_at_last"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Badgermole Cub",
+      "rule_families": [
+        "earthbend",
+        "mana_and_payment",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:add_mana",
+        "opcode:earthbend",
+        "predicate:card_type",
+        "program_kind:triggered",
+        "program_kind:triggered_mana",
+        "selector:land_you_control",
+        "trigger_event:enters_battlefield",
+        "trigger_event:tapped_for_mana",
+        "trigger_subject:any_you_control",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.badgermole_cub",
+      "support": "supported",
+      "tests": [
+        "badgermole_waterbend",
+        "earthbend_animates",
+        "earthbend_returns"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Compassionate Healer",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "life",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:gain_life",
+        "opcode:scry",
+        "program_kind:triggered",
+        "trigger_event:becomes_tapped",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.compassionate_healer",
+      "support": "supported",
+      "tests": [
+        "compassionate_healer"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Dragonfly Swarm",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "conditional_semantics",
+        "continuous_effects_and_keywords",
+        "countering_and_ward",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "condition:graveyard_at_least",
+        "keyword:flying",
+        "opcode:branch",
+        "opcode:counter_unless_pays",
+        "opcode:draw_cards",
+        "opcode:set_power_from_count",
+        "predicate:not_card_types",
+        "predicate:subtype",
+        "program_kind:static",
+        "program_kind:triggered",
+        "trigger_event:becomes_targeted",
+        "trigger_event:dies",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.dragonfly_swarm",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "dragonfly_death",
+        "dragonfly_power",
+        "ward_payment"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Earth Kingdom Jailer",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:exile_until_source_leaves",
+        "program_kind:triggered",
+        "selector:permanent_opponent_controls",
+        "trigger_event:enters_battlefield",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.earth_kingdom_jailer",
+      "support": "supported",
+      "tests": [
+        "earth_kingdom_jailer"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Earth King's Lieutenant",
+      "rule_families": [
+        "continuous_effects_and_keywords",
+        "counters",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "keyword:trample",
+        "opcode:put_counters",
+        "predicate:subtype",
+        "program_kind:triggered",
+        "trigger_event:enters_battlefield",
+        "trigger_subject:another_you_control",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.earth_kings_lieutenant",
+      "support": "supported",
+      "tests": [
+        "earth_kings_lieutenant"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Fancy Footwork",
+      "rule_families": [
+        "continuous_effects_and_keywords",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "tap_and_untap",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "cost_feature:mana",
+        "opcode:for_each_target",
+        "opcode:modify_pt",
+        "opcode:untap",
+        "program_kind:spell",
+        "selector:creature"
+      ],
+      "semantic_key": "tla.fancy_footwork",
+      "support": "supported",
+      "tests": [
+        "fancy_footwork"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Fire Nation Cadets",
+      "rule_families": [
+        "activated_abilities",
+        "conditional_semantics",
+        "continuous_effects_and_keywords",
+        "mana_and_payment",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "condition:graveyard_at_least",
+        "cost_feature:mana",
+        "opcode:add_mana",
+        "opcode:modify_pt",
+        "predicate:subtype",
+        "program_kind:activated",
+        "program_kind:triggered",
+        "trigger_event:attacks",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.fire_nation_cadets",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "cadets_firebending",
+        "cadets_pump"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Firebending Lesson",
+      "rule_families": [
+        "conditional_semantics",
+        "damage",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "condition:kicked",
+        "cost_feature:kicker",
+        "cost_feature:mana",
+        "opcode:branch",
+        "opcode:deal_damage",
+        "program_kind:spell",
+        "selector:creature"
+      ],
+      "semantic_key": "tla.firebending_lesson",
+      "support": "supported",
+      "tests": [
+        "firebending_lesson_kicker"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "First-Time Flyer",
+      "rule_families": [
+        "conditional_semantics",
+        "continuous_effects_and_keywords",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "condition:graveyard_at_least",
+        "keyword:flying",
+        "opcode:branch",
+        "opcode:modify_pt",
+        "predicate:subtype",
+        "program_kind:static"
+      ],
+      "semantic_key": "tla.first_time_flyer",
+      "support": "supported",
+      "tests": [
+        "first_time_flyer_static"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Forecasting Fortune Teller",
+      "rule_families": [
+        "tokens",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:create_token",
+        "program_kind:triggered",
+        "trigger_event:enters_battlefield",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.forecasting_fortune_teller",
+      "support": "supported",
+      "tests": [
+        "fortune_teller_clue"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Invasion Reinforcements",
+      "rule_families": [
+        "continuous_effects_and_keywords",
+        "tokens",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "keyword:flash",
+        "opcode:create_token",
+        "program_kind:triggered",
+        "trigger_event:enters_battlefield",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.invasion_reinforcements",
+      "support": "supported",
+      "tests": [
+        "invasion_flash"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "It'll Quench Ya!",
+      "rule_families": [
+        "countering_and_ward",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "cost_feature:mana",
+        "opcode:counter_unless_pays",
+        "program_kind:spell",
+        "selector:spell"
+      ],
+      "semantic_key": "tla.itll_quench_ya",
+      "support": "supported",
+      "tests": [
+        "quench_payment"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Kyoshi Warriors",
+      "rule_families": [
+        "tokens",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:create_token",
+        "program_kind:triggered",
+        "trigger_event:enters_battlefield",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.kyoshi_warriors",
+      "support": "supported",
+      "tests": [
+        "kyoshi_token"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Otter-Penguin",
+      "rule_families": [
+        "continuous_effects_and_keywords",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:modify_pt",
+        "opcode:restrict_blocking",
+        "predicate:any",
+        "program_kind:triggered",
+        "trigger_event:draw_nth_card",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.otter_penguin",
+      "support": "supported",
+      "tests": [
+        "otter_penguin"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "South Pole Voyager",
+      "rule_families": [
+        "card_flow_and_zone_changes",
+        "conditional_semantics",
+        "life",
+        "targets_and_filters",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "condition:nth_resolution",
+        "opcode:branch",
+        "opcode:draw_cards",
+        "opcode:gain_life",
+        "predicate:subtype",
+        "program_kind:triggered",
+        "trigger_event:enters_battlefield",
+        "trigger_subject:any_you_control"
+      ],
+      "semantic_key": "tla.south_pole_voyager",
+      "support": "supported",
+      "tests": [
+        "south_pole_voyager"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [
+        "experiments/card-conformance-audit.md",
+        "wave/rules/01-two-deck-slice.md"
+      ],
+      "registry_name": "Suki, Kyoshi Warrior",
+      "rule_families": [
+        "continuous_effects_and_keywords",
+        "targets_and_filters",
+        "tokens",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "opcode:create_token",
+        "opcode:set_power_from_count",
+        "predicate:card_type",
+        "program_kind:static",
+        "program_kind:triggered",
+        "trigger_event:attacks",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.suki_kyoshi_warrior",
+      "support": "sanctioned_deviation",
+      "tests": [
+        "suki_attack"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Tiger-Seal",
+      "rule_families": [
+        "continuous_effects_and_keywords",
+        "tap_and_untap",
+        "triggered_abilities"
+      ],
+      "semantic_atoms": [
+        "keyword:vigilance",
+        "opcode:tap",
+        "opcode:untap",
+        "program_kind:triggered",
+        "trigger_event:draw_nth_card",
+        "trigger_event:upkeep_begins",
+        "trigger_subject:this"
+      ],
+      "semantic_key": "tla.tiger_seal",
+      "support": "supported",
+      "tests": [
+        "tiger_seal"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Water Tribe Rallier",
+      "rule_families": [
+        "activated_abilities",
+        "card_flow_and_zone_changes",
+        "mana_and_payment",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "cost_feature:mana",
+        "cost_feature:waterbend",
+        "opcode:look_and_select",
+        "predicate:all",
+        "predicate:card_type",
+        "predicate:power_at_most",
+        "program_kind:activated"
+      ],
+      "semantic_key": "tla.water_tribe_rallier",
+      "support": "supported",
+      "tests": [
+        "waterbend_payment"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "White Lotus Reinforcements",
+      "rule_families": [
+        "continuous_effects_and_keywords"
+      ],
+      "semantic_atoms": [
+        "keyword:vigilance",
+        "opcode:modify_pt",
+        "program_kind:static"
+      ],
+      "semantic_key": "tla.white_lotus_reinforcements",
+      "support": "supported",
+      "tests": [
+        "white_lotus_anthem"
+      ]
+    },
+    {
+      "admission_roles": [
+        "deck"
+      ],
+      "decision_refs": [],
+      "registry_name": "Yip Yip!",
+      "rule_families": [
+        "conditional_semantics",
+        "continuous_effects_and_keywords",
+        "mana_and_payment",
+        "spells_and_resolution",
+        "targets_and_filters"
+      ],
+      "semantic_atoms": [
+        "condition:target_matches",
+        "cost_feature:mana",
+        "opcode:branch",
+        "opcode:grant_keywords",
+        "opcode:modify_pt",
+        "predicate:subtype",
+        "program_kind:spell",
+        "selector:creature_you_control"
+      ],
+      "semantic_key": "tla.yip_yip",
+      "support": "supported",
+      "tests": [
+        "yip_yip"
+      ]
+    },
+    {
+      "admission_roles": [
+        "referenced"
+      ],
+      "decision_refs": [],
+      "registry_name": "Ally",
+      "rule_families": [
+        "tokens"
+      ],
+      "semantic_atoms": [
+        "characteristic:token"
+      ],
+      "semantic_key": "token.ally",
+      "support": "supported",
+      "tests": [
+        "kyoshi_token"
+      ]
+    },
+    {
+      "admission_roles": [
+        "referenced"
+      ],
+      "decision_refs": [],
+      "registry_name": "Clue",
+      "rule_families": [
+        "activated_abilities",
+        "card_flow_and_zone_changes",
+        "mana_and_payment",
+        "tokens"
+      ],
+      "semantic_atoms": [
+        "characteristic:token",
+        "cost_feature:mana",
+        "cost_feature:sacrifice_source",
+        "opcode:draw_cards",
+        "program_kind:activated"
+      ],
+      "semantic_key": "token.clue",
+      "support": "supported",
+      "tests": [
+        "fortune_teller_clue"
+      ]
+    }
+  ],
+  "coverage_gaps": {
+    "sanctioned_deviations": [
+      "stx.divide_by_zero",
+      "stx.igneous_inspiration",
+      "stx.pop_quiz",
+      "tla.accumulate_wisdom",
+      "tla.dragonfly_swarm",
+      "tla.fire_nation_cadets",
+      "tla.suki_kyoshi_warrior"
+    ],
+    "unmapped_semantic_atoms": [],
+    "unsupported_cards": [],
+    "untested_cards": []
+  },
+  "coverage_status": "complete",
+  "evidence_hash": "0243290307fad34d70002416975dfc23c30bbca3d7903b607dab24fb60850e35",
+  "pack_key": "ur-lessons-vs-gw-allies",
+  "policy": {
+    "max_kernel_change_share": {
+      "denominator": 5,
+      "numerator": 1
+    },
+    "minimum_denominator": 10,
+    "window_size": 20
+  },
+  "rolling_kernel_change_gate": {
+    "counts": {
+      "content_only": 0,
+      "denominator": 20,
+      "kernel_changing": 20
+    },
+    "gate_status": "breached_acknowledged",
+    "latest_sequence": 25,
+    "ratios": {
+      "content_only_share": {
+        "denominator": 20,
+        "numerator": 0
+      },
+      "content_only_to_kernel_changing": "0:20",
+      "kernel_changing_share": {
+        "denominator": 20,
+        "numerator": 20
+      }
+    },
+    "response": {
+      "acknowledged_through_sequence": 25,
+      "decision_document": "docs/research/semantic-kernel.md",
+      "kind": "ir_redesign",
+      "rationale": "The Milestone 1 card slice required sustained one-off kernel expansion, so the rules program adopted reviewed offline typed semantic programs and a checked content boundary."
+    },
+    "threshold_breached": true,
+    "window_sequences": [
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25
+    ]
+  },
+  "rule_families": [
+    {
+      "cards": [
+        "tla.fire_nation_cadets",
+        "tla.water_tribe_rallier",
+        "token.clue"
+      ],
+      "cr_refs": [
+        "CR 602"
+      ],
+      "key": "activated_abilities",
+      "label": "Activated abilities and activation costs",
+      "semantic_atoms": [
+        "cost_feature:sacrifice_source",
+        "program_kind:activated"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "cadets_pump",
+        "fortune_teller_clue"
+      ]
+    },
+    {
+      "cards": [
+        "stx.divide_by_zero",
+        "stx.igneous_inspiration",
+        "stx.pop_quiz",
+        "tla.accumulate_wisdom",
+        "tla.compassionate_healer",
+        "tla.dragonfly_swarm",
+        "tla.earth_kingdom_jailer",
+        "tla.south_pole_voyager",
+        "tla.water_tribe_rallier",
+        "token.clue"
+      ],
+      "cr_refs": [
+        "CR 121",
+        "CR 400",
+        "CR 701"
+      ],
+      "key": "card_flow_and_zone_changes",
+      "label": "Drawing, selection, and zone changes",
+      "semantic_atoms": [
+        "opcode:draw_cards",
+        "opcode:exile_until_source_leaves",
+        "opcode:learn",
+        "opcode:look_and_select",
+        "opcode:put_top_cards_in_hand",
+        "opcode:return_to_hand",
+        "opcode:scry"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "accumulate_wisdom",
+        "divide_by_zero",
+        "earth_kingdom_jailer",
+        "pop_quiz_learn"
+      ]
+    },
+    {
+      "cards": [
+        "tla.accumulate_wisdom",
+        "tla.dragonfly_swarm",
+        "tla.fire_nation_cadets",
+        "tla.firebending_lesson",
+        "tla.first_time_flyer",
+        "tla.south_pole_voyager",
+        "tla.yip_yip"
+      ],
+      "cr_refs": [
+        "CR 609"
+      ],
+      "key": "conditional_semantics",
+      "label": "Typed conditions and branching",
+      "semantic_atoms": [
+        "condition:graveyard_at_least",
+        "condition:kicked",
+        "condition:nth_resolution",
+        "condition:target_matches",
+        "opcode:branch"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "dragonfly_death",
+        "firebending_lesson_kicker",
+        "south_pole_voyager"
+      ]
+    },
+    {
+      "cards": [
+        "tla.dragonfly_swarm",
+        "tla.earth_kings_lieutenant",
+        "tla.fancy_footwork",
+        "tla.fire_nation_cadets",
+        "tla.first_time_flyer",
+        "tla.invasion_reinforcements",
+        "tla.otter_penguin",
+        "tla.suki_kyoshi_warrior",
+        "tla.tiger_seal",
+        "tla.white_lotus_reinforcements",
+        "tla.yip_yip"
+      ],
+      "cr_refs": [
+        "CR 604",
+        "CR 613",
+        "CR 702"
+      ],
+      "key": "continuous_effects_and_keywords",
+      "label": "Static, continuous, and keyword effects",
+      "semantic_atoms": [
+        "keyword:flash",
+        "keyword:flying",
+        "keyword:trample",
+        "keyword:vigilance",
+        "opcode:grant_keywords",
+        "opcode:modify_pt",
+        "opcode:restrict_blocking",
+        "opcode:set_power_from_count",
+        "program_kind:static"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "dragonfly_power",
+        "first_time_flyer_static",
+        "white_lotus_anthem",
+        "yip_yip"
+      ]
+    },
+    {
+      "cards": [
+        "tla.dragonfly_swarm",
+        "tla.itll_quench_ya"
+      ],
+      "cr_refs": [
+        "CR 701.5",
+        "CR 702.21"
+      ],
+      "key": "countering_and_ward",
+      "label": "Counter-unless-paid and ward interactions",
+      "semantic_atoms": [
+        "opcode:counter_unless_pays"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "quench_payment",
+        "ward_payment"
+      ]
+    },
+    {
+      "cards": [
+        "tla.earth_kings_lieutenant"
+      ],
+      "cr_refs": [
+        "CR 122"
+      ],
+      "key": "counters",
+      "label": "Counters on permanents",
+      "semantic_atoms": [
+        "opcode:put_counters"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "earth_kings_lieutenant",
+        "earthbend_animates"
+      ]
+    },
+    {
+      "cards": [
+        "stx.igneous_inspiration",
+        "tla.allies_at_last",
+        "tla.firebending_lesson"
+      ],
+      "cr_refs": [
+        "CR 120"
+      ],
+      "key": "damage",
+      "label": "Damage effects and dynamic damage values",
+      "semantic_atoms": [
+        "opcode:deal_damage",
+        "opcode:deal_power_damage"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "allies_at_last",
+        "igneous_inspiration"
+      ]
+    },
+    {
+      "cards": [
+        "tla.badgermole_cub"
+      ],
+      "cr_refs": [
+        "TLA Earthbend — supported subset"
+      ],
+      "key": "earthbend",
+      "label": "Earthbend land animation and linked return",
+      "semantic_atoms": [
+        "opcode:earthbend"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "badgermole_waterbend",
+        "earthbend_animates",
+        "earthbend_returns"
+      ]
+    },
+    {
+      "cards": [
+        "tla.compassionate_healer",
+        "tla.south_pole_voyager"
+      ],
+      "cr_refs": [
+        "CR 119"
+      ],
+      "key": "life",
+      "label": "Life gain effects",
+      "semantic_atoms": [
+        "opcode:gain_life"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "compassionate_healer"
+      ]
+    },
+    {
+      "cards": [
+        "basic.forest",
+        "basic.island",
+        "basic.mountain",
+        "basic.plains",
+        "stx.divide_by_zero",
+        "stx.igneous_inspiration",
+        "stx.pop_quiz",
+        "tla.accumulate_wisdom",
+        "tla.allies_at_last",
+        "tla.badgermole_cub",
+        "tla.fancy_footwork",
+        "tla.fire_nation_cadets",
+        "tla.firebending_lesson",
+        "tla.itll_quench_ya",
+        "tla.water_tribe_rallier",
+        "tla.yip_yip",
+        "token.clue"
+      ],
+      "cr_refs": [
+        "CR 106",
+        "CR 601.2f-h"
+      ],
+      "key": "mana_and_payment",
+      "label": "Mana production, costs, and payment",
+      "semantic_atoms": [
+        "cost_feature:affinity",
+        "cost_feature:kicker",
+        "cost_feature:mana",
+        "cost_feature:waterbend",
+        "opcode:add_mana",
+        "program_kind:mana",
+        "program_kind:triggered_mana",
+        "trigger_event:tapped_for_mana"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "allies_at_last",
+        "firebending_lesson_kicker",
+        "mana_casting",
+        "waterbend_payment"
+      ]
+    },
+    {
+      "cards": [
+        "stx.divide_by_zero",
+        "stx.igneous_inspiration",
+        "stx.pop_quiz",
+        "tla.accumulate_wisdom",
+        "tla.allies_at_last",
+        "tla.fancy_footwork",
+        "tla.firebending_lesson",
+        "tla.itll_quench_ya",
+        "tla.yip_yip"
+      ],
+      "cr_refs": [
+        "CR 601",
+        "CR 608"
+      ],
+      "key": "spells_and_resolution",
+      "label": "Spell programs and resolution",
+      "semantic_atoms": [
+        "program_kind:spell"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "divide_by_zero",
+        "igneous_inspiration"
+      ]
+    },
+    {
+      "cards": [
+        "tla.fancy_footwork",
+        "tla.tiger_seal"
+      ],
+      "cr_refs": [
+        "CR 701.21"
+      ],
+      "key": "tap_and_untap",
+      "label": "Tap and untap effects",
+      "semantic_atoms": [
+        "opcode:tap",
+        "opcode:untap"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "fancy_footwork",
+        "tiger_seal"
+      ]
+    },
+    {
+      "cards": [
+        "stx.divide_by_zero",
+        "stx.igneous_inspiration",
+        "tla.accumulate_wisdom",
+        "tla.allies_at_last",
+        "tla.badgermole_cub",
+        "tla.dragonfly_swarm",
+        "tla.earth_kingdom_jailer",
+        "tla.earth_kings_lieutenant",
+        "tla.fancy_footwork",
+        "tla.fire_nation_cadets",
+        "tla.firebending_lesson",
+        "tla.first_time_flyer",
+        "tla.itll_quench_ya",
+        "tla.otter_penguin",
+        "tla.south_pole_voyager",
+        "tla.suki_kyoshi_warrior",
+        "tla.water_tribe_rallier",
+        "tla.yip_yip"
+      ],
+      "cr_refs": [
+        "CR 115",
+        "CR 601.2c",
+        "CR 608.2b"
+      ],
+      "key": "targets_and_filters",
+      "label": "Targets, selectors, and predicates",
+      "semantic_atoms": [
+        "opcode:for_each_target",
+        "predicate:all",
+        "predicate:any",
+        "predicate:card_type",
+        "predicate:not_card_types",
+        "predicate:power_at_most",
+        "predicate:subtype",
+        "selector:creature",
+        "selector:creature_opponent_controls",
+        "selector:creature_or_player",
+        "selector:creature_you_control",
+        "selector:land_you_control",
+        "selector:permanent_opponent_controls",
+        "selector:spell",
+        "selector:spell_or_permanent"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "allies_at_last",
+        "earth_kingdom_jailer",
+        "fancy_footwork"
+      ]
+    },
+    {
+      "cards": [
+        "tla.forecasting_fortune_teller",
+        "tla.invasion_reinforcements",
+        "tla.kyoshi_warriors",
+        "tla.suki_kyoshi_warrior",
+        "token.ally",
+        "token.clue"
+      ],
+      "cr_refs": [
+        "CR 111"
+      ],
+      "key": "tokens",
+      "label": "Token creation and token definitions",
+      "semantic_atoms": [
+        "characteristic:token",
+        "opcode:create_token"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "fortune_teller_clue",
+        "kyoshi_token",
+        "suki_attack"
+      ]
+    },
+    {
+      "cards": [
+        "tla.badgermole_cub",
+        "tla.compassionate_healer",
+        "tla.dragonfly_swarm",
+        "tla.earth_kingdom_jailer",
+        "tla.earth_kings_lieutenant",
+        "tla.fire_nation_cadets",
+        "tla.forecasting_fortune_teller",
+        "tla.invasion_reinforcements",
+        "tla.kyoshi_warriors",
+        "tla.otter_penguin",
+        "tla.south_pole_voyager",
+        "tla.suki_kyoshi_warrior",
+        "tla.tiger_seal"
+      ],
+      "cr_refs": [
+        "CR 603"
+      ],
+      "key": "triggered_abilities",
+      "label": "Triggered abilities and trigger subjects",
+      "semantic_atoms": [
+        "program_kind:triggered",
+        "trigger_event:attacks",
+        "trigger_event:becomes_tapped",
+        "trigger_event:becomes_targeted",
+        "trigger_event:dies",
+        "trigger_event:draw_nth_card",
+        "trigger_event:enters_battlefield",
+        "trigger_event:upkeep_begins",
+        "trigger_subject:another_you_control",
+        "trigger_subject:any_you_control",
+        "trigger_subject:this"
+      ],
+      "status": "supported_tested",
+      "tests": [
+        "dragonfly_death",
+        "kyoshi_token",
+        "tiger_seal"
+      ]
+    }
+  ],
+  "source_hash": "f712ff02334d257b792523297f369e728ca3914524304056b029fb46b1b2c290",
+  "summary": {
+    "deck_definition_count": 29,
+    "definition_count": 31,
+    "referenced_definition_count": 2,
+    "rule_family_count": 15,
+    "sanctioned_deviation_count": 7,
+    "test_count": 31,
+    "unsupported_count": 0
+  },
+  "tests": [
+    {
+      "identifier": "rules::stage2_cards::accumulate_wisdom_look_three_pick_one_rest_to_bottom",
+      "key": "accumulate_wisdom",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::allies_at_last_affinity_and_two_attackers",
+      "key": "allies_at_last",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::badgermole_cub_composes_with_waterbend_payment",
+      "key": "badgermole_waterbend",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::firebending_only_triggers_with_lesson_in_graveyard",
+      "key": "cadets_firebending",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::cadets_pump_ability_buffs_until_end_of_turn",
+      "key": "cadets_pump",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::healer_tap_gains_life_and_scries",
+      "key": "compassionate_healer",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::divide_by_zero_bounces_spell_from_stack",
+      "key": "divide_by_zero",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::dragonfly_swarm_death_trigger_needs_lesson_at_fire_time",
+      "key": "dragonfly_death",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards",
+      "key": "dragonfly_power",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::jailer_exiles_and_returns_on_leaving",
+      "key": "earth_kingdom_jailer",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::lieutenant_counters_each_other_ally_and_grows",
+      "key": "earth_kings_lieutenant",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::earthbend_animates_land_with_counter",
+      "key": "earthbend_animates",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::animated_land_dies_and_returns_tapped_as_plain_land",
+      "key": "earthbend_returns",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::fancy_footwork_untaps_and_buffs_one_or_two_targets",
+      "key": "fancy_footwork",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::firebending_lesson_kicked_deals_five",
+      "key": "firebending_lesson_kicker",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::first_time_flyer_conditional_static_recomputes_on_read",
+      "key": "first_time_flyer_static",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::tla_cards::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist",
+      "key": "fortune_teller_clue",
+      "path": "managym/tests/rules/tla_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::igneous_inspiration_deals_three_then_learns",
+      "key": "igneous_inspiration",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::tla_cards::invasion_reinforcements_flash_cast_on_opponents_turn",
+      "key": "invasion_flash",
+      "path": "managym/tests/rules/tla_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::tla_cards::kyoshi_warriors_etb_creates_ally_token_via_stack",
+      "key": "kyoshi_token",
+      "path": "managym/tests/rules/tla_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::cr_106_mana::cr_106_3_casting_uses_mana_abilities",
+      "key": "mana_casting",
+      "path": "managym/tests/rules/cr_106_mana.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::tla_cards::otter_penguin_buffs_on_second_draw_only_and_resets",
+      "key": "otter_penguin",
+      "path": "managym/tests/rules/tla_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::pop_quiz_draws_then_learn_discard_draws",
+      "key": "pop_quiz_learn",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::quench_controller_declines_and_spell_is_countered",
+      "key": "quench_payment",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::tla_cards::south_pole_voyager_second_resolution_draws",
+      "key": "south_pole_voyager",
+      "path": "managym/tests/rules/tla_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::suki_power_tracks_creature_count_and_attack_makes_a_token",
+      "key": "suki_attack",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::tla_cards::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw",
+      "key": "tiger_seal",
+      "path": "managym/tests/rules/tla_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::ward_asks_spell_controller_and_counters_on_decline",
+      "key": "ward_payment",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage2_cards::waterbend_pays_entirely_with_creature_taps",
+      "key": "waterbend_payment",
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::anthem_buffs_other_allies_only",
+      "key": "white_lotus_anthem",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    },
+    {
+      "identifier": "rules::stage3_cards::yip_yip_buffs_and_grants_flying_to_allies_only",
+      "key": "yip_yip",
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "runner": "rust"
+    }
+  ],
+  "violations": []
+}

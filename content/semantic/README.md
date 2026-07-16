@@ -14,6 +14,31 @@ uv run scripts/compile_semantic_content.py
 uv run scripts/compile_semantic_content.py --check
 ```
 
+`v1/coverage.evidence.json` adds the reviewed facts that typed card programs
+cannot derive themselves: rule-family ownership, exact executable Rust tests,
+support/deviation annotations, and a sequenced history classifying real card
+admissions as `content_only` or `kernel_changing`. Generate or verify the
+canonical coverage-gap artifact with:
+
+```bash
+uv run scripts/generate_coverage_gaps.py
+uv run scripts/generate_coverage_gaps.py --check
+```
+
+The rolling policy selects the latest 20 distinct real card admissions (basic
+lands and referenced tokens are excluded) and uses those 20 rows as the
+denominator. More than 20% kernel-changing cards is a breach. A breach remains
+visible in `v1/generated/coverage-gaps.json` and passes the check only when an
+IR redesign, kernel redesign, or stopped-expansion response exists and is
+acknowledged through the newest history sequence. Adding another card makes a
+previous acknowledgment stale, so the response cannot become a permanent
+waiver.
+
+The initial history intentionally reports the two-deck Milestone 1 expansion
+as an acknowledged `0 content-only / 20 total` breach. The linked semantic
+kernel design is the reviewed IR-redesign response to that historical pattern;
+future admissions should move the rolling window toward content-only changes.
+
 The generated `semantic_index` is local to this IR document. It is deliberately
 not `CardDefId`. At pack load, `content_pack_binding` resolves once through the
 current `ContentPack` adapter and every executable program thereafter carries
