@@ -17,9 +17,9 @@ handles.
 
 ## Measurement record
 
-- Captured: `2026-07-16T01:32:56Z`
+- Captured: `2026-07-16T01:47:23Z`
 - Measurement-code revision:
-  `f7d5878b6be4b2276ac5f42f50dc5f390a6982ad`
+  `a53d7cd5927396c597b2e4e45642b8496496ff66`
 - Build profile: Cargo `release`
 - Toolchain: `rustc 1.96.1 (31fca3adb 2026-06-26)`;
   `cargo 1.96.1 (356927216 2026-06-26)`
@@ -82,5 +82,6 @@ tolerance: the required allocation and byte deltas are exactly zero.
 
 The result passes. It proves that clone allocations do not include or scale
 with the controlled immutable definition bytes at this source revision. The
-executable test remains the current gate; this checked record is a historical
-receipt and must be regenerated if the measurement-code revision is rewritten.
+executable test remains the current gate. Artifact-only descendants preserve
+this receipt; it must be regenerated after any rebase or change that rewrites
+the measured source code.
