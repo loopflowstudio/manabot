@@ -62,6 +62,7 @@ impl Game {
             });
             if !any_legal {
                 if let Some(index) = self.find_spell_on_stack_index(card) {
+                    self.journal_stack();
                     self.state.stack_objects.remove(index);
                 }
                 self.move_card(card, ZoneType::Graveyard);
@@ -89,6 +90,7 @@ impl Game {
         let Some(index) = self.find_spell_on_stack_index(card) else {
             return;
         };
+        self.journal_stack();
         self.state.stack_objects.remove(index);
         self.move_card(card, ZoneType::Graveyard);
         self.emit(GameEvent::SpellCountered { card, by });
@@ -217,6 +219,7 @@ impl Game {
                         // Bounce a spell: its stack object ceases and the
                         // card returns to its owner's hand.
                         if let Some(index) = self.find_spell_on_stack_index(card) {
+                            self.journal_stack();
                             self.state.stack_objects.remove(index);
                             let owner = self.state.cards[card].owner;
                             self.move_card(card, ZoneType::Hand);

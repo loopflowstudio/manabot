@@ -30,8 +30,25 @@ import psutil
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "docs/benchmarks/search-branching-contract-v1.md"
-DEFAULT_RAW = ROOT / "experiments/data/w2-182-search-branching-v1.json"
-DEFAULT_REPORT = ROOT / "experiments/w2-182-search-branching-v1.md"
+FULL_CLONE_DRIVER = "full_clone/current_game_v1"
+CLONE_PLUS_UNDO_DRIVER = "compact_clone_undo/current_game_v1"
+
+# Each candidate lands its own artifact pair. Both pairs are excluded from
+# source_sha256 so that generating one candidate's evidence does not invalidate
+# the other's source digest -- the two must be comparable on one tree.
+ARTIFACTS: dict[str, tuple[Path, Path]] = {
+    FULL_CLONE_DRIVER: (
+        ROOT / "experiments/data/w2-182-search-branching-v1.json",
+        ROOT / "experiments/w2-182-search-branching-v1.md",
+    ),
+    CLONE_PLUS_UNDO_DRIVER: (
+        ROOT / "experiments/data/w2-198-compact-clone-undo-v1.json",
+        ROOT / "experiments/w2-198-compact-clone-undo-v1.md",
+    ),
+}
+
+DEFAULT_RAW = ARTIFACTS[FULL_CLONE_DRIVER][0]
+DEFAULT_REPORT = ARTIFACTS[FULL_CLONE_DRIVER][1]
 BINARY = ROOT / "managym/target/release/branching_bench"
 SCHEMA = "manabot.search-branching.result.v1"
 WHOLE_CELLS = {
@@ -197,7 +214,9 @@ def source_sha256() -> str:
         "node_modules",
         "scratch",
     }
-    excluded_files = {DEFAULT_RAW.resolve(), DEFAULT_REPORT.resolve()}
+    excluded_files = {
+        path.resolve() for pair in ARTIFACTS.values() for path in pair
+    }
     digest = hashlib.sha256()
     files: list[Path] = []
     for directory, names, filenames in os.walk(ROOT):
@@ -424,7 +443,9 @@ def sample_process_rss(
     }
 
 
-def run_group(spec: dict[str, Any], root_seed: int, max_steps: int) -> dict[str, Any]:
+def run_group(
+    spec: dict[str, Any], root_seed: int, max_steps: int, driver: str
+) -> dict[str, Any]:
     repeat_started_at = utc_now()
     processes: list[subprocess.Popen[str]] = []
     process_group_id: int | None = None
@@ -434,7 +455,7 @@ def run_group(spec: dict[str, Any], root_seed: int, max_steps: int) -> dict[str,
         for worker in range(spec["workers"]):
             request = {
                 "schema_version": 1,
-                "driver": "full_clone/current_game_v1",
+                "driver": driver,
                 "workload": spec,
                 "root_seed": root_seed,
                 "worker": worker,
@@ -627,6 +648,18 @@ def summarize_cell(cell: dict[str, Any]) -> dict[str, Any]:
         for repeat in repeats
     ]
     caps = sum(metric["cap_hits"] for metric in metrics)
+
+    def counter_total(name: str) -> int | None:
+        """Sum a driver counter, or None if the driver does not support it.
+
+        A counter the driver cannot measure stays null with a reason rather
+        than being reported as a zero it did not observe.
+        """
+        values = [metric[name] for metric in metrics]
+        if any(value is None for value in values):
+            return None
+        return sum(values)
+
     return {
         "simulations": simulations,
         "transitions": transitions,
@@ -645,6 +678,28 @@ def summarize_cell(cell: dict[str, Any]) -> dict[str, Any]:
             repeat["rss_peak_delta_bytes"] for repeat in repeats
         ),
         "max_live_states": max(metric["max_live_states"] for metric in metrics),
+        "eager_forks": sum(metric["eager_forks"] for metric in metrics),
+        "checkpoint_copies": sum(metric["checkpoint_copies"] for metric in metrics),
+        "fork_seconds": sum(metric["fork_seconds"] for metric in metrics),
+        "mark_seconds": sum(metric["mark_seconds"] for metric in metrics),
+        "rollback_seconds": sum(metric["rollback_seconds"] for metric in metrics),
+        "journal_peak_bytes": max(
+            (metric["journal_bytes"] for metric in metrics), default=None
+        )
+        if all(metric["journal_bytes"] is not None for metric in metrics)
+        else None,
+        "journal_peak_entries": max(
+            (metric["journal_peak_entries"] for metric in metrics), default=None
+        )
+        if all(metric["journal_peak_entries"] is not None for metric in metrics)
+        else None,
+        "journal_marks": counter_total("journal_marks"),
+        "journal_commits": counter_total("journal_commits"),
+        "journal_rollbacks": counter_total("journal_rollbacks"),
+        "allocation_count": counter_total("allocation_count"),
+        "allocation_bytes": counter_total("allocation_bytes"),
+        "cow_bytes": counter_total("cow_bytes"),
+        "unsupported_counters_reason": metrics[0]["unsupported_counters_reason"],
         "cap_rate": caps / simulations if simulations else 0.0,
         "repeat_checksums": [repeat["result_checksum"] for repeat in repeats],
     }
@@ -673,7 +728,7 @@ def summarize_diagnostic(cell: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_equivalence(manifest: dict[str, Any]) -> dict[str, Any]:
+def run_equivalence(manifest: dict[str, Any], driver: str) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     for fixture in manifest["fixtures"]:
         for seed in manifest["equivalence_seeds"]:
@@ -684,6 +739,8 @@ def run_equivalence(manifest: dict[str, Any]) -> dict[str, Any]:
                 str(seed),
                 "--max-steps",
                 str(manifest["max_steps"]),
+                "--driver",
+                driver,
             ]
             first = native_json(arguments)
             second = native_json(arguments)
@@ -703,12 +760,15 @@ def run_benchmark(
     profile: str,
     oversubscribed: bool,
     *,
+    driver: str,
     started_at: str,
     invoked_argv: list[str],
 ) -> dict[str, Any]:
     initial_source_sha256 = source_sha256()
     build = build_binary()
-    manifest = native_json(["--manifest"])
+    manifest = native_json(["--manifest", "--driver", driver])
+    if manifest["driver"] != driver:
+        raise RuntimeError("native manifest driver does not match the request")
     if manifest["contract_id"] != "manabot.search-branching.v1":
         raise RuntimeError("native manifest does not implement contract v1")
     physical_cores = psutil.cpu_count(logical=False)
@@ -718,7 +778,7 @@ def run_benchmark(
         )
 
     fixtures = [native_json(["--fixture", fixture]) for fixture in manifest["fixtures"]]
-    equivalence = run_equivalence(manifest)
+    equivalence = run_equivalence(manifest, driver)
     if not equivalence["passed"]:
         raise RuntimeError("deterministic equivalence gate failed")
 
@@ -739,10 +799,12 @@ def run_benchmark(
                 "seed": manifest["warmup_seed"] if spec["id"] in WHOLE_CELLS else None,
                 "included_in_measurement": False,
             },
-            "repeats": [run_group(spec, seed, manifest["max_steps"]) for seed in seeds],
+            "repeats": [
+                run_group(spec, seed, manifest["max_steps"], driver) for seed in seeds
+            ],
         }
         if cell["id"] in WHOLE_CELLS:
-            replay = run_group(spec, seeds[0], manifest["max_steps"])
+            replay = run_group(spec, seeds[0], manifest["max_steps"], driver)
             replay["matches_first_repeat"] = (
                 replay["result_checksum"] == cell["repeats"][0]["result_checksum"]
             )
@@ -759,7 +821,7 @@ def run_benchmark(
         cells.append(cell)
 
     task_status = command_output(
-        ["lf", "task", "status", "W2-182", "--json"], required=False
+        ["lf", "task", "status", "W2-198", "--json"], required=False
     )
     completed_source_sha256 = source_sha256()
     if completed_source_sha256 != initial_source_sha256:
@@ -783,10 +845,10 @@ def run_benchmark(
             "canonical": profile == "full" and not oversubscribed,
             "status": "complete",
             "loopflow": {
-                "task": "W2-182",
+                "task": "W2-198",
                 "task_session": "ts_b39e9de2861c44bc8c4234a32c2f6bcf",
                 "worktree": str(ROOT),
-                "branch": "jack-heart/build-whole-rollout-branching-benchmark",
+                "branch": "jack-heart/implement-compact-clone-plus-undo",
                 "status_snapshot": json.loads(task_status) if task_status else None,
                 "status_unavailable_reason": None
                 if task_status
@@ -821,7 +883,7 @@ def bytes_mib(value: int | float) -> float:
 
 def render_report(payload: dict[str, Any]) -> str:
     lines = [
-        "# W2-182: whole-rollout branching baseline",
+        f"# Whole-rollout branching evidence: `{payload['run']['driver']}`",
         "",
         f"Contract: `{payload['contract']['id']}` (`{payload['contract']['sha256']}`)",
         f"Driver: `{payload['run']['driver']}`",
@@ -850,6 +912,48 @@ def render_report(payload: dict[str, Any]) -> str:
             "",
             "Peak RSS is the 5 ms sampled sum across worker processes and can double-count shared pages. Clone latency is diagnostic, not a storage decision.",
             "",
+            "## Branch lifecycle and journal counters",
+            "",
+            "| Cell | eager forks | checkpoints | fork time | mark time | rollback time | journal peak | journal entries | marks / commits / rollbacks |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for cell in payload["cells"]:
+        if cell["id"] not in WHOLE_CELLS:
+            continue
+        summary = cell["summary"]
+        journal_peak = (
+            f"{bytes_mib(summary['journal_peak_bytes']):.2f} MiB"
+            if summary["journal_peak_bytes"] is not None
+            else "null"
+        )
+        entries = (
+            str(summary["journal_peak_entries"])
+            if summary["journal_peak_entries"] is not None
+            else "null"
+        )
+        counts = " / ".join(
+            str(summary[name]) if summary[name] is not None else "null"
+            for name in ("journal_marks", "journal_commits", "journal_rollbacks")
+        )
+        lines.append(
+            f"| `{cell['id']}` | {summary['eager_forks']} | "
+            f"{summary['checkpoint_copies']} | {summary['fork_seconds']:.3f}s | "
+            f"{summary['mark_seconds']:.3f}s | {summary['rollback_seconds']:.3f}s | "
+            f"{journal_peak} | {entries} | {counts} |"
+        )
+    unsupported = {
+        cell["summary"]["unsupported_counters_reason"]
+        for cell in payload["cells"]
+        if cell["id"] in WHOLE_CELLS
+    }
+    lines.extend(
+        [
+            "",
+            "`null` counters are unsupported by this driver, not observed zeros: "
+            + "; ".join(sorted(reason for reason in unsupported if reason))
+            + ".",
+            "",
             "## Step and clone diagnostics",
             "",
             "| Cell | samples/s | latency p50 / p95 / p99 | resets | reset time |",
@@ -871,8 +975,8 @@ def render_report(payload: dict[str, Any]) -> str:
             "## Reproduction and evidence",
             "",
             "```bash",
-            "uv run scripts/bench_branching.py run",
-            "uv run scripts/bench_branching.py verify",
+            f"uv run scripts/bench_branching.py run --driver {payload['run']['driver']}",
+            f"uv run scripts/bench_branching.py verify --driver {payload['run']['driver']}",
             "```",
             "",
             f"Equivalence: `{str(payload['equivalence']['passed']).lower()}` across {len(payload['equivalence']['checks'])} fixture/seed checks, each replayed twice.",
@@ -880,7 +984,11 @@ def render_report(payload: dict[str, Any]) -> str:
             f"Artifact SHA-256: `{payload['artifact_sha256']}`.",
             f"Source SHA-256: `{payload['run']['source_sha256']}`.",
             "",
-            "The raw artifact contains the pre-execution UTC start, exact orchestrator and worker argv, a fresh process group per cell/repeat, barrier and sampler receipts, the complete timestamped 5 ms aggregate-worker RSS series, hardware, versions, fixture tapes and hashes, all worker results, seeds, timings, outcomes, and deterministic checksums. No undo or page-COW implementation was selected or measured.",
+            "`source_sha256` hashes the whole tree except generated evidence, so this receipt is bound to one exact source state: it must be generated at the final landing tree and landed before `origin/main` moves under it. Any later rebase or source edit, even one touching no benchmark file, invalidates it and requires re-running `run`; re-check `verify` immediately before submitting. Regenerating this receipt is also what repairs the W2-182 baseline, which had been left failing `verify` with a contract-digest mismatch after the witness refactor edited the contract and benchmark without regenerating the artifact.",
+            "",
+            "The raw artifact contains the pre-execution UTC start, exact orchestrator and worker argv, a fresh process group per cell/repeat, barrier and sampler receipts, the complete timestamped 5 ms aggregate-worker RSS series, hardware, versions, fixture tapes and hashes, all worker results, seeds, timings, outcomes, and deterministic checksums.",
+            "",
+            "This artifact measures one candidate. Comparing candidates means comparing two artifacts from the same host and source state, matched by their equal per-cell result checksums. No page-COW representation is implemented, measured, or selected here.",
             "",
         ]
     )
@@ -923,6 +1031,7 @@ def validate_repeat_evidence(
     dimensions: dict[str, Any],
     max_steps: int,
     context: str,
+    driver: str,
 ) -> int:
     record = require_keys(
         repeat,
@@ -1009,7 +1118,7 @@ def validate_repeat_evidence(
         )
         if (
             request["schema_version"] != 1
-            or request["driver"] != "full_clone/current_game_v1"
+            or request["driver"] != driver
             or request["workload"] != dimensions
             or request["root_seed"] != record["root_seed"]
             or request["worker"] != worker_index
@@ -1259,6 +1368,7 @@ def validate_required_evidence(payload: Any) -> None:
                 dimensions=dimensions,
                 max_steps=manifest["max_steps"],
                 context=context,
+                driver=run["driver"],
             )
             if process_group_id in process_groups:
                 raise RuntimeError(
@@ -1321,39 +1431,59 @@ def main() -> int:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--profile", choices=("full", "smoke"), default="full")
     run_parser.add_argument("--oversubscribed", action="store_true")
-    run_parser.add_argument("--output", type=Path, default=DEFAULT_RAW)
-    run_parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    run_parser.add_argument(
+        "--driver", choices=tuple(ARTIFACTS), default=FULL_CLONE_DRIVER
+    )
+    run_parser.add_argument("--output", type=Path, default=None)
+    run_parser.add_argument("--report", type=Path, default=None)
     verify_parser = subparsers.add_parser("verify")
-    verify_parser.add_argument("--input", type=Path, default=DEFAULT_RAW)
-    verify_parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    verify_parser.add_argument(
+        "--driver", choices=tuple(ARTIFACTS), default=FULL_CLONE_DRIVER
+    )
+    verify_parser.add_argument("--input", type=Path, default=None)
+    verify_parser.add_argument("--report", type=Path, default=None)
     args = parser.parse_args()
+
+    default_raw, default_report = ARTIFACTS[args.driver]
+    if args.command == "run":
+        output = args.output or default_raw
+        report_path = args.report or default_report
+    else:
+        output = args.input or default_raw
+        report_path = args.report or default_report
 
     if args.command == "run":
         payload = run_benchmark(
             args.profile,
             args.oversubscribed,
+            driver=args.driver,
             started_at=pre_execution_started_at,
             invoked_argv=invoked_argv,
         )
         verify(payload)
-        atomic_write(args.output, canonical_json(payload) + b"\n")
-        atomic_write(args.report, render_report(payload).encode())
+        atomic_write(output, canonical_json(payload) + b"\n")
+        atomic_write(report_path, render_report(payload).encode())
         print(
             json.dumps(
                 {
                     "status": "complete",
                     "profile": args.profile,
-                    "artifact": str(args.output),
-                    "report": str(args.report),
+                    "driver": args.driver,
+                    "artifact": str(output),
+                    "report": str(report_path),
                     "artifact_sha256": payload["artifact_sha256"],
                 }
             )
         )
     else:
-        payload = json.loads(args.input.read_text())
+        payload = json.loads(output.read_text())
+        if payload["run"]["driver"] != args.driver:
+            raise RuntimeError(
+                f"artifact driver {payload['run']['driver']} does not match --driver {args.driver}"
+            )
         verify(payload)
         expected_report = render_report(payload)
-        if args.report.read_text() != expected_report:
+        if report_path.read_text() != expected_report:
             raise RuntimeError("generated report is stale")
         print(
             json.dumps(

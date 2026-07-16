@@ -248,6 +248,7 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
+        self.journal_priority();
         match action {
             Action::PlayLand { player, card } => {
                 self.play_land(*player, *card)?;

@@ -15,6 +15,7 @@ use crate::{
         priority::PriorityState,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger},
         turn::TurnState,
+        undo::UndoJournal,
     },
     state::{
         game_object::{
@@ -99,7 +100,7 @@ pub(crate) enum CombatDamagePass {
     Normal,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Game {
     pub state: GameState,
     pub skip_trivial: bool,
@@ -114,10 +115,27 @@ pub struct Game {
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
+    pub(crate) undo: Option<UndoJournal>,
+}
+
+impl Clone for Game {
+    fn clone(&self) -> Self {
+        Self {
+            state: self.state.clone(),
+            skip_trivial: self.skip_trivial,
+            current_action_space: self.current_action_space.clone(),
+            decision_epoch: self.decision_epoch,
+            pending_choice: self.pending_choice.clone(),
+            skip_trivial_count: self.skip_trivial_count,
+            trackers: self.trackers.clone(),
+            undo: None,
+        }
+    }
 }
 
 impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
+        self.journal_observation_events();
         std::mem::take(&mut self.state.observation_events)
     }
 }

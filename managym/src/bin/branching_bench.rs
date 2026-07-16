@@ -5,7 +5,7 @@ use std::{
 };
 
 use managym::benchmark::{
-    build_fixture, equivalence_check, manifest, prepare_worker, WorkerRequest,
+    build_fixture, equivalence_check_with, manifest_for, prepare_worker, DriverKind, WorkerRequest,
 };
 use serde_json::json;
 
@@ -19,13 +19,23 @@ fn argument(args: &[String], flag: &str) -> Result<String, String> {
         .ok_or_else(|| format!("missing value after {flag}"))
 }
 
+/// Candidate selection defaults to the full-clone reference baseline, so an
+/// invocation that predates the second candidate keeps its meaning.
+fn driver(args: &[String]) -> Result<DriverKind, String> {
+    match argument(args, "--driver") {
+        Ok(id) => DriverKind::parse(&id),
+        Err(_) => Ok(DriverKind::FullClone),
+    }
+}
+
 fn run() -> Result<(), String> {
     let invoked_argv: Vec<String> = env::args().collect();
     let args: Vec<String> = invoked_argv.iter().skip(1).cloned().collect();
     if args.iter().any(|value| value == "--manifest") {
         println!(
             "{}",
-            serde_json::to_string(&manifest()).map_err(|error| error.to_string())?
+            serde_json::to_string(&manifest_for(driver(&args)?))
+                .map_err(|error| error.to_string())?
         );
         return Ok(());
     }
@@ -46,7 +56,7 @@ fn run() -> Result<(), String> {
         let max_steps = argument(&args, "--max-steps")?
             .parse::<usize>()
             .map_err(|error| format!("invalid --max-steps: {error}"))?;
-        let receipt = equivalence_check(&fixture_id, seed, max_steps)?;
+        let receipt = equivalence_check_with(driver(&args)?, &fixture_id, seed, max_steps)?;
         println!(
             "{}",
             serde_json::to_string(&receipt).map_err(|error| error.to_string())?

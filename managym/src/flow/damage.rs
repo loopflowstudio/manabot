@@ -100,6 +100,7 @@ impl Game {
 
         match target {
             ProposedDamageTarget::Player(player) => {
+                self.journal_player(player);
                 let Some(player_state) = self.state.players.get_mut(player.0) else {
                     return false;
                 };
@@ -130,6 +131,7 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(object_ref) else {
                     return false;
                 };
+                self.journal_permanent(permanent_id);
                 let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                     return false;
                 };
@@ -163,6 +165,7 @@ impl Game {
     }
 
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {
+        self.journal_player(player);
         let Some(player_state) = self.state.players.get_mut(player.0) else {
             return false;
         };
@@ -180,8 +183,15 @@ impl Game {
         true
     }
     pub(crate) fn clear_damage(&mut self) {
-        for permanent in self.state.permanents.iter_mut().flatten() {
-            permanent.clear_damage();
+        for index in 0..self.state.permanents.len() {
+            let permanent_id = PermanentId(index);
+            if self.state.permanents[permanent_id].is_some() {
+                self.journal_permanent(permanent_id);
+                self.state.permanents[permanent_id]
+                    .as_mut()
+                    .expect("checked permanent")
+                    .clear_damage();
+            }
         }
     }
 
@@ -221,8 +231,15 @@ impl Game {
     }
 
     pub(crate) fn clear_temporary_modifiers(&mut self) {
-        for permanent in self.state.permanents.iter_mut().flatten() {
-            permanent.clear_temporary_modifiers();
+        for index in 0..self.state.permanents.len() {
+            let permanent_id = PermanentId(index);
+            if self.state.permanents[permanent_id].is_some() {
+                self.journal_permanent(permanent_id);
+                self.state.permanents[permanent_id]
+                    .as_mut()
+                    .expect("checked permanent")
+                    .clear_temporary_modifiers();
+            }
         }
     }
 }

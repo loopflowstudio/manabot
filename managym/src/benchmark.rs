@@ -1,8 +1,9 @@
 //! Contract-v1 search-state benchmark support.
 //!
-//! The workload code is generic over [`BranchDriver`]. The only implementation
-//! in this task is the reference baseline: exact `Game` clones and full-clone
-//! marks. Undo journals and page-COW storage intentionally remain future work.
+//! The workload code is generic over [`BranchDriver`], so every candidate runs
+//! byte-identical logical work and the cells are matched by construction. Two
+//! implementations exist: the full-clone reference baseline, and compact clone
+//! plus undo. Dense page-COW storage intentionally remains future work.
 
 use std::{collections::BTreeMap, hint::black_box, time::Instant};
 
@@ -17,13 +18,40 @@ use crate::{
 };
 
 pub use crate::search_state::{
-    witness, ApplyReceipt, AuthorityFingerprint, BenchCommand, BranchDriver, ContractDiagnostics,
-    DriverCounters, FullCloneDriver, LegalSurfaceFingerprint, SearchStateWitness,
-    ViewerProjectionWitness, SEARCH_WITNESS_SCHEMA_VERSION,
+    witness, ApplyReceipt, AuthorityFingerprint, BenchCommand, BranchDriver, ClonePlusUndoDriver,
+    ContractDiagnostics, DriverCounters, FullCloneDriver, LegalSurfaceFingerprint,
+    SearchStateWitness, ViewerProjectionWitness, SEARCH_WITNESS_SCHEMA_VERSION,
 };
 
 pub const CONTRACT_ID: &str = "manabot.search-branching.v1";
 pub const DRIVER_ID: &str = "full_clone/current_game_v1";
+pub const CLONE_PLUS_UNDO_DRIVER_ID: &str = "compact_clone_undo/current_game_v1";
+
+/// The branching candidates under measurement. Selecting a candidate changes
+/// only how a branch is taken and released; it never changes the workload's
+/// logical work, so `result_checksum` must agree across every candidate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DriverKind {
+    FullClone,
+    ClonePlusUndo,
+}
+
+impl DriverKind {
+    pub fn parse(id: &str) -> Result<Self, String> {
+        match id {
+            DRIVER_ID => Ok(Self::FullClone),
+            CLONE_PLUS_UNDO_DRIVER_ID => Ok(Self::ClonePlusUndo),
+            other => Err(format!("unknown driver {other}")),
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::FullClone => DRIVER_ID,
+            Self::ClonePlusUndo => CLONE_PLUS_UNDO_DRIVER_ID,
+        }
+    }
+}
 pub const MANIFEST_SCHEMA: u32 = 1;
 pub const RESULT_SCHEMA: u32 = 1;
 pub const SETUP_SEED: u64 = 377;
@@ -85,10 +113,16 @@ pub enum WorkloadShape {
 }
 
 pub fn manifest() -> BenchmarkManifest {
+    manifest_for(DriverKind::FullClone)
+}
+
+/// The manifest is identical for every candidate except its driver name: the
+/// fixtures, seeds, and workload dimensions are the matched contract.
+pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
     BenchmarkManifest {
         schema_version: MANIFEST_SCHEMA,
         contract_id: CONTRACT_ID.to_string(),
-        driver: DRIVER_ID.to_string(),
+        driver: driver.id().to_string(),
         // Preserve the v1 manifest field name for artifact compatibility.
         snapshot_schema: SEARCH_WITNESS_SCHEMA_VERSION,
         seed_derivation: "worker=mix(root,worker); actor=mix(worker,actor); world=mix(actor,world); rollout=mix(world,action*R+rollout+1); policy=mix(rollout,ply)".to_string(),
@@ -202,6 +236,10 @@ pub struct WorkerRequest {
 }
 
 impl WorkerRequest {
+    pub fn driver_kind(&self) -> Result<DriverKind, String> {
+        DriverKind::parse(&self.driver)
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_version != RESULT_SCHEMA {
             return Err(format!(
@@ -209,9 +247,7 @@ impl WorkerRequest {
                 self.schema_version, RESULT_SCHEMA
             ));
         }
-        if self.driver != DRIVER_ID {
-            return Err(format!("unknown driver {}", self.driver));
-        }
+        self.driver_kind()?;
         if self.workload.actors_per_worker == 0
             || self.workload.worlds == 0
             || self.workload.rollouts_per_world == 0
@@ -247,6 +283,8 @@ pub struct RunMetrics {
     pub reset_seconds: f64,
     pub hash_seconds: f64,
     pub fork_seconds: f64,
+    pub mark_seconds: f64,
+    pub rollback_seconds: f64,
     pub determinize_seconds: f64,
     pub apply_seconds: f64,
     pub policy_seconds: f64,
@@ -270,6 +308,11 @@ pub struct RunMetrics {
     pub allocation_count: Option<u64>,
     pub allocation_bytes: Option<u64>,
     pub journal_bytes: Option<u64>,
+    pub journal_entries: Option<u64>,
+    pub journal_peak_entries: Option<u64>,
+    pub journal_marks: Option<u64>,
+    pub journal_commits: Option<u64>,
+    pub journal_rollbacks: Option<u64>,
     pub cow_bytes: Option<u64>,
     pub unsupported_counters_reason: String,
 }
@@ -468,8 +511,38 @@ pub fn equivalence_check(
     trace_seed: u64,
     max_steps: usize,
 ) -> Result<EquivalenceReceipt, String> {
+    equivalence_check_with(DriverKind::FullClone, fixture_id, trace_seed, max_steps)
+}
+
+/// Every candidate must produce a byte-identical receipt here. The receipt
+/// carries logical hashes only, so equality across candidates is the evidence
+/// that a timing comparison between them is measuring the same work.
+pub fn equivalence_check_with(
+    driver: DriverKind,
+    fixture_id: &str,
+    trace_seed: u64,
+    max_steps: usize,
+) -> Result<EquivalenceReceipt, String> {
+    match driver {
+        DriverKind::FullClone => {
+            equivalence_for(&FullCloneDriver, fixture_id, trace_seed, max_steps)
+        }
+        DriverKind::ClonePlusUndo => equivalence_for(
+            &ClonePlusUndoDriver::default(),
+            fixture_id,
+            trace_seed,
+            max_steps,
+        ),
+    }
+}
+
+fn equivalence_for<D: BranchDriver<State = Game>>(
+    driver: &D,
+    fixture_id: &str,
+    trace_seed: u64,
+    max_steps: usize,
+) -> Result<EquivalenceReceipt, String> {
     let (game, _) = build_fixture(fixture_id)?;
-    let driver = FullCloneDriver;
     let root = driver.witness(&game);
     let mut left = driver.fork_exact(&game);
     let mut right = driver.fork_exact(&game);
@@ -491,7 +564,7 @@ pub fn equivalence_check(
     driver.rollback(&mut left, mark);
     let rollback = driver.witness(&left);
     if rollback != root {
-        return Err("full-clone rollback failed to restore root".to_string());
+        return Err("rollback failed to restore root".to_string());
     }
 
     let viewer = game
@@ -624,30 +697,44 @@ fn checksum_state(
     }
 }
 
-fn install_counters(metrics: &mut RunMetrics, driver: FullCloneDriver) {
+/// Counters are read after the measured run so journal peaks reflect it.
+/// Unsupported counters stay `null` with a reason; they are never zeroed.
+fn install_counters<D: BranchDriver>(metrics: &mut RunMetrics, driver: &D) {
     let counters = driver.counters();
     metrics.allocation_count = counters.allocation_count;
     metrics.allocation_bytes = counters.allocation_bytes;
     metrics.journal_bytes = counters.journal_bytes;
+    metrics.journal_entries = counters.journal_entries;
+    metrics.journal_peak_entries = counters.journal_peak_entries;
+    metrics.journal_marks = counters.journal_marks;
+    metrics.journal_commits = counters.journal_commits;
+    metrics.journal_rollbacks = counters.journal_rollbacks;
     metrics.cow_bytes = counters.cow_bytes;
     metrics.unsupported_counters_reason = counters.unsupported_reason;
 }
 
-fn warmup_clone(root: &Game, count: usize) {
+fn warmup_clone<D: BranchDriver<State = Game>>(driver: &D, root: &Game, count: usize) {
     for _ in 0..count {
-        let clone = root.clone();
+        let clone = driver.fork_exact(root);
         black_box(clone.action_space().map_or(0, |space| space.actions.len()));
         drop(clone);
     }
 }
 
-fn measure_clone(root: &Game, count: usize, metrics: &mut RunMetrics) {
+/// Prices one exact fork. Every candidate must still fork exactly, so this
+/// diagnostic isolates that cost from the branch lifecycle around it.
+fn measure_clone<D: BranchDriver<State = Game>>(
+    driver: &D,
+    root: &Game,
+    count: usize,
+    metrics: &mut RunMetrics,
+) {
     let count = count.max(1);
     metrics.clone_latency_ns.reserve(count);
     let elapsed = Instant::now();
     for _ in 0..count {
         let sample = Instant::now();
-        let clone = root.clone();
+        let clone = driver.fork_exact(root);
         black_box(clone.action_space().map_or(0, |space| space.actions.len()));
         drop(clone);
         metrics
@@ -715,13 +802,23 @@ fn drive_env_steps(count: usize, timed: bool, metrics: &mut RunMetrics) -> Resul
     Ok(())
 }
 
-fn run_sequential(
+/// Flat Monte-Carlo over one root: every simulation is a nested sequential
+/// sibling of its world.
+///
+/// Siblings are taken with `mark` and released with `rollback` rather than a
+/// fork per simulation. This is the branch lifecycle both candidates implement,
+/// so the logical work is identical and only the branch mechanism differs:
+/// full clone's `mark` copies the whole `Game` and its `rollback` restores that
+/// copy, while clone plus undo marks a journal cursor and inverts it. Sequential
+/// siblings are exactly the case an undo journal can serve without a copy, so
+/// this is where a win, if there is one, must show up.
+fn run_sequential<D: BranchDriver<State = Game>>(
+    driver: &D,
     root: &Game,
     request: &WorkerRequest,
     worker_seed: u64,
     metrics: &mut RunMetrics,
 ) -> Result<(), String> {
-    let driver = FullCloneDriver;
     let viewer = root
         .action_space()
         .and_then(|space| space.player)
@@ -748,19 +845,19 @@ fn run_sequential(
             metrics.determinize_seconds += determinize_start.elapsed().as_secs_f64();
             for action in 0..action_count {
                 for rollout in 0..request.workload.rollouts_per_world {
-                    let fork_start = Instant::now();
-                    let mut sim = driver.fork_exact(&world);
-                    metrics.fork_seconds += fork_start.elapsed().as_secs_f64();
-                    metrics.eager_forks += 1;
+                    let mark_start = Instant::now();
+                    let mark = driver.mark(&mut world);
+                    metrics.mark_seconds += mark_start.elapsed().as_secs_f64();
+                    metrics.checkpoint_copies += 1;
                     let rollout_seed = mix_seed(
                         world_seed,
                         (action * request.workload.rollouts_per_world + rollout + 1) as u64,
                     );
-                    driver.reseed_rollout(&mut sim, rollout_seed);
+                    driver.reseed_rollout(&mut world, rollout_seed);
                     let apply_start = Instant::now();
                     let done = driver
                         .apply(
-                            &mut sim,
+                            &mut world,
                             BenchCommand {
                                 action_index: action,
                                 expected_state_hash: None,
@@ -770,11 +867,11 @@ fn run_sequential(
                         .done;
                     metrics.apply_seconds += apply_start.elapsed().as_secs_f64();
                     let (winner, tail_steps, cap_hit) = if done {
-                        (sim.winner_index(), 0, false)
+                        (world.winner_index(), 0, false)
                     } else {
                         let tail_start = Instant::now();
                         let outcome = deterministic_playout(
-                            &mut sim,
+                            &mut world,
                             request.max_steps.saturating_sub(1).max(1),
                         )?;
                         metrics.tail_seconds += tail_start.elapsed().as_secs_f64();
@@ -784,13 +881,17 @@ fn run_sequential(
                     metrics.transitions += transitions as u64;
                     metrics.simulations += 1;
                     record_outcome(metrics, winner, cap_hit);
-                    checksum_state(&mut checksum, metrics, &sim, winner, transitions, cap_hit);
+                    checksum_state(&mut checksum, metrics, &world, winner, transitions, cap_hit);
+                    let rollback_start = Instant::now();
+                    driver.rollback(&mut world, mark);
+                    metrics.rollback_seconds += rollback_start.elapsed().as_secs_f64();
                 }
             }
         }
         metrics.root_decisions += 1;
     }
     metrics.elapsed_seconds = (started.elapsed().as_secs_f64() - metrics.hash_seconds).max(0.0);
+    // root, world, and the world's single live sibling.
     metrics.max_live_states = 3;
     metrics.result_checksum = checksum.finalize().to_hex().to_string();
     Ok(())
@@ -809,13 +910,17 @@ fn project_observation(game: &mut Game) {
     black_box(Observation::new(game, &events));
 }
 
-fn run_retained(
+/// Every simulation stays live at once, so each slot needs its own exact fork
+/// regardless of candidate. An undo journal cannot serve concurrently retained
+/// cells: it only reverses one sequential branch at a time. Retained cells are
+/// therefore expected to be a wash, and exist to price journal overhead.
+fn run_retained<D: BranchDriver<State = Game>>(
+    driver: &D,
     root: &Game,
     request: &WorkerRequest,
     worker_seed: u64,
     metrics: &mut RunMetrics,
 ) -> Result<(), String> {
-    let driver = FullCloneDriver;
     let viewer = root
         .action_space()
         .and_then(|space| space.player)
@@ -950,24 +1055,12 @@ pub struct PreparedWorker {
 pub fn prepare_worker(request: WorkerRequest) -> Result<PreparedWorker, String> {
     request.validate()?;
     let (root, fixture) = build_fixture(&request.workload.fixture)?;
-    match request.workload.shape {
-        WorkloadShape::Step => {
-            let mut discarded = RunMetrics::default();
-            drive_env_steps(request.workload.warmup_count, false, &mut discarded)?;
-        }
-        WorkloadShape::CloneLatency => warmup_clone(&root, request.workload.warmup_count),
-        WorkloadShape::Sequential | WorkloadShape::Retained => {
-            let warmup_request = WorkerRequest {
-                root_seed: WARMUP_SEED,
-                ..request.clone()
-            };
-            let mut discarded = RunMetrics::default();
-            let worker_seed = mix_seed(WARMUP_SEED, request.worker as u64);
-            if request.workload.shape == WorkloadShape::Sequential {
-                run_sequential(&root, &warmup_request, worker_seed, &mut discarded)?;
-            } else {
-                run_retained(&root, &warmup_request, worker_seed, &mut discarded)?;
-            }
+    // Warm up through the candidate actually under measurement, so its own
+    // caches and allocation behavior are warm rather than the baseline's.
+    match request.driver_kind()? {
+        DriverKind::FullClone => warmup_worker(&FullCloneDriver, &root, &request)?,
+        DriverKind::ClonePlusUndo => {
+            warmup_worker(&ClonePlusUndoDriver::default(), &root, &request)?
         }
     }
     Ok(PreparedWorker {
@@ -977,31 +1070,66 @@ pub fn prepare_worker(request: WorkerRequest) -> Result<PreparedWorker, String> 
     })
 }
 
+fn warmup_worker<D: BranchDriver<State = Game>>(
+    driver: &D,
+    root: &Game,
+    request: &WorkerRequest,
+) -> Result<(), String> {
+    match request.workload.shape {
+        WorkloadShape::Step => {
+            let mut discarded = RunMetrics::default();
+            drive_env_steps(request.workload.warmup_count, false, &mut discarded)?;
+        }
+        WorkloadShape::CloneLatency => warmup_clone(driver, root, request.workload.warmup_count),
+        WorkloadShape::Sequential | WorkloadShape::Retained => {
+            let warmup_request = WorkerRequest {
+                root_seed: WARMUP_SEED,
+                ..request.clone()
+            };
+            let mut discarded = RunMetrics::default();
+            let worker_seed = mix_seed(WARMUP_SEED, request.worker as u64);
+            if request.workload.shape == WorkloadShape::Sequential {
+                run_sequential(driver, root, &warmup_request, worker_seed, &mut discarded)?;
+            } else {
+                run_retained(driver, root, &warmup_request, worker_seed, &mut discarded)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl PreparedWorker {
     pub fn measure(self) -> Result<WorkerResult, String> {
         let worker_seed = mix_seed(self.request.root_seed, self.request.worker as u64);
-        let driver = FullCloneDriver;
+        let driver_kind = self.request.driver_kind()?;
         let mut metrics = RunMetrics::default();
-        install_counters(&mut metrics, driver);
-        match self.request.workload.shape {
-            WorkloadShape::Step => {
-                drive_env_steps(self.request.workload.measured_count, true, &mut metrics)?
+        match driver_kind {
+            DriverKind::FullClone => {
+                let driver = FullCloneDriver;
+                measure_with(
+                    &driver,
+                    &self.root,
+                    &self.request,
+                    worker_seed,
+                    &mut metrics,
+                )?;
+                install_counters(&mut metrics, &driver);
             }
-            WorkloadShape::CloneLatency => measure_clone(
-                &self.root,
-                self.request.workload.measured_count,
-                &mut metrics,
-            ),
-            WorkloadShape::Sequential => {
-                run_sequential(&self.root, &self.request, worker_seed, &mut metrics)?
-            }
-            WorkloadShape::Retained => {
-                run_retained(&self.root, &self.request, worker_seed, &mut metrics)?
+            DriverKind::ClonePlusUndo => {
+                let driver = ClonePlusUndoDriver::default();
+                measure_with(
+                    &driver,
+                    &self.root,
+                    &self.request,
+                    worker_seed,
+                    &mut metrics,
+                )?;
+                install_counters(&mut metrics, &driver);
             }
         }
         Ok(WorkerResult {
             schema_version: RESULT_SCHEMA,
-            driver: DRIVER_ID.to_string(),
+            driver: driver_kind.id().to_string(),
             fixture: self.fixture,
             workload_id: self.request.workload.id.clone(),
             shape: self.request.workload.shape,
@@ -1014,6 +1142,24 @@ impl PreparedWorker {
             metrics,
         })
     }
+}
+
+fn measure_with<D: BranchDriver<State = Game>>(
+    driver: &D,
+    root: &Game,
+    request: &WorkerRequest,
+    worker_seed: u64,
+    metrics: &mut RunMetrics,
+) -> Result<(), String> {
+    match request.workload.shape {
+        WorkloadShape::Step => drive_env_steps(request.workload.measured_count, true, metrics)?,
+        WorkloadShape::CloneLatency => {
+            measure_clone(driver, root, request.workload.measured_count, metrics)
+        }
+        WorkloadShape::Sequential => run_sequential(driver, root, request, worker_seed, metrics)?,
+        WorkloadShape::Retained => run_retained(driver, root, request, worker_seed, metrics)?,
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1065,8 +1211,8 @@ mod tests {
         let (root, _) = build_fixture("interactive-heavy-80-v1").expect("heavy fixture");
         let mut first = RunMetrics::default();
         let mut second = RunMetrics::default();
-        measure_clone(&root, 2, &mut first);
-        measure_clone(&root, 2, &mut second);
+        measure_clone(&FullCloneDriver, &root, 2, &mut first);
+        measure_clone(&FullCloneDriver, &root, 2, &mut second);
         assert_eq!(first.result_checksum, second.result_checksum);
     }
 }

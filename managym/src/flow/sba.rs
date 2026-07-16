@@ -101,6 +101,7 @@ impl Game {
             }
         }
         for (card_id, owner) in tokens_to_remove {
+            self.journal_zone_move(card_id, owner);
             self.state.zones.remove_card(card_id, owner);
             performed = true;
         }

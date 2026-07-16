@@ -116,10 +116,12 @@ impl Game {
     }
 
     pub(crate) fn record_object_lki(&mut self, lki: ObjectLki) {
+        self.journal_object_lki(lki.object_ref);
         self.state.object_lki.insert(lki.object_ref, lki);
     }
 
     pub(crate) fn advance_object_incarnation(&mut self, card: CardId) {
+        self.journal_incarnation(card);
         let incarnation = self
             .state
             .object_incarnations

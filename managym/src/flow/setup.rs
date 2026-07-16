@@ -100,6 +100,7 @@ impl Game {
             pending_choice: None,
             skip_trivial_count: 0,
             trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],
+            undo: None,
         };
 
         game.trackers[0].on_game_start();

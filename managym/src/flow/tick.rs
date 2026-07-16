@@ -18,6 +18,8 @@ impl Game {
             return Err(AgentError("game is over".to_string()));
         }
 
+        self.journal_action_space();
+        self.journal_transition_queues();
         let action_space = self
             .current_action_space
             .take()
@@ -45,11 +47,13 @@ impl Game {
     /// cast-plus-target has the same SBA, priority, tracking, and consistency
     /// behavior as the legacy positional path.
     pub(crate) fn finish_action_step(&mut self) -> bool {
+        self.journal_priority();
         self.state.priority.sba_done = false;
 
         let game_over = self.tick();
         if game_over {
             if let Some(winner) = self.winner_index() {
+                self.journal_trackers();
                 self.trackers[winner].on_game_won();
             }
         }
@@ -61,6 +65,8 @@ impl Game {
     /// Publish a newly computed external decision and invalidate commands
     /// decoded from every previously published structured offer set.
     pub(crate) fn publish_action_space(&mut self, action_space: ActionSpace) {
+        self.journal_decision_epoch();
+        self.journal_action_space();
         self.decision_epoch = self
             .decision_epoch
             .checked_add(1)
@@ -75,6 +81,7 @@ impl Game {
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
+        self.journal_events();
         std::mem::take(&mut self.state.events)
     }
 
@@ -92,6 +99,7 @@ impl Game {
                     return false;
                 }
 
+                self.journal_skip_trivial_count();
                 self.skip_trivial_count += 1;
                 if let Some(action) = space.actions.first() {
                     if self.execute_action(action).is_err() {
@@ -104,6 +112,7 @@ impl Game {
     }
 
     fn turn_tick(&mut self) -> Option<ActionSpace> {
+        self.journal_turn();
         let step = self.state.turn.current_step_kind();
 
         if !self.state.turn.step_initialized {
@@ -134,6 +143,7 @@ impl Game {
     }
 
     fn on_step_start(&mut self, step: StepKind) {
+        self.journal_priority();
         self.state.priority.start_round(self.active_player());
         if step == StepKind::Untap {
             let player = self.active_player();
@@ -150,12 +160,14 @@ impl Game {
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
+                self.journal_combat();
                 self.state.combat = Some(CombatState::default());
             }
             StepKind::DeclareAttackers => {
                 // CR 508.1 — Active player declares attackers.
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
+                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 combat.attackers_to_declare = eligible;
             }
@@ -163,6 +175,7 @@ impl Game {
                 // CR 509.1 — Defending player declares blockers.
                 let defender = self.non_active_player();
                 let eligible = self.eligible_blockers(defender);
+                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 combat.blockers_to_declare = eligible;
             }
@@ -173,9 +186,17 @@ impl Game {
     fn on_step_end(&mut self, step: StepKind) {
         if matches!(step, StepKind::EndOfCombat) {
             // CR 511.3 — Creatures stop being attacking as combat ends.
-            for permanent in self.state.permanents.iter_mut().flatten() {
-                permanent.attacking = false;
+            for index in 0..self.state.permanents.len() {
+                let permanent_id = crate::state::game_object::PermanentId(index);
+                if self.state.permanents[permanent_id].is_some() {
+                    self.journal_permanent(permanent_id);
+                    self.state.permanents[permanent_id]
+                        .as_mut()
+                        .expect("checked permanent")
+                        .attacking = false;
+                }
             }
+            self.journal_combat();
             self.state.combat = None;
             // Until-end-of-combat mana (firebending) empties now.
             self.clear_combat_mana_pools();
@@ -208,6 +229,7 @@ impl Game {
             }
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
+                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
@@ -252,6 +274,7 @@ impl Game {
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
+                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();
@@ -343,10 +366,12 @@ impl Game {
             }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
+                self.journal_priority();
                 self.state.priority.start_round(self.active_player());
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
+                    self.journal_priority();
                     self.state.priority.on_non_pass_action(self.active_player());
                     continue;
                 }
@@ -357,6 +382,7 @@ impl Game {
 
             if self.skip_trivial && !self.can_player_act(player) {
                 let next = self.next_player(player);
+                self.journal_priority();
                 self.state.priority.on_pass(next);
                 continue;
             }

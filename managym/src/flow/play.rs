@@ -84,6 +84,7 @@ impl Game {
         }
 
         // CR 305.2 — Track one normal land play per turn.
+        self.journal_turn();
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
         self.invalidate_mana_cache(player);

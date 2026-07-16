@@ -45,6 +45,7 @@ impl Game {
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
+        self.journal_zones();
         self.state.zones.resample_hidden(opponent, &mut rng);
         self.state
             .zones

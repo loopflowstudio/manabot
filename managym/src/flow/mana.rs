@@ -16,11 +16,13 @@ impl Game {
             return cached.clone();
         }
         let mana = self.producible_mana(player);
+        self.journal_mana_cache(player);
         self.state.mana_cache[player.0] = Some(mana.clone());
         mana
     }
 
     pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
+        self.journal_mana_cache(player);
         self.state.mana_cache[player.0] = None;
     }
 
@@ -72,6 +74,7 @@ impl Game {
             // CR 106.3 — Activate mana abilities to add mana to the mana pool.
             // Tapping for mana emits a PermanentTapped { for_mana: true } event.
             self.tap_permanent(permanent_id, true);
+            self.journal_player(player);
             for mana in &produced {
                 self.state.players[player.0].mana_pool.add(mana);
             }
@@ -100,6 +103,7 @@ impl Game {
 
         // Rebuild the two pools from what's left: spent mana comes out of
         // the combat pool first, slot by slot.
+        self.journal_player(player);
         let player_state = &mut self.state.players[player.0];
         for slot in 0..remaining.mana.len() {
             let before =
@@ -128,15 +132,17 @@ impl Game {
     /// pool (until-end-of-combat mana) survives; see
     /// `clear_combat_mana_pools`.
     pub(crate) fn clear_mana_pools(&mut self) {
-        for player in &mut self.state.players {
-            player.mana_pool.clear();
+        for player in [PlayerId(0), PlayerId(1)] {
+            self.journal_player(player);
+            self.state.players[player.0].mana_pool.clear();
         }
     }
 
     /// Until-end-of-combat mana (firebending) empties as combat ends.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
-        for player in &mut self.state.players {
-            player.combat_mana_pool.clear();
+        for player in [PlayerId(0), PlayerId(1)] {
+            self.journal_player(player);
+            self.state.players[player.0].combat_mana_pool.clear();
         }
     }
 }
