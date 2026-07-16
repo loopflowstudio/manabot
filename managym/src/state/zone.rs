@@ -164,8 +164,7 @@ impl ZoneManager {
     pub fn resample_hidden<R: rand::Rng + ?Sized>(&mut self, player: PlayerId, rng: &mut R) {
         let idx = player.0;
         let hand_size = self.hand[idx].len();
-        let mut pool: Vec<CardId> =
-            Vec::with_capacity(hand_size + self.library[idx].len());
+        let mut pool: Vec<CardId> = Vec::with_capacity(hand_size + self.library[idx].len());
         pool.append(&mut self.hand[idx]);
         pool.append(&mut self.library[idx]);
         pool.shuffle(rng);

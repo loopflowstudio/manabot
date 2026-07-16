@@ -51,7 +51,8 @@ impl Game {
         }
         let source_card = source.map(|object_ref| CardId::from(object_ref.entity));
         let source_has_deathtouch = source.is_some_and(|object_ref| {
-            self.source_keywords(object_ref).is_some_and(|keywords| keywords.deathtouch)
+            self.source_keywords(object_ref)
+                .is_some_and(|keywords| keywords.deathtouch)
         });
         let lifelink_controller = source.and_then(|object_ref| {
             self.source_keywords(object_ref)
@@ -142,7 +143,10 @@ impl Game {
             return Some(definition.keywords.clone());
         }
         let card = CardId::from(source.entity);
-        self.state.cards.get(card.0).map(|card| card.keywords.clone())
+        self.state
+            .cards
+            .get(card.0)
+            .map(|card| card.keywords.clone())
     }
 
     fn source_controller(&self, source: ObjectRef) -> Option<PlayerId> {

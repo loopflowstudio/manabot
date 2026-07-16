@@ -108,18 +108,9 @@ impl Game {
     /// Create a token from a registered token definition under `controller`'s
     /// control. Tokens are full cards in `GameState::cards`; state-based
     /// actions remove them once they leave the battlefield (CR 704.5d).
-    pub fn create_token(
-        &mut self,
-        name: &str,
-        controller: PlayerId,
-        tapped_and_attacking: bool,
-    ) {
+    pub fn create_token(&mut self, name: &str, controller: PlayerId, tapped_and_attacking: bool) {
         let object_id = self.state.id_gen.next_id();
-        let Some(card) = self
-            .state
-            .content
-            .instantiate(name, controller, object_id)
-        else {
+        let Some(card) = self.state.content.instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
             return;
         };

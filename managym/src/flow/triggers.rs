@@ -265,9 +265,7 @@ impl Game {
             .iter()
             .rev()
             .filter_map(|object| match object {
-                StackObject::Spell(spell)
-                    if self.card_mana_value(spell.card) >= min_mana_value =>
-                {
+                StackObject::Spell(spell) if self.card_mana_value(spell.card) >= min_mana_value => {
                     Some(Target::StackSpell(spell.card))
                 }
                 _ => None,
@@ -430,7 +428,13 @@ impl Game {
             // Conditionally-granted abilities: the ability only exists (and
             // so only triggers) while the condition holds for its
             // controller (CR 603.4 fire-time check).
-            (TriggerCondition::ActiveIf { active_if, condition }, _) => {
+            (
+                TriggerCondition::ActiveIf {
+                    active_if,
+                    condition,
+                },
+                _,
+            ) => {
                 self.check_static_condition(active_if, source_controller)
                     && self.trigger_condition_fires(
                         condition,

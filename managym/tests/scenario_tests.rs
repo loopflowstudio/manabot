@@ -100,7 +100,10 @@ fn injection_builds_exact_position() {
     assert_eq!(obs.opponent.life, 12);
     // Battlefield zone is index 2.
     assert_eq!(obs.agent.zone_counts[2], 2, "hero battlefield: 2 islands");
-    assert_eq!(obs.opponent.zone_counts[2], 6, "villain battlefield: 6 mountains");
+    assert_eq!(
+        obs.opponent.zone_counts[2], 6,
+        "villain battlefield: 6 mountains"
+    );
 }
 
 /// The refreshed action space reflects injected cards, and the full loop

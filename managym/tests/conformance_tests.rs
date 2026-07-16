@@ -225,9 +225,9 @@ fn every_registered_real_card_matches_scryfall() {
             .unwrap_or_default();
         let scryfall_cost = fx.mana_cost.clone().unwrap_or_default();
         let cost_ok = canonical_cost(&engine_cost) == canonical_cost(&scryfall_cost)
-            || cost_exceptions.get(name).is_some_and(|allowed| {
-                *allowed == scryfall_cost
-            });
+            || cost_exceptions
+                .get(name)
+                .is_some_and(|allowed| *allowed == scryfall_cost);
         if !cost_ok {
             failures.push(format!(
                 "{name}: mana cost {engine_cost:?} != Scryfall {scryfall_cost:?}"
@@ -235,8 +235,11 @@ fn every_registered_real_card_matches_scryfall() {
         }
 
         // Colors.
-        let engine_colors: BTreeSet<String> =
-            def.colors().iter().map(|c| c.symbol().to_string()).collect();
+        let engine_colors: BTreeSet<String> = def
+            .colors()
+            .iter()
+            .map(|c| c.symbol().to_string())
+            .collect();
         let scryfall_colors: BTreeSet<String> = fx.colors.iter().cloned().collect();
         if engine_colors != scryfall_colors {
             failures.push(format!(

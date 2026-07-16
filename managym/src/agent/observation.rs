@@ -723,14 +723,14 @@ impl Observation {
                     .and_then(|suspended| suspended.frame.source)
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
-                        | Some(crate::flow::game::PendingChoice::ChooseTargets {
-                            card, ..
-                        }) => Some(*card),
-                        Some(crate::flow::game::PendingChoice::Waterbend {
-                            permanent, ..
-                        }) => game.state.permanents[*permanent]
-                            .as_ref()
-                            .map(|perm| perm.card),
+                        | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
+                            Some(*card)
+                        }
+                        Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {
+                            game.state.permanents[*permanent]
+                                .as_ref()
+                                .map(|perm| perm.card)
+                        }
                         None => None,
                     });
                 card.map(|card| vec![game.state.cards[card].id])

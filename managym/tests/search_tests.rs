@@ -221,7 +221,10 @@ fn determinize_resamples_opponent_hand() {
 
     let villain = PlayerId(1);
     let hand_before = zone_snapshot(&game, ZoneType::Hand, villain);
-    assert!(!hand_before.is_empty(), "test needs a nonempty villain hand");
+    assert!(
+        !hand_before.is_empty(),
+        "test needs a nonempty villain hand"
+    );
 
     // Across several seeds, at least one determinization must produce a
     // different villain hand (36-card unseen pool: astronomically likely).
@@ -353,9 +356,7 @@ fn flat_mc_survives_stage2_decision_points() {
 
         let mut steps = 0_usize;
         while !env.is_game_over() && steps < 800 {
-            if decisions_evaluated < 6
-                && env.action_space_kind().is_some_and(is_decision_kind)
-            {
+            if decisions_evaluated < 6 && env.action_space_kind().is_some_and(is_decision_kind) {
                 let result = env
                     .flat_mc_scores(1, 1, seed ^ 0xf1a7, 400)
                     .expect("flat MC at a decision point");
@@ -436,9 +437,7 @@ fn flat_mc_survives_milestone1_matchup() {
 
         let mut steps = 0_usize;
         while !env.is_game_over() && steps < 800 {
-            if decisions_evaluated < 8
-                && env.action_space_kind().is_some_and(is_decision_kind)
-            {
+            if decisions_evaluated < 8 && env.action_space_kind().is_some_and(is_decision_kind) {
                 let result = env
                     .flat_mc_scores(1, 1, seed ^ 0x57a3e3, 400)
                     .expect("flat MC at a decision point");

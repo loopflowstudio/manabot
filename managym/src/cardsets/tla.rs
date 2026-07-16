@@ -104,9 +104,8 @@ impl CardRegistry {
                     tapped_and_attacking: false,
                 }],
             }],
-            text_box:
-                "Flash\nWhen this creature enters, create a 1/1 white Ally creature token."
-                    .to_string(),
+            text_box: "Flash\nWhen this creature enters, create a 1/1 white Ally creature token."
+                .to_string(),
             power: Some(1),
             toughness: Some(1),
             ..Default::default()
@@ -714,7 +713,8 @@ impl CardRegistry {
                     },
                 ],
             }],
-            text_box: "Untap one or two target creatures. They each get +2/+2 until end of turn.".to_string(),
+            text_box: "Untap one or two target creatures. They each get +2/+2 until end of turn."
+                .to_string(),
             ..Default::default()
         });
 

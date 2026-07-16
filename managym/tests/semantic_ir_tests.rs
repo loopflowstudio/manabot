@@ -68,7 +68,8 @@ fn keyword_names(definition: &CardDefinition) -> BTreeSet<String> {
         ("vigilance", definition.keywords.vigilance),
     ]
     .into_iter()
-    .filter_map(|(name, enabled)| enabled.then(|| name.to_owned()))
+    .filter(|(_, enabled)| *enabled)
+    .map(|(name, _)| name.to_owned())
     .collect()
 }
 

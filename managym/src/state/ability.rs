@@ -20,7 +20,9 @@ impl Ability {
     /// The target spec of the ability's single targeted effect, if any.
     /// At most one effect per ability may carry a target.
     pub fn target_spec(&self) -> Option<&TargetSpec> {
-        self.effects().iter().find_map(|effect| effect.target_spec())
+        self.effects()
+            .iter()
+            .find_map(|effect| effect.target_spec())
     }
 
     /// "Up to one target" — the controller may decline choosing a target.
@@ -269,7 +271,9 @@ pub enum TargetSpec {
     Spell,
     /// "target spell or permanent with mana value `min_mana_value` or
     /// greater" (Divide by Zero).
-    SpellOrPermanent { min_mana_value: u8 },
+    SpellOrPermanent {
+        min_mana_value: u8,
+    },
     /// "target creature you control" — relative to the caster/controller.
     CreatureYouControl,
     /// "target creature an opponent controls".
@@ -278,7 +282,9 @@ pub enum TargetSpec {
     LandYouControl,
     /// "target [predicate] permanent an opponent controls" (Earth Kingdom
     /// Jailer: artifact/creature/enchantment with mana value 3+).
-    PermanentOpponentControls { predicate: CardPredicate },
+    PermanentOpponentControls {
+        predicate: CardPredicate,
+    },
 }
 
 /// One targeting clause of a spell: "[up to] N target [spec]".
@@ -292,7 +298,11 @@ pub struct TargetRequirement {
 
 impl TargetRequirement {
     pub fn one(spec: TargetSpec) -> Self {
-        Self { spec, min: 1, max: 1 }
+        Self {
+            spec,
+            min: 1,
+            max: 1,
+        }
     }
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {

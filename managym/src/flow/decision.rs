@@ -168,9 +168,7 @@ impl Game {
             self.emit(GameEvent::SpellResolved { card });
         }
         // A resolution completed: restart the priority round (CR 117.3b).
-        self.state
-            .priority
-            .on_non_pass_action(self.active_player());
+        self.state.priority.on_non_pass_action(self.active_player());
     }
 
     /// The action space for the pending mid-resolution decision, if any.
@@ -292,7 +290,12 @@ impl Game {
         }
 
         match (&mut suspended.decision, action) {
-            (Decision::Scry { remaining, .. }, Action::ScryCard { card, to_bottom, .. }) => {
+            (
+                Decision::Scry { remaining, .. },
+                Action::ScryCard {
+                    card, to_bottom, ..
+                },
+            ) => {
                 if remaining.first() != Some(card) {
                     let err = AgentError("scry decision is for a different card".to_string());
                     self.state.suspended_decision = Some(suspended);
@@ -320,8 +323,8 @@ impl Game {
                 },
                 Action::SelectCard { card, .. },
             ) => {
-                let selectable = looked.contains(card)
-                    && predicate.matches_card(&self.state.cards[*card]);
+                let selectable =
+                    looked.contains(card) && predicate.matches_card(&self.state.cards[*card]);
                 if !selectable {
                     let err = AgentError("card is not selectable".to_string());
                     self.state.suspended_decision = Some(suspended);
@@ -449,10 +452,7 @@ impl Game {
     /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         let owner = self.state.cards[card].owner;
-        let library = self
-            .state
-            .zones
-            .zone_cards_mut(ZoneType::Library, owner);
+        let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
         if let Some(index) = library.iter().position(|c| *c == card) {
             library.remove(index);
             library.insert(0, card);

@@ -29,9 +29,7 @@ impl From<EntityId> for CardId {
 }
 
 /// Monotonic rules-object generation for one physical entity.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize,
-)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct Incarnation(pub u32);
 
 impl Incarnation {

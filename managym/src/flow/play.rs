@@ -188,8 +188,7 @@ impl Game {
             let Some(requirement) = requirements.get(requirement_index) else {
                 return self.finish_casting(player, card, kicked, chosen, chosen_req_indices);
             };
-            let legal =
-                self.remaining_legal_targets(player, card, requirement, &chosen);
+            let legal = self.remaining_legal_targets(player, card, requirement, &chosen);
             if legal.is_empty() {
                 if requirement.min == 0 {
                     requirement_index += 1;

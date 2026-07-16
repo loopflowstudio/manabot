@@ -9,6 +9,7 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
+    cardsets::alpha::ContentPackManifest,
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     state::{game_object::PlayerId, player::PlayerConfig},
@@ -249,6 +250,14 @@ impl Env {
         self.add_profiler_info(&mut info);
         self.add_behavior_info(&mut info);
         info
+    }
+
+    /// Manifest for the exact immutable content pack retained by this match.
+    pub fn content_pack_manifest(&self) -> Result<ContentPackManifest, AgentError> {
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError("env.content_pack_manifest called before reset".to_string())
+        })?;
+        Ok(game.state.content.manifest())
     }
 
     pub fn encode_observation(&self, observation: &Observation) -> EncodedObservation {
@@ -637,6 +646,10 @@ mod content_pack_contract_tests {
             .fork()
             .expect_err("an environment without a match has no content pack");
         assert_eq!(error.0, "env.fork called before reset");
+        let error = absent
+            .content_pack_manifest()
+            .expect_err("an environment without a match has no manifest");
+        assert_eq!(error.0, "env.content_pack_manifest called before reset");
 
         let mut first = Env::new(11, true, false, false);
         let mut second = Env::new(12, true, false, false);
@@ -652,6 +665,20 @@ mod content_pack_contract_tests {
         assert!(Arc::ptr_eq(&second_game.state.content, &admitted));
         assert_eq!(first_game.state.content.content_digest(), expected_digest);
         assert_eq!(second_game.state.content.content_digest(), expected_digest);
+
+        let manifest = first.content_pack_manifest().expect("content manifest");
+        assert_eq!(manifest.schema_version, CONTENT_PACK_SCHEMA_VERSION);
+        assert_eq!(manifest.content_digest, expected_digest);
+        assert_eq!(manifest.definitions.len(), admitted.len());
+        for entry in &manifest.definitions {
+            assert_eq!(
+                admitted
+                    .definition(entry.card_def_id)
+                    .expect("manifest definition")
+                    .name,
+                entry.registry_name
+            );
+        }
 
         let root_hash = first_game.state.deterministic_hash();
         let root_life = first_game.state.players[0].life;

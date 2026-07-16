@@ -756,7 +756,10 @@ mod tests {
         assert_eq!(encoded.agent_cards[CARD_DIM - 1 + CARD_DIM], 1.0);
         assert_eq!(encoded.agent_cards[CARD_DIM - 1 + CARD_DIM * 2], 0.0);
         assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
-        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM], 0.0);
+        assert_eq!(
+            encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
+            0.0
+        );
 
         // Expected object indices with padding-aware ordering:
         // players: 0,1; agent cards: [2,3,4]; opponent cards: [5,6,7];

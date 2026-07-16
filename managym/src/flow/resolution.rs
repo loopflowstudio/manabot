@@ -15,7 +15,9 @@ use crate::{
         ability::{Ability, Effect, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
-        stack_object::{ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack},
+        stack_object::{
+            ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
+        },
         zone::ZoneType,
     },
 };
@@ -111,8 +113,7 @@ impl Game {
             else {
                 return;
             };
-            let Some(source_permanent) = self.state.permanents[source_permanent_id].as_ref()
-            else {
+            let Some(source_permanent) = self.state.permanents[source_permanent_id].as_ref() else {
                 return;
             };
             if source_permanent.id != ability.source_permanent_object_id {
@@ -226,7 +227,10 @@ impl Game {
                 }
                 None
             }
-            Effect::DealDamage { amount, target: spec } => {
+            Effect::DealDamage {
+                amount,
+                target: spec,
+            } => {
                 let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, spec, frame.controller) {
                     return None;
@@ -292,7 +296,10 @@ impl Game {
                 }
                 None
             }
-            Effect::PutCounters { count, target: spec } => {
+            Effect::PutCounters {
+                count,
+                target: spec,
+            } => {
                 let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, spec, frame.controller) {
                     return None;
@@ -445,7 +452,10 @@ impl Game {
                 }
                 None
             }
-            Effect::Earthbend { count, target: spec } => {
+            Effect::Earthbend {
+                count,
+                target: spec,
+            } => {
                 let chosen = frame.primary_target()?;
                 if !self.target_is_legal(chosen, spec, frame.controller) {
                     return None;
@@ -633,10 +643,13 @@ impl Game {
     }
 
     fn spell_controller(&self, card: CardId) -> Option<PlayerId> {
-        self.state.stack_objects.iter().find_map(|object| match object {
-            StackObject::Spell(spell) if spell.card == card => Some(spell.controller),
-            _ => None,
-        })
+        self.state
+            .stack_objects
+            .iter()
+            .find_map(|object| match object {
+                StackObject::Spell(spell) if spell.card == card => Some(spell.controller),
+                _ => None,
+            })
     }
 
     pub(crate) fn permanent_is_battlefield_creature(&self, permanent_id: PermanentId) -> bool {
@@ -729,8 +742,7 @@ impl Game {
             (Target::Permanent(perm_id), TargetSpec::LandYouControl) => {
                 self.permanent_on_battlefield(perm_id)
                     && self.state.permanents[perm_id].as_ref().is_some_and(|p| {
-                        p.controller == controller
-                            && self.state.cards[p.card].types.is_land()
+                        p.controller == controller && self.state.cards[p.card].types.is_land()
                     })
             }
             (Target::Permanent(perm_id), TargetSpec::PermanentOpponentControls { predicate }) => {

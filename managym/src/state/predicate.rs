@@ -63,9 +63,7 @@ impl CardPredicate {
                 return false;
             }
         }
-        if !self.card_types_any.is_empty()
-            && !self.card_types_any.iter().any(|t| has_type(*t))
-        {
+        if !self.card_types_any.is_empty() && !self.card_types_any.iter().any(|t| has_type(*t)) {
             return false;
         }
         if self.not_card_types.iter().any(|t| has_type(*t)) {

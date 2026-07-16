@@ -173,6 +173,11 @@ class Env(gym.Env):
     def info(self) -> Dict[str, Any]:
         return self._engine.info()
 
+    def content_pack_manifest(self) -> Dict[str, Any]:
+        """Describe the exact immutable content pack retained by the match."""
+
+        return self._engine.content_pack_manifest()
+
     def skip_trivial_count(self) -> int:
         """Trivial decision points auto-collapsed since the current game began."""
         return self._engine.skip_trivial_count()

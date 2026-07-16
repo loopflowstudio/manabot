@@ -57,10 +57,7 @@ impl Game {
             let player = suspended.decision.player();
             let revealed = suspended.decision.revealed_cards().to_vec();
             if !revealed.is_empty() {
-                let library = self
-                    .state
-                    .zones
-                    .zone_cards_mut(ZoneType::Library, player);
+                let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
                 library.retain(|card| !revealed.contains(card));
                 // revealed[0] is the top of the library = last element.
                 for card in revealed.iter().rev() {
@@ -93,9 +90,7 @@ impl Game {
                 .as_ref()
                 .map_or(0, |space| space.actions.len());
             if action_count == 0 {
-                return Err(AgentError(
-                    "random_playout: empty action space".to_string(),
-                ));
+                return Err(AgentError("random_playout: empty action space".to_string()));
             }
             let index = self.state.rng.gen_range(0..action_count);
             self.step(index)?;

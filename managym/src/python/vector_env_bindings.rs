@@ -191,118 +191,108 @@ fn read_observation_buffers(
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
     Ok(ObservationBuffers {
-        agent_player: require_numpy_array(
-            &buffers,
-            "agent_player",
-            &[n, 1, PLAYER_DIM],
-            "float32",
-        )?
-        .unbind(),
+        agent_player: require_numpy_array(buffers, "agent_player", &[n, 1, PLAYER_DIM], "float32")?
+            .unbind(),
         opponent_player: require_numpy_array(
-            &buffers,
+            buffers,
             "opponent_player",
             &[n, 1, PLAYER_DIM],
             "float32",
         )?
         .unbind(),
         agent_cards: require_numpy_array(
-            &buffers,
+            buffers,
             "agent_cards",
             &[n, c.max_cards_per_player, CARD_DIM],
             "float32",
         )?
         .unbind(),
         opponent_cards: require_numpy_array(
-            &buffers,
+            buffers,
             "opponent_cards",
             &[n, c.max_cards_per_player, CARD_DIM],
             "float32",
         )?
         .unbind(),
         agent_permanents: require_numpy_array(
-            &buffers,
+            buffers,
             "agent_permanents",
             &[n, c.max_permanents_per_player, PERMANENT_DIM],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
-            &buffers,
+            buffers,
             "opponent_permanents",
             &[n, c.max_permanents_per_player, PERMANENT_DIM],
             "float32",
         )?
         .unbind(),
         actions: require_numpy_array(
-            &buffers,
+            buffers,
             "actions",
             &[n, c.max_actions, ACTION_DIM],
             "float32",
         )?
         .unbind(),
-        events: require_numpy_array(&buffers, "events", &[n, c.max_events, EVENT_DIM], "float32")?
+        events: require_numpy_array(buffers, "events", &[n, c.max_events, EVENT_DIM], "float32")?
             .unbind(),
         action_focus: require_numpy_array(
-            &buffers,
+            buffers,
             "action_focus",
             &[n, c.max_actions, c.max_focus_objects],
             "int32",
         )?
         .unbind(),
-        agent_player_valid: require_numpy_array(
-            &buffers,
-            "agent_player_valid",
-            &[n, 1],
-            "float32",
-        )?
-        .unbind(),
+        agent_player_valid: require_numpy_array(buffers, "agent_player_valid", &[n, 1], "float32")?
+            .unbind(),
         opponent_player_valid: require_numpy_array(
-            &buffers,
+            buffers,
             "opponent_player_valid",
             &[n, 1],
             "float32",
         )?
         .unbind(),
         agent_cards_valid: require_numpy_array(
-            &buffers,
+            buffers,
             "agent_cards_valid",
             &[n, c.max_cards_per_player],
             "float32",
         )?
         .unbind(),
         opponent_cards_valid: require_numpy_array(
-            &buffers,
+            buffers,
             "opponent_cards_valid",
             &[n, c.max_cards_per_player],
             "float32",
         )?
         .unbind(),
         agent_permanents_valid: require_numpy_array(
-            &buffers,
+            buffers,
             "agent_permanents_valid",
             &[n, c.max_permanents_per_player],
             "float32",
         )?
         .unbind(),
         opponent_permanents_valid: require_numpy_array(
-            &buffers,
+            buffers,
             "opponent_permanents_valid",
             &[n, c.max_permanents_per_player],
             "float32",
         )?
         .unbind(),
         actions_valid: require_numpy_array(
-            &buffers,
+            buffers,
             "actions_valid",
             &[n, c.max_actions],
             "float32",
         )?
         .unbind(),
-        events_valid: require_numpy_array(&buffers, "events_valid", &[n, c.max_events], "float32")?
+        events_valid: require_numpy_array(buffers, "events_valid", &[n, c.max_events], "float32")?
             .unbind(),
-        rewards: require_numpy_array(&buffers, "rewards", &[n], "float64")?.unbind(),
-        terminated: require_numpy_array(&buffers, "terminated", &[n], "uint8")?.unbind(),
-        truncated: require_numpy_array(&buffers, "truncated", &[n], "uint8")?.unbind(),
+        rewards: require_numpy_array(buffers, "rewards", &[n], "float64")?.unbind(),
+        terminated: require_numpy_array(buffers, "terminated", &[n], "uint8")?.unbind(),
+        truncated: require_numpy_array(buffers, "truncated", &[n], "uint8")?.unbind(),
     })
 }
 

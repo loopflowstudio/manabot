@@ -15,6 +15,19 @@ use crate::state::{
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ContentPackDefinitionManifest {
+    pub card_def_id: CardDefId,
+    pub registry_name: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ContentPackManifest {
+    pub schema_version: u32,
+    pub content_digest: String,
+    pub definitions: Vec<ContentPackDefinitionManifest>,
+}
+
 #[derive(Clone, Debug)]
 pub struct ContentPack {
     pub schema_version: u32,
@@ -44,6 +57,24 @@ impl ContentPack {
         definitions.sort_by(|left, right| left.name.cmp(&right.name));
         let bytes = serde_json::to_vec(&definitions).expect("card definitions are serializable");
         blake3::hash(&bytes).to_hex().to_string()
+    }
+
+    /// Read-only descriptor for binding derived consumers to this exact pack.
+    ///
+    /// Registry names are used only at the adapter boundary. Runtime match
+    /// facts and learning projections continue to carry typed definition IDs.
+    pub fn manifest(&self) -> ContentPackManifest {
+        ContentPackManifest {
+            schema_version: self.schema_version,
+            content_digest: self.content_digest(),
+            definitions: self
+                .definition_entries()
+                .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
+                    card_def_id,
+                    registry_name: definition.name.clone(),
+                })
+                .collect(),
+        }
     }
 }
 

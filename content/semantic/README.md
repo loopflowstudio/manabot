@@ -58,3 +58,35 @@ The compiler records the actual product manifest rather than silently deleting
 a card. GW Allies contains 40 cards. Resolving that content decision belongs to
 the curated deck owner, and changing it will make the product-manifest parity
 test fail until both sides agree.
+
+## Learning projection v1
+
+`v1/learning_schema.json` defines the versioned, typed token graph used by
+learning consumers. `manabot.semantic.learning.BoundSemanticPack` obtains a
+read-only manifest from the exact environment `ContentPack`, resolves the IR's
+legacy registry-name adapters once, then discards names from model inputs.
+
+The shared catalog stores definition and program token spans plus explicit
+definition-reference edges. Viewer observations carry only ragged bindings into
+that immutable catalog. The `semantic_only` mode keeps the structural binding
+but masks every opaque `CardDefId`; the `identity` mode makes that feature
+explicit for controlled ablations. Neither mode tokenizes card names.
+
+Semantic datasets and checkpoints must persist the artifact header returned by
+`BoundSemanticPack.artifact_header()`. Semantic loaders reject missing or
+mismatched learning-schema, IR, content-pack, layout, and identity-mode
+provenance. Legacy artifacts without semantic inputs retain their existing
+load path and are not silently upgraded.
+
+The projection reads only `managym.Observation`, which already excludes the
+opponent's hand, unrevealed libraries, and private choices. It never reads
+`Game` or `MatchState`; mutable counters, damage, control, and other match facts
+remain in the existing observation tensors.
+
+Focused verification:
+
+```bash
+uv run --extra dev pytest -q \
+  tests/semantic/test_learning_projection.py \
+  tests/semantic/test_learning_projection_env.py
+```

@@ -26,11 +26,7 @@ impl Game {
 
     /// Move every card in `player`'s hand to the bottom of their library.
     pub fn scenario_clear_hand(&mut self, player: PlayerId) {
-        let hand: Vec<CardId> = self
-            .state
-            .zones
-            .zone_cards(ZoneType::Hand, player)
-            .to_vec();
+        let hand: Vec<CardId> = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
         for card in hand {
             self.state.zones.move_card(card, player, ZoneType::Library);
             // move_card pushes to the top (end); rotate to the bottom so the

@@ -1997,6 +1997,29 @@ impl PyEnv {
         Ok(py_dict.into_any().unbind())
     }
 
+    /// Read-only binding manifest for the exact immutable ContentPack used by
+    /// the current match. This is deliberately not repeated on observations.
+    fn content_pack_manifest(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let manifest = env.content_pack_manifest().map_err(map_agent_err)?;
+
+        let out = PyDict::new_bound(py);
+        out.set_item("schema_version", manifest.schema_version)?;
+        out.set_item("content_digest", manifest.content_digest)?;
+        let definitions = PyList::empty_bound(py);
+        for entry in manifest.definitions {
+            let definition = PyDict::new_bound(py);
+            definition.set_item("card_def_id", entry.card_def_id.0)?;
+            definition.set_item("registry_name", entry.registry_name)?;
+            definitions.append(definition)?;
+        }
+        out.set_item("definitions", definitions)?;
+        Ok(out.into_any().unbind())
+    }
+
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
     /// since the current game began. Resets to zero on `reset`.
     fn skip_trivial_count(&self) -> PyResult<usize> {
