@@ -21,7 +21,7 @@
 </script>
 
 <section class="rounded border border-slate-700 bg-slate-800 p-4">
-  <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Game Log</h2>
+  <h2 class="mb-3 text-base font-semibold text-accent-text">Game Log</h2>
 
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (axe requires keyboard access to scrollable regions) -->
   <div

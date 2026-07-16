@@ -107,8 +107,8 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         assert set(record["scenario_ids"]) == expected_ids
 
     visual = matrix["visual_references"]
-    assert visual["version"] == 1
-    assert visual["directory"] == "visual-references/v1"
+    assert visual["version"] == 2
+    assert visual["directory"] == "visual-references/v2"
     assert visual["profile"] == {
         "name": "ubuntu-24.04-chromium",
         "operating_system": "Ubuntu 24.04 x86-64",
@@ -122,7 +122,12 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         "timezone": "UTC",
         "reduced_motion": "reduce",
         "pixel_threshold": 0.2,
-        "font": {"family": "Inter", "package_version": "5.2.8"},
+        "font": {
+            "body_family": "Lato",
+            "display_family": "Cormorant Garamond",
+            "mono_family": "JetBrains Mono",
+            "source_revision": "loopflow@1e68ba107",
+        },
     }
 
     scenarios_by_id = {scenario["id"]: scenario for scenario in scenarios}

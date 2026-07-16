@@ -127,7 +127,7 @@ assistive-technology automation, or a new performance baseline.
 ## Versioned visual references
 
 The same two terminal trajectories compare 17 committed references under
-[`frontend/e2e/visual-references/v1`](../frontend/e2e/visual-references/v1):
+[`frontend/e2e/visual-references/v2`](../frontend/e2e/visual-references/v2):
 
 - one Actions-panel reference for every one of the nine reachable prompt
   families;
@@ -145,8 +145,9 @@ failures.
 The named reference profile is `ubuntu-24.04-chromium`: GitHub-hosted Ubuntu
 24.04 x86-64, Node 22, Playwright 1.61.1's Chromium 149.0.7827.55, a 1600 x
 1200 CSS-pixel viewport at device scale factor 1, dark color scheme, `en-US`,
-UTC, and reduced motion. Inter 5.2.8 weights 400/500/600/700 are bundled by the
-release build and loaded from loopback before comparison. Screenshot capture
+UTC, and reduced motion. Cormorant Garamond, Lato, and JetBrains Mono are
+bundled from the shared Loopflow visual system by the release build and loaded
+from loopback before comparison. Screenshot capture
 disables animation and the caret and permits zero pixels beyond Playwright's
 0.2 perceptual color threshold on that profile, filtering subpixel text
 rasterization noise without tolerating a visible change.
@@ -165,7 +166,7 @@ reconnects to uvicorn and must restore the same authoritative offer.
 Do not use a developer workstation capture as the reviewed baseline. Push the
 intentional visual change to its branch, dispatch the `CI` workflow for that
 branch with `update_visual_references` set to `true`, and download the
-`visual-references-v1` artifact. That job uses the named Linux profile, runs
+`visual-references-v2` artifact. That job uses the named Linux profile, runs
 Playwright with its explicit snapshot-update flag, reruns normal comparison,
 and continues to enforce every non-pixel assertion.
 

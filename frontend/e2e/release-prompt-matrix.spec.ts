@@ -54,7 +54,12 @@ interface VisualReferences {
     timezone: string;
     reduced_motion: 'reduce';
     pixel_threshold: number;
-    font: { family: string; package_version: string };
+    font: {
+      body_family: string;
+      display_family: string;
+      mono_family: string;
+      source_revision: string;
+    };
   };
   prompts: VisualReferenceTrigger[];
   boards: VisualReferenceTrigger[];
@@ -611,8 +616,8 @@ async function assertCuratedAssets(
   await page.evaluate(() => document.fonts.ready);
   expect(
     await page.locator('body').evaluate((body) => getComputedStyle(body).fontFamily),
-    `${label}: bundled Inter is not the active body font`,
-  ).toContain(matrix.visual_references.profile.font.family);
+    `${label}: bundled Lato is not the active body font`,
+  ).toContain(matrix.visual_references.profile.font.body_family);
   expect(
     failures.fontResponses,
     `${label}: no successful local font response was observed`,

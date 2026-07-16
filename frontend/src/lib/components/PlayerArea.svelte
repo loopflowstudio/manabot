@@ -44,7 +44,7 @@
 <article class={`rounded border p-3 ${focusedIds.has(player.id) ? 'border-blue-400' : 'border-slate-700'}`}>
   <div class="mb-3 flex items-center justify-between gap-4">
     <div>
-      <h2 class="text-sm uppercase tracking-wide text-slate-400">{label}</h2>
+      <h2 class="text-base font-semibold text-accent-text">{label}</h2>
       <div class="text-sm text-slate-300">Library: {player.library_count}</div>
     </div>
     <div class={`rounded bg-slate-900 px-3 py-1 text-2xl font-bold ${focusedIds.has(player.id) ? 'ring-1 ring-blue-400' : ''}`}>
@@ -54,7 +54,7 @@
 
   <div class="space-y-4">
     <div>
-      <h3 class="mb-2 text-xs uppercase tracking-wide text-slate-400">Hand ({hiddenHandCount})</h3>
+      <h3 class="mb-2 text-sm font-medium text-accent-text">Hand ({hiddenHandCount})</h3>
       <div class="flex flex-wrap gap-2">
         {#if opponent}
           {#each Array(hiddenHandCount) as _, index}
@@ -88,7 +88,7 @@
     </div>
 
     <div>
-      <h3 class="mb-2 text-xs uppercase tracking-wide text-slate-400">Graveyard ({player.graveyard.length})</h3>
+      <h3 class="mb-2 text-sm font-medium text-accent-text">Graveyard ({player.graveyard.length})</h3>
       <div class="flex flex-wrap gap-2">
         {#if player.graveyard.length === 0}
           <div class="rounded border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-400">Empty graveyard</div>
@@ -107,7 +107,7 @@
     </div>
 
     <div>
-      <h3 class="mb-2 text-xs uppercase tracking-wide text-slate-400">Exile ({player.exile.length})</h3>
+      <h3 class="mb-2 text-sm font-medium text-accent-text">Exile ({player.exile.length})</h3>
       <div class="flex flex-wrap gap-2">
         {#if player.exile.length === 0}
           <div class="rounded border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-400">Empty exile</div>

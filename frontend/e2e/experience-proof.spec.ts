@@ -165,6 +165,14 @@ async function updateSequence(page: Page): Promise<number> {
   return Number(await page.locator('main').getAttribute('data-update-seq'));
 }
 
+async function authoritativeBoardText(page: Page): Promise<string> {
+  return page.getByTestId('game-board').evaluate((element) => {
+    const board = element.cloneNode(true) as HTMLElement;
+    board.querySelector('[data-testid="presentation-stage"]')?.remove();
+    return (board.textContent ?? '').replace(/\s+/g, ' ').trim();
+  });
+}
+
 async function armInteractionProbe(
   page: Page,
   initialLogCount: number,
@@ -318,9 +326,8 @@ async function rendererHeapMiB(page: Page): Promise<number> {
 
 async function injectReconnectFault(page: Page): Promise<void> {
   const badge = page.getByTestId('connection-badge');
-  const board = page.getByTestId('game-board');
   const credentialsBefore = await page.evaluate((key) => sessionStorage.getItem(key), RESUME_STORAGE_KEY);
-  const boardBefore = (await board.textContent())?.replace(/\s+/g, ' ').trim();
+  const boardBefore = await authoritativeBoardText(page);
   const actionsBefore = await page.getByTestId('action-option').allTextContents();
   const logCountBefore = await page.getByTestId('log-entry').count();
   const updateSequenceBefore = await updateSequence(page);
@@ -344,7 +351,7 @@ async function injectReconnectFault(page: Page): Promise<void> {
     .toBeGreaterThan(updateSequenceBefore);
 
   const credentialsAfter = await page.evaluate((key) => sessionStorage.getItem(key), RESUME_STORAGE_KEY);
-  const boardAfter = (await board.textContent())?.replace(/\s+/g, ' ').trim();
+  const boardAfter = await authoritativeBoardText(page);
   const actionsAfter = await page.getByTestId('action-option').allTextContents();
   const socketCount = await page.evaluate(
     () => (window as ProofWindow).__etudeProof?.sockets.length ?? 0,

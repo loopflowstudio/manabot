@@ -63,7 +63,7 @@
 >
   <div class="mb-3 flex items-center justify-between gap-3">
     <div class="flex items-center gap-2">
-      <h2 id="action-panel-heading" class="text-sm font-semibold uppercase tracking-wide text-slate-300">Actions</h2>
+      <h2 id="action-panel-heading" class="text-base font-semibold text-accent-text">Actions</h2>
       {#if disabled}
         <span role="status" aria-live="polite" aria-atomic="true" class="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold text-slate-300">Game over</span>
       {:else if fastForwarding}
@@ -132,7 +132,7 @@
           {disabled}
         >
           <div class="font-medium">{action.description}</div>
-          <div aria-hidden="true" class="mt-1 text-xs text-slate-400">{action.type}</div>
+          <div aria-hidden="true" class="mt-1 font-mono text-[10px] text-slate-400">{action.type}</div>
         </button>
       {/each}
     {/if}

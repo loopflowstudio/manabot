@@ -151,7 +151,7 @@
     class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800 px-4 py-3"
   >
     <div data-testid="connection-summary" class="flex items-center gap-3">
-      <span class="text-sm font-medium uppercase tracking-wide text-slate-300">Connection</span>
+      <span class="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">Connection</span>
       <span
         data-testid="connection-badge"
         data-connection-state={gameStore.connection}

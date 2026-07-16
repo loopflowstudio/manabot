@@ -6,8 +6,8 @@
     "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
   },
   "visual_references": {
-    "version": 1,
-    "directory": "visual-references/v1",
+    "version": 2,
+    "directory": "visual-references/v2",
     "profile": {
       "name": "ubuntu-24.04-chromium",
       "operating_system": "Ubuntu 24.04 x86-64",
@@ -21,7 +21,12 @@
       "timezone": "UTC",
       "reduced_motion": "reduce",
       "pixel_threshold": 0.2,
-      "font": { "family": "Inter", "package_version": "5.2.8" }
+      "font": {
+        "body_family": "Lato",
+        "display_family": "Cormorant Garamond",
+        "mono_family": "JetBrains Mono",
+        "source_revision": "loopflow@1e68ba107"
+      }
     },
     "prompts": [
       {

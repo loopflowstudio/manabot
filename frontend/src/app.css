@@ -1,21 +1,264 @@
 @import 'tailwindcss';
-@import '@fontsource/inter/latin-400.css';
-@import '@fontsource/inter/latin-500.css';
-@import '@fontsource/inter/latin-600.css';
-@import '@fontsource/inter/latin-700.css';
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('/fonts/CormorantGaramond-Regular.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('/fonts/CormorantGaramond-Medium.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('/fonts/CormorantGaramond-SemiBold.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600 900;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/Lato-Regular.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 600;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/Lato-Bold.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700 900;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
 
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
+
+  /* Loopflow / kata brand */
+  --burgundy: #722f37;
+  --burgundy-hover: #8b3d47;
+  --cream: #faf8f5;
+
+  /* Adaptive palette: cream */
+  --bg: #faf8f5;
+  --bg-surface: #fffdfb;
+  --bg-muted: #f3eee7;
+  --border: #e3ddd5;
+  --border-strong: #c9c0b6;
+  --text: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --accent: var(--burgundy);
+  --accent-text: var(--burgundy);
+  --accent-hover: var(--burgundy-hover);
+  --accent-soft: #efe2e3;
+
+  /* Shared status colors and contrast-safe text companions */
+  --success: #2d6a4f;
+  --success-text: #24543f;
+  --warning: #b0812a;
+  --warning-text: #775615;
+  --error: #b45309;
+  --error-text: #8e4006;
+  --info: #0ab3cc;
+  --info-text: #087b8c;
+  --neutral: #8b8b8b;
+
+  /* 4pt grid, radii, and layering */
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+  --space-xxxl: 32px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+  --z-tooltip: 400;
+
+  --shadow-surface: 0 1px 2px rgb(26 26 26 / 0.05), 0 12px 32px rgb(114 47 55 / 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Kata's lifted burgundy reconciles the shared accent with slate. */
+    --bg: #2b3036;
+    --bg-surface: #343b44;
+    --bg-muted: #3c4550;
+    --border: #46505b;
+    --border-strong: #65717d;
+    --text: #f5f1ea;
+    --text-secondary: #c8c1b8;
+    --accent: #9b4a54;
+    --accent-text: #d9949d;
+    --accent-hover: #b05762;
+    --accent-soft: #49343b;
+    --success-text: #83c3a0;
+    --warning-text: #deb967;
+    --error-text: #e49a61;
+    --info-text: #68d3e3;
+    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.18), 0 16px 40px rgb(0 0 0 / 0.12);
+  }
+}
+
+/* Existing Etude utilities now resolve through the shared semantic system. */
+@theme inline {
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  --color-slate-950: var(--bg);
+  --color-slate-900: var(--bg);
+  --color-slate-800: var(--bg-surface);
+  --color-slate-700: var(--bg-muted);
+  --color-slate-600: var(--border-strong);
+  --color-slate-500: var(--text-secondary);
+  --color-slate-400: var(--text-secondary);
+  --color-slate-300: var(--text-secondary);
+  --color-slate-200: var(--text);
+  --color-slate-100: var(--text);
+
+  --color-blue-600: var(--accent);
+  --color-blue-500: var(--accent-hover);
+  --color-blue-400: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-sky-600: var(--info);
+  --color-sky-400: var(--info-text);
+  --color-sky-300: var(--info-text);
+  --color-cyan-300: var(--info-text);
+  --color-cyan-400: var(--info);
+
+  --color-emerald-600: var(--success);
+  --color-emerald-300: var(--success-text);
+  --color-amber-600: var(--warning);
+  --color-amber-300: var(--warning-text);
+  --color-rose-900: var(--error);
+  --color-rose-600: var(--error);
+  --color-rose-500: var(--error);
+  --color-rose-200: var(--error-text);
+
+  --color-violet-900: var(--accent);
+  --color-violet-500: var(--accent);
+  --color-violet-200: var(--text);
+  --color-indigo-900: var(--info);
+  --color-indigo-500: var(--info);
+  --color-indigo-400: var(--info);
+  --color-indigo-200: var(--info-text);
+  --color-white: var(--cream);
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--bg);
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin: 0;
+  background:
+    radial-gradient(circle at 8% -18%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 32rem),
+    var(--bg);
+  color: var(--text);
+  font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
-button {
+h1,
+h2,
+h3 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+code,
+kbd,
+pre {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+button,
+input,
+select,
+textarea {
   font: inherit;
+}
+
+button,
+select,
+input:not([type='checkbox']):not([type='radio']) {
+  min-height: 32px;
+}
+
+button,
+a,
+input,
+select,
+summary {
+  transition-duration: 100ms;
+  transition-property: background-color, border-color, color, opacity, box-shadow, transform;
+  transition-timing-function: ease-out;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.rounded,
+.rounded-md {
+  border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+  border-radius: var(--radius-lg);
+}
+
+.rounded-xl {
+  border-radius: var(--radius-xl);
+}
+
+.rounded-full {
+  border-radius: var(--radius-full);
+}
+
+@media (max-width: 640px) {
+  button,
+  select,
+  input:not([type='checkbox']):not([type='radio']) {
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

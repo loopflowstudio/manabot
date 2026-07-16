@@ -15,7 +15,7 @@ Etude Fantasia is built out of three main subsystems:
 - **managym** (Rust): the deterministic game and search environment, with PyO3
   Python bindings
 
-<img src="frontend/e2e/visual-references/v1/board-developed.png"
+<img src="frontend/e2e/visual-references/v2/board-developed.png"
      alt="An Etude Fantasia board mid-game" width="440">
 
 ## Play

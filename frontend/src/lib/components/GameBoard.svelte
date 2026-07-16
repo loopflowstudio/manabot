@@ -69,7 +69,7 @@
     <PresentationStage player={presentationPlayer} />
   {/if}
 
-  <div class="rounded border border-slate-700 bg-slate-900/60 px-3 py-2 text-center text-sm font-semibold text-slate-200">
+  <div class="rounded border border-slate-700 bg-slate-900/60 px-3 py-2 text-center font-mono text-xs font-semibold text-slate-200">
     Turn {observation.turn.turn_number} · {observation.turn.phase} · {observation.turn.step}
   </div>
 
@@ -85,7 +85,7 @@
   />
 
   <section class="rounded border border-slate-700 bg-slate-900/60 p-3">
-    <h3 class="mb-3 text-xs uppercase tracking-wide text-slate-400">Battlefield</h3>
+    <h3 class="mb-3 text-sm font-semibold text-accent-text">Battlefield</h3>
     <div class="space-y-4">
       <PermanentRow
         label="Opponent"

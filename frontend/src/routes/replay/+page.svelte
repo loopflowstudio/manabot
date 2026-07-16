@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
 
   import GameBoard from '$lib/components/GameBoard.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
@@ -40,12 +40,14 @@
 
   $effect(() => {
     if (!currentFrame) {
-      presentationPlayer.recover();
+      untrack(() => presentationPlayer.recover());
       return;
     }
-    presentationPlayer.recover(
-      currentFrame.presentation,
-      currentFrame.presentationLabels,
+    untrack(() =>
+      presentationPlayer.recover(
+        currentFrame.presentation,
+        currentFrame.presentationLabels,
+      ),
     );
   });
 
@@ -97,7 +99,7 @@
   <div class="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
     <section class="rounded border border-slate-700 bg-slate-800 p-4">
       <div class="mb-3 flex items-center justify-between gap-3">
-        <h1 class="text-lg font-bold">Replay</h1>
+        <h1 class="text-lg font-bold text-accent-text">Replay</h1>
         <button class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm hover:border-blue-400" onclick={() => void loadTraces()}>
           Refresh
         </button>
@@ -114,7 +116,7 @@
               class={`w-full rounded border px-3 py-3 text-left text-sm ${replayStore.trace?.id === summary.id ? 'border-blue-400 bg-slate-900' : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'}`}
               onclick={() => void loadTrace(summary.id)}
             >
-              <div class="font-medium text-slate-100">{summary.id}</div>
+              <div class="font-mono text-xs text-slate-100">{summary.id}</div>
               <div class="mt-1 text-xs text-slate-400">{summary.timestamp ?? 'Unknown time'}</div>
               <div class="mt-1 text-xs text-slate-400">
                 Winner: {winnerLabel(summary.winner)} · Events: {summary.num_events}

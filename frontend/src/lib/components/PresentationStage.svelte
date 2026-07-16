@@ -47,7 +47,7 @@
     >
       <div class="flex items-start justify-between gap-4">
         <div role="status" aria-live="polite" aria-atomic="true">
-          <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+          <p class="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">
             Beat {player.currentIndex + 1} of {player.events.length}
           </p>
           <h2 class="mt-1 text-base font-bold text-white">{beat.heading}</h2>

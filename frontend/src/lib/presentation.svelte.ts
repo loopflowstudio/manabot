@@ -63,8 +63,8 @@ export class PresentationPlayer {
     events: readonly PresentationEvent[],
     labels: PresentationLabels,
   ): void {
-    this.events = copyPresentationEvents(events);
-    this.labels = structuredClone(labels);
+    this.events = copyPresentationEvents($state.snapshot(events));
+    this.labels = structuredClone($state.snapshot(labels));
     this.currentIndex = 0;
     this.speed = NORMAL_SPEED;
     this.playing = this.events.length > 0;
