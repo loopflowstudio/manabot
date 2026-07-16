@@ -223,6 +223,13 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
 }
 
 impl GameState {
+    /// Canonical logical JSON used by higher-level state contracts that add
+    /// authority outside `GameState` (for example, the current legal offer).
+    pub(crate) fn deterministic_hash_value(&self) -> serde_json::Value {
+        serde_json::to_value(CanonicalMatchState::from(self))
+            .expect("canonical match state contains only serializable values")
+    }
+
     /// Hash every mutable match fact plus the shared content schema and digest.
     ///
     /// Canonicalization uses fixed struct field order, semantic vector order,

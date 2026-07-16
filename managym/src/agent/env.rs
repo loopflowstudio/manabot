@@ -235,13 +235,28 @@ impl Env {
         ))
     }
 
-    /// Canonical full-engine digest used by differential benchmark assertions.
+    /// Canonical semantic digest used by differential ABI assertions.
+    ///
+    /// The structured ABI can commit one logical choice where the legacy ABI
+    /// publishes several intermediate prompts. Those paths intentionally have
+    /// different decision epochs even when they reach the same rules state,
+    /// legal action, and pending choice. Exact search-fork admission uses
+    /// `search_state::snapshot`, which includes that authority epoch.
     pub fn state_digest(&self) -> Result<String, AgentError> {
         let game = self
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
-        Ok(crate::benchmark::snapshot(game).hash)
+        let semantic_surface = (
+            game.state.deterministic_hash_value(),
+            &game.current_action_space,
+            &game.pending_choice,
+            game.skip_trivial,
+            game.skip_trivial_count,
+        );
+        let canonical = serde_json::to_vec(&semantic_surface)
+            .expect("semantic differential surface serializes");
+        Ok(blake3::hash(&canonical).to_hex().to_string())
     }
 
     pub fn info(&self) -> InfoDict {

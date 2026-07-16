@@ -253,7 +253,35 @@ pub struct Observation {
 
 impl Observation {
     pub fn new(game: &Game, recent_events: &[GameEvent]) -> Self {
-        let agent_player = game.agent_player();
+        Self::for_player_with_events(game, game.agent_player(), recent_events, true)
+    }
+
+    /// Build a fixed-player, current-state projection.
+    ///
+    /// Unlike [`Self::new`], the perspective does not follow the player who
+    /// currently owns the action space. Presentation events are deliberately
+    /// absent: their visibility is a separate product boundary. If another
+    /// player is deciding, the prompt kind remains public but its candidates
+    /// and focus are suppressed.
+    pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
+        assert!(
+            viewer.0 < game.state.players.len(),
+            "viewer must name a player"
+        );
+        let expose_actions = game
+            .current_action_space
+            .as_ref()
+            .and_then(|space| space.player)
+            == Some(viewer);
+        Self::for_player_with_events(game, viewer, &[], expose_actions)
+    }
+
+    fn for_player_with_events(
+        game: &Game,
+        agent_player: PlayerId,
+        recent_events: &[GameEvent],
+        expose_actions: bool,
+    ) -> Self {
         let opponent_player = PlayerId((agent_player.0 + 1) % 2);
 
         let game_over = game.is_game_over();
@@ -274,23 +302,31 @@ impl Observation {
             .as_ref()
             .map(|space| ActionSpaceData {
                 action_space_type: space.kind,
-                actions: space
-                    .actions
-                    .iter()
-                    .map(|action| ActionOption {
-                        action_type: action.action_type(),
-                        focus: Self::action_focus(game, action)
-                            .into_iter()
-                            .map(|id| id.0 as i32)
-                            .collect(),
-                        declared: match action {
-                            Action::DeclareAttacker { attack, .. } => Some(*attack),
-                            Action::DeclareBlocker { attacker, .. } => Some(attacker.is_some()),
-                            _ => None,
-                        },
-                    })
-                    .collect(),
-                focus: space.focus.iter().map(|id| id.0 as i32).collect(),
+                actions: if expose_actions {
+                    space
+                        .actions
+                        .iter()
+                        .map(|action| ActionOption {
+                            action_type: action.action_type(),
+                            focus: Self::action_focus(game, action)
+                                .into_iter()
+                                .map(|id| id.0 as i32)
+                                .collect(),
+                            declared: match action {
+                                Action::DeclareAttacker { attack, .. } => Some(*attack),
+                                Action::DeclareBlocker { attacker, .. } => Some(attacker.is_some()),
+                                _ => None,
+                            },
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                },
+                focus: if expose_actions {
+                    space.focus.iter().map(|id| id.0 as i32).collect()
+                } else {
+                    Vec::new()
+                },
             })
             .unwrap_or(ActionSpaceData {
                 action_space_type: ActionSpaceKind::GameOver,
@@ -317,7 +353,7 @@ impl Observation {
         };
 
         obs.populate_cards(game, agent_player);
-        obs.populate_permanents(game);
+        obs.populate_permanents(game, agent_player);
         obs.populate_stack_objects(game);
         obs
     }
@@ -363,7 +399,7 @@ impl Observation {
             }
         }
 
-        for player in game.players_starting_with_agent() {
+        for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
             for card in game.state.zones.zone_cards(ZoneType::Graveyard, player) {
                 self.add_card(game, *card, ZoneType::Graveyard);
             }
@@ -379,8 +415,8 @@ impl Observation {
         }
     }
 
-    fn populate_permanents(&mut self, game: &Game) {
-        for player in game.players_starting_with_agent() {
+    fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
+        for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
             for card_id in game.state.zones.zone_cards(ZoneType::Battlefield, player) {
                 if let Some(perm_id) = game.state.card_to_permanent[card_id] {
                     let Some(permanent) = game.state.permanents[perm_id].as_ref() else {

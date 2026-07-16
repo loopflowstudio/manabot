@@ -12,7 +12,6 @@ use managym::{
             SubjectRef,
         },
     },
-    benchmark::snapshot,
     flow::turn::StepKind,
     state::game_object::PermanentId,
     Game,
@@ -202,7 +201,31 @@ fn apply_legacy_attacker_adapter(game: &mut Game, selected_entities: &BTreeSet<u
 }
 
 fn assert_equivalent_surface(structured: &Game, legacy: &Game) {
-    assert_eq!(snapshot(structured), snapshot(legacy));
+    // The atomic command is one external decision while the compatibility
+    // adapter walks every legacy binary prompt. Their decision epochs must
+    // therefore differ even though the resulting rules and viewer surfaces
+    // are equivalent. Search-state snapshots intentionally include that
+    // authority epoch, so compare the semantic surface explicitly here.
+    assert_eq!(
+        structured.state.deterministic_hash(),
+        legacy.state.deterministic_hash()
+    );
+    assert_eq!(structured.current_action_space, legacy.current_action_space);
+    assert_eq!(
+        serde_json::to_value(&structured.pending_choice).expect("pending choice serializes"),
+        serde_json::to_value(&legacy.pending_choice).expect("pending choice serializes")
+    );
+    assert_eq!(structured.skip_trivial, legacy.skip_trivial);
+    assert_eq!(structured.skip_trivial_count, legacy.skip_trivial_count);
+    for viewer in [
+        managym::state::game_object::PlayerId(0),
+        managym::state::game_object::PlayerId(1),
+    ] {
+        assert_eq!(
+            Observation::for_player(structured, viewer),
+            Observation::for_player(legacy, viewer)
+        );
+    }
 }
 
 #[test]
@@ -405,7 +428,7 @@ fn structured_attacker_adapter_matches_seeded_two_deck_traces() {
                         .expect("seeded structured declaration");
                     apply_legacy_attacker_adapter(&mut legacy, &selected_entities);
                     // The two engines took different ABI paths at this
-                    // boundary, so compare the complete canonical state.
+                    // boundary, so compare the complete semantic surface.
                     assert_equivalent_surface(&structured, &legacy);
                 } else {
                     let action_count = space.actions.len();
