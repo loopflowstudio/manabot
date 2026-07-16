@@ -19,8 +19,14 @@ may be built.
 The authored Etude Fantasia game and Study experience are part of the research
 loop. They create real opponents, decisions, human questions, and model-version
 comparisons. Intelligence owns the policies, search, training, evaluation, and
-evidence behind those experiences; it does not own rules authority or the Study
-product.
+evidence behind those experiences; it does not own rules authority or Game's
+Study experience.
+
+The product north star places manabots in Avatar Cube Team Sealed as pilots,
+teammates, and opponents. The first robot team may use fixed authored decks,
+and manabots need not sideboard. Once a manabot can play the selected world,
+constructing three legal decks from a shared sealed pool becomes an important
+later Intelligence capability. Drafting is separate and is not a prerequisite.
 
 ## Measures
 
@@ -75,9 +81,9 @@ pressure back through real workloads; it does not delay prototypes until every
 possible kernel representation is settled. A proven full-clone path is an
 acceptable first backend when it fits the measured budget.
 
-Study owns decision navigation, reveal, comparison, explanation, and human
-research consent. Intelligence emits attributable evidence; it does not build a
-second replay, legality, presentation, or hidden-information system.
+Game owns Study decision navigation, reveal, comparison, explanation, and
+human research consent. Intelligence emits attributable evidence; it does not
+build a second replay, legality, presentation, or hidden-information system.
 
 An external LLM may be a teacher, baseline, or grounded narrator. It is not the
 inner-loop rules oracle or source of legal actions. Open-ended card coverage,
@@ -94,5 +100,9 @@ information safety, calibration, throughput, transfer, and matched cost remain
 separate evidence.
 
 Concrete repository changes begin as Linear Tasks under an Intelligence
-Project. Tasks that change Rules or Study authority stay in their providing
+Project. Tasks that change Rules or Game authority stay in their providing
 waves and are represented here as dependencies exercised by a running system.
+
+Do not create a deck-construction Project until the runnable policy and search
+systems can play a meaningful content boundary. Record the Team Sealed goal in
+the portfolio now; earn the Task later from an executable agent.

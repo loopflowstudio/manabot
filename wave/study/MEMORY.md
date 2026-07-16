@@ -1,5 +1,14 @@
 # Study memory
 
+## Current ownership
+
+Study was folded into Game in July 2026. This file preserves product research
+and decisions as historical input, but no independent Study Project should be
+pursued. Near-term player-facing work belongs to Game's Play, Replay, and Study
+Project; Rules and Intelligence continue to provide exact branches and honest
+evidence. Tree navigation, sealed sharing, annotations, and deeper solver-like
+surfaces remain deferred until the first play-to-replay-to-retry loop works.
+
 ## Product identity
 
 > "I love the experience of playing chess and go with engines showing me

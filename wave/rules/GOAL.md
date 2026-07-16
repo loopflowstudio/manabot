@@ -15,6 +15,11 @@ matchups run end to end through general semantic machinery, measuring their
 behavior and cost, and hardening the exact seams that real play exposes. It does
 not pursue open-ended card or format breadth.
 
+The product north star is a versioned Avatar Cube Team Sealed world, but the
+current two-deck matchup remains the next executable step. Grow toward the cube
+through playable content increments; do not replace the current vertical slice
+with a speculative 540-card admission program.
+
 Exact object identity, typed card programs, structured legal choices,
 proposed-event mutation, viewer-safe state, and safe forks remain foundational.
 They earn their complexity by powering a running world; they are not separate
@@ -72,14 +77,22 @@ the optimized path running an authored world.
 Game owns presentation, replay UX, recovery, packaging, and client adapters.
 Rules owns their authoritative frames, offers, commands, events, and state.
 Intelligence owns policies and search algorithms but supplies real branching
-and throughput workloads. Study owns branch navigation but consumes an exact
-Rules fork and return provider.
+and throughput workloads. Game owns Study branch navigation but consumes an
+exact Rules fork and return provider.
 
 Use immutable versioned `ContentPack` definitions plus compact dense mutable
 facts unless a measured consumer demonstrates a better representation. Offline
 compilation into checked-in typed IR remains preferred to runtime natural-
-language parsing. Deck building, format legality, Commander breadth, and
-arbitrary-card support remain out of scope.
+language parsing. Open-ended deck building, general format legality, Commander
+breadth, and arbitrary-card support remain out of scope; the selected Team
+Sealed preset's pool and submission legality are part of its eventual world.
+
+Rules will eventually own versioned cube, sealed-deal, team-submission, deck
+legality, matchup-matrix, and series identities. Avatar's initial values—540
+cube cards, 135 cards per team, three 40-card-minimum decks, unlimited basic
+lands, and a first-to-five three-by-three matrix—are format parameters rather
+than engine constants. Do not schedule that orchestration before a complete
+selected match runs through the authoritative world.
 
 Concrete repository changes begin as Linear Tasks under a Rules Project. A
 Project must culminate in a running world or consumer integration; tests,
