@@ -165,7 +165,7 @@ def validate_pack() -> Any:
     if not PACK_NOTICE.is_file():
         raise PlayError("pack.notice", "the installed curated-pack notice is missing")
     try:
-        from gui.curated_pack import load_curated_pack
+        from etude.curated_pack import load_curated_pack
 
         return load_curated_pack(PACK_MANIFEST)
     except (OSError, RuntimeError, ValueError) as error:
@@ -390,7 +390,7 @@ def start_processes(
             [
                 *UV_RUNTIME,
                 "uvicorn",
-                "gui.server:app",
+                "etude.server:app",
                 "--host",
                 "127.0.0.1",
                 "--port",

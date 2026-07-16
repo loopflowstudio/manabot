@@ -6,7 +6,7 @@ from collections import Counter
 import json
 from pathlib import Path
 
-from gui.curated_pack import CURATED_PACK
+from etude.curated_pack import CURATED_PACK
 from manabot.env.observation import ActionSpaceEnum
 
 ROOT = Path(__file__).resolve().parents[2]

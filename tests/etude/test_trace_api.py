@@ -8,8 +8,8 @@ import json
 from fastapi.testclient import TestClient
 
 # Local imports
-from gui import trace as trace_store
-from gui.server import app
+from etude import trace as trace_store
+from etude.server import app
 
 
 def _write_trace(path, trace_id: str, timestamp: str) -> None:

@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from gui.experience_protocol import (
+from etude.experience_protocol import (
     Command,
     ExperienceFrame,
     InteractionOffer,

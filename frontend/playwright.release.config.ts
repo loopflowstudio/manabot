@@ -37,9 +37,9 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `uv run --active --no-sync uvicorn gui.server:app --host 127.0.0.1 --port ${apiPort}`,
+      command: `uv run --active --no-sync uvicorn etude.server:app --host 127.0.0.1 --port ${apiPort}`,
       cwd: repoRoot,
-      env: { ETUDE_GUI_TRACES_DIR: traceDir },
+      env: { ETUDE_TRACES_DIR: traceDir },
       url: `http://127.0.0.1:${apiPort}/api/traces`,
       reuseExistingServer: false,
       timeout: 180_000,

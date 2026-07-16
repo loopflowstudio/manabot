@@ -22,7 +22,7 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: `${uvicorn} gui.server:app --port ${apiPort}`,
+          command: `${uvicorn} etude.server:app --port ${apiPort}`,
           cwd: '..',
           url: `http://localhost:${apiPort}/api/traces`,
           reuseExistingServer: true,

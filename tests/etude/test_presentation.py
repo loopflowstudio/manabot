@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from gui import trace as trace_store
-from gui.server import GameSession
+from etude import trace as trace_store
+from etude.server import GameSession
 
 
 def _command_payload(

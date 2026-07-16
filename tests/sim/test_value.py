@@ -17,8 +17,8 @@ from manabot.sim.flat_mc import load_checkpoint_agent, make_player, spec_name
 from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.value import (
     ValueScorer,
-    VGreedyPlayer,
     ValueSearchPlayer,
+    VGreedyPlayer,
     outcome_labels,
     save_value_checkpoint,
     spearman,

@@ -47,7 +47,7 @@ play-runtime = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["manabot"]
+packages = ["manabot", "etude"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -67,5 +67,5 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
-known-first-party = ["manabot"]
+known-first-party = ["etude", "manabot"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

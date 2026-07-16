@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from gui import server
-from gui.curated_pack import CURATED_PACK, PACK_MANIFEST_PATH, load_curated_pack
+from etude import server
+from etude.curated_pack import CURATED_PACK, PACK_MANIFEST_PATH, load_curated_pack
 
 
 def _contains_remote_value(value) -> bool:

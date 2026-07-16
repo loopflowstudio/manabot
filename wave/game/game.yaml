@@ -1,6 +1,6 @@
 flow: ship-wave
 area:
-  - gui/
+  - etude/
   - manabot/env/
   - managym/src/
   - tests/

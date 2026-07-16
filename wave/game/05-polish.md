@@ -6,12 +6,12 @@
 
 The GUI now has Scryfall card images, replay, game log, opponent selector, and clickable board interactions. The remaining polish item is mana display.
 
-Current blocker: the Python bindings used by `gui/server.py` do not expose mana pool state from the Rust engine. This requires a Rust/PyO3 change to serialize mana pool contents into the observation.
+Current blocker: the Python bindings used by `etude/server.py` do not expose mana pool state from the Rust engine. This requires a Rust/PyO3 change to serialize mana pool contents into the observation.
 
 ## Steps
 
 1. Add mana pool to the Rust observation serialization (PyO3 bindings)
-2. Include mana pool in `serialize_observation()` in `gui/server.py`
+2. Include mana pool in `serialize_observation()` in `etude/server.py`
 3. Add a `ManaDisplay` component to the frontend board
 4. Show mana in both live play and replay views
 

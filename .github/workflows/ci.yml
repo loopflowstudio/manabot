@@ -145,8 +145,8 @@ jobs:
       - name: Certify Rust and Python
         run: |
           cargo test --manifest-path managym/Cargo.toml --test experience_protocol_tests
-          uv run --extra dev pytest tests/gui/test_experience_protocol.py -q
-          uv run --extra dev pytest tests/gui/test_server.py -k protocol_v1 -q
+          uv run --extra dev pytest tests/etude/test_experience_protocol.py -q
+          uv run --extra dev pytest tests/etude/test_server.py -k protocol_v1 -q
 
       - name: Certify TypeScript
         working-directory: frontend
@@ -257,14 +257,14 @@ jobs:
       - name: Compare committed visual references
         if: ${{ github.event_name != 'workflow_dispatch' || !inputs.update_visual_references }}
         run: |
-          uv run --no-sync pytest tests/gui/test_release_prompt_matrix.py -q
+          uv run --no-sync pytest tests/etude/test_release_prompt_matrix.py -q
           npm --prefix frontend run test:e2e:release
 
       - name: Generate visual reference artifact
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
         run: |
           npm --prefix frontend run test:e2e:release -- --update-snapshots
-          uv run --no-sync pytest tests/gui/test_release_prompt_matrix.py -q
+          uv run --no-sync pytest tests/etude/test_release_prompt_matrix.py -q
           npm --prefix frontend run test:e2e:release
 
       - name: Upload generated visual references

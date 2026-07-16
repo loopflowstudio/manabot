@@ -3,7 +3,7 @@
 `managym/src/experience.rs` is the authority for the currently integrated v1
 adapter boundary. It generates `experience-v1.schema.json`, a Draft 2020-12
 schema for one `ProtocolV1ConformanceBundle`: a complete recovery envelope and
-the command selected from that exact frame. `gui/experience_protocol.py` is the
+the command selected from that exact frame. `etude/experience_protocol.py` is the
 explicit Pydantic representation used by the Python adapter; automated tests
 compare its fields, required/optional keys, tagged variants, and enums to the
 Rust-generated schema.
@@ -69,7 +69,7 @@ Regenerate and verify it with:
 cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_study_protocol -- protocol/study-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test study_protocol_tests
-uv run pytest -q tests/gui/test_study_protocol.py
+uv run pytest -q tests/etude/test_study_protocol.py
 npm --prefix frontend test -- --run src/lib/study-protocol.test.ts
 ```
 

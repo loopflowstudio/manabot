@@ -23,7 +23,7 @@ npm --prefix frontend run test:e2e -- experience-proof.spec.ts
 The complete scoped verification is:
 
 ```bash
-uv run pytest tests/gui
+uv run pytest tests/etude
 npm --prefix frontend run check
 npm --prefix frontend test
 npm --prefix frontend run build
@@ -79,7 +79,7 @@ decks can reach these nine non-terminal families:
 frontend framework, but its proof card, Crossroads of Destiny, is not in either
 selected deck and therefore is not part of this matchup inventory.
 
-Existing backend coverage lives in `tests/gui/test_server.py`,
+Existing backend coverage lives in `tests/etude/test_server.py`,
 `test_play_modes.py`, `test_stops.py`, and `test_trace_api.py`. Frontend unit
 coverage exercises the game/replay stores, socket parsing, stops, and target
 mapping. Existing Playwright specs cover reactive full-game DOM mutation,
@@ -100,7 +100,7 @@ table and protocol. The product default remains UR Lessons versus GW Allies.
 Run the release gate with:
 
 ```bash
-uv run pytest tests/gui/test_release_prompt_matrix.py
+uv run pytest tests/etude/test_release_prompt_matrix.py
 npm --prefix frontend run test:e2e:release -- release-prompt-matrix.spec.ts
 ```
 

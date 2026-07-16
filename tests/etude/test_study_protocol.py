@@ -9,7 +9,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 import pytest
 
-from gui.study_protocol import KnowledgeScope, StudyArtifact
+from etude.study_protocol import KnowledgeScope, StudyArtifact
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(

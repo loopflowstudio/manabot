@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 import pytest
 
 # Local imports
-from gui import server, trace as trace_store
-from gui.server import app
+from etude import server, trace as trace_store
+from etude.server import app
 
 MAX_HERO_MOVES = 3000
 

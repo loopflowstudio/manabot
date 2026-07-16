@@ -1,4 +1,4 @@
-"""GUI backend package."""
+"""Etude experience server package: authoritative play, presentation, study."""
 
 from typing import Any
 
@@ -6,7 +6,7 @@ __all__ = ["app"]
 
 
 def __getattr__(name: str) -> Any:
-    """Keep ``gui.app`` compatible without importing the native engine eagerly."""
+    """Keep ``etude.app`` importable without loading the native engine eagerly."""
     if name == "app":
         from .server import app
 

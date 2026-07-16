@@ -18,7 +18,7 @@ server, proxies `/api` and `/ws` to port 8000).
 Manual equivalent (all Python through uv, per AGENTS.md):
 
 ```bash
-uv run --python 3.12 --locked uvicorn gui.server:app --port 8000  # terminal 1
+uv run --python 3.12 --locked uvicorn etude.server:app --port 8000  # terminal 1
 cd frontend && npm ci && npm run dev                              # terminal 2
 ```
 
@@ -26,15 +26,15 @@ Open http://localhost:5173 — that root route IS the play page. Pick an
 opponent, hit New Game, click actions. The replay viewer is at
 http://localhost:5173/replay and lists every finished game automatically.
 
-Traces land in `gui/traces/` (override with `ETUDE_GUI_TRACES_DIR`).
+Traces land in `etude/traces/` (override with `ETUDE_TRACES_DIR`).
 
 ## What already existed (commit e234933 and before)
 
-- `gui/server.py`: FastAPI WebSocket server (`/ws/play`) with sessions,
+- `etude/server.py`: FastAPI WebSocket server (`/ws/play`) with sessions,
   resume tokens, TTL cleanup; villain auto-play loop; trace persistence;
   trace list/load API (`/api/traces`).
-- `gui/villain.py`: villain policies — but only `passive` and `random`.
-- `gui/trace.py`: trace dataclasses, JSON persistence, hand redaction for
+- `etude/villain.py`: villain policies — but only `passive` and `random`.
+- `etude/trace.py`: trace dataclasses, JSON persistence, hand redaction for
   the trace API.
 - `frontend/`: full Svelte 5 play UI at `/` (board, hand, battlefield, life,
   turn/phase indicator, stack when non-empty, clickable actions with
@@ -43,7 +43,7 @@ Traces land in `gui/traces/` (override with `ETUDE_GUI_TRACES_DIR`).
 
 ## What this step added
 
-**Pluggable opponents** (`gui/villain.py` rewritten; policy signature is now
+**Pluggable opponents** (`etude/villain.py` rewritten; policy signature is now
 `(env, obs) -> action_index`):
 - `search` — flat determinized Monte Carlo via `managym.Env.flat_mc_scores`
   (same engine path as `manabot/sim/flat_mc.py`). Strength dial
@@ -63,7 +63,7 @@ Traces land in `gui/traces/` (override with `ETUDE_GUI_TRACES_DIR`).
 (kept in sync with `manabot.verify.util.INTERACTIVE_DECK` by a test).
 UI defaults to Search 64.
 
-**Hidden-info integrity** (`gui/server.py: hero_view`, `gui/trace.py`):
+**Hidden-info integrity** (`etude/server.py: hero_view`, `etude/trace.py`):
 - Every live payload is hero-perspective and redacts the villain's hand
   (count only). The engine already omits opponent hand cards from
   observations; the redaction layer is defense-in-depth, and the
@@ -77,7 +77,7 @@ UI defaults to Search 64.
   shows everything (post-game review).
 - Libraries are never serialized (counts only) in any payload.
 
-**Action labels in Magic terms** (`gui/server.py: _format_action`):
+**Action labels in Magic terms** (`etude/server.py: _format_action`):
 "Play Mountain", "Cast Lightning Bolt", "Attack with Gray Ogre",
 "Block Gray Ogre with Wind Drake", "Wind Drake: do not block",
 "Target Villain", "Pass priority". Attack/block focus ids are *permanent*
@@ -97,8 +97,8 @@ trace config records the exact opponent for every game.
 
 ## Validation
 
-- `uv run pytest tests/gui` — 17 green: existing server/session/trace tests plus
-  new `tests/gui/test_play_modes.py` (full games vs search / random /
+- `uv run pytest tests/etude` — 17 green: existing server/session/trace tests plus
+  new `tests/etude/test_play_modes.py` (full games vs search / random /
   checkpoint villains driven through the WebSocket as a scripted human,
   hidden-info assertions on every payload, config validation, action-label
   unit tests, terminal-perspective swap test).
@@ -165,7 +165,7 @@ server-authoritative auto-pass with configurable stops, like the villain
 auto-play loop: the server fast-forwards between the points a human needs
 to see and the client gets one consolidated update per surfaced decision.
 
-**Semantics** (`gui/server.py: GameSession._advance / _should_surface`):
+**Semantics** (`etude/server.py: GameSession._advance / _should_surface`):
 when the hero holds priority on a pure priority window (pass is legal),
 the server auto-passes UNLESS
 
@@ -211,7 +211,7 @@ persisted to localStorage and sent with every new game; Pass Turn button
 flight. The fast-forward loop is bounded (`MAX_AUTOPLAY_STEPS`) so a
 stuck engine cannot spin the server.
 
-**Validation**: `tests/gui/test_stops.py` (8 tests — default stops
+**Validation**: `tests/etude/test_stops.py` (8 tests — default stops
 surface exactly the configured windows and traces mark the rest auto;
 auto_pass off surfaces every window on an identical trajectory;
 stop-on-stack forces surfacing at un-stopped steps and its absence

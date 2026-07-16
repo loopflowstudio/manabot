@@ -13,7 +13,7 @@ from scripts import play
 
 
 def test_gui_wire_enum_mirrors_match_the_native_engine():
-    from gui.enums import (
+    from etude.enums import (
         ActionEnum,
         ActionSpaceEnum,
         EventTypeEnum,

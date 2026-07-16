@@ -16,9 +16,9 @@ from typing import Any, Iterable
 
 import numpy as np
 
-from gui import trace as trace_store
-from gui.experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
-from gui.server import (
+from etude import trace as trace_store
+from etude.experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
+from etude.server import (
     ASSET_MANIFEST_HASH,
     CONTENT_HASH,
     _offer_verb,

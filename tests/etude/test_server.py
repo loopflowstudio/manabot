@@ -12,9 +12,9 @@ from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 
 # Local imports
-from gui import server, trace as trace_store
-from gui.experience_protocol import ProtocolV1ConformanceBundle
-from gui.server import app
+from etude import server, trace as trace_store
+from etude.experience_protocol import ProtocolV1ConformanceBundle
+from etude.server import app
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 PROTOCOL_V1_BOLT_FIXTURE = json.loads(

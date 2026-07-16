@@ -15,7 +15,7 @@ import re
 from typing import Any
 
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
-TRACES_DIR = Path(os.getenv("ETUDE_GUI_TRACES_DIR", "gui/traces"))
+TRACES_DIR = Path(os.getenv("ETUDE_TRACES_DIR", "etude/traces"))
 
 
 @dataclass
