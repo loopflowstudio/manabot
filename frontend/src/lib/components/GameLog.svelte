@@ -23,7 +23,13 @@
 <section class="rounded border border-slate-700 bg-slate-800 p-4">
   <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">Game Log</h2>
 
-  <div class="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex (axe requires keyboard access to scrollable regions) -->
+  <div
+    class="max-h-[32rem] space-y-2 overflow-y-auto pr-1"
+    role="region"
+    aria-label="Game log entries"
+    tabindex="0"
+  >
     {#if entries.length === 0}
       <p class="text-sm text-slate-400">Actions will appear here.</p>
     {:else}

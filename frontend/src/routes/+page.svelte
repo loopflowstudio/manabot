@@ -151,6 +151,11 @@
       <span class="text-sm font-medium uppercase tracking-wide text-slate-300">Connection</span>
       <span
         data-testid="connection-badge"
+        data-connection-state={gameStore.connection}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-label={`Connection status: ${gameStore.connection}`}
         class={`rounded px-2 py-1 text-xs font-semibold ${
           gameStore.connection === 'connected'
             ? 'bg-emerald-600/30 text-emerald-300'
@@ -196,7 +201,7 @@
   </div>
 
   {#if gameStore.errorMessage}
-    <section class="mb-4 rounded border border-rose-500/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
+    <section role="alert" aria-atomic="true" class="mb-4 rounded border border-rose-500/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
       {gameStore.errorMessage}
     </section>
   {/if}
@@ -224,6 +229,7 @@
           disabled={gameStore.gameOver}
           fastForwarding={gameStore.fastForwarding}
           {canPassTurn}
+          focusKey={`${gameStore.updateSeq}:${gameStore.selectedTargetId ?? 'all'}`}
           onHoverAction={handleActionHover}
           onSelectAction={handleActionSelect}
           onPassTurn={handlePassTurn}

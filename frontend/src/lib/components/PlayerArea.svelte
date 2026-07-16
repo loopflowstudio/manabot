@@ -58,7 +58,7 @@
       <div class="flex flex-wrap gap-2">
         {#if opponent}
           {#each Array(hiddenHandCount) as _, index}
-            <div aria-label={`Hidden card ${index + 1}`}>
+            <div role="img" aria-label={`Hidden card ${index + 1}`}>
               <CardBack />
             </div>
           {/each}
@@ -82,7 +82,7 @@
             />
           {/each}
         {:else}
-          <div class="rounded border border-dashed border-slate-700 px-3 py-5 text-xs text-slate-500">Empty hand</div>
+          <div class="rounded border border-dashed border-slate-700 px-3 py-5 text-xs text-slate-400">Empty hand</div>
         {/if}
       </div>
     </div>
@@ -91,7 +91,7 @@
       <h3 class="mb-2 text-xs uppercase tracking-wide text-slate-400">Graveyard ({player.graveyard.length})</h3>
       <div class="flex flex-wrap gap-2">
         {#if player.graveyard.length === 0}
-          <div class="rounded border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-500">Empty graveyard</div>
+          <div class="rounded border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-400">Empty graveyard</div>
         {/if}
         {#each player.graveyard as card}
           <Card
@@ -110,7 +110,7 @@
       <h3 class="mb-2 text-xs uppercase tracking-wide text-slate-400">Exile ({player.exile.length})</h3>
       <div class="flex flex-wrap gap-2">
         {#if player.exile.length === 0}
-          <div class="rounded border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-500">Empty exile</div>
+          <div class="rounded border border-dashed border-slate-700 px-3 py-2 text-xs text-slate-400">Empty exile</div>
         {/if}
         {#each player.exile as card}
           <Card

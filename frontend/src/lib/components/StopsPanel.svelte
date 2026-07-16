@@ -53,6 +53,7 @@
               <input
                 type="checkbox"
                 data-testid={`stop-${side}-${step.key}`}
+                aria-label={`${side === 'my' ? 'My' : 'Opponent'} ${step.label} stop`}
                 checked={stops[side].includes(step.key)}
                 disabled={!stops.auto_pass}
                 onchange={() => onToggleStop?.(side, step.key)}

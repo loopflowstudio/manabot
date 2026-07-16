@@ -27,10 +27,10 @@
 </script>
 
 <div class="min-h-24">
-  <div class="mb-2 text-xs uppercase tracking-wide text-slate-500">{label}</div>
+  <div class="mb-2 text-xs uppercase tracking-wide text-slate-400">{label}</div>
   <div class="flex flex-wrap gap-3">
     {#if permanents.length === 0}
-      <div class="rounded border border-dashed border-slate-700 px-3 py-5 text-xs text-slate-500">No permanents</div>
+      <div class="rounded border border-dashed border-slate-700 px-3 py-5 text-xs text-slate-400">No permanents</div>
     {/if}
 
     {#each permanents as permanent}

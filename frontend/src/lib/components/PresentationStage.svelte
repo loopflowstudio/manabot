@@ -33,9 +33,8 @@
     data-testid="presentation-stage"
     data-presentation-seq={beat.seq}
     data-presentation-kind={event.kind.kind}
+    data-reduced-motion={player.reducedMotion}
     class={`pointer-events-none absolute inset-x-4 top-16 z-10 flex justify-center ${player.reducedMotion ? '' : 'transition duration-200 ease-out'}`}
-    aria-live="polite"
-    aria-atomic="true"
   >
     <div
       class={`pointer-events-auto w-full max-w-xl rounded-xl border px-4 py-3 shadow-2xl backdrop-blur ${
@@ -47,7 +46,7 @@
       }`}
     >
       <div class="flex items-start justify-between gap-4">
-        <div>
+        <div role="status" aria-live="polite" aria-atomic="true">
           <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
             Beat {player.currentIndex + 1} of {player.events.length}
           </p>

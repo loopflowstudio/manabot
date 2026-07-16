@@ -13,6 +13,7 @@
     "test:e2e:release": "npm run build && playwright test --config playwright.release.config.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
     "@sveltejs/adapter-auto": "^6.0.0",
     "@sveltejs/kit": "^2.20.0",

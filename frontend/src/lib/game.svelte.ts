@@ -5,6 +5,7 @@ import {
   type DeckSelection,
 } from './decks';
 import { deriveObservationNotes } from './log';
+export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
 import type {
   ActionOption,
@@ -44,19 +45,6 @@ export function buildOpponentConfig(
   const sims = Number(choice.split('-')[1]);
   return { villain_type: 'search', villain_sims: sims };
 }
-
-// Decision prompts for the non-priority action-space kinds (mid-resolution
-// choices surfaced by the engine). Keys are ActionSpaceEnum names echoed by
-// the server in the observation payload's `action_space` field.
-export const DECISION_PROMPTS: Record<string, string> = {
-  SCRY: 'Scry — keep each card on top or put it on the bottom.',
-  LOOK_AND_SELECT: 'Look at the revealed cards — choose what to take.',
-  PAY_OR_NOT: 'Optional cost — pay it or decline.',
-  MODAL: 'Choose a mode.',
-  DISCARD_THEN_DRAW: 'Learn — discard a card to draw a card, or keep your hand.',
-  WATERBEND: 'Waterbend — tap permanents to help pay the cost.',
-  CHOOSE_TARGET: 'Choose a target.',
-};
 
 export class GameStore {
   protocolFrame = $state<ExperienceFrame | null>(null);

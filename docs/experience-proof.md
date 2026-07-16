@@ -107,9 +107,22 @@ npm --prefix frontend run test:e2e:release -- release-prompt-matrix.spec.ts
 There is no runtime seed search or retry. Each scenario pins its prompt counts,
 terminal winner, turn, and command count. The gate fails on incomplete or
 unexpected family coverage, a non-terminal run, a missing terminal trace, or
-any browser console/page error. It does not inject reconnect faults or claim
-replay equivalence, accessibility completeness, visual stability, or a new
-performance baseline.
+any browser console/page error.
+
+The same two trajectories run entirely through Enter/Space command activation
+with the browser's reduced-motion preference enabled. Every prompt occurrence
+must expose a named and described Actions region, exact accessible names for
+all legal offers, and focus on the next legal choice. The first occurrence of
+each family additionally proves tab-boundary behavior, reduced-motion computed
+styles, and automated WCAG A/AA checks including color contrast. The terminal
+overlay announces the result and contains focus. A bounded socket close checks
+only the accessibility of the already-existing reconnect status and focus
+restoration; it adds no recovery protocol claim. The run also rejects public or
+failed play-asset requests, curated-pack fallbacks, and browser errors.
+
+This gate does not claim replay equivalence, stale/duplicate/checkpoint
+recovery semantics, screenshot stability, touch/mobile/zoom certification,
+real assistive-technology automation, or a new performance baseline.
 
 ## Boundaries and next evidence
 
@@ -120,7 +133,7 @@ multiple sessions, or large boards. Frame deltas only describe scheduling
 around the current DOM updates.
 
 It also does not prove protocol-v1 stale/duplicate command handling, checkpoint
-recovery, replay equivalence, deterministic browser scenarios for all prompt
-families, screenshot stability, contrast, reduced motion, touch, or
-screen-reader behavior. Those remain explicit Game-wave gates; a passing first
-baseline must not be promoted into a broader quality claim.
+recovery, replay equivalence, screenshot stability, touch, or real
+assistive-technology behavior. Those remain explicit Game-wave gates; the
+browser accessibility-tree proof must not be promoted into a broader quality
+claim.

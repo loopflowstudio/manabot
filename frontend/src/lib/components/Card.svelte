@@ -38,7 +38,9 @@
 <button
   type="button"
   aria-label={name}
-  class={`group relative aspect-[5/7] ${widthClass} overflow-visible rounded-lg border bg-slate-900 text-left shadow transition ${focused ? 'border-blue-400 ring-1 ring-blue-400/70' : 'border-slate-700'} ${clickable ? 'cursor-pointer hover:-translate-y-1 hover:border-amber-300' : 'cursor-default'} ${tapped ? 'rotate-90' : ''} ${dimmed ? 'opacity-70' : ''}`}
+  aria-disabled={!clickable}
+  tabindex={clickable ? 0 : -1}
+  class={`group relative aspect-[5/7] ${widthClass} overflow-visible rounded-lg border bg-slate-900 text-left shadow transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${focused ? 'border-blue-400 ring-1 ring-blue-400/70' : 'border-slate-700'} ${clickable ? 'cursor-pointer hover:-translate-y-1 hover:border-amber-300' : 'cursor-default'} ${tapped ? 'rotate-90' : ''} ${dimmed ? 'opacity-70' : ''}`}
   onclick={() => {
     if (clickable) {
       onSelect?.();
@@ -46,6 +48,8 @@
   }}
   onmouseenter={() => onHoverStart?.()}
   onmouseleave={() => onHoverEnd?.()}
+  onfocus={() => onHoverStart?.()}
+  onblur={() => onHoverEnd?.()}
 >
   <div class="absolute inset-0 overflow-hidden rounded-lg">
     <CardImage name={name} size={size} alt={name} className={imageClass}>
