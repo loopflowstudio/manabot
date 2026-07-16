@@ -6,6 +6,7 @@ pub mod experience;
 pub mod flow;
 pub mod infra;
 pub mod python;
+pub mod semantic;
 pub mod state;
 
 pub use agent::env::Env;
