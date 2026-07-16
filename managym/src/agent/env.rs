@@ -7,12 +7,65 @@ use crate::{
             encode, encode_into, EncodedObservation, EncodedObservationMut, ObservationEncodeError,
             ObservationEncoderConfig,
         },
+        structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
+
+fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
+    game.action_space()
+        .ok_or_else(|| AgentError("no active action space".to_string()))?
+        .player
+        .ok_or_else(|| AgentError("no agent player in current action space".to_string()))
+}
+
+fn finish_game_step(
+    game: &mut Game,
+    agent: PlayerId,
+    done: bool,
+) -> (Observation, f64, bool, bool, InfoDict) {
+    let events = game.take_observation_events();
+    let observation = Observation::new(game, &events);
+
+    let mut reward = 0.0;
+    let mut info = empty_info_dict();
+    if done {
+        if let Some(winner) = game.winner_index() {
+            reward = if winner == agent.0 { 1.0 } else { -1.0 };
+            insert_info(&mut info, "winner_index", InfoValue::Int(winner as i64));
+            insert_info(
+                &mut info,
+                "winner_name",
+                InfoValue::String(game.state.players[winner].name.clone()),
+            );
+        } else {
+            insert_info(
+                &mut info,
+                "winner_name",
+                InfoValue::String("draw".to_string()),
+            );
+        }
+        for (i, player) in game.state.players.iter().enumerate() {
+            if !player.alive {
+                let reason = if player.drew_when_empty {
+                    "deck_empty"
+                } else {
+                    "life_total"
+                };
+                insert_info(
+                    &mut info,
+                    format!("p{i}_loss_reason"),
+                    InfoValue::String(reason.to_string()),
+                );
+            }
+        }
+    }
+
+    (observation, reward, done, false, info)
+}
 
 /// Result of a flat Monte Carlo evaluation of the current action space.
 #[derive(Clone, Debug)]
@@ -107,46 +160,87 @@ impl Env {
         };
 
         let done = game.step(action)?;
-        let events = game.take_observation_events();
-        let observation = Observation::new(game, &events);
-
-        let mut reward = 0.0;
-        let mut info = empty_info_dict();
+        let mut result = finish_game_step(game, agent, done);
         if done {
-            if let Some(winner) = game.winner_index() {
-                reward = if winner == agent.0 { 1.0 } else { -1.0 };
-                insert_info(&mut info, "winner_index", InfoValue::Int(winner as i64));
-                insert_info(
-                    &mut info,
-                    "winner_name",
-                    InfoValue::String(game.state.players[winner].name.clone()),
-                );
-            } else {
-                insert_info(
-                    &mut info,
-                    "winner_name",
-                    InfoValue::String("draw".to_string()),
-                );
-            }
-            for (i, player) in game.state.players.iter().enumerate() {
-                if !player.alive {
-                    let reason = if player.drew_when_empty {
-                        "deck_empty"
-                    } else {
-                        "life_total"
-                    };
-                    insert_info(
-                        &mut info,
-                        format!("p{i}_loss_reason"),
-                        InfoValue::String(reason.to_string()),
-                    );
-                }
-            }
-            self.add_profiler_info(&mut info);
-            self.add_behavior_info(&mut info);
+            self.add_profiler_info(&mut result.4);
+            self.add_behavior_info(&mut result.4);
         }
+        Ok(result)
+    }
 
-        Ok((observation, reward, done, false, info))
+    /// Project the exact currently supported structured decision.
+    pub fn structured_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.structured_offers called before reset".to_string()))?
+            .structured_offers()
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Apply one prompt-bound structured submission through the atomic path.
+    pub fn step_structured(
+        &mut self,
+        offers: &StructuredOfferSet,
+        submission: &OfferSubmission,
+    ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
+        let mut result = {
+            let game = self
+                .game
+                .as_mut()
+                .ok_or_else(|| AgentError("env.step_structured called before reset".to_string()))?;
+            let agent = current_agent(game)?;
+            let done = game
+                .apply_offer_submission(offers, submission)
+                .map_err(|error| AgentError(error.to_string()))?;
+            finish_game_step(game, agent, done)
+        };
+        if result.2 {
+            self.add_profiler_info(&mut result.4);
+            self.add_behavior_info(&mut result.4);
+        }
+        let (observation, reward, terminated, truncated, info) = result;
+        Ok((observation, reward, terminated, truncated, info, 1))
+    }
+
+    /// Apply one structured submission through the independent positional ABI
+    /// adapter. The final count is the number of legacy actions consumed.
+    pub fn step_legacy_submission(
+        &mut self,
+        offers: &StructuredOfferSet,
+        submission: &OfferSubmission,
+    ) -> Result<(Observation, f64, bool, bool, InfoDict, usize), AgentError> {
+        let (mut result, legacy_actions) = {
+            let game = self.game.as_mut().ok_or_else(|| {
+                AgentError("env.step_legacy_submission called before reset".to_string())
+            })?;
+            let agent = current_agent(game)?;
+            let (done, legacy_actions) = game
+                .apply_legacy_offer_submission(offers, submission)
+                .map_err(|error| AgentError(error.to_string()))?;
+            (finish_game_step(game, agent, done), legacy_actions)
+        };
+        if result.2 {
+            self.add_profiler_info(&mut result.4);
+            self.add_behavior_info(&mut result.4);
+        }
+        let (observation, reward, terminated, truncated, info) = result;
+        Ok((
+            observation,
+            reward,
+            terminated,
+            truncated,
+            info,
+            legacy_actions,
+        ))
+    }
+
+    /// Canonical full-engine digest used by differential benchmark assertions.
+    pub fn state_digest(&self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.state_digest called before reset".to_string()))?;
+        Ok(crate::benchmark::snapshot(game).hash)
     }
 
     pub fn info(&self) -> InfoDict {

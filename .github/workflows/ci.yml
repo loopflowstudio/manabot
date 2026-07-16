@@ -108,7 +108,9 @@ jobs:
       - name: Integration tests
         run: |
           source .venv/bin/activate
-          pytest tests/env/ tests/agent/ tests/model/
+          uv run pytest tests/env/ tests/agent/ tests/model/ \
+            tests/sim/test_structured_policy.py \
+            tests/bench/test_structured_policy_benchmark.py
 
       - name: Enum smoke test
         run: |

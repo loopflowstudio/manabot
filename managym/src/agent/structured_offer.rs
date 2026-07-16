@@ -619,6 +619,186 @@ impl Game {
         self.apply_atomic_command(&command)
     }
 
+    /// Decode one structured submission, then execute the same semantic
+    /// choice through the preserved positional action ABI.
+    ///
+    /// This is an experiment-only differential oracle. It deliberately walks
+    /// the public legacy prompts instead of sharing the atomic executor.
+    pub fn apply_legacy_offer_submission(
+        &mut self,
+        offers: &StructuredOfferSet,
+        submission: &OfferSubmission,
+    ) -> Result<(bool, usize), StructuredOfferError> {
+        let command = offers.decode(submission)?;
+        let checkpoint = self.clone();
+        match self.apply_legacy_command_inner(&command) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                *self = checkpoint;
+                Err(error)
+            }
+        }
+    }
+
+    fn apply_legacy_command_inner(
+        &mut self,
+        command: &AtomicCommand,
+    ) -> Result<(bool, usize), StructuredOfferError> {
+        let binding = match command {
+            AtomicCommand::PassPriority { binding, .. }
+            | AtomicCommand::CastSpell { binding, .. }
+            | AtomicCommand::DeclareAttackers { binding, .. } => *binding,
+        };
+        if binding != OfferSetBinding(self.decision_epoch) {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "offer set no longer names the current decision".to_string(),
+            ));
+        }
+        if self.is_game_over() {
+            return Err(StructuredOfferError::GameOver);
+        }
+
+        match command {
+            AtomicCommand::PassPriority { player, .. } => {
+                let action = self
+                    .action_space()
+                    .filter(|space| space.kind == ActionSpaceKind::Priority)
+                    .and_then(|space| {
+                        space.actions.iter().position(|action| {
+                            matches!(
+                                action,
+                                Action::PassPriority { player: legal } if legal == player
+                            )
+                        })
+                    })
+                    .ok_or(StructuredOfferError::WrongDecision)?;
+                let done = self
+                    .step(action)
+                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                Ok((done, 1))
+            }
+            AtomicCommand::CastSpell {
+                player,
+                card,
+                targets,
+                ..
+            } => {
+                if targets.len() != 1 {
+                    return Err(StructuredOfferError::StaleOrIllegal(format!(
+                        "single-target cast requires one target, got {}",
+                        targets.len()
+                    )));
+                }
+                let cast = self
+                    .action_space()
+                    .filter(|space| space.kind == ActionSpaceKind::Priority)
+                    .and_then(|space| {
+                        space.actions.iter().position(|action| {
+                            matches!(
+                                action,
+                                Action::CastSpell {
+                                    player: legal_player,
+                                    card: legal_card,
+                                } if legal_player == player && legal_card == card
+                            )
+                        })
+                    })
+                    .ok_or(StructuredOfferError::WrongDecision)?;
+                let mut done = self
+                    .step(cast)
+                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                let mut actions = 1;
+
+                // With skip_trivial enabled, a sole legal target may already
+                // have been collapsed by tick(). Otherwise walk the explicit
+                // ChooseTarget prompt exactly as the legacy caller does.
+                if self
+                    .action_space()
+                    .is_some_and(|space| space.kind == ActionSpaceKind::ChooseTarget)
+                {
+                    let wanted = to_action_target(targets[0]);
+                    let target = self
+                        .action_space()
+                        .and_then(|space| {
+                            space.actions.iter().position(|action| {
+                                matches!(
+                                    action,
+                                    Action::ChooseTarget {
+                                        player: legal_player,
+                                        target: legal_target,
+                                    } if legal_player == player && legal_target == &wanted
+                                )
+                            })
+                        })
+                        .ok_or_else(|| {
+                            StructuredOfferError::StaleOrIllegal(
+                                "structured target is absent from the legacy prompt".to_string(),
+                            )
+                        })?;
+                    done = self
+                        .step(target)
+                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                    actions += 1;
+                }
+                Ok((done, actions))
+            }
+            AtomicCommand::DeclareAttackers {
+                player, attackers, ..
+            } => {
+                let selected: BTreeSet<_> = attackers.iter().copied().collect();
+                let mut actions = 0;
+                let mut done = false;
+                while self
+                    .action_space()
+                    .is_some_and(|space| space.kind == ActionSpaceKind::DeclareAttacker)
+                {
+                    let space = self.action_space().expect("checked attacker prompt");
+                    if space.player != Some(*player) {
+                        return Err(StructuredOfferError::WrongDecision);
+                    }
+                    let permanent = space
+                        .actions
+                        .iter()
+                        .find_map(|action| match action {
+                            Action::DeclareAttacker { permanent, .. } => Some(*permanent),
+                            _ => None,
+                        })
+                        .ok_or_else(|| {
+                            StructuredOfferError::Invariant(
+                                "legacy attacker prompt is empty".to_string(),
+                            )
+                        })?;
+                    let attack = selected.contains(&permanent);
+                    let action = space
+                        .actions
+                        .iter()
+                        .position(|action| {
+                            matches!(
+                                action,
+                                Action::DeclareAttacker {
+                                    player: legal_player,
+                                    permanent: legal_permanent,
+                                    attack: legal_attack,
+                                } if legal_player == player
+                                    && *legal_permanent == permanent
+                                    && *legal_attack == attack
+                            )
+                        })
+                        .ok_or_else(|| {
+                            StructuredOfferError::Invariant(
+                                "legacy attacker prompt lacks a binary choice".to_string(),
+                            )
+                        })?;
+                    done = self
+                        .step(action)
+                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                    actions += 1;
+                }
+                Ok((done, actions))
+            }
+        }
+    }
+
     /// Apply one decoded structured command as a single rules mutation.
     ///
     /// The current engine has no transaction journal yet, so this prototype

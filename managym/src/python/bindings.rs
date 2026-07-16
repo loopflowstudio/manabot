@@ -28,6 +28,7 @@ use crate::{
         observation_encoder::{
             ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
+        structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     flow::turn::{PhaseKind, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
@@ -1815,6 +1816,25 @@ pub struct PyEnv {
     inner: Mutex<Env>,
 }
 
+/// Prompt-bound structured offers. The private Rust mapping remains attached
+/// to the public projection, so Python can submit IDs but cannot forge engine
+/// identities from presentation values.
+#[cfg(feature = "python")]
+#[pyclass(name = "StructuredOfferSet", frozen)]
+#[derive(Clone)]
+pub struct PyStructuredOfferSet {
+    inner: StructuredOfferSet,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyStructuredOfferSet {
+    fn projection_json(&self) -> PyResult<String> {
+        serde_json::to_string(self.inner.projection())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyEnv {
@@ -1881,6 +1901,81 @@ impl PyEnv {
             truncated,
             py_dict.into_any().unbind(),
         ))
+    }
+
+    /// Return the exact structured projection for the current supported
+    /// priority or attacker decision.
+    fn structured_offers(&self) -> PyResult<PyStructuredOfferSet> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(PyStructuredOfferSet {
+            inner: env.structured_offers().map_err(map_agent_err)?,
+        })
+    }
+
+    /// Apply an ID-only submission through the atomic structured path.
+    fn step_structured(
+        &self,
+        py: Python<'_>,
+        offers: &PyStructuredOfferSet,
+        submission_json: &str,
+    ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        let submission: OfferSubmission = serde_json::from_str(submission_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let (obs, reward, terminated, truncated, info, legacy_equivalent_actions) = env
+            .step_structured(&offers.inner, &submission)
+            .map_err(map_agent_err)?;
+        let py_dict = info_dict_to_pydict(py, &info);
+        Ok((
+            PyObservation::from(obs),
+            reward,
+            terminated,
+            truncated,
+            py_dict.into_any().unbind(),
+            legacy_equivalent_actions,
+        ))
+    }
+
+    /// Apply the same semantic submission by walking the positional prompts.
+    fn step_legacy_submission(
+        &self,
+        py: Python<'_>,
+        offers: &PyStructuredOfferSet,
+        submission_json: &str,
+    ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        let submission: OfferSubmission = serde_json::from_str(submission_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let (obs, reward, terminated, truncated, info, legacy_actions) = env
+            .step_legacy_submission(&offers.inner, &submission)
+            .map_err(map_agent_err)?;
+        let py_dict = info_dict_to_pydict(py, &info);
+        Ok((
+            PyObservation::from(obs),
+            reward,
+            terminated,
+            truncated,
+            py_dict.into_any().unbind(),
+            legacy_actions,
+        ))
+    }
+
+    /// Canonical full-engine digest for exact differential assertions.
+    fn state_digest(&self) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.state_digest().map_err(map_agent_err)
     }
 
     fn info(&self, py: Python<'_>) -> PyResult<PyObject> {
@@ -2182,6 +2277,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStackObject>()?;
     m.add_class::<PyEventData>()?;
 
+    m.add_class::<PyStructuredOfferSet>()?;
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "id": "structured-policy-v1",
+  "scorer_seed": 189,
+  "decks": {
+    "ur_lessons": {
+      "Island": 9,
+      "Mountain": 8,
+      "Tiger-Seal": 2,
+      "Otter-Penguin": 2,
+      "Fire Nation Cadets": 2,
+      "First-Time Flyer": 2,
+      "Forecasting Fortune Teller": 1,
+      "Dragonfly Swarm": 1,
+      "Firebending Lesson": 4,
+      "Igneous Inspiration": 2,
+      "Pop Quiz": 2,
+      "Divide by Zero": 2,
+      "It'll Quench Ya!": 2,
+      "Accumulate Wisdom": 2
+    },
+    "gw_allies": {
+      "Plains": 9,
+      "Forest": 8,
+      "Water Tribe Rallier": 2,
+      "Invasion Reinforcements": 2,
+      "Compassionate Healer": 2,
+      "Earth Kingdom Jailer": 2,
+      "White Lotus Reinforcements": 2,
+      "Earth King's Lieutenant": 2,
+      "Kyoshi Warriors": 2,
+      "Badgermole Cub": 2,
+      "Suki, Kyoshi Warrior": 1,
+      "South Pole Voyager": 1,
+      "Allies at Last": 2,
+      "Yip Yip!": 1,
+      "Fancy Footwork": 2
+    }
+  },
+  "evaluation": {
+    "game_seeds": [18901, 18902, 18903, 18904, 18905, 18906, 18907, 18908],
+    "max_steps": 1600
+  },
+  "latency": {
+    "warmup": 10,
+    "samples": 60
+  },
+  "gates": {
+    "minimum_legal_choices": 33,
+    "overflow_count": 0,
+    "illegal_decode_count": 0,
+    "trace_mismatch_count": 0
+  }
+}
