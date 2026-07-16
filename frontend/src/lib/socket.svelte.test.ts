@@ -132,6 +132,19 @@ describe('GameSocketController offline gameplay', () => {
     expect(controller.sendPassTurn()).toBe(false);
     expect(queue).toEqual([]);
     expect(gameStore.fastForwarding).toBe(false);
+
+    deliver(controller, {
+      type: 'observation',
+      data: frameAt(43).projection,
+      actions: [],
+      recovery: {
+        ...structuredClone(boltProtocolFixture.recovery),
+        frame: frameAt(43),
+      },
+    });
+
+    expect(gameStore.protocolFrame?.revision).toBe(43);
+    expect(queue).toEqual([]);
   });
 });
 
@@ -172,6 +185,7 @@ describe('GameSocketController presentation seam', () => {
       recovery: {
         ...structuredClone(boltProtocolFixture.recovery),
         frame: frameAt(43),
+        presentation_cursor: 903,
         presentation_tail: LIGHTNING_BOLT_PRESENTATION.events.slice(3),
       },
     });
@@ -203,5 +217,64 @@ describe('GameSocketController presentation seam', () => {
     expect(gameStore.protocolFrame?.revision).toBe(43);
     expect(presentationPlayer.currentEvent).toBeNull();
     expect(gameStore.errorMessage).toMatch(/Presentation stream rejected/);
+  });
+
+  it('commits a newer authority frame but rejects an event gap and requests recovery', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(42));
+    const controller = new GameSocketController();
+    (controller as unknown as { presentationCursor: number }).presentationCursor = 900;
+
+    deliver(controller, {
+      type: 'command_outcome',
+      status: 'accepted',
+      update: {
+        base_revision: 42,
+        frame: frameAt(43),
+        presentation: LIGHTNING_BOLT_PRESENTATION.events.slice(1),
+        receipt: null,
+      },
+    });
+
+    expect(gameStore.protocolFrame?.revision).toBe(43);
+    expect(presentationPlayer.currentEvent).toBeNull();
+    expect(gameStore.errorMessage).toMatch(/Presentation cursor gap/);
+  });
+
+  it('produces the same frame and ordered event tail after refresh', () => {
+    const recovery = {
+      ...structuredClone(boltProtocolFixture.recovery),
+      frame: frameAt(43),
+    };
+
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    const first = new GameSocketController();
+    deliver(first, {
+      type: 'observation',
+      data: recovery.frame.projection,
+      actions: [],
+      recovery,
+    });
+    const firstProjection = structuredClone(gameStore.protocolFrame);
+    const firstEvents = presentationPlayer.events.map((event) => event.seq);
+    const firstCursor = (first as unknown as { presentationCursor: number }).presentationCursor;
+
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    const refreshed = new GameSocketController();
+    deliver(refreshed, {
+      type: 'observation',
+      data: recovery.frame.projection,
+      actions: [],
+      recovery,
+    });
+
+    expect(gameStore.protocolFrame).toEqual(firstProjection);
+    expect(presentationPlayer.events.map((event) => event.seq)).toEqual(firstEvents);
+    expect(
+      (refreshed as unknown as { presentationCursor: number }).presentationCursor,
+    ).toBe(firstCursor);
   });
 });

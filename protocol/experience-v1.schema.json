@@ -1385,6 +1385,12 @@
         "frame": {
           "$ref": "#/$defs/ExperienceFrame"
         },
+        "presentation_cursor": {
+          "description": "Sequence address of the first event in `presentation_tail`. For an\nempty tail this is the authority's next presentation sequence.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
         "presentation_tail": {
           "type": "array",
           "items": {
@@ -1411,6 +1417,7 @@
         "asset_manifest_hash",
         "reason",
         "frame",
+        "presentation_cursor",
         "presentation_tail",
         "accepted_commands",
         "replay_cursor",

@@ -8,7 +8,9 @@ from gui import trace as trace_store
 from gui.server import GameSession
 
 
-def _command(session: GameSession, label: str, command_id: str) -> dict[str, Any]:
+def _command_payload(
+    session: GameSession, label: str, command_id: str
+) -> dict[str, Any]:
     prompt = session._publish_current_prompt()
     assert prompt is not None
     offer_id = next(
@@ -16,16 +18,18 @@ def _command(session: GameSession, label: str, command_id: str) -> dict[str, Any
         for index, action in enumerate(prompt.actions)
         if action["description"] == label
     )
-    return session.hero_command(
-        {
-            "command_id": command_id,
-            "match_id": session.match_id,
-            "expected_revision": prompt.revision,
-            "prompt_id": prompt.prompt_id,
-            "offer_id": offer_id,
-            "answers": [],
-        }
-    )
+    return {
+        "command_id": command_id,
+        "match_id": session.match_id,
+        "expected_revision": prompt.revision,
+        "prompt_id": prompt.prompt_id,
+        "offer_id": offer_id,
+        "answers": [],
+    }
+
+
+def _command(session: GameSession, label: str, command_id: str) -> dict[str, Any]:
+    return session.hero_command(_command_payload(session, label, command_id))
 
 
 def _bolt_scenario(trace_dir) -> GameSession:
@@ -57,7 +61,9 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     cast = _command(session, "Cast Lightning Bolt", "command-cast")
     assert cast["update"]["presentation"] == []
 
-    target = _command(session, "Target Gray Ogre", "command-target")
+    recovery_cursor = session.presentation.next_seq
+    target_command = _command_payload(session, "Target Gray Ogre", "command-target")
+    target = session.hero_command(target_command)
     live_events = target["update"]["presentation"]
 
     assert [event["kind"]["kind"] for event in live_events] == [
@@ -78,6 +84,28 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     battlefield = target["update"]["frame"]["projection"]["opponent"]["battlefield"]
     assert all(permanent["id"] != target_id["entity"] for permanent in battlefield)
 
+    # Simulate an authority commit whose WebSocket response was lost. Reconnect
+    # from the last received cursor reconstructs the accepted frame and exact
+    # semantic tail without applying the gameplay choice again.
+    trace_length = len(session.trace.events)
+    accepted_revision = session.revision
+    recovered = session.current_message(recovery_cursor)["recovery"]
+    assert recovered["presentation_cursor"] == recovery_cursor
+    assert recovered["presentation_tail"] == live_events
+    assert recovered["frame"]["frame_hash"] == target["update"]["frame"]["frame_hash"]
+
+    duplicate = session.hero_command(target_command)
+    assert duplicate["status"] == "duplicate"
+    assert duplicate["receipt"] == target["update"]["receipt"]
+    assert duplicate["recovery"]["presentation_tail"] == live_events
+    assert session.revision == accepted_revision
+    assert len(session.trace.events) == trace_length
+    assert session.presentation_events == live_events
+
+    refreshed = session.current_message(recovery_cursor)["recovery"]
+    assert refreshed["frame"] == recovered["frame"]
+    assert refreshed["presentation_tail"] == recovered["presentation_tail"]
+
     session.close(end_reason="disconnect")
     trace_files = list(tmp_path.glob("*.json"))
     assert len(trace_files) == 1
@@ -88,6 +116,33 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
         for event in trace_event.get("presentation", [])
     ]
     assert replay_events == live_events
+
+
+def test_recovery_cursor_slices_tail_and_recovers_from_gaps(tmp_path):
+    session = _bolt_scenario(tmp_path)
+    _command(session, "Cast Lightning Bolt", "command-cast")
+    target = _command(session, "Target Gray Ogre", "command-target")
+    events = target["update"]["presentation"]
+
+    partial = session.current_recovery("reconnect", presentation_cursor=3)
+    assert partial["presentation_cursor"] == 3
+    assert [event["seq"] for event in partial["presentation_tail"]] == [3, 4]
+
+    at_head = session.current_recovery("reconnect", presentation_cursor=5)
+    assert at_head["presentation_cursor"] == 5
+    assert at_head["presentation_tail"] == []
+
+    # A cursor beyond the authority head is a gap. The complete frame remains
+    # canonical and the semantic tail restarts at the oldest retained address.
+    gap = session.current_recovery("reconnect", presentation_cursor=99)
+    assert gap["frame"]["frame_hash"] == target["update"]["frame"]["frame_hash"]
+    assert gap["presentation_cursor"] == 0
+    assert gap["presentation_tail"] == events
+
+    session.presentation_events = events[2:]
+    expired = session.current_recovery("reconnect", presentation_cursor=0)
+    assert expired["presentation_cursor"] == 2
+    assert expired["presentation_tail"] == events[2:]
 
 
 def test_scenario_snapshot_changes_do_not_invent_presentation(tmp_path):

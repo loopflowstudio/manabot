@@ -203,6 +203,13 @@ describe('experience protocol v1 conformance', () => {
     expect(fixture.recovery.presentation_tail.map((event) => event.kind.kind)).toEqual(
       PRESENTATION_KIND_NAMES,
     );
+    expect(fixture.recovery.presentation_cursor).toBe(900);
+    expect(fixture.recovery.presentation_tail.map((event) => event.seq)).toEqual(
+      [900, 901, 902, 903, 904, 905],
+    );
+    const missingCursor = structuredClone(fixture) as unknown as Record<string, unknown>;
+    delete (missingCursor.recovery as Record<string, unknown>).presentation_cursor;
+    expect(validate(missingCursor)).toBe(false);
     expect(JSON.parse(JSON.stringify(fixture))).toEqual(fixture);
   });
 

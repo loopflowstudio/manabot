@@ -4,6 +4,7 @@ import { gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
+  validatePresentationTail,
   validatePresentationUpdate,
 } from './presentation';
 import { presentationPlayer } from './presentation.svelte';
@@ -20,6 +21,7 @@ const VALID_SERVER_TYPES = new Set(['observation', 'game_over', 'command_outcome
 interface ResumeCredentials {
   session_id: string;
   resume_token: string;
+  presentation_cursor?: number;
 }
 
 function loadResumeCredentials(): ResumeCredentials | null {
@@ -33,11 +35,24 @@ function loadResumeCredentials(): ResumeCredentials | null {
   }
 
   try {
-    const parsed = JSON.parse(raw) as ResumeCredentials;
+    const parsed = JSON.parse(raw) as Partial<ResumeCredentials>;
     if (!parsed.session_id || !parsed.resume_token) {
       return null;
     }
-    return parsed;
+    const presentationCursor = parsed.presentation_cursor;
+    if (
+      presentationCursor !== undefined
+      && (!Number.isSafeInteger(presentationCursor) || presentationCursor < 0)
+    ) {
+      return null;
+    }
+    return {
+      session_id: parsed.session_id,
+      resume_token: parsed.resume_token,
+      ...(presentationCursor === undefined
+        ? {}
+        : { presentation_cursor: presentationCursor }),
+    };
   } catch {
     return null;
   }
@@ -82,6 +97,7 @@ export class GameSocketController {
   private pendingResume = false;
   private outboundQueue: ClientMessage[] = [];
   private inFlightCommand: string | null = null;
+  private presentationCursor: number | null = null;
 
   connect(): void {
     if (!browser) {
@@ -108,6 +124,7 @@ export class GameSocketController {
       if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
         if (credentials) {
+          this.presentationCursor = credentials.presentation_cursor ?? null;
           this.pendingResume = true;
           this.send({ type: 'resume', ...credentials });
           return;
@@ -153,6 +170,7 @@ export class GameSocketController {
 
   sendNewGame(config?: Record<string, unknown>): void {
     this.inFlightCommand = null;
+    this.presentationCursor = null;
     presentationPlayer.clear();
     gameStore.prepareForNewGame();
     this.send(config ? { type: 'new_game', config } : { type: 'new_game' });
@@ -269,10 +287,7 @@ export class GameSocketController {
         );
       }
       if (message.type === 'observation' && message.session_id && message.resume_token) {
-        saveResumeCredentials({
-          session_id: message.session_id,
-          resume_token: message.resume_token,
-        });
+        this.persistResumeState(message.session_id, message.resume_token);
       }
       this.flushQueue();
       return;
@@ -334,17 +349,21 @@ export class GameSocketController {
         update.base_revision,
         update.frame.revision,
       );
+      const expectedCursor = this.presentationCursor
+        ?? update.presentation[0]?.seq
+        ?? 0;
+      this.presentationCursor = validatePresentationTail(
+        update.presentation,
+        expectedCursor,
+      );
       presentationPlayer.enqueue(
         update.presentation,
         labels,
       );
+      this.persistResumeState();
     } catch (error) {
       presentationPlayer.clear();
-      gameStore.setError(
-        error instanceof Error
-          ? `Presentation stream rejected: ${error.message}`
-          : 'Presentation stream rejected.',
-      );
+      this.rejectPresentation('Presentation stream rejected', error);
     }
   }
 
@@ -366,17 +385,43 @@ export class GameSocketController {
     // viewer-safe tail. The complete frame remains authoritative either way.
     gameStore.applyFrame(next, sessionId, resumeToken);
     try {
+      this.presentationCursor = validatePresentationTail(
+        recovery.presentation_tail,
+        recovery.presentation_cursor,
+      );
       presentationPlayer.recover(
         recovery.presentation_tail,
         presentationLabelsFromFrame(next),
       );
+      this.persistResumeState(sessionId, resumeToken);
     } catch (error) {
       presentationPlayer.clear();
-      gameStore.setError(
-        error instanceof Error
-          ? `Recovery presentation rejected: ${error.message}`
-          : 'Recovery presentation rejected.',
-      );
+      this.rejectPresentation('Recovery presentation rejected', error);
+    }
+  }
+
+  private persistResumeState(sessionId?: string, resumeToken?: string): void {
+    const existing = loadResumeCredentials();
+    const resolvedSessionId = sessionId ?? existing?.session_id;
+    const resolvedResumeToken = resumeToken ?? existing?.resume_token;
+    if (!resolvedSessionId || !resolvedResumeToken) {
+      return;
+    }
+    saveResumeCredentials({
+      session_id: resolvedSessionId,
+      resume_token: resolvedResumeToken,
+      ...(this.presentationCursor === null
+        ? {}
+        : { presentation_cursor: this.presentationCursor }),
+    });
+  }
+
+  private rejectPresentation(prefix: string, error: unknown): void {
+    const detail = error instanceof Error ? error.message : 'Unknown presentation error.';
+    gameStore.setError(`${prefix}: ${detail}`);
+    if (detail.startsWith('Presentation cursor gap:')) {
+      this.disconnect();
+      this.connect();
     }
   }
 

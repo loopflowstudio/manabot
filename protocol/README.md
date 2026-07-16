@@ -34,7 +34,9 @@ languages:
 This is intentionally a narrow claim. It certifies the merged adapter's
 recovery-to-command seam, including the legacy hero-view projection and a
 non-empty six-kind presentation tail (`cast`, `targeted`, `resolved`, `damage`,
-`destroyed`, and `died`). It does not yet certify command outcomes as fixtures,
+`destroyed`, and `died`). The envelope cursor names the first event in that
+ordered tail, so Rust, Python, and TypeScript also certify exact event
+addressing. It does not yet certify command outcomes as fixtures,
 the future semantic table projection, or generated declarations. Those gaps
 should become new fixtures as their producers land rather than being
 represented here as already complete.

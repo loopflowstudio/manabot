@@ -304,6 +304,8 @@ export interface RecoveryEnvelope {
   asset_manifest_hash: string;
   reason: RecoveryReason;
   frame: ExperienceFrame;
+  /** Sequence address of the first tail event, or the next sequence when empty. */
+  presentation_cursor: number;
   presentation_tail: PresentationEvent[];
   accepted_commands: CommandReceipt[];
   replay_cursor: number;
@@ -478,7 +480,12 @@ export type ClientMessage =
       auto_pass: boolean;
     }
   | { type: 'pass_turn' }
-  | { type: 'resume'; session_id: string; resume_token: string };
+  | {
+      type: 'resume';
+      session_id: string;
+      resume_token: string;
+      presentation_cursor?: number;
+    };
 
 export type ConnectionState =
   | 'disconnected'

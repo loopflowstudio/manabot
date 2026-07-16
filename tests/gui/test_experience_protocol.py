@@ -115,6 +115,10 @@ def test_python_representation_round_trips_shared_non_empty_fixture():
 
     bundle = ProtocolV1ConformanceBundle.model_validate(FIXTURE)
     assert bundle.model_dump(mode="json", exclude_unset=True) == FIXTURE
+    assert bundle.recovery.presentation_cursor == 900
+    assert [event.seq for event in bundle.recovery.presentation_tail] == list(
+        range(900, 906)
+    )
     assert [event.kind.kind for event in bundle.recovery.presentation_tail] == [
         "cast",
         "targeted",
@@ -176,6 +180,12 @@ def test_required_nullable_fields_cannot_be_omitted(container, field):
     for part in container:
         target = target[part]
     del target[field]
+    _assert_both_reject(invalid)
+
+
+def test_recovery_presentation_cursor_is_required():
+    invalid = deepcopy(FIXTURE)
+    del invalid["recovery"]["presentation_cursor"]
     _assert_both_reject(invalid)
 
 

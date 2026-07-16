@@ -5,6 +5,7 @@ import {
   presentationBeat,
   presentationInspectorRows,
   validatePresentationEvents,
+  validatePresentationTail,
   validatePresentationUpdate,
 } from './presentation';
 import { createPresentationPlayer } from './presentation.svelte';
@@ -69,6 +70,15 @@ describe('Lightning Bolt presentation fixture', () => {
     expect(() =>
       validatePresentationUpdate(LIGHTNING_BOLT_PRESENTATION.events, 42, 43),
     ).not.toThrow();
+  });
+
+  it('requires a contiguous authority-addressed recovery tail', () => {
+    expect(validatePresentationTail(LIGHTNING_BOLT_PRESENTATION.events, 900)).toBe(905);
+    expect(validatePresentationTail(LIGHTNING_BOLT_PRESENTATION.events.slice(3), 903)).toBe(905);
+    expect(validatePresentationTail([], 905)).toBe(905);
+    expect(() =>
+      validatePresentationTail(LIGHTNING_BOLT_PRESENTATION.events.slice(1), 900),
+    ).toThrow(/cursor gap/);
   });
 });
 

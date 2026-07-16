@@ -222,6 +222,32 @@ export function validatePresentationEvents(events: readonly PresentationEvent[])
   }
 }
 
+/**
+ * Validate an authority-addressed recovery/live tail and return its next cursor.
+ *
+ * The cursor names the first event in the array. An empty array therefore
+ * keeps the cursor unchanged. Clients reject gaps instead of inventing or
+ * reordering semantic events locally.
+ */
+export function validatePresentationTail(
+  events: readonly PresentationEvent[],
+  cursor: number,
+): number {
+  if (!Number.isSafeInteger(cursor) || cursor < 0) {
+    throw new Error(`Presentation cursor must be a non-negative safe integer: ${cursor}`);
+  }
+  validatePresentationEvents(events);
+  for (let offset = 0; offset < events.length; offset += 1) {
+    const expected = cursor + offset;
+    if (events[offset].seq !== expected) {
+      throw new Error(
+        `Presentation cursor gap: expected event ${expected}, received ${events[offset].seq}`,
+      );
+    }
+  }
+  return cursor + events.length;
+}
+
 export function validatePresentationUpdate(
   events: readonly PresentationEvent[],
   fromRevision: number,

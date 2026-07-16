@@ -18,9 +18,12 @@ The live socket path follows one ordering rule:
 4. enqueue the ordered events into the live `PresentationPlayer`.
 
 Recovery similarly commits the complete frame, cancels current theater, and
-then loads the viewer-safe presentation tail. Malformed presentation clears
-the optional theater and reports an error without undoing the authoritative
-frame. New games and failed resume attempts clear old theater.
+then loads the viewer-safe presentation tail at `presentation_cursor`. Every
+event must be contiguous from that address; a gap is rejected and requests a
+fresh envelope rather than being reordered or invented locally. Malformed
+presentation clears the optional theater and reports an error without undoing
+the authoritative frame. New games and failed resume attempts clear old
+theater.
 
 Replay frames carry the exact `PresentationEvent[]` persisted on the authority
 transition's final trace step; selecting a replay frame loads those values into
@@ -66,8 +69,14 @@ adapter therefore certifies incarnation zero and reuses the visible spell card
 ID as the stack render ID. The display-label bridge leaves other exact
 references unnamed instead of guessing.
 
-Recovery continues to send an empty `presentation_tail`; checkpoint/tail
-reconstruction is the explicit downstream recovery dependency, not part of
-this sequence. Upgrading the viewer projection to exact render identities is
-also separate. Converting either concern into arbitrary snapshot-diff text
-would break the contract.
+Recovery uses one complete `ExperienceFrame` plus a bounded, match-local ledger
+of the same events returned by live updates and persisted in replay. The cursor
+names the first returned event; an empty tail keeps that cursor unchanged. If a
+requested address is outside the retained window or ahead of the authority,
+the complete frame converges game truth and presentation restarts at the oldest
+retained address. The ledger keeps the latest 256 events and is deliberately
+not a durable cross-process checkpoint.
+
+Upgrading the viewer projection to exact render identities is separate.
+Converting either concern into arbitrary snapshot-diff text would break the
+contract.

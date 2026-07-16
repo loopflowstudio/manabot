@@ -494,6 +494,9 @@ pub struct RecoveryEnvelope {
     pub asset_manifest_hash: AssetManifestHash,
     pub reason: RecoveryReason,
     pub frame: ExperienceFrame,
+    /// Address of the first event in `presentation_tail`; unchanged when the
+    /// tail is empty.
+    pub presentation_cursor: PresentationCursor,
     /// Already filtered for this viewer; hidden destinations and private
     /// reveals are absent or redacted.
     pub presentation_tail: Vec<PresentationEvent>,
@@ -726,13 +729,15 @@ class GameSession:
         )
         return self.published_prompt
 
-    def current_recovery(self, reason: str) -> dict[str, Any]:
+    def current_recovery(self, reason: str, cursor: int) -> dict[str, Any]:
         prompt = self.published_prompt or self._publish_current_prompt()
+        cursor, tail = self.presentation_recovery_tail(cursor)
         return {
             "protocol": 1,
             "reason": reason,
             "frame": self._experience_frame(prompt),
-            "presentation_tail": [],
+            "presentation_cursor": cursor,
+            "presentation_tail": tail,
             "accepted_commands": list(self.accepted_commands.values())[-64:],
             "replay_cursor": len(self.trace.events),
             "checkpoint": None,
@@ -843,6 +848,7 @@ commands while disconnected:
 class ExperienceProtocolClient {
   private frame: ExperienceFrame | null = null;
   private inFlightCommand: string | null = null;
+  private presentationCursor: number | null = null;
 
   submit(offer: InteractionOffer, answers: ChoiceAnswer[]): void {
     const frame = this.frame;
@@ -907,6 +913,10 @@ class ExperienceProtocolClient {
 
     // Presentation is optional theater over committed truth. It may play,
     // accelerate, skip, or be discarded on recovery.
+    this.presentationCursor = validateContiguousTail(
+      update.presentation,
+      this.presentationCursor,
+    );
     presentationStore.enqueue(update.presentation, update.frame.revision);
   }
 
@@ -917,6 +927,10 @@ class ExperienceProtocolClient {
     presentationStore.cancelAll();
     this.frame = recovery.frame;
     gameStore.commitFrame(recovery.frame);
+    this.presentationCursor = validateContiguousTail(
+      recovery.presentation_tail,
+      recovery.presentation_cursor,
+    );
     presentationStore.resumeTail(
       recovery.presentation_tail,
       recovery.frame.revision,

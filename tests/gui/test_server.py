@@ -190,6 +190,7 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             accepted = websocket.receive_json()
             assert accepted["status"] == "accepted"
             receipt = accepted["update"]["receipt"]
+            current_frame = accepted["update"]["frame"]
 
             websocket.send_json({"type": "command", "command": land_command})
             duplicate = websocket.receive_json()
@@ -197,6 +198,18 @@ def test_protocol_v1_rejects_stale_and_dedupes_retry(monkeypatch, tmp_path):
             assert duplicate["receipt"] == receipt
             assert duplicate["recovery"]["reason"] == "duplicate_command"
             assert duplicate["recovery"]["frame"]["revision"] == 1
+
+            stale_prompt_command = _command(
+                current_frame,
+                current_frame["offers"][0],
+                "stale-prompt-command",
+            )
+            stale_prompt_command["prompt_id"] = old_frame["prompt"]["id"]
+            websocket.send_json({"type": "command", "command": stale_prompt_command})
+            stale_prompt = websocket.receive_json()
+            assert stale_prompt["status"] == "rejected"
+            assert stale_prompt["rejection"]["code"] == "stale_prompt"
+            assert stale_prompt["recovery"]["frame"]["revision"] == 1
 
             websocket.send_json({"type": "command", "command": stale_command})
             rejected = websocket.receive_json()
@@ -283,6 +296,7 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
             assert payload["type"] == "observation"
             session_id = payload["session_id"]
             resume_token = payload["resume_token"]
+            presentation_cursor = payload["recovery"]["presentation_cursor"]
 
             first_action = _pick_action(payload["actions"])
             websocket.send_json({"type": "action", "index": first_action})
@@ -296,6 +310,7 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
                     "type": "resume",
                     "session_id": session_id,
                     "resume_token": resume_token,
+                    "presentation_cursor": presentation_cursor,
                 }
             )
             resumed_payload = resumed.receive_json()
@@ -303,9 +318,99 @@ def test_websocket_can_resume_existing_session(monkeypatch, tmp_path):
             assert resumed_payload["session_id"] == session_id
             assert resumed_payload["resume_token"] == resume_token
             assert resumed_payload["recovery"]["reason"] == "reconnect"
+            assert (
+                resumed_payload["recovery"]["presentation_cursor"]
+                == presentation_cursor
+            )
+            tail = resumed_payload["recovery"]["presentation_tail"]
+            assert [event["seq"] for event in tail] == list(
+                range(presentation_cursor, presentation_cursor + len(tail))
+            )
             resumed_frame = resumed_payload["recovery"]["frame"]
             for key in ("match_id", "revision", "prompt"):
                 assert resumed_frame[key] == frame_before_reconnect[key]
+
+
+def test_disconnect_after_acceptance_recovers_without_replaying_command(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    config = {
+        "hero_deck": {"Mountain": 12, "Lightning Bolt": 12},
+        "villain_deck": {"Island": 20},
+        "villain_type": "passive",
+        "seed": 3,
+        "auto_pass": False,
+    }
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": config})
+            initial = websocket.receive_json()
+            frame = initial["recovery"]["frame"]
+            command = _command(
+                frame,
+                _offer(frame, action_type="PRIORITY_PLAY_LAND"),
+                "lost-response-command",
+            )
+            cursor = initial["recovery"]["presentation_cursor"]
+
+        # The authority accepts after the response channel is gone. Discarding
+        # this return value models the lost receipt deterministically.
+        record = next(iter(server.SESSION_REGISTRY.values()))
+        accepted = record.game.hero_command(command)
+        assert accepted["status"] == "accepted"
+        accepted_receipt = accepted["update"]["receipt"]
+        trace_length = len(record.game.trace.events)
+
+        with client.websocket_connect("/ws/play") as resumed:
+            resumed.send_json(
+                {
+                    "type": "resume",
+                    "session_id": initial["session_id"],
+                    "resume_token": initial["resume_token"],
+                    "presentation_cursor": cursor,
+                }
+            )
+            recovery = resumed.receive_json()["recovery"]
+            assert (
+                recovery["frame"]["frame_hash"]
+                == accepted["update"]["frame"]["frame_hash"]
+            )
+            assert accepted_receipt in recovery["accepted_commands"]
+
+            resumed.send_json({"type": "command", "command": command})
+            duplicate = resumed.receive_json()
+            assert duplicate["status"] == "duplicate"
+            assert duplicate["receipt"] == accepted_receipt
+
+        assert record.game.revision == 1
+        assert len(record.game.trace.events) == trace_length
+
+
+def test_websocket_rejects_invalid_presentation_cursor(monkeypatch, tmp_path):
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game"})
+            payload = websocket.receive_json()
+
+        for invalid_cursor in (-1, True, "0", 2**64):
+            with client.websocket_connect("/ws/play") as resumed:
+                resumed.send_json(
+                    {
+                        "type": "resume",
+                        "session_id": payload["session_id"],
+                        "resume_token": payload["resume_token"],
+                        "presentation_cursor": invalid_cursor,
+                    }
+                )
+                error_payload = resumed.receive_json()
+                assert error_payload["type"] == "error"
+                assert "unsigned 64-bit integer" in error_payload["message"]
 
 
 def test_websocket_rejects_invalid_resume_credentials(monkeypatch, tmp_path):

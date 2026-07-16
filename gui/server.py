@@ -74,6 +74,8 @@ MAX_AUTOPLAY_STEPS = 1024
 HERO_PLAYER_INDEX = 0
 VILLAIN_TYPES = {"passive", "random", "search", "checkpoint"}
 MAX_ACCEPTED_COMMANDS = 64
+MAX_PRESENTATION_EVENTS = 256
+MAX_UINT64 = 2**64 - 1
 CONTENT_HASH = "legacy-content-unversioned"
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
 
@@ -630,6 +632,8 @@ class GameSession:
         self.published_prompt: PublishedPrompt | None = None
         self.accepted_commands: dict[str, dict[str, Any]] = {}
         self.presentation = PresentationProjector()
+        self.presentation_events: list[dict[str, Any]] = []
+        self._last_presentation_cursor = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -681,6 +685,8 @@ class GameSession:
         self.published_prompt = None
         self.accepted_commands = {}
         self.presentation.reset()
+        self.presentation_events = []
+        self._last_presentation_cursor = 0
 
         self._advance()
         # Initial setup is an authority snapshot, not a command transition.
@@ -690,6 +696,7 @@ class GameSession:
             to_revision=self.revision,
             caused_by=None,
         )
+        self._last_presentation_cursor = self.presentation.next_seq
         return self._wire_message(reason="initial_connect")
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
@@ -861,10 +868,15 @@ class GameSession:
             )
         return self._wire_message()
 
-    def current_message(self) -> dict[str, Any]:
+    def current_message(self, presentation_cursor: int | None = None) -> dict[str, Any]:
         if self.obs is None:
             raise ValueError("No active game session. Send new_game first.")
-        return self._wire_message(reason="reconnect")
+        if presentation_cursor is None:
+            presentation_cursor, _ = self._presentation_recovery_tail(None)
+        return self._wire_message(
+            reason="reconnect",
+            presentation_cursor=presentation_cursor,
+        )
 
     def _step_and_record(
         self,
@@ -1034,6 +1046,14 @@ class GameSession:
             to_revision=self.revision,
             caused_by=caused_by,
         )
+        self._last_presentation_cursor = (
+            int(presentation[0]["seq"]) if presentation else self.presentation.next_seq
+        )
+        self.presentation_events.extend(presentation)
+        if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
+            self.presentation_events = self.presentation_events[
+                -MAX_PRESENTATION_EVENTS:
+            ]
         if (
             presentation
             and self.trace is not None
@@ -1148,8 +1168,40 @@ class GameSession:
             frame["auto_passed"] = auto_passed
         return frame
 
-    def current_recovery(self, reason: str) -> dict[str, Any]:
+    def _presentation_recovery_tail(
+        self, requested_cursor: int | None
+    ) -> tuple[int, list[dict[str, Any]]]:
+        """Return a contiguous retained tail starting at an exact event address.
+
+        A complete frame makes recovery correct even when the requested cursor
+        has fallen out of the bounded in-process ledger. In that case (or when
+        a client claims to be ahead) theater resets to the oldest retained
+        event instead of guessing at missing semantics.
+        """
+
+        head = self.presentation.next_seq
+        oldest = (
+            int(self.presentation_events[0]["seq"])
+            if self.presentation_events
+            else head
+        )
+        cursor = requested_cursor
+        if cursor is None or cursor < oldest or cursor > head:
+            cursor = oldest
+        tail = [
+            event for event in self.presentation_events if int(event["seq"]) >= cursor
+        ]
+        return cursor, tail
+
+    def current_recovery(
+        self,
+        reason: str,
+        presentation_cursor: int | None = None,
+    ) -> dict[str, Any]:
         frame = self._experience_frame()
+        cursor, presentation_tail = self._presentation_recovery_tail(
+            presentation_cursor
+        )
         return {
             "protocol": PROTOCOL_VERSION,
             "engine_version": "managym-python-adapter",
@@ -1157,20 +1209,30 @@ class GameSession:
             "asset_manifest_hash": ASSET_MANIFEST_HASH,
             "reason": reason,
             "frame": frame,
-            "presentation_tail": [],
+            "presentation_cursor": cursor,
+            "presentation_tail": presentation_tail,
             "accepted_commands": list(self.accepted_commands.values()),
             "replay_cursor": len(self.trace.events) if self.trace else 0,
             "checkpoint": None,
         }
 
-    def _wire_message(self, reason: str = "explicit_resync") -> dict[str, Any]:
+    def _wire_message(
+        self,
+        reason: str = "explicit_resync",
+        presentation_cursor: int | None = None,
+    ) -> dict[str, Any]:
         """Compatibility wrapper carrying the protocol recovery envelope.
 
         Existing GUI/table consumers retain their observation fields while the
         protocol client reads the nested atomic frame. This wrapper disappears
         when semantic projection replaces the legacy table shape.
         """
-        recovery = self.current_recovery(reason)
+        recovery = self.current_recovery(
+            reason,
+            self._last_presentation_cursor
+            if presentation_cursor is None
+            else presentation_cursor,
+        )
         frame = recovery["frame"]
         prompt = self.published_prompt
         payload: dict[str, Any] = {
@@ -1298,6 +1360,21 @@ def _session_from_resume(
     return record
 
 
+def _parse_presentation_cursor(raw_cursor: Any) -> int | None:
+    if raw_cursor is None:
+        return None
+    if (
+        isinstance(raw_cursor, bool)
+        or not isinstance(raw_cursor, int)
+        or raw_cursor < 0
+        or raw_cursor > MAX_UINT64
+    ):
+        raise ValueError(
+            "resume presentation_cursor must be an unsigned 64-bit integer."
+        )
+    return raw_cursor
+
+
 def _response_with_session(
     response: dict[str, Any],
     record: SessionRecord,
@@ -1416,13 +1493,16 @@ async def play_socket(websocket: WebSocket) -> None:
                     record.touch()
                     response = _response_with_session(response, record)
                 elif message_type == "resume":
+                    presentation_cursor = _parse_presentation_cursor(
+                        request.get("presentation_cursor")
+                    )
                     record = _session_from_resume(
                         request.get("session_id"),
                         request.get("resume_token"),
                     )
                     await _attach_session_websocket(record, websocket)
                     attached_session_id = record.session_id
-                    response = record.game.current_message()
+                    response = record.game.current_message(presentation_cursor)
                     response = _response_with_session(response, record)
                 else:
                     raise ValueError(f"Unsupported message type: {message_type}")

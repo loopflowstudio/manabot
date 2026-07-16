@@ -97,6 +97,7 @@ numeric_id!(RoleId, u16);
 numeric_id!(PlayerId, u8);
 numeric_id!(StackRenderId, u64);
 numeric_id!(PresentationSeq, u64);
+numeric_id!(PresentationCursor, u64);
 numeric_id!(PresentationGroupId, u64);
 numeric_id!(ReplayCursor, u64);
 
@@ -512,6 +513,9 @@ pub struct RecoveryEnvelope {
     pub asset_manifest_hash: AssetManifestHash,
     pub reason: RecoveryReason,
     pub frame: ExperienceFrame,
+    /// Sequence address of the first event in `presentation_tail`. For an
+    /// empty tail this is the authority's next presentation sequence.
+    pub presentation_cursor: PresentationCursor,
     pub presentation_tail: Vec<PresentationEvent>,
     pub accepted_commands: Vec<CommandReceipt>,
     pub replay_cursor: ReplayCursor,

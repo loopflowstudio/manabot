@@ -72,6 +72,11 @@ class PresentationProjector:
         self._active_bolts = {}
         self._pending_bolt = None
 
+    @property
+    def next_seq(self) -> int:
+        """Next authority-owned event address for recovery cursors."""
+        return self._next_seq
+
     def note_action(
         self,
         observation: managym.Observation,

@@ -32,6 +32,10 @@ fn bolt_target_bundle_round_trips_through_rust_authority_types() {
         .offers
         .iter()
         .any(|offer| offer.id == bundle.command.offer_id));
+    assert_eq!(bundle.recovery.presentation_cursor.0, 900);
+    for (offset, event) in bundle.recovery.presentation_tail.iter().enumerate() {
+        assert_eq!(event.seq.0, 900 + offset as u64);
+    }
     assert!(matches!(
         bundle.recovery.presentation_tail.as_slice(),
         [
@@ -103,6 +107,14 @@ fn unsupported_protocol_versions_fail_at_the_rust_boundary() {
 #[test]
 fn required_nullable_fields_and_closed_presentation_kinds_are_enforced() {
     let source: serde_json::Value = serde_json::from_str(FIXTURE).expect("fixture JSON");
+    let mut missing_cursor = source.clone();
+    missing_cursor["recovery"]
+        .as_object_mut()
+        .expect("recovery object")
+        .remove("presentation_cursor");
+    serde_json::from_value::<ProtocolV1ConformanceBundle>(missing_cursor)
+        .expect_err("presentation cursor is required");
+
     for (parent_pointer, field) in [
         ("/recovery", "checkpoint"),
         ("/recovery/frame", "prompt"),

@@ -434,6 +434,7 @@ class RecoveryEnvelope(ProtocolModel):
     asset_manifest_hash: str
     reason: RecoveryReason
     frame: ExperienceFrame
+    presentation_cursor: UInt64
     presentation_tail: list[PresentationEvent]
     accepted_commands: list[CommandReceipt]
     replay_cursor: UInt64
