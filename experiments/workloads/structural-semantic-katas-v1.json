@@ -1,0 +1,144 @@
+{
+  "authority": {
+    "compiler_path": "manabot/semantic/compiler.py",
+    "compiler_sha256": "f10f34d7b2e458a0ea01b124261a0c0fbbda4648e4452f277254aa6cc3250367",
+    "learning_schema_path": "content/semantic/v1/learning_schema.json",
+    "learning_schema_sha256": "a156c592414d0d4838c5423e2cb471fc49a4450f21d62e5e5c198ba948ae7034",
+    "oracle_path": "experiments/katas/structural-semantic-katas-v1.oracles.json",
+    "oracle_sha256": "87a3e918f513c4bd8bfc4d29634440d0c1c6526542078b88b3f1e50b4e165c11",
+    "source_path": "experiments/katas/structural-semantic-katas-v1.source.json",
+    "source_sha256": "1a61c10d15a0ed5aa2746f4bb4fb9773db841c0c6affffe8cad21fac32ef5f2d",
+    "suite_path": "experiments/katas/structural-semantic-katas-v1.json",
+    "suite_sha256": "5595ce579017c4ec84b8746cb30a3f4bb09a69e4801ccaf7748467f7bec2f948"
+  },
+  "branches": [
+    "nominate_for_w2_213",
+    "instrument_invalid",
+    "teacher_or_label_error",
+    "optimization_or_capacity_unresolved",
+    "missing_structural_relation",
+    "encoder_redesign",
+    "cost_redesign"
+  ],
+  "budget": {
+    "arms": 2,
+    "cpu_cores": 1,
+    "maximum_optimizer_steps": 8000,
+    "maximum_presented_examples": 512000,
+    "maximum_wall_clock_seconds": 1800,
+    "seeds": 5
+  },
+  "claim_boundary": "This experiment may nominate one static encoder candidate for W2-213. It does not establish semantic recombination, dynamic binding, card transfer, executable rules parity, gameplay strength, or integration readiness.",
+  "dataset": {
+    "dataset_seed": 21400,
+    "definition_references": "forbidden",
+    "families": [
+      "order",
+      "hierarchy",
+      "field_role",
+      "argument_binding",
+      "target_choice_role"
+    ],
+    "maximum_program_tokens": 72,
+    "opaque_identity_features": "forbidden",
+    "pairs_per_family": 80,
+    "splits": {
+      "test": 16,
+      "train": 48,
+      "validation": 16
+    }
+  },
+  "gates": {
+    "aggregate_uplift_t95_lower_minimum_exclusive": 0.35,
+    "parameter_difference_fraction_maximum": 0.05,
+    "per_family_uplift_minimum": 0.4,
+    "structural_aggregate_test_accuracy_minimum": 0.95,
+    "structural_batch128_throughput_ratio_minimum": 0.4,
+    "structural_batch1_p95_ratio_maximum": 2.5,
+    "structural_brier_maximum": 0.1,
+    "structural_nll_maximum": 0.35,
+    "structural_per_family_test_accuracy_minimum": 0.9,
+    "structural_train_accuracy_each_seed_minimum": 0.99,
+    "structural_validation_accuracy_each_seed_minimum": 0.95
+  },
+  "id": "structural-semantic-katas-v1",
+  "model_seeds": [
+    21401,
+    21402,
+    21403,
+    21404,
+    21405
+  ],
+  "models": {
+    "bag_v1": {
+      "hidden_dim": 32,
+      "pooling": "masked_mean_max",
+      "probe_dim": 24
+    },
+    "probe": {
+      "candidates_per_head": 2,
+      "family_heads": 5,
+      "family_is_route_only": true,
+      "head_type": "dot_product"
+    },
+    "relational_semantic_encoder_v1": {
+      "blocks": 1,
+      "context_projection": "24x24_tanh",
+      "d_ff": 28,
+      "d_model": 24,
+      "dropout": 0.0,
+      "heads": 2,
+      "position": "sinusoidal_preorder_and_depth",
+      "probe_dim": 24,
+      "relations": [
+        "parent_to_child",
+        "child_to_parent",
+        "ancestor_to_descendant",
+        "descendant_to_ancestor",
+        "field_to_value",
+        "value_to_field",
+        "role_declaration_to_reference",
+        "role_reference_to_declaration"
+      ]
+    }
+  },
+  "performance": {
+    "batch1_samples": 2000,
+    "batch1_warmups": 200,
+    "throughput_batch_size": 128,
+    "throughput_samples": 100,
+    "throughput_warmups": 20
+  },
+  "predictions": {
+    "bag_accuracy_every_family_seed": 0.5,
+    "bag_brier": 0.25,
+    "bag_nll": 0.6931471805599453,
+    "per_family_uplift_minimum": 0.4,
+    "structural_aggregate_accuracy_minimum": 0.95,
+    "structural_brier_maximum": 0.1,
+    "structural_nll_maximum": 0.35,
+    "structural_per_family_accuracy_minimum": 0.9
+  },
+  "schema_version": 1,
+  "status": "pre_registered_results_pending",
+  "training": {
+    "batch_size": 64,
+    "checkpoint_selection": "lowest_validation_nll_earliest_step_tiebreak",
+    "deterministic_algorithms": true,
+    "device": "cpu",
+    "family_loss_weights": {
+      "argument_binding": 0.2,
+      "field_role": 0.2,
+      "hierarchy": 0.2,
+      "order": 0.2,
+      "target_choice_role": 0.2
+    },
+    "learning_rate": 0.003,
+    "maximum_steps_per_run": 800,
+    "optimizer": "adamw",
+    "python_minor": "3.12",
+    "torch_threads": 1,
+    "validation_interval": 20,
+    "weight_decay": 0.0
+  }
+}

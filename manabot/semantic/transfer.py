@@ -485,6 +485,26 @@ class TensorExamples:
     targets: torch.Tensor
 
 
+def masked_mean_max_program_pool(
+    token_embedding: nn.Embedding,
+    token_projection: nn.Module,
+    token_ids: torch.Tensor,
+    token_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Apply the landed order-invariant semantic-program pooling path.
+
+    Keeping this operation factored but parameter-free lets diagnostic probes
+    reuse the exact negative-control mechanism without changing
+    ``TransferPolicy`` parameter names or checkpoint compatibility.
+    """
+
+    embedded = token_embedding(token_ids)
+    mask = token_mask.unsqueeze(-1)
+    mean = (embedded * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+    maximum = embedded.masked_fill(~mask, -torch.inf).amax(dim=1)
+    return token_projection(torch.cat([mean, maximum], dim=-1))
+
+
 def tensorize(examples: Sequence[ProbeExample]) -> TensorExamples:
     if not examples:
         raise TransferExperimentError("cannot tensorize an empty example set")
@@ -550,11 +570,14 @@ class TransferPolicy(nn.Module):
     def forward(self, batch: TensorExamples) -> torch.Tensor:
         pieces = []
         if self.uses_semantics:
-            embedded = self.token_embedding(batch.token_ids)
-            mask = batch.token_mask.unsqueeze(-1)
-            mean = (embedded * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
-            maximum = embedded.masked_fill(~mask, -torch.inf).amax(dim=1)
-            pieces.append(self.token_projection(torch.cat([mean, maximum], dim=-1)))
+            pieces.append(
+                masked_mean_max_program_pool(
+                    self.token_embedding,
+                    self.token_projection,
+                    batch.token_ids,
+                    batch.token_mask,
+                )
+            )
         if self.uses_identity:
             pieces.append(self.identity_embedding(batch.identity_slots))
         context = self.context(torch.cat(pieces, dim=-1))

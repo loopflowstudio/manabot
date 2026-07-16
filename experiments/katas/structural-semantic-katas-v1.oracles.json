@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "families": [
+    {
+      "family": "order",
+      "negative": {
+        "key": "main",
+        "kind": "static",
+        "ops": [
+          {"op": "gain_life", "amount": 2},
+          {"op": "draw_cards", "count": 1}
+        ]
+      },
+      "positive": {
+        "key": "main",
+        "kind": "static",
+        "ops": [
+          {"op": "draw_cards", "count": 1},
+          {"op": "gain_life", "amount": 2}
+        ]
+      }
+    },
+    {
+      "family": "hierarchy",
+      "negative": {
+        "key": "main",
+        "kind": "static",
+        "ops": [
+          {
+            "op": "branch",
+            "condition": {"kind": "kicked"},
+            "then": [
+              {
+                "op": "branch",
+                "condition": {"kind": "nth_resolution", "n": 1},
+                "then": [{"op": "gain_life", "amount": 2}],
+                "otherwise": []
+              }
+            ],
+            "otherwise": [{"op": "draw_cards", "count": 1}]
+          }
+        ]
+      },
+      "positive": {
+        "key": "main",
+        "kind": "static",
+        "ops": [
+          {
+            "op": "branch",
+            "condition": {"kind": "kicked"},
+            "then": [
+              {
+                "op": "branch",
+                "condition": {"kind": "nth_resolution", "n": 1},
+                "then": [{"op": "draw_cards", "count": 1}],
+                "otherwise": []
+              }
+            ],
+            "otherwise": [{"op": "gain_life", "amount": 2}]
+          }
+        ]
+      }
+    },
+    {
+      "family": "field_role",
+      "negative": {
+        "key": "main",
+        "kind": "static",
+        "ops": [
+          {
+            "op": "modify_pt",
+            "target": "source",
+            "power": 1,
+            "toughness": 2,
+            "duration": "end_of_turn"
+          }
+        ]
+      },
+      "positive": {
+        "key": "main",
+        "kind": "static",
+        "ops": [
+          {
+            "op": "modify_pt",
+            "target": "source",
+            "power": 2,
+            "toughness": 1,
+            "duration": "end_of_turn"
+          }
+        ]
+      }
+    },
+    {
+      "family": "argument_binding",
+      "negative": {
+        "key": "main",
+        "kind": "static",
+        "targets": [
+          {"role": "alpha", "selector": {"kind": "creature_you_control"}, "min": 1, "max": 1},
+          {"role": "beta", "selector": {"kind": "creature_opponent_controls"}, "min": 1, "max": 1}
+        ],
+        "ops": [
+          {"op": "tap", "target": "beta"},
+          {"op": "untap", "target": "alpha"}
+        ]
+      },
+      "positive": {
+        "key": "main",
+        "kind": "static",
+        "targets": [
+          {"role": "alpha", "selector": {"kind": "creature_you_control"}, "min": 1, "max": 1},
+          {"role": "beta", "selector": {"kind": "creature_opponent_controls"}, "min": 1, "max": 1}
+        ],
+        "ops": [
+          {"op": "tap", "target": "alpha"},
+          {"op": "untap", "target": "beta"}
+        ]
+      }
+    },
+    {
+      "family": "target_choice_role",
+      "negative": {
+        "key": "main",
+        "kind": "static",
+        "targets": [
+          {"role": "alpha", "selector": {"kind": "creature"}, "min": 1, "max": 3},
+          {"role": "beta", "selector": {"kind": "creature"}, "min": 1, "max": 1}
+        ],
+        "ops": [
+          {
+            "op": "for_each_target",
+            "role": "beta",
+            "body": [{"op": "tap", "target": "current_target"}]
+          },
+          {"op": "untap", "target": "alpha"}
+        ]
+      },
+      "positive": {
+        "key": "main",
+        "kind": "static",
+        "targets": [
+          {"role": "alpha", "selector": {"kind": "creature"}, "min": 1, "max": 3},
+          {"role": "beta", "selector": {"kind": "creature"}, "min": 1, "max": 1}
+        ],
+        "ops": [
+          {
+            "op": "for_each_target",
+            "role": "alpha",
+            "body": [{"op": "tap", "target": "current_target"}]
+          },
+          {"op": "untap", "target": "beta"}
+        ]
+      }
+    }
+  ]
+}
