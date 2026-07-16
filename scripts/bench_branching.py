@@ -18,15 +18,17 @@ import math
 import os
 from pathlib import Path
 import platform
+import re
 import selectors
 import signal
 import subprocess
 import sys
 import tempfile
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 import psutil
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "docs/benchmarks/search-branching-contract-v1.md"
@@ -62,6 +64,41 @@ POLL_SECONDS = 0.005
 READY_TIMEOUT_SECONDS = 120.0
 WORKER_TIMEOUT_SECONDS = 300.0
 TERMINATE_GRACE_SECONDS = 2.0
+GIT_TIMEOUT_SECONDS = 5.0
+SOURCE_DIGEST_METHOD = "git-ls-tree-sha256-v1"
+
+# These files are embedded into the production Rust crate from outside
+# managym/src. The include inventory below makes this list an executable
+# closure rather than a best-effort comment.
+COMPILE_TIME_SOURCE_INPUTS = (
+    "content/semantic/v1/coverage.evidence.json",
+    "content/semantic/v1/generated/two_deck.ir.json",
+    "content/semantic/v1/two_deck.source.json",
+)
+SOURCE_DIRECTORY_PATHS = (
+    "managym/src",
+    "managym/tests",
+)
+SOURCE_SINGLETON_PATHS = tuple(
+    sorted(
+        (
+            *COMPILE_TIME_SOURCE_INPUTS,
+            "docs/benchmarks/search-branching-contract-v1.md",
+            "managym/Cargo.lock",
+            "managym/Cargo.toml",
+            "pyproject.toml",
+            "scripts/bench_branching.py",
+            "tests/bench/test_branching_benchmark.py",
+            "uv.lock",
+        )
+    )
+)
+SOURCE_PATHS = tuple(sorted((*SOURCE_DIRECTORY_PATHS, *SOURCE_SINGLETON_PATHS)))
+
+
+class SourceIdentity(NamedTuple):
+    sha256: str
+    paths: tuple[str, ...]
 
 
 def utc_now() -> str:
@@ -200,42 +237,192 @@ def command_output(command: list[str], *, required: bool = True) -> str | None:
     return None
 
 
-def source_sha256() -> str:
-    excluded_parts = {
-        ".git",
-        ".lf",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".venv",
-        "__pycache__",
-        "htmlcov",
-        "target",
-        "node_modules",
-        "scratch",
-    }
-    excluded_files = {
-        path.resolve() for pair in ARTIFACTS.values() for path in pair
-    }
-    digest = hashlib.sha256()
-    files: list[Path] = []
-    for directory, names, filenames in os.walk(ROOT):
-        names[:] = sorted(name for name in names if name not in excluded_parts)
-        base = Path(directory)
-        files.extend(
-            base / filename
-            for filename in sorted(filenames)
-            if filename != ".DS_Store"
-            and Path(filename).suffix not in {".dylib", ".pyc", ".so"}
+def git_bytes(arguments: list[str], *, root: Path = ROOT, context: str) -> bytes:
+    try:
+        result = subprocess.run(
+            ["git", *arguments],
+            cwd=root,
+            capture_output=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
         )
-    for path in sorted(files):
-        if path.resolve() not in excluded_files:
-            relative = path.relative_to(ROOT).as_posix()
-            digest.update(relative.encode())
-            digest.update(b"\0")
-            digest.update(path.read_bytes())
-            digest.update(b"\0")
-    return digest.hexdigest()
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError(f"{context} failed: {error}") from error
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace").strip()
+        raise RuntimeError(
+            f"{context} failed ({result.returncode}): {stderr or 'no error output'}"
+        )
+    return result.stdout
+
+
+def is_admitted_source_path(relative: str) -> bool:
+    return relative in SOURCE_SINGLETON_PATHS or any(
+        relative.startswith(f"{directory}/") for directory in SOURCE_DIRECTORY_PATHS
+    )
+
+
+def production_compile_time_inputs(*, root: Path = ROOT) -> tuple[str, ...]:
+    source_root = root / "managym/src"
+    if not source_root.is_dir():
+        raise RuntimeError("production source root managym/src is absent")
+
+    discovered: set[str] = set()
+    macro = re.compile(
+        r"\b(?:include|include_str|include_bytes)!\s*\(\s*(?P<argument>[^)]*?)\s*\)",
+        re.DOTALL,
+    )
+    literal = re.compile(r'"(?P<path>[^"\n]+)"\s*,?')
+    for rust_path in sorted(source_root.rglob("*.rs")):
+        contents = rust_path.read_text()
+        occurrences = re.findall(
+            r"\b(?:include|include_str|include_bytes)\s*!", contents
+        )
+        matches = list(macro.finditer(contents))
+        if len(matches) != len(occurrences):
+            relative_rust = rust_path.relative_to(root).as_posix()
+            raise RuntimeError(
+                f"unresolvable production compile-time include in {relative_rust}"
+            )
+        for match in matches:
+            argument = match.group("argument")
+            literal_match = literal.fullmatch(argument)
+            if literal_match is None:
+                relative_rust = rust_path.relative_to(root).as_posix()
+                raise RuntimeError(
+                    f"unresolvable production compile-time include in {relative_rust}: "
+                    f"{argument.strip()!r}"
+                )
+            target = (rust_path.parent / literal_match.group("path")).resolve()
+            try:
+                relative = target.relative_to(root.resolve()).as_posix()
+            except ValueError as error:
+                raise RuntimeError(
+                    f"production compile-time include escapes the repository: {target}"
+                ) from error
+            if not target.is_file():
+                raise RuntimeError(
+                    f"production compile-time include target is absent: {relative}"
+                )
+            if not target.is_relative_to(source_root.resolve()):
+                discovered.add(relative)
+
+    cargo_path = root / "managym/Cargo.toml"
+    try:
+        cargo = tomllib.loads(cargo_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise RuntimeError(f"cannot read managym/Cargo.toml: {error}") from error
+    build_value = cargo.get("package", {}).get("build")
+    build_path: Path | None
+    if build_value is False:
+        build_path = None
+    elif build_value is None:
+        candidate = root / "managym/build.rs"
+        build_path = candidate if candidate.exists() else None
+    elif isinstance(build_value, str) and build_value:
+        build_path = root / "managym" / build_value
+    else:
+        raise RuntimeError("Cargo package.build must be a path string or false")
+    if build_path is not None:
+        resolved_build = build_path.resolve()
+        if not resolved_build.is_file():
+            raise RuntimeError(f"Cargo build script is absent: {build_path}")
+        try:
+            build_relative = resolved_build.relative_to(root.resolve()).as_posix()
+        except ValueError as error:
+            raise RuntimeError(
+                f"Cargo build script escapes the repository: {resolved_build}"
+            ) from error
+        if not is_admitted_source_path(build_relative):
+            raise RuntimeError(
+                f"Cargo build script is not admitted to source provenance: {build_relative}"
+            )
+
+    actual = tuple(sorted(discovered))
+    if actual != COMPILE_TIME_SOURCE_INPUTS:
+        raise RuntimeError(
+            "production compile-time input inventory mismatch: "
+            f"declared={list(COMPILE_TIME_SOURCE_INPUTS)!r}, discovered={list(actual)!r}"
+        )
+    return actual
+
+
+def assert_admitted_source_clean(*, root: Path = ROOT) -> None:
+    status = git_bytes(
+        [
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--ignored=matching",
+            "--",
+            *SOURCE_PATHS,
+        ],
+        root=root,
+        context="admitted-source status check",
+    )
+    if status:
+        entries = [
+            entry.decode(errors="replace") for entry in status.split(b"\0") if entry
+        ]
+        raise RuntimeError("admitted source inputs are dirty: " + "; ".join(entries))
+
+
+def selected_tree_entries(*, root: Path = ROOT) -> tuple[bytes, tuple[str, ...]]:
+    entries = git_bytes(
+        ["ls-tree", "-r", "--full-tree", "-z", "HEAD", "--", *SOURCE_PATHS],
+        root=root,
+        context="selected source tree lookup",
+    )
+    if not entries:
+        raise RuntimeError("selected source tree is empty")
+
+    paths: list[str] = []
+    for raw_record in entries.split(b"\0"):
+        if not raw_record:
+            continue
+        try:
+            metadata, raw_path = raw_record.split(b"\t", 1)
+            _mode, object_type, _object_name = metadata.split(b" ", 2)
+        except ValueError as error:
+            raise RuntimeError("malformed selected Git tree entry") from error
+        if object_type != b"blob":
+            raise RuntimeError(
+                "selected source tree contains a non-blob entry: "
+                + raw_path.decode(errors="replace")
+            )
+        paths.append(raw_path.decode())
+
+    if len(paths) != len(set(paths)) or paths != sorted(paths):
+        raise RuntimeError("selected source tree paths are not unique and sorted")
+    path_set = set(paths)
+    missing_singletons = sorted(set(SOURCE_SINGLETON_PATHS) - path_set)
+    if missing_singletons:
+        raise RuntimeError(
+            f"required source inputs are absent from HEAD: {missing_singletons!r}"
+        )
+    empty_directories = [
+        directory
+        for directory in SOURCE_DIRECTORY_PATHS
+        if not any(path.startswith(f"{directory}/") for path in paths)
+    ]
+    if empty_directories:
+        raise RuntimeError(
+            f"required source roots are absent from HEAD: {empty_directories!r}"
+        )
+    return entries, tuple(paths)
+
+
+def source_identity(*, root: Path = ROOT, check_clean: bool = True) -> SourceIdentity:
+    if check_clean:
+        assert_admitted_source_clean(root=root)
+    production_compile_time_inputs(root=root)
+    entries, paths = selected_tree_entries(root=root)
+    return SourceIdentity(hashlib.sha256(entries).hexdigest(), paths)
+
+
+def source_sha256() -> str:
+    return source_identity().sha256
 
 
 def build_binary() -> dict[str, Any]:
@@ -756,6 +943,70 @@ def run_equivalence(manifest: dict[str, Any], driver: str) -> dict[str, Any]:
     }
 
 
+def loopflow_metadata() -> dict[str, Any]:
+    task_session = os.environ.get("LF_TASK_SESSION_ID")
+    branch = command_output(
+        ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], required=False
+    )
+    fallback = {
+        "task": None,
+        "task_session": task_session,
+        "worktree": str(ROOT),
+        "branch": branch,
+        "status_snapshot": None,
+        "status_unavailable_reason": "local Loopflow registry unavailable during evidence run",
+    }
+    raw_status = command_output(["lf", "status", "--json"], required=False)
+    if raw_status is None:
+        return fallback
+    try:
+        status = json.loads(raw_status)
+    except json.JSONDecodeError:
+        fallback["status_unavailable_reason"] = (
+            "local Loopflow registry returned malformed JSON during evidence run"
+        )
+        return fallback
+
+    candidates: list[dict[str, Any]] = []
+    for project_entry in status.get("projects", []):
+        if not isinstance(project_entry, dict):
+            continue
+        for task_entry in project_entry.get("tasks", []):
+            if not isinstance(task_entry, dict):
+                continue
+            runtime = task_entry.get("runtime", {})
+            workspace = task_entry.get("reference", {}).get("workspace", {})
+            if task_session and runtime.get("session_id") == task_session:
+                candidates = [task_entry]
+                break
+            if workspace.get("worktree") == str(ROOT):
+                candidates.append(task_entry)
+        if task_session and len(candidates) == 1:
+            break
+    if len(candidates) != 1:
+        fallback["status_unavailable_reason"] = (
+            "ambient Loopflow Task could not be identified uniquely during evidence run"
+        )
+        return fallback
+
+    task_entry = candidates[0]
+    task = task_entry.get("task", {})
+    runtime = task_entry.get("runtime", {})
+    workspace = task_entry.get("reference", {}).get("workspace", {})
+    return {
+        "task": task.get("identifier"),
+        "task_session": runtime.get("session_id") or task_session,
+        "worktree": workspace.get("worktree") or str(ROOT),
+        "branch": workspace.get("branch") or branch,
+        "status_snapshot": {
+            "status": runtime.get("status"),
+            "reason": runtime.get("reason"),
+            "project_session_id": runtime.get("project_session_id"),
+        },
+        "status_unavailable_reason": None,
+    }
+
+
 def run_benchmark(
     profile: str,
     oversubscribed: bool,
@@ -764,7 +1015,7 @@ def run_benchmark(
     started_at: str,
     invoked_argv: list[str],
 ) -> dict[str, Any]:
-    initial_source_sha256 = source_sha256()
+    initial_source = source_identity()
     build = build_binary()
     manifest = native_json(["--manifest", "--driver", driver])
     if manifest["driver"] != driver:
@@ -820,11 +1071,9 @@ def run_benchmark(
         )
         cells.append(cell)
 
-    task_status = command_output(
-        ["lf", "task", "status", "W2-198", "--json"], required=False
-    )
-    completed_source_sha256 = source_sha256()
-    if completed_source_sha256 != initial_source_sha256:
+    control_plane = loopflow_metadata()
+    completed_source = source_identity()
+    if completed_source != initial_source:
         raise RuntimeError("source tree changed during benchmark execution")
     payload: dict[str, Any] = {
         "schema": SCHEMA,
@@ -839,21 +1088,14 @@ def run_benchmark(
             "argv": invoked_argv,
             "cwd": str(ROOT),
             "pid": os.getpid(),
-            "source_sha256": initial_source_sha256,
+            "source_sha256": initial_source.sha256,
+            "source_digest_method": SOURCE_DIGEST_METHOD,
+            "source_paths": list(initial_source.paths),
             "driver": manifest["driver"],
             "profile": profile,
             "canonical": profile == "full" and not oversubscribed,
             "status": "complete",
-            "loopflow": {
-                "task": "W2-198",
-                "task_session": "ts_b39e9de2861c44bc8c4234a32c2f6bcf",
-                "worktree": str(ROOT),
-                "branch": "jack-heart/implement-compact-clone-plus-undo",
-                "status_snapshot": json.loads(task_status) if task_status else None,
-                "status_unavailable_reason": None
-                if task_status
-                else "local Loopflow registry unavailable during evidence run",
-            },
+            "loopflow": control_plane,
         },
         "hardware": hardware_metadata(oversubscribed),
         "build": build,
@@ -983,8 +1225,9 @@ def render_report(payload: dict[str, Any]) -> str:
             "Each primary cell also repeated its first measured root in a fresh worker group and matched the ordered deterministic result checksum.",
             f"Artifact SHA-256: `{payload['artifact_sha256']}`.",
             f"Source SHA-256: `{payload['run']['source_sha256']}`.",
+            f"Source method: `{payload['run']['source_digest_method']}` over {len(payload['run']['source_paths'])} tracked paths recorded in the raw receipt.",
             "",
-            "`source_sha256` hashes the whole tree except generated evidence, so this receipt is bound to one exact source state: it must be generated at the final landing tree and landed before `origin/main` moves under it. Any later rebase or source edit, even one touching no benchmark file, invalidates it and requires re-running `run`; re-check `verify` immediately before submitting. Regenerating this receipt is also what repairs the W2-182 baseline, which had been left failing `verify` with a contract-digest mismatch after the witness refactor edited the contract and benchmark without regenerating the artifact.",
+            "`source_sha256` hashes the canonical NUL-delimited Git tree entries for the receipt's explicit source closure. Run and verification fail closed when an admitted input is dirty, missing, or gains an undeclared production compile-time dependency. Checkout paths, `.git` representation, `.claude` worktrees, generated evidence, and unrelated tracked files are excluded by construction; changing an admitted engine, embedded-content, harness, dependency, test, or contract input requires regenerating every candidate receipt.",
             "",
             "The raw artifact contains the pre-execution UTC start, exact orchestrator and worker argv, a fresh process group per cell/repeat, barrier and sampler receipts, the complete timestamped 5 ms aggregate-worker RSS series, hardware, versions, fixture tapes and hashes, all worker results, seeds, timings, outcomes, and deterministic checksums.",
             "",
@@ -1023,6 +1266,11 @@ def validate_argv(value: Any, context: str) -> list[str]:
     ):
         raise RuntimeError(f"missing required exact {context}")
     return value
+
+
+def validate_sha256(value: Any, context: str) -> None:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise RuntimeError(f"missing required {context}")
 
 
 def validate_repeat_evidence(
@@ -1264,6 +1512,8 @@ def validate_required_evidence(payload: Any) -> None:
             "cwd",
             "pid",
             "source_sha256",
+            "source_digest_method",
+            "source_paths",
             "driver",
             "profile",
             "canonical",
@@ -1281,11 +1531,45 @@ def validate_required_evidence(payload: Any) -> None:
         raise RuntimeError("missing required run.cwd")
     if not isinstance(run["pid"], int) or run["pid"] <= 0:
         raise RuntimeError("missing required run.pid")
-    require_keys(
+    validate_sha256(run["source_sha256"], "run.source_sha256")
+    if run["source_digest_method"] != SOURCE_DIGEST_METHOD:
+        raise RuntimeError("source digest method mismatch")
+    if (
+        not isinstance(run["source_paths"], list)
+        or not run["source_paths"]
+        or any(not isinstance(path, str) or not path for path in run["source_paths"])
+        or run["source_paths"] != sorted(set(run["source_paths"]))
+    ):
+        raise RuntimeError("missing required exact run.source_paths")
+    loopflow = require_keys(
         run["loopflow"],
-        {"task", "task_session", "worktree", "branch"},
+        {
+            "task",
+            "task_session",
+            "worktree",
+            "branch",
+            "status_snapshot",
+            "status_unavailable_reason",
+        },
         "run.loopflow",
     )
+    for field in ("task", "task_session", "branch"):
+        if loopflow[field] is not None and not isinstance(loopflow[field], str):
+            raise RuntimeError(f"invalid run.loopflow.{field}")
+    if not isinstance(loopflow["worktree"], str) or not loopflow["worktree"]:
+        raise RuntimeError("missing required run.loopflow.worktree")
+    if not (
+        (
+            loopflow["status_snapshot"] is not None
+            and loopflow["status_unavailable_reason"] is None
+        )
+        or (
+            loopflow["status_snapshot"] is None
+            and isinstance(loopflow["status_unavailable_reason"], str)
+            and loopflow["status_unavailable_reason"]
+        )
+    ):
+        raise RuntimeError("invalid Loopflow availability evidence")
     hardware = require_keys(
         root["hardware"],
         {
@@ -1391,9 +1675,12 @@ def verify(payload: dict[str, Any]) -> None:
         raise RuntimeError("required cell set mismatch")
     if not payload["equivalence"]["passed"]:
         raise RuntimeError("equivalence evidence failed")
+    current_source = source_identity(check_clean=payload["run"]["canonical"])
+    if payload["run"]["source_paths"] != list(current_source.paths):
+        raise RuntimeError("source path closure mismatch")
     if (
         payload["run"]["canonical"]
-        and payload["run"]["source_sha256"] != source_sha256()
+        and payload["run"]["source_sha256"] != current_source.sha256
     ):
         raise RuntimeError("source digest mismatch")
     for cell in payload["cells"]:

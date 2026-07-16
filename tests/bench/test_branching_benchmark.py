@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import psutil
@@ -94,7 +95,20 @@ def test_barrier_failure_invalidates_measurement() -> None:
 
 
 def load_artifact() -> dict:
-    return json.loads(bench.DEFAULT_RAW.read_text())
+    payload = json.loads(bench.DEFAULT_RAW.read_text())
+    identity = bench.source_identity(check_clean=False)
+    payload["run"].setdefault("source_digest_method", bench.SOURCE_DIGEST_METHOD)
+    payload["run"].setdefault("source_paths", list(identity.paths))
+    loopflow = payload["run"]["loopflow"]
+    loopflow.setdefault("status_snapshot", None)
+    loopflow.setdefault(
+        "status_unavailable_reason",
+        None
+        if loopflow["status_snapshot"] is not None
+        else "legacy fixture has no local Loopflow snapshot",
+    )
+    payload["artifact_sha256"] = bench.artifact_hash(payload)
+    return payload
 
 
 @pytest.mark.parametrize(
@@ -102,6 +116,8 @@ def load_artifact() -> dict:
     [
         ("run", "started_at"),
         ("run", "argv"),
+        ("run", "source_digest_method"),
+        ("run", "source_paths"),
         ("cells", 0, "repeats", 0, "process_group_id"),
         ("cells", 0, "repeats", 0, "commands"),
         ("cells", 0, "repeats", 0, "rss_samples"),
@@ -154,3 +170,197 @@ def test_expected_worker_simulations_is_a_times_l_times_r() -> None:
         "rollouts_per_world": 2,
     }
     assert bench.expected_worker_simulations(dimensions, action_count=6) == 1_536
+
+
+def git(root: Path, *arguments: str) -> str:
+    result = subprocess.run(
+        ["git", *arguments],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def commit_all(root: Path, message: str) -> None:
+    git(root, "add", "-A")
+    git(root, "commit", "-m", message)
+
+
+def make_source_repo(tmp_path: Path) -> Path:
+    root = tmp_path / "source"
+    files = {
+        "content/semantic/v1/coverage.evidence.json": "{}\n",
+        "content/semantic/v1/generated/two_deck.ir.json": "{}\n",
+        "content/semantic/v1/two_deck.source.json": "{}\n",
+        "docs/benchmarks/search-branching-contract-v1.md": "# contract\n",
+        "managym/Cargo.lock": "# lock\n",
+        "managym/Cargo.toml": (
+            '[package]\nname = "source-fixture"\nversion = "0.1.0"\n'
+        ),
+        "managym/src/lib.rs": (
+            'const IR: &str = include_str!("../../content/semantic/v1/generated/two_deck.ir.json");\n'
+            'const SOURCE: &[u8] = include_bytes!("../../content/semantic/v1/two_deck.source.json");\n'
+            'const COVERAGE: &[u8] = include_bytes!("../../content/semantic/v1/coverage.evidence.json");\n'
+        ),
+        "managym/tests/smoke.rs": "#[test]\nfn smoke() {}\n",
+        "pyproject.toml": '[project]\nname = "source-fixture"\nversion = "0.1.0"\n',
+        "scripts/bench_branching.py": "# harness\n",
+        "tests/bench/test_branching_benchmark.py": "# tests\n",
+        "uv.lock": "version = 1\n",
+    }
+    for relative, contents in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(contents)
+    git(root, "init", "-b", "main")
+    git(root, "config", "user.name", "Branching Test")
+    git(root, "config", "user.email", "branching@example.test")
+    commit_all(root, "fixture")
+    return root
+
+
+def test_selected_git_tree_digest_is_checkout_independent(tmp_path: Path) -> None:
+    root = make_source_repo(tmp_path)
+    noise = root / ".claude/worktrees/agent/noise.txt"
+    noise.parent.mkdir(parents=True)
+    noise.write_text("incidental worktree bytes\n")
+    linked = tmp_path / "linked"
+    git(root, "worktree", "add", "-b", "linked", str(linked))
+
+    assert bench.source_identity(root=root) == bench.source_identity(root=linked)
+    assert (linked / ".git").is_file()
+
+
+def test_unrelated_tracked_commit_does_not_change_digest(tmp_path: Path) -> None:
+    root = make_source_repo(tmp_path)
+    baseline = bench.source_identity(root=root)
+    (root / "notes.md").write_text("unrelated\n")
+    commit_all(root, "unrelated")
+    assert bench.source_identity(root=root) == baseline
+
+
+@pytest.mark.parametrize("relative", bench.COMPILE_TIME_SOURCE_INPUTS)
+def test_external_compile_time_input_mutation_changes_digest(
+    tmp_path: Path, relative: str
+) -> None:
+    root = make_source_repo(tmp_path)
+    baseline = bench.source_identity(root=root)
+    target = root / relative
+    target.write_bytes(target.read_bytes() + b" ")
+    with pytest.raises(RuntimeError, match="admitted source inputs are dirty"):
+        bench.source_identity(root=root)
+    commit_all(root, f"mutate {relative}")
+    assert bench.source_identity(root=root).sha256 != baseline.sha256
+
+
+@pytest.mark.parametrize("state", ["unstaged", "staged", "untracked", "ignored"])
+def test_dirty_admitted_input_fails_closed(tmp_path: Path, state: str) -> None:
+    root = make_source_repo(tmp_path)
+    if state == "unstaged":
+        (root / "scripts/bench_branching.py").write_text("# dirty\n")
+    elif state == "staged":
+        (root / "scripts/bench_branching.py").write_text("# staged\n")
+        git(root, "add", "scripts/bench_branching.py")
+    elif state == "untracked":
+        (root / "managym/src/untracked.rs").write_text("// untracked\n")
+    else:
+        (root / ".gitignore").write_text("managym/src/ignored.rs\n")
+        commit_all(root, "ignore fixture")
+        (root / "managym/src/ignored.rs").write_text("// ignored\n")
+    with pytest.raises(RuntimeError, match="admitted source inputs are dirty"):
+        bench.source_identity(root=root)
+
+
+def test_new_external_compile_time_input_fails_inventory(tmp_path: Path) -> None:
+    root = make_source_repo(tmp_path)
+    extra = root / "content/semantic/v1/new.json"
+    extra.write_text("{}\n")
+    library = root / "managym/src/lib.rs"
+    library.write_text(
+        library.read_text()
+        + 'const NEW: &str = include_str!("../../content/semantic/v1/new.json");\n'
+    )
+    with pytest.raises(RuntimeError, match="input inventory mismatch"):
+        bench.production_compile_time_inputs(root=root)
+
+
+def test_nonliteral_compile_time_input_fails_inventory(tmp_path: Path) -> None:
+    root = make_source_repo(tmp_path)
+    library = root / "managym/src/lib.rs"
+    library.write_text(
+        library.read_text()
+        + 'const NEW: &str = include_str!(concat!("../../content", "/new.json"));\n'
+    )
+    with pytest.raises(
+        RuntimeError, match="unresolvable production compile-time include"
+    ):
+        bench.production_compile_time_inputs(root=root)
+
+
+def test_new_cargo_build_script_must_be_admitted(tmp_path: Path) -> None:
+    root = make_source_repo(tmp_path)
+    (root / "managym/build.rs").write_text("fn main() {}\n")
+    with pytest.raises(RuntimeError, match="build script is not admitted"):
+        bench.production_compile_time_inputs(root=root)
+
+
+def test_verifier_rejects_wrong_source_method_and_path_closure() -> None:
+    payload = load_artifact()
+    payload["run"]["canonical"] = False
+    payload["run"]["source_digest_method"] = "filesystem-walk-v0"
+    payload["artifact_sha256"] = bench.artifact_hash(payload)
+    with pytest.raises(RuntimeError, match="source digest method mismatch"):
+        bench.verify(payload)
+
+    payload = load_artifact()
+    payload["run"]["canonical"] = False
+    payload["run"]["source_paths"] = payload["run"]["source_paths"][1:]
+    payload["artifact_sha256"] = bench.artifact_hash(payload)
+    with pytest.raises(RuntimeError, match="source path closure mismatch"):
+        bench.verify(payload)
+
+
+def test_loopflow_metadata_selects_ambient_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    status = {
+        "projects": [
+            {
+                "tasks": [
+                    {
+                        "task": {"identifier": "W2-264"},
+                        "reference": {
+                            "workspace": {
+                                "worktree": str(bench.ROOT),
+                                "branch": "jack-heart/reproducible",
+                            }
+                        },
+                        "runtime": {
+                            "session_id": "ts_current",
+                            "project_session_id": "ps_search",
+                            "status": "running",
+                            "reason": "working",
+                        },
+                    }
+                ]
+            }
+        ]
+    }
+
+    def fake_command(command: list[str], *, required: bool = True) -> str | None:
+        if command[:2] == ["lf", "status"]:
+            return json.dumps(status)
+        if command[:2] == ["git", "symbolic-ref"]:
+            return "fallback-branch"
+        raise AssertionError(command)
+
+    monkeypatch.setenv("LF_TASK_SESSION_ID", "ts_current")
+    monkeypatch.setattr(bench, "command_output", fake_command)
+    metadata = bench.loopflow_metadata()
+    assert metadata["task"] == "W2-264"
+    assert metadata["task_session"] == "ts_current"
+    assert metadata["branch"] == "jack-heart/reproducible"
+    assert metadata["status_unavailable_reason"] is None
