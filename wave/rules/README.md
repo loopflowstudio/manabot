@@ -29,6 +29,9 @@ one-off card handlers. The detailed audit remains in `00-pool-audit.md`.
    serialized everywhere.
 7. Optimization follows a written search-state contract and benchmarks. Dense
    state, safe forks, and undo are complementary tools.
+8. Learning schemas bind symbolic semantics to checkpoints. Runtime registry
+   IDs are transport, semantic programs are complete rather than silently
+   truncated, and compatible table reordering does not create a new meaning.
 
 ## Portfolio
 
@@ -51,6 +54,14 @@ replace flat action enumeration with legal-by-construction offers for priority,
 targets, modes, payment, attackers, and blockers. Preserve an adapter for the
 current policy ABI long enough to compare it with structured decoding.
 
+Project viewer-safe IR into variable-length typed programs with stable symbolic
+opcodes, explicit structure and masks, a checkpoint-bound `SemanticInputSpec`,
+compiler-proven budgets, and cross-language parity fixtures. Test the result in
+the four-arm ladder from card-ID/legacy actions through semantic programs and a
+structured decoder on held-out cards or a held-out pack. Runtime-ID permutation,
+checkpoint rebinding, identity ablation, legality, overflow, throughput, and RSS
+are required controls—not optional polish.
+
 ### Search branching and verification
 
 Specify `fork`, `mark`, `apply`, `rollback`, `snapshot`, and deterministic hash
@@ -67,16 +78,19 @@ ratio of new-card content changes to kernel changes.
 
 1. Establish definition/state separation and clone/rollout baselines.
 2. Land one incarnation/LKI vertical slice before further zone mechanics.
-3. Prototype structured offers on priority, Lightning Bolt targeting, and
-   declare attackers while retaining the old ABI for A/B measurement.
-4. Add proposed events before replacement-heavy cards.
-5. Run the three-way search-state benchmark before adopting HAMTs, page-COW, or
+3. Preserve the structured-offer and decoder evidence while building the
+   viewer-safe typed-program projection and checkpoint-bound input spec.
+4. Run the four-arm semantic transfer ladder, including held-out content,
+   identity ablation, schema-rebind controls, and complete performance receipts.
+5. Add proposed events before replacement-heavy cards.
+6. Run the three-way search-state benchmark before adopting HAMTs, page-COW, or
    another representation by doctrine.
-6. Turn conformance gaps into a machine-generated worklist and make regression
+7. Turn conformance gaps into a machine-generated worklist and make regression
    evidence a CI gate.
 
 Reference designs live in `docs/research/semantic-kernel.md` and
-`docs/research/manabot-vs-phase.md`.
+`docs/research/manabot-vs-phase.md`. The observation-schema history and semantic
+input consequences are in `docs/research/metta-observation-robustness.md`.
 
 ## Non-goals
 

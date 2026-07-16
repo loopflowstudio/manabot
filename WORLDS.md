@@ -19,3 +19,27 @@ for *components* (opponents) after behavioral validation; *measurements* are
 regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any shape change.
+
+## Semantic input compatibility
+
+The semantic-program input adds meaning-level compatibility requirements on
+top of tensor dimensions:
+
+- A checkpoint bundles its complete `SemanticInputSpec`: symbolic vocabularies,
+  value/structure encodings, masks, budgets, compatibility rules, and relevant
+  ContentPack/compiler digests.
+- Runtime CardDef, ability, opcode, role, or tag table reordering is transport
+  churn, not a new world. Load-time symbolic rebinding must preserve the exact
+  projected program and policy result.
+- Adding or changing a semantic primitive, structural encoding, visibility
+  rule, normalization, or budget behavior creates a new world unless an
+  explicit migration proves equivalence.
+- An unseen card composed entirely from known primitives may be evaluated in
+  the same world. A card requiring an unknown primitive is rejected or moves to
+  a new world; mapping it to `UNKNOWN` does not count as semantic transfer.
+- Every admitted ContentPack must fit its declared semantic-program budget with
+  zero silent truncation. Token-count and overflow receipts travel with
+  experiment results.
+
+The full rationale and required controls are in
+[`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
