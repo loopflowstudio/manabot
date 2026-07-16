@@ -269,7 +269,11 @@ fn animated_land_attacks_with_haste_and_still_taps_for_mana() {
 
 #[test]
 fn animated_land_dies_and_returns_tapped_as_plain_land() {
-    let mut s = Scenario::new(cub_deck(), deck(&[("Mountain", 24), ("Lightning Bolt", 16)]), 305);
+    let mut s = Scenario::new(
+        cub_deck(),
+        deck(&[("Mountain", 24), ("Lightning Bolt", 16)]),
+        305,
+    );
     force_lands(&mut s, 0, "Forest", 3);
     force_lands(&mut s, 1, "Mountain", 1);
     clear_hand(&mut s, 0);
@@ -344,7 +348,10 @@ fn animated_land_bounced_drops_the_delayed_trigger() {
     s.game_mut().move_card(land_card, ZoneType::Hand);
     assert!(s.game().state.delayed_triggers.is_empty());
     assert!(s.game().state.pending_triggers.is_empty());
-    assert_eq!(s.game().state.zones.zone_of(land_card), Some(ZoneType::Hand));
+    assert_eq!(
+        s.game().state.zones.zone_of(land_card),
+        Some(ZoneType::Hand)
+    );
 }
 
 #[test]
@@ -411,7 +418,10 @@ fn jailer_exiles_and_returns_on_leaving() {
     s.pass_priority();
     s.pass_priority(); // trigger resolves
 
-    assert_eq!(s.game().state.zones.zone_of(ogre_card), Some(ZoneType::Exile));
+    assert_eq!(
+        s.game().state.zones.zone_of(ogre_card),
+        Some(ZoneType::Exile)
+    );
     assert_eq!(s.game().state.exile_links.len(), 1);
 
     // Kill the Jailer: the Ogre returns immediately, under its owner.
@@ -505,14 +515,20 @@ fn jailer_old_trigger_does_not_follow_reentered_source() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     let jailer = s.battlefield_permanents_named(0, "Earth Kingdom Jailer")[0];
     let jailer_card = permanent(&s, jailer).card;
-    let old_ref = s.game().current_object_ref(jailer_card).expect("old Jailer ref");
+    let old_ref = s
+        .game()
+        .current_object_ref(jailer_card)
+        .expect("old Jailer ref");
 
     s.game_mut().move_card(jailer_card, ZoneType::Hand);
     s.game_mut().move_card(jailer_card, ZoneType::Battlefield);
     // Ignore the later incarnation's ETB trigger and resolve only the old
     // trigger already on the stack.
     s.game_mut().state.pending_triggers.clear();
-    let new_ref = s.game().current_object_ref(jailer_card).expect("new Jailer ref");
+    let new_ref = s
+        .game()
+        .current_object_ref(jailer_card)
+        .expect("new Jailer ref");
     assert_eq!(old_ref.entity, new_ref.entity);
     assert_ne!(old_ref.incarnation, new_ref.incarnation);
 
@@ -893,9 +909,15 @@ fn healer_tap_gains_life_and_scries() {
         .action_space()
         .actions
         .iter()
-        .position(
-            |action| matches!(action, Action::ScryCard { to_bottom: false, .. }),
-        )
+        .position(|action| {
+            matches!(
+                action,
+                Action::ScryCard {
+                    to_bottom: false,
+                    ..
+                }
+            )
+        })
         .expect("keep action");
     s.step_action(keep);
     assert_eq!(
@@ -941,8 +963,16 @@ fn lieutenant_counters_each_other_ally_and_grows() {
     s.pass_priority(); // ETB trigger resolves
 
     let lieutenant = s.battlefield_permanents_named(0, "Earth King's Lieutenant")[0];
-    assert_eq!(permanent(&s, kyoshi).plus1_counters, 1, "other Ally gets a counter");
-    assert_eq!(permanent(&s, penguin).plus1_counters, 0, "non-Ally does not");
+    assert_eq!(
+        permanent(&s, kyoshi).plus1_counters,
+        1,
+        "other Ally gets a counter"
+    );
+    assert_eq!(
+        permanent(&s, penguin).plus1_counters,
+        0,
+        "non-Ally does not"
+    );
     assert_eq!(permanent(&s, lieutenant).plus1_counters, 0, "not itself");
 
     // Another Ally enters: the Lieutenant grows — twice, because the
@@ -995,7 +1025,10 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
         .chain(obs.opponent_permanents.iter())
         .find(|perm| perm.id == kyoshi_object_id)
         .expect("Kyoshi Warriors permanent should be observable");
-    assert!(kyoshi_perm.keywords.flying, "granted flying must be encoded");
+    assert!(
+        kyoshi_perm.keywords.flying,
+        "granted flying must be encoded"
+    );
     assert!(!kyoshi_perm.keywords.hexproof);
     let kyoshi_card = obs
         .agent_cards
@@ -1035,8 +1068,14 @@ fn fancy_footwork_untaps_and_buffs_one_or_two_targets() {
     );
     let w1 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
     let w2 = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
-    s.game_mut().state.permanents[w1].as_mut().expect("w1").tapped = true;
-    s.game_mut().state.permanents[w2].as_mut().expect("w2").tapped = true;
+    s.game_mut().state.permanents[w1]
+        .as_mut()
+        .expect("w1")
+        .tapped = true;
+    s.game_mut().state.permanents[w2]
+        .as_mut()
+        .expect("w2")
+        .tapped = true;
     force_lands(&mut s, 0, "Plains", 3);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Fancy Footwork");

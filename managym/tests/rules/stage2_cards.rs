@@ -49,7 +49,9 @@ fn library(s: &Scenario, player: usize) -> Vec<CardId> {
 }
 
 fn library_top(s: &Scenario, player: usize) -> CardId {
-    *library(s, player).last().expect("library should be nonempty")
+    *library(s, player)
+        .last()
+        .expect("library should be nonempty")
 }
 
 fn hand(s: &Scenario, player: usize) -> Vec<CardId> {
@@ -316,7 +318,11 @@ fn quench_controller_declines_and_spell_is_countered() {
     let mut s = quench_setup(41, 3);
     let space = s.action_space();
     assert_eq!(space.kind, ActionSpaceKind::PayOrNot);
-    assert_eq!(space.player, Some(PlayerId(1)), "the spell's controller decides");
+    assert_eq!(
+        space.player,
+        Some(PlayerId(1)),
+        "the spell's controller decides"
+    );
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
 
     // Gray Ogre countered; both spells in graveyards; stack empty.
@@ -695,7 +701,11 @@ fn badgermole_cub_composes_with_waterbend_payment() {
 #[test]
 fn allies_at_last_affinity_and_two_attackers() {
     let mut s = Scenario::new(
-        deck(&[("Forest", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
+        deck(&[
+            ("Forest", 20),
+            ("Allies at Last", 8),
+            ("Kyoshi Warriors", 12),
+        ]),
         deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         91,
     );
@@ -733,7 +743,11 @@ fn allies_at_last_affinity_and_two_attackers() {
 #[test]
 fn allies_at_last_up_to_zero_attackers_is_legal() {
     let mut s = Scenario::new(
-        deck(&[("Forest", 20), ("Allies at Last", 8), ("Kyoshi Warriors", 12)]),
+        deck(&[
+            ("Forest", 20),
+            ("Allies at Last", 8),
+            ("Kyoshi Warriors", 12),
+        ]),
         deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         92,
     );
@@ -788,7 +802,11 @@ fn ward_asks_spell_controller_and_counters_on_decline() {
     let (mut s, aerialist) = ward_setup(101, 3);
     let space = s.action_space().clone();
     assert_eq!(space.kind, ActionSpaceKind::PayOrNot);
-    assert_eq!(space.player, Some(PlayerId(1)), "the bolt's controller pays");
+    assert_eq!(
+        space.player,
+        Some(PlayerId(1)),
+        "the bolt's controller pays"
+    );
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
 
     // The bolt was countered.
@@ -805,7 +823,11 @@ fn ward_paid_lets_the_spell_resolve() {
     s.pass_priority();
     s.pass_priority();
     // Bolt resolved: 3 damage kills the 3/1 Aerialist (lethal SBA).
-    assert_eq!(s.battlefield_permanents_named(0, "Waterfall Aerialist").len(), 0);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Waterfall Aerialist")
+            .len(),
+        0
+    );
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
 }
 
@@ -832,7 +854,11 @@ fn ward_does_not_trigger_for_controllers_own_spell() {
     s.pass_priority();
     // No ward pay-or-not; the bolt resolved directly and killed the 3/1.
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
-    assert_eq!(s.battlefield_permanents_named(0, "Waterfall Aerialist").len(), 0);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Waterfall Aerialist")
+            .len(),
+        0
+    );
 }
 
 // ---------------------------------------------------------------------------

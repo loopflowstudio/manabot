@@ -1,12 +1,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use managym::{
-    state::{
-        game_object::{
-            CardId, EntityId, Incarnation, ObjectLookupError, ObjectRef, PlayerId,
-        },
-        zone::ZoneType,
-    },
+use managym::state::{
+    game_object::{CardId, EntityId, Incarnation, ObjectLookupError, ObjectRef, PlayerId},
+    zone::ZoneType,
 };
 
 use super::helpers::*;
@@ -64,7 +60,10 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         }),
         Err(ObjectLookupError::MissingEntity)
     );
-    let lki = *s.game().object_lki(old_ref).expect("departing battlefield LKI");
+    let lki = *s
+        .game()
+        .object_lki(old_ref)
+        .expect("departing battlefield LKI");
     assert_eq!(lki.object_ref, old_ref);
     assert_eq!(lki.card, card);
     assert_eq!(lki.from_zone, ZoneType::Battlefield);
@@ -196,5 +195,8 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
     assert!(s.game().state.pending_triggers.is_empty());
     assert!(s.game().state.stack_objects.is_empty());
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before + 1);
-    assert_eq!(s.game().state.zones.zone_of(swarm_card), Some(ZoneType::Battlefield));
+    assert_eq!(
+        s.game().state.zones.zone_of(swarm_card),
+        Some(ZoneType::Battlefield)
+    );
 }

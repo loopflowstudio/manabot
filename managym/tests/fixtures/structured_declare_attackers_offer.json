@@ -1,0 +1,110 @@
+{
+  "actor": 0,
+  "kind": "declare_attackers",
+  "offers": [
+    {
+      "id": 0,
+      "actor": 0,
+      "verb": "declare_attackers",
+      "source": null,
+      "label": "Declare attackers",
+      "help": null,
+      "choices": [
+        {
+          "kind": "select",
+          "role": 1,
+          "label": "Attackers",
+          "candidates": {
+            "id": 0,
+            "depends_on": [],
+            "initial": [
+              {
+                "id": 0,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": { "entity": 201, "incarnation": 0 }
+                  }
+                },
+                "label": "Water Tribe Rallier",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 1,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": { "entity": 202, "incarnation": 0 }
+                  }
+                },
+                "label": "Water Tribe Rallier",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 2,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": { "entity": 203, "incarnation": 0 }
+                  }
+                },
+                "label": "Invasion Reinforcements",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 3,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": { "entity": 204, "incarnation": 0 }
+                  }
+                },
+                "label": "Invasion Reinforcements",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 4,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": { "entity": 205, "incarnation": 0 }
+                  }
+                },
+                "label": "Compassionate Healer",
+                "help": null,
+                "preview": null
+              },
+              {
+                "id": 5,
+                "value": {
+                  "kind": "subject",
+                  "subject": {
+                    "kind": "object",
+                    "id": { "entity": 206, "incarnation": 0 }
+                  }
+                },
+                "label": "Compassionate Healer",
+                "help": null,
+                "preview": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 6,
+          "ordered": false,
+          "distinct": true
+        }
+      ],
+      "confirm_label": "Declare attackers"
+    }
+  ]
+}

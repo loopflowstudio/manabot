@@ -274,7 +274,11 @@ fn invasion_reinforcements_flash_cast_on_opponents_turn() {
     cast_and_resolve(&mut s);
     resolve_all(&mut s);
 
-    assert_eq!(s.battlefield_permanents_named(0, "Invasion Reinforcements").len(), 1);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Invasion Reinforcements")
+            .len(),
+        1
+    );
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
 }
 
@@ -310,7 +314,9 @@ fn jeong_jeongs_deserters_targeted_counter_and_lethal_sba() {
         .unwrap()
         .damage = 2;
     s.pass_priority();
-    assert!(!s.battlefield_permanents_named(0, "Jeong Jeong's Deserters").is_empty());
+    assert!(!s
+        .battlefield_permanents_named(0, "Jeong Jeong's Deserters")
+        .is_empty());
 
     // ...but 3 damage is.
     s.game_mut().state.permanents[deserters]
@@ -318,7 +324,9 @@ fn jeong_jeongs_deserters_targeted_counter_and_lethal_sba() {
         .unwrap()
         .damage = 3;
     s.pass_priority();
-    assert!(s.battlefield_permanents_named(0, "Jeong Jeong's Deserters").is_empty());
+    assert!(s
+        .battlefield_permanents_named(0, "Jeong Jeong's Deserters")
+        .is_empty());
     assert_eq!(
         s.game()
             .state
@@ -350,7 +358,10 @@ fn tiger_seal_taps_at_upkeep_and_untaps_on_second_draw() {
     // Next upkeep of its controller: "At the beginning of your upkeep, tap
     // this creature." (It does not fire on the opponent's upkeep.)
     s.advance_to_active_step(1, StepKind::Draw);
-    assert!(!permanent(&s, seal).tapped, "opponent's upkeep must not tap it");
+    assert!(
+        !permanent(&s, seal).tapped,
+        "opponent's upkeep must not tap it"
+    );
     s.advance_to_active_step(0, StepKind::Draw);
     assert!(
         permanent(&s, seal).tapped,
@@ -479,11 +490,7 @@ fn fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist() {
 /// events) and then ceases to exist via state-based actions.
 #[test]
 fn creature_token_ceases_to_exist_after_dying() {
-    let mut s = Scenario::new(
-        deck(&[("Plains", 40)]),
-        deck(&[("Plains", 40)]),
-        37,
-    );
+    let mut s = Scenario::new(deck(&[("Plains", 40)]), deck(&[("Plains", 40)]), 37);
     s.game_mut().create_token("Ally", PlayerId(0), false);
     resolve_all(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
@@ -562,7 +569,10 @@ fn battlefield_card(s: &Scenario, permanent_id: PermanentId) -> CardId {
 fn attack_trigger_creates_tapped_and_attacking_token() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 43);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
         &mut s,
@@ -601,7 +611,10 @@ fn one_or_more_attack_trigger_fires_once() {
     let ogre_a = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let ogre_b = s.force_permanent_on_battlefield(0, "Gray Ogre");
     for ogre in [ogre_a, ogre_b] {
-        s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
+        s.game_mut().state.permanents[ogre]
+            .as_mut()
+            .unwrap()
+            .summoning_sick = false;
     }
     let ogre_a_card = battlefield_card(&s, ogre_a);
     inject_ability(
@@ -657,7 +670,10 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
 fn becomes_tapped_fires_when_attacker_taps() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 59);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
         &mut s,
@@ -683,7 +699,10 @@ fn becomes_tapped_fires_when_attacker_taps() {
 fn vigilance_attacker_does_not_become_tapped() {
     let mut s = Scenario::new(serra_angel_deck(), deck(&[("Plains", 40)]), 61);
     let angel = s.force_permanent_on_battlefield(0, "Serra Angel");
-    s.game_mut().state.permanents[angel].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[angel]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     let angel_card = battlefield_card(&s, angel);
     inject_ability(
         &mut s,
@@ -700,7 +719,10 @@ fn vigilance_attacker_does_not_become_tapped() {
     s.declare_attack();
     s.advance_to_active_step(0, StepKind::EndOfCombat);
 
-    assert!(!permanent(&s, angel).tapped, "vigilance attacker stays untapped");
+    assert!(
+        !permanent(&s, angel).tapped,
+        "vigilance attacker stays untapped"
+    );
     s.assert_life(0, 20);
 }
 
@@ -710,7 +732,10 @@ fn vigilance_attacker_does_not_become_tapped() {
 fn tapped_for_mana_trigger() {
     let mut s = Scenario::new(forest_elves_deck(), deck(&[("Plains", 40)]), 67);
     let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
-    s.game_mut().state.permanents[elves].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[elves]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     let elves_card = battlefield_card(&s, elves);
     inject_ability(
         &mut s,
@@ -739,7 +764,10 @@ fn tapped_for_mana_trigger() {
 fn attack_tap_is_not_tapped_for_mana() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 71);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.game_mut().state.permanents[ogre].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     let ogre_card = battlefield_card(&s, ogre);
     inject_ability(
         &mut s,
@@ -823,19 +851,24 @@ fn bounce_is_not_death() {
 fn block_restriction_respects_effective_power() {
     let mut s = Scenario::new(ogre_only_deck(), ogre_only_deck(), 83);
     let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.game_mut().state.permanents[attacker].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[attacker]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     let attacker_card = battlefield_card(&s, attacker);
-    s.game_mut().state.cards[attacker_card].block_restriction =
-        Some(CardPredicate {
-            card_type: Some(CardType::Creature),
-            max_power: Some(2),
-            ..Default::default()
-        });
+    s.game_mut().state.cards[attacker_card].block_restriction = Some(CardPredicate {
+        card_type: Some(CardType::Creature),
+        max_power: Some(2),
+        ..Default::default()
+    });
 
     let weak = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let strong = s.force_permanent_on_battlefield(1, "Gray Ogre");
     // The "strong" ogre has a +1/+1 counter: effective power 3 > 2.
-    s.game_mut().state.permanents[strong].as_mut().unwrap().plus1_counters = 1;
+    s.game_mut().state.permanents[strong]
+        .as_mut()
+        .unwrap()
+        .plus1_counters = 1;
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
@@ -855,9 +888,15 @@ fn block_restriction_respects_effective_power() {
                 _ => None,
             })
             .expect("blocker action should reference a blocker");
-        let can_block = actions.iter().any(
-            |action| matches!(action, Action::DeclareBlocker { attacker: Some(_), .. }),
-        );
+        let can_block = actions.iter().any(|action| {
+            matches!(
+                action,
+                Action::DeclareBlocker {
+                    attacker: Some(_),
+                    ..
+                }
+            )
+        });
         if blocker == weak {
             assert!(!can_block, "power-2 creature must not be able to block");
         } else {
@@ -873,7 +912,10 @@ fn block_restriction_respects_effective_power() {
 fn cant_be_blocked_this_turn_blocks_all_blocks() {
     let mut s = Scenario::new(ogre_only_deck(), ogre_only_deck(), 89);
     let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.game_mut().state.permanents[attacker].as_mut().unwrap().summoning_sick = false;
+    s.game_mut().state.permanents[attacker]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
     s.game_mut().state.permanents[attacker]
         .as_mut()
         .unwrap()
@@ -886,9 +928,15 @@ fn cant_be_blocked_this_turn_blocks_all_blocks() {
         |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
         "expected blocker prompt".to_string(),
     );
-    let can_block = s.action_space().actions.iter().any(
-        |action| matches!(action, Action::DeclareBlocker { attacker: Some(_), .. }),
-    );
+    let can_block = s.action_space().actions.iter().any(|action| {
+        matches!(
+            action,
+            Action::DeclareBlocker {
+                attacker: Some(_),
+                ..
+            }
+        )
+    });
     assert!(!can_block);
 }
 
@@ -902,7 +950,10 @@ fn cant_be_blocked_this_turn_blocks_all_blocks() {
 fn counters_on_lands_are_inert_and_persistent() {
     let mut s = Scenario::new(deck(&[("Forest", 40)]), deck(&[("Forest", 40)]), 97);
     let forest = s.force_permanent_on_battlefield(0, "Forest");
-    s.game_mut().state.permanents[forest].as_mut().unwrap().plus1_counters = 1;
+    s.game_mut().state.permanents[forest]
+        .as_mut()
+        .unwrap()
+        .plus1_counters = 1;
 
     s.pass_priority();
     s.pass_priority();
@@ -930,12 +981,17 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     s.game_mut().create_token("Ally", PlayerId(0), false);
     resolve_all(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
-    s.game_mut().state.permanents[token].as_mut().unwrap().plus1_counters = 3;
+    s.game_mut().state.permanents[token]
+        .as_mut()
+        .unwrap()
+        .plus1_counters = 3;
 
     // A Lesson in the graveyard (subtype injected — no Lesson spell is
     // registered until Stage 2 machinery lands).
     let bolt = find_owned_card_off_battlefield(&s, 0, "Lightning Bolt");
-    s.game_mut().state.cards[bolt].subtypes.push("Lesson".to_string());
+    s.game_mut().state.cards[bolt]
+        .subtypes
+        .push("Lesson".to_string());
     s.game_mut().move_card(bolt, ZoneType::Graveyard);
     s.pass_priority();
 

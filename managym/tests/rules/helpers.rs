@@ -511,9 +511,9 @@ impl Scenario {
 
     /// Tap a specific permanent to pay {1} of a pending waterbend cost.
     pub fn choose_waterbend_tap(&mut self, permanent: PermanentId) -> bool {
-        let Some(index) = self.action_space().actions.iter().position(|action| {
-            matches!(action, Action::WaterbendTap { permanent: p, .. } if *p == permanent)
-        }) else {
+        let Some(index) = self.action_space().actions.iter().position(
+            |action| matches!(action, Action::WaterbendTap { permanent: p, .. } if *p == permanent),
+        ) else {
             return false;
         };
         self.step_action(index);

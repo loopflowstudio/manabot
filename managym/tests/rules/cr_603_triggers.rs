@@ -204,20 +204,14 @@ fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
         .as_ref()
         .expect("old permanent")
         .card;
-    let old_ref = s
-        .game()
-        .current_object_ref(card)
-        .expect("old object ref");
+    let old_ref = s.game().current_object_ref(card).expect("old object ref");
 
     s.game_mut().move_card(card, ZoneType::Hand);
     s.game_mut().move_card(card, ZoneType::Battlefield);
     // Ignore the new object's own ETB trigger; this scenario is specifically
     // resolving the already-stacked trigger that targeted the old object.
     s.game_mut().state.pending_triggers.clear();
-    let new_ref = s
-        .game()
-        .current_object_ref(card)
-        .expect("new object ref");
+    let new_ref = s.game().current_object_ref(card).expect("new object ref");
     let new_permanent = s.game().state.card_to_permanent[card].expect("new permanent");
 
     assert_eq!(old_ref.entity, new_ref.entity);
@@ -235,7 +229,10 @@ fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
         Some(new_permanent),
         "the new incarnation must remain on the battlefield"
     );
-    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Battlefield));
+    assert_eq!(
+        s.game().state.zones.zone_of(card),
+        Some(ZoneType::Battlefield)
+    );
 }
 
 /// CR 117.5, 704.3, 603.3 — SBAs are checked before pending triggers are flushed.
