@@ -10,6 +10,7 @@ import pytest
 from experiments.runners.run_teacher1_pilot import (
     _load_contract,
     _load_control_lock,
+    _play_cell,
 )
 from manabot.sim.teacher1_evidence import ContractError, file_sha256
 
@@ -30,6 +31,31 @@ def test_missing_control_lock_blocks_before_search(tmp_path: Path) -> None:
             contract_hash=contract_hash,
             budgets=contract["teacher"]["budgets"],
         )
+
+
+def test_matchup_cell_reports_three_seed_blocks_and_fixed_aggregate() -> None:
+    result = _play_cell(
+        {"kind": "random"},
+        {"kind": "random"},
+        seed_blocks=[
+            {"id": "one", "seed": 701, "games": 2},
+            {"id": "two", "seed": 709, "games": 2},
+            {"id": "three", "seed": 719, "games": 2},
+        ],
+    )
+
+    assert result["num_games"] == 6
+    assert list(result["seed_blocks"]) == ["one", "two", "three"]
+    assert [block["num_games"] for block in result["seed_blocks"].values()] == [
+        2,
+        2,
+        2,
+    ]
+    assert [block["seed"] for block in result["seed_blocks"].values()] == [
+        701,
+        709,
+        719,
+    ]
 
 
 def test_control_lock_binds_terminal_recovery_and_latency_calibration(

@@ -61,6 +61,43 @@ def _load_contract(path: Path) -> tuple[dict[str, Any], str]:
         raise ContractError("Teacher-1 contract schema_version must be 1")
     if contract.get("experiment") != "w2-234-teacher1-admission-v1":
         raise ContractError("unexpected Teacher-1 experiment identity")
+    seed_blocks = contract.get("evaluation", {}).get("matchup_seed_blocks") or []
+    if (
+        len(seed_blocks) != 3
+        or len({block.get("id") for block in seed_blocks}) != 3
+        or len({block.get("seed") for block in seed_blocks}) != 3
+        or any(int(block.get("games", 0)) < 1 for block in seed_blocks)
+        or sum(int(block.get("games", 0)) for block in seed_blocks)
+        != int(contract["evaluation"]["games_per_matchup"])
+    ):
+        raise ContractError(
+            "Teacher-1 contract must declare three independent matchup seed "
+            "blocks totaling games_per_matchup"
+        )
+    repeat_seeds = contract["evaluation"].get("stability_repeat_search_seeds") or []
+    if len(repeat_seeds) != 3 or len(set(repeat_seeds)) != 3:
+        raise ContractError("root stability must declare exactly three search seeds")
+    replay_roots = contract["evaluation"].get("sampled_search_replay_roots") or []
+    replay_keys = {
+        (root.get("game_index"), root.get("decision_index")) for root in replay_roots
+    }
+    if (
+        len(replay_roots) != 8
+        or len(replay_keys) != 8
+        or contract["gates"].get("required_sampled_search_replay_roots")
+        != len(replay_roots)
+        or any(
+            not isinstance(game, int)
+            or not 0 <= game < int(contract["evaluation"]["trajectory_audit_games"])
+            or not isinstance(decision, int)
+            or decision < 0
+            for game, decision in replay_keys
+        )
+    ):
+        raise ContractError(
+            "sampled search replay must declare eight unique roots inside the "
+            "trajectory audit"
+        )
     return contract, canonical_sha256(contract)
 
 
@@ -155,17 +192,84 @@ def _search_stats(stats: Any) -> dict[str, Any] | None:
     return payload
 
 
+def _merge_search_stats(stats_blocks: list[Any]) -> dict[str, Any] | None:
+    stats_blocks = [stats for stats in stats_blocks if stats is not None]
+    if not stats_blocks:
+        return None
+    decisions = sum(int(stats.decisions) for stats in stats_blocks)
+    seconds = sum(float(stats.seconds) for stats in stats_blocks)
+    simulations = sum(int(stats.simulations) for stats in stats_blocks)
+    cap_hits = sum(int(stats.cap_hits) for stats in stats_blocks)
+    decision_seconds = np.asarray(
+        [value for stats in stats_blocks for value in stats.decision_seconds],
+        dtype=np.float64,
+    )
+    payload: dict[str, Any] = {
+        "decisions": decisions,
+        "seconds": seconds,
+        "simulations": simulations,
+        "cap_hits": cap_hits,
+        "p50_decision_ms": float(np.quantile(decision_seconds, 0.50)) * 1000,
+        "p95_decision_ms": float(np.quantile(decision_seconds, 0.95)) * 1000,
+        "labels_per_second": decisions / seconds if seconds else None,
+        "cap_rate": cap_hits / simulations if simulations else 0.0,
+    }
+    if hasattr(stats_blocks[0], "tree_nodes"):
+        payload.update(
+            tree_nodes=sum(int(stats.tree_nodes) for stats in stats_blocks),
+            worlds_sampled=sum(int(stats.worlds_sampled) for stats in stats_blocks),
+            mean_max_depth=(
+                sum(int(stats.max_depth_sum) for stats in stats_blocks) / decisions
+                if decisions
+                else 0.0
+            ),
+            max_depth_max=max(int(stats.max_depth_max) for stats in stats_blocks),
+        )
+    return payload
+
+
 def _play_cell(
-    hero: dict[str, Any], villain: dict[str, Any], *, games: int, seed: int
+    hero: dict[str, Any],
+    villain: dict[str, Any],
+    *,
+    seed_blocks: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    result = play_games(hero, villain, num_games=games, seed=seed)
+    results: list[tuple[dict[str, Any], Any, float]] = []
+    for block in seed_blocks:
+        started = time.perf_counter()
+        result = play_games(
+            hero,
+            villain,
+            num_games=int(block["games"]),
+            seed=int(block["seed"]),
+        )
+        results.append((block, result, time.perf_counter() - started))
+    records = [record for _, result, _ in results for record in result.records]
+    per_block = {
+        str(block["id"]): {
+            **aggregate_records(result.records),
+            "seed": int(block["seed"]),
+            "hero_search": _search_stats(result.hero_search),
+            "villain_search": _search_stats(result.villain_search),
+            "wall_seconds": wall_seconds,
+            "gameplay_wall_seconds": result.wall_seconds,
+        }
+        for block, result, wall_seconds in results
+    }
+    first_result = results[0][1]
     return {
-        **aggregate_records(result.records),
-        "hero": result.hero,
-        "villain": result.villain,
-        "wall_seconds": result.wall_seconds,
-        "hero_search": _search_stats(result.hero_search),
-        "villain_search": _search_stats(result.villain_search),
+        **aggregate_records(records),
+        "hero": first_result.hero,
+        "villain": first_result.villain,
+        "wall_seconds": sum(wall_seconds for _, _, wall_seconds in results),
+        "gameplay_wall_seconds": sum(result.wall_seconds for _, result, _ in results),
+        "hero_search": _merge_search_stats(
+            [result.hero_search for _, result, _ in results]
+        ),
+        "villain_search": _merge_search_stats(
+            [result.villain_search for _, result, _ in results]
+        ),
+        "seed_blocks": per_block,
     }
 
 
@@ -353,6 +457,8 @@ def _evaluate_gates(
     )
     gates = {
         "trajectory_replay": bool(manifest["trajectory_replay"]["passed"]),
+        "sampled_search_replay": manifest["trajectory_replay"]["sampled_search_roots"]
+        == thresholds["required_sampled_search_replay_roots"],
         "target_integrity": bool(manifest["target_integrity"]["passed"]),
         "high_vs_low": high_low["win_rate"] >= thresholds["high_vs_low_win_rate"],
         "high_vs_checkpoint": high_checkpoint["win_rate"]
@@ -401,6 +507,9 @@ def _verify_existing(
         artifact,
         content_hash=actual["experience_content_hash"],
         asset_manifest_hash=actual["asset_manifest_hash"],
+        sampled_search_roots=list(
+            contract["evaluation"]["sampled_search_replay_roots"]
+        ),
     )
     expected = manifest.get("trajectory_replay")
     current = receipt_dict(replay)
@@ -457,6 +566,7 @@ def run_teacher_gate(
             "control_lock_path": str(control_lock_path),
             "control_lock_sha256": lock_hash,
             "runtime": runtime,
+            "matchup_seed_blocks": list(contract["evaluation"]["matchup_seed_blocks"]),
             "cells": {},
         }
         _atomic_json(manifest_path, manifest)
@@ -490,9 +600,8 @@ def run_teacher_gate(
             raise SystemExit("Teacher-1 gate reached its pre-registered artifact cap")
 
     checkpoint_path = lock["checkpoint_control"]["path"]
-    games = int(contract["evaluation"]["games_per_matchup"])
-    base_seed = int(contract["seeds"]["matchups"])
-    cell_specs: list[tuple[str, dict[str, Any], dict[str, Any], int]] = []
+    matchup_seed_blocks = list(contract["evaluation"]["matchup_seed_blocks"])
+    cell_specs: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
     for budget in budgets:
         teacher = _teacher_spec(contract, budget)
         flat = {
@@ -502,7 +611,7 @@ def run_teacher_gate(
         }
         cell_specs.extend(
             [
-                (f"t1-{budget}-vs-random", teacher, {"kind": "random"}, 10_000),
+                (f"t1-{budget}-vs-random", teacher, {"kind": "random"}),
                 (
                     f"t1-{budget}-vs-checkpoint",
                     teacher,
@@ -512,9 +621,8 @@ def run_teacher_gate(
                         "name": "teacher0-policy-value-frozen",
                         "deterministic": True,
                     },
-                    20_000,
                 ),
-                (f"t1-{budget}-vs-flat-wall", teacher, flat, 30_000),
+                (f"t1-{budget}-vs-flat-wall", teacher, flat),
             ]
         )
     low, high = min(budgets), max(budgets)
@@ -523,18 +631,16 @@ def run_teacher_gate(
             f"t1-{high}-vs-t1-{low}",
             _teacher_spec(contract, high),
             _teacher_spec(contract, low),
-            40_000,
         )
     )
-    for cell_id, hero, villain, seed_offset in cell_specs:
+    for cell_id, hero, villain in cell_specs:
         if cell_id in manifest["cells"]:
             continue
         check_cap()
         manifest["cells"][cell_id] = _play_cell(
             hero,
             villain,
-            games=games,
-            seed=base_seed + seed_offset,
+            seed_blocks=matchup_seed_blocks,
         )
         save_manifest()
 
@@ -545,7 +651,10 @@ def run_teacher_gate(
             worlds=int(contract["teacher"]["worlds"]),
             c_puct=float(contract["teacher"]["c_puct"]),
             roots=int(contract["evaluation"]["stability_roots"]),
-            repeats=int(contract["evaluation"]["stability_repeats"]),
+            repeat_seeds=[
+                int(value)
+                for value in contract["evaluation"]["stability_repeat_search_seeds"]
+            ],
             seed=int(contract["seeds"]["stability"]),
             max_steps=int(contract["teacher"]["max_steps"]),
         )
@@ -575,6 +684,9 @@ def run_teacher_gate(
         audit,
         content_hash=runtime["experience_content_hash"],
         asset_manifest_hash=runtime["asset_manifest_hash"],
+        sampled_search_roots=list(
+            contract["evaluation"]["sampled_search_replay_roots"]
+        ),
     )
     manifest["trajectory_sha256"] = file_sha256(audit_path)
     manifest["trajectory_replay"] = receipt_dict(replay)

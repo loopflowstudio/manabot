@@ -28,7 +28,11 @@ from gui.server import (
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.env.observation import ActionEnum, ActionSpaceEnum
 from manabot.infra.hypers import MatchHypers, RewardHypers
-from manabot.sim.mcts import DeterminizedPuctPlayer, determinized_puct
+from manabot.sim.mcts import (
+    DeterminizedPuctPlayer,
+    _mix_seed as _mcts_mix_seed,
+    determinized_puct,
+)
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 import managym
 
@@ -262,6 +266,13 @@ class ReplayReceipt:
     command_mismatches: int
     outcome_mismatches: int
     opponent_private_cards_exposed: int
+    sampled_search_roots: int
+    missing_sampled_search_roots: int
+    search_action_mismatches: int
+    search_visit_mismatches: int
+    search_q_mismatches: int
+    search_value_mismatches: int
+    search_metadata_mismatches: int
 
     @property
     def passed(self) -> bool:
@@ -271,6 +282,12 @@ class ReplayReceipt:
                 self.command_mismatches,
                 self.outcome_mismatches,
                 self.opponent_private_cards_exposed,
+                self.missing_sampled_search_roots,
+                self.search_action_mismatches,
+                self.search_visit_mismatches,
+                self.search_q_mismatches,
+                self.search_value_mismatches,
+                self.search_metadata_mismatches,
             )
         )
 
@@ -324,6 +341,8 @@ def record_teacher_trajectories(
             )
             root_digest = env._engine.state_digest()
             search_call_index = players[actor].stats.decisions + 1
+            player_seed = seed * 2 + actor + 1
+            call_seed = _mcts_mix_seed(player_seed, search_call_index)
             action = players[actor].act(env, obs)
             root_unchanged = env._engine.state_digest() == root_digest
             command = build_command(frame, action)
@@ -348,8 +367,9 @@ def record_teacher_trajectories(
                         "cap_hits": result.cap_hits,
                         "encoded_legal_count": encoded_legal_count,
                         "root_unchanged": root_unchanged,
-                        "player_seed": seed * 2 + actor + 1,
+                        "player_seed": player_seed,
                         "call_index": search_call_index,
+                        "call_seed": call_seed,
                     },
                 }
             )
@@ -382,16 +402,31 @@ def record_teacher_trajectories(
 
 
 def replay_teacher_trajectories(
-    artifact: dict[str, Any], *, content_hash: str, asset_manifest_hash: str
+    artifact: dict[str, Any],
+    *,
+    content_hash: str,
+    asset_manifest_hash: str,
+    sampled_search_roots: list[dict[str, int]] | None = None,
 ) -> ReplayReceipt:
-    """Replay commands without rerunning search and compare viewer-safe frames."""
+    """Replay commands and exactly rerun every predeclared sampled search root."""
 
     frame_mismatches = 0
     command_mismatches = 0
     outcome_mismatches = 0
     private_exposures = 0
     decisions_seen = 0
+    sampled_seen: set[tuple[int, int]] = set()
+    sampled_requested = {
+        (int(root["game_index"]), int(root["decision_index"]))
+        for root in sampled_search_roots or []
+    }
+    search_action_mismatches = 0
+    search_visit_mismatches = 0
+    search_q_mismatches = 0
+    search_value_mismatches = 0
+    search_metadata_mismatches = 0
     for game in artifact["games"]:
+        game_index = int(game["game_index"])
         env = _fresh_env(int(game["deal_seed"]))
         info: dict[str, Any] = {}
         done = False
@@ -419,6 +454,41 @@ def replay_teacher_trajectories(
                 or command.offer_id not in {offer["id"] for offer in frame["offers"]}
             ):
                 command_mismatches += 1
+            root_key = (game_index, revision)
+            if root_key in sampled_requested:
+                sampled_seen.add(root_key)
+                expected_search = expected["search"]
+                root_digest = env._engine.state_digest()
+                rerun = determinized_puct(
+                    env._engine,
+                    simulations=int(expected_search["simulations"]),
+                    worlds=int(expected_search["worlds"]),
+                    c_puct=float(artifact["teacher"]["c_puct"]),
+                    seed=int(expected_search["call_seed"]),
+                    max_steps=int(artifact["teacher"]["max_steps"]),
+                )
+                if env._engine.state_digest() != root_digest:
+                    search_metadata_mismatches += 1
+                if _teacher_action(rerun) != int(command.offer_id):
+                    search_action_mismatches += 1
+                if not np.array_equal(
+                    rerun.visit_counts,
+                    np.asarray(expected_search["visit_counts"], dtype=np.int64),
+                ):
+                    search_visit_mismatches += 1
+                if not np.array_equal(
+                    rerun.q_values,
+                    np.asarray(expected_search["q_values"], dtype=np.float32),
+                ):
+                    search_q_mismatches += 1
+                if rerun.root_value != float(expected_search["root_value"]):
+                    search_value_mismatches += 1
+                if (
+                    rerun.tree_nodes != int(expected_search["tree_nodes"])
+                    or rerun.max_depth != int(expected_search["max_depth"])
+                    or rerun.cap_hits != int(expected_search["cap_hits"])
+                ):
+                    search_metadata_mismatches += 1
             _, _, terminated, truncated, info = env.step(int(command.offer_id))
             done = bool(terminated or truncated)
             decisions_seen += 1
@@ -432,6 +502,13 @@ def replay_teacher_trajectories(
         command_mismatches=command_mismatches,
         outcome_mismatches=outcome_mismatches,
         opponent_private_cards_exposed=private_exposures,
+        sampled_search_roots=len(sampled_seen),
+        missing_sampled_search_roots=len(sampled_requested - sampled_seen),
+        search_action_mismatches=search_action_mismatches,
+        search_visit_mismatches=search_visit_mismatches,
+        search_q_mismatches=search_q_mismatches,
+        search_value_mismatches=search_value_mismatches,
+        search_metadata_mismatches=search_metadata_mismatches,
     )
 
 
@@ -460,14 +537,21 @@ def evaluate_root_stability(
     worlds: int,
     c_puct: float,
     roots: int,
-    repeats: int,
+    repeat_seeds: list[int],
     seed: int,
     max_steps: int = 2000,
 ) -> dict[str, Any]:
     """Measure repeated-search stability on a fixed teacher-driven root stream."""
 
-    if roots < 1 or repeats < 2:
-        raise ValueError("roots must be positive and repeats must be at least two")
+    if (
+        roots < 1
+        or len(repeat_seeds) < 2
+        or len(set(repeat_seeds)) != len(repeat_seeds)
+    ):
+        raise ValueError(
+            "roots must be positive and repeat_seeds must contain at least two "
+            "distinct seeds"
+        )
     if not budgets or any(budget < worlds for budget in budgets):
         raise ValueError("every budget must be at least the number of worlds")
     env = _fresh_env(seed)
@@ -494,14 +578,14 @@ def evaluate_root_stability(
         repeat_results: dict[int, list[Any]] = {}
         for budget in budgets:
             repeat_results[budget] = []
-            for repeat in range(repeats):
+            for repeat_seed in repeat_seeds:
                 root_digest = env._engine.state_digest()
                 result = determinized_puct(
                     env._engine,
                     simulations=budget,
                     worlds=worlds,
                     c_puct=c_puct,
-                    seed=seed + roots_seen * 10_000 + repeat,
+                    seed=repeat_seed,
                     max_steps=max_steps,
                 )
                 if env._engine.state_digest() != root_digest:
@@ -515,8 +599,8 @@ def evaluate_root_stability(
                 for result in repeat_results[budget]
             ]
             actions = [_teacher_action(result) for result in repeat_results[budget]]
-            for left in range(repeats):
-                for right in range(left + 1, repeats):
+            for left in range(len(repeat_seeds)):
+                for right in range(left + 1, len(repeat_seeds)):
                     block["pair_js"].append(
                         _js_divergence(distributions[left], distributions[right])
                     )
@@ -546,7 +630,8 @@ def evaluate_root_stability(
     for budget, block in per_budget.items():
         aggregate[str(budget)] = {
             "roots": roots_seen,
-            "searches": roots_seen * repeats,
+            "searches": roots_seen * len(repeat_seeds),
+            "repeat_search_seeds": list(repeat_seeds),
             "top_action_agreement": float(np.mean(block["pair_action_agreement"])),
             "median_js_divergence": float(np.median(block["pair_js"])),
             "mean_target_entropy": float(np.mean(block["target_entropy"])),

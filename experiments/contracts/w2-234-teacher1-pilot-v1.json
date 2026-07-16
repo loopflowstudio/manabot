@@ -72,8 +72,35 @@
   "date_preregistered": "2026-07-16",
   "evaluation": {
     "games_per_matchup": 48,
+    "matchup_seed_blocks": [
+      {
+        "games": 16,
+        "id": "matchup-197",
+        "seed": 1197
+      },
+      {
+        "games": 16,
+        "id": "matchup-419",
+        "seed": 1419
+      },
+      {
+        "games": 16,
+        "id": "matchup-887",
+        "seed": 1887
+      }
+    ],
+    "sampled_search_replay_roots": [
+      {"decision_index": 0, "game_index": 0},
+      {"decision_index": 8, "game_index": 0},
+      {"decision_index": 0, "game_index": 1},
+      {"decision_index": 8, "game_index": 1},
+      {"decision_index": 0, "game_index": 2},
+      {"decision_index": 8, "game_index": 2},
+      {"decision_index": 0, "game_index": 3},
+      {"decision_index": 8, "game_index": 3}
+    ],
     "scenario_runs": 100,
-    "stability_repeats": 3,
+    "stability_repeat_search_seeds": [2197001, 2197002, 2197003],
     "stability_roots": 192,
     "trajectory_audit_games": 4
   },
@@ -90,7 +117,7 @@
     "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
     "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
     "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
-    "pilot_source_sha256": "5b1cd5d5d49f9bb3b1f59fc59261c476aa27664a5ac1428f48b5502d88ab5a2e",
+    "pilot_source_sha256": "341fc4e1bd710ac1a4e55bfaf548d29c76fc88fdb3a75728ce7cf7267ccb867b",
     "world": "w2"
   },
   "experiment": "w2-234-teacher1-admission-v1",
@@ -104,7 +131,8 @@
     "high_vs_low_win_rate": 0.55,
     "high_vs_random_win_rate": 0.8,
     "max_realized_p50_gap": 0.1,
-    "max_playout_cap_rate": 0.001
+    "max_playout_cap_rate": 0.001,
+    "required_sampled_search_replay_roots": 8
   },
   "hidden_information_boundary": {
     "audit_private_authority": "deal seeds and authority witnesses may exist only in the audit bundle",
@@ -149,6 +177,7 @@
   },
   "predictions": [
     "t1-128-w4 wins at least 55% against t1-8-w4, 55% against the frozen checkpoint, and 80% against random",
+    "all matchup cells report the three fixed 16-game seed blocks separately and as the pre-registered 48-game aggregate",
     "at 128 traversals repeated searches agree on the top action at least 70% of roots and have median Jensen-Shannon divergence at most 0.10",
     "mean tree nodes and mean maximum depth both increase from 8 to 128 traversals",
     "t1-128-w4 reaches 20% correct on at least one of S1, S2, or S5 and no S1-S5 result is over 10 points below random",
@@ -158,7 +187,6 @@
   "schema_version": 1,
   "seeds": {
     "future_training": [197, 419, 887],
-    "matchups": 1197,
     "runtime": 197,
     "scenarios": 4197,
     "stability": 2197,
