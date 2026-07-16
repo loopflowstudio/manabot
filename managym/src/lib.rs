@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod benchmark;
 pub mod cardsets;
+pub mod conformance;
 pub mod experience;
 pub mod flow;
 pub mod infra;

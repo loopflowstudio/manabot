@@ -200,10 +200,43 @@ jobs:
           uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py -q
           uv run scripts/generate_coverage_gaps.py --check
 
+  semantic-conformance:
+    name: Semantic Kernel Conformance
+    needs: [rust]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            managym -> target
+
+      - name: Check replay, property, and metamorphic evidence
+        run: cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests
+
+      - name: Reproduce checked conformance artifacts
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-v1
+
+      - name: Run bounded valid-action fuzzing
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
+
+      - name: Preserve exact fuzz replay seeds
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-conformance-failures
+          path: target/semantic-conformance/failures/*.json
+          if-no-files-found: ignore
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage]
+    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance]
     if: always()
     steps:
       - name: Check all jobs
@@ -213,10 +246,12 @@ jobs:
           echo "integration: ${{ needs.integration.result }}"
           echo "protocol-v1: ${{ needs.protocol-v1.result }}"
           echo "semantic-coverage: ${{ needs.semantic-coverage.result }}"
+          echo "semantic-conformance: ${{ needs.semantic-conformance.result }}"
           if [ "${{ needs.rust.result }}" != "success" ] || \
              [ "${{ needs.python-unit.result }}" != "success" ] || \
              [ "${{ needs.integration.result }}" != "success" ] || \
              [ "${{ needs.protocol-v1.result }}" != "success" ] || \
-             [ "${{ needs.semantic-coverage.result }}" != "success" ]; then
+             [ "${{ needs.semantic-coverage.result }}" != "success" ] || \
+             [ "${{ needs.semantic-conformance.result }}" != "success" ]; then
             exit 1
           fi
