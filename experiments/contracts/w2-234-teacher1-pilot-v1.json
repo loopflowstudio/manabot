@@ -1,0 +1,186 @@
+{
+  "branch_table": {
+    "boundary_or_legality_failure": {
+      "diagnosis": "authoritative coordinator, replay, viewer boundary, or action ABI defect",
+      "next": "invalidate the run and repair the evidence boundary before further search"
+    },
+    "economics_failure_only": {
+      "diagnosis": "Python full-clone tree search is useful but not a viable label generator",
+      "next": "retain the algorithm result and move search behind the Rules BranchDriver before data generation"
+    },
+    "label_instability": {
+      "diagnosis": "the declared traversal budget does not define a learnable visit target",
+      "next": "stop before training and preregister a new budget or target-pruning experiment"
+    },
+    "pass": {
+      "diagnosis": "Teacher-1 is strong, stable, legal, replayable, and affordable enough for a bounded student test",
+      "next": "freeze t1-128-w4 and run paired chosen-versus-visit distillation at training seeds 197, 419, and 887"
+    },
+    "tree_or_accounting_failure": {
+      "diagnosis": "Teacher-1 is not producing the declared adaptive tree or budget",
+      "next": "repair the reference implementation and rerun all cells"
+    },
+    "weak_teacher": {
+      "diagnosis": "uniform priors and random leaves do not produce useful Teacher-1 supervision",
+      "next": "do not distill; isolate frozen policy priors and value leaves as separate teacher ablations"
+    }
+  },
+  "caps": {
+    "artifact_bytes": 2147483648,
+    "confirmatory_workers": 4,
+    "teacher_gate_core_hours": 32,
+    "teacher_gate_wall_hours": 8
+  },
+  "control_lock": {
+    "path": "experiments/contracts/w2-234-teacher1-control-lock-v1.json",
+    "required_before_run": true,
+    "requirements": [
+      "bind the canonical SHA-256 of this contract",
+      "bind a terminal Teacher-0 recovery manifest and its exact policy/value checkpoint",
+      "bind a same-host latency calibration artifact",
+      "map every Teacher-1 budget to a Teacher-0 sims/action control within 10% realized p50 decision latency"
+    ]
+  },
+  "curated_matchup": {
+    "hero": "teacher-a",
+    "hero_deck": {
+      "Ancestral Recall": 3,
+      "Counterspell": 4,
+      "Gray Ogre": 6,
+      "Island": 12,
+      "Lightning Bolt": 6,
+      "Man-o'-War": 4,
+      "Mountain": 12,
+      "Pyroclasm": 3,
+      "Raging Goblin": 4,
+      "Wind Drake": 6
+    },
+    "villain": "teacher-b",
+    "villain_deck": {
+      "Ancestral Recall": 3,
+      "Counterspell": 4,
+      "Gray Ogre": 6,
+      "Island": 12,
+      "Lightning Bolt": 6,
+      "Man-o'-War": 4,
+      "Mountain": 12,
+      "Pyroclasm": 3,
+      "Raging Goblin": 4,
+      "Wind Drake": 6
+    }
+  },
+  "date_preregistered": "2026-07-16",
+  "evaluation": {
+    "games_per_matchup": 48,
+    "scenario_runs": 100,
+    "stability_repeats": 3,
+    "stability_roots": 192,
+    "trajectory_audit_games": 4
+  },
+  "expected_fingerprints": {
+    "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+    "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+    "content_digest": "2444fc15283068d79f74d49f8297bdbe3cc581a62a1eee976b35a8cecd8a0ef4",
+    "content_manifest_sha256": "02fab67db308685ae2dc14197c9afb368769ef9f78a3e87d77ce342d1777ad01",
+    "content_schema_version": 1,
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "2c81c1577a3d26fc1bb6e50236e3bdffa6da4488b58007fd38c88c8cbc670b63",
+    "engine_source_sha256": "8df36a12940e51b77747915e4999f08032328cc19c440a343586ca0875805ddd",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+    "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+    "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+    "pilot_source_sha256": "5b1cd5d5d49f9bb3b1f59fc59261c476aa27664a5ac1428f48b5502d88ab5a2e",
+    "world": "w2"
+  },
+  "experiment": "w2-234-teacher1-admission-v1",
+  "gates": {
+    "competency_max_regression_vs_random": 0.1,
+    "high_labels_per_second_per_worker": 2.0,
+    "high_median_js_divergence": 0.1,
+    "high_p95_decision_ms": 500.0,
+    "high_top_action_agreement": 0.7,
+    "high_vs_checkpoint_win_rate": 0.55,
+    "high_vs_low_win_rate": 0.55,
+    "high_vs_random_win_rate": 0.8,
+    "max_realized_p50_gap": 0.1,
+    "max_playout_cap_rate": 0.001
+  },
+  "hidden_information_boundary": {
+    "audit_private_authority": "deal seeds and authority witnesses may exist only in the audit bundle",
+    "learner_view": "acting viewer observation and legal mask only",
+    "method": "separate determinized PUCT trees per sampled world; not ISMCTS or public-belief search",
+    "opponent_hand": "absent from viewer-safe protocol frames and learner inputs"
+  },
+  "host": {
+    "chip": "Apple M4 Max",
+    "description": "MacBook Pro Mac16,5; 16 CPU cores; 128 GB unified memory",
+    "machine": "arm64",
+    "max_workers": 4,
+    "mps_available": true,
+    "operating_system": "macOS 26.0.1",
+    "python": "3.12.12",
+    "torch": "2.10.0"
+  },
+  "observation_shapes": {
+    "action_focus": [32, 2],
+    "actions": [32, 15],
+    "actions_valid": [32],
+    "agent_cards": [60, 38],
+    "agent_cards_valid": [60],
+    "agent_permanents": [40, 24],
+    "agent_permanents_valid": [40],
+    "agent_player": [1, 28],
+    "agent_player_valid": [1],
+    "events": [32, 7],
+    "events_valid": [32],
+    "opponent_cards": [60, 38],
+    "opponent_cards_valid": [60],
+    "opponent_permanents": [40, 24],
+    "opponent_permanents_valid": [40],
+    "opponent_player": [1, 28],
+    "opponent_player_valid": [1]
+  },
+  "opponents": {
+    "checkpoint": "the recovery policy_value arm, preselected before result inspection, frozen by exact SHA-256, and played by deterministic argmax",
+    "random": "uniform random over the current encoded legal mask",
+    "scripted": "the fixed villains embedded in competency scenarios S1-S5",
+    "search": "Teacher-0 flat determinized Monte Carlo matched by realized p50 latency"
+  },
+  "predictions": [
+    "t1-128-w4 wins at least 55% against t1-8-w4, 55% against the frozen checkpoint, and 80% against random",
+    "at 128 traversals repeated searches agree on the top action at least 70% of roots and have median Jensen-Shannon divergence at most 0.10",
+    "mean tree nodes and mean maximum depth both increase from 8 to 128 traversals",
+    "t1-128-w4 reaches 20% correct on at least one of S1, S2, or S5 and no S1-S5 result is over 10 points below random",
+    "t1-128-w4 remains at or below 500 ms p95, at or above two labels/second/worker, and below 0.1% playout-cap hits"
+  ],
+  "question": "Does the existing deterministic multi-world PUCT Teacher-1 produce sufficiently strong, stable, legal, replayable, and affordable visit/value targets to justify a three-seed distillation experiment?",
+  "schema_version": 1,
+  "seeds": {
+    "future_training": [197, 419, 887],
+    "matchups": 1197,
+    "runtime": 197,
+    "scenarios": 4197,
+    "stability": 2197,
+    "trajectory": 3197
+  },
+  "source_base_commit": "df01e1749f7095380bf0a37858be196605081ca5",
+  "status": "preregistered_waiting_for_control_lock",
+  "student_stage": {
+    "authorized_only_if": "teacher gate status is completed_pass",
+    "primary_comparison": "normalized root visits versus one-hot chosen action, both with root-value supervision",
+    "training_seeds": [197, 419, 887]
+  },
+  "teacher": {
+    "budget_semantics": "total adaptive tree traversals per decision across all worlds; root visits sum exactly to this budget",
+    "budgets": [8, 32, 128],
+    "c_puct": 1.5,
+    "kind": "determinized_puct_uniform_prior_random_leaf/v1",
+    "max_steps": 2000,
+    "policy_target_kind": "root_visit_distribution",
+    "root_noise": "none",
+    "value_target_kind": "random_leaf_root_value",
+    "visit_temperature": 1.0,
+    "worlds": 4
+  }
+}
