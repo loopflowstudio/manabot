@@ -105,7 +105,7 @@ interface MatrixBrowserState {
 }
 
 type MatrixWindow = Window & typeof globalThis & {
-  __manabotMatrix?: MatrixBrowserState;
+  __etudeMatrix?: MatrixBrowserState;
 };
 
 interface RuntimeFailures {
@@ -394,7 +394,7 @@ async function installScenarioInstrumentation(page: Page, seed: number): Promise
       value: SeededWebSocket,
       writable: true,
     });
-    (window as MatrixWindow).__manabotMatrix = state;
+    (window as MatrixWindow).__etudeMatrix = state;
   }, seed);
 }
 
@@ -403,7 +403,7 @@ async function updateSequence(page: Page): Promise<number> {
 }
 
 async function commandCount(page: Page): Promise<number> {
-  return page.evaluate(() => (window as MatrixWindow).__manabotMatrix?.commands.length ?? 0);
+  return page.evaluate(() => (window as MatrixWindow).__etudeMatrix?.commands.length ?? 0);
 }
 
 async function renderedActions(page: Page): Promise<RenderedAction[]> {
@@ -651,7 +651,7 @@ async function assertExistingReconnectStatus(
   const sequenceBefore = await updateSequence(page);
 
   await page.evaluate(() => {
-    const matrixState = (window as MatrixWindow).__manabotMatrix;
+    const matrixState = (window as MatrixWindow).__etudeMatrix;
     const connectionBadge = document.querySelector<HTMLElement>('[data-testid="connection-badge"]');
     if (!matrixState || !connectionBadge) {
       throw new Error('matrix reconnect instrumentation is unavailable');
@@ -724,7 +724,7 @@ async function assertExistingReconnectStatus(
   );
 
   const statuses = await page.evaluate(
-    () => (window as MatrixWindow).__manabotMatrix?.connectionStatuses ?? [],
+    () => (window as MatrixWindow).__etudeMatrix?.connectionStatuses ?? [],
   );
   expect(statuses).toEqual(expect.arrayContaining(['disconnected', 'reconnecting', 'connected']));
   return statuses;
@@ -757,7 +757,7 @@ async function activateKeyboardChoice(
     })
     .toBe(commandsBefore + 1);
   const command = await page.evaluate(
-    () => (window as MatrixWindow).__manabotMatrix?.commands.at(-1) ?? null,
+    () => (window as MatrixWindow).__etudeMatrix?.commands.at(-1) ?? null,
   );
   expect(command, `${scenario.id}: ${family} command was not captured`).not.toBeNull();
   expect(command?.command_id, `${scenario.id}: ${family} command id is absent`).not.toBe('');

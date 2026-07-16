@@ -6,12 +6,12 @@ import path from 'node:path';
 
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
-const RESUME_STORAGE_KEY = 'manabot.gui.resume';
+const RESUME_STORAGE_KEY = 'etude.gui.resume';
 const PUBLIC_PROTOCOLS = new Set(['http:', 'https:', 'ws:', 'wss:']);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
-const RECEIPT_PATH = process.env.MANABOT_CLEAN_RECEIPT;
-const LAUNCH_LOG_PATH = process.env.MANABOT_LAUNCH_LOG;
-const LAUNCH_STARTED_MS = Number(process.env.MANABOT_CLEAN_START_MS ?? '0');
+const RECEIPT_PATH = process.env.ETUDE_CLEAN_RECEIPT;
+const LAUNCH_LOG_PATH = process.env.ETUDE_LAUNCH_LOG;
+const LAUNCH_STARTED_MS = Number(process.env.ETUDE_CLEAN_START_MS ?? '0');
 
 interface AssetPackReference {
   id: string;
@@ -20,7 +20,7 @@ interface AssetPackReference {
 }
 
 type CleanProofWindow = Window &
-  typeof globalThis & { __manabotCleanFrames?: string[] };
+  typeof globalThis & { __etudeCleanFrames?: string[] };
 
 function isPublicRequest(rawUrl: string): boolean {
   const url = new URL(rawUrl);
@@ -89,7 +89,7 @@ function packFromMessage(message: unknown): AssetPackReference | null {
 
 async function latestBrowserPack(page: Page): Promise<AssetPackReference | null> {
   const frames = await page.evaluate(
-    () => (window as CleanProofWindow).__manabotCleanFrames ?? [],
+    () => (window as CleanProofWindow).__etudeCleanFrames ?? [],
   );
   for (const frame of frames.toReversed()) {
     try {
@@ -162,8 +162,8 @@ function launcherReadyRecord(): unknown {
   }
   const line = readFileSync(LAUNCH_LOG_PATH, 'utf8')
     .split('\n')
-    .find((candidate) => candidate.startsWith('MANABOT_PLAY_READY '));
-  return line ? JSON.parse(line.slice('MANABOT_PLAY_READY '.length)) : null;
+    .find((candidate) => candidate.startsWith('ETUDE_PLAY_READY '));
+  return line ? JSON.parse(line.slice('ETUDE_PLAY_READY '.length)) : null;
 }
 
 test('clean command reaches pinned play and reloads without public network', async ({
@@ -191,12 +191,12 @@ test('clean command reaches pinned play and reloads without public network', asy
         }
         this.addEventListener('message', (event: MessageEvent<unknown>) => {
           if (typeof event.data === 'string') {
-            proofWindow.__manabotCleanFrames?.push(event.data);
+            proofWindow.__etudeCleanFrames?.push(event.data);
           }
         });
       }
     }
-    proofWindow.__manabotCleanFrames = [];
+    proofWindow.__etudeCleanFrames = [];
     Object.defineProperty(window, 'WebSocket', {
       configurable: true,
       value: TrackedWebSocket,

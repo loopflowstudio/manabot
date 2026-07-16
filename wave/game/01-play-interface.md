@@ -26,7 +26,7 @@ Open http://localhost:5173 — that root route IS the play page. Pick an
 opponent, hit New Game, click actions. The replay viewer is at
 http://localhost:5173/replay and lists every finished game automatically.
 
-Traces land in `gui/traces/` (override with `MANABOT_GUI_TRACES_DIR`).
+Traces land in `gui/traces/` (override with `ETUDE_GUI_TRACES_DIR`).
 
 ## What already existed (commit e234933 and before)
 
@@ -144,8 +144,8 @@ component — in particular, no legacy `$:` over `$state` fields. Any new
 or `export let` silently flips the whole component back to legacy).
 
 **Regression net**: `npm run test:e2e` (Playwright, headless Chromium)
-drives the real stack — backend on `MANABOT_API_PORT` (default 8011,
-uvicorn binary override `MANABOT_UVICORN`), vite dev on 5183 — and asserts
+drives the real stack — backend on `ETUDE_API_PORT` (default 8011,
+uvicorn binary override `ETUDE_UVICORN`), vite dev on 5183 — and asserts
 DOM *mutation*: badge reaches "connected", New Game renders a board vs the
 random villain, a full game is played with random legal actions (at least
 ten decision points) where the game log must grow after every click and the

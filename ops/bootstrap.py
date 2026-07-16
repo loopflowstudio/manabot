@@ -10,7 +10,7 @@ import shlex
 from ops.provider import RuntimeSpec
 
 BOOTSTRAP_MARKER = "/opt/manabot/bootstrap.v1.done"
-DEFAULT_REPO = "https://github.com/loopflowstudio/manabot.git"
+DEFAULT_REPO = "https://github.com/loopflowstudio/etude.git"
 
 
 def _sq(value: str) -> str:

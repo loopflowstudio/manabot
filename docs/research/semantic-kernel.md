@@ -4,13 +4,13 @@ Research date: 2026-07-15.
 
 Compared revisions:
 
-- manabot: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (2026-07-10).
+- Etude: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (2026-07-10).
 - Phase: [`553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d`](https://github.com/phase-rs/phase/commit/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d)
   (2026-07-15).
 
-This is the technical follow-on to [the broad manabot/Phase comparison](research.md).
+This is the technical follow-on to [the broad Etude/Phase comparison](etude-vs-phase.md).
 Its question is not "how do we copy Phase?" It is: **which invariants should
-manabot steal, which representations should it reject, and what smaller design
+Etude steal, which representations should it reject, and what smaller design
 could support a more polished game and a more general learning system?**
 
 ## Executive conclusion
@@ -59,9 +59,9 @@ The architectural maxim is: **steal Phase's invariants, not its shapes.**
 
 ### Architecture
 
-#### manabot today
+#### Etude today
 
-manabot already has the seed of a semantic machine, but four concerns are
+Etude already has the seed of a semantic machine, but four concerns are
 collapsed together.
 
 1. [`CardDefinition`](../managym/src/state/card.rs#L196) is both authoring data
@@ -172,13 +172,13 @@ The mature open-source MTG engines show the two conventional content extremes.
   cost of an enormous class graph and deep-copy/runtime-composition complexity.
 
 Phase sits between them: Oracle text is lowered to a large typed Rust AST, with
-Forge fallbacks. Manabot should not choose one of these poles. Its selected-deck
+Forge fallbacks. Etude should not choose one of these poles. Its selected-deck
 scope makes it possible to insist on a smaller typed intermediate representation
 and reject unsupported constructs at content-build time.
 
 ### Data flow
 
-#### Current manabot flow
+#### Current Etude flow
 
 ```text
 Rust card constructor
@@ -320,7 +320,7 @@ The names can change; the separation cannot.
 
 Phase has the right pair, but it still carries raw `ObjectId` through a great
 deal of state and manually propagates optional `source_incarnation`. A stronger
-manabot type rule is: **bare storage IDs never cross a rules boundary.** Looking
+Etude type rule is: **bare storage IDs never cross a rules boundary.** Looking
 up `ObjectRef` validates the epoch. Following a physical card across zones is an
 explicit operation with an explicit rules justification.
 
@@ -487,7 +487,7 @@ memory-access pattern**. The storage choice depends on whether the search keeps
 many simulations alive concurrently, walks one tree depth-first, or performs a
 long independent playout and throws it away.
 
-manabot currently has two importantly different Monte Carlo implementations:
+Etude currently has two importantly different Monte Carlo implementations:
 
 - [`Env::flat_mc_scores`](../managym/src/agent/env.rs#L370) holds one
   determinized world and one simulation clone at a time. It clones a world,
@@ -734,11 +734,11 @@ Run at least these workload families:
    every `W*A*R` state between policy calls. Include both policy-to-terminal and
    the deployed hybrid `K = 8` policy plies followed by random tails.
 3. **Tree-shaped synthetic consumer:** 64, 256, and 1,024 visits with measured
-   manabot legal offers and path lengths, one state per worker, 1/4/8 workers.
+   Etude legal offers and path lengths, one state per worker, 1/4/8 workers.
    This does not claim MCTS strength; it measures whether prefix reuse makes the
    transaction machinery valuable.
 4. **Cross-game teacher batching:** multiple root games whose live leaves are
-   co-batched, because [`pooled_datagen`](../manabot/sim/pooled_datagen.py#L85)
+   co-batched, because [`pooled_datagen`](../../manabot/sim/pooled_datagen.py#L85)
    already makes cross-game inference throughput part of the actual system.
 
 For each cell, report:
@@ -903,7 +903,7 @@ while the environment applies the completed command once.
 [OpenSpiel's `State` API](https://github.com/google-deepmind/open_spiel/blob/master/open_spiel/spiel.h#L3454-L3482)
 provides the simpler baseline: `Clone()` returns a copy, `Child(action)` clones
 then applies, and the interface separately permits a game-specific fast
-`UndoAction`. Manabot needs a richer structured command than OpenSpiel's integer
+`UndoAction`. Etude needs a richer structured command than OpenSpiel's integer
 action, but should retain the clean distinction between a game state, its fork
 and rollback capabilities, and the algorithm consuming them.
 
@@ -946,7 +946,7 @@ their modest O(n) middle removal is usually a good simplicity trade. Set-like
 zones can use dense vectors plus reverse positions and swap-remove. UI ordering
 is presentation state and should not become a `GameAction` as it does in Phase.
 
-manabot's current `ZoneManager` uses `retain` for every removal, scans the full
+Etude's current `ZoneManager` uses `retain` for every removal, scans the full
 zone, and stores only the zone—not the position—in its reverse index. This is
 not urgent at 60-card decks, but the new identity migration is the right time to
 centralize zone invariants and add O(1) location lookup.
@@ -966,7 +966,7 @@ objects became tapped simultaneously, this choice opened, this trigger entered
 the stack. The UI owns layout, grouping, hover, drag state, animation clocks,
 and uncommitted choice drafts.
 
-This separation is how manabot can equal Phase's smoothness while remaining
+This separation is how Etude can equal Phase's smoothness while remaining
 narrow. Phase's simulation path already learned that frontend derivation must be
 skippable during search. The cleaner endpoint is that display state is never
 part of the rules aggregate at all.
@@ -1102,7 +1102,7 @@ decoder steps.
 
 ### Complexity
 
-1. **manabot's current complexity is cross-product complexity.** Adding a
+1. **Etude's current complexity is cross-product complexity.** Adding a
    choice-bearing mechanic touches definition enums, target derivation,
    resolution, suspended decisions, action variants, action-space generation,
    PyO3 bindings, flat encoding, model heads, and UI. A semantic program and
@@ -1127,10 +1127,10 @@ decoder steps.
 1. **Phase's incarnation work is among its most valuable rules engineering.**
    It aligns directly with CR 400.7 and CR 608.2h and prevents an entire class of
    blink, delayed-trigger, source, and LKI bugs.
-2. **manabot's fresh `PermanentId` is a useful partial model, not a durable
+2. **Etude's fresh `PermanentId` is a useful partial model, not a durable
    identity contract.** Stable `CardId` references can still accidentally reach
    a later incarnation, and `PermanentId` is tied to one representation/zone.
-3. **manabot's suspension seam is good.** Parking an effect frame proves the
+3. **Etude's suspension seam is good.** Parking an effect frame proves the
    engine can support serializable continuations. Replacing the queue with a
    program counter is an evolution, not a rewrite of the rules loop concept.
 4. **Direct mutation plus factual events is insufficient for replacements.** A
@@ -1265,7 +1265,7 @@ The new kernel should be built with a reference/fast duality.
 3. **Cost/payment semantics:** should mana-source selection be a first-class
    strategic decision for the policy, or can a deterministic solver supply
    Pareto-distinct payment plans and hide dominated microchoices?
-4. **Search shape:** will manabot remain flat determinized rollout search, move
+4. **Search shape:** will Etude remain flat determinized rollout search, move
    to deeper tree search, or use search mostly as a teacher? This decides how
    soon make/unmake earns its complexity.
 5. **Program embeddings:** learn from opcode/operand structure end-to-end,
@@ -1305,7 +1305,7 @@ decks I select" without turning it into technical debt.
 
 ### Move immutable definitions out of `GameState`
 
-**Observation**: Every manabot `Card` deep-clones its definition, and every
+**Observation**: Every Etude `Card` deep-clones its definition, and every
 search fork clones those copies again.
 
 **Cost**: Medium. Introduce stable definition IDs, an `Arc<ContentPack>`, and
@@ -1350,7 +1350,7 @@ cards that stress modes, multiple target roles, loops, LKI, and a suspending
 
 ### Replace flat action materialization with offers and a choice grammar
 
-**Observation**: manabot truncates dynamic actions; Phase caps combinatorial
+**Observation**: Etude truncates dynamic actions; Phase caps combinatorial
 enumeration. Both are symptoms of treating a structured command as a flat list.
 
 **Cost**: High across engine ABI, PyO3, model, training data, search, and UI.
@@ -1379,7 +1379,7 @@ special branches around current direct mutations.
 ### Prefer dense state plus measured transaction undo over persistent HAMTs
 
 **Observation**: Phase's structural sharing reduces clone cost but pays in
-lookup/allocation complexity; manabot's current state is small and dense but
+lookup/allocation complexity; Etude's current state is small and dense but
 clones immutable baggage.
 
 **Cost**: Low for dense compact state; high for complete undo journaling.

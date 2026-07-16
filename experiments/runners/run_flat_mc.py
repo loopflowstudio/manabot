@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 
 CHECKPOINT_TEMPLATE = (
-    "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s{seed}-final/"
+    "/Users/jack/src/etude/.runs/first-light-c1-interactive-dev2-s{seed}-final/"
     "step_65536.pt"
 )
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "manabot"
 version = "0.1.0"
-description = "Reinforcement Learning agent for Magic: The Gathering"
+description = "The trainable Magic: The Gathering agent for Etude Fantasia"
 requires-python = ">=3.10"
 dependencies = [
     "torch>=2.0.0",

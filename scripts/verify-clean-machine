@@ -8,7 +8,7 @@ cd "$ROOT" || exit 1
 proof_error() {
   code=$1
   message=$2
-  printf 'MANABOT_CLEAN_PROOF_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
+  printf 'ETUDE_CLEAN_PROOF_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
     "$code" "$message" >&2
   exit 2
 }
@@ -36,8 +36,8 @@ fi
 mkdir -p .cache/clean-machine
 log=$ROOT/.cache/clean-machine/launch.log
 receipt=$ROOT/.cache/clean-machine/proof.json
-api_port=${MANABOT_CLEAN_API_PORT:-18011}
-frontend_port=${MANABOT_CLEAN_FRONTEND_PORT:-15183}
+api_port=${ETUDE_CLEAN_API_PORT:-18011}
+frontend_port=${ETUDE_CLEAN_FRONTEND_PORT:-15183}
 start_ms=$(uv run --no-project --python 3.12 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
   proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
@@ -60,7 +60,7 @@ cleanup() {
 trap cleanup 0 HUP INT TERM
 
 deadline=$((start_ms + 60000))
-while ! grep -q '^MANABOT_PLAY_READY ' "$log" 2>/dev/null; do
+while ! grep -q '^ETUDE_PLAY_READY ' "$log" 2>/dev/null; do
   if ! kill -0 "$launcher_pid" 2>/dev/null; then
     cat "$log" >&2
     proof_error proof.launch "./scripts/play exited before readiness"
@@ -74,12 +74,12 @@ while ! grep -q '^MANABOT_PLAY_READY ' "$log" 2>/dev/null; do
   sleep 0.1
 done
 
-MANABOT_EXTERNAL_SERVERS=1 \
-MANABOT_API_PORT=$api_port \
-MANABOT_FRONTEND_PORT=$frontend_port \
-MANABOT_CLEAN_START_MS=$start_ms \
-MANABOT_CLEAN_RECEIPT=$receipt \
-MANABOT_LAUNCH_LOG=$log \
+ETUDE_EXTERNAL_SERVERS=1 \
+ETUDE_API_PORT=$api_port \
+ETUDE_FRONTEND_PORT=$frontend_port \
+ETUDE_CLEAN_START_MS=$start_ms \
+ETUDE_CLEAN_RECEIPT=$receipt \
+ETUDE_LAUNCH_LOG=$log \
   npm --prefix frontend run test:e2e -- clean-machine.spec.ts
 status=$?
 if [ "$status" -ne 0 ]; then

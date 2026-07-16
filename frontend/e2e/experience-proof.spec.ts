@@ -2,8 +2,8 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import { EXPERIENCE_PROOF_BASELINE, REACHABLE_PROMPT_FAMILIES } from './experience-proof-baseline';
 
-const RESUME_STORAGE_KEY = 'manabot.gui.resume';
-const CALIBRATING = process.env.MANABOT_CALIBRATE_PROOF === '1';
+const RESUME_STORAGE_KEY = 'etude.gui.resume';
+const CALIBRATING = process.env.ETUDE_CALIBRATE_PROOF === '1';
 const TINY_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABh6FO1AAAAABJRU5ErkJggg==',
   'base64',
@@ -42,7 +42,7 @@ interface ObservedProof {
   };
 }
 
-type ProofWindow = Window & typeof globalThis & { __manabotProof?: ProofState };
+type ProofWindow = Window & typeof globalThis & { __etudeProof?: ProofState };
 
 function round(value: number, digits = 2): number {
   const factor = 10 ** digits;
@@ -142,7 +142,7 @@ async function installProofInstrumentation(page: Page): Promise<void> {
       writable: true,
     });
 
-    proofWindow.__manabotProof = {
+    proofWindow.__etudeProof = {
       frameDeltas: [],
       sockets,
       interaction: null,
@@ -150,7 +150,7 @@ async function installProofInstrumentation(page: Page): Promise<void> {
 
     let previousFrame: number | null = null;
     const sampleFrame = (timestamp: number): void => {
-      const proof = proofWindow.__manabotProof;
+      const proof = proofWindow.__etudeProof;
       if (proof && previousFrame !== null) {
         proof.frameDeltas.push(timestamp - previousFrame);
       }
@@ -173,7 +173,7 @@ async function armInteractionProbe(
   await page.evaluate(
     ({ logCount, updateSequence }) => {
       const proofWindow = window as ProofWindow;
-      const proof = proofWindow.__manabotProof;
+      const proof = proofWindow.__etudeProof;
       if (!proof) {
         throw new Error('experience proof instrumentation is unavailable');
       }
@@ -276,14 +276,14 @@ async function measureKeyboardAction(page: Page): Promise<InteractionProbe> {
       () =>
         page.evaluate(
           () =>
-            (window as ProofWindow).__manabotProof?.interaction?.authorityResponseMs ?? null,
+            (window as ProofWindow).__etudeProof?.interaction?.authorityResponseMs ?? null,
         ),
       { timeout: 30_000, message: 'authority did not respond to keyboard action' },
     )
     .not.toBeNull();
 
   const sample = await page.evaluate(
-    () => (window as ProofWindow).__manabotProof?.interaction ?? null,
+    () => (window as ProofWindow).__etudeProof?.interaction ?? null,
   );
   expect(sample?.acknowledgementMs, 'local input acknowledgement was not observed').not.toBeNull();
   expect(sample?.authorityResponseMs, 'authority response was not observed').not.toBeNull();
@@ -327,7 +327,7 @@ async function injectReconnectFault(page: Page): Promise<void> {
   expect(credentialsBefore, 'resume credentials were not stored').not.toBeNull();
 
   await page.evaluate(() => {
-    const socket = (window as ProofWindow).__manabotProof?.sockets.at(-1);
+    const socket = (window as ProofWindow).__etudeProof?.sockets.at(-1);
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       throw new Error('no open WebSocket is available for reconnect fault injection');
     }
@@ -347,7 +347,7 @@ async function injectReconnectFault(page: Page): Promise<void> {
   const boardAfter = (await board.textContent())?.replace(/\s+/g, ' ').trim();
   const actionsAfter = await page.getByTestId('action-option').allTextContents();
   const socketCount = await page.evaluate(
-    () => (window as ProofWindow).__manabotProof?.sockets.length ?? 0,
+    () => (window as ProofWindow).__etudeProof?.sockets.length ?? 0,
   );
 
   expect(credentialsAfter).toBe(credentialsBefore);
@@ -424,7 +424,7 @@ test('reference experience meets baseline, resumes, and accepts keyboard play', 
   }
 
   const frameDeltas = await page.evaluate(
-    () => (window as ProofWindow).__manabotProof?.frameDeltas ?? [],
+    () => (window as ProofWindow).__etudeProof?.frameDeltas ?? [],
   );
   expect(await page.evaluate(() => document.visibilityState)).toBe('visible');
   expect(frameDeltas.length, 'too few animation frames were sampled').toBeGreaterThan(30);

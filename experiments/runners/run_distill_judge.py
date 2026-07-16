@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 C1V2_CHECKPOINT_TEMPLATE = (
-    "/Users/jack/src/manabot/.runs/first-light-c1-interactive-dev2-s{seed}-final/"
+    "/Users/jack/src/etude/.runs/first-light-c1-interactive-dev2-s{seed}-final/"
     "step_65536.pt"
 )
 
@@ -130,8 +130,9 @@ def main() -> None:
     if out_path.exists():
         results = json.loads(out_path.read_text())
 
-    from manabot.sim.flat_mc import spec_name
     from run_flat_mc import run_matchup
+
+    from manabot.sim.flat_mc import spec_name
 
     matchups = build_matchups(args.bc, args.ppo, args.games)
     for index, (hero_spec, villain_spec, games) in enumerate(matchups):

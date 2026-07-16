@@ -111,7 +111,7 @@ def test_missing_pack_notice_has_stable_diagnostic(monkeypatch, tmp_path):
 
 def test_frontend_install_marker_is_bound_to_lock(monkeypatch, tmp_path):
     lock = tmp_path / "package-lock.json"
-    marker = tmp_path / "node_modules" / ".manabot-package-lock.sha256"
+    marker = tmp_path / "node_modules" / ".etude-package-lock.sha256"
     required = tmp_path / "node_modules" / ".bin" / "vite"
     lock.write_text('{"lockfileVersion": 3}', encoding="utf-8")
     monkeypatch.setattr(play, "FRONTEND_LOCK", lock)
@@ -139,7 +139,7 @@ def test_failed_npm_ci_has_stable_diagnostic(monkeypatch, tmp_path):
     monkeypatch.setattr(
         play,
         "FRONTEND_INSTALL_MARKER",
-        tmp_path / "node_modules" / ".manabot-package-lock.sha256",
+        tmp_path / "node_modules" / ".etude-package-lock.sha256",
     )
 
     def runner(argv, **_kwargs):
@@ -153,7 +153,7 @@ def test_failed_npm_ci_has_stable_diagnostic(monkeypatch, tmp_path):
 
 def test_failed_svelte_sync_has_stable_diagnostic(monkeypatch, tmp_path):
     lock = tmp_path / "package-lock.json"
-    marker = tmp_path / "node_modules" / ".manabot-package-lock.sha256"
+    marker = tmp_path / "node_modules" / ".etude-package-lock.sha256"
     lock.write_text("{}", encoding="utf-8")
     marker.parent.mkdir()
     monkeypatch.setattr(play, "FRONTEND", tmp_path)

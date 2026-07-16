@@ -63,7 +63,7 @@
 ## Evidence
 
 - `docs/research/semantic-kernel.md`
-- `docs/research/manabot-vs-phase.md`
+- `docs/research/etude-vs-phase.md`
 - `docs/research/metta-observation-robustness.md`
 - Phase comparison pinned to phase-rs commit 553b97bd
 - Existing capability and card-pool audits under `wave/rules/`

@@ -15,7 +15,7 @@ import type {
   ServerMessage,
 } from './types';
 
-const RESUME_STORAGE_KEY = 'manabot.gui.resume';
+const RESUME_STORAGE_KEY = 'etude.gui.resume';
 const VALID_SERVER_TYPES = new Set(['observation', 'game_over', 'command_outcome', 'error']);
 
 interface ResumeCredentials {

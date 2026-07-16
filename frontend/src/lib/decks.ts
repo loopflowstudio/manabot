@@ -18,7 +18,7 @@ export const DECK_CHOICES: readonly { key: DeckChoice; label: string }[] = [
 
 const DECK_KEYS = new Set<string>(DECK_CHOICES.map((deck) => deck.key));
 
-export const DECKS_STORAGE_KEY = 'manabot.gui.decks';
+export const DECKS_STORAGE_KEY = 'etude.gui.decks';
 
 export interface DeckSelection {
   hero: DeckChoice;

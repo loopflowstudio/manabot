@@ -6,7 +6,7 @@
   playing experience, not a rendering technology.
 - The experience target is Phase-level or better smoothness, performance,
   polish, reliability, and portability for creator-selected decks.
-- Preserve manabot's differentiators: visible AI identity, decision inspection,
+- Preserve Etude Fantasia's differentiators: visible AI identity, decision inspection,
   research-grade traces, replay, and a deliberately tiny curated product.
 - The authority seam is `ExperienceFrame`, `InteractionOffer`/`Command`,
   `PresentationEvent`, and `RecoveryEnvelope`.

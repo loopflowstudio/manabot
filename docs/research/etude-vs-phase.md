@@ -1,19 +1,19 @@
-# Research: manabot vs phase as MTG AI platforms
+# Research: Etude Fantasia vs. Phase as MTG AI platforms
 
 Research date: 2026-07-15.
 
-Follow-on: [semantic game-kernel deep dive](platform-kernel-research.md), covering
+Follow-on: [semantic game-kernel deep dive](semantic-kernel.md), covering
 typed card programs, exact object incarnation, structured dynamic actions,
 transactional state, a three-way clone/undo/page-COW search benchmark, product
 projections, and the eventual deck/legality seam.
 
 Compared revisions:
 
-- manabot: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (2026-07-10).
+- Etude Fantasia (Etude): `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (2026-07-10).
 - phase: [`553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d`](https://github.com/phase-rs/phase/commit/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d) (2026-07-15).
 
 Method: source inspection of both engines and AI stacks, local test execution for
-manabot, inspection of Phase's committed AI baselines and workflow definitions,
+Etude, inspection of Phase's committed AI baselines and workflow definitions,
 and verification of the pinned Phase commit's [successful CI
 run](https://github.com/phase-rs/phase/actions/runs/29439693949). Dynamic project
 and coverage figures are snapshots, not timeless facts.
@@ -28,7 +28,7 @@ primary products.
   WebSocket, and P2P clients. Its AI is a product opponent layered on top: exact
   candidate generation, many tactical rules, heuristic evaluation, and shallow
   budgeted search. It has no neural policy or self-play learning loop.
-- **manabot is a narrow learning research platform.** Its center of gravity is a
+- **Etude is a narrow learning research platform.** Its center of gravity is a
   cheap two-player simulator, dense tensor observations, a batched Python/Torch
   boundary, PPO/self-play, and search-to-policy distillation. Its card and rules
   world is deliberately small.
@@ -36,14 +36,14 @@ primary products.
 The shortest accurate verdict is: **Phase is a real, audacious platform with a
 vibecoded blast radius; it is not a vibecoded disaster, and its present AI is not
 an MTG-AGI approach.** Phase is currently the stronger game/product substrate.
-Manabot is currently the stronger learning agenda. Neither is yet a credible
+Etude is currently the stronger learning agenda. Neither is yet a credible
 general MTG-AGI substrate without major work.
 
 ### Architecture
 
-#### manabot
+#### Etude
 
-manabot has four relevant layers:
+Etude has four relevant layers:
 
 1. `managym/src`: a mutable Rust rules engine and agent environment. The engine
    owns legal action enumeration, a priority/stack/event loop, hidden-information
@@ -102,7 +102,7 @@ documentation lag under the project's change rate.
 
 #### Side-by-side position
 
-| Axis | manabot | Phase |
+| Axis | Etude | Phase |
 |---|---|---|
 | Primary product | Learning/search research loop | Full MTG engine and playable app |
 | Rules/card scope | Two players, 55 audited real cards | Multiplayer, dynamic card DB, 31k+ marker-free cards |
@@ -116,7 +116,7 @@ documentation lag under the project's change rate.
 
 ### Data flow
 
-#### manabot game and learning path
+#### Etude game and learning path
 
 The engine advances a mutable `Game` until it reaches a non-trivial decision.
 The observation builder projects the current perspective into players, cards,
@@ -208,7 +208,7 @@ composes through self-play.
 Both projects clone a complete authoritative state and determinize before some
 search. Their details differ materially.
 
-- manabot uniformly re-deals the opponent's hand/library pool, reshuffles its
+- Etude uniformly re-deals the opponent's hand/library pool, reshuffles its
   own unknown library, and pins cards exposed by an active scry/look decision.
   This assumes decklists are known and does not maintain an action-conditioned
   range, but it does remove the directly stored hidden order.
@@ -238,7 +238,7 @@ network information leak.
 
 #### State and identity
 
-manabot uses dense, typed indices:
+Etude uses dense, typed indices:
 
 - `CardId(usize)` indexes `CardVec<Card>`.
 - `PermanentId(usize)` indexes `PermanentVec<Option<Permanent>>`.
@@ -276,7 +276,7 @@ Phase uses a richer dynamic graph:
   apply path avoid recomputing frontend-only projections during search.
 
 These are real scaling choices, not decoration. Phase has optimized for cheap
-branch clones of a large state and for serialized product state. manabot has
+branch clones of a large state and for serialized product state. Etude has
 optimized for cheap dense inference input and many small environments. The two
 systems therefore agree on clone-and-apply search but choose nearly opposite
 physical representations.
@@ -286,7 +286,7 @@ physical representations.
 Both engines treat legal action enumeration as engine authority, which is the
 right starting point for search and learning. Both also need caps.
 
-manabot truncates the encoded action list to 32. The engine can hold more legal
+Etude truncates the encoded action list to 32. The engine can hold more legal
 actions, but the neural agent cannot select actions after the cap. Each encoded
 action contains only a 14-way action-type one-hot plus focus-object indices; it
 does not directly encode costs, modes, targets beyond two focus objects, or the
@@ -314,7 +314,7 @@ and target filters. Common mechanics become reusable engine patterns; a card
 database can be regenerated as the parser grows. The cost is a very large AST,
 parser, synthesis layer, and continuation state.
 
-manabot's card registration is manual and audited, which produces higher
+Etude's card registration is manual and audited, which produces higher
 confidence over a tiny slice. The engine has a typed effect DSL, but the neural
 observation does not expose it. A card tensor includes zone, ownership, P/T,
 mana value, broad types, a subset of keywords, token/Ally/Lesson flags, and
@@ -327,11 +327,11 @@ Consequently, two cards with the same coarse features are observationally
 aliased even if their text boxes do opposite things. Legal actions can expose
 some difference through available action types and focus objects, but not enough
 to make a card-general policy. The observation architecture is currently the
-largest blocker to calling manabot an MTG-AGI platform.
+largest blocker to calling Etude an MTG-AGI platform.
 
 #### Neural architecture
 
-The current manabot agent is deliberately modest: two-layer typed MLP
+The current Manabot agent is deliberately modest: two-layer typed MLP
 projections, optional single-block multi-head self-attention, focus-aware action
 embeddings, a per-action policy head, and a mean-pooled value head. The default
 object sequence has 202 positions before actions (two players, 120 card slots,
@@ -353,20 +353,20 @@ training a learned agent.
 
 - **Breadth versus semantic confidence**: Phase can classify tens of thousands
   of faces as marker-free, but that coverage metric is weaker than executable
-  conformance. manabot audits and trace-tests a tiny card slice, but cannot claim
+  conformance. Etude audits and trace-tests a tiny card slice, but cannot claim
   broad Magic capability.
 - **Product opponent versus AGI research**: Phase's explicit policy modules and
   special handlers make a usable bot across many mechanics. They also bake in
-  the solution and create a growing manual maintenance surface. manabot asks the
+  the solution and create a growing manual maintenance surface. Etude asks the
   policy to learn, but its observation omits the semantics required for that
   learning to generalize.
 - **Rich state versus throughput**: Phase's persistent structures make rich
   state clones cheaper, but legal-action probes, layers, and continuations still
-  make a single decision expensive. manabot's small dense state is much cheaper,
+  make a single decision expensive. Etude's small dense state is much cheaper,
   but `VectorEnv` currently iterates environments sequentially and deep-clones
   worlds during search.
 - **Dynamic correctness versus stable ML ABI**: Phase can keep extending
-  `GameState` and `GameAction` without a tensor contract. manabot has a stable
+  `GameState` and `GameAction` without a tensor contract. Etude has a stable
   fixed shape, but every new rule/card concept either aliases an old feature or
   requires an ABI/model migration.
 - **Functional branding versus mutable implementation**: Phase gets value-like
@@ -381,11 +381,11 @@ training a learned agent.
   creates.
 - **Search strength versus information fairness**: Phase preserves default
   Medium's perfect information as a "strength floor" and leaves the AI's own
-  library order intact even when sampling opponents. manabot's root
+  library order intact even when sampling opponents. Etude's root
   determinization is fairer at the immediate state level but remains a weak
   approximation to action-conditioned beliefs.
 - **Reproducibility versus moving worlds**: Both projects seed their RNG and
-  maintain deterministic evaluation modes. manabot's own experiment notes show
+  maintain deterministic evaluation modes. Etude's own experiment notes show
   a learned ladder rating moved when the rules engine and observation schema
   changed. Phase's rapidly changing parser/card database has the same problem at
   much larger scale; a policy or benchmark needs an engine/card-data hash, not
@@ -397,7 +397,7 @@ training a learned agent.
 
 The complexity difference is enormous.
 
-At the compared manabot revision, `managym/src` is about 14.9k Rust lines and
+At the compared Etude revision, `managym/src` is about 14.9k Rust lines and
 the main `manabot` package about 11.7k Python lines. The rules engine is small
 enough that the state machine and all core data structures can be understood in
 one focused pass. Complexity concentrates in `flow/resolution.rs`, action
@@ -483,7 +483,7 @@ Therefore the fair label is **real alpha platform, unusually well-guarded for
 its velocity, with uncertain corpus-level semantic confidence**. It should not
 yet be treated as a verified Magic oracle.
 
-#### manabot quality
+#### Etude quality
 
 The local Rust suite passed 205 tests at this revision (12 unit, 2 conformance,
 13 engine, 162 rules, 6 scenario, and 10 search tests). The frontend passed 24
@@ -533,13 +533,13 @@ The projects are complementary enough that their best ideas compose:
   typed Oracle semantics, regeneration from MTGJSON, explicit object
   incarnation, persistent clone-friendly state, dynamic actions, visibility,
   save/replay determinism, and broad client/server reach.
-- manabot demonstrates the intelligence loop Phase lacks: perspective-relative
+- Etude demonstrates the intelligence loop Phase lacks: perspective-relative
   observations, batched environments, self-play, learned policy/value,
   search-as-teacher data, exploitability probes, and world-tagged experiment
   evidence.
 
 The plausible MTG-AGI architecture is not "use Phase's AI." It is
-**Phase-like semantics plus manabot-like learning**, connected by a new API:
+**Phase-like semantics plus Manabot-like learning**, connected by a new API:
 
 1. A versioned, perspective-safe observation that exposes executable card and
    ability semantics, not card-name one-hots or the complete private
@@ -559,7 +559,7 @@ The plausible MTG-AGI architecture is not "use Phase's AI." It is
 Phase could support that after substantial adaptation. Its persistent state and
 typed action semantics are valuable, but its current AI boundary passes a huge
 trusted `GameState`, uses numerous handcrafted policies, and is optimized for
-one interactive decision rather than millions of training steps. manabot could
+one interactive decision rather than millions of training steps. Etude could
 also grow there, but its manual card registry and coarse observation would need
 replacement, not incremental feature accretion.
 
@@ -582,11 +582,11 @@ replacement, not incremental feature accretion.
   shallow search, and how much strength disappears when that order is correctly
   resampled? The data-flow permits the leak; its empirical frequency remains
   unmeasured.
-- After correcting manabot's terminal GAE semantics, do the published PPO
+- After correcting Manabot's terminal GAE semantics, do the published PPO
   rankings and self-play lead reproduce? Shared bugs preserve arm fairness only
   imperfectly because episode lengths and terminal frequencies differ by
   policy.
-- What representation should be the stable semantic unit for manabot: normalized
+- What representation should be the stable semantic unit for Manabot: normalized
   ability AST nodes, effect-graph message passing, text embeddings grounded by
   typed execution, or a hybrid? This decision dominates card-generalization
   prospects.
@@ -596,13 +596,13 @@ replacement, not incremental feature accretion.
 
 ## Recommendations
 
-### Do not copy or port Phase's current AI into manabot
+### Do not copy or port Phase's current AI into Manabot
 
 **Observation**: Phase's strength comes from dozens of explicit tactical
 policies, deterministic special handlers, scalar evaluation, and shallow search.
 That improves a consumer opponent but moves intelligence into authored code.
 
-**Cost**: Porting would import a large maintenance surface and blur manabot's
+**Cost**: Porting would import a large maintenance surface and blur Manabot's
 learning objective.
 
 **Benefit**: Some immediate play-strength and mechanism coverage.
@@ -611,7 +611,7 @@ learning objective.
 policies as evaluation probes, scripted curriculum opponents, or labeled
 competency tests—not as the target agent.
 
-### Fix the manabot learning contract before scaling compute
+### Fix the Manabot learning contract before scaling compute
 
 **Observation**: Terminal GAE indexing, coarse card aliasing, fixed action
 truncation, unmasked value pooling, and unused event features make current
@@ -630,7 +630,7 @@ representation, then more training throughput.
 
 **Observation**: `ObjectId + incarnation`, Arc-shared immutable card/ability
 definitions, and simulation-specific display suppression directly address rules
-correctness and clone cost. manabot's dense typed IDs and arrays remain simpler
+correctness and clone cost. Etude's dense typed IDs and arrays remain simpler
 for its current scale.
 
 **Cost**: Low to adopt incarnation semantics deliberately before more blink/LKI
@@ -657,7 +657,7 @@ clone/apply, memory, determinism, and batchability against managym.
 **Benefit**: Replaces architectural debate with evidence and may reveal a path
 to arbitrary-deck experiments years earlier than manual card registration.
 
-**Verdict**: Worth a spike only after the manabot learning-contract fixes. Pin a
+**Verdict**: Worth a spike only after the Manabot learning-contract fixes. Pin a
 Phase commit and card-data hash; do not build against moving `main`.
 
 ### Treat Phase coverage as a lead generator, not an oracle
@@ -676,7 +676,7 @@ learner from mastering simulator bugs.
 truth. Start with high-frequency mechanics and adversarial parser compositions,
 not random cards.
 
-### Make manabot reusable as a project
+### Make Etude reusable as a project
 
 **Observation**: The repo is effectively single-author, its README is stale,
 pytest is absent from the active dev environment, and there is no explicit

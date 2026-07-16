@@ -1,6 +1,6 @@
 # Game
 
-Game owns the complete experience of playing manabot. Its standard is not "a
+Game owns the complete experience of playing Etude Fantasia. Its standard is not "a
 working GUI" but a small, authored game whose smoothness, performance, visual
 polish, reliability, and portability equal or exceed Phase for the exact decks
 the creator chooses to support.

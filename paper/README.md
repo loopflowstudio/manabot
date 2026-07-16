@@ -1,4 +1,4 @@
-# The manabot paper
+# The Etude Fantasia paper
 
 > **Charter change (2026-07-10):** this document serves *internal
 > understanding first*. Its job is that the owner can state, for every result:
@@ -8,7 +8,7 @@
 > The per-cycle integration required by the main wave's Pacing rule happens
 > here.
 
-A standing snapshot of the paper we would write today: manabot as a **research
+A standing snapshot of the paper we would write today: Etude as a **research
 platform** for *Magic: The Gathering*, with calibrated baselines and a stated set
 of open challenge areas for others to build on. Sections are expected to be thin;
 the gaps are the roadmap.
@@ -16,14 +16,14 @@ the gaps are the roadmap.
 ## Reading it
 
 ```bash
-open paper/manabot.pdf
+open paper/etude.pdf
 ```
 
 ## Building it
 
 ```bash
 brew install tectonic   # one-time; fetches TeX packages on demand, no TeXLive
-cd paper && make        # -> paper/manabot.pdf
+cd paper && make        # -> paper/etude.pdf
 make watch              # rebuild on save
 ```
 
@@ -39,10 +39,10 @@ make watch              # rebuild on save
 
 ## Structure of the current draft
 
-1. Why *Magic* is hard, precisely, and how manabot differs from prior MTG
+1. Why *Magic* is hard, precisely, and how Etude differs from prior MTG
    search, representation, and benchmark work.
 2. The platform — managym (engine, determinization, throughput, Milestone 1's
-   two cube decks and the scenario-injection surface) and manabot (encoder,
+   two cube decks and the scenario-injection surface) and Manabot (encoder,
    PPO, search, batched inference, distillation).
 3. The measurement protocol — seat balance, Wilson intervals, the pass gate,
    estimated and confirmed **ladder strength**, the cost axis, pre-registration.

@@ -9,7 +9,7 @@ pm:
 
 ## Objective
 
-Turn completed manabot games into a beautiful, honest engine-study experience:
+Turn completed Etude Fantasia games into a beautiful, honest engine-study experience:
 restore consequential decisions as the player understood them, show what else
 was worth considering, and let the player retry, inspect, and inhabit stronger
 lines. Study should make human learning intrinsically enjoyable while producing
@@ -60,4 +60,3 @@ Concrete repository changes begin as Linear Tasks under one Study Project.
 Projects must prove player-visible improvements or a durable evidence frontier;
 infrastructure without a demonstrable study moment belongs in the providing
 Game or Rules wave.
-

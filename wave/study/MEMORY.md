@@ -6,7 +6,7 @@
 > visually what else is worth thinking about and allowing me to see superior
 > lines. Would love to make the same thing for MTG."
 
-Study is the engine-analysis and human-learning surface of manabot's superhuman
+Study is the engine-analysis and human-learning surface of Etude Fantasia's superhuman
 AI research program. It is not merely a replay viewer and not a generic
 analytics dashboard. The player should experience a better idea on the same
 Magic table, then be able to challenge, branch, compare, annotate, and share it.
@@ -86,4 +86,3 @@ It must not infer legality or semantic events from snapshot differences.
   every internal search artifact forever.
 - The first slice should prove one complete study moment before building a
   general annotation library or collaborative review system.
-

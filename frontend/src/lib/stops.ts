@@ -18,7 +18,7 @@ export type StopStepKey = (typeof STOP_STEPS)[number]['key'];
 
 const STOP_STEP_KEYS = new Set<string>(STOP_STEPS.map((step) => step.key));
 
-export const STOPS_STORAGE_KEY = 'manabot.gui.stops';
+export const STOPS_STORAGE_KEY = 'etude.gui.stops';
 
 // Mirrors the server defaults (gui/server.py DEFAULT_STOPS): act in your own
 // main phases, hold up interaction at the opponent's end step, always stop

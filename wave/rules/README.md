@@ -3,7 +3,7 @@
 Rules owns the semantic kernel shared by human play, replay, training, and
 search. It is active again as of 2026-07-15 with a redesigned charter: make the
 creator-selected decks exact, expressive, inspectable, and cheap to branch
-without turning manabot into a general Magic platform.
+without turning Etude into a general Magic platform.
 
 The prior capability-ordered content roadmap still supplies the card pressure:
 UR Lessons vs GW Allies, then TLA commons, then the curated cube's named tail.
@@ -89,7 +89,7 @@ ratio of new-card content changes to kernel changes.
    evidence a CI gate.
 
 Reference designs live in `docs/research/semantic-kernel.md` and
-`docs/research/manabot-vs-phase.md`. The observation-schema history and semantic
+`docs/research/etude-vs-phase.md`. The observation-schema history and semantic
 input consequences are in `docs/research/metta-observation-robustness.md`.
 
 ## Non-goals

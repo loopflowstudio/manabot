@@ -1,8 +1,8 @@
-# Phase vs. manabot: full game-experience technical deep dive
+# Phase vs. Etude Fantasia: full game-experience technical deep dive
 
 Research date: 2026-07-15
 Phase revision: [`553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d`](https://github.com/phase-rs/phase/tree/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d)
-manabot revision inspected: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (`rescue-set-seed`)
+Etude revision inspected: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (`rescue-set-seed`)
 
 ## Executive judgment
 
@@ -10,13 +10,13 @@ manabot revision inspected: `bbb5a0a38f8b90efeb87829b60847fb40c5d55d4` (`rescue-
 
 It is also **large, accreted, and expensive**. At the pinned commit, `client/src` contains roughly 162,000 TS/TSX lines, 451 component files, and 245 test files. Its experience layer includes 123 registered player-facing `WaitingFor` variants, a 3,373-line choice modal, a 3,404-line game page, and a 3,057-line manually mirrored Rust/TypeScript type file. A complete client game-state representation crosses the WASM boundary as JSON and is then structured-cloned from a worker on every action. Much of its visual semantic reconstruction lives in a 779-line TypeScript event normalizer. That is not evidence of fraud; it is evidence of a broad general-purpose Magic client paying the full generality tax.
 
-**manabot today is the opposite trade:** a small, working, intentionally utilitarian AI-learning instrument. Its frontend is about 3,200 source lines. It exposes an unusually clear legal-action inspector, real learned/search/random/passive opponent identities, fully attributable decision traces, and replay as an AI-observation surface. Its current UI is not Phase-level product polish or portability: state snaps, networking is revisionless, card art is remote-only, the Python backend is required, reconnect is process-local, and there is no animation, PWA, desktop shell, large-board strategy, or production frontend CI.
+**Etude today is the opposite trade:** a small, working, intentionally utilitarian AI-learning instrument. Its frontend is about 3,200 source lines. It exposes an unusually clear legal-action inspector, real learned/search/random/passive opponent identities, fully attributable decision traces, and replay as an AI-observation surface. Its current UI is not Phase-level product polish or portability: state snaps, networking is revisionless, card art is remote-only, the Python backend is required, reconnect is process-local, and there is no animation, PWA, desktop shell, large-board strategy, or production frontend CI.
 
 The correct “great artists steal” conclusion is therefore:
 
 1. **Steal Phase's experience invariants**: atomic snapshot + legal choices, monotonic revisions, one command queue, adapter boundaries, background execution, semantic presentation events, fail-loud interaction coverage, full-snapshot recovery, update safety, overflow/grouping, and exhaustive flow testing.
 2. **Do not steal Phase's surface area or accidental architecture**: the Commander cockpit, generic deck/format UI, manual type mirror, 123 branch-specific dialogs, dual dispatch paths, all-state JSON copies, animation timing as summed sleeps, or DOM measurement of every visible object on every action.
-3. **Build a third thing**: a curated-deck, AI-native “experience runtime” whose rules/AI process emits a compact, versioned, clone-friendly frame, stable interaction offers, and semantic presentation events. Direct manipulation and manabot's action inspector should be two views of the same offers. That can feel better than Phase precisely because the selected deck/mechanic inventory is finite and art-directable.
+3. **Build a third thing**: a curated-deck, AI-native “experience runtime” whose rules/AI process emits a compact, versioned, clone-friendly frame, stable interaction offers, and semantic presentation events. Direct manipulation and Etude's action inspector should be two views of the same offers. That can feel better than Phase precisely because the selected deck/mechanic inventory is finite and art-directable.
 
 This report concerns the game experience boundary—client architecture, state delivery, rendering, input, portability, resilience, replay, and perceived quality—not the internal correctness of either rules engine.
 
@@ -50,17 +50,17 @@ The local engine normally runs in a Web Worker; `WasmAdapter` falls back to the 
 
 Phase is deployable as a web/PWA client, a server-backed client, and a Tauri desktop app. The Tauri package includes a `phase-server` sidecar plus card/draft data and has signed updater configuration ([`tauri.conf.json`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src-tauri/tauri.conf.json#L1-L52)). The source README refers to a `TauriAdapter`, but no adapter of that name exists at this revision; local Tauri play appears to use the WASM adapter. That is minor documentation drift, not a platform absence.
 
-#### manabot: a thin Svelte instrument over one authoritative Python session
+#### Etude: a thin Svelte instrument over one authoritative Python session
 
-manabot's experience is much smaller and easier to understand:
+Etude's experience is much smaller and easier to understand:
 
 - SvelteKit renders one live-game route and one replay route.
-- FastAPI owns a `managym.Env`, advances the villain automatically, normalizes a hero-view observation, and pushes a full observation plus positional legal actions over a WebSocket ([`gui/server.py`](/Users/jack/src/manabot/gui/server.py:603)).
-- [`GameStore`](/Users/jack/src/manabot/frontend/src/lib/game.svelte.ts:60) owns the currently displayed observation/actions, logs, focus IDs, target selection, connection state, stops, chosen decks, and opponent identity.
-- [`GameSocketController`](/Users/jack/src/manabot/frontend/src/lib/socket.svelte.ts:66) reconnects, resumes an in-memory server session, and applies each full server update directly.
+- FastAPI owns a `managym.Env`, advances the villain automatically, normalizes a hero-view observation, and pushes a full observation plus positional legal actions over a WebSocket ([`gui/server.py`](/Users/jack/src/etude/gui/server.py:603)).
+- [`GameStore`](/Users/jack/src/etude/frontend/src/lib/game.svelte.ts:60) owns the currently displayed observation/actions, logs, focus IDs, target selection, connection state, stops, chosen decks, and opponent identity.
+- [`GameSocketController`](/Users/jack/src/etude/frontend/src/lib/socket.svelte.ts:66) reconnects, resumes an in-memory server session, and applies each full server update directly.
 - Replay loads recorded full observations into the same board components and provides previous/play/next/scrub/speed controls.
 
-The previous charter explicitly called this an **instrument** for learning what the bot is, obtaining a human-anchored benchmark, and producing human-game data; visual product polish and public hosting were marked out of scope ([`wave/game/legacy-gui-charter.md`](/Users/jack/src/manabot/wave/game/legacy-gui-charter.md:1)). Therefore “manabot is visually plain” describes the old scope, not failed execution. The new Game wave retains the instrument's epistemic identity while making the game itself portable, reliable, and authored.
+The previous charter explicitly called this an **instrument** for learning what the bot is, obtaining a human-anchored benchmark, and producing human-game data; visual product polish and public hosting were marked out of scope ([`wave/game/legacy-gui-charter.md`](/Users/jack/src/etude/wave/game/legacy-gui-charter.md:1)). Therefore “Etude is visually plain” describes the old scope, not failed execution. The new Game wave retains the instrument's epistemic identity while making the game itself portable, reliable, and authored.
 
 ### Data flow
 
@@ -90,11 +90,11 @@ At the WASM boundary, the Rust state getter serializes the client state to a JSO
 
 The state contains engine-authored `DerivedViews`: stack grouping/details, keyword badges, commander damage, player status/aura, remaining payment, auxiliary variants, and turn order. This is a good ownership decision: the engine supplies compact display meaning instead of forcing React to reinterpret all rules. The view builder still walks battlefield/state collections each time ([`derived_views.rs`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/crates/engine/src/game/derived_views.rs#L194-L404)).
 
-#### manabot live action path
+#### Etude live action path
 
 The server emits a hero-normalized `Observation` plus `ActionOption[]`. Each option has an array index, type, description, and `focus` object IDs. The UI uses those IDs both to highlight cards when an action is inspected and to filter ambiguous target actions when a board card is selected. This is a compact and valuable **interaction offer** already hiding in the current design.
 
-The client sends only `{type: "action", index}` ([`socket.svelte.ts`](/Users/jack/src/manabot/frontend/src/lib/socket.svelte.ts:147)). The client does not disable existing actions while a normal action is in flight, attach the observed update sequence, provide a prompt ID, or use a command ID. Offline messages—including actions—are queued and flushed after reconnect ([`socket.svelte.ts`](/Users/jack/src/manabot/frontend/src/lib/socket.svelte.ts:166)).
+The client sends only `{type: "action", index}` ([`socket.svelte.ts`](/Users/jack/src/etude/frontend/src/lib/socket.svelte.ts:147)). The client does not disable existing actions while a normal action is in flight, attach the observed update sequence, provide a prompt ID, or use a command ID. Offline messages—including actions—are queued and flushed after reconnect ([`socket.svelte.ts`](/Users/jack/src/etude/frontend/src/lib/socket.svelte.ts:166)).
 
 **Inference:** a rapid double click can send two indexes. If the first advances the engine to another action space, the same integer can now mean something else. Likewise, an action queued against an old decision can be flushed after a resumed fresh snapshot. WebSocket ordering does not prevent semantic staleness. This is the highest-priority experience correctness flaw because an apparently legal click can become a different legal click.
 
@@ -102,7 +102,7 @@ The villain search/step loop runs synchronously inside the FastAPI WebSocket flo
 
 ### Key abstractions worth preserving or replacing
 
-| Concern | Phase abstraction | manabot today | Recommended abstraction |
+| Concern | Phase abstraction | Etude today | Recommended abstraction |
 |---|---|---|---|
 | Authoritative display | atomic state + legal-result snapshot + sequence | full observation + action list, applied together but no server revision | versioned `ExperienceFrame` with projection + offers + status |
 | User choice | `WaitingFor` variants, legal actions, many special dialogs | positional `ActionOption` with description/focus IDs | stable semantic `InteractionOffer` IDs; direct manipulation and inspector share them |
@@ -122,7 +122,7 @@ This creates spectacle and readable pacing, but too much presentation meaning is
 
 Before each animated action, Phase runs `querySelectorAll("[data-object-id]")` and calls `getBoundingClientRect()` for each visible object ([`animationStore.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/stores/animationStore.ts#L56-L64)). **Inference:** this is O(rendered objects), can force layout, and becomes an input-latency risk on distinct-permanent boards. Phase mitigates board explosion by grouping identical permanents and switching to overflow/scroll representations using distinct-stack thresholds, with `data-grouped-ids` preserving animation targets for unrendered group members. That is a strong technique, but it is not DOM virtualization and no quantitative large-board browser test was found.
 
-manabot directly replaces a Svelte observation. It has no animation/presentation queue, audio, semantic batching, object-position transition system, token grouping, battlefield overflow mode, or level of detail. Cards wrap at fixed sizes. That is adequate for the current selected games, but “Phase parity” requires explicit budgets for distinct-permanent boards and event storms; it should not be answered by importing Phase's DOM-scanning approach.
+Etude directly replaces a Svelte observation. It has no animation/presentation queue, audio, semantic batching, object-position transition system, token grouping, battlefield overflow mode, or level of detail. Cards wrap at fixed sizes. That is adequate for the current selected games, but “Phase parity” requires explicit budgets for distinct-permanent boards and event storms; it should not be answered by importing Phase's DOM-scanning approach.
 
 ### Interaction grammar and core flows
 
@@ -137,9 +137,9 @@ The dialog host distinguishes:
 
 The comments and tests show attention to pointer stacking and hit-testing failures ([`DialogHost.tsx`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/components/modal/DialogHost.tsx#L14-L215)). Source inspection shows flows for mulligans and hand-bottoming, priority/full-control/stops, alternate costs/modes/splice/targets, manual or automatic payment, attackers/blockers/damage, takebacks, game over, and replay. This supports “real platform.” The 3,373-line `CardChoiceModal` and numerous mechanic-specific branches support “expensive platform.”
 
-manabot's core grammar is unusually coherent for its size: a board card and a textual legal action are linked by stable object IDs. The action sidebar always shows the truth about available decisions, and clicking a target narrows ambiguous options. Seven non-priority action-space kinds receive authored prompt copy; unknown kinds still fall back to generic legal buttons rather than becoming impossible ([`game.svelte.ts`](/Users/jack/src/manabot/frontend/src/lib/game.svelte.ts:47)). MTGO-style stops and F6 eliminate priority churn. The missing piece is not a Commander-style universal UI; it is a finite **selected-deck interaction inventory** and an exhaustive contract that every offer in that inventory is executable and understandable.
+Etude's core grammar is unusually coherent for its size: a board card and a textual legal action are linked by stable object IDs. The action sidebar always shows the truth about available decisions, and clicking a target narrows ambiguous options. Seven non-priority action-space kinds receive authored prompt copy; unknown kinds still fall back to generic legal buttons rather than becoming impossible ([`game.svelte.ts`](/Users/jack/src/etude/frontend/src/lib/game.svelte.ts:47)). MTGO-style stops and F6 eliminate priority churn. The missing piece is not a Commander-style universal UI; it is a finite **selected-deck interaction inventory** and an exhaustive contract that every offer in that inventory is executable and understandable.
 
-The ideal polished form keeps the inspector as a first-class secondary view. The board can offer direct casting, targeting, drag/confirm, and payment previews, while the inspector exposes the exact same stable offer IDs for learning, debugging, accessibility, and trust. Phase mostly optimizes for playing Magic; manabot can uniquely optimize for understanding a machine playing Magic.
+The ideal polished form keeps the inspector as a first-class secondary view. The board can offer direct casting, targeting, drag/confirm, and payment previews, while the inspector exposes the exact same stable offer IDs for learning, debugging, accessibility, and trust. Phase mostly optimizes for playing Magic; Etude can uniquely optimize for understanding a machine playing Magic.
 
 ### Touch, keyboard, accessibility, and responsive behavior
 
@@ -154,17 +154,17 @@ Phase has a meaningful responsive/input layer:
 
 However, this is not proof of fully accessible play. The central `PermanentCard` is an interactive `motion.div` with `onClick` but no equivalent `role`, `tabIndex`, or keyboard handler ([`PermanentCard.tsx`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/components/board/PermanentCard.tsx#L636-L663)). No automated axe/Lighthouse/accessibility browser suite was found.
 
-manabot has a useful accessibility seed: the core [`Card.svelte`](/Users/jack/src/manabot/frontend/src/lib/components/Card.svelte:1) uses a real button with an `aria-label`, and its selects/buttons/labels are mostly native controls. It has only the F6 gameplay shortcut, no focus management/live announcements, no safe-area/reduced-motion/touch inspection system, and its hover preview disappears below the `xl` layout with no long-press replacement. Some non-clickable cards are still enabled-looking buttons. Phase supplies patterns, but an explicit input-equivalence matrix is still required for either project.
+Etude has a useful accessibility seed: the core [`Card.svelte`](/Users/jack/src/etude/frontend/src/lib/components/Card.svelte:1) uses a real button with an `aria-label`, and its selects/buttons/labels are mostly native controls. It has only the F6 gameplay shortcut, no focus management/live announcements, no safe-area/reduced-motion/touch inspection system, and its hover preview disappears below the `xl` layout with no long-press replacement. Some non-clickable cards are still enabled-looking buttons. Phase supplies patterns, but an explicit input-equivalence matrix is still required for either project.
 
 ### Images, asset caching, offline behavior, and updates
 
 Phase's card image hook maps metadata to Scryfall URLs and keeps in-memory request/refcount, negative, and printing caches to avoid repeated fetch/rerender storms ([`useCardImage.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/hooks/useCardImage.ts#L1-L240)). Contrary to a README claim of IndexedDB image caching, the pinned service worker explicitly does **not** runtime-cache remote Scryfall images because a prior CORS caching incident broke them ([`vite.config.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/vite.config.ts#L303-L315)). Same-origin imagery, fonts, audio, WASM, metadata, and content-addressed card data receive PWA caching strategies. Thus Phase is robustly installable, but card art is not proven fully offline.
 
-Its update code is notably battle-tested: it distinguishes initial service-worker control from updates, checks periodically and on visibility, breaks iOS reload loops, reports progress/errors, and defers activation/reload during multiplayer. A Vite preload-error handler has similar guarded self-recovery ([`registerServiceWorker.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/pwa/registerServiceWorker.ts#L1-L299), [`chunkReloadHandler.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/pwa/chunkReloadHandler.ts#L1-L81)). This is exactly the kind of invisible polish manabot should learn from.
+Its update code is notably battle-tested: it distinguishes initial service-worker control from updates, checks periodically and on visibility, breaks iOS reload loops, reports progress/errors, and defers activation/reload during multiplayer. A Vite preload-error handler has similar guarded self-recovery ([`registerServiceWorker.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/pwa/registerServiceWorker.ts#L1-L299), [`chunkReloadHandler.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/pwa/chunkReloadHandler.ts#L1-L81)). This is exactly the kind of invisible polish Etude should learn from.
 
-manabot renders direct `api.scryfall.com/cards/named?format=image...` URLs with browser lazy loading and a text fallback ([`scryfall.ts`](/Users/jack/src/manabot/frontend/src/lib/scryfall.ts:1)). It has no request dedupe, persistent manifest, service worker, or offline asset path. Existing E2E tests intercept card images with a one-pixel fixture, so they validate flow without validating production image availability.
+Etude renders direct `api.scryfall.com/cards/named?format=image...` URLs with browser lazy loading and a text fallback ([`scryfall.ts`](/Users/jack/src/etude/frontend/src/lib/scryfall.ts:1)). It has no request dedupe, persistent manifest, service worker, or offline asset path. Existing E2E tests intercept card images with a one-pixel fixture, so they validate flow without validating production image availability.
 
-Curated decks turn this weakness into an opportunity. For each allowed deck/version, manabot can build a content-addressed manifest containing exact printings, art crops, tokens, emblems, sounds, interaction schemas, and hashes. Preflight can guarantee every selected match's assets are locally available before “Play.” This can be more reliable and more art-directed than Phase's general Scryfall dependency without becoming a deck builder.
+Curated decks turn this weakness into an opportunity. For each allowed deck/version, Etude can build a content-addressed manifest containing exact printings, art crops, tokens, emblems, sounds, interaction schemas, and hashes. Preflight can guarantee every selected match's assets are locally available before “Play.” This can be more reliable and more art-directed than Phase's general Scryfall dependency without becoming a deck builder.
 
 ### Reconnect, persistence, replay, and failure modes
 
@@ -174,9 +174,9 @@ The server and P2P steady-state protocols still send full snapshots, legal actio
 
 The engine-worker watchdog has an important compromise: gameplay operations report “slow” at 60 seconds but remain pending, AI has a longer timeout, and `resolveAll` deliberately has no timeout to avoid interrupting engine work ([`engine-worker-client.ts`](https://github.com/phase-rs/phase/blob/553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d/client/src/adapter/engine-worker-client.ts#L28-L50)). This protects correctness but permits an indefinitely stuck resolving overlay. A user-facing cancel/recover/resync state machine would be stronger.
 
-manabot keeps sessions in an in-memory registry with a 15-minute TTL and stores credentials in browser `sessionStorage`. Reload/reconnect can recover while the Python process and registry survive; a server restart loses all sessions and a browser restart loses credentials. Client reconnect is indefinite exponential backoff capped at five seconds. Server messages are only checked for a recognized top-level `type` before a TypeScript cast ([`socket.svelte.ts`](/Users/jack/src/manabot/frontend/src/lib/socket.svelte.ts:49)). There is no protocol/content/engine version or recovery from sequence gaps.
+Etude keeps sessions in an in-memory registry with a 15-minute TTL and stores credentials in browser `sessionStorage`. Reload/reconnect can recover while the Python process and registry survive; a server restart loses all sessions and a browser restart loses credentials. Client reconnect is indefinite exponential backoff capped at five seconds. Server messages are only checked for a recognized top-level `type` before a TypeScript cast ([`socket.svelte.ts`](/Users/jack/src/etude/frontend/src/lib/socket.svelte.ts:49)). There is no protocol/content/engine version or recovery from sequence gaps.
 
-manabot's replay is excellent in product intent and expensive in representation. A trace records the full observation and legal action list before every event plus the final observation, as pretty, uncompressed JSON written directly to disk ([`gui/trace.py`](/Users/jack/src/manabot/gui/trace.py:1)). This enables O(1)-style snapshot seeking in the browser and retains exact decisions, but grows approximately with turns × visible state, has no atomic write/schema migration, and mixes player replay material with research data. The trace API redacts hidden information by default but accepts an unauthenticated `reveal_hidden=true`; appropriate for a local instrument, unsafe if exposed as a hosted product.
+Etude's replay is excellent in product intent and expensive in representation. A trace records the full observation and legal action list before every event plus the final observation, as pretty, uncompressed JSON written directly to disk ([`gui/trace.py`](/Users/jack/src/etude/gui/trace.py:1)). This enables O(1)-style snapshot seeking in the browser and retains exact decisions, but grows approximately with turns × visible state, has no atomic write/schema migration, and mixes player replay material with research data. The trace API redacts hidden information by default but accepts an unauthenticated `reveal_hidden=true`; appropriate for a local instrument, unsafe if exposed as a hosted product.
 
 The better design separates three needs:
 
@@ -184,7 +184,7 @@ The better design separates three needs:
 2. polished playback: optional semantic presentation events;
 3. AI research: observations, legal masks, chosen action, policy/value/search diagnostics, reward, identity, and provenance in a sidecar dataset.
 
-Phase has the more compact “reconstruct from actions in a replay worker” direction. manabot has the more important attribution and analysis direction. Preserve the latter and adopt the former's checkpointed reconstruction.
+Phase has the more compact “reconstruct from actions in a replay worker” direction. Etude has the more important attribution and analysis direction. Preserve the latter and adopt the former's checkpointed reconstruction.
 
 ### Tests, CI, and evidence of polish
 
@@ -192,7 +192,7 @@ Phase's source contains substantial automated engineering gates: Rust formatting
 
 I found no Playwright/Cypress dependency or browser job, screenshot regression suite, automated accessibility audit, Lighthouse budget, or large-board browser benchmark at the pinned revision. Therefore source-level confidence in mechanics and state management is much stronger than evidence for visual polish, real-device input behavior, or performance.
 
-manabot's local tests are small but live:
+Etude's local tests are small but live:
 
 - **Observed:** `npm test -- --run`: 24 unit tests passed across 5 files.
 - **Observed:** `npm run check`: 0 errors and 0 warnings.
@@ -200,9 +200,9 @@ manabot's local tests are small but live:
 - **Observed:** targeted Playwright `play.spec.ts` + `replay.spec.ts`: 2 tests passed in 11.1 seconds, covering a random full game and replay stepping. This was repository automation, not hands-on browser QA.
 - **Observed:** `uv run python -m pytest tests/gui -q`: 27 tests passed in 2.10 seconds. The module form avoids a stale `.venv/bin/pytest` entry-point shebang while preserving the repository's uv-managed interpreter.
 
-The current GitHub CI runs engine Rust/Python work but does **not** install/check/test/build `frontend` or run `tests/gui` ([`.github/workflows/ci.yml`](/Users/jack/src/manabot/.github/workflows/ci.yml:1)). The working game experience can regress outside local checks. Adding existing tests to CI is a prerequisite, not Phase imitation.
+The current GitHub CI runs engine Rust/Python work but does **not** install/check/test/build `frontend` or run `tests/gui` ([`.github/workflows/ci.yml`](/Users/jack/src/etude/.github/workflows/ci.yml:1)). The working game experience can regress outside local checks. Adding existing tests to CI is a prerequisite, not Phase imitation.
 
-## Experience contract for a curated, AI-native manabot
+## Experience contract for a curated, AI-native Etude
 
 This is the proposed non-negotiable contract. It deliberately does not promise generic Commander, arbitrary decks, or deck construction.
 
@@ -223,7 +223,7 @@ This is the proposed non-negotiable contract. It deliberately does not promise g
 
 ## Proposed new technical approach
 
-Phase's strongest ideas and manabot's strongest identity fit into four wire concepts:
+Phase's strongest ideas and Etude's strongest identity fit into four wire concepts:
 
 Concrete types and acceptance/client flows are worked through in the
 [experience protocol code sketch](experience-protocol-code.md).
@@ -263,7 +263,7 @@ Command {
 }
 ```
 
-The authority accepts a command once, rejects stale/duplicate/invalid commands explicitly, and returns the accepted command ID in the next frame. This preserves manabot's action clarity while removing positional-index ambiguity.
+The authority accepts a command once, rejects stale/duplicate/invalid commands explicitly, and returns the accepted command ID in the next frame. This preserves Etude's action clarity while removing positional-index ambiguity.
 
 ### 3. `PresentationEvent`
 
@@ -296,11 +296,11 @@ The key scaling choices should be similar to Phase only at the invariant level:
 - **Same:** clone-friendly client projection, worker/process isolation, stable object incarnations, derived display views, full-snapshot recovery, grouping, background AI, and adapter seam.
 - **Different:** generated narrow schema instead of a 3,057-line manual mirror; semantic stable offers instead of 123 UI prompt classes; targeted presentation events instead of TS event archaeology; command/revision identity at the wire; full-frame first with measured patch escape hatch instead of unexamined full JSON copies; exact-deck asset packs instead of a world card database; AI server/native authority first, optional WASM rather than WASM as ideology.
 
-WASM is a distribution choice, not the experience architecture. Phase demonstrates that local browser rules can be portable, but also demonstrates the memory/startup/copy costs of a large WASM + full card database. manabot's learned agents and search are likely better isolated in a server or native worker initially. Keep the experience frame portable enough that a smaller rules-only WASM or selected-deck local bundle can arrive later without rewriting the client.
+WASM is a distribution choice, not the experience architecture. Phase demonstrates that local browser rules can be portable, but also demonstrates the memory/startup/copy costs of a large WASM + full card database. Etude's learned agents and search are likely better isolated in a server or native worker initially. Keep the experience frame portable enough that a smaller rules-only WASM or selected-deck local bundle can arrive later without rewriting the client.
 
 ## Core-flow experience matrix
 
-| Flow | Phase at pinned source | manabot now | Curated target |
+| Flow | Phase at pinned source | Etude now | Curated target |
 |---|---|---|---|
 | Cold start | WASM worker/fallback, large DB initialization, progress/error paths, shared warm adapter; PWA/Tauri | `scripts/play.py` starts backend + Vite dev; tiny client, backend required | fast shell; explicit AI/authority readiness; exact-match asset preflight; measured cold/warm first-decision budget |
 | New match | broad format/deck/AI/local/online/P2P setup | selected named decks + search/checkpoint/random/passive selectors | deliberately small authored matchup gallery; policy identity visible; no general deck builder |
@@ -319,7 +319,7 @@ WASM is a distribution choice, not the experience architecture. Phase demonstrat
 
 ## Comparison matrix: what matters
 
-| Axis | What Phase does that matters | What manabot already does that matters | Direction |
+| Axis | What Phase does that matters | What Etude already does that matters | Direction |
 |---|---|---|---|
 | Client architecture | separates authoritative, interaction, animation, preference, multiplayer state; adapter seam | very small shared live/replay components; comprehensible single-creator system | adopt separation and adapters without framework-scale proliferation |
 | State contract | atomic state/legal snapshot, monotonic commit gate, engine-derived display views | full hero-normalized observation + legal actions already arrive together | add authority revision/prompt/command identity and generated compact schema |
@@ -332,34 +332,34 @@ WASM is a distribution choice, not the experience architecture. Phase demonstrat
 | Scope | arbitrary-card/format/multiplayer generality | curated decks and finite interaction surface | use constraint as an artistic/QA/performance advantage |
 | Maintainability | massive broad client with parity tests | ~3.2k frontend lines and one clear grammar | generated contracts, small primitive vocabulary, deck-specific data—not deck-specific component forests |
 
-## What manabot must keep doing that Phase does not
+## What Etude must keep doing that Phase does not
 
-1. **AI as the work, not a convenience opponent.** Search budgets, checkpoints, deterministic mode, and passive/random baselines correspond to actual research systems ([`game.svelte.ts`](/Users/jack/src/manabot/frontend/src/lib/game.svelte.ts:20), [`gui/villain.py`](/Users/jack/src/manabot/gui/villain.py:1)). A polished UI must not flatten them into “Easy / Medium / Hard.”
+1. **AI as the work, not a convenience opponent.** Search budgets, checkpoints, deterministic mode, and passive/random baselines correspond to actual research systems ([`game.svelte.ts`](/Users/jack/src/etude/frontend/src/lib/game.svelte.ts:20), [`gui/villain.py`](/Users/jack/src/etude/gui/villain.py:1)). A polished UI must not flatten them into “Easy / Medium / Hard.”
 2. **Attributable games.** Traces preserve exact deck lists/names, villain type/sims/checkpoint/determinism, seed/stops, observations, legal actions, chosen index/description, reward, and actor. Improve the storage format; retain the provenance contract.
 3. **Decision legibility.** The visible legal-action inspector linked to board objects answers “what exactly can I do?” and makes engine behavior inspectable. It should survive as a player aid, learning layer, debugging console, and accessibility route.
 4. **Replay as an AI-learning surface.** The trace browser and timeline are already part of the product, not a late match-viewer feature. Extend them with policy scores, search alternatives, counterfactuals, and competency hypotheses.
 5. **Curated scope as taste.** Exactly selected decks provide a finite asset set, finite prompt inventory, exhaustive golden-flow matrix, authored visual language, and stronger performance bounds. Do not import Phase's deck builder, format legality, or Commander dashboard merely because the infrastructure can support it.
 6. **A light, comprehensible client.** The current production output is tens of kilobytes of JS rather than a roughly 48 MB engine plus large universal data set. Heavy AI/rules can remain off-main-thread and off-client while the shell stays fast.
-7. **Single-creator coherence.** manabot can define a dozen orthogonal interaction primitives and compose them artistically. It should not grow one component per Magic mechanic until it resembles Phase's giant switches.
+7. **Single-creator coherence.** Etude can define a dozen orthogonal interaction primitives and compose them artistically. It should not grow one component per Magic mechanic until it resembles Phase's giant switches.
 8. **The broader training/evaluation loop.** Vector environments, learned policy checkpoints, search, experiment provenance, and human benchmark design are outside Phase's core product. Polish must serve that loop rather than displacing it.
 
 ## Tensions
 
 ### Generality versus authorship
 
-Phase proves that arbitrary Magic needs many escape hatches. manabot's refusal to allow arbitrary decks is not a missing feature; it is the mechanism that makes exhaustive interaction polish possible for one creator. The risk is allowing “curated” to become hard-coded deck-name branches. Keep mechanics in typed engine/experience primitives and keep *selection, assets, authored copy, camera, sound, and pacing* in content manifests.
+Phase proves that arbitrary Magic needs many escape hatches. Etude's refusal to allow arbitrary decks is not a missing feature; it is the mechanism that makes exhaustive interaction polish possible for one creator. The risk is allowing “curated” to become hard-coded deck-name branches. Keep mechanics in typed engine/experience primitives and keep *selection, assets, authored copy, camera, sound, and pacing* in content manifests.
 
 ### Full snapshots versus scaling
 
-Both projects favor full viewer snapshots, which are excellent for correctness, cloneability, reconnect, debugging, and deterministic tests. Phase's path serializes/parses/structured-clones a large representation; manabot repeats full observations in wire messages and traces. Optimize only after measuring. The durable invariant is “a complete frame is always available”; the optimization may be structural sharing, binary encoding, patches, or checkpoints.
+Both projects favor full viewer snapshots, which are excellent for correctness, cloneability, reconnect, debugging, and deterministic tests. Phase's path serializes/parses/structured-clones a large representation; Etude repeats full observations in wire messages and traces. Optimize only after measuring. The durable invariant is “a complete frame is always available”; the optimization may be structural sharing, binary encoding, patches, or checkpoints.
 
 ### Truth versus animation
 
-Phase keeps the old visual board during an animation and commits afterward; manabot commits immediately with no transition. The new runtime should commit authoritative truth independently while allowing a presentation layer to display a controlled transition. Input targets must always bind to the authoritative prompt, and skip/reconnect must instantly converge.
+Phase keeps the old visual board during an animation and commits afterward; Etude commits immediately with no transition. The new runtime should commit authoritative truth independently while allowing a presentation layer to display a controlled transition. Input targets must always bind to the authoritative prompt, and skip/reconnect must instantly converge.
 
 ### Local portability versus AI capability
 
-WASM makes Phase self-contained but produces startup/memory/copy challenges. manabot's serious learned/search opponents naturally fit a server or native process. “Portable” should first mean a stable client contract plus web/PWA and packaged desktop authority—not forcing all AI into browser WASM. Selected-deck local rules can be a later transport implementation.
+WASM makes Phase self-contained but produces startup/memory/copy challenges. Etude's serious learned/search opponents naturally fit a server or native process. “Portable” should first mean a stable client contract plus web/PWA and packaged desktop authority—not forcing all AI into browser WASM. Selected-deck local rules can be a later transport implementation.
 
 ### Inspector clarity versus visual magic
 
@@ -371,20 +371,20 @@ Direct manipulation can hide available legal choices; an action list can feel li
 
 - **Observed:** Phase's client breadth is real and strongly tested at unit/source level, but its largest files and 123 prompt variants show that generic mechanic-by-mechanic UI does not preserve single-creator agility.
 - **Observed:** Phase has useful scale mitigations—worker isolation, grouping, event collapse, shared warm initialization—but still performs full state serialization/copy and broad DOM measurement.
-- **Observed:** manabot's client is dramatically smaller and already shares passive board components between live/replay. Its protocol and trace formats, not its component count, are the first scaling hazards.
+- **Observed:** Etude's client is dramatically smaller and already shares passive board components between live/replay. Its protocol and trace formats, not its component count, are the first scaling hazards.
 
 ### Quality
 
 - **Observed:** Phase's commit gate, prompt-aware queue, fail-loud registry, PWA update defenses, protocol mismatch handling, and reconnect snapshots are platform-grade patterns.
 - **Observed:** Phase lacks browser-level evidence for the very qualities the user wants to match: no visual regression, accessibility, real-device, or performance gates were found.
-- **Observed:** manabot's local unit/type/build/targeted E2E/GUI tests pass, but CI does not protect the frontend or GUI server.
-- **Inference:** manabot's revisionless action indexes can execute unintended decisions after double click/reconnect; this is a correctness defect disguised as an interaction detail.
+- **Observed:** Etude's local unit/type/build/targeted E2E/GUI tests pass, but CI does not protect the frontend or GUI server.
+- **Inference:** Etude's revisionless action indexes can execute unintended decisions after double click/reconnect; this is a correctness defect disguised as an interaction detail.
 
 ### Potential
 
-- **Inference:** curated deck packs allow manabot to outperform Phase on cold asset certainty, interaction completeness, authored animation, and accessibility because the reachable surface is enumerable.
+- **Inference:** curated deck packs allow Etude to outperform Phase on cold asset certainty, interaction completeness, authored animation, and accessibility because the reachable surface is enumerable.
 - **Inference:** an AI-native presentation stream can outperform Phase's frontend event reconstruction while making replay and policy analysis richer.
-- **Inference:** preserving the inspector means manabot can be simultaneously more beautiful and more intellectually honest than clients that hide the action model.
+- **Inference:** preserving the inspector means Etude can be simultaneously more beautiful and more intellectually honest than clients that hide the action model.
 
 ## Risk register
 
@@ -395,18 +395,18 @@ Direct manipulation can hide available legal choices; an action list can feel li
 | Session disappears on backend restart | Medium | High | in-memory registry + browser `sessionStorage` | durable recovery envelope/checkpoints; lease-based sessions; explicit unrecoverable state |
 | Trace growth, corruption, version drift, or hidden-data exposure | High | High if hosted | full pretty observation per event; direct write; reveal query | versioned append/atomic finalize; command+checkpoint replay; research sidecar; auth/capability for hidden view |
 | Card art fails offline or under remote service behavior | High | Medium | direct Scryfall URLs; no SW/manifest | selected-deck content-addressed asset packs; preflight; local fallbacks; printing pinning |
-| Large board or event storm freezes UI | Medium | High | fixed wrap/no grouping in manabot; Phase's DOM scan/full copies show likely future cost | adversarial deck fixtures; grouping/LOD; targeted element registry; event condensation; measured budgets |
+| Large board or event storm freezes UI | Medium | High | fixed wrap/no grouping in Etude; Phase's DOM scan/full copies show likely future cost | adversarial deck fixtures; grouping/LOD; targeted element registry; event condensation; measured budgets |
 | Copying Phase creates type/modal explosion | High if imitation is literal | High | 3,057-line mirror, 3,373-line modal, 123 prompt variants | generated narrow wire schema; orthogonal offer primitives; selected-deck reachability gate |
 | Full snapshot JSON/copy dominates state update | Medium | High at large state/frequency | Phase stringify→parse→worker clone; both send full state | instrument bytes/serialize/parse/commit; preserve full resync; add binary/patch only when justified |
-| Animation and authoritative state race | Medium | High | Phase dual dispatch and timeout-based presentation; manabot no command identity | single command pipeline; separate authoritative/presentation layers; event sequence; skip/resync invariant |
-| Visual/input/performance regressions ship | High today | High | manabot frontend absent from CI; Phase lacks browser-quality gates | add existing tests now; then screenshot/a11y/perf/network/interruption suites |
+| Animation and authoritative state race | Medium | High | Phase dual dispatch and timeout-based presentation; Etude no command identity | single command pipeline; separate authoritative/presentation layers; event sequence; skip/resync invariant |
+| Visual/input/performance regressions ship | High today | High | Etude frontend absent from CI; Phase lacks browser-quality gates | add existing tests now; then screenshot/a11y/perf/network/interruption suites |
 | Curated deck definitions drift across server/client/assets | Medium | Medium | current server/client selected-deck knowledge is partly duplicated | one versioned matchup manifest generated into bindings and asset build |
-| Update or cached-version mismatch strands a match | Medium once PWA ships | High | Phase needs extensive mitigation; manabot has no update protocol | protocol/content handshake; defer activation during match; recovery envelope; circuit breaker |
-| “Accessible controls” mask an inaccessible board | Medium | High | Phase core permanent is click-only div; manabot lacks full input-equivalence tests | offer-level keyboard/touch mappings; semantic renderers; focus/live-region tests; axe + manual screen-reader pass |
+| Update or cached-version mismatch strands a match | Medium once PWA ships | High | Phase needs extensive mitigation; Etude has no update protocol | protocol/content handshake; defer activation during match; recovery envelope; circuit breaker |
+| “Accessible controls” mask an inaccessible board | Medium | High | Phase core permanent is click-only div; Etude lacks full input-equivalence tests | offer-level keyboard/touch mappings; semantic renderers; focus/live-region tests; axe + manual screen-reader pass |
 
 ## Proof and benchmark plan
 
-Do not declare “equal or better than Phase” from code review. First obtain a full Phase checkout/build and run the same instrumented scenarios. Where Phase cannot execute a selected manabot matchup, compare the common experience mechanics, not card coverage.
+Do not declare “equal or better than Phase” from code review. First obtain a full Phase checkout/build and run the same instrumented scenarios. Where Phase cannot execute a selected Etude matchup, compare the common experience mechanics, not card coverage.
 
 ### Measurements
 
@@ -433,27 +433,27 @@ Do not declare “equal or better than Phase” from code review. First obtain a
 - deterministic replay hash checks across current and previous supported schema/content versions;
 - frontend build/unit/E2E and `tests/gui` in CI immediately, before the visual rebuild.
 
-The first benchmark should capture Phase as it exists rather than choosing flattering manabot targets. The next step is to turn those distributions into explicit budgets. No Phase runtime number in this report is measured.
+The first benchmark should capture Phase as it exists rather than choosing flattering Etude targets. The next step is to turn those distributions into explicit budgets. No Phase runtime number in this report is measured.
 
 ## Recommendations
 
 ### 1. Freeze the experience protocol before expanding visual mechanics
 
-**Observation:** manabot's action index has no revision/prompt identity, while Phase's atomic commit gate solves a closely related class of softlocks.
+**Observation:** Etude's action index has no revision/prompt identity, while Phase's atomic commit gate solves a closely related class of softlocks.
 **Cost:** medium; touches Rust/Python serialization, WebSocket messages, traces, store, and tests.
 **Benefit:** prevents unintended commands and gives every later interaction/animation/reconnect feature a sound foundation.
 **Verdict:** **do first.** Introduce `ExperienceFrame`, stable offers, command IDs, expected revision, prompt ID, runtime validation, and explicit stale/duplicate responses.
 
 ### 2. Preserve the inspector and make direct manipulation another projection
 
-**Observation:** manabot's focus-linked action list is a differentiator; Phase's broad direct UI often needs many mechanic-specific branches.
+**Observation:** Etude's focus-linked action list is a differentiator; Phase's broad direct UI often needs many mechanic-specific branches.
 **Cost:** medium.
 **Benefit:** combines smooth play with exact legibility, accessibility, and AI analysis.
 **Verdict:** **core product principle.** Never create a board gesture that bypasses or invents semantics outside `InteractionOffer`.
 
 ### 3. Add a semantic presentation stream, not state-diff animation archaeology
 
-**Observation:** Phase's polished effects require a large client event normalizer and DOM capture; manabot currently has no transitions.
+**Observation:** Phase's polished effects require a large client event normalizer and DOM capture; Etude currently has no transitions.
 **Cost:** medium-high across engine/experience boundary and art direction.
 **Benefit:** authoritative, replayable, skippable animation with a small client vocabulary.
 **Verdict:** **build after protocol identity.** Start with move/cast/damage/die/tap/reveal/attack-group and composition/importance metadata.
@@ -467,14 +467,14 @@ The first benchmark should capture Phase as it exists rather than choosing flatt
 
 ### 5. Isolate the authority without prematurely forcing WASM
 
-**Observation:** Phase gains local portability from WASM but pays large startup/memory/copy costs; manabot's learned/search agents are naturally process-heavy.
+**Observation:** Phase gains local portability from WASM but pays large startup/memory/copy costs; Etude's learned/search agents are naturally process-heavy.
 **Cost:** medium-high for worker/process lifecycle and packaging.
 **Benefit:** responsive UI, bounded AI, web/native portability, and an eventual optional WASM transport.
 **Verdict:** **server or native worker first; WASM later if measured/product need justifies it.** Keep one adapter/frame contract.
 
 ### 6. Separate replay, presentation, and research records
 
-**Observation:** manabot's full-snapshot traces are attributable but large and fragile; Phase reconstructs playback from actions.
+**Observation:** Etude's full-snapshot traces are attributable but large and fragile; Phase reconstructs playback from actions.
 **Cost:** medium.
 **Benefit:** compact deterministic replay, fast checkpointed seek, schema migration, and richer AI diagnostics without leaking hidden data.
 **Verdict:** **preserve the data ambition, replace the container.** Initial config + stable commands + checkpoints; presentation log optional; research sidecar access-controlled.
@@ -484,11 +484,11 @@ The first benchmark should capture Phase as it exists rather than choosing flatt
 **Observation:** full-snapshot reconnect, protocol mismatch errors, fail-loud handler coverage, PWA update deferral, reload circuit breaking, and overflow grouping are proven-by-source investments.
 **Cost:** incremental but nontrivial.
 **Benefit:** the “smoothness” users notice mostly when something goes wrong.
-**Verdict:** **steal these patterns.** Implement against manabot's smaller contract; do not copy the surrounding generic product surface.
+**Verdict:** **steal these patterns.** Implement against Etude's smaller contract; do not copy the surrounding generic product surface.
 
 ### 8. Put today's working experience under CI, then add perceptual gates
 
-**Observation:** local manabot checks pass but CI omits the frontend and GUI; Phase's own weak spot is browser-level proof.
+**Observation:** local Etude checks pass but CI omits the frontend and GUI; Phase's own weak spot is browser-level proof.
 **Cost:** low immediately, medium for fixtures/performance stability.
 **Benefit:** converts polish and reliability from taste claims into release criteria.
 **Verdict:** **immediate.** Add existing build/unit/E2E/GUI tests, then screenshot, accessibility, interruption, offline, and performance budgets.
@@ -506,6 +506,6 @@ The first benchmark should capture Phase as it exists rather than choosing flatt
 
 ## Bottom line
 
-Phase's game experience is not a mirage. It is a credible general platform with several excellent invariants and a huge breadth tax. manabot should aspire to its reliability, portability, response discipline, and invisible lifecycle polish—not to its product breadth or component count.
+Phase's game experience is not a mirage. It is a credible general platform with several excellent invariants and a huge breadth tax. Etude should aspire to its reliability, portability, response discipline, and invisible lifecycle polish—not to its product breadth or component count.
 
 The artistic opening is to make the restriction to selected decks do real technical work: compile exact assets and interactions; prove every path; present AI identity honestly; retain the decision inspector; make replays research-grade; and give a small semantic event vocabulary exceptional animation, sound, responsiveness, and recovery. With a versioned experience frame and stable offers beneath it, that can be both **more agile than Phase and better at the game experience it intentionally chooses to provide**.

@@ -1,6 +1,6 @@
 # Proposed events and replacement/prevention v1
 
-This document defines manabot's first curated replacement-effects boundary.
+This document defines Etude's first curated replacement-effects boundary.
 It is intentionally smaller than the general Magic rules in CR 614-616.
 
 ## Lifecycle

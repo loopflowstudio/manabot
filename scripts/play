@@ -8,7 +8,7 @@ cd "$ROOT" || exit 1
 error() {
   code=$1
   message=$2
-  printf 'MANABOT_PLAY_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
+  printf 'ETUDE_PLAY_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
     "$code" "$message" >&2
   exit 2
 }
@@ -41,11 +41,11 @@ command -v cargo >/dev/null 2>&1 || \
 [ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/NOTICE.md ] || \
   error pack.notice "the installed curated-pack notice is missing"
 
-marker=$(mktemp "${TMPDIR:-/tmp}/manabot-play-error.XXXXXX") || \
+marker=$(mktemp "${TMPDIR:-/tmp}/etude-play-error.XXXXXX") || \
   error launcher.internal "could not create the launcher error marker"
 rm -f "$marker"
 trap 'rm -f "$marker"' 0
-export MANABOT_PLAY_ERROR_MARKER=$marker
+export ETUDE_PLAY_ERROR_MARKER=$marker
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 uv run --python 3.12 --locked --only-group play-runtime scripts/play.py "$@" &

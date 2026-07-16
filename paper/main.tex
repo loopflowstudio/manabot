@@ -40,7 +40,7 @@
   breaklines=true,
 }
 
-\title{\textbf{manabot}: A Research Platform and Open Challenge Set\\ for \textit{Magic: The Gathering}}
+\title{\textbf{Etude Fantasia}: A Research Platform and Open Challenge Set\\ for \textit{Magic: The Gathering}}
 
 \author{Jack Heart\\ \small Loopflow Studio}
 
@@ -52,7 +52,7 @@
 \begin{abstract}
 \textit{Magic: The Gathering} combines an expanding card pool, structured hidden information, state-dependent actions, long decision horizons, and a rules system capable of universal computation. Existing work has studied search, deck construction, card representations, and, recently, causal reinforcement learning in restricted versions of the game. This work focuses on a complementary combination: a fast, rules-explicit environment with native search primitives and cost-calibrated baselines.
 
-This paper presents \textbf{manabot}. We contribute (i) \textbf{managym}, a deterministic, seedable, forkable Rust engine ($\approx$15k lines, 162 rules-cited integration tests, a 55-card pool) that runs $1.8\times10^{5}$ steps/second on an Apple M4 Max and exposes determinization and state injection as native primitives; (ii) a \textbf{measurement protocol} based on seat-balanced evaluation, Wilson intervals, pre-registered predictions, and standardized compute accounting; (iii) a \textbf{reference suite} spanning flat determinized search, PPO under three reward regimes, behavior cloning from search, and one measured round of expert iteration; (iv) a \textbf{control-competency suite} --- five injected scenarios with known-correct lines --- that no current agent passes; and (v) \textbf{five open challenge areas} with measurable entry criteria.
+This paper presents \textbf{Etude Fantasia}, or \textbf{Etude}. We contribute (i) \textbf{managym}, a deterministic, seedable, forkable Rust engine ($\approx$15k lines, 162 rules-cited integration tests, a 55-card pool) that runs $1.8\times10^{5}$ steps/second on an Apple M4 Max and exposes determinization and state injection as native primitives; (ii) a \textbf{measurement protocol} based on seat-balanced evaluation, Wilson intervals, pre-registered predictions, and standardized compute accounting; (iii) a \textbf{reference suite} spanning flat determinized search, PPO under three reward regimes, behavior cloning from search, and one measured round of expert iteration; (iv) a \textbf{control-competency suite} --- five injected scenarios with known-correct lines --- that no current agent passes; and (v) \textbf{five open challenge areas} with measurable entry criteria.
 
 On an interactive mirror, \searchn{16} requires no training and runs in 7\,ms per decision. It wins $91.7\%$ against a uniform-random opponent and defeated each of the three early PPO policies tested head-to-head. A student distilled from \searchn{256} reaches $87.0\%$ against random at ladder strength $N\approx7$; one crank of expert iteration on top of it \emph{degraded} the student, and the search pilot itself scores at most $0.39$ on the five competency scenarios --- uniform random beats it outright on three. These are baseline results, not a claim to strong \textit{Magic} play: there is no human evaluation, adaptive opponent population, or broad card pool. They expose a large gap on the common random-opponent axis and define the tests a solution must pass.
 \end{abstract}
@@ -63,7 +63,7 @@ Sequential decision-making research depends on two kinds of infrastructure: a si
 
 \textit{Magic: The Gathering} is a natural target. It is imperfect-information and long-horizon, and its full rules admit universal computation \citep{churchill2019turing}. In this benchmark's open-decklist setting, public decklists constrain hidden cards to known multisets: the support is combinatorial but explicit, and exact samples from the turn-one prior are cheap. Later in a game, actions make the posterior policy-dependent. That combination gives belief modeling both a clean prior and a meaningful inference problem.
 
-Prior work includes Monte Carlo search for card selection \citep{ward2009draft}, ensemble determinization for game play \citep{cowling2012magic}, and generalized representations for unseen cards in deck construction \citep{bertram2024representations}. A contemporaneous preprint introduces MTG-Causal-RL, a 56-card, five-archetype Gymnasium benchmark with a fixed masked action space and an explicit causal interface \citep{cunha2026causal}. Manabot is complementary: it emphasizes a rules-cited Rust engine, state-dependent object-referential actions, native determinization and search, and a baseline ledger that includes seat effects, inference cost, and failed predictions.
+Prior work includes Monte Carlo search for card selection \citep{ward2009draft}, ensemble determinization for game play \citep{cowling2012magic}, and generalized representations for unseen cards in deck construction \citep{bertram2024representations}. A contemporaneous preprint introduces MTG-Causal-RL, a 56-card, five-archetype Gymnasium benchmark with a fixed masked action space and an explicit causal interface \citep{cunha2026causal}. Etude is complementary: it emphasizes a rules-cited Rust engine, state-dependent object-referential actions, native determinization and search, and a baseline ledger that includes seat effects, inference cost, and failed predictions.
 
 The remaining entry cost is still high. Restricted environments necessarily choose a rules slice; evaluation can be dominated by seat and opponent effects; and a learned policy can look strong against random play while remaining weaker than a small search budget. We encountered all three problems in that order.
 
@@ -194,7 +194,7 @@ The platform's first pool expansion was deliberately shaped like the real task: 
 
 Both decks are playable in the browser UI against any agent, with MTGO-style priority stops and auto-pass. The first cross-deck matchup table (2{,}000 seat-balanced games, zero engine errors) is a calibration result discussed in \S\ref{sec:pitfalls}: GW Allies wins $65.5\%$ under random-vs-random and $\approx77\%$ in search mirrors --- and \S\ref{sec:competency} shows why that last number says more about the pilot than the decks.
 
-\subsection{manabot: the learning side}
+\subsection{Manabot: the learning side}
 
 A Gymnasium-compatible vectorized wrapper \citep{towers2024gymnasium} and an object-centric observation encoder used by PPO and the distilled policy. The flat-MC player instead reads raw engine state; the distillation harness connects the two by recording encoded observations paired with search actions.
 
@@ -412,7 +412,7 @@ These five problems organize the gaps exposed by the current platform. They are 
 
 \textbf{Statement.} Replace uniform determinization with a learned posterior over the opponent's hidden state, and demonstrate that it improves play at a matched simulation budget.
 
-\textbf{Current best.} No learned belief model in manabot. \texttt{determinize()} draws uniformly from the opponent's unseen pool. This is correct before public behavior conveys information and increasingly misspecified when actions depend on private cards.
+\textbf{Current best.} No learned belief model in Manabot. \texttt{determinize()} draws uniformly from the opponent's unseen pool. This is correct before public behavior conveys information and increasingly misspecified when actions depend on private cards.
 
 \textbf{Entry criterion.} A belief model $b(\text{hand} \mid \text{public history})$ that (i) beats the uniform prior in held-out log-likelihood of the true opponent hand, (ii) when substituted into \texttt{determinize}, yields a searcher that beats an equal-simulation uniform searcher over $\ge400$ seat-balanced games, and (iii) reports the control-competency suite (\S\ref{sec:competency}), lifting hold-the-wipe and hold-up-quench strictly off zero.
 
@@ -432,7 +432,7 @@ These five problems organize the gaps exposed by the current platform. They are 
 
 \textbf{Statement.} Train an agent that plays competently with cards it has never seen.
 
-\textbf{Current best.} No zero-shot game-play result in manabot. The observation encoder represents cards as hand-built feature vectors: type flags, keyword flags, ward and kicker costs, power/toughness/mana value, and type tags. Related work has demonstrated generalized representations for unseen cards in deck-construction decisions \citep{bertram2024representations}, but transfer to sequential play remains open here.
+\textbf{Current best.} No zero-shot game-play result in Manabot. The observation encoder represents cards as hand-built feature vectors: type flags, keyword flags, ward and kicker costs, power/toughness/mana value, and type tags. Related work has demonstrated generalized representations for unseen cards in deck-construction decisions \citep{bertram2024representations}, but transfer to sequential play remains open here.
 
 \textbf{Entry criterion.} Hold out the 26-card \textit{Avatar} slice (\texttt{cardsets/tla.rs}) from training, freeze the policy, and evaluate it on decks containing those cards. It must beat an otherwise matched identifier-only or randomized-representation baseline head-to-head with a Wilson lower bound above $50\%$; also report the gap to an oracle trained with the held-out cards.
 

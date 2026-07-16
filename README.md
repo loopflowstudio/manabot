@@ -1,17 +1,25 @@
-# manabot
+# Etude Fantasia
 
-A reinforcement learning framework for [Magic: The Gathering](https://magic.wizards.com/), using PPO as the core training algorithm.
+**Etude Fantasia** is an AI-native research game for
+[Magic: The Gathering](https://magic.wizards.com/): exact, creator-selected
+matchups for developing strong agents and studying their decisions through a
+finished play experience. **Etude** is its short name and the repository's
+machine identity.
 
-This repository contains both:
-- **manabot** (Python): RL training framework, Gymnasium environment wrapper, experiment tracking
-- **managym** (Rust): Game engine with PyO3 Python bindings
+Etude Fantasia trains and studies a **manabot**. This repository contains:
+
+- **Etude Fantasia**: the authored play, replay, and study experience
+- **Manabot** (`manabot`, Python): the trainable agent, search and learning
+  library, Gymnasium wrappers, and experiment tracking
+- **managym** (Rust): the deterministic game and search environment, with PyO3
+  Python bindings
 
 ## Installation
 
 ```bash
 # Clone the repo
-git clone git@github.com:loopflowstudio/manabot.git
-cd manabot
+git clone git@github.com:loopflowstudio/etude.git
+cd etude
 
 # Install locked Python dependencies
 uv sync --python 3.12 --extra dev
@@ -26,7 +34,7 @@ uv run --python 3.12 --extra play maturin develop --release \
 
 ## Training
 
-Manabot is primarily trained on Ubuntu machines in AWS and requires wandb credentials.
+Manabots are primarily trained on Ubuntu machines in AWS and require W&B credentials.
 
 ```bash
 uv run manabot train --preset simple
@@ -63,7 +71,7 @@ uv run --extra dev pytest tests/env/ tests/agent/ -v
 
 ## Architecture
 
-### manabot (Python)
+### Manabot (Python)
 
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    - `VectorEnv`: vectorized environment backed by `managym.VectorEnv`
@@ -71,15 +79,15 @@ uv run --extra dev pytest tests/env/ tests/agent/ -v
    - `Match`: Game configuration (decklists, etc.)
    - `Reward`: Reward function
 
-2. **`manabot.model`**: PPO implementation
+2. **`manabot.model`**: trainable policy and value models
    - `Agent`: Shared value/policy network
    - `Trainer`: PPO trainer
 
-3. **`manabot.sim`**: Game simulation
+3. **`manabot.sim`**: search, data generation, and game simulation
    - `Player`: Agent implementations (learned or random)
    - `Sim`: Multi-game simulation runner
 
-4. **`manabot.infra`**: Infrastructure
+4. **`manabot.infra`**: training infrastructure
    - `Experiment`: W&B/TensorBoard tracking
    - `Hypers`: Pydantic config model
    - `Profiler`: Performance profiling
@@ -97,7 +105,7 @@ Dependencies flow: python → agent → flow → state/infra
 
 ## Style Guide
 
-### Python (manabot)
+### Python (Manabot)
 
 ```python
 """
@@ -114,7 +122,7 @@ from typing import Dict, List
 # Third-party imports
 from torch import Tensor
 
-# manabot imports
+# Manabot imports
 from manabot.env import ObservationSpace
 
 # Local imports
@@ -133,6 +141,14 @@ use crate::state::player::PlayerId;
 
 Prefer explicit types and focused modules. Keep game behavior in enums +
 `match` expressions instead of inheritance-like abstractions.
+
+## Naming
+
+Etude Fantasia is the full project and product name; Etude is the short name.
+Manabot is not a former name to erase: it is the agent Etude trains and the
+Python library that implements its learning and search systems. Existing
+`manabot.*` contract/schema identifiers and experiment receipts therefore keep
+their names and remain reproducible.
 
 ## LLM Collaboration
 

@@ -11,11 +11,11 @@ robust. Its history shows that variable-length tokens are only the first step:
 the durable work is explicit schema identity, padding, normalization, overflow
 semantics, checkpoint binding, compatibility, and cross-language parity.
 
-Metta does not demonstrate the stronger capability manabot wants. Its policy
+Metta does not demonstrate the stronger capability Etude wants. Its policy
 can survive a known feature arriving under a different runtime ID, but it does
 not infer the meaning of a genuinely new feature. Feature names bind known
 facts to learned embedding slots; they are not themselves interpreted as a
-semantic language. Manabot's target is therefore one level higher: an unseen
+semantic language. Etude's target is therefore one level higher: an unseen
 card composed from known typed operations should remain intelligible without
 its `CardDefId`.
 
@@ -120,7 +120,7 @@ showed otherwise:
 The environment's 200-token buffer dropped nothing in that workload. All loss
 was introduced by policy preprocessing. The cap was raised to 128.
 
-This is a central lesson for manabot: a token budget is part of experimental
+This is a central lesson for Etude: a token budget is part of experimental
 semantics, not merely model configuration. Truncating a semantic program can
 change an ability's meaning rather than merely omit a distant fact.
 
@@ -178,7 +178,7 @@ Metta is strong on these dimensions. It is weak on **novel semantic
 robustness**: its model consumes learned IDs for flat spatial facts, not typed
 nested programs whose familiar operations can recombine on unseen content.
 
-## Manabot design consequences
+## Etude design consequences
 
 ### Variable typed programs, not fixed feature vectors
 
@@ -282,5 +282,5 @@ headline arms.
 
 The transferable lesson is to copy Metta's migration discipline and contracts,
 not its byte layout. Metta made policies portable across changing sets of known
-facts. Manabot should make policies compositional across unseen cards built
+facts. Etude should make policies compositional across unseen cards built
 from known executable meanings.

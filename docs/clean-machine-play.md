@@ -1,6 +1,6 @@
 # Clean-machine play proof
 
-Manabot has one clean-machine-certified play command:
+Etude has one clean-machine-certified play command:
 
 ```bash
 ./scripts/play
@@ -10,7 +10,7 @@ From a fresh checkout on the reference profile, that command prepares the
 locked, minimal play-runtime Python environment, builds the CPython 3.12 `managym` extension,
 installs the locked frontend dependencies, starts the local FastAPI and Vite
 processes, validates the installed curated pack, and prints a
-`MANABOT_PLAY_READY` JSON record plus the play URL. Ctrl-C stops both child
+`ETUDE_PLAY_READY` JSON record plus the play URL. Ctrl-C stops both child
 processes.
 
 The existing `uv run scripts/play.py` path remains useful in an already
@@ -91,7 +91,7 @@ proof.
 
 ## Deterministic diagnostics
 
-Controlled failures print one `MANABOT_PLAY_ERROR` JSON record and exit
+Controlled failures print one `ETUDE_PLAY_ERROR` JSON record and exit
 nonzero. The stable codes are:
 
 | Code | Meaning |

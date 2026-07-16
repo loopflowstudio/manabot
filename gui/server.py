@@ -108,7 +108,7 @@ ACTION_LABELS = {
     "CHOOSE_TARGET": "Choose target",
 }
 
-app = FastAPI(title="manabot-gui")
+app = FastAPI(title="Etude Fantasia")
 SESSION_TTL = timedelta(minutes=15)
 SESSION_EXPIRED_END_REASON = "session_expired"
 
