@@ -17,16 +17,23 @@ handles.
 
 ## Measurement record
 
-- Captured: `2026-07-16T01:19:56Z`
+- Captured: `2026-07-16T01:32:56Z`
 - Measurement-code revision:
-  `4f49ad512f1af93316b82f1a8c3d00e0aa98c1b5`
+  `f7d5878b6be4b2276ac5f42f50dc5f390a6982ad`
 - Build profile: Cargo `release`
 - Toolchain: `rustc 1.96.1 (31fca3adb 2026-06-26)`;
   `cargo 1.96.1 (356927216 2026-06-26)`
 - Hardware: Apple M4 Max, arm64, 16 logical CPUs, 137,438,953,472 bytes
   physical memory
 - OS: macOS 26.0.1, Darwin 25.0.0
-- Command:
+- Focused identity/isolation contracts:
+
+  ```bash
+  cargo test --manifest-path managym/Cargo.toml --test content_pack_tests matches_and_search_clones_share_one_immutable_content_pack -- --exact
+  cargo test --manifest-path managym/Cargo.toml --lib agent::env::content_pack_contract_tests::content_pack_contract_covers_env_roots_siblings_and_rollout_slots -- --exact
+  ```
+
+- Allocation command:
 
   ```bash
   cargo test --release --manifest-path managym/Cargo.toml --test content_pack_clone_allocations -- --nocapture --test-threads=1
