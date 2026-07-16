@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "id": "opcode-alignment-v1",
+  "claim": "preliminary_typed_opcode_alignment_probe",
+  "claim_boundary": "This probe measures typed-opcode alignment only. It does not establish semantic compositional transfer, AST understanding, gameplay strength, PPO transfer, search strength, or win rate.",
+  "dataset_seed": 21400,
+  "model_seeds": [21401, 21402, 21403],
+  "held_out_definitions": {
+    "ur_lessons": [
+      "stx.pop_quiz",
+      "tla.forecasting_fortune_teller"
+    ],
+    "gw_allies": [
+      "tla.kyoshi_warriors",
+      "tla.white_lotus_reinforcements"
+    ]
+  },
+  "evaluation": {
+    "replicates_per_program_and_seat": 4,
+    "seats": [0, 1],
+    "confidence_level": 0.95,
+    "confidence_method": "wilson",
+    "limited_retraining_examples_per_program": 1
+  },
+  "training": {
+    "epochs": 160,
+    "limited_retraining_steps": 24,
+    "learning_rate": 0.03,
+    "hidden_dim": 32
+  },
+  "performance": {
+    "warmup": 20,
+    "samples": 100
+  },
+  "gates": {
+    "minimum_legal_choices": 33,
+    "maximum_overflow_count": 0,
+    "maximum_illegal_decode_count": 0,
+    "required_rebind_match_rate": 1.0,
+    "required_permutation_match_rate": 1.0
+  },
+  "alignment_signal_criterion": {
+    "semantic_only_minimum_accuracy": 0.8,
+    "minimum_uplift_over_each_identity_control": 0.2
+  }
+}
