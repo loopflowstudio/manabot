@@ -503,3 +503,95 @@ impl Env {
         insert_info(info, "behavior", InfoValue::Map(behavior));
     }
 }
+
+#[cfg(test)]
+mod content_pack_contract_tests {
+    use std::{collections::BTreeMap, sync::Arc};
+
+    use super::Env;
+    use crate::{
+        cardsets::alpha::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
+        state::player::PlayerConfig,
+    };
+
+    fn interactive_deck() -> BTreeMap<String, usize> {
+        BTreeMap::from([
+            ("Island".to_string(), 12),
+            ("Mountain".to_string(), 12),
+            ("Gray Ogre".to_string(), 6),
+            ("Wind Drake".to_string(), 6),
+            ("Man-o'-War".to_string(), 4),
+            ("Raging Goblin".to_string(), 4),
+            ("Lightning Bolt".to_string(), 6),
+            ("Counterspell".to_string(), 4),
+            ("Ancestral Recall".to_string(), 3),
+            ("Pyroclasm".to_string(), 3),
+        ])
+    }
+
+    fn configs() -> Vec<PlayerConfig> {
+        vec![
+            PlayerConfig::new("hero", interactive_deck()),
+            PlayerConfig::new("villain", interactive_deck()),
+        ]
+    }
+
+    #[test]
+    fn content_pack_contract_covers_env_roots_siblings_and_rollout_slots() {
+        let absent = Env::new(1, true, false, false);
+        let error = absent
+            .fork()
+            .expect_err("an environment without a match has no content pack");
+        assert_eq!(error.0, "env.fork called before reset");
+
+        let mut first = Env::new(11, true, false, false);
+        let mut second = Env::new(12, true, false, false);
+        first.reset(configs()).expect("first reset");
+        second.reset(configs()).expect("second reset");
+
+        let admitted = default_content_pack();
+        let expected_digest = admitted.content_digest();
+        let first_game = first.game.as_ref().expect("first game");
+        let second_game = second.game.as_ref().expect("second game");
+        assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
+        assert!(Arc::ptr_eq(&first_game.state.content, &admitted));
+        assert!(Arc::ptr_eq(&second_game.state.content, &admitted));
+        assert_eq!(first_game.state.content.content_digest(), expected_digest);
+        assert_eq!(second_game.state.content.content_digest(), expected_digest);
+
+        let root_hash = first_game.state.deterministic_hash();
+        let root_life = first_game.state.players[0].life;
+        let mut changed = first.fork().expect("changed sibling");
+        let untouched = first.fork().expect("untouched sibling");
+        let pool = first.rollout_pool(1, 1, 0x208, 2000).expect("rollout pool");
+
+        for content in pool.content_pack_contract_refs() {
+            assert!(Arc::ptr_eq(content, &admitted));
+            assert_eq!(content.content_digest(), expected_digest);
+        }
+
+        let action = changed.action_count().expect("changed action count");
+        assert!(action > 0);
+        changed.step(0).expect("legal branch action");
+        changed.game.as_mut().expect("changed game").state.players[0].life -= 3;
+
+        let root = first.game.as_ref().expect("root game");
+        let changed_game = changed.game.as_ref().expect("changed game");
+        let untouched_game = untouched.game.as_ref().expect("untouched game");
+        assert_eq!(root.state.deterministic_hash(), root_hash);
+        assert_eq!(untouched_game.state.deterministic_hash(), root_hash);
+        assert_ne!(changed_game.state.deterministic_hash(), root_hash);
+        assert_eq!(root.state.players[0].life, root_life);
+        assert_eq!(untouched_game.state.players[0].life, root_life);
+        assert_eq!(changed_game.state.players[0].life, root_life - 3);
+
+        for branch in [changed_game, untouched_game] {
+            assert!(Arc::ptr_eq(&branch.state.content, &admitted));
+            assert_eq!(branch.state.content.content_digest(), expected_digest);
+            for (root_card, branch_card) in root.state.cards.iter().zip(branch.state.cards.iter()) {
+                assert_eq!(root_card.definition_id, branch_card.definition_id);
+                assert!(root_card.shares_definition_with(branch_card));
+            }
+        }
+    }
+}
