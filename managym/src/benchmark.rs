@@ -1,9 +1,9 @@
 //! Contract-v1 search-state benchmark support.
 //!
 //! The workload code is generic over [`BranchDriver`], so every candidate runs
-//! byte-identical logical work and the cells are matched by construction. Two
-//! implementations exist: the full-clone reference baseline, and compact clone
-//! plus undo. Dense page-COW storage intentionally remains future work.
+//! byte-identical logical work and the cells are matched by construction. Three
+//! implementations exist: the full-clone reference baseline, compact clone
+//! plus undo, and fixed 4 KiB event-page COW plus undo.
 
 use std::{collections::BTreeMap, hint::black_box, time::Instant};
 
@@ -19,13 +19,15 @@ use crate::{
 
 pub use crate::search_state::{
     witness, ApplyReceipt, AuthorityFingerprint, BenchCommand, BranchDriver, ClonePlusUndoDriver,
-    ContractDiagnostics, DriverCounters, FullCloneDriver, LegalSurfaceFingerprint,
-    SearchStateWitness, ViewerProjectionWitness, SEARCH_WITNESS_SCHEMA_VERSION,
+    ContractDiagnostics, DensePageCowUndoDriver, DriverCounters, FullCloneDriver,
+    LegalSurfaceFingerprint, SearchStateWitness, ViewerProjectionWitness,
+    SEARCH_WITNESS_SCHEMA_VERSION,
 };
 
 pub const CONTRACT_ID: &str = "manabot.search-branching.v1";
 pub const DRIVER_ID: &str = "full_clone/current_game_v1";
 pub const CLONE_PLUS_UNDO_DRIVER_ID: &str = "compact_clone_undo/current_game_v1";
+pub const PAGE_COW_DRIVER_ID: &str = "dense_page_cow_undo/event_pages_4k_v1";
 
 /// The branching candidates under measurement. Selecting a candidate changes
 /// only how a branch is taken and released; it never changes the workload's
@@ -34,6 +36,7 @@ pub const CLONE_PLUS_UNDO_DRIVER_ID: &str = "compact_clone_undo/current_game_v1"
 pub enum DriverKind {
     FullClone,
     ClonePlusUndo,
+    DensePageCowUndo,
 }
 
 impl DriverKind {
@@ -41,6 +44,7 @@ impl DriverKind {
         match id {
             DRIVER_ID => Ok(Self::FullClone),
             CLONE_PLUS_UNDO_DRIVER_ID => Ok(Self::ClonePlusUndo),
+            PAGE_COW_DRIVER_ID => Ok(Self::DensePageCowUndo),
             other => Err(format!("unknown driver {other}")),
         }
     }
@@ -49,6 +53,7 @@ impl DriverKind {
         match self {
             Self::FullClone => DRIVER_ID,
             Self::ClonePlusUndo => CLONE_PLUS_UNDO_DRIVER_ID,
+            Self::DensePageCowUndo => PAGE_COW_DRIVER_ID,
         }
     }
 }
@@ -533,6 +538,12 @@ pub fn equivalence_check_with(
             trace_seed,
             max_steps,
         ),
+        DriverKind::DensePageCowUndo => {
+            let driver = DensePageCowUndoDriver::default();
+            let (mut game, _) = build_fixture(fixture_id)?;
+            driver.admit_root(&mut game);
+            equivalence_for_root(&driver, game, fixture_id, trace_seed, max_steps)
+        }
     }
 }
 
@@ -543,6 +554,16 @@ fn equivalence_for<D: BranchDriver<State = Game>>(
     max_steps: usize,
 ) -> Result<EquivalenceReceipt, String> {
     let (game, _) = build_fixture(fixture_id)?;
+    equivalence_for_root(driver, game, fixture_id, trace_seed, max_steps)
+}
+
+fn equivalence_for_root<D: BranchDriver<State = Game>>(
+    driver: &D,
+    game: Game,
+    fixture_id: &str,
+    trace_seed: u64,
+    max_steps: usize,
+) -> Result<EquivalenceReceipt, String> {
     let root = driver.witness(&game);
     let mut left = driver.fork_exact(&game);
     let mut right = driver.fork_exact(&game);
@@ -740,7 +761,9 @@ fn measure_clone<D: BranchDriver<State = Game>>(
         metrics
             .clone_latency_ns
             .push(sample.elapsed().as_nanos() as u64);
-        metrics.eager_forks += 1;
+        if driver.fork_copies_full_state() {
+            metrics.eager_forks += 1;
+        }
     }
     metrics.elapsed_seconds = elapsed.elapsed().as_secs_f64();
     metrics.root_decisions = 1;
@@ -839,7 +862,9 @@ fn run_sequential<D: BranchDriver<State = Game>>(
             let fork_start = Instant::now();
             let mut world = driver.fork_exact(root);
             metrics.fork_seconds += fork_start.elapsed().as_secs_f64();
-            metrics.eager_forks += 1;
+            if driver.fork_copies_full_state() {
+                metrics.eager_forks += 1;
+            }
             let determinize_start = Instant::now();
             driver.determinize(&mut world, viewer, world_seed);
             metrics.determinize_seconds += determinize_start.elapsed().as_secs_f64();
@@ -848,7 +873,9 @@ fn run_sequential<D: BranchDriver<State = Game>>(
                     let mark_start = Instant::now();
                     let mark = driver.mark(&mut world);
                     metrics.mark_seconds += mark_start.elapsed().as_secs_f64();
-                    metrics.checkpoint_copies += 1;
+                    if driver.mark_copies_full_state() {
+                        metrics.checkpoint_copies += 1;
+                    }
                     let rollout_seed = mix_seed(
                         world_seed,
                         (action * request.workload.rollouts_per_world + rollout + 1) as u64,
@@ -906,8 +933,9 @@ struct RetainedSlot {
 }
 
 fn project_observation(game: &mut Game) {
-    let events = game.take_observation_events();
-    black_box(Observation::new(game, &events));
+    game.journal_observation_events();
+    black_box(Observation::new(game, &game.state.observation_events));
+    game.state.observation_events.clear();
 }
 
 /// Every simulation stays live at once, so each slot needs its own exact fork
@@ -946,7 +974,9 @@ fn run_retained<D: BranchDriver<State = Game>>(
             let fork_start = Instant::now();
             let mut world = driver.fork_exact(root);
             metrics.fork_seconds += fork_start.elapsed().as_secs_f64();
-            metrics.eager_forks += 1;
+            if driver.fork_copies_full_state() {
+                metrics.eager_forks += 1;
+            }
             let determinize_start = Instant::now();
             driver.determinize(&mut world, viewer, world_seed);
             metrics.determinize_seconds += determinize_start.elapsed().as_secs_f64();
@@ -955,7 +985,9 @@ fn run_retained<D: BranchDriver<State = Game>>(
                     let fork_start = Instant::now();
                     let mut sim = driver.fork_exact(&world);
                     metrics.fork_seconds += fork_start.elapsed().as_secs_f64();
-                    metrics.eager_forks += 1;
+                    if driver.fork_copies_full_state() {
+                        metrics.eager_forks += 1;
+                    }
                     let rollout_seed = mix_seed(
                         world_seed,
                         (action * request.workload.rollouts_per_world + rollout + 1) as u64,
@@ -1054,13 +1086,18 @@ pub struct PreparedWorker {
 /// their ready barrier only after this returns.
 pub fn prepare_worker(request: WorkerRequest) -> Result<PreparedWorker, String> {
     request.validate()?;
-    let (root, fixture) = build_fixture(&request.workload.fixture)?;
+    let (mut root, fixture) = build_fixture(&request.workload.fixture)?;
     // Warm up through the candidate actually under measurement, so its own
     // caches and allocation behavior are warm rather than the baseline's.
     match request.driver_kind()? {
         DriverKind::FullClone => warmup_worker(&FullCloneDriver, &root, &request)?,
         DriverKind::ClonePlusUndo => {
             warmup_worker(&ClonePlusUndoDriver::default(), &root, &request)?
+        }
+        DriverKind::DensePageCowUndo => {
+            let driver = DensePageCowUndoDriver::default();
+            driver.admit_root(&mut root);
+            warmup_worker(&driver, &root, &request)?
         }
     }
     Ok(PreparedWorker {
@@ -1117,6 +1154,17 @@ impl PreparedWorker {
             }
             DriverKind::ClonePlusUndo => {
                 let driver = ClonePlusUndoDriver::default();
+                measure_with(
+                    &driver,
+                    &self.root,
+                    &self.request,
+                    worker_seed,
+                    &mut metrics,
+                )?;
+                install_counters(&mut metrics, &driver);
+            }
+            DriverKind::DensePageCowUndo => {
+                let driver = DensePageCowUndoDriver::default();
                 measure_with(
                     &driver,
                     &self.root,

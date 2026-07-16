@@ -252,7 +252,10 @@ pub struct Observation {
 }
 
 impl Observation {
-    pub fn new(game: &Game, recent_events: &[GameEvent]) -> Self {
+    pub fn new<'a, I>(game: &Game, recent_events: I) -> Self
+    where
+        I: IntoIterator<Item = &'a GameEvent>,
+    {
         Self::for_player_with_events(game, game.agent_player(), recent_events, true)
     }
 
@@ -273,15 +276,18 @@ impl Observation {
             .as_ref()
             .and_then(|space| space.player)
             == Some(viewer);
-        Self::for_player_with_events(game, viewer, &[], expose_actions)
+        Self::for_player_with_events(game, viewer, std::iter::empty(), expose_actions)
     }
 
-    fn for_player_with_events(
+    fn for_player_with_events<'a, I>(
         game: &Game,
         agent_player: PlayerId,
-        recent_events: &[GameEvent],
+        recent_events: I,
         expose_actions: bool,
-    ) -> Self {
+    ) -> Self
+    where
+        I: IntoIterator<Item = &'a GameEvent>,
+    {
         let opponent_player = PlayerId((agent_player.0 + 1) % 2);
 
         let game_over = game.is_game_over();
@@ -349,7 +355,10 @@ impl Observation {
             opponent_cards: Vec::new(),
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
-            recent_events: recent_events.iter().flat_map(Self::event_data).collect(),
+            recent_events: recent_events
+                .into_iter()
+                .flat_map(Self::event_data)
+                .collect(),
         };
 
         obs.populate_cards(game, agent_player);

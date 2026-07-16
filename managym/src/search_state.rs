@@ -18,6 +18,7 @@ use serde::Serialize;
 use crate::{
     agent::{action::ActionSpace, observation::Observation},
     flow::{
+        event_log::{CowStats, EVENT_PAGE_BYTES},
         game::PendingChoice,
         search::mix_seed,
         undo::{ClonePlusUndoMark, JournalStats},
@@ -193,6 +194,8 @@ pub trait BranchDriver {
     fn rollback(&self, state: &mut Self::State, mark: Self::Mark);
     fn witness(&self, state: &Self::State) -> SearchStateWitness;
     fn counters(&self) -> DriverCounters;
+    fn fork_copies_full_state(&self) -> bool;
+    fn mark_copies_full_state(&self) -> bool;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -262,6 +265,14 @@ impl BranchDriver for FullCloneDriver {
             unsupported_reason: "system allocator has no counting hook; full-clone baseline has no undo journal or page-COW counters".to_string(),
             ..DriverCounters::default()
         }
+    }
+
+    fn fork_copies_full_state(&self) -> bool {
+        true
+    }
+
+    fn mark_copies_full_state(&self) -> bool {
+        true
     }
 }
 
@@ -366,6 +377,136 @@ impl BranchDriver for ClonePlusUndoDriver {
                     .to_string(),
             ..DriverCounters::default()
         }
+    }
+
+    fn fork_copies_full_state(&self) -> bool {
+        true
+    }
+
+    fn mark_copies_full_state(&self) -> bool {
+        false
+    }
+}
+
+/// Fixed 4 KiB event-page COW outer forks with the dense inverse journal for
+/// nested sequential work.
+#[derive(Clone, Debug, Default)]
+pub struct DensePageCowUndoDriver {
+    journal_stats: Arc<JournalStats>,
+    cow_stats: Arc<CowStats>,
+}
+
+impl DensePageCowUndoDriver {
+    pub fn admit_root(&self, state: &mut Game) {
+        state.admit_page_cow_root();
+    }
+
+    fn ensure_enabled(&self, state: &mut Game) {
+        if state.undo.is_none() {
+            state.enable_undo(
+                self.journal_stats.clone(),
+                self.journal_stats.next_branch_id(),
+            );
+        }
+    }
+}
+
+impl BranchDriver for DensePageCowUndoDriver {
+    type State = Game;
+    type Mark = ClonePlusUndoMark;
+
+    fn fork_exact(&self, source: &Game) -> Game {
+        let mut fork = source.page_cow_fork(self.cow_stats.clone());
+        self.ensure_enabled(&mut fork);
+        fork
+    }
+
+    fn determinize(&self, state: &mut Game, viewer: PlayerId, seed: u64) {
+        self.ensure_enabled(state);
+        state.determinize(viewer, seed);
+    }
+
+    fn reseed_rollout(&self, state: &mut Game, seed: u64) {
+        self.ensure_enabled(state);
+        state.reseed(seed);
+    }
+
+    fn mark(&self, state: &mut Game) -> ClonePlusUndoMark {
+        self.ensure_enabled(state);
+        state.undo_mark()
+    }
+
+    fn apply(&self, state: &mut Game, command: BenchCommand) -> Result<ApplyReceipt, String> {
+        self.ensure_enabled(state);
+        if command.expected_state_hash.is_some() || command.expected_action_hash.is_some() {
+            let pre = witness(state);
+            if command
+                .expected_state_hash
+                .as_ref()
+                .is_some_and(|expected| expected != &pre.authority.hash)
+            {
+                return Err("state precondition mismatch".to_string());
+            }
+            if command
+                .expected_action_hash
+                .as_ref()
+                .is_some_and(|expected| expected != &pre.legal_surface.hash)
+            {
+                return Err("action precondition mismatch".to_string());
+            }
+        }
+        let action_count = state.action_space().map_or(0, |space| space.actions.len());
+        if command.action_index >= action_count {
+            return Err(format!(
+                "action {} out of bounds for {action_count} legal actions",
+                command.action_index
+            ));
+        }
+
+        let atomic = state.undo_mark();
+        match state.step(command.action_index) {
+            Ok(done) => {
+                state.undo_commit(atomic);
+                Ok(ApplyReceipt { done })
+            }
+            Err(error) => {
+                state.undo_rollback(atomic);
+                Err(error.to_string())
+            }
+        }
+    }
+
+    fn rollback(&self, state: &mut Game, mark: ClonePlusUndoMark) {
+        state.undo_rollback(mark);
+    }
+
+    fn witness(&self, state: &Game) -> SearchStateWitness {
+        witness(state)
+    }
+
+    fn counters(&self) -> DriverCounters {
+        let stats = self.journal_stats.snapshot();
+        DriverCounters {
+            journal_bytes: Some(stats.peak_bytes),
+            journal_entries: Some(stats.entries),
+            journal_peak_entries: Some(stats.peak_entries),
+            journal_marks: Some(stats.marks),
+            journal_commits: Some(stats.commits),
+            journal_rollbacks: Some(stats.rollbacks),
+            cow_bytes: Some(self.cow_stats.peak_bytes()),
+            unsupported_reason: format!(
+                "system allocator has no counting hook; cow_bytes measures branch-private copied {EVENT_PAGE_BYTES}-byte event pages"
+            ),
+            ..DriverCounters::default()
+        }
+    }
+
+    fn fork_copies_full_state(&self) -> bool {
+        false
+    }
+
+    fn mark_copies_full_state(&self) -> bool {
+        false
     }
 }
 

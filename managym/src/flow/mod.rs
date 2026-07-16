@@ -4,6 +4,7 @@ pub mod combat_actions;
 pub mod damage;
 pub mod decision;
 pub mod event;
+pub mod event_log;
 pub mod game;
 pub mod identity;
 pub mod mana;

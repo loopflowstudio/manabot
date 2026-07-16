@@ -3,8 +3,8 @@
 
 Invoke only through uv, for example:
 
-    uv run scripts/bench_branching.py run
-    uv run scripts/bench_branching.py verify
+    uv run scripts/bench_branching.py run-matrix
+    uv run scripts/bench_branching.py verify-matrix
 """
 
 from __future__ import annotations
@@ -32,8 +32,11 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "docs/benchmarks/search-branching-contract-v1.md"
+PREREG_PATH = ROOT / "docs/benchmarks/dense-page-cow-prereg-v1.md"
+DECISION_PATH = ROOT / "docs/benchmarks/search-branching-decision-v1.md"
 FULL_CLONE_DRIVER = "full_clone/current_game_v1"
 CLONE_PLUS_UNDO_DRIVER = "compact_clone_undo/current_game_v1"
+PAGE_COW_DRIVER = "dense_page_cow_undo/event_pages_4k_v1"
 
 # Each candidate lands its own artifact pair. Both pairs are excluded from
 # source_sha256 so that generating one candidate's evidence does not invalidate
@@ -46,6 +49,10 @@ ARTIFACTS: dict[str, tuple[Path, Path]] = {
     CLONE_PLUS_UNDO_DRIVER: (
         ROOT / "experiments/data/w2-198-compact-clone-undo-v1.json",
         ROOT / "experiments/w2-198-compact-clone-undo-v1.md",
+    ),
+    PAGE_COW_DRIVER: (
+        ROOT / "experiments/data/w2-199-dense-page-cow-undo-v1.json",
+        ROOT / "experiments/w2-199-dense-page-cow-undo-v1.md",
     ),
 }
 
@@ -83,6 +90,7 @@ SOURCE_SINGLETON_PATHS = tuple(
     sorted(
         (
             *COMPILE_TIME_SOURCE_INPUTS,
+            "docs/benchmarks/dense-page-cow-prereg-v1.md",
             "docs/benchmarks/search-branching-contract-v1.md",
             "managym/Cargo.lock",
             "managym/Cargo.toml",
@@ -448,7 +456,20 @@ def build_binary() -> dict[str, Any]:
         "uv": command_output(["uv", "--version"]),
         "python": command_output(["uv", "run", "python", "--version"]),
         "binary": str(BINARY.relative_to(ROOT)),
+        "binary_sha256": sha256_file(BINARY),
     }
+
+
+def measurement_code_revision() -> str:
+    revision = command_output(["git", "rev-parse", "HEAD"])
+    if revision is None or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise RuntimeError("cannot resolve exact measurement code revision")
+    return revision
+
+
+def assert_binary_unchanged(build: dict[str, Any]) -> None:
+    if not BINARY.is_file() or sha256_file(BINARY) != build["binary_sha256"]:
+        raise RuntimeError("release benchmark binary changed during matrix execution")
 
 
 def native_json(arguments: list[str]) -> dict[str, Any]:
@@ -847,6 +868,16 @@ def summarize_cell(cell: dict[str, Any]) -> dict[str, Any]:
             return None
         return sum(values)
 
+    def simultaneous_peak(name: str) -> int | None:
+        """Maximum repeat peak after summing simultaneously live workers."""
+        groups = [
+            [worker["metrics"][name] for worker in repeat["workers"]]
+            for repeat in repeats
+        ]
+        if any(value is None for group in groups for value in group):
+            return None
+        return max(sum(group) for group in groups)
+
     return {
         "simulations": simulations,
         "transitions": transitions,
@@ -870,22 +901,14 @@ def summarize_cell(cell: dict[str, Any]) -> dict[str, Any]:
         "fork_seconds": sum(metric["fork_seconds"] for metric in metrics),
         "mark_seconds": sum(metric["mark_seconds"] for metric in metrics),
         "rollback_seconds": sum(metric["rollback_seconds"] for metric in metrics),
-        "journal_peak_bytes": max(
-            (metric["journal_bytes"] for metric in metrics), default=None
-        )
-        if all(metric["journal_bytes"] is not None for metric in metrics)
-        else None,
-        "journal_peak_entries": max(
-            (metric["journal_peak_entries"] for metric in metrics), default=None
-        )
-        if all(metric["journal_peak_entries"] is not None for metric in metrics)
-        else None,
+        "journal_peak_bytes": simultaneous_peak("journal_bytes"),
+        "journal_peak_entries": simultaneous_peak("journal_peak_entries"),
         "journal_marks": counter_total("journal_marks"),
         "journal_commits": counter_total("journal_commits"),
         "journal_rollbacks": counter_total("journal_rollbacks"),
         "allocation_count": counter_total("allocation_count"),
         "allocation_bytes": counter_total("allocation_bytes"),
-        "cow_bytes": counter_total("cow_bytes"),
+        "cow_bytes": simultaneous_peak("cow_bytes"),
         "unsupported_counters_reason": metrics[0]["unsupported_counters_reason"],
         "cap_rate": caps / simulations if simulations else 0.0,
         "repeat_checksums": [repeat["result_checksum"] for repeat in repeats],
@@ -1014,9 +1037,16 @@ def run_benchmark(
     driver: str,
     started_at: str,
     invoked_argv: list[str],
+    source: SourceIdentity | None = None,
+    build_metadata: dict[str, Any] | None = None,
+    hardware: dict[str, Any] | None = None,
+    revision: str | None = None,
 ) -> dict[str, Any]:
-    initial_source = source_identity()
-    build = build_binary()
+    initial_source = source or source_identity()
+    build = dict(build_metadata) if build_metadata is not None else build_binary()
+    measured_hardware = dict(hardware) if hardware is not None else hardware_metadata(oversubscribed)
+    measured_revision = revision or measurement_code_revision()
+    assert_binary_unchanged(build)
     manifest = native_json(["--manifest", "--driver", driver])
     if manifest["driver"] != driver:
         raise RuntimeError("native manifest driver does not match the request")
@@ -1075,6 +1105,9 @@ def run_benchmark(
     completed_source = source_identity()
     if completed_source != initial_source:
         raise RuntimeError("source tree changed during benchmark execution")
+    if measurement_code_revision() != measured_revision:
+        raise RuntimeError("measurement code revision changed during benchmark execution")
+    assert_binary_unchanged(build)
     payload: dict[str, Any] = {
         "schema": SCHEMA,
         "contract": {
@@ -1091,13 +1124,14 @@ def run_benchmark(
             "source_sha256": initial_source.sha256,
             "source_digest_method": SOURCE_DIGEST_METHOD,
             "source_paths": list(initial_source.paths),
+            "measurement_code_revision": measured_revision,
             "driver": manifest["driver"],
             "profile": profile,
             "canonical": profile == "full" and not oversubscribed,
             "status": "complete",
             "loopflow": control_plane,
         },
-        "hardware": hardware_metadata(oversubscribed),
+        "hardware": measured_hardware,
         "build": build,
         "manifest": manifest,
         "fixtures": fixtures,
@@ -1156,8 +1190,8 @@ def render_report(payload: dict[str, Any]) -> str:
             "",
             "## Branch lifecycle and journal counters",
             "",
-            "| Cell | eager forks | checkpoints | fork time | mark time | rollback time | journal peak | journal entries | marks / commits / rollbacks |",
-            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| Cell | eager forks | checkpoints | fork time | mark time | rollback time | journal peak | COW peak | journal entries | marks / commits / rollbacks |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
     for cell in payload["cells"]:
@@ -1178,11 +1212,16 @@ def render_report(payload: dict[str, Any]) -> str:
             str(summary[name]) if summary[name] is not None else "null"
             for name in ("journal_marks", "journal_commits", "journal_rollbacks")
         )
+        cow_peak = (
+            f"{bytes_mib(summary['cow_bytes']):.2f} MiB"
+            if summary["cow_bytes"] is not None
+            else "null"
+        )
         lines.append(
             f"| `{cell['id']}` | {summary['eager_forks']} | "
             f"{summary['checkpoint_copies']} | {summary['fork_seconds']:.3f}s | "
             f"{summary['mark_seconds']:.3f}s | {summary['rollback_seconds']:.3f}s | "
-            f"{journal_peak} | {entries} | {counts} |"
+            f"{journal_peak} | {cow_peak} | {entries} | {counts} |"
         )
     unsupported = {
         cell["summary"]["unsupported_counters_reason"]
@@ -1217,21 +1256,23 @@ def render_report(payload: dict[str, Any]) -> str:
             "## Reproduction and evidence",
             "",
             "```bash",
-            f"uv run scripts/bench_branching.py run --driver {payload['run']['driver']}",
-            f"uv run scripts/bench_branching.py verify --driver {payload['run']['driver']}",
+            "uv run scripts/bench_branching.py run-matrix",
+            "uv run scripts/bench_branching.py verify-matrix",
             "```",
             "",
             f"Equivalence: `{str(payload['equivalence']['passed']).lower()}` across {len(payload['equivalence']['checks'])} fixture/seed checks, each replayed twice.",
             "Each primary cell also repeated its first measured root in a fresh worker group and matched the ordered deterministic result checksum.",
             f"Artifact SHA-256: `{payload['artifact_sha256']}`.",
             f"Source SHA-256: `{payload['run']['source_sha256']}`.",
+            f"Measurement revision: `{payload['run']['measurement_code_revision']}`.",
+            f"Release binary SHA-256: `{payload['build']['binary_sha256']}`.",
             f"Source method: `{payload['run']['source_digest_method']}` over {len(payload['run']['source_paths'])} tracked paths recorded in the raw receipt.",
             "",
             "`source_sha256` hashes the canonical NUL-delimited Git tree entries for the receipt's explicit source closure. Run and verification fail closed when an admitted input is dirty, missing, or gains an undeclared production compile-time dependency. Checkout paths, `.git` representation, `.claude` worktrees, generated evidence, and unrelated tracked files are excluded by construction; changing an admitted engine, embedded-content, harness, dependency, test, or contract input requires regenerating every candidate receipt.",
             "",
             "The raw artifact contains the pre-execution UTC start, exact orchestrator and worker argv, a fresh process group per cell/repeat, barrier and sampler receipts, the complete timestamped 5 ms aggregate-worker RSS series, hardware, versions, fixture tapes and hashes, all worker results, seeds, timings, outcomes, and deterministic checksums.",
             "",
-            "This artifact measures one candidate. Comparing candidates means comparing two artifacts from the same host and source state, matched by their equal per-cell result checksums. No page-COW representation is implemented, measured, or selected here.",
+            "This artifact measures one candidate. The matrix verifier compares all three candidates from the same host, source revision, and release binary and requires equal logical work before the decision record is accepted.",
             "",
         ]
     )
@@ -1270,6 +1311,11 @@ def validate_argv(value: Any, context: str) -> list[str]:
 
 def validate_sha256(value: Any, context: str) -> None:
     if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+        raise RuntimeError(f"missing required {context}")
+
+
+def validate_git_revision(value: Any, context: str) -> None:
+    if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
         raise RuntimeError(f"missing required {context}")
 
 
@@ -1514,6 +1560,7 @@ def validate_required_evidence(payload: Any) -> None:
             "source_sha256",
             "source_digest_method",
             "source_paths",
+            "measurement_code_revision",
             "driver",
             "profile",
             "canonical",
@@ -1532,6 +1579,9 @@ def validate_required_evidence(payload: Any) -> None:
     if not isinstance(run["pid"], int) or run["pid"] <= 0:
         raise RuntimeError("missing required run.pid")
     validate_sha256(run["source_sha256"], "run.source_sha256")
+    validate_git_revision(
+        run["measurement_code_revision"], "run.measurement_code_revision"
+    )
     if run["source_digest_method"] != SOURCE_DIGEST_METHOD:
         raise RuntimeError("source digest method mismatch")
     if (
@@ -1593,7 +1643,7 @@ def validate_required_evidence(payload: Any) -> None:
     )
     if hardware["rss_poll_interval_seconds"] != POLL_SECONDS:
         raise RuntimeError("RSS polling interval does not match the contract")
-    require_keys(
+    build = require_keys(
         root["build"],
         {
             "profile",
@@ -1604,9 +1654,11 @@ def validate_required_evidence(payload: Any) -> None:
             "uv",
             "python",
             "binary",
+            "binary_sha256",
         },
         "build",
     )
+    validate_sha256(build["binary_sha256"], "build.binary_sha256")
     manifest = require_keys(root["manifest"], {"max_steps"}, "manifest")
     if not isinstance(root["cells"], list):
         raise RuntimeError("missing required cells")
@@ -1710,6 +1762,344 @@ def verify(payload: dict[str, Any]) -> None:
                 raise RuntimeError(f"replay checksum mismatch for {cell['id']}")
 
 
+LOGICAL_METRIC_FIELDS = (
+    "simulations",
+    "transitions",
+    "root_decisions",
+    "resets",
+    "cap_hits",
+    "hero_wins",
+    "villain_wins",
+    "draws",
+    "max_live_states",
+    "result_checksum",
+    "sampled_final_hashes",
+)
+
+
+def matched_matrix_projection(payload: dict[str, Any]) -> dict[str, Any]:
+    """Project fields that must match across representation candidates."""
+    manifest = dict(payload["manifest"])
+    manifest.pop("driver", None)
+
+    def group_projection(group: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "root_seed": group["root_seed"],
+            "result_checksum": group["result_checksum"],
+            "workers": [
+                {
+                    "fixture": worker["fixture"],
+                    "workload_id": worker["workload_id"],
+                    "shape": worker["shape"],
+                    "root_seed": worker["root_seed"],
+                    "seed_path": worker["seed_path"],
+                    "metrics": {
+                        field: worker["metrics"][field]
+                        for field in LOGICAL_METRIC_FIELDS
+                    },
+                }
+                for worker in group["workers"]
+            ],
+        }
+
+    return {
+        "contract": payload["contract"],
+        "source_sha256": payload["run"]["source_sha256"],
+        "source_digest_method": payload["run"]["source_digest_method"],
+        "source_paths": payload["run"]["source_paths"],
+        "measurement_code_revision": payload["run"]["measurement_code_revision"],
+        "hardware": payload["hardware"],
+        "build": payload["build"],
+        "manifest": manifest,
+        "fixtures": payload["fixtures"],
+        "equivalence": payload["equivalence"],
+        "cells": [
+            {
+                "id": cell["id"],
+                "dimensions": cell["dimensions"],
+                "warmup": cell["warmup"],
+                "repeats": [group_projection(group) for group in cell["repeats"]],
+                "determinism_replay": group_projection(cell["determinism_replay"])
+                if cell["id"] in WHOLE_CELLS
+                else None,
+            }
+            for cell in payload["cells"]
+        ],
+    }
+
+
+def verify_matrix_payloads(payloads: dict[str, dict[str, Any]]) -> None:
+    if set(payloads) != set(ARTIFACTS):
+        raise RuntimeError("three-driver artifact set mismatch")
+    for driver, payload in payloads.items():
+        if payload["run"]["driver"] != driver:
+            raise RuntimeError(f"artifact driver mismatch for {driver}")
+        verify(payload)
+    reference = matched_matrix_projection(payloads[FULL_CLONE_DRIVER])
+    for driver in (CLONE_PLUS_UNDO_DRIVER, PAGE_COW_DRIVER):
+        if matched_matrix_projection(payloads[driver]) != reference:
+            raise RuntimeError(f"matched logical/provenance matrix differs for {driver}")
+
+
+def cell_summaries(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {cell["id"]: cell["summary"] for cell in payload["cells"]}
+
+
+def decision_outcome(payloads: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    full = cell_summaries(payloads[FULL_CLONE_DRIVER])
+    undo = cell_summaries(payloads[CLONE_PLUS_UNDO_DRIVER])
+    page = cell_summaries(payloads[PAGE_COW_DRIVER])
+    flat = ("flat-single-64-v1", "flat-saturated-64-v1")
+    retained = ("retained-single-8-v1", "retained-saturated-16-v1")
+
+    undo_sequential = all(
+        undo[cell]["simulations_per_second"]
+        >= 1.20 * full[cell]["simulations_per_second"]
+        and undo[cell]["root_latency_seconds_p99"]
+        <= 1.10 * full[cell]["root_latency_seconds_p99"]
+        and undo[cell]["rss_peak_bytes"] <= 1.10 * full[cell]["rss_peak_bytes"]
+        for cell in flat
+    )
+    page_retained = (
+        all(
+            page[cell]["simulations_per_second"]
+            >= 0.90 * full[cell]["simulations_per_second"]
+            and page[cell]["rss_peak_bytes"] <= full[cell]["rss_peak_bytes"]
+            for cell in retained
+        )
+        and page["retained-saturated-16-v1"]["rss_peak_bytes"]
+        <= 0.85 * full["retained-saturated-16-v1"]["rss_peak_bytes"]
+        and page["retained-saturated-16-v1"]["rss_peak_delta_bytes"]
+        <= 0.60 * full["retained-saturated-16-v1"]["rss_peak_delta_bytes"]
+        and page["retained-single-8-v1"]["rss_peak_delta_bytes"]
+        <= 0.75 * full["retained-single-8-v1"]["rss_peak_delta_bytes"]
+    )
+    page_general = page_retained and all(
+        page[cell]["simulations_per_second"]
+        >= 0.90 * full[cell]["simulations_per_second"]
+        and page[cell]["root_latency_seconds_p99"]
+        <= 1.10 * full[cell]["root_latency_seconds_p99"]
+        and page[cell]["rss_peak_bytes"] <= 1.10 * full[cell]["rss_peak_bytes"]
+        for cell in flat
+    )
+
+    if page_general:
+        selection = "dense event-page COW plus undo for all measured branching shapes"
+        consequence = (
+            "Advance the page driver as the production candidate; W2-207 owns the "
+            "subsequent runtime gate. Keep full clone as the conformance reference."
+        )
+    elif page_retained:
+        sequential = (
+            "clone plus undo" if undo_sequential else "compact full clone"
+        )
+        selection = (
+            f"workload-specific hybrid: {sequential} for sequential flat rollouts, "
+            "dense event-page COW plus undo for retained slots"
+        )
+        consequence = (
+            "Integrate only the workload-specific paths named above; keep full clone "
+            "as the conformance reference and do not generalize page storage."
+        )
+    elif undo_sequential:
+        selection = (
+            "workload-specific hybrid: clone plus undo for sequential flat rollouts, "
+            "compact full clone for retained slots"
+        )
+        consequence = (
+            "Do not integrate page COW. Retain it as a conformance/benchmark driver; "
+            "W2-207 may gate the sequential undo path separately."
+        )
+    else:
+        selection = "retain compact full clone as the production default"
+        consequence = (
+            "Do not integrate either optimized representation. Keep both as "
+            "conformance/benchmark drivers and remove them from production hot paths."
+        )
+    return {
+        "undo_sequential": undo_sequential,
+        "page_retained": page_retained,
+        "page_general": page_general,
+        "selection": selection,
+        "consequence": consequence,
+    }
+
+
+def ratio(value: float | int, baseline: float | int) -> float:
+    return float(value) / float(baseline) if baseline else 0.0
+
+
+def render_decision(payloads: dict[str, dict[str, Any]]) -> str:
+    outcome = decision_outcome(payloads)
+    full = cell_summaries(payloads[FULL_CLONE_DRIVER])
+    labels = {
+        FULL_CLONE_DRIVER: "full clone",
+        CLONE_PLUS_UNDO_DRIVER: "clone + undo",
+        PAGE_COW_DRIVER: "event-page COW + undo",
+    }
+    lines = [
+        "# Search branching decision v1",
+        "",
+        f"Decision: **{outcome['selection']}**.",
+        "",
+        outcome["consequence"],
+        "",
+        "The decision applies the pre-registered whole-rollout thresholds in "
+        "`dense-page-cow-prereg-v1.md`. Correctness and matched provenance are "
+        "absolute gates; clone latency is diagnostic only.",
+        "",
+        "## Matched primary evidence",
+        "",
+        "| Driver | Cell | sims/s | vs full | p99 root | vs full | peak RSS | vs full | RSS delta | vs full |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for driver in ARTIFACTS:
+        summaries = cell_summaries(payloads[driver])
+        for cell in sorted(WHOLE_CELLS):
+            summary = summaries[cell]
+            baseline = full[cell]
+            lines.append(
+                f"| {labels[driver]} | `{cell}` | "
+                f"{summary['simulations_per_second']:.1f} | "
+                f"{ratio(summary['simulations_per_second'], baseline['simulations_per_second']):.3f}x | "
+                f"{summary['root_latency_seconds_p99']:.3f}s | "
+                f"{ratio(summary['root_latency_seconds_p99'], baseline['root_latency_seconds_p99']):.3f}x | "
+                f"{bytes_mib(summary['rss_peak_bytes']):.1f} MiB | "
+                f"{ratio(summary['rss_peak_bytes'], baseline['rss_peak_bytes']):.3f}x | "
+                f"{bytes_mib(summary['rss_peak_delta_bytes']):.1f} MiB | "
+                f"{ratio(summary['rss_peak_delta_bytes'], baseline['rss_peak_delta_bytes']):.3f}x |"
+            )
+    lines.extend(
+        [
+            "",
+            "## Threshold results",
+            "",
+            f"- Clone-plus-undo sequential bar: `{'pass' if outcome['undo_sequential'] else 'fail'}`.",
+            f"- Page-COW retained-memory bar: `{'pass' if outcome['page_retained'] else 'fail'}`.",
+            f"- Page-COW general-driver bar: `{'pass' if outcome['page_general'] else 'fail'}`.",
+            "",
+            "Clone plus undo is rejected unless both flat cells reach 1.20x full-clone "
+            "throughput without exceeding 1.10x p99 latency or RSS. Page COW is "
+            "rejected for retained use unless both retained cells preserve at least "
+            "0.90x throughput and meet every registered RSS reduction; general use "
+            "also requires the flat guardrails. The table above makes each failed "
+            "comparison explicit.",
+            "",
+            "## Branch lifecycle diagnostics",
+            "",
+            "| Driver | eager full forks | full checkpoints | max journal peak | max COW peak |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
+    for driver in ARTIFACTS:
+        primary = [
+            summary
+            for cell, summary in cell_summaries(payloads[driver]).items()
+            if cell in WHOLE_CELLS
+        ]
+        journal_values = [
+            summary["journal_peak_bytes"]
+            for summary in primary
+            if summary["journal_peak_bytes"] is not None
+        ]
+        cow_values = [
+            summary["cow_bytes"]
+            for summary in primary
+            if summary["cow_bytes"] is not None
+        ]
+        journal_peak = (
+            f"{bytes_mib(max(journal_values)):.2f} MiB" if journal_values else "null"
+        )
+        cow_peak = f"{bytes_mib(max(cow_values)):.2f} MiB" if cow_values else "null"
+        lines.append(
+            f"| {labels[driver]} | {sum(summary['eager_forks'] for summary in primary)} | "
+            f"{sum(summary['checkpoint_copies'] for summary in primary)} | "
+            f"{journal_peak} | {cow_peak} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Full-clone and clone-plus-undo eager counts represent deep outer forks; "
+            "only full clone takes full mark snapshots. Page COW reports zero full "
+            "logical-state forks and checkpoints, with numeric copied-page peaks. "
+            "Unsupported allocator totals remain null in the raw receipts.",
+            "",
+            "## Provenance",
+            "",
+        ]
+    )
+    for driver, (artifact, _) in ARTIFACTS.items():
+        payload = payloads[driver]
+        lines.append(
+            f"- `{driver}`: `{artifact.relative_to(ROOT)}`; artifact "
+            f"`{payload['artifact_sha256']}`."
+        )
+    reference = payloads[FULL_CLONE_DRIVER]
+    lines.extend(
+        [
+            "",
+            f"All three receipts use source `{reference['run']['source_sha256']}`, "
+            f"revision `{reference['run']['measurement_code_revision']}`, and release "
+            f"binary `{reference['build']['binary_sha256']}` on the identical recorded host.",
+            "Logical fixture summaries, seeds, workload dimensions, result checksums, "
+            "outcomes, caps, and sampled final hashes match exactly across candidates.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def persist_payload(driver: str, payload: dict[str, Any]) -> None:
+    raw_path, report_path = ARTIFACTS[driver]
+    atomic_write(raw_path, canonical_json(payload) + b"\n")
+    atomic_write(report_path, render_report(payload).encode())
+
+
+def run_matrix(
+    profile: str,
+    oversubscribed: bool,
+    *,
+    started_at: str,
+    invoked_argv: list[str],
+) -> dict[str, dict[str, Any]]:
+    source = source_identity()
+    revision = measurement_code_revision()
+    build = build_binary()
+    hardware = hardware_metadata(oversubscribed)
+    payloads: dict[str, dict[str, Any]] = {}
+    for driver in ARTIFACTS:
+        assert_binary_unchanged(build)
+        payloads[driver] = run_benchmark(
+            profile,
+            oversubscribed,
+            driver=driver,
+            started_at=started_at,
+            invoked_argv=invoked_argv,
+            source=source,
+            build_metadata=build,
+            hardware=hardware,
+            revision=revision,
+        )
+    verify_matrix_payloads(payloads)
+    for driver, payload in payloads.items():
+        persist_payload(driver, payload)
+    atomic_write(DECISION_PATH, render_decision(payloads).encode())
+    return payloads
+
+
+def load_and_verify_matrix() -> dict[str, dict[str, Any]]:
+    payloads = {
+        driver: json.loads(paths[0].read_text()) for driver, paths in ARTIFACTS.items()
+    }
+    verify_matrix_payloads(payloads)
+    for driver, payload in payloads.items():
+        if ARTIFACTS[driver][1].read_text() != render_report(payload):
+            raise RuntimeError(f"generated report is stale for {driver}")
+    if DECISION_PATH.read_text() != render_decision(payloads):
+        raise RuntimeError("generated branching decision is stale")
+    return payloads
+
+
 def main() -> int:
     pre_execution_started_at = utc_now()
     invoked_argv = psutil.Process(os.getpid()).cmdline()
@@ -1723,13 +2113,56 @@ def main() -> int:
     )
     run_parser.add_argument("--output", type=Path, default=None)
     run_parser.add_argument("--report", type=Path, default=None)
+    matrix_parser = subparsers.add_parser("run-matrix")
+    matrix_parser.add_argument(
+        "--profile", choices=("full", "smoke"), default="full"
+    )
+    matrix_parser.add_argument("--oversubscribed", action="store_true")
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument(
         "--driver", choices=tuple(ARTIFACTS), default=FULL_CLONE_DRIVER
     )
     verify_parser.add_argument("--input", type=Path, default=None)
     verify_parser.add_argument("--report", type=Path, default=None)
+    subparsers.add_parser("verify-matrix")
     args = parser.parse_args()
+
+    if args.command == "run-matrix":
+        payloads = run_matrix(
+            args.profile,
+            args.oversubscribed,
+            started_at=pre_execution_started_at,
+            invoked_argv=invoked_argv,
+        )
+        print(
+            json.dumps(
+                {
+                    "status": "complete",
+                    "profile": args.profile,
+                    "artifacts": {
+                        driver: payload["artifact_sha256"]
+                        for driver, payload in payloads.items()
+                    },
+                    "decision": decision_outcome(payloads)["selection"],
+                }
+            )
+        )
+        return 0
+    if args.command == "verify-matrix":
+        payloads = load_and_verify_matrix()
+        print(
+            json.dumps(
+                {
+                    "status": "verified",
+                    "artifacts": {
+                        driver: payload["artifact_sha256"]
+                        for driver, payload in payloads.items()
+                    },
+                    "decision": decision_outcome(payloads)["selection"],
+                }
+            )
+        )
+        return 0
 
     default_raw, default_report = ARTIFACTS[args.driver]
     if args.command == "run":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 from pathlib import Path
@@ -99,6 +100,8 @@ def load_artifact() -> dict:
     identity = bench.source_identity(check_clean=False)
     payload["run"].setdefault("source_digest_method", bench.SOURCE_DIGEST_METHOD)
     payload["run"].setdefault("source_paths", list(identity.paths))
+    payload["run"].setdefault("measurement_code_revision", "0" * 40)
+    payload["build"].setdefault("binary_sha256", "0" * 64)
     loopflow = payload["run"]["loopflow"]
     loopflow.setdefault("status_snapshot", None)
     loopflow.setdefault(
@@ -118,6 +121,8 @@ def load_artifact() -> dict:
         ("run", "argv"),
         ("run", "source_digest_method"),
         ("run", "source_paths"),
+        ("run", "measurement_code_revision"),
+        ("build", "binary_sha256"),
         ("cells", 0, "repeats", 0, "process_group_id"),
         ("cells", 0, "repeats", 0, "commands"),
         ("cells", 0, "repeats", 0, "rss_samples"),
@@ -196,6 +201,7 @@ def make_source_repo(tmp_path: Path) -> Path:
         "content/semantic/v1/generated/two_deck.ir.json": "{}\n",
         "content/semantic/v1/two_deck.source.json": "{}\n",
         "docs/benchmarks/search-branching-contract-v1.md": "# contract\n",
+        "docs/benchmarks/dense-page-cow-prereg-v1.md": "# prereg\n",
         "managym/Cargo.lock": "# lock\n",
         "managym/Cargo.toml": (
             '[package]\nname = "source-fixture"\nversion = "0.1.0"\n'
@@ -321,6 +327,93 @@ def test_verifier_rejects_wrong_source_method_and_path_closure() -> None:
     payload["artifact_sha256"] = bench.artifact_hash(payload)
     with pytest.raises(RuntimeError, match="source path closure mismatch"):
         bench.verify(payload)
+
+
+def test_matrix_projection_ignores_only_physical_measurements() -> None:
+    payload = load_artifact()
+    physical = copy.deepcopy(payload)
+    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"][
+        "elapsed_seconds"
+    ] = 0.001
+    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"][
+        "cow_bytes"
+    ] = 4096
+    physical["cells"][2]["repeats"][0]["rss_peak_bytes"] += 1234
+    assert bench.matched_matrix_projection(payload) == bench.matched_matrix_projection(
+        physical
+    )
+
+    physical["cells"][2]["repeats"][0]["workers"][0]["metrics"][
+        "result_checksum"
+    ] = "logical-drift"
+    assert bench.matched_matrix_projection(payload) != bench.matched_matrix_projection(
+        physical
+    )
+
+
+def decision_candidate(
+    *,
+    flat_speed: float,
+    retained_speed: float,
+    flat_rss: int = 100,
+    retained_rss: int = 100,
+    single_delta: int = 100,
+    saturated_delta: int = 100,
+) -> dict:
+    cells = []
+    for cell in bench.WHOLE_CELLS:
+        retained = cell.startswith("retained")
+        cells.append(
+            {
+                "id": cell,
+                "summary": {
+                    "simulations_per_second": retained_speed
+                    if retained
+                    else flat_speed,
+                    "root_latency_seconds_p99": 1.0,
+                    "rss_peak_bytes": retained_rss if retained else flat_rss,
+                    "rss_peak_delta_bytes": saturated_delta
+                    if cell == "retained-saturated-16-v1"
+                    else single_delta,
+                },
+            }
+        )
+    return {"cells": cells}
+
+
+def test_decision_thresholds_select_general_hybrid_or_baseline() -> None:
+    full = decision_candidate(flat_speed=100, retained_speed=100)
+    undo = decision_candidate(flat_speed=121, retained_speed=100)
+    page = decision_candidate(
+        flat_speed=95,
+        retained_speed=95,
+        retained_rss=80,
+        single_delta=70,
+        saturated_delta=50,
+    )
+    payloads = {
+        bench.FULL_CLONE_DRIVER: full,
+        bench.CLONE_PLUS_UNDO_DRIVER: undo,
+        bench.PAGE_COW_DRIVER: page,
+    }
+    assert bench.decision_outcome(payloads)["page_general"] is True
+
+    payloads[bench.PAGE_COW_DRIVER] = decision_candidate(
+        flat_speed=80,
+        retained_speed=95,
+        retained_rss=80,
+        single_delta=70,
+        saturated_delta=50,
+    )
+    assert "hybrid" in bench.decision_outcome(payloads)["selection"]
+
+    payloads[bench.PAGE_COW_DRIVER] = decision_candidate(
+        flat_speed=80, retained_speed=80
+    )
+    payloads[bench.CLONE_PLUS_UNDO_DRIVER] = decision_candidate(
+        flat_speed=100, retained_speed=100
+    )
+    assert bench.decision_outcome(payloads)["selection"].startswith("retain")
 
 
 def test_loopflow_metadata_selects_ambient_task(

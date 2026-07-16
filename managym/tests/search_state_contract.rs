@@ -5,7 +5,7 @@ use managym::{
     benchmark::build_fixture,
     search_state::{
         verify_branch_contract, verify_seeded_trace_equivalence, BranchDriver, ClonePlusUndoDriver,
-        FullCloneDriver,
+        DensePageCowUndoDriver, FullCloneDriver,
     },
     state::{
         game_object::{ObjectLookupError, PermanentId, PlayerId},
@@ -55,6 +55,35 @@ fn clone_plus_undo_matches_the_full_clone_reference_receipts() {
             );
             assert_ne!(undo.root_hash, undo.nested_hash);
             assert!(undo.replay_steps > 0);
+        }
+    }
+}
+
+/// The page-COW representation is physical only: after driver admission its
+/// complete logical contract receipt must remain byte-identical to the dense
+/// full-clone reference on every fixture and seed.
+#[test]
+fn dense_page_cow_plus_undo_matches_the_full_clone_reference_receipts() {
+    for fixture in ["interactive-midgame-48-v1", "interactive-heavy-80-v1"] {
+        for trace_seed in [0x1975eed_u64, 0x5eed, 0xc10e] {
+            let (mut root, _) = build_fixture(fixture).expect("contract fixture");
+            let viewer = root.agent_player();
+            let reference =
+                verify_branch_contract(&FullCloneDriver, &root, viewer, trace_seed, 2_000)
+                    .unwrap_or_else(|error| {
+                        panic!("full clone {fixture}/{trace_seed:#x}: {error}")
+                    });
+            let driver = DensePageCowUndoDriver::default();
+            driver.admit_root(&mut root);
+            let page = verify_branch_contract(&driver, &root, viewer, trace_seed, 2_000)
+                .unwrap_or_else(|error| panic!("page COW {fixture}/{trace_seed:#x}: {error}"));
+
+            assert_eq!(
+                reference, page,
+                "{fixture}/{trace_seed:#x} receipts must be identical"
+            );
+            assert_ne!(page.root_hash, page.nested_hash);
+            assert!(page.replay_steps > 0);
         }
     }
 }
@@ -431,6 +460,48 @@ fn stale_object_refs_are_rejected_and_identity_rolls_back_exactly() {
     );
     assert!(branch.lookup_current_permanent(new_ref).is_ok());
     assert_ne!(driver.witness(&branch), root_witness);
+
+    driver.rollback(&mut branch, mark);
+    assert_eq!(driver.witness(&branch), root_witness);
+    assert_eq!(branch.lookup_current_permanent(old_ref), Ok(permanent));
+    assert_eq!(
+        branch.lookup_current_permanent(new_ref),
+        Err(ObjectLookupError::StaleIncarnation)
+    );
+}
+
+#[test]
+fn dense_page_cow_rejects_stale_refs_and_restores_identity() {
+    let (mut root, _) = build_fixture("interactive-heavy-80-v1").expect("identity fixture");
+    let driver = DensePageCowUndoDriver::default();
+    driver.admit_root(&mut root);
+    let root_witness = driver.witness(&root);
+    let permanent = PermanentId(
+        root.state
+            .permanents
+            .iter()
+            .position(Option::is_some)
+            .expect("fixture has a live permanent"),
+    );
+    let card = root.state.permanents[permanent]
+        .as_ref()
+        .expect("live permanent")
+        .card;
+    let old_ref = root.current_object_ref(card).expect("current object ref");
+    let mut branch = driver.fork_exact(&root);
+    let sibling = driver.fork_exact(&root);
+    let mark = driver.mark(&mut branch);
+
+    branch.move_card(card, ZoneType::Graveyard);
+    assert_eq!(
+        branch.lookup_current_permanent(old_ref),
+        Err(ObjectLookupError::StaleIncarnation)
+    );
+    branch.move_card(card, ZoneType::Battlefield);
+    let new_ref = branch.current_object_ref(card).expect("re-entered ref");
+    assert_ne!(driver.witness(&branch), root_witness);
+    assert_eq!(driver.witness(&root), root_witness);
+    assert_eq!(driver.witness(&sibling), root_witness);
 
     driver.rollback(&mut branch, mark);
     assert_eq!(driver.witness(&branch), root_witness);

@@ -14,7 +14,7 @@ use crate::{
     flow::{
         combat::CombatState,
         decision::SuspendedResolution,
-        event::GameEvent,
+        event_log::EventLog,
         game::{Game, PendingChoice},
         priority::PriorityState,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger},
@@ -162,7 +162,7 @@ enum UndoEntry {
     Stack(Vec<StackObject>),
     Combat(Box<Option<CombatState>>),
     ManaCache(usize, Option<Mana>),
-    EventQueue(EventQueue, Vec<GameEvent>),
+    EventQueue(EventQueue, EventLog),
     EventLength(EventQueue, usize),
     PendingTriggers(Vec<PendingTrigger>),
     PendingTriggerChoice(Box<Option<PendingTrigger>>),
@@ -201,7 +201,7 @@ impl UndoEntry {
                         .map(vec_bytes)
                         .sum::<usize>()
             }),
-            Self::EventQueue(_, values) => vec_bytes(values),
+            Self::EventQueue(_, values) => values.owned_bytes(),
             Self::PendingTriggers(values) => vec_bytes(values),
             Self::DelayedTriggers(values) => vec_bytes(values),
             Self::ExileLinks(values) => vec_bytes(values),
@@ -573,7 +573,7 @@ impl Game {
     pub(crate) fn journal_events(&mut self) {
         self.record_undo(UndoEntry::EventQueue(
             EventQueue::Events,
-            self.state.events.clone(),
+            self.state.events.journal_snapshot(),
         ));
     }
 
@@ -607,7 +607,7 @@ impl Game {
     pub(crate) fn journal_pending_events(&mut self) {
         self.record_undo(UndoEntry::EventQueue(
             EventQueue::Pending,
-            self.state.pending_events.clone(),
+            self.state.pending_events.journal_snapshot(),
         ));
     }
 
@@ -621,7 +621,7 @@ impl Game {
     pub(crate) fn journal_observation_events(&mut self) {
         self.record_undo(UndoEntry::EventQueue(
             EventQueue::Observation,
-            self.state.observation_events.clone(),
+            self.state.observation_events.journal_snapshot(),
         ));
     }
 
