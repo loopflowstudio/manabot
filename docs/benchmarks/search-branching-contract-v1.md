@@ -233,9 +233,8 @@ place between measured seeds.
 No timing or baseline claim is valid until the driver passes all four
 equivalence seeds on both fixtures:
 
-1. Root and `fork_exact` have identical canonical snapshot, semantic hash,
-   legal-action hash, visible observation hash, event boundary, and eight-word
-   RNG continuation probe.
+1. Root and `fork_exact` have identical authority, legal-surface, fixed-viewer,
+   and diagnostic witness components.
 2. Mutating a fork cannot change its root or sibling.
 3. Two exact forks driven by the same external action sequence compare equal
    after every step through terminal/cap.
@@ -245,8 +244,8 @@ equivalence seeds on both fixtures:
 5. Repeating a measured root seed produces the same ordered result checksum;
    timing and RSS may vary.
 
-Canonical snapshot v1 is representation-neutral. It serializes logical rules
-facts, not Rust layout or `Debug` output:
+Search-witness schema 2 is representation-neutral. Its authority fingerprint
+serializes logical rules facts, not Rust layout or `Debug` output:
 
 - content schema/digest;
 - physical cards as object ID, stable definition ID, and owner (definitions
@@ -259,7 +258,10 @@ facts, not Rust layout or `Debug` output:
 Serialize as canonical JSON with fixed struct field order and ordered maps,
 then hash with BLAKE3. Pointer addresses, allocator state, copied definition
 layout, and randomized hash maps are prohibited. This keeps hashes comparable
-across branching representations despite definition sharing.
+across branching representations despite definition sharing. Separate typed
+components fingerprint the legal surface and each fixed viewer projection;
+diagnostics expose event boundaries, terminal state, and the RNG continuation
+probe. The aggregate is deliberately a witness, not restorable state.
 
 ## Branch driver hooks
 
@@ -276,7 +278,7 @@ trait BranchDriver {
     fn mark(&self, state: &mut Self::State) -> Self::Mark;
     fn apply(&self, state: &mut Self::State, action: usize) -> ApplyResult;
     fn rollback(&self, state: &mut Self::State, mark: Self::Mark);
-    fn snapshot(&self, state: &Self::State) -> CanonicalSnapshotV1;
+    fn witness(&self, state: &Self::State) -> SearchStateWitness;
     fn counters(&self) -> DriverCounters;
 }
 ```

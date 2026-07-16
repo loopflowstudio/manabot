@@ -25,7 +25,7 @@ fn full_clone_passes_the_representation_neutral_branch_contract() {
 }
 
 #[test]
-fn independently_allocated_roots_have_equal_snapshots_and_seeded_traces() {
+fn independently_allocated_roots_have_equal_witnesses_and_seeded_traces() {
     let (mut first, _) = build_fixture("interactive-heavy-80-v1").expect("first heavy fixture");
     let (mut second, _) = build_fixture("interactive-heavy-80-v1").expect("second heavy fixture");
     second.state.content = Arc::new((*second.state.content).clone());
@@ -35,15 +35,15 @@ fn independently_allocated_roots_have_equal_snapshots_and_seeded_traces() {
     );
 
     let driver = FullCloneDriver;
-    assert_eq!(driver.snapshot(&first), driver.snapshot(&second));
+    assert_eq!(driver.witness(&first), driver.witness(&second));
     let viewer = first.agent_player();
     let receipt =
         verify_seeded_trace_equivalence(&driver, &mut first, &mut second, viewer, 0x197c0de, 2_000)
             .expect("equivalent roots must remain equal through a seeded trace");
 
     assert!(receipt.compared_steps > 0);
-    assert_eq!(driver.snapshot(&first), driver.snapshot(&second));
-    assert_eq!(receipt.final_hash, driver.snapshot(&first).hash);
+    assert_eq!(driver.witness(&first), driver.witness(&second));
+    assert_eq!(receipt.final_hash, driver.witness(&first).authority.hash);
 }
 
 #[test]
@@ -86,35 +86,33 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
     let opponent = PlayerId(1);
     let mut first = driver.fork_exact(&root);
     driver.determinize(&mut first, viewer, 1);
-    let first_snapshot = driver.snapshot(&first);
+    let first_witness = driver.witness(&first);
 
-    let second_snapshot = (2_u64..64)
+    let second_witness = (2_u64..64)
         .find_map(|seed| {
             let mut candidate = driver.fork_exact(&root);
             driver.determinize(&mut candidate, viewer, seed);
-            let snapshot = driver.snapshot(&candidate);
-            (snapshot.hash != first_snapshot.hash
-                && snapshot.viewer_projections[viewer.0]
-                    == first_snapshot.viewer_projections[viewer.0]
-                && snapshot.viewer_projections[opponent.0]
-                    != first_snapshot.viewer_projections[opponent.0])
-                .then_some(snapshot)
+            let witness = driver.witness(&candidate);
+            (witness.authority.hash != first_witness.authority.hash
+                && witness.viewers[viewer.0] == first_witness.viewers[viewer.0]
+                && witness.viewers[opponent.0] != first_witness.viewers[opponent.0])
+                .then_some(witness)
         })
         .expect("fixed seeds must produce a distinct opponent hidden hand");
 
-    assert_ne!(first_snapshot.hash, second_snapshot.hash);
+    assert_ne!(first_witness.authority.hash, second_witness.authority.hash);
     assert_eq!(
-        first_snapshot.viewer_hashes[viewer.0],
-        second_snapshot.viewer_hashes[viewer.0]
+        first_witness.viewers[viewer.0].hash,
+        second_witness.viewers[viewer.0].hash
     );
     assert_ne!(
-        first_snapshot.viewer_hashes[opponent.0],
-        second_snapshot.viewer_hashes[opponent.0]
+        first_witness.viewers[opponent.0].hash,
+        second_witness.viewers[opponent.0].hash
     );
-    for projection in &first_snapshot.viewer_projections {
-        let json = std::str::from_utf8(projection).expect("projection JSON is UTF-8");
+    for projection in &first_witness.viewers {
+        let json = std::str::from_utf8(&projection.bytes).expect("projection JSON is UTF-8");
         assert!(!json.contains("semantic_hash"));
-        assert!(!json.contains(&first_snapshot.hash));
+        assert!(!json.contains(&first_witness.authority.hash));
     }
 }
 
@@ -122,7 +120,7 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
 fn stale_object_refs_are_rejected_and_identity_rolls_back_exactly() {
     let (root, _) = build_fixture("interactive-heavy-80-v1").expect("heavy identity fixture");
     let driver = FullCloneDriver;
-    let root_snapshot = driver.snapshot(&root);
+    let root_witness = driver.witness(&root);
     let permanent = PermanentId(
         root.state
             .permanents
@@ -163,10 +161,10 @@ fn stale_object_refs_are_rejected_and_identity_rolls_back_exactly() {
         Err(ObjectLookupError::StaleIncarnation)
     );
     assert!(branch.lookup_current_permanent(new_ref).is_ok());
-    assert_ne!(driver.snapshot(&branch), root_snapshot);
+    assert_ne!(driver.witness(&branch), root_witness);
 
     driver.rollback(&mut branch, mark);
-    assert_eq!(driver.snapshot(&branch), root_snapshot);
+    assert_eq!(driver.witness(&branch), root_witness);
     assert_eq!(branch.lookup_current_permanent(old_ref), Ok(permanent));
     assert_eq!(
         branch.lookup_current_permanent(new_ref),

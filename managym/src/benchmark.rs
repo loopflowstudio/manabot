@@ -17,8 +17,9 @@ use crate::{
 };
 
 pub use crate::search_state::{
-    snapshot, ApplyReceipt, BenchCommand, BranchDriver, CanonicalSnapshotV2, DriverCounters,
-    EquivalenceSnapshot, FullCloneDriver, SNAPSHOT_SCHEMA,
+    witness, ApplyReceipt, AuthorityFingerprint, BenchCommand, BranchDriver, ContractDiagnostics,
+    DriverCounters, FullCloneDriver, LegalSurfaceFingerprint, SearchStateWitness,
+    ViewerProjectionWitness, SEARCH_WITNESS_SCHEMA_VERSION,
 };
 
 pub const CONTRACT_ID: &str = "manabot.search-branching.v1";
@@ -88,7 +89,8 @@ pub fn manifest() -> BenchmarkManifest {
         schema_version: MANIFEST_SCHEMA,
         contract_id: CONTRACT_ID.to_string(),
         driver: DRIVER_ID.to_string(),
-        snapshot_schema: SNAPSHOT_SCHEMA,
+        // Preserve the v1 manifest field name for artifact compatibility.
+        snapshot_schema: SEARCH_WITNESS_SCHEMA_VERSION,
         seed_derivation: "worker=mix(root,worker); actor=mix(worker,actor); world=mix(actor,world); rollout=mix(world,action*R+rollout+1); policy=mix(rollout,ply)".to_string(),
         max_steps: MAX_STEPS,
         equivalence_seeds: EQUIVALENCE_SEEDS.to_vec(),
@@ -389,7 +391,7 @@ fn fixture_with_summary(
     if game.is_game_over() {
         return Err(format!("fixture {id} unexpectedly reached game over"));
     }
-    let snap = snapshot(&game);
+    let state_witness = witness(&game);
     let action_space = game
         .action_space()
         .ok_or_else(|| format!("fixture {id} has no action space"))?;
@@ -399,9 +401,9 @@ fn fixture_with_summary(
         setup_seed: SETUP_SEED,
         action_seed,
         action_tape,
-        semantic_hash: snap.hash.clone(),
-        action_hash: snap.action_hash.clone(),
-        observation_hash: snap.observation_hash.clone(),
+        semantic_hash: state_witness.authority.hash.clone(),
+        action_hash: state_witness.legal_surface.hash.clone(),
+        observation_hash: state_witness.acting_projection.hash.clone(),
         action_kind: action_kind_name(action_space.kind).to_string(),
         action_count: action_space.actions.len(),
         card_count: game.state.cards.len(),
@@ -419,7 +421,7 @@ fn fixture_with_summary(
         committed_event_count: game.state.events.len(),
         pending_event_count: game.state.pending_events.len(),
         observation_event_count: game.state.observation_events.len(),
-        snapshot_bytes: snap.canonical.len(),
+        snapshot_bytes: state_witness.authority.bytes.len(),
     };
     match id {
         "interactive-midgame-48-v1" if summary.action_count != 6 => {
@@ -468,11 +470,11 @@ pub fn equivalence_check(
 ) -> Result<EquivalenceReceipt, String> {
     let (game, _) = build_fixture(fixture_id)?;
     let driver = FullCloneDriver;
-    let root = driver.snapshot(&game);
+    let root = driver.witness(&game);
     let mut left = driver.fork_exact(&game);
     let mut right = driver.fork_exact(&game);
-    let fork = driver.snapshot(&left);
-    if root != fork || root != driver.snapshot(&right) {
+    let fork = driver.witness(&left);
+    if root != fork || root != driver.witness(&right) {
         return Err("exact fork differs from root".to_string());
     }
     let mark = driver.mark(&mut left);
@@ -480,14 +482,14 @@ pub fn equivalence_check(
         &mut left,
         BenchCommand {
             action_index: 0,
-            expected_state_hash: Some(root.hash.clone()),
-            expected_action_hash: Some(root.action_hash.clone()),
+            expected_state_hash: Some(root.authority.hash.clone()),
+            expected_action_hash: Some(root.legal_surface.hash.clone()),
         },
     )?;
-    let root_isolated = driver.snapshot(&game) == root;
-    let sibling_isolated = driver.snapshot(&right) == root;
+    let root_isolated = driver.witness(&game) == root;
+    let sibling_isolated = driver.witness(&right) == root;
     driver.rollback(&mut left, mark);
-    let rollback = driver.snapshot(&left);
+    let rollback = driver.witness(&left);
     if rollback != root {
         return Err("full-clone rollback failed to restore root".to_string());
     }
@@ -509,13 +511,13 @@ pub fn equivalence_check(
     replay_checksum.update(fixture_id.as_bytes());
     replay_checksum.update(&trace_seed.to_le_bytes());
     for step in 0..max_steps {
-        let before_left = driver.snapshot(&left);
-        let before_right = driver.snapshot(&right);
+        let before_left = driver.witness(&left);
+        let before_right = driver.witness(&right);
         structural_comparisons += 1;
         if before_left != before_right {
             return Err(format!("deterministic replay diverged before step {step}"));
         }
-        replay_checksum.update(before_left.hash.as_bytes());
+        replay_checksum.update(before_left.authority.hash.as_bytes());
         if left.is_game_over() {
             break;
         }
@@ -527,8 +529,8 @@ pub fn equivalence_check(
         replay_checksum.update(&(action as u64).to_le_bytes());
         let command = BenchCommand {
             action_index: action,
-            expected_state_hash: Some(before_left.hash),
-            expected_action_hash: Some(before_left.action_hash),
+            expected_state_hash: Some(before_left.authority.hash),
+            expected_action_hash: Some(before_left.legal_surface.hash),
         };
         let left_done = driver.apply(&mut left, command.clone())?.done;
         let right_done = driver.apply(&mut right, command)?.done;
@@ -540,20 +542,20 @@ pub fn equivalence_check(
             break;
         }
     }
-    let replay_final = driver.snapshot(&left);
-    if replay_final != driver.snapshot(&right) {
+    let replay_final = driver.witness(&left);
+    if replay_final != driver.witness(&right) {
         return Err("deterministic replay final states differ".to_string());
     }
-    replay_checksum.update(replay_final.hash.as_bytes());
+    replay_checksum.update(replay_final.authority.hash.as_bytes());
     Ok(EquivalenceReceipt {
         fixture_id: fixture_id.to_string(),
         trace_seed,
-        root_hash: root.hash,
-        action_hash: root.action_hash,
-        observation_hash: root.observation_hash,
-        fork_hash: fork.hash,
-        rollback_hash: rollback.hash,
-        replay_final_hash: replay_final.hash,
+        root_hash: root.authority.hash,
+        action_hash: root.legal_surface.hash,
+        observation_hash: root.acting_projection.hash,
+        fork_hash: fork.authority.hash,
+        rollback_hash: rollback.authority.hash,
+        replay_final_hash: replay_final.authority.hash,
         replay_checksum: replay_checksum.finalize().to_hex().to_string(),
         compared_steps,
         root_isolated,
@@ -605,18 +607,20 @@ fn checksum_state(
     cap_hit: bool,
 ) {
     let started = Instant::now();
-    let final_snapshot = snapshot(game);
+    let final_witness = witness(game);
     metrics.hash_seconds += started.elapsed().as_secs_f64();
-    hasher.update(final_snapshot.hash.as_bytes());
-    hasher.update(&final_snapshot.event_boundary[0].to_le_bytes());
-    for probe in final_snapshot.rng_probe {
+    hasher.update(final_witness.authority.hash.as_bytes());
+    hasher.update(&final_witness.diagnostics.event_boundary[0].to_le_bytes());
+    for probe in final_witness.diagnostics.rng_probe {
         hasher.update(&probe.to_le_bytes());
     }
     hasher.update(&(winner.unwrap_or(usize::MAX) as u64).to_le_bytes());
     hasher.update(&(steps as u64).to_le_bytes());
     hasher.update(&[u8::from(cap_hit)]);
     if metrics.sampled_final_hashes.len() < 8 {
-        metrics.sampled_final_hashes.push(final_snapshot.hash);
+        metrics
+            .sampled_final_hashes
+            .push(final_witness.authority.hash);
     }
 }
 
@@ -654,10 +658,10 @@ fn measure_clone(root: &Game, count: usize, metrics: &mut RunMetrics) {
     metrics.elapsed_seconds = elapsed.elapsed().as_secs_f64();
     metrics.root_decisions = 1;
     metrics.max_live_states = 2;
-    let root_snapshot = snapshot(root);
+    let root_witness = witness(root);
     let mut checksum = blake3::Hasher::new();
     checksum.update(b"clone-v1");
-    checksum.update(root_snapshot.hash.as_bytes());
+    checksum.update(root_witness.authority.hash.as_bytes());
     checksum.update(&(count as u64).to_le_bytes());
     metrics.result_checksum = checksum.finalize().to_hex().to_string();
 }
