@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "asset_pack": {
+    "id": "tla-ur-lessons-vs-gw-allies",
+    "version": "1.0.0",
+    "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
+  },
+  "action_spaces": {
+    "reachable": [
+      "PRIORITY",
+      "DECLARE_ATTACKER",
+      "DECLARE_BLOCKER",
+      "CHOOSE_TARGET",
+      "SCRY",
+      "LOOK_AND_SELECT",
+      "PAY_OR_NOT",
+      "DISCARD_THEN_DRAW",
+      "WATERBEND"
+    ],
+    "terminal": ["GAME_OVER"],
+    "excluded": [
+      {
+        "family": "MODAL",
+        "reason": "Crossroads of Destiny is not in either selected deck.",
+        "proof_card": "Crossroads of Destiny"
+      }
+    ]
+  },
+  "families": {
+    "PRIORITY": {
+      "sources": [{ "kind": "core", "name": "turn and priority flow" }],
+      "scenario_ids": ["ur-lessons-seed-51", "gw-prompts-seed-62"]
+    },
+    "DECLARE_ATTACKER": {
+      "sources": [{ "kind": "core", "name": "combat" }],
+      "scenario_ids": ["ur-lessons-seed-51", "gw-prompts-seed-62"]
+    },
+    "DECLARE_BLOCKER": {
+      "sources": [{ "kind": "core", "name": "combat" }],
+      "scenario_ids": ["ur-lessons-seed-51", "gw-prompts-seed-62"]
+    },
+    "CHOOSE_TARGET": {
+      "sources": [
+        { "kind": "card", "name": "Firebending Lesson" },
+        { "kind": "card", "name": "Igneous Inspiration" },
+        { "kind": "card", "name": "Divide by Zero" },
+        { "kind": "card", "name": "It'll Quench Ya!" },
+        { "kind": "card", "name": "Earth Kingdom Jailer" },
+        { "kind": "card", "name": "Allies at Last" },
+        { "kind": "card", "name": "Yip Yip!" },
+        { "kind": "card", "name": "Fancy Footwork" }
+      ],
+      "scenario_ids": ["ur-lessons-seed-51", "gw-prompts-seed-62"]
+    },
+    "SCRY": {
+      "sources": [{ "kind": "card", "name": "Compassionate Healer" }],
+      "scenario_ids": ["gw-prompts-seed-62"]
+    },
+    "LOOK_AND_SELECT": {
+      "sources": [
+        { "kind": "card", "name": "Accumulate Wisdom" },
+        { "kind": "card", "name": "Water Tribe Rallier" }
+      ],
+      "scenario_ids": ["ur-lessons-seed-51", "gw-prompts-seed-62"]
+    },
+    "PAY_OR_NOT": {
+      "sources": [
+        { "kind": "card", "name": "Firebending Lesson" },
+        { "kind": "card", "name": "It'll Quench Ya!" }
+      ],
+      "scenario_ids": ["ur-lessons-seed-51", "gw-prompts-seed-62"]
+    },
+    "DISCARD_THEN_DRAW": {
+      "sources": [
+        { "kind": "card", "name": "Pop Quiz" },
+        { "kind": "card", "name": "Igneous Inspiration" },
+        { "kind": "card", "name": "Divide by Zero" }
+      ],
+      "scenario_ids": ["ur-lessons-seed-51"]
+    },
+    "WATERBEND": {
+      "sources": [{ "kind": "card", "name": "Water Tribe Rallier" }],
+      "scenario_ids": ["gw-prompts-seed-62"]
+    }
+  },
+  "policies": {
+    "curated-v1": {
+      "priority_cast_order": {
+        "ur_lessons": [
+          "Firebending Lesson",
+          "Accumulate Wisdom",
+          "Pop Quiz",
+          "Igneous Inspiration",
+          "Divide by Zero",
+          "It'll Quench Ya!",
+          "Fire Nation Cadets",
+          "Tiger-Seal",
+          "Otter-Penguin",
+          "First-Time Flyer",
+          "Forecasting Fortune Teller",
+          "Dragonfly Swarm"
+        ],
+        "gw_allies": [
+          "Compassionate Healer",
+          "Water Tribe Rallier",
+          "Badgermole Cub",
+          "Invasion Reinforcements",
+          "Earth Kingdom Jailer",
+          "White Lotus Reinforcements",
+          "Earth King's Lieutenant",
+          "Kyoshi Warriors",
+          "Suki, Kyoshi Warrior",
+          "South Pole Voyager",
+          "Allies at Last",
+          "Yip Yip!",
+          "Fancy Footwork"
+        ]
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "ur-lessons-seed-51",
+      "hero_deck": "ur_lessons",
+      "villain_deck": "gw_allies",
+      "villain_type": "random",
+      "seed": 51,
+      "policy": "curated-v1",
+      "max_commands": 60,
+      "expected": {
+        "winner": 1,
+        "turn": 14,
+        "commands": 24,
+        "prompt_counts": {
+          "PRIORITY": 16,
+          "DECLARE_ATTACKER": 1,
+          "DECLARE_BLOCKER": 2,
+          "CHOOSE_TARGET": 2,
+          "LOOK_AND_SELECT": 1,
+          "PAY_OR_NOT": 1,
+          "DISCARD_THEN_DRAW": 1
+        }
+      }
+    },
+    {
+      "id": "gw-prompts-seed-62",
+      "hero_deck": "gw_allies",
+      "villain_deck": "ur_lessons",
+      "villain_type": "random",
+      "seed": 62,
+      "policy": "curated-v1",
+      "max_commands": 250,
+      "expected": {
+        "winner": 0,
+        "turn": 46,
+        "commands": 148,
+        "prompt_counts": {
+          "PRIORITY": 49,
+          "DECLARE_ATTACKER": 8,
+          "DECLARE_BLOCKER": 7,
+          "CHOOSE_TARGET": 9,
+          "SCRY": 19,
+          "LOOK_AND_SELECT": 4,
+          "PAY_OR_NOT": 1,
+          "WATERBEND": 51
+        }
+      }
+    }
+  ]
+}

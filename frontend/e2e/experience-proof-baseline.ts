@@ -1,14 +1,6 @@
-export const REACHABLE_PROMPT_FAMILIES = [
-  'PRIORITY',
-  'DECLARE_ATTACKER',
-  'DECLARE_BLOCKER',
-  'CHOOSE_TARGET',
-  'SCRY',
-  'LOOK_AND_SELECT',
-  'PAY_OR_NOT',
-  'DISCARD_THEN_DRAW',
-  'WATERBEND',
-] as const;
+import releasePromptMatrix from './release-prompt-matrix.json' with { type: 'json' };
+
+export const REACHABLE_PROMPT_FAMILIES = releasePromptMatrix.action_spaces.reachable;
 
 export const EXPERIENCE_PROOF_BASELINE = {
   schemaVersion: 1,

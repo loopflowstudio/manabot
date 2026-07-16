@@ -10,6 +10,7 @@ const uvicorn = process.env.MANABOT_UVICORN ?? '.venv/bin/uvicorn';
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: ['release-prompt-matrix.spec.ts'],
   timeout: 120_000,
   fullyParallel: false,
   workers: 1,

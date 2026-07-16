@@ -87,6 +87,30 @@ replay stepping, priority stops/F6, and at least one encountered
 mid-resolution choice. Those tests do not yet deterministically cover all nine
 families; absence is reported rather than inferred from frontend support.
 
+## Terminal release-build matrix
+
+The deterministic follow-on gate is defined by
+[`frontend/e2e/release-prompt-matrix.json`](../frontend/e2e/release-prompt-matrix.json).
+It runs the built Svelte application through Vite preview, proxies the shipped
+HTTP/WebSocket paths to uvicorn, and drives two fixed-seed games to terminal.
+The default UR-hero orientation covers the seven UR-side families; a proof-only
+reverse-seat game surfaces GW's `SCRY` and `WATERBEND` prompts through the same
+table and protocol. The product default remains UR Lessons versus GW Allies.
+
+Run the release gate with:
+
+```bash
+uv run pytest tests/gui/test_release_prompt_matrix.py
+npm --prefix frontend run test:e2e:release -- release-prompt-matrix.spec.ts
+```
+
+There is no runtime seed search or retry. Each scenario pins its prompt counts,
+terminal winner, turn, and command count. The gate fails on incomplete or
+unexpected family coverage, a non-terminal run, a missing terminal trace, or
+any browser console/page error. It does not inject reconnect faults or claim
+replay equivalence, accessibility completeness, visual stability, or a new
+performance baseline.
+
 ## Boundaries and next evidence
 
 This baseline deliberately measures warm development-stack launch and
@@ -100,4 +124,3 @@ recovery, replay equivalence, deterministic browser scenarios for all prompt
 families, screenshot stability, contrast, reduced motion, touch, or
 screen-reader behavior. Those remain explicit Game-wave gates; a passing first
 baseline must not be promoted into a broader quality claim.
-
