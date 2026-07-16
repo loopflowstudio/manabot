@@ -1,13 +1,13 @@
 # Etude Fantasia
 
-**Etude Fantasia** is an AI-native research game for
-[Magic: The Gathering](https://magic.wizards.com/): exact, creator-selected
-matchups for developing strong agents and studying their decisions through a
-finished play experience. **Etude** is its short name and the repository's
-machine identity.
+**Etude Fantasia** is a way to study
+[Magic: The Gathering](https://magic.wizards.com/) built by Loopflow Studio.
 
-Etude Fantasia trains and studies a **manabot**. This repository contains:
+Etude is playable by both humans and robots, and is designed to support the
+development of intelligent Magic: The Gathering robots to support the
+development of intelligent Magic: The Gathering humans.
 
+Etude Fantasia is built out of three main subsystems:
 - **Etude** (`etude`, Python + Svelte frontend): the authored play, replay,
   and study experience
 - **Manabot** (`manabot`, Python): the trainable agent, search and learning
