@@ -186,18 +186,17 @@ Extend the `./scripts/play` standard — one command, structured failure,
 CI-receipted clean-machine proof — to the full loop.
 
 - **Journey 1: Play.** Done. Keep the receipt green.
-- **Journey 2: Train a manabot.** `uv run manabot train --preset local`: runs
-  on a laptop (CPU/MPS), requires no credentials (wandb offline or disabled),
-  bounded to roughly ten minutes, and emits a usable checkpoint. Certified by
-  a `scripts/verify-training` analog of `verify-clean-machine` with its own
-  CI receipt. Today training is gated behind Ubuntu/AWS + wandb; this is the
-  gap between "the agent is the product" and "the agent is something only the
-  authors can touch."
-- **Journey 3: Face your own manabot.** `./scripts/play` accepts a checkpoint
-  for the villain seat. This closes the loop that *is* the vision: play →
-  study → train → play against what you trained. Etude Fantasia becomes a
-  game whose opponent you can grow. No other change in this plan manifests
-  the vision as directly.
+- **Journey 2: Train a manabot.** **[landed]** The default `local` preset
+  sets `experiment.wandb=false`: no credentials, no CUDA, ~41 s on a laptop
+  CPU, checkpoints in `.runs/local/step_N.pt`, with a regression test
+  pinning the credential-free default. Remaining: a
+  `scripts/verify-training` analog of `verify-clean-machine` with its own CI
+  receipt.
+- **Journey 3: Face your own manabot.** **[landed]** The server, protocol,
+  and client already supported checkpoint villains; verified end-to-end by
+  playing a full protocol game against a fresh local-preset checkpoint, and
+  documented as the loop in the README. This closes the loop that *is* the
+  vision: play → train → play against what you trained.
 - **Journey 4: Study (deferred).** When the Study wave ships decision
   landmarks, the journey gets the same treatment: one command from a finished
   game to a guided review, with a receipt.

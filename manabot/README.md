@@ -22,6 +22,10 @@ CPU at small scales.
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.
 
+To face what you trained, launch `./scripts/play`, choose the **Checkpoint**
+opponent, and enter your `.runs/local/step_*.pt` path — the server loads the
+agent behind the same experience protocol as every other villain.
+
 ## You are in world w2
 
 An observation/action-shape change is a world version, and artifacts are only
