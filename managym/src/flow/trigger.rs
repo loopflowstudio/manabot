@@ -27,7 +27,7 @@ pub struct PendingTrigger {
 /// once the watched permanent leaves in a non-matching way.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DelayedTrigger {
-    pub watched_card: CardId,
+    pub watched: ObjectRef,
     pub controller: PlayerId,
     pub kind: DelayedTriggerKind,
 }

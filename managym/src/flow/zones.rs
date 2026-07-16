@@ -221,13 +221,16 @@ impl Game {
     ) {
         let from = self.state.zones.zone_of(card);
         let object = from.and_then(|_| self.current_object_ref(card));
-        self.apply_proposed_event(ProposedEvent::ZoneMove {
+        let committed = self.apply_proposed_event(ProposedEvent::ZoneMove {
             card,
             object,
             from,
             to: to_zone,
             entry,
         });
+        if committed {
+            self.process_game_events();
+        }
     }
 
     pub(crate) fn commit_zone_move(
@@ -293,29 +296,28 @@ impl Game {
         };
         self.emit(event);
         if old_zone == Some(ZoneType::Battlefield) {
-            self.handle_leaves_battlefield(card, departing_ref, to_zone);
+            self.handle_leaves_battlefield(departing_ref, to_zone);
         }
-        self.process_game_events();
         true
     }
 
     /// Leave-the-battlefield bookkeeping: fire one-shot delayed triggers
     /// (earthbend returns) and end "exiled until this leaves" durations
     /// (Jailer links — the exiled card returns immediately, no stack).
-    fn handle_leaves_battlefield(
-        &mut self,
-        card: CardId,
-        departing_ref: Option<ObjectRef>,
-        to_zone: ZoneType,
-    ) {
+    fn handle_leaves_battlefield(&mut self, departing_ref: Option<ObjectRef>, to_zone: ZoneType) {
         // Delayed triggers watching this card fire on dies/exiled and are
         // dropped otherwise (they watched this battlefield stint only).
         let watching: Vec<_> = {
             let mut kept = Vec::new();
             let mut fired = Vec::new();
             for trigger in std::mem::take(&mut self.state.delayed_triggers) {
-                if trigger.watched_card == card {
+                if departing_ref.is_some_and(|object_ref| trigger.watched == object_ref) {
                     fired.push(trigger);
+                } else if departing_ref
+                    .is_some_and(|object_ref| trigger.watched.entity == object_ref.entity)
+                {
+                    // The watched incarnation is already gone. Never retarget
+                    // a delayed trigger to a later object of the same entity.
                 } else {
                     kept.push(trigger);
                 }
@@ -327,11 +329,16 @@ impl Game {
             for trigger in watching {
                 match trigger.kind {
                     crate::flow::trigger::DelayedTriggerKind::ReturnToBattlefieldTapped => {
-                        self.enqueue_delayed_trigger(
-                            card,
-                            trigger.controller,
-                            vec![crate::state::ability::Effect::ReturnSourceToBattlefieldTapped],
-                        );
+                        if let Some(source_lki) = self.object_lki(trigger.watched).copied() {
+                            self.enqueue_delayed_trigger(
+                                trigger.watched,
+                                source_lki,
+                                trigger.controller,
+                                vec![
+                                    crate::state::ability::Effect::ReturnSourceToBattlefieldTapped,
+                                ],
+                            );
+                        }
                     }
                 }
             }

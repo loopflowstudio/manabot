@@ -75,7 +75,7 @@ impl Game {
         let has_first_or_double_strike = self.combat_has_first_or_double_strike(&combat);
         if has_first_or_double_strike {
             self.resolve_combat_damage_pass(&combat, CombatDamagePass::FirstStrike);
-            self.perform_state_based_actions();
+            while self.perform_state_based_actions() {}
             if !self.is_game_over() {
                 self.resolve_combat_damage_pass(&combat, CombatDamagePass::NormalWithFirstStrike);
             }

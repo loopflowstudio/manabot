@@ -308,6 +308,15 @@ impl Game {
         let Some(target) = self.permanent_object_ref(permanent_id) else {
             return false;
         };
+        self.change_plus_one_counters_on_object(target, delta)
+    }
+
+    /// Exact-object counter mutation for rules continuations.
+    pub(crate) fn change_plus_one_counters_on_object(
+        &mut self,
+        target: ObjectRef,
+        delta: i32,
+    ) -> bool {
         self.apply_proposed_event(ProposedEvent::CounterChange {
             target,
             kind: CounterKind::PlusOnePlusOne,
@@ -315,11 +324,24 @@ impl Game {
         })
     }
 
-    pub(crate) fn destroy_permanent(&mut self, permanent_id: PermanentId) -> bool {
-        let Some(target) = self.permanent_object_ref(permanent_id) else {
-            return false;
-        };
+    /// Exact-object destruction for rules continuations and SBA batches.
+    pub(crate) fn destroy_object(&mut self, target: ObjectRef) -> bool {
         self.apply_proposed_event(ProposedEvent::Destroy { target })
+    }
+
+    /// Move one exact current object without following its physical card into
+    /// a later incarnation. Trigger collection is owned by the caller so an
+    /// SBA batch can expose one simultaneous pre-batch source snapshot.
+    pub(crate) fn move_object_to_zone(&mut self, object: ObjectRef, to: ZoneType) -> bool {
+        let card = CardId::from(object.entity);
+        let from = self.state.zones.zone_of(card);
+        self.apply_proposed_event(ProposedEvent::ZoneMove {
+            card,
+            object: Some(object),
+            from,
+            to,
+            entry: BattlefieldEntry::default(),
+        })
     }
 }
 

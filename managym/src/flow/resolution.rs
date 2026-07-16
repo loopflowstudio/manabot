@@ -453,19 +453,22 @@ impl Game {
                 let Target::Permanent(permanent_id) = chosen else {
                     return None;
                 };
-                let (watched_card, controller) = {
+                let watched = self.permanent_object_ref(permanent_id)?;
+                let controller = {
                     let permanent = self.state.permanents[permanent_id].as_mut()?;
                     // The land becomes a 0/0 creature with haste that's
                     // still a land (base 0/0 by construction — lands print
                     // no P/T).
                     permanent.animated = true;
-                    (permanent.card, permanent.controller)
+                    permanent.controller
                 };
-                self.change_plus_one_counters(permanent_id, *count);
+                if !self.change_plus_one_counters_on_object(watched, *count) {
+                    return None;
+                }
                 // Delayed trigger: when it dies or is exiled, return it to
                 // the battlefield tapped (CR 603.7 one-shot).
                 self.state.delayed_triggers.push(DelayedTrigger {
-                    watched_card,
+                    watched,
                     controller,
                     kind: DelayedTriggerKind::ReturnToBattlefieldTapped,
                 });

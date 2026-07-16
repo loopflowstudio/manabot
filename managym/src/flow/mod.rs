@@ -15,6 +15,7 @@ pub mod sba;
 pub mod scenario;
 pub mod search;
 pub mod setup;
+pub mod stabilization;
 pub mod statics;
 pub mod tick;
 pub mod trigger;

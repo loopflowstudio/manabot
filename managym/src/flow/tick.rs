@@ -294,26 +294,11 @@ impl Game {
                 return Some(choice_space);
             }
 
-            // Turn any events emitted outside card movement (step starts,
-            // taps, draws, attack declarations) into pending triggers.
-            self.process_game_events();
-
-            if !self.state.priority.sba_done {
-                // CR 117.5, 704.3 — Check state-based actions before granting priority.
-                self.perform_state_based_actions();
-                self.state.priority.sba_done = true;
-                if self.is_game_over() {
-                    return None;
-                }
+            if let Some(space) = self.stabilize_before_priority() {
+                return Some(space);
             }
-
-            // CR 603.3 — Flush pending triggers before granting priority.
-            if self.state.pending_trigger_choice.is_some()
-                || !self.state.pending_triggers.is_empty()
-            {
-                if let Some(space) = self.flush_triggers() {
-                    return Some(space);
-                }
+            if self.is_game_over() {
+                return None;
             }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {

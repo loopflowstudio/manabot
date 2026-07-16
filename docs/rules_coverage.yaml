@@ -84,10 +84,20 @@
     - managym/tests/rules/cr_514_cleanup.rs
   notes: "Damage clearing and no-priority cleanup handling are covered in rule tests."
 
+- rule: "CR 117.5 / 704.3 — Pre-priority trigger and SBA stabilization"
+  status: implemented_tested
+  code_refs:
+    - managym/src/flow/stabilization.rs — stabilize_before_priority
+    - managym/src/flow/sba.rs — perform_state_based_actions
+    - managym/src/flow/triggers.rs — process_game_events_with_sources
+  test_refs:
+    - managym/tests/rules/cr_704_sba.rs
+  notes: "Committed events, simultaneous supported SBAs, and waiting triggers reach a deterministic fixed point before priority; required trigger target choices may suspend and re-enter the loop."
+
 - rule: "CR 704.5a — SBA: life total 0 or less"
   status: implemented_tested
   code_refs:
-    - managym/src/flow/game.rs — check_state_based_actions
+    - managym/src/flow/sba.rs — perform_state_based_actions
   test_refs:
     - managym/tests/rules/cr_704_sba.rs
   notes: "Losing at 0 or less life is enforced in SBA checks before priority."
@@ -95,7 +105,8 @@
 - rule: "CR 704.5b — SBA: attempted draw from empty library"
   status: implemented_tested
   code_refs:
-    - managym/src/flow/game.rs — draw_card, check_state_based_actions
+    - managym/src/flow/zones.rs — draw_cards
+    - managym/src/flow/sba.rs — perform_state_based_actions
   test_refs:
     - managym/tests/rules/cr_704_sba.rs
     - managym/tests/engine_tests.rs
@@ -104,8 +115,8 @@
 - rule: "CR 704.5g — SBA: lethal damage"
   status: implemented_tested
   code_refs:
-    - managym/src/flow/game.rs — check_state_based_actions (lethal damage branch)
-    - managym/src/state/permanent.rs — Permanent::has_lethal_damage
+    - managym/src/flow/sba.rs — perform_state_based_actions (lethal damage branch)
+    - managym/src/flow/statics.rs — has_lethal_damage
   test_refs:
     - managym/tests/rules/cr_704_sba.rs
   notes: "Creatures with lethal marked damage are moved to graveyard during SBA checks."

@@ -4,28 +4,34 @@
 use crate::{
     flow::game::Game,
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
 
 impl Game {
-    pub(crate) fn perform_state_based_actions(&mut self) {
+    /// Perform one simultaneous batch of the supported state-based actions.
+    /// Returns whether the batch changed state; the stabilization authority
+    /// repeats this method until it returns false (CR 704.3).
+    pub(crate) fn perform_state_based_actions(&mut self) -> bool {
+        let mut performed = false;
         for player in [PlayerId(0), PlayerId(1)] {
             // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
             if self.state.players[player.0].life <= 0
                 || self.state.players[player.0].drew_when_empty
             {
-                self.lose_game(player);
+                performed |= self.lose_game(player);
             }
         }
 
         if self.is_game_over() {
-            return;
+            return performed;
         }
 
-        let mut to_put_in_graveyard = Vec::new();
-        let mut to_destroy = Vec::new();
+        // Candidate discovery uses exact object identities. The mutable
+        // storage slot is resolved only while inspecting the current object;
+        // no later commit can accidentally follow a re-entered card.
+        let mut candidates: Vec<(ObjectRef, PlayerId, bool)> = Vec::new();
         for permanent_id in self
             .state
             .permanents
@@ -39,34 +45,35 @@ impl Game {
             let zero_toughness = self.permanent_is_creature(permanent_id)
                 && self.effective_toughness(permanent_id) <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
-            if zero_toughness {
-                to_put_in_graveyard.push(permanent_id);
-            } else if self.has_lethal_damage(permanent_id) {
-                to_destroy.push(permanent_id);
+            let destroy = !zero_toughness && self.has_lethal_damage(permanent_id);
+            if !zero_toughness && !destroy {
+                continue;
             }
-        }
-
-        // CR 704.5f is a zone move, not destruction.
-        for permanent_id in to_put_in_graveyard {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = permanent.card;
-            let controller = permanent.controller;
-            self.move_card(card, ZoneType::Graveyard);
-            self.invalidate_mana_cache(controller);
-        }
-
-        // CR 704.5g destruction has its own proposal before committing the
-        // consequent battlefield-to-graveyard zone move.
-        for permanent_id in to_destroy {
-            let Some(controller) = self.state.permanents[permanent_id]
-                .as_ref()
-                .map(|permanent| permanent.controller)
-            else {
+            let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
                 continue;
             };
-            if self.destroy_permanent(permanent_id) {
+            candidates.push((object_ref, permanent.controller, destroy));
+        }
+        candidates.sort_by_key(|(object_ref, _, _)| *object_ref);
+
+        // CR 704.3 — all applicable SBAs are one simultaneous event. Commits
+        // have a deterministic ObjectRef order for replay, while every death
+        // event sees the same pre-batch trigger-source snapshot.
+        let trigger_sources = self.snapshot_trigger_sources();
+        for (object_ref, controller, destroy) in candidates {
+            let committed = if destroy {
+                // CR 704.5g destruction has its own proposal before the
+                // consequent battlefield-to-graveyard move.
+                self.destroy_object(object_ref)
+            } else {
+                // CR 704.5f is a zone move, not destruction.
+                self.move_object_to_zone(object_ref, ZoneType::Graveyard)
+            };
+            if committed {
+                performed = true;
                 self.invalidate_mana_cache(controller);
             }
         }
@@ -87,10 +94,21 @@ impl Game {
         }
         for (card_id, owner) in tokens_to_remove {
             self.state.zones.remove_card(card_id, owner);
+            performed = true;
         }
+
+        if performed {
+            self.process_game_events_with_sources(&trigger_sources);
+        }
+
+        performed
     }
 
-    pub(crate) fn lose_game(&mut self, player: PlayerId) {
+    pub(crate) fn lose_game(&mut self, player: PlayerId) -> bool {
+        if !self.state.players[player.0].alive {
+            return false;
+        }
         self.state.players[player.0].alive = false;
+        true
     }
 }

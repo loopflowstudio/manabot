@@ -6,12 +6,22 @@ use crate::{
     flow::{event::GameEvent, game::Game, trigger::PendingTrigger, turn::StepKind},
     state::{
         ability::{Ability, TargetSpec, TriggerCondition, TriggerSubject},
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
         stack_object::{StackObject, TriggeredAbilityOnStack},
         target::Target as ActionTarget,
         zone::ZoneType,
     },
 };
+
+/// Exact battlefield source facts used while matching one or more committed
+/// events. SBA batches reuse one sorted snapshot so simultaneous departures
+/// see the same pre-batch abilities (CR 603.6c, 704.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TriggerSourceSnapshot {
+    card: CardId,
+    controller: PlayerId,
+    lki: ObjectLki,
+}
 
 impl Game {
     pub(crate) fn choose_trigger_target(
@@ -265,15 +275,25 @@ impl Game {
             .collect()
     }
 
-    /// Match pending game events against every triggered ability in play and
-    /// enqueue the ones that fire. Matching only enqueues triggers (it never
-    /// emits events), but effects that run between calls may, so drain in a
-    /// loop.
+    /// Match pending committed events against the applicable exact sources.
     pub(crate) fn process_game_events(&mut self) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(&mut self.state.pending_events);
             for event in events {
-                self.check_triggers_for_event(&event);
+                let sources = self.trigger_ability_sources(&event);
+                self.check_triggers_for_event(&event, &sources);
+            }
+        }
+    }
+
+    /// Process a simultaneous committed batch using the same pre-batch source
+    /// facts for every event. Matching only enqueues triggers, so the snapshot
+    /// remains immutable throughout collection.
+    pub(crate) fn process_game_events_with_sources(&mut self, sources: &[TriggerSourceSnapshot]) {
+        while !self.state.pending_events.is_empty() {
+            let events = std::mem::take(&mut self.state.pending_events);
+            for event in events {
+                self.check_triggers_for_event(&event, sources);
             }
         }
     }
@@ -287,20 +307,21 @@ impl Game {
         }
     }
 
-    fn check_triggers_for_event(&mut self, event: &GameEvent) {
+    fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         let mut fired = Vec::new();
-        for (source_card, source_controller, source_lki) in self.trigger_ability_sources(event) {
+        for source in sources {
             for (ability_index, ability) in
-                self.state.cards[source_card].abilities.iter().enumerate()
+                self.state.cards[source.card].abilities.iter().enumerate()
             {
                 let Ability::Triggered { condition, .. } = ability;
-                if self.trigger_condition_fires(condition, source_card, source_controller, event) {
-                    fired.push((
-                        source_card,
-                        ability_index,
-                        source_controller,
-                        source_lki,
-                    ));
+                if self.trigger_condition_fires(
+                    condition,
+                    source.card,
+                    source.controller,
+                    true,
+                    event,
+                ) {
+                    fired.push((source.card, ability_index, source.controller, source.lki));
                 }
             }
         }
@@ -309,8 +330,8 @@ impl Game {
         for (source_card, ability_index, controller, source_lki) in fired {
             self.state.pending_triggers.push(PendingTrigger {
                 source_card,
-                source_ref: source_lki.map(|lki| lki.object_ref),
-                source_lki,
+                source_ref: Some(source_lki.object_ref),
+                source_lki: Some(source_lki),
                 ability_index,
                 controller,
                 enqueue_order: self.state.trigger_enqueue_counter,
@@ -326,14 +347,15 @@ impl Game {
     /// `Card::abilities` entry to reference).
     pub(crate) fn enqueue_delayed_trigger(
         &mut self,
-        source_card: CardId,
+        source: ObjectRef,
+        source_lki: ObjectLki,
         controller: PlayerId,
         effects: Vec<crate::state::ability::Effect>,
     ) {
         self.state.pending_triggers.push(PendingTrigger {
-            source_card,
-            source_ref: None,
-            source_lki: None,
+            source_card: source_lki.card,
+            source_ref: Some(source),
+            source_lki: Some(source_lki),
             ability_index: 0,
             controller,
             enqueue_order: self.state.trigger_enqueue_counter,
@@ -346,32 +368,28 @@ impl Game {
     /// Cards whose triggered abilities can see this event: every permanent on
     /// the battlefield, plus — for zone changes — the moved card itself, so
     /// that leave-the-battlefield abilities look back in time (CR 603.6c).
-    fn trigger_ability_sources(
-        &self,
-        event: &GameEvent,
-    ) -> Vec<(
-        CardId,
-        PlayerId,
-        Option<crate::state::game_object::ObjectLki>,
-    )> {
-        let mut sources = Vec::new();
-        for player in [PlayerId(0), PlayerId(1)] {
-            for card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
-                let Some(permanent_id) = self.state.card_to_permanent[card_id] else {
-                    continue;
-                };
-                let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                    continue;
-                };
-                if !self.state.cards[card_id].abilities.is_empty() {
-                    sources.push((
-                        *card_id,
-                        permanent.controller,
-                        self.snapshot_current_permanent(*card_id),
-                    ));
-                }
-            }
-        }
+    pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
+        let mut sources: Vec<_> = self
+            .state
+            .permanents
+            .iter()
+            .flatten()
+            .filter(|permanent| !self.state.cards[permanent.card].abilities.is_empty())
+            .filter_map(|permanent| {
+                self.snapshot_current_permanent(permanent.card)
+                    .map(|lki| TriggerSourceSnapshot {
+                        card: permanent.card,
+                        controller: permanent.controller,
+                        lki,
+                    })
+            })
+            .collect();
+        sources.sort_by_key(|source| source.lki.object_ref);
+        sources
+    }
+
+    fn trigger_ability_sources(&self, event: &GameEvent) -> Vec<TriggerSourceSnapshot> {
+        let mut sources = self.snapshot_trigger_sources();
 
         if let GameEvent::CardMoved {
             card, controller, ..
@@ -384,13 +402,19 @@ impl Game {
                     .object_lki
                     .iter()
                     .rev()
-                    .find_map(|(object_ref, lki)| {
-                        (object_ref.entity.0 == card.0).then_some(*lki)
+                    .find_map(|(object_ref, lki)| (object_ref.entity.0 == card.0).then_some(*lki));
+                if let Some(lki) = source_lki {
+                    sources.push(TriggerSourceSnapshot {
+                        card: *card,
+                        controller: *controller,
+                        lki,
                     });
-                sources.push((*card, *controller, source_lki));
+                }
             }
         }
 
+        sources.sort_by_key(|source| source.lki.object_ref);
+        sources.dedup_by_key(|source| source.lki.object_ref);
         sources
     }
 
@@ -399,6 +423,7 @@ impl Game {
         condition: &TriggerCondition,
         source_card: CardId,
         source_controller: PlayerId,
+        source_was_on_battlefield: bool,
         event: &GameEvent,
     ) -> bool {
         match (condition, event) {
@@ -411,6 +436,7 @@ impl Game {
                         condition,
                         source_card,
                         source_controller,
+                        source_was_on_battlefield,
                         event,
                     )
             }
@@ -429,6 +455,7 @@ impl Game {
                         subject,
                         source_card,
                         source_controller,
+                        source_was_on_battlefield,
                         *card,
                         *controller,
                     )
@@ -447,6 +474,7 @@ impl Game {
                     subject,
                     source_card,
                     source_controller,
+                    source_was_on_battlefield,
                     *card,
                     *controller,
                 )
@@ -530,6 +558,7 @@ impl Game {
         subject: &TriggerSubject,
         source_card: CardId,
         source_controller: PlayerId,
+        source_was_on_battlefield: bool,
         moved_card: CardId,
         moved_controller: PlayerId,
     ) -> bool {
@@ -538,12 +567,12 @@ impl Game {
             TriggerSubject::AnotherYouControl(predicate) => {
                 moved_card != source_card
                     && moved_controller == source_controller
-                    && self.source_is_on_battlefield(source_card)
+                    && source_was_on_battlefield
                     && predicate.matches_card(&self.state.cards[moved_card])
             }
             TriggerSubject::AnyYouControl(predicate) => {
                 moved_controller == source_controller
-                    && self.source_is_on_battlefield(source_card)
+                    && source_was_on_battlefield
                     && predicate.matches_card(&self.state.cards[moved_card])
             }
         }
@@ -571,10 +600,6 @@ impl Game {
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
         }
-    }
-
-    fn source_is_on_battlefield(&self, source_card: CardId) -> bool {
-        self.state.zones.zone_of(source_card) == Some(ZoneType::Battlefield)
     }
 
     fn permanent_is_other(&self, permanent_id: PermanentId, source_card: CardId) -> bool {
