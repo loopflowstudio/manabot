@@ -6,6 +6,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      update_visual_references:
+        description: Generate reviewed visual references on the pinned Linux profile
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   rust:
@@ -204,6 +210,7 @@ jobs:
     name: Semantic Kernel Conformance
     needs: [rust]
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -233,10 +240,79 @@ jobs:
           path: target/semantic-conformance/failures/*.json
           if-no-files-found: ignore
 
+  visual_reference:
+    name: Visual Reference Gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          uv venv .venv --python 3.12
+          uv export --quiet --frozen --extra dev --no-emit-project \
+            --prune torch --prune pandas --prune typer --prune psutil \
+            --prune httpx --prune jsonschema --prune ruff --prune boto3 \
+            --output-file /tmp/visual-requirements.txt
+          uv pip install --python .venv/bin/python \
+            --requirements /tmp/visual-requirements.txt maturin==1.11.5
+          uv pip install --python .venv/bin/python \
+            --default-index https://download.pytorch.org/whl/cpu torch==2.10.0
+
+      - name: Build Python extension
+        run: uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+
+      - name: Install frontend and Chromium
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Compare committed visual references
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.update_visual_references }}
+        run: |
+          uv run --no-sync pytest tests/gui/test_release_prompt_matrix.py -q
+          npm --prefix frontend run test:e2e:release
+
+      - name: Generate visual reference artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
+        run: |
+          npm --prefix frontend run test:e2e:release -- --update-snapshots
+          uv run --no-sync pytest tests/gui/test_release_prompt_matrix.py -q
+          npm --prefix frontend run test:e2e:release
+
+      - name: Upload generated visual references
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-references-v1
+          path: frontend/e2e/visual-references/v1
+          if-no-files-found: error
+
+      - name: Upload visual failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-reference-failure
+          path: frontend/test-results/release
+          if-no-files-found: warn
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance]
+    needs: [rust, python-unit, integration, protocol-v1, semantic-coverage, semantic-conformance, visual_reference]
     if: always()
     steps:
       - name: Check all jobs
@@ -247,11 +323,13 @@ jobs:
           echo "protocol-v1: ${{ needs.protocol-v1.result }}"
           echo "semantic-coverage: ${{ needs.semantic-coverage.result }}"
           echo "semantic-conformance: ${{ needs.semantic-conformance.result }}"
+          echo "visual_reference: ${{ needs.visual_reference.result }}"
           if [ "${{ needs.rust.result }}" != "success" ] || \
              [ "${{ needs.python-unit.result }}" != "success" ] || \
              [ "${{ needs.integration.result }}" != "success" ] || \
              [ "${{ needs.protocol-v1.result }}" != "success" ] || \
              [ "${{ needs.semantic-coverage.result }}" != "success" ] || \
-             [ "${{ needs.semantic-conformance.result }}" != "success" ]; then
+             [ "${{ needs.semantic-conformance.result }}" != "success" ] || \
+              [ "${{ needs.visual_reference.result }}" != "success" ]; then
             exit 1
           fi

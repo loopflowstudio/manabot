@@ -121,8 +121,65 @@ restoration; it adds no recovery protocol claim. The run also rejects public or
 failed play-asset requests, curated-pack fallbacks, and browser errors.
 
 This gate does not claim replay equivalence, stale/duplicate/checkpoint
-recovery semantics, screenshot stability, touch/mobile/zoom certification,
-real assistive-technology automation, or a new performance baseline.
+recovery semantics, touch/mobile/zoom certification, real
+assistive-technology automation, or a new performance baseline.
+
+## Versioned visual references
+
+The same two terminal trajectories compare 17 committed references under
+[`frontend/e2e/visual-references/v1`](../frontend/e2e/visual-references/v1):
+
+- one Actions-panel reference for every one of the nine reachable prompt
+  families;
+- opening, combat, and developed board references;
+- disconnected, reconnecting, and recovered-connected header references; and
+- the distinct terminal result from each fixed scenario.
+
+The `visual_references` record in the release matrix binds every filename to an
+exact scenario and prompt occurrence. Each scenario also pins its complete
+pre-terminal prompt-family sequence, so a reordered intermediate decision
+fails before the terminal aggregate can conceal it. The ordinary gate never
+creates missing PNGs: a missing reference and a changed reference are both
+failures.
+
+The named reference profile is `ubuntu-24.04-chromium`: GitHub-hosted Ubuntu
+24.04 x86-64, Node 22, Playwright 1.61.1's Chromium 149.0.7827.55, a 1600 x
+1200 CSS-pixel viewport at device scale factor 1, dark color scheme, `en-US`,
+UTC, and reduced motion. Inter 5.2.8 weights 400/500/600/700 are bundled by the
+release build and loaded from loopback before comparison. Screenshot capture
+disables animation and the caret and permits zero pixels beyond Playwright's
+0.2 perceptual color threshold on that profile, filtering subpixel text
+rasterization noise without tolerating a visible change.
+
+The release browser blocks and records public HTTP and WebSocket requests. It
+also fails on a missing or failed local font, broken rendered images, a card
+treatment outside the pinned pack, any fallback treatment, failed/local-error
+responses, console errors, and page errors. The reconnect screenshots isolate
+the existing connection summary in the game header, avoiding unrelated native
+deck/opponent selectors whose glyph rasterization is host-controlled. They
+pause only the replacement Playwright WebSocket route; the client still
+reconnects to uvicorn and must restore the same authoritative offer.
+
+### Intentional baseline updates
+
+Do not use a developer workstation capture as the reviewed baseline. Push the
+intentional visual change to its branch, dispatch the `CI` workflow for that
+branch with `update_visual_references` set to `true`, and download the
+`visual-references-v1` artifact. That job uses the named Linux profile, runs
+Playwright with its explicit snapshot-update flag, reruns normal comparison,
+and continues to enforce every non-pixel assertion.
+
+Review all 17 images and the product diff, replace the versioned directory with
+the reviewed artifact, and commit the PNGs. A normal pull-request run must then
+pass without update mode. Snapshot updating must never be used to accept a
+changed prompt sequence, terminal result, authority response, asset source,
+network request, console error, or page error.
+
+For a deliberate new product appearance, increment the matrix reference
+version and update the matrix directory, Playwright snapshot path, and CI
+artifact path together before dispatching. Git history retains the earlier
+set. A pure pinned-runner or browser recapture may keep the visual version only
+when review confirms that the intended appearance did not change.
 
 ## Boundaries and next evidence
 
@@ -133,7 +190,7 @@ multiple sessions, or large boards. Frame deltas only describe scheduling
 around the current DOM updates.
 
 It also does not prove protocol-v1 stale/duplicate command handling, checkpoint
-recovery, replay equivalence, screenshot stability, touch, or real
-assistive-technology behavior. Those remain explicit Game-wave gates; the
-browser accessibility-tree proof must not be promoted into a broader quality
-claim.
+recovery, replay equivalence, touch, or real assistive-technology behavior.
+Those remain explicit Game-wave gates; the browser accessibility-tree and
+visual-regression proof must not be promoted into broader semantic or
+assistive-technology claims.

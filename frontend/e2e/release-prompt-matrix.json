@@ -1,9 +1,113 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "asset_pack": {
     "id": "tla-ur-lessons-vs-gw-allies",
     "version": "1.0.0",
     "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
+  },
+  "visual_references": {
+    "version": 1,
+    "directory": "visual-references/v1",
+    "profile": {
+      "name": "ubuntu-24.04-chromium",
+      "operating_system": "Ubuntu 24.04 x86-64",
+      "node": "22",
+      "playwright": "1.61.1",
+      "chromium": "149.0.7827.55",
+      "viewport": { "width": 1600, "height": 1200 },
+      "device_scale_factor": 1,
+      "color_scheme": "dark",
+      "locale": "en-US",
+      "timezone": "UTC",
+      "reduced_motion": "reduce",
+      "pixel_threshold": 0.2,
+      "font": { "family": "Inter", "package_version": "5.2.8" }
+    },
+    "prompts": [
+      {
+        "id": "prompt-priority",
+        "family": "PRIORITY",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-declare-attacker",
+        "family": "DECLARE_ATTACKER",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-declare-blocker",
+        "family": "DECLARE_BLOCKER",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-choose-target",
+        "family": "CHOOSE_TARGET",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-look-and-select",
+        "family": "LOOK_AND_SELECT",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-pay-or-not",
+        "family": "PAY_OR_NOT",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-discard-then-draw",
+        "family": "DISCARD_THEN_DRAW",
+        "scenario_id": "ur-lessons-seed-51",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-scry",
+        "family": "SCRY",
+        "scenario_id": "gw-prompts-seed-62",
+        "occurrence": 1
+      },
+      {
+        "id": "prompt-waterbend",
+        "family": "WATERBEND",
+        "scenario_id": "gw-prompts-seed-62",
+        "occurrence": 1
+      }
+    ],
+    "boards": [
+      {
+        "id": "board-opening",
+        "scenario_id": "ur-lessons-seed-51",
+        "family": "PRIORITY",
+        "occurrence": 1
+      },
+      {
+        "id": "board-combat",
+        "scenario_id": "ur-lessons-seed-51",
+        "family": "DECLARE_BLOCKER",
+        "occurrence": 1
+      },
+      {
+        "id": "board-developed",
+        "scenario_id": "gw-prompts-seed-62",
+        "family": "WATERBEND",
+        "occurrence": 1
+      }
+    ],
+    "reconnect": {
+      "scenario_id": "ur-lessons-seed-51",
+      "command": 0,
+      "states": ["disconnected", "reconnecting", "connected"]
+    },
+    "terminals": [
+      { "id": "terminal-ur-lessons-loss", "scenario_id": "ur-lessons-seed-51" },
+      { "id": "terminal-gw-allies-win", "scenario_id": "gw-prompts-seed-62" }
+    ]
   },
   "action_spaces": {
     "reachable": [
@@ -139,7 +243,8 @@
           "LOOK_AND_SELECT": 1,
           "PAY_OR_NOT": 1,
           "DISCARD_THEN_DRAW": 1
-        }
+        },
+        "prompt_sequence": ["PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "LOOK_AND_SELECT", "DECLARE_ATTACKER", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "PRIORITY", "PRIORITY", "DISCARD_THEN_DRAW", "PRIORITY", "PRIORITY", "PRIORITY", "PAY_OR_NOT", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "DECLARE_BLOCKER"]
       }
     },
     {
@@ -163,7 +268,8 @@
           "LOOK_AND_SELECT": 4,
           "PAY_OR_NOT": 1,
           "WATERBEND": 51
-        }
+        },
+        "prompt_sequence": ["PRIORITY", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "CHOOSE_TARGET", "CHOOSE_TARGET", "DECLARE_ATTACKER", "PRIORITY", "PRIORITY", "DECLARE_ATTACKER", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "LOOK_AND_SELECT", "SCRY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "LOOK_AND_SELECT", "SCRY", "LOOK_AND_SELECT", "DECLARE_BLOCKER", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "SCRY", "LOOK_AND_SELECT", "DECLARE_BLOCKER", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "SCRY", "PRIORITY", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "SCRY", "SCRY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "SCRY", "SCRY", "PRIORITY", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PAY_OR_NOT", "SCRY", "SCRY", "PRIORITY", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "CHOOSE_TARGET", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "SCRY", "SCRY", "PRIORITY", "WATERBEND", "SCRY", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "WATERBEND", "WATERBEND", "SCRY", "SCRY", "PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "SCRY", "SCRY", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "SCRY", "SCRY", "PRIORITY"]
       }
     }
   ]

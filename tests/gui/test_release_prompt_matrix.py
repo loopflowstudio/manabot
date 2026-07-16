@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import json
 from pathlib import Path
 
@@ -14,7 +15,7 @@ MATRIX_PATH = ROOT / "frontend" / "e2e" / "release-prompt-matrix.json"
 
 def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
     matrix = json.loads(MATRIX_PATH.read_text(encoding="utf-8"))
-    assert matrix["schema_version"] == 1
+    assert matrix["schema_version"] == 2
 
     pack = matrix["asset_pack"]
     assert pack == {
@@ -88,6 +89,10 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         assert expected["commands"] < scenario["max_commands"]
         assert expected["winner"] in {0, 1}
         assert isinstance(expected["turn"], int) and expected["turn"] > 0
+        sequence = expected["prompt_sequence"]
+        assert len(sequence) == expected["commands"]
+        assert Counter(sequence) == Counter(counts)
+        assert set(sequence) <= set(reachable)
 
         scenario_families[scenario["id"]] = set(counts)
         covered.update(counts)
@@ -100,3 +105,62 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
             if family in observed
         }
         assert set(record["scenario_ids"]) == expected_ids
+
+    visual = matrix["visual_references"]
+    assert visual["version"] == 1
+    assert visual["directory"] == "visual-references/v1"
+    assert visual["profile"] == {
+        "name": "ubuntu-24.04-chromium",
+        "operating_system": "Ubuntu 24.04 x86-64",
+        "node": "22",
+        "playwright": "1.61.1",
+        "chromium": "149.0.7827.55",
+        "viewport": {"width": 1600, "height": 1200},
+        "device_scale_factor": 1,
+        "color_scheme": "dark",
+        "locale": "en-US",
+        "timezone": "UTC",
+        "reduced_motion": "reduce",
+        "pixel_threshold": 0.2,
+        "font": {"family": "Inter", "package_version": "5.2.8"},
+    }
+
+    scenarios_by_id = {scenario["id"]: scenario for scenario in scenarios}
+    prompt_references = visual["prompts"]
+    assert {reference["family"] for reference in prompt_references} == set(reachable)
+    assert len(prompt_references) == len(reachable)
+
+    ids: list[str] = []
+    for reference in [*prompt_references, *visual["boards"]]:
+        assert reference["id"]
+        ids.append(reference["id"])
+        scenario = scenarios_by_id[reference["scenario_id"]]
+        family = reference["family"]
+        assert family in scenario["expected"]["prompt_counts"]
+        assert 0 < reference["occurrence"] <= scenario["expected"]["prompt_counts"][family]
+
+    assert {reference["id"] for reference in visual["boards"]} == {
+        "board-opening",
+        "board-combat",
+        "board-developed",
+    }
+    assert visual["reconnect"] == {
+        "scenario_id": "ur-lessons-seed-51",
+        "command": 0,
+        "states": ["disconnected", "reconnecting", "connected"],
+    }
+    reconnect_scenario = scenarios_by_id[visual["reconnect"]["scenario_id"]]
+    assert visual["reconnect"]["command"] < reconnect_scenario["expected"]["commands"]
+    ids.extend(f"reconnect-{state}" for state in visual["reconnect"]["states"])
+
+    terminals = visual["terminals"]
+    assert {reference["scenario_id"] for reference in terminals} == set(scenarios_by_id)
+    assert len(terminals) == len(scenarios_by_id)
+    ids.extend(reference["id"] for reference in terminals)
+    assert len(ids) == len(set(ids)) == 17
+
+    reference_dir = MATRIX_PATH.parent / visual["directory"]
+    assert reference_dir.is_dir()
+    assert {path.name for path in reference_dir.glob("*.png")} == {
+        f"{reference_id}.png" for reference_id in ids
+    }

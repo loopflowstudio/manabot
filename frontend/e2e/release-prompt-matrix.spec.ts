@@ -1,5 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 
 import { DECISION_PROMPTS } from '../src/lib/prompt-instructions';
 import matrixJson from './release-prompt-matrix.json' with { type: 'json' };
@@ -21,11 +27,53 @@ interface PromptScenario {
     turn: number;
     commands: number;
     prompt_counts: Record<string, number>;
+    prompt_sequence: string[];
   };
+}
+
+interface VisualReferenceTrigger {
+  id: string;
+  scenario_id: string;
+  family: string;
+  occurrence: number;
+}
+
+interface VisualReferences {
+  version: number;
+  directory: string;
+  profile: {
+    name: string;
+    operating_system: string;
+    node: string;
+    playwright: string;
+    chromium: string;
+    viewport: { width: number; height: number };
+    device_scale_factor: number;
+    color_scheme: 'dark';
+    locale: string;
+    timezone: string;
+    reduced_motion: 'reduce';
+    pixel_threshold: number;
+    font: { family: string; package_version: string };
+  };
+  prompts: VisualReferenceTrigger[];
+  boards: VisualReferenceTrigger[];
+  reconnect: {
+    scenario_id: string;
+    command: number;
+    states: Array<'disconnected' | 'reconnecting' | 'connected'>;
+  };
+  terminals: Array<{ id: string; scenario_id: string }>;
 }
 
 interface ReleasePromptMatrix {
   schema_version: number;
+  asset_pack: {
+    id: string;
+    version: string;
+    manifest_sha256: string;
+  };
+  visual_references: VisualReferences;
   action_spaces: {
     reachable: string[];
     terminal: string[];
@@ -62,9 +110,15 @@ type MatrixWindow = Window & typeof globalThis & {
 
 interface RuntimeFailures {
   console: string[];
+  fontResponses: string[];
   localResponses: string[];
   publicRequests: string[];
   requestFailures: string[];
+}
+
+interface ReconnectGate {
+  replacementStarted: Promise<void>;
+  releaseReplacement: () => void;
 }
 
 interface TraceSummary {
@@ -90,9 +144,11 @@ interface ScenarioReceipt {
   seed: number;
   commands: number;
   prompt_counts: Record<string, number>;
+  prompt_sequence: string[];
   winner: number;
   turn: number;
   trace_id: string;
+  visual_references: string[];
   accessibility: {
     audited_families: string[];
     keyboard_commands: number;
@@ -115,6 +171,7 @@ function isPublicRequest(rawUrl: string): boolean {
 function collectRuntimeFailures(page: Page): RuntimeFailures {
   const failures: RuntimeFailures = {
     console: [],
+    fontResponses: [],
     localResponses: [],
     publicRequests: [],
     requestFailures: [],
@@ -140,8 +197,116 @@ function collectRuntimeFailures(page: Page): RuntimeFailures {
     if (!isPublicRequest(response.url()) && response.status() >= 400) {
       failures.localResponses.push(`${response.status()} ${response.url()}`);
     }
+    if (
+      !isPublicRequest(response.url()) &&
+      response.request().resourceType() === 'font' &&
+      response.ok()
+    ) {
+      failures.fontResponses.push(response.url());
+    }
   });
   return failures;
+}
+
+async function installNetworkGuards(
+  page: Page,
+  failures: RuntimeFailures,
+): Promise<ReconnectGate> {
+  await page.route('**/*', async (route) => {
+    if (isPublicRequest(route.request().url())) {
+      await route.abort('internetdisconnected');
+      return;
+    }
+    await route.continue();
+  });
+
+  let localSocketCount = 0;
+  let markReplacementStarted: (() => void) | undefined;
+  let releaseReplacement: (() => void) | undefined;
+  const replacementStarted = new Promise<void>((resolve) => {
+    markReplacementStarted = resolve;
+  });
+  const replacementReleased = new Promise<void>((resolve) => {
+    releaseReplacement = resolve;
+  });
+
+  await page.routeWebSocket(() => true, async (route) => {
+    if (isPublicRequest(route.url())) {
+      failures.publicRequests.push(route.url());
+      await route.close({ code: 1008, reason: 'public play network is forbidden' });
+      return;
+    }
+
+    localSocketCount += 1;
+    if (localSocketCount === 2) {
+      markReplacementStarted?.();
+      await replacementReleased;
+    }
+    route.connectToServer();
+  });
+
+  return {
+    replacementStarted,
+    releaseReplacement: () => releaseReplacement?.(),
+  };
+}
+
+async function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(message)), milliseconds);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+async function captureVisualReference(
+  locator: Locator,
+  id: string,
+  captured: Set<string>,
+): Promise<void> {
+  expect(captured.has(id), `visual reference ${id} was captured more than once`).toBe(false);
+  await expect(locator).toHaveScreenshot(`${id}.png`);
+  captured.add(id);
+}
+
+async function settleBoardPresentation(page: Page): Promise<void> {
+  const presentationStage = page.getByTestId('presentation-stage');
+  const finished = await page.evaluate(() => {
+    const stage = document.querySelector<HTMLElement>('[data-testid="presentation-stage"]');
+    if (!stage) {
+      return false;
+    }
+    const finish = [...stage.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Finish',
+    );
+    if (!(finish instanceof HTMLButtonElement)) {
+      throw new Error('presentation stage has no Finish control');
+    }
+    finish.click();
+    return true;
+  });
+  if (finished) {
+    await expect(presentationStage).toBeHidden();
+  }
+
+  // The action can already own DOM focus while its derived board emphasis was
+  // cleared by a prior presentation transition. Re-fire the focus boundary so
+  // board references never depend on that event ordering.
+  const firstAction = page.getByTestId('action-option').first();
+  await firstAction.evaluate((button) => {
+    (button as HTMLButtonElement).blur();
+    (button as HTMLButtonElement).focus();
+  });
+  await expect(firstAction).toBeFocused();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 }
 
 function assertNoRuntimeFailures(scenario: PromptScenario, failures: RuntimeFailures): void {
@@ -438,16 +603,49 @@ async function auditAccessibility(page: Page, label: string): Promise<void> {
   expect(violations, `${label}: WCAG/contrast violations`).toEqual([]);
 }
 
-async function assertCuratedAssets(page: Page, label: string): Promise<void> {
+async function assertCuratedAssets(
+  page: Page,
+  label: string,
+  failures: RuntimeFailures,
+): Promise<void> {
+  await page.evaluate(() => document.fonts.ready);
+  expect(
+    await page.locator('body').evaluate((body) => getComputedStyle(body).fontFamily),
+    `${label}: bundled Inter is not the active body font`,
+  ).toContain(matrix.visual_references.profile.font.family);
+  expect(
+    failures.fontResponses,
+    `${label}: no successful local font response was observed`,
+  ).not.toEqual([]);
+  expect(
+    failures.fontResponses.every((url) => !isPublicRequest(url)),
+    `${label}: font response escaped the release stack`,
+  ).toBe(true);
+
   const board = page.getByTestId('game-board');
   const treatments = board.getByTestId('card-treatment');
   const count = await treatments.count();
   expect(count, `${label}: no curated card treatments rendered`).toBeGreaterThan(0);
   await expect(board.locator('[data-asset-source="pack"]')).toHaveCount(count);
   await expect(board.locator('[data-asset-source="fallback"]')).toHaveCount(0);
+  await expect(board.locator(`[data-pack-id="${matrix.asset_pack.id}"]`)).toHaveCount(count);
+
+  const brokenImages = await page.locator('img').evaluateAll((images) =>
+    images.flatMap((image) => {
+      const element = image as HTMLImageElement;
+      return element.complete && element.naturalWidth > 0
+        ? []
+        : [element.currentSrc || element.src || element.alt || '<unnamed image>'];
+    }),
+  );
+  expect(brokenImages, `${label}: broken rendered images`).toEqual([]);
 }
 
-async function assertExistingReconnectStatus(page: Page): Promise<string[]> {
+async function assertExistingReconnectStatus(
+  page: Page,
+  gate: ReconnectGate,
+  captured: Set<string>,
+): Promise<string[]> {
   const badge = page.getByTestId('connection-badge');
   const actionsBefore = await renderedActions(page);
   const sequenceBefore = await updateSequence(page);
@@ -488,6 +686,25 @@ async function assertExistingReconnectStatus(page: Page): Promise<string[]> {
   await expect(badge).toHaveAttribute('data-connection-state', 'disconnected', {
     timeout: 5_000,
   });
+  await captureVisualReference(
+    page.getByTestId('connection-summary'),
+    'reconnect-disconnected',
+    captured,
+  );
+  await withTimeout(
+    gate.replacementStarted,
+    15_000,
+    'replacement WebSocket did not reach the deterministic reconnect gate',
+  );
+  await expect(badge).toHaveAttribute('data-connection-state', 'reconnecting', {
+    timeout: 5_000,
+  });
+  await captureVisualReference(
+    page.getByTestId('connection-summary'),
+    'reconnect-reconnecting',
+    captured,
+  );
+  gate.releaseReplacement();
   await expect(badge).toHaveAttribute('data-connection-state', 'connected', {
     timeout: 15_000,
   });
@@ -500,6 +717,11 @@ async function assertExistingReconnectStatus(page: Page): Promise<string[]> {
     .toBeGreaterThan(sequenceBefore);
   expect(await renderedActions(page)).toEqual(actionsBefore);
   await expect(page.getByTestId('action-option').first()).toBeFocused();
+  await captureVisualReference(
+    page.getByTestId('connection-summary'),
+    'reconnect-connected',
+    captured,
+  );
 
   const statuses = await page.evaluate(
     () => (window as MatrixWindow).__manabotMatrix?.connectionStatuses ?? [],
@@ -556,26 +778,51 @@ async function findTerminalTrace(
   page: Page,
   scenario: PromptScenario,
 ): Promise<{ id: string; payload: TracePayload }> {
-  const summariesResponse = await page.request.get('/api/traces');
-  expect(summariesResponse.ok()).toBe(true);
-  const summaries = (await summariesResponse.json()) as TraceSummary[];
+  let terminalTrace: { id: string; payload: TracePayload } | undefined;
+  let observed: Array<{
+    id: string;
+    seed: number;
+    hero_deck_name: string;
+    villain_deck_name: string;
+  }> = [];
 
-  for (const summary of summaries) {
-    const response = await page.request.get(
-      `/api/traces/${encodeURIComponent(summary.id)}`,
-    );
-    expect(response.ok()).toBe(true);
-    const payload = (await response.json()) as TracePayload;
-    if (
-      payload.config.seed === scenario.seed &&
-      payload.config.hero_deck_name === scenario.hero_deck &&
-      payload.config.villain_deck_name === scenario.villain_deck
-    ) {
-      return { id: summary.id, payload };
-    }
+  await expect
+    .poll(
+      async () => {
+        observed = [];
+        const summariesResponse = await page.request.get('/api/traces');
+        expect(summariesResponse.ok()).toBe(true);
+        const summaries = (await summariesResponse.json()) as TraceSummary[];
+
+        for (const summary of summaries) {
+          const response = await page.request.get(
+            `/api/traces/${encodeURIComponent(summary.id)}`,
+          );
+          expect(response.ok()).toBe(true);
+          const payload = (await response.json()) as TracePayload;
+          observed.push({ id: summary.id, ...payload.config });
+          if (
+            payload.config.seed === scenario.seed &&
+            payload.config.hero_deck_name === scenario.hero_deck &&
+            payload.config.villain_deck_name === scenario.villain_deck
+          ) {
+            terminalTrace = { id: summary.id, payload };
+            return true;
+          }
+        }
+        return false;
+      },
+      {
+        timeout: 10_000,
+        message: `${scenario.id}: terminal trace was not persisted; observed ${JSON.stringify(observed)}`,
+      },
+    )
+    .toBe(true);
+
+  if (terminalTrace === undefined) {
+    throw new Error(`${scenario.id}: terminal trace poll completed without a receipt`);
   }
-
-  throw new Error(`${scenario.id}: terminal trace was not persisted`);
+  return terminalTrace;
 }
 
 async function runScenario(
@@ -583,8 +830,10 @@ async function runScenario(
   scenario: PromptScenario,
   testInfo: TestInfo,
   auditedFamilies: Set<string>,
+  capturedVisualReferences: Set<string>,
 ): Promise<ScenarioReceipt> {
   const failures = collectRuntimeFailures(page);
+  const reconnectGate = await installNetworkGuards(page, failures);
   await installScenarioInstrumentation(page, scenario.seed);
   await page.goto('/');
 
@@ -611,7 +860,9 @@ async function runScenario(
   const actionButtons = page.getByTestId('action-option');
   const gameOver = page.getByText('Game Over', { exact: true });
   const promptCounts: Record<string, number> = {};
+  const promptSequence: string[] = [];
   const scenarioAudits: string[] = [];
+  const visualReferencesBefore = new Set(capturedVisualReferences);
   let reconnectStatuses: string[] = [];
   let commands = 0;
 
@@ -627,14 +878,54 @@ async function runScenario(
       reachableFamilies.has(family),
       `${scenario.id}: unexpected action-space family ${family}`,
     ).toBe(true);
+    expect(
+      family,
+      `${scenario.id}: prompt-family drift before command ${commands + 1}`,
+    ).toBe(scenario.expected.prompt_sequence[commands]);
+    promptSequence.push(family);
+    const occurrence = (promptCounts[family] ?? 0) + 1;
 
     const actions = await renderedActions(page);
     expect(actions.length, `${scenario.id}: ${family} has no rendered actions`).toBeGreaterThan(0);
     await assertAccessiblePrompt(page, scenario, family, actions);
-    await assertCuratedAssets(page, `${scenario.id}: ${family}`);
+    await assertCuratedAssets(page, `${scenario.id}: ${family}`, failures);
 
-    if (scenario.id === 'ur-lessons-seed-51' && commands === 0) {
-      reconnectStatuses = await assertExistingReconnectStatus(page);
+    for (const reference of matrix.visual_references.prompts) {
+      if (
+        reference.scenario_id === scenario.id &&
+        reference.family === family &&
+        reference.occurrence === occurrence
+      ) {
+        await captureVisualReference(actionPanel, reference.id, capturedVisualReferences);
+      }
+    }
+    for (const reference of matrix.visual_references.boards) {
+      if (
+        reference.scenario_id === scenario.id &&
+        reference.family === family &&
+        reference.occurrence === occurrence
+      ) {
+        // Presentation beats intentionally advance while a game is idle. Finish
+        // the current batch before pinning a board reference so Playwright sees
+        // one semantic game state instead of racing the optional theater.
+        await settleBoardPresentation(page);
+        await captureVisualReference(
+          page.getByTestId('game-board'),
+          reference.id,
+          capturedVisualReferences,
+        );
+      }
+    }
+
+    if (
+      scenario.id === matrix.visual_references.reconnect.scenario_id &&
+      commands === matrix.visual_references.reconnect.command
+    ) {
+      reconnectStatuses = await assertExistingReconnectStatus(
+        page,
+        reconnectGate,
+        capturedVisualReferences,
+      );
       await assertAccessiblePrompt(page, scenario, family, actions);
       await auditAccessibility(page, `${scenario.id}: reconnected`);
     }
@@ -659,6 +950,7 @@ async function runScenario(
   ).toBe(true);
   expect(commands).toBe(scenario.expected.commands);
   expect(promptCounts).toEqual(scenario.expected.prompt_counts);
+  expect(promptSequence).toEqual(scenario.expected.prompt_sequence);
 
   const winnerText = scenario.expected.winner === 0 ? 'Hero wins' : 'Opponent wins';
   const resultDialog = page.getByTestId('game-result-dialog');
@@ -676,7 +968,16 @@ async function runScenario(
   await expect(page.getByTestId('game-board')).toContainText(`Turn ${scenario.expected.turn}`);
   await assertReducedMotion(page, `${scenario.id}: GAME_OVER`);
   await auditAccessibility(page, `${scenario.id}: GAME_OVER`);
-  await assertCuratedAssets(page, `${scenario.id}: GAME_OVER`);
+  await assertCuratedAssets(page, `${scenario.id}: GAME_OVER`, failures);
+  const terminalReference = matrix.visual_references.terminals.find(
+    (reference) => reference.scenario_id === scenario.id,
+  );
+  expect(terminalReference, `${scenario.id}: terminal visual reference is absent`).toBeTruthy();
+  await captureVisualReference(
+    page.getByTestId('game-board'),
+    terminalReference!.id,
+    capturedVisualReferences,
+  );
 
   const trace = await findTerminalTrace(page, scenario);
   expect(trace.payload.config.villain_type).toBe(scenario.villain_type);
@@ -690,9 +991,13 @@ async function runScenario(
     seed: scenario.seed,
     commands,
     prompt_counts: promptCounts,
+    prompt_sequence: promptSequence,
     winner: trace.payload.winner as number,
     turn: trace.payload.final_observation.turn.turn_number,
     trace_id: trace.id,
+    visual_references: [...capturedVisualReferences].filter(
+      (id) => !visualReferencesBefore.has(id),
+    ),
     accessibility: {
       audited_families: scenarioAudits,
       keyboard_commands: commands,
@@ -707,7 +1012,7 @@ async function runScenario(
   return receipt;
 }
 
-test('release stack proves keyboard and reduced-motion accessibility across the prompt matrix', async ({
+test('release stack proves versioned visuals and accessibility across the prompt matrix', async ({
   browser,
 }, testInfo) => {
   test.setTimeout(600_000);
@@ -717,13 +1022,26 @@ test('release stack proves keyboard and reduced-motion accessibility across the 
   const receipts: ScenarioReceipt[] = [];
   const observedFamilies = new Set<string>();
   const auditedFamilies = new Set<string>();
+  const capturedVisualReferences = new Set<string>();
+  const profile = matrix.visual_references.profile;
   for (const scenario of matrix.scenarios) {
     const context = await browser.newContext({
       baseURL: baseURL as string,
-      reducedMotion: 'reduce',
+      colorScheme: profile.color_scheme,
+      deviceScaleFactor: profile.device_scale_factor,
+      locale: profile.locale,
+      reducedMotion: profile.reduced_motion,
+      timezoneId: profile.timezone,
+      viewport: profile.viewport,
     });
     const page = await context.newPage();
-    const receipt = await runScenario(page, scenario, testInfo, auditedFamilies);
+    const receipt = await runScenario(
+      page,
+      scenario,
+      testInfo,
+      auditedFamilies,
+      capturedVisualReferences,
+    );
     receipts.push(receipt);
     Object.keys(receipt.prompt_counts).forEach((family) => observedFamilies.add(family));
     await context.close();
@@ -732,11 +1050,23 @@ test('release stack proves keyboard and reduced-motion accessibility across the 
   const expectedFamilies = [...matrix.action_spaces.reachable].sort();
   expect([...observedFamilies].sort()).toEqual(expectedFamilies);
   expect([...auditedFamilies].sort()).toEqual(expectedFamilies);
+  const expectedVisualReferences = [
+    ...matrix.visual_references.prompts.map((reference) => reference.id),
+    ...matrix.visual_references.boards.map((reference) => reference.id),
+    ...matrix.visual_references.reconnect.states.map((state) => `reconnect-${state}`),
+    ...matrix.visual_references.terminals.map((reference) => reference.id),
+  ].sort();
+  expect([...capturedVisualReferences].sort()).toEqual(expectedVisualReferences);
   await testInfo.attach('release-prompt-matrix.json', {
     body: Buffer.from(
       JSON.stringify(
         {
           schema_version: matrix.schema_version,
+          visual_references: {
+            profile: profile.name,
+            version: matrix.visual_references.version,
+            captured: [...capturedVisualReferences].sort(),
+          },
           accessibility: {
             audited_families: [...auditedFamilies].sort(),
             reduced_motion: true,
