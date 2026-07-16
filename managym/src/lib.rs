@@ -9,6 +9,7 @@ pub mod python;
 pub mod search_state;
 pub mod semantic;
 pub mod state;
+pub mod study;
 
 pub use agent::env::Env;
 pub use agent::vector_env::VectorEnv;

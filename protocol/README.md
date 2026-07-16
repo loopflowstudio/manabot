@@ -45,3 +45,34 @@ The Rust design uses `u64` revisions and sequence IDs while TypeScript currently
 represents them as `number`. The certified fixture is far below
 `Number.MAX_SAFE_INTEGER`; the wire contract must gain an explicit safe-integer
 limit or string encoding before long-lived counters can approach that boundary.
+
+## Study artifact v1
+
+`managym/src/study.rs` owns the separate, closed study evidence contract and
+generates `study-v1.schema.json`. Its shared
+`fixtures/study-curated-decision.json` pins one historical decision from the
+curated UR Lessons versus GW Allies matchup. The artifact embeds the exact
+viewer-safe `ExperienceFrame`, the selected `InteractionOffer`, and the played
+`Command`; consumers never reconstruct that history from current state.
+
+The artifact pins content and asset pack, engine build, model checkpoint,
+match state, viewer, decision, prompt, offer, source replay, and analysis
+budget identities. Policy mass, search value, visits, sampled-world
+robustness, uncertainty, and provenance are separate typed fields keyed to
+the same exact command alternatives. Cross-field validators in Rust, Python,
+and TypeScript reject identity drift and opponent hand identities. The closed
+schema rejects unmodelled sidecars such as RNG seeds.
+
+Regenerate and verify it with:
+
+```bash
+cargo run --locked --manifest-path managym/Cargo.toml \
+  --example export_study_protocol -- protocol/study-v1.schema.json
+cargo test --locked --manifest-path managym/Cargo.toml --test study_protocol_tests
+uv run pytest -q tests/gui/test_study_protocol.py
+npm --prefix frontend test -- --run src/lib/study-protocol.test.ts
+```
+
+This certifies portable restoration and evidence labelling only. V1 contains
+no landmark selector, search execution, branch state, UI, annotation or share
+service, hindsight lens, or client-side legality model.
