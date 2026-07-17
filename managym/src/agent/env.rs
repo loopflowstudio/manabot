@@ -369,6 +369,21 @@ impl Env {
             .map(|player| player.0)
     }
 
+    /// Project the current state for one fixed player without following the
+    /// acting seat. Study branches use this after a counterfactual command so
+    /// an opponent decision cannot turn into an opponent-private observation.
+    pub fn observation_for_player(&self, player_index: usize) -> Result<Observation, AgentError> {
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError("env.observation_for_player called before reset".to_string())
+        })?;
+        if player_index >= game.state.players.len() {
+            return Err(AgentError(format!(
+                "player index {player_index} is out of bounds"
+            )));
+        }
+        Ok(Observation::for_player(game, PlayerId(player_index)))
+    }
+
     pub fn is_game_over(&self) -> bool {
         self.game.as_ref().is_some_and(|game| game.is_game_over())
     }
@@ -729,5 +744,41 @@ mod content_pack_contract_tests {
                 assert!(root_card.shares_definition_with(branch_card));
             }
         }
+    }
+
+    #[test]
+    fn fixed_player_observation_does_not_follow_the_acting_seat() {
+        let absent = Env::new(1, true, false, false);
+        assert_eq!(
+            absent
+                .observation_for_player(0)
+                .expect_err("an environment without a match has no projection")
+                .0,
+            "env.observation_for_player called before reset"
+        );
+
+        let mut env = Env::new(11, true, false, false);
+        env.reset(configs()).expect("reset");
+        let player_zero = env.observation_for_player(0).expect("player zero view");
+        let player_one = env.observation_for_player(1).expect("player one view");
+
+        assert_eq!(player_zero.agent.player_index, 0);
+        assert_eq!(player_zero.opponent.player_index, 1);
+        assert_eq!(player_one.agent.player_index, 1);
+        assert_eq!(player_one.opponent.player_index, 0);
+        assert!(player_zero
+            .opponent_cards
+            .iter()
+            .all(|card| card.zone != crate::state::zone::ZoneType::Hand));
+        assert!(player_one
+            .opponent_cards
+            .iter()
+            .all(|card| card.zone != crate::state::zone::ZoneType::Hand));
+        assert_eq!(
+            env.observation_for_player(2)
+                .expect_err("only two seats exist")
+                .0,
+            "player index 2 is out of bounds"
+        );
     }
 }

@@ -37,6 +37,7 @@ from .replay_index import (
     projection_with_addresses,
     restore_decision,
 )
+from .study_branch import StudyBranch, StudyForkProvider
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
@@ -677,6 +678,8 @@ class GameSession:
             1: [],
         }
         self._authority_command_seq = 0
+        self._study_roots: dict[int, managym.Env] = {}
+        self._study_provider: StudyForkProvider | None = None
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -733,6 +736,8 @@ class GameSession:
         self.canonical_decisions = []
         self.canonical_presentation = {HERO_PLAYER_INDEX: [], 1: []}
         self._authority_command_seq = 0
+        self._study_roots = {}
+        self._study_provider = None
 
         # Setup itself is an authority snapshot. Clear staged facts before any
         # auto-play transition so each subsequent drain belongs to one exact
@@ -1018,6 +1023,7 @@ class GameSession:
                     "command": command,
                 }
             )
+            self._study_roots[int(row.ordinal)] = self.env.clone_env()
             self.canonical_decisions.append(row)
         action_description = actions[action_index]["description"]
         self.presentation.note_action(
@@ -1482,6 +1488,7 @@ class GameSession:
                 for viewer, events in sorted(self.canonical_presentation.items())
             ],
         )
+        study_provider = StudyForkProvider(canonical, self._study_roots)
         final_trace = replace(
             self.trace,
             final_observation=serialize_observation(self.obs),
@@ -1492,7 +1499,14 @@ class GameSession:
         path = trace_store.save_trace(final_trace, self.trace_dir)
         self.trace = final_trace
         self.trace_id = path.stem
+        self._study_provider = study_provider
         self._trace_saved = True
+
+    def fork_study(self, raw_address: str) -> StudyBranch:
+        """Fork one retained player-0 replay decision for ephemeral Study."""
+        if self._study_provider is None:
+            raise ValueError("Study roots are unavailable until the match is complete.")
+        return self._study_provider.fork(raw_address, HERO_PLAYER_INDEX)
 
     def close(self, end_reason: str) -> None:
         if self.trace is not None and not self._trace_saved:

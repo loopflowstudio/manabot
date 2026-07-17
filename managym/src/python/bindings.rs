@@ -2109,6 +2109,18 @@ impl PyEnv {
         Ok(env.current_agent_index())
     }
 
+    /// Return a fixed-viewer projection even when another player now acts.
+    fn observation_for_player(&self, player_index: usize) -> PyResult<PyObservation> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(PyObservation::from(
+            env.observation_for_player(player_index)
+                .map_err(map_agent_err)?,
+        ))
+    }
+
     fn is_game_over(&self) -> PyResult<bool> {
         let env = self
             .inner
