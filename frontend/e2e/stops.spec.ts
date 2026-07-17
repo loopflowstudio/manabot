@@ -113,7 +113,7 @@ test('stops cut the clicks needed to finish a game, log keeps narrating', async 
   // The narrative survives the fast-forward: villain actions inside skipped
   // stretches are logged, and the auto-passed windows are called out.
   const logTexts = await page.getByTestId('log-entry').allTextContents();
-  expect(logTexts.some((text) => text.startsWith('Villain: '))).toBe(true);
+  expect(logTexts.some((text) => text.trimStart().startsWith('Villain'))).toBe(true);
   expect(logTexts.some((text) => /Auto-passed \d+ priority window/.test(text))).toBe(true);
 });
 
@@ -140,5 +140,7 @@ test('F6 passes the turn from the keyboard', async ({ page }) => {
   // the next surfaced decision is on a later turn.
   await expect(board).toContainText(/Turn (?!1 )\d+/, { timeout: 30_000 });
   const logTexts = await page.getByTestId('log-entry').allTextContents();
-  expect(logTexts.some((text) => text.includes('Hero: Pass turn (F6)'))).toBe(true);
+  expect(
+    logTexts.some((text) => /Hero\s*Pass turn/.test(text.replace(/\s+/g, ' '))),
+  ).toBe(true);
 });

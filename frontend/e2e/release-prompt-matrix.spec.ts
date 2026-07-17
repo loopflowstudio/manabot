@@ -853,10 +853,22 @@ async function runScenario(
   await expect(newGame).toBeFocused();
   await page.keyboard.press('Enter');
 
-  const expectedDeckNames =
-    scenario.hero_deck === 'ur_lessons'
-      ? 'UR Lessons vs GW Allies'
-      : 'GW Allies vs UR Lessons';
+  const DECK_DISPLAY: Record<string, string> = {
+    ur_lessons: 'UR Lessons',
+    gw_allies: 'GW Allies',
+    interactive: 'Interactive',
+  };
+  const OPPONENT_DISPLAY: Record<string, string> = {
+    'search-16': 'Search 16',
+    'search-64': 'Search 64',
+    'search-256': 'Search 256',
+    checkpoint: 'Checkpoint',
+    random: 'Random',
+    passive: 'Passive',
+  };
+  const expectedDeckNames = `You (${DECK_DISPLAY[scenario.hero_deck]}) vs ${
+    OPPONENT_DISPLAY[scenario.villain_type] ?? 'Opponent'
+  } (${DECK_DISPLAY[scenario.villain_deck]})`;
   await expect(page.getByTestId('deck-names')).toHaveText(expectedDeckNames, {
     timeout: 15_000,
   });

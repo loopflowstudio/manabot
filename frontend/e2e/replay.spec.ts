@@ -12,12 +12,13 @@ test('replay page lists traces and steps through frames', async ({ page }) => {
 
   await page.goto('/replay');
 
-  // The trace list is fetched after mount; a frozen DOM would show the
+  // The trace picker is fetched after mount; a frozen DOM would show the
   // initial "No traces yet." state forever.
-  const traceButton = page.locator('button', { hasText: 'Winner:' }).first();
-  await expect(traceButton).toBeVisible({ timeout: 15_000 });
+  const traceSelect = page.getByTestId('trace-select');
+  await expect(traceSelect).toBeVisible({ timeout: 15_000 });
 
-  await traceButton.click();
+  // Index 0 is the disabled placeholder; pick the newest real trace.
+  await traceSelect.selectOption({ index: 1 });
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });
 
@@ -34,7 +35,7 @@ test('replay page lists traces and steps through frames', async ({ page }) => {
   const lastStep = Math.min(6, totalFrames);
 
   const boardSnapshots = new Set<string>([await board.innerHTML()]);
-  const next = page.getByRole('button', { name: 'Next', exact: true });
+  const next = page.getByRole('button', { name: 'Next frame', exact: true });
   for (let step = 2; step <= lastStep; step += 1) {
     await next.click();
     await expect(frameCounter).toHaveText(new RegExp(`Frame ${step} / \\d+`));

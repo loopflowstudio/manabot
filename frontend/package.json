@@ -1,30 +1,32 @@
 {
-  "name": "etude-frontend",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "test:e2e:release": "npm run build && playwright test --config playwright.release.config.ts"
-  },
-  "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
-    "@playwright/test": "^1.61.1",
-    "@sveltejs/adapter-auto": "^6.0.0",
-    "@sveltejs/kit": "^2.20.0",
-    "@tailwindcss/vite": "^4.1.0",
-    "@types/node": "^22.12.0",
-    "ajv": "^8.20.0",
-    "svelte": "^5.22.0",
-    "svelte-check": "^4.1.0",
-    "tailwindcss": "^4.1.0",
-    "typescript": "^5.8.0",
-    "vite": "^7.0.0",
-    "vitest": "^3.0.0"
-  }
+	"name": "etude-frontend",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"test": "vitest run",
+		"validate:contrast": "node scripts/validate-contrast.mjs",
+		"test:e2e": "playwright test",
+		"test:e2e:release": "npm run build && playwright test --config playwright.release.config.ts",
+		"fetch:card-art": "node scripts/fetch-card-art.mjs"
+	},
+	"devDependencies": {
+		"@axe-core/playwright": "^4.12.1",
+		"@playwright/test": "^1.61.1",
+		"@sveltejs/adapter-auto": "^6.0.0",
+		"@sveltejs/kit": "^2.20.0",
+		"@tailwindcss/vite": "^4.1.0",
+		"@types/node": "^22.12.0",
+		"ajv": "^8.20.0",
+		"svelte": "^5.22.0",
+		"svelte-check": "^4.1.0",
+		"tailwindcss": "^4.1.0",
+		"typescript": "^5.8.0",
+		"vite": "^7.0.0",
+		"vitest": "^3.0.0"
+	}
 }

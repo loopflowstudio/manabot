@@ -28,22 +28,48 @@
   }: Props = $props();
 </script>
 
-<section class="rounded border border-slate-700 bg-slate-800 p-4">
-  <div class="mb-3 flex flex-wrap items-center gap-2">
-    <button class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm hover:border-blue-400" onclick={() => onPrevious?.()}>
-      Previous
+<section class="min-w-0">
+  <div class="flex flex-wrap items-center gap-2">
+    <button
+      class="btn btn-secondary btn-sm w-7 px-0"
+      aria-label="Previous frame"
+      onclick={() => onPrevious?.()}
+    >
+      ‹
     </button>
-    <button class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm hover:border-blue-400" onclick={() => onTogglePlaying?.()}>
+    <button
+      class="btn btn-secondary btn-sm"
+      onclick={() => onTogglePlaying?.()}
+    >
       {playing ? 'Pause' : 'Play'}
     </button>
-    <button class="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm hover:border-blue-400" onclick={() => onNext?.()}>
-      Next
+    <button
+      class="btn btn-secondary btn-sm w-7 px-0"
+      aria-label="Next frame"
+      onclick={() => onNext?.()}
+    >
+      ›
     </button>
 
-    <label class="ml-auto flex items-center gap-2 text-sm text-slate-300">
+    <input
+      class="rail min-w-24 flex-1"
+      type="range"
+      aria-label="Replay position"
+      aria-valuetext={`Frame ${totalFrames === 0 ? 0 : currentFrame + 1} of ${totalFrames}`}
+      min="0"
+      max={Math.max(totalFrames - 1, 0)}
+      value={currentFrame}
+      oninput={(event) => onScrub?.(Number((event.currentTarget as HTMLInputElement).value))}
+    />
+
+    <span class="type-rubric whitespace-nowrap tabular-nums text-ink-2">
+      Frame {totalFrames === 0 ? 0 : currentFrame + 1} / {totalFrames}
+    </span>
+
+    <label class="type-label flex items-center gap-1.5 text-ink-2">
       Speed
       <select
-        class="rounded border border-slate-600 bg-slate-900 px-2 py-1"
+        class="type-caption min-h-0 rounded border border-line bg-field px-2 py-0.5"
         value={speed}
         onchange={(event) => onSpeedChange?.(Number((event.currentTarget as HTMLSelectElement).value))}
       >
@@ -54,26 +80,41 @@
     </label>
   </div>
 
-  <input
-    class="w-full"
-    type="range"
-    min="0"
-    max={Math.max(totalFrames - 1, 0)}
-    value={currentFrame}
-    oninput={(event) => onScrub?.(Number((event.currentTarget as HTMLInputElement).value))}
-  />
-
-  <div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
-    <span>Frame {totalFrames === 0 ? 0 : currentFrame + 1} / {totalFrames}</span>
-    <span class="text-right">
-      {#if actionDescription}
-        <span class={actor === 'villain' ? 'text-amber-300' : actor === 'hero' ? 'text-emerald-300' : 'text-slate-300'}>
-          {actor === 'villain' ? 'Villain' : actor === 'hero' ? 'Hero' : 'State'}
-        </span>
-        : {actionDescription}
-      {:else}
-        Initial game state
-      {/if}
-    </span>
+  <div class="mt-2 text-ink-2">
+    {#if actionDescription}
+      <span class="type-rubric">
+        {actor === 'villain' ? 'Villain' : actor === 'hero' ? 'Hero' : 'State'}
+      </span>
+      <span class="type-annotation text-ink"> {actionDescription}</span>
+    {:else}
+      <span class="type-annotation">Initial game state</span>
+    {/if}
   </div>
 </section>
+
+<style>
+  input.rail {
+    appearance: none;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    cursor: pointer;
+  }
+  input.rail::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--ivory);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  }
+  input.rail::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--ivory);
+  }
+</style>

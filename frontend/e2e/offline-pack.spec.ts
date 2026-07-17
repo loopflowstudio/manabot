@@ -93,7 +93,7 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
   const board = page.getByTestId('game-board');
   await expect(board).toBeVisible({ timeout: 15_000 });
   expect(Date.now() - startedAt).toBeLessThan(60_000);
-  await expect(page.getByTestId('deck-names')).toHaveText('UR Lessons vs GW Allies');
+  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Random (GW Allies)');
 
   const initialTreatments = board.getByTestId('card-treatment');
   const initialTreatmentCount = await initialTreatments.count();
@@ -115,9 +115,9 @@ test('fresh-cache play, reload, and replay need no public network', async ({ pag
 
   await finishGame(page);
   await page.goto('/replay');
-  const traceButton = page.locator('button', { hasText: 'Winner:' }).first();
-  await expect(traceButton).toBeVisible({ timeout: 15_000 });
-  await traceButton.click();
+  const traceSelect = page.getByTestId('trace-select');
+  await expect(traceSelect).toBeVisible({ timeout: 15_000 });
+  await traceSelect.selectOption({ index: 1 });
   await expect(board).toBeVisible({ timeout: 15_000 });
   await expect(board.getByTestId('card-treatment').first()).toHaveAttribute(
     'data-asset-source',

@@ -95,7 +95,7 @@ async function selectReferenceExperience(page: Page): Promise<void> {
 async function startReferenceGame(page: Page): Promise<void> {
   await selectReferenceExperience(page);
   await page.getByRole('button', { name: 'New Game' }).first().click();
-  await expect(page.getByTestId('deck-names')).toHaveText('UR Lessons vs GW Allies', {
+  await expect(page.getByTestId('deck-names')).toHaveText('You (UR Lessons) vs Search 64 (GW Allies)', {
     timeout: 15_000,
   });
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 30_000 });

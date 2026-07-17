@@ -34,33 +34,29 @@
     data-presentation-seq={beat.seq}
     data-presentation-kind={event.kind.kind}
     data-reduced-motion={player.reducedMotion}
-    class={`pointer-events-none absolute inset-x-4 top-16 z-10 flex justify-center ${player.reducedMotion ? '' : 'transition duration-200 ease-out'}`}
+    class={`pointer-events-none absolute inset-x-4 top-16 z-10 flex justify-center ${player.reducedMotion ? '' : 'motion-move'}`}
   >
     <div
-      class={`pointer-events-auto w-full max-w-xl rounded-xl border px-4 py-3 shadow-2xl backdrop-blur ${
+      class={`pointer-events-auto w-full max-w-xl rounded-xl border px-4 py-3 shadow-raised backdrop-blur ${
         beat.importance === 'critical'
-          ? 'border-rose-300/70 bg-rose-950/90'
+          ? 'border-mountain/80 bg-panel/95'
           : beat.importance === 'emphasized'
-            ? 'border-amber-300/60 bg-slate-950/90'
-            : 'border-cyan-300/40 bg-slate-950/90'
+            ? 'border-plains/60 bg-panel/95'
+            : 'border-island/40 bg-panel/95'
       }`}
     >
       <div class="flex items-start justify-between gap-4">
         <div role="status" aria-live="polite" aria-atomic="true">
-          <p class="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">
+          <p class="type-rubric text-ink-2">
             Beat {player.currentIndex + 1} of {player.events.length}
           </p>
-          <h2 class="mt-1 text-base font-bold text-white">{beat.heading}</h2>
-          <p class="mt-1 text-sm text-slate-200">{beat.detail}</p>
+          <h2 class="type-title mt-1 text-ink">{beat.heading}</h2>
+          <p class="mt-1 text-ink">{beat.detail}</p>
         </div>
         <div class="flex shrink-0 gap-2">
           <button
             type="button"
-            class={`rounded border px-2.5 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${
-              player.speed > 1
-                ? 'border-amber-300 bg-amber-300/20 text-amber-100'
-                : 'border-slate-600 bg-slate-900 text-slate-200 hover:border-slate-400'
-            }`}
+            class={`btn btn-secondary btn-sm ${player.speed > 1 ? 'border-plains bg-plains/20' : ''}`}
             aria-pressed={player.speed > 1}
             onclick={() => player.setFastForward(player.speed === 1)}
           >
@@ -68,14 +64,14 @@
           </button>
           <button
             type="button"
-            class="rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+            class="btn btn-secondary btn-sm"
             onclick={() => player.skipCurrent()}
           >
             Skip beat
           </button>
           <button
             type="button"
-            class="rounded border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+            class="btn btn-secondary btn-sm"
             onclick={() => player.finishSequence()}
           >
             Finish

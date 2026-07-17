@@ -22,16 +22,16 @@
   const sides: StopSide[] = ['my', 'opponent'];
 </script>
 
-<details class="rounded border border-slate-700 bg-slate-800" data-testid="stops-panel">
-  <summary class="cursor-pointer select-none px-4 py-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+<details class="min-w-0" data-testid="stops-panel">
+  <summary class="type-title cursor-pointer select-none py-1 text-display">
     Stops
-    <span class="ml-2 rounded bg-slate-700 px-2 py-0.5 text-xs font-normal normal-case text-slate-300">
+    <span class="type-label ml-2 rounded-full bg-panel-muted px-2 py-1 text-ink-2">
       {stops.auto_pass ? `${activeCount} set` : 'off'}
     </span>
   </summary>
 
-  <div class="space-y-3 border-t border-slate-700 p-4">
-    <label class="flex items-center gap-2 text-sm text-slate-300">
+  <div class="space-y-3 pt-3">
+    <label class="flex items-center gap-2 text-ink-2">
       <input
         type="checkbox"
         data-testid="auto-pass-toggle"
@@ -42,12 +42,12 @@
     </label>
 
     <div class={stops.auto_pass ? '' : 'pointer-events-none opacity-50'}>
-      <div class="grid grid-cols-[minmax(0,1fr)_3rem_3rem] items-center gap-y-1 text-sm">
+      <div class="grid grid-cols-[minmax(0,1fr)_3rem_3rem] items-center gap-y-1">
         <span></span>
-        <span class="text-center text-xs font-semibold uppercase text-slate-400">Mine</span>
-        <span class="text-center text-xs font-semibold uppercase text-slate-400">Opp</span>
+        <span class="type-rubric text-center text-ink-2">Mine</span>
+        <span class="type-rubric text-center text-ink-2">Opp</span>
         {#each STOP_STEPS as step}
-          <span class="text-slate-300">{step.label}</span>
+          <span class="text-ink-2">{step.label}</span>
           {#each sides as side}
             <span class="text-center">
               <input
@@ -63,7 +63,7 @@
         {/each}
       </div>
 
-      <label class="mt-3 flex items-center gap-2 text-sm text-slate-300">
+      <label class="mt-3 flex items-center gap-2 text-ink-2">
         <input
           type="checkbox"
           data-testid="stop-on-stack"
@@ -76,7 +76,7 @@
     </div>
 
     <button
-      class="text-xs text-slate-400 underline hover:text-slate-200"
+      class="type-label inline-block py-1 text-ink-2 underline underline-offset-2 hover:text-ink"
       data-testid="stops-reset"
       onclick={() => onReset?.()}
     >

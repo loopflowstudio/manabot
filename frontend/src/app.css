@@ -50,35 +50,66 @@
 
 :root {
   color-scheme: light dark;
+  accent-color: var(--accent);
 
-  /* Loopflow / kata brand */
-  --burgundy: #722f37;
-  --burgundy-hover: #8b3d47;
-  --cream: #faf8f5;
+  /* Sepia Etude brand: an annotated score in an old library. Everything is
+     sepia ink on aged paper except the active decision, which burns
+     Mountain red. Display text is set in bronze, like a margin annotation. */
+  --mountain-red: #973427;
+  --sepia-bronze: #6d5a35;
+  --ivory: #f8f1e0;
 
-  /* Adaptive palette: cream */
-  --bg: #faf8f5;
-  --bg-surface: #fffdfb;
-  --bg-muted: #f3eee7;
-  --border: #e3ddd5;
-  --border-strong: #c9c0b6;
-  --text: #1a1a1a;
-  --text-secondary: #6b6b6b;
-  --accent: var(--burgundy);
-  --accent-text: var(--burgundy);
-  --accent-hover: var(--burgundy-hover);
-  --accent-soft: #efe2e3;
+  /* The vivid pie: full-saturation Magic colors for the fixed rich worlds
+     (banner, player bars). Constants in both modes, like card art. */
+  --vivid-w: #f2ad25;
+  --vivid-u: #2f74d0;
+  --vivid-b: #9550b4;
+  --vivid-r: #e04a18;
+  --vivid-g: #46a230;
 
-  /* Shared status colors and contrast-safe text companions */
-  --success: #2d6a4f;
-  --success-text: #24543f;
-  --warning: #b0812a;
-  --warning-text: #775615;
-  --error: #b45309;
-  --error-text: #8e4006;
-  --info: #0ab3cc;
-  --info-text: #087b8c;
-  --neutral: #8b8b8b;
+  /* Adaptive palette: parchment. Three ground levels — page, panel, and
+     field (the paper-white fill inside bordered controls) — so surfaces
+     separate by value, not just by borders. */
+  --bg: #ebdfc6;
+  --bg-surface: #f7f0e0;
+  --bg-muted: #ded0af;
+  --bg-field: #fcf9ee;
+  --border: #c9b892;
+  --border-strong: #a5926a;
+  --text: #3a3122;
+  --text-secondary: #5f553d;
+  --text-tertiary: #6e6247;
+  --accent: var(--mountain-red);
+  --accent-text: var(--sepia-bronze);
+  --accent-hover: #ab4634;
+  --accent-pressed: #822d21;
+  --accent-soft: #ead6c6;
+
+  /* The color pie: WUBRG at splash volume, syntax-highlighting the sepia
+     ground. Each family owns a semantic register — Plains sun the turn
+     structure, Island the knowledge (prompts, stack, hand), Swamp ink the
+     hidden and the spent, Mountain the actions and errors, Forest the
+     living board — and each ships a contrast-safe text companion. */
+  --success: #4c8040;
+  --success-text: #396230;
+  --warning: #9f7a1c;
+  --warning-text: #6f5712;
+  --error: var(--mountain-red);
+  --error-text: #7e2a20;
+  --info: #2e6da8;
+  --info-text: #31599a;
+  --neutral: #6a5f86;
+  --neutral-text: #554b6e;
+
+  /* Washes are tokens, not arithmetic: each family's container tint is
+     pre-mixed with the panel ground per mode, so a wash can never silently
+     vanish when the ground changes underneath it. */
+  --wash-strength: 10%;
+  --success-wash: color-mix(in srgb, var(--success) var(--wash-strength), var(--bg-surface));
+  --warning-wash: color-mix(in srgb, var(--warning) var(--wash-strength), var(--bg-surface));
+  --error-wash: color-mix(in srgb, var(--error) var(--wash-strength), var(--bg-surface));
+  --info-wash: color-mix(in srgb, var(--info) var(--wash-strength), var(--bg-surface));
+  --neutral-wash: color-mix(in srgb, var(--neutral) var(--wash-strength), var(--bg-surface));
 
   /* 4pt grid, radii, and layering */
   --space-xxs: 2px;
@@ -89,85 +120,262 @@
   --space-xl: 20px;
   --space-xxl: 24px;
   --space-xxxl: 32px;
+  --space-4xl: 48px;
+  --space-5xl: 64px;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-full: 9999px;
+  --motion-fast: 100ms;
+  --motion-move: 180ms;
+  --motion-move-ease: cubic-bezier(0.2, 0, 0, 1);
   --z-dropdown: 100;
   --z-modal: 200;
   --z-toast: 300;
   --z-tooltip: 400;
 
-  --shadow-surface: 0 1px 2px rgb(26 26 26 / 0.05), 0 12px 32px rgb(114 47 55 / 0.04);
+  --shadow-surface: 0 1px 2px rgb(58 49 34 / 0.06), 0 12px 32px rgb(109 90 53 / 0.05);
+
+  /* Elevation law: the sheet rests on the desk (shadow-sheet); only what
+     floats above the sheet casts shadow-raised. Nothing else has a shadow,
+     and shadows are umber, never black, by day. */
+  --shadow-sheet: 0 1px 2px rgb(58 40 20 / 0.1), 0 22px 56px rgb(58 40 20 / 0.14);
+  --shadow-raised: 0 1px 2px rgb(58 40 20 / 0.08), 0 6px 16px rgb(58 40 20 / 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Kata's lifted burgundy reconciles the shared accent with slate. */
-    --bg: #2b3036;
-    --bg-surface: #343b44;
-    --bg-muted: #3c4550;
-    --border: #46505b;
-    --border-strong: #65717d;
-    --text: #f5f1ea;
-    --text-secondary: #c8c1b8;
-    --accent: #9b4a54;
-    --accent-text: #d9949d;
-    --accent-hover: #b05762;
-    --accent-soft: #49343b;
-    --success-text: #83c3a0;
-    --warning-text: #deb967;
-    --error-text: #e49a61;
-    --info-text: #68d3e3;
-    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.18), 0 16px 40px rgb(0 0 0 / 0.12);
+    /* The library after dark: umber ink grounds, lamplight bronze display,
+       and a lifted Mountain red. The dark hover deepens instead of
+       lightening — a lighter red cannot hold ivory button text at AA. */
+    --bg: #191510;
+    --bg-surface: #221c14;
+    --bg-muted: #2b241a;
+    --bg-field: #2f2717;
+    --border: #423a2b;
+    --border-strong: #625741;
+    --text: #ece4d0;
+    --text-secondary: #b3a88e;
+    --text-tertiary: #9a9077;
+    --accent: #b24d38;
+    --accent-text: #c3a568;
+    --accent-hover: #a34531;
+    --accent-pressed: #93402d;
+    --accent-soft: #3f2b20;
+    --success-text: #9ecb8b;
+    --warning-text: #d9bc66;
+    --error-text: #de9181;
+    --info-text: #8ab8e8;
+    --neutral-text: #b4a9d1;
+    /* Washes lift by lamplight: 10% reads on parchment but vanishes on umber. */
+    --wash-strength: 26%;
+    --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.22), 0 16px 40px rgb(0 0 0 / 0.16);
+    --shadow-sheet: 0 1px 2px rgb(0 0 0 / 0.4), 0 22px 56px rgb(0 0 0 / 0.45);
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px rgb(0 0 0 / 0.4);
   }
 }
 
-/* Existing Etude utilities now resolve through the shared semantic system. */
+/* The semantic vocabulary: every component color resolves through these. */
 @theme inline {
   --font-serif: 'Cormorant Garamond', Georgia, serif;
   --font-sans: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
 
-  --color-slate-950: var(--bg);
-  --color-slate-900: var(--bg);
-  --color-slate-800: var(--bg-surface);
-  --color-slate-700: var(--bg-muted);
-  --color-slate-600: var(--border-strong);
-  --color-slate-500: var(--text-secondary);
-  --color-slate-400: var(--text-secondary);
-  --color-slate-300: var(--text-secondary);
-  --color-slate-200: var(--text);
-  --color-slate-100: var(--text);
+  /*
+   * The system's vocabulary. Components speak these names and no others:
+   * there is no stock-name shim, so a stale Tailwind color class simply
+   * fails to resolve instead of silently meaning something.
+   *
+   *   ink / ink-2          reading text, primary and secondary
+   *   ground               the page floor (--bg)
+   *   panel / panel-muted  raised surfaces and their muted wells
+   *   field                the paper-white fill inside bordered controls
+   *   line / line-strong   hairline and emphasized borders
+   *   action / -hover      interactive accent (fills, hover borders)
+   *   action-soft          quiet accent wash
+   *   display              accent-toned display text (headings, panel titles)
+   *
+   * The five pie families carry Magic's land registers. Each base is a
+   * fill color; each `-ink` companion is its contrast-safe text tone.
+   */
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-secondary);
+  --color-ink-3: var(--text-tertiary);
+  --color-ground: var(--bg);
+  --color-panel: var(--bg-surface);
+  --color-panel-muted: var(--bg-muted);
+  --color-field: var(--bg-field);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-action: var(--accent);
+  --color-action-hover: var(--accent-hover);
+  --color-action-soft: var(--accent-soft);
+  --color-display: var(--accent-text);
+  --color-ivory: var(--ivory);
 
-  --color-blue-600: var(--accent);
-  --color-blue-500: var(--accent-hover);
-  --color-blue-400: var(--accent);
-  --color-accent-text: var(--accent-text);
-  --color-sky-600: var(--info);
-  --color-sky-400: var(--info-text);
-  --color-sky-300: var(--info-text);
-  --color-cyan-300: var(--info-text);
-  --color-cyan-400: var(--info);
+  --color-forest: var(--success);
+  --color-forest-ink: var(--success-text);
+  --color-forest-wash: var(--success-wash);
+  --color-plains: var(--warning);
+  --color-plains-ink: var(--warning-text);
+  --color-plains-wash: var(--warning-wash);
+  --color-island: var(--info);
+  --color-island-ink: var(--info-text);
+  --color-island-wash: var(--info-wash);
+  --color-mountain: var(--error);
+  --color-mountain-ink: var(--error-text);
+  --color-mountain-wash: var(--error-wash);
+  --color-swamp: var(--neutral);
+  --color-swamp-ink: var(--neutral-text);
+  --color-swamp-wash: var(--neutral-wash);
+}
 
-  --color-emerald-600: var(--success);
-  --color-emerald-300: var(--success-text);
-  --color-amber-600: var(--warning);
-  --color-amber-300: var(--warning-text);
-  --color-rose-900: var(--error);
-  --color-rose-600: var(--error);
-  --color-rose-500: var(--error);
-  --color-rose-200: var(--error-text);
+/* ————————————————————————————————————————————————
+   The voices: one text style per role, defined once. Components use these
+   and never set font sizes, families, or tracking inline. Mono is the
+   notation register — rubrics, tempo lines, frame counters — and nothing
+   else. The annotation voice — serif italic — belongs to prompts and
+   marginalia alone.
+   ———————————————————————————————————————————————— */
+@utility type-display {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+@utility type-title {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 0;
+}
+@utility type-label {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+}
+@utility type-caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+@utility type-rubric {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+@utility type-numeral {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+@utility type-brand {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 36px;
+  letter-spacing: -0.01em;
+}
+@utility motion-move {
+  transition-property: opacity, transform;
+  transition-duration: var(--motion-move);
+  transition-timing-function: var(--motion-move-ease);
+}
+@utility type-annotation {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13.5px;
+  line-height: 20px;
+  letter-spacing: 0;
+}
 
-  --color-violet-900: var(--accent);
-  --color-violet-500: var(--accent);
-  --color-violet-200: var(--text);
-  --color-indigo-900: var(--info);
-  --color-indigo-500: var(--info);
-  --color-indigo-400: var(--info);
-  --color-indigo-200: var(--info-text);
-  --color-white: var(--cream);
+/* ————————————————————————————————————————————————
+   Buttons: three roles, two sizes, one shape. Nothing else is a button.
+   ———————————————————————————————————————————————— */
+@utility shadow-sheet {
+  box-shadow: var(--shadow-sheet);
+}
+@utility shadow-raised {
+  box-shadow: var(--shadow-raised);
+}
+
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  transition-duration: 100ms;
+  transition-property: background-color, border-color, color;
+  transition-timing-function: ease-out;
+}
+@utility btn-sm {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+@utility btn-primary {
+  background: var(--accent);
+  color: var(--ivory);
+  &:hover {
+    background: var(--accent-hover);
+  }
+  &:active {
+    background: var(--accent-pressed);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+@utility btn-secondary {
+  background: var(--bg-field);
+  border-color: var(--border);
+  color: var(--text);
+  &:hover {
+    border-color: var(--accent);
+  }
+  &:active {
+    background: var(--bg-muted);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    border-color: var(--border);
+  }
+}
+@utility btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  &:hover {
+    background: var(--bg-field);
+    color: var(--text);
+  }
+  &:active {
+    background: var(--bg-muted);
+  }
 }
 
 html {
@@ -180,12 +388,13 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 8% -18%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 32rem),
+    radial-gradient(circle at 8% -18%, color-mix(in srgb, var(--accent-text) 9%, transparent), transparent 32rem),
     var(--bg);
   color: var(--text);
   font-family: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -211,9 +420,9 @@ textarea {
   font: inherit;
 }
 
-button,
+button:where(:not(.btn-sm)),
 select,
-input:not([type='checkbox']):not([type='radio']) {
+input:where(:not([type='checkbox'])):where(:not([type='radio'])) {
   min-height: 32px;
 }
 

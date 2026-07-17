@@ -3,8 +3,9 @@
 
   import Card from './Card.svelte';
 
+  // A staff of permanents on the sheet: just the cards on their line —
+  // the zone rubric lives in the sheet's margin column.
   interface Props {
-    label: string;
     permanents?: PermanentState[];
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
@@ -16,7 +17,6 @@
   }
 
   let {
-    label,
     permanents = [],
     focusedIds = new Set<number>(),
     clickableTargets = undefined,
@@ -26,37 +26,36 @@
   }: Props = $props();
 </script>
 
-<div class="min-h-24">
-  <div class="mb-2 text-xs uppercase tracking-wide text-slate-400">{label}</div>
-  <div class="flex flex-wrap gap-3">
-    {#if permanents.length === 0}
-      <div class="rounded border border-dashed border-slate-700 px-3 py-5 text-xs text-slate-400">No permanents</div>
-    {/if}
+<div class="flex flex-wrap items-end gap-2">
+  {#if permanents.length === 0}
+    <div class="type-caption px-1 py-1 text-ink-3">No permanents</div>
+  {/if}
 
-    {#each permanents as permanent}
-      <Card
-        name={permanent.name ?? 'Unknown Permanent'}
-        power={permanent.power}
-        toughness={permanent.toughness}
-        focused={focusedIds.has(permanent.id)}
-        clickable={clickableTargets?.has(permanent.id) ?? false}
-        tapped={permanent.tapped}
-        dimmed={permanent.summoning_sick}
-        damage={permanent.damage}
-        onSelect={() => onSelectTarget?.(permanent.id)}
-        onHoverStart={() => {
-          onHoverTarget?.(clickableTargets?.has(permanent.id) ? permanent.id : null);
-          onPreviewCard?.({
-            name: permanent.name,
-            power: permanent.power,
-            toughness: permanent.toughness,
-          });
-        }}
-        onHoverEnd={() => {
-          onHoverTarget?.(null);
-          onPreviewCard?.(null);
-        }}
-      />
-    {/each}
-  </div>
+  {#each permanents as permanent}
+    <Card
+      name={permanent.name ?? 'Unknown Permanent'}
+      power={permanent.power === 0 && permanent.toughness === 0 ? null : permanent.power}
+      toughness={permanent.power === 0 && permanent.toughness === 0 ? null : permanent.toughness}
+      focused={focusedIds.has(permanent.id)}
+      clickable={clickableTargets?.has(permanent.id) ?? false}
+      tapped={permanent.tapped}
+      dimmed={permanent.summoning_sick}
+      counters={permanent.plus1_counters}
+      damage={permanent.damage}
+      onSelect={() => onSelectTarget?.(permanent.id)}
+      onHoverStart={() => {
+        onHoverTarget?.(clickableTargets?.has(permanent.id) ? permanent.id : null);
+        onPreviewCard?.({
+          name: permanent.name,
+          power: permanent.power === 0 && permanent.toughness === 0 ? null : permanent.power,
+          toughness:
+            permanent.power === 0 && permanent.toughness === 0 ? null : permanent.toughness,
+        });
+      }}
+      onHoverEnd={() => {
+        onHoverTarget?.(null);
+        onPreviewCard?.(null);
+      }}
+    />
+  {/each}
 </div>

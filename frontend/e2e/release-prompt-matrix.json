@@ -6,8 +6,8 @@
     "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
   },
   "visual_references": {
-    "version": 2,
-    "directory": "visual-references/v2",
+    "version": 3,
+    "directory": "visual-references/v3",
     "profile": {
       "name": "ubuntu-24.04-chromium",
       "operating_system": "Ubuntu 24.04 x86-64",

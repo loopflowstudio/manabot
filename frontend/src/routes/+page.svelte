@@ -3,6 +3,7 @@
 
   import { buildClickableTargets, filterActionsForTarget, focusIdsForActionIndexes } from '$lib/action-map';
   import ActionPanel from '$lib/components/ActionPanel.svelte';
+  import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
@@ -55,6 +56,18 @@
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
   const canPassTurn = $derived(gameActive && gameStore.actions.length > 0);
 
+  // The matchup names the players: "You (UR Lessons) vs Search 64 (GW
+  // Allies)". Selectors hide while a game runs, so the choice is stable.
+  const OPPONENT_LABELS: Record<string, string> = {
+    'search-16': 'Search 16',
+    'search-64': 'Search 64',
+    'search-256': 'Search 256',
+    checkpoint: 'Checkpoint',
+    random: 'Random',
+    passive: 'Passive',
+  };
+  const opponentLabel = $derived(OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent');
+
   function syncStopsToServer(): void {
     if (gameActive) {
       sendSetStops();
@@ -88,7 +101,8 @@
     if (!sendPassTurn()) {
       return;
     }
-    gameStore.appendHeroAction('Pass turn (F6)');
+    // The log records game vocabulary, not affordances: no key hints.
+    gameStore.appendHeroAction('Pass turn');
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -145,72 +159,90 @@
   }
 </script>
 
-<main class="mx-auto w-full max-w-[1600px] p-4" data-update-seq={gameStore.updateSeq}>
-  <div
-    data-testid="game-header"
-    class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded border border-slate-700 bg-slate-800 px-4 py-3"
-  >
-    <div data-testid="connection-summary" class="flex items-center gap-3">
-      <span class="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">Connection</span>
-      <span
-        data-testid="connection-badge"
-        data-connection-state={gameStore.connection}
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        aria-label={`Connection status: ${gameStore.connection}`}
-        class={`rounded px-2 py-1 text-xs font-semibold ${
-          gameStore.connection === 'connected'
-            ? 'bg-emerald-600/30 text-emerald-300'
-            : gameStore.connection === 'reconnecting' || gameStore.connection === 'connecting'
-              ? 'bg-amber-600/30 text-amber-300'
-              : 'bg-slate-700 text-slate-300'
-        }`}
-      >
-        {gameStore.connection}
-      </span>
-      {#if gameStore.deckNames && gameStore.observation}
-        <span
-          data-testid="deck-names"
-          class="rounded bg-slate-700/60 px-2 py-1 text-xs font-semibold text-slate-200"
-        >
-          {gameStore.deckNames.hero} vs {gameStore.deckNames.villain}
-        </span>
-      {/if}
-    </div>
-
-    <div class="flex flex-wrap items-center gap-3">
-      <DeckSelector
-        hero={gameStore.decks.hero}
-        villain={gameStore.decks.villain}
-        onHeroChange={(value) => gameStore.setHeroDeck(value)}
-        onVillainChange={(value) => gameStore.setVillainDeck(value)}
-      />
-      <OpponentSelector
-        value={gameStore.opponentChoice}
-        checkpointPath={gameStore.checkpointPath}
-        checkpointDeterministic={gameStore.checkpointDeterministic}
-        onChange={(value) => gameStore.setOpponentChoice(value)}
-        onCheckpointPathChange={(value) => gameStore.setCheckpointPath(value)}
-        onCheckpointDeterministicChange={(value) => gameStore.setCheckpointDeterministic(value)}
-      />
-      <button
-        class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-        onclick={startNewGame}
-      >
-        New Game
-      </button>
-    </div>
-  </div>
+<main class="mx-auto w-full max-w-[1400px] px-4 py-6" data-update-seq={gameStore.updateSeq}>
+  <h1 class="sr-only">Play</h1>
 
   {#if gameStore.errorMessage}
-    <section role="alert" aria-atomic="true" class="mb-4 rounded border border-rose-500/50 bg-rose-900/20 px-4 py-3 text-sm text-rose-200">
+    <section role="alert" aria-atomic="true" class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
       {gameStore.errorMessage}
     </section>
   {/if}
 
+  <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
+  <div class="overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
+    <div class="px-10 pb-10 pt-6 max-md:px-5 max-md:pb-6">
+  <!-- The masthead, in levels: the matchup names the players, fields show
+       only while they matter, one red action, and the connection is a
+       whisper beside it. -->
+  <div
+    data-testid="game-header"
+    class="flex flex-wrap items-end justify-between gap-x-8 gap-y-4 border-b border-line pb-4"
+  >
+    <div class="min-w-0 self-center">
+      {#if gameStore.deckNames && gameStore.observation}
+        <!-- The players live at their bars; this line is the summary for
+             assistive tech and the proof suite. -->
+        <span data-testid="deck-names" class="sr-only">
+          You ({gameStore.deckNames.hero}) vs {opponentLabel} ({gameStore.deckNames.villain})
+        </span>
+      {:else}
+        <span class="type-annotation text-ink-2">No game in progress</span>
+      {/if}
+    </div>
+
+    <div class="flex flex-wrap items-end gap-x-5 gap-y-3">
+      {#if !gameStore.observation || gameStore.gameOver}
+        <DeckSelector
+          hero={gameStore.decks.hero}
+          villain={gameStore.decks.villain}
+          onHeroChange={(value) => gameStore.setHeroDeck(value)}
+          onVillainChange={(value) => gameStore.setVillainDeck(value)}
+        />
+        <OpponentSelector
+          value={gameStore.opponentChoice}
+          checkpointPath={gameStore.checkpointPath}
+          checkpointDeterministic={gameStore.checkpointDeterministic}
+          onChange={(value) => gameStore.setOpponentChoice(value)}
+          onCheckpointPathChange={(value) => gameStore.setCheckpointPath(value)}
+          onCheckpointDeterministicChange={(value) => gameStore.setCheckpointDeterministic(value)}
+        />
+      {/if}
+      <div class="flex items-center gap-4">
+        <div data-testid="connection-summary" class="flex items-center gap-1.5">
+          <i
+            aria-hidden="true"
+            class={`inline-block h-1.5 w-1.5 rounded-full ${
+              gameStore.connection === 'connected'
+                ? 'bg-forest'
+                : gameStore.connection === 'reconnecting' || gameStore.connection === 'connecting'
+                  ? 'bg-plains'
+                  : 'bg-swamp'
+            }`}
+          ></i>
+          <span
+            data-testid="connection-badge"
+            data-connection-state={gameStore.connection}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label={`Connection status: ${gameStore.connection}`}
+            class="type-label uppercase text-ink-3"
+          >
+            {gameStore.connection}
+          </span>
+        </div>
+        <button
+          class="btn btn-primary"
+          onclick={startNewGame}
+        >
+          New Game
+        </button>
+      </div>
+    </div>
+  </div>
+
   {#if gameStore.observation}
-    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px_320px]">
+    <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px]">
       <GameBoard
         observation={gameStore.observation}
         focusedIds={gameStore.focusIds}
@@ -218,12 +250,19 @@
         onSelectTarget={handleBoardTargetSelect}
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
+        deckNames={gameStore.deckNames}
+        heroLabel="You"
+        villainLabel={opponentLabel}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
         {presentationPlayer}
       />
 
-      <div class="flex flex-col gap-4">
+      <!-- The margin column: actions, stops, and the log as annotations
+           beside the score, behind a single vertical rule. -->
+      <div
+        class="flex min-w-0 flex-col gap-6 pt-4 max-xl:mt-2 max-xl:border-t max-xl:border-line xl:ml-8 xl:border-l xl:border-line xl:pl-8"
+      >
         <ActionPanel
           actions={filteredActions}
           actionSpaceKind={gameStore.actionSpaceKind}
@@ -243,6 +282,32 @@
           }}
         />
 
+        <div class="border-t border-line pt-4">
+          <StopsPanel
+            stops={gameStore.stops}
+            onToggleStop={handleToggleStop}
+            onStopOnStackChange={handleStopOnStackChange}
+            onAutoPassChange={handleAutoPassChange}
+            onReset={handleResetStops}
+          />
+        </div>
+
+        <div class="border-t border-line pt-4">
+          <GameLog entries={gameStore.actionLog} />
+        </div>
+      </div>
+    </div>
+  {:else}
+    <div class="mx-auto max-w-xl py-12 text-center">
+      <p class="type-annotation mb-1 text-ink-2">The table is set.</p>
+      <p class="type-caption mb-5 text-ink-2">Start a game to begin.</p>
+      <button
+        class="btn btn-primary"
+        onclick={startNewGame}
+      >
+        New Game
+      </button>
+      <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
         <StopsPanel
           stops={gameStore.stops}
           onToggleStop={handleToggleStop}
@@ -251,30 +316,10 @@
           onReset={handleResetStops}
         />
       </div>
-
-      <GameLog entries={gameStore.actionLog} />
-    </div>
-  {:else}
-    <div class="mx-auto flex max-w-xl flex-col gap-4">
-      <section class="rounded border border-slate-700 bg-slate-800 p-10 text-center text-slate-300">
-        <p class="mb-4 text-lg">Start a game to begin.</p>
-        <button
-          class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500"
-          onclick={startNewGame}
-        >
-          New Game
-        </button>
-      </section>
-
-      <StopsPanel
-        stops={gameStore.stops}
-        onToggleStop={handleToggleStop}
-        onStopOnStackChange={handleStopOnStackChange}
-        onAutoPassChange={handleAutoPassChange}
-        onReset={handleResetStops}
-      />
     </div>
   {/if}
+    </div>
+  </div>
 </main>
 
 <svelte:window onkeydown={handleKeydown} />

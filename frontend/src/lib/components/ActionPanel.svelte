@@ -59,28 +59,28 @@
   data-action-space-kind={actionSpaceKind}
   aria-labelledby="action-panel-heading"
   aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
-  class="rounded border border-slate-700 bg-slate-800 p-4"
+  class="min-w-0"
 >
-  <div class="mb-3 flex items-center justify-between gap-3">
-    <div class="flex items-center gap-2">
-      <h2 id="action-panel-heading" class="text-base font-semibold text-accent-text">Actions</h2>
+  <div class="mb-2 flex items-baseline justify-between gap-3">
+    <div class="flex items-baseline gap-2.5">
+      <h2 id="action-panel-heading" class="type-title text-display">Actions</h2>
       {#if disabled}
-        <span role="status" aria-live="polite" aria-atomic="true" class="rounded bg-slate-700 px-2 py-0.5 text-xs font-semibold text-slate-300">Game over</span>
+        <span role="status" aria-live="polite" aria-atomic="true" class="type-label rounded-full bg-swamp/20 px-2 py-1 text-ink-2">Game over</span>
       {:else if fastForwarding}
-        <span role="status" aria-live="polite" aria-atomic="true" data-testid="auto-passing" class="animate-pulse rounded bg-sky-600/30 px-2 py-0.5 text-xs font-semibold text-sky-300">Auto-passing…</span>
+        <span role="status" aria-live="polite" aria-atomic="true" data-testid="auto-passing" class="type-label animate-pulse rounded-full bg-island/20 px-2 py-1 text-ink">Auto-passing…</span>
       {:else if actions.length > 0}
-        <span role="status" aria-live="polite" aria-atomic="true" class="rounded bg-emerald-600/30 px-2 py-0.5 text-xs font-semibold text-emerald-300">Your move</span>
+        <span role="status" aria-live="polite" aria-atomic="true" class="type-label whitespace-nowrap uppercase text-mountain-ink">Your move</span>
       {/if}
     </div>
     <div class="flex items-center gap-3">
       {#if selectedTargetId !== null}
-        <button class="text-xs text-slate-400 underline hover:text-slate-200" onclick={() => onClearSelection?.()}>
+        <button class="type-label inline-block py-1 text-ink-2 underline underline-offset-2 hover:text-ink" onclick={() => onClearSelection?.()}>
           Show all
         </button>
       {/if}
       <button
         data-testid="pass-turn"
-        class="rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-300 transition hover:border-sky-400 hover:text-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+        class="btn btn-secondary btn-sm"
         disabled={!canPassTurn || fastForwarding}
         onclick={() => onPassTurn?.()}
         title="Auto-pass every priority window until the turn ends"
@@ -95,14 +95,14 @@
       id="decision-prompt"
       data-testid="decision-prompt"
       data-kind={actionSpaceKind}
-      class="mb-3 rounded border border-violet-500/40 bg-violet-900/20 px-3 py-2 text-sm text-violet-200"
+      class="type-annotation mb-3 border-l-2 border-action py-0.5 pl-3 text-ink"
     >
       {decisionPrompt}
     </p>
   {/if}
 
   {#if selectedTargetId !== null}
-    <p class="mb-3 text-xs text-slate-400">Filtered to actions for selected board target.</p>
+    <p class="type-caption mb-3 text-ink-2">Filtered to actions for selected board target.</p>
   {/if}
 
   <div
@@ -113,7 +113,7 @@
     aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
   >
     {#if actions.length === 0}
-      <p class="text-sm text-slate-400">No actions available.</p>
+      <p class="type-caption text-ink-3">No actions available.</p>
     {:else}
       {#each actions as action}
         <button
@@ -123,7 +123,7 @@
           data-action-description={action.description}
           aria-label={action.description}
           aria-describedby={decisionPrompt ? 'decision-prompt' : undefined}
-          class={`w-full rounded border px-3 py-2 text-left text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 ${highlightedActionIndexes.has(action.index) ? 'border-amber-300 bg-slate-800' : 'border-slate-600 bg-slate-900 hover:border-blue-400 hover:bg-slate-800'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+          class={`w-full rounded border px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action ${highlightedActionIndexes.has(action.index) ? 'border-plains-ink bg-panel' : 'border-line-strong bg-field hover:border-action hover:bg-panel'} ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
           onmouseenter={() => onHoverAction?.(action)}
           onmouseleave={() => onHoverAction?.(null)}
           onfocus={() => onHoverAction?.(action)}
@@ -132,7 +132,6 @@
           {disabled}
         >
           <div class="font-medium">{action.description}</div>
-          <div aria-hidden="true" class="mt-1 font-mono text-[10px] text-slate-400">{action.type}</div>
         </button>
       {/each}
     {/if}
