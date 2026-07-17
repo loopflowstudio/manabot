@@ -41,7 +41,12 @@ def test_exact_environment_manifest_binds_the_selected_matchup():
 
     assert manifest["schema_version"] == pack.content_pack_schema_version
     assert manifest["content_digest"] == pack.content_pack_hash
-    assert len(manifest["definitions"]) > len(pack.ir.definitions)
+    assert manifest["compiled_semantics"] == {
+        "pack_key": pack.ir.raw["pack_key"],
+        "ir_hash": pack.ir.raw["ir_hash"],
+        "source_hash": pack.ir.raw["source_hash"],
+    }
+    assert len(manifest["definitions"]) == len(pack.ir.definitions)
     assert len(pack.definition_row_by_card_def_id) == len(pack.ir.definitions)
 
 

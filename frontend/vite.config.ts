@@ -15,7 +15,19 @@ const proxy = {
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
-  server: { proxy },
+  server: {
+    proxy,
+    warmup: {
+      clientFiles: [
+        './src/routes/+layout.svelte',
+        './src/routes/+page.svelte',
+        './src/lib/components/*.svelte',
+        './src/lib/game.svelte.ts',
+        './src/lib/presentation.svelte.ts',
+        './src/lib/socket.svelte.ts',
+      ],
+    },
+  },
   preview: { proxy },
   test: {
     environment: 'node',

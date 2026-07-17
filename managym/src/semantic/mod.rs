@@ -8,13 +8,18 @@
 //! name, registry name, or oracle string: the parser rejects any name-bearing
 //! instruction field, and execution is a `match` over typed steps.
 //!
-//! The interpreter is deliberately additive. It does not replace the live
-//! effect resolver in [`crate::flow`]; it consumes the same reviewed programs
-//! and yields a deterministic [`TraceEvent`] sequence that tests assert against.
-//! Differential parity between this trace and the legacy effect path remains a
-//! documented future step (see `content/semantic/README.md`).
+//! The trace interpreter remains an additive diagnostic surface. The same
+//! parsed pack also lowers every admitted characteristic and program into the
+//! live [`ContentPack`] used by the exact authored matchup, so ordinary game
+//! commands, events, stabilization, search forks, and terminal state now run
+//! on compiled semantics. Differential tests keep that live lowering aligned
+//! with the reviewed reference definitions.
 
-use std::collections::BTreeSet;
+mod content;
+
+pub(crate) use content::content_pack_for_authored_match;
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::Value;
 
@@ -199,6 +204,7 @@ pub enum Step {
     },
     RestrictBlocking {
         target: String,
+        predicate: Predicate,
         duration: String,
     },
     DealDamage {
@@ -218,6 +224,7 @@ pub enum Step {
         min_select: i64,
         max_select: i64,
         destination: String,
+        predicate: Predicate,
     },
     Branch {
         condition: Condition,
@@ -242,6 +249,7 @@ pub enum Step {
     SetPowerFromCount {
         zone: String,
         controller: String,
+        predicate: Predicate,
     },
 }
 
@@ -253,6 +261,7 @@ pub struct Program {
     pub kind_name: String,
     pub definition_index: usize,
     pub steps: Vec<Step>,
+    metadata: Value,
 }
 
 /// One semantic definition and the reviewed registry name it binds through.
@@ -261,6 +270,14 @@ pub struct Definition {
     pub semantic_index: usize,
     pub semantic_key: String,
     pub registry_name: String,
+    characteristics: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SemanticDeck {
+    pub key: String,
+    pub card_count: usize,
+    pub cards: BTreeMap<usize, usize>,
 }
 
 /// The parsed IR document, independent of any content pack.
@@ -272,6 +289,7 @@ pub struct SemanticPack {
     pub source_hash: String,
     pub definitions: Vec<Definition>,
     pub programs: Vec<Program>,
+    pub decks: Vec<SemanticDeck>,
     /// Definition indexes referenced by the two admitted decks. Every one of
     /// these must bind for the slice to be considered fully admitted.
     pub deck_definition_indexes: BTreeSet<usize>,
@@ -418,11 +436,41 @@ impl SemanticPack {
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut deck_definition_indexes = BTreeSet::new();
-        for deck in array_field(value, "decks")? {
+        let mut decks = Vec::new();
+        for (deck_index, deck) in array_field(value, "decks")?.iter().enumerate() {
+            let deck_key = deck
+                .get("key")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("deck_{deck_index}"));
+            let mut cards = BTreeMap::new();
             for card in array_field(deck, "cards")? {
                 let index = usize_field(card, "definition_index")?;
                 deck_definition_indexes.insert(index);
+                let count = usize_field(card, "count")?;
+                if cards.insert(index, count).is_some() {
+                    return Err(IrError::Malformed(format!(
+                        "deck {:?} repeats definition index {index}",
+                        deck_key
+                    )));
+                }
             }
+            let card_count = deck
+                .get("card_count")
+                .and_then(Value::as_u64)
+                .map(|count| count as usize)
+                .unwrap_or_else(|| cards.values().sum());
+            if cards.values().sum::<usize>() != card_count {
+                return Err(IrError::Malformed(format!(
+                    "deck {:?} card count does not match its entries",
+                    deck_key
+                )));
+            }
+            decks.push(SemanticDeck {
+                key: deck_key,
+                card_count,
+                cards,
+            });
         }
 
         Ok(SemanticPack {
@@ -432,6 +480,7 @@ impl SemanticPack {
             source_hash,
             definitions,
             programs,
+            decks,
             deck_definition_indexes,
         })
     }
@@ -556,12 +605,12 @@ impl<'a> BoundPack<'a> {
                 keywords: keywords.clone(),
                 duration: duration.clone(),
             }),
-            Step::RestrictBlocking { target, duration } => {
-                trace.push(TraceEvent::RestrictBlocking {
-                    target: target.clone(),
-                    duration: duration.clone(),
-                })
-            }
+            Step::RestrictBlocking {
+                target, duration, ..
+            } => trace.push(TraceEvent::RestrictBlocking {
+                target: target.clone(),
+                duration: duration.clone(),
+            }),
             Step::DealDamage { amount, target } => trace.push(TraceEvent::DealDamage {
                 target: target.clone(),
                 amount: *amount,
@@ -577,6 +626,7 @@ impl<'a> BoundPack<'a> {
                 min_select,
                 max_select,
                 destination,
+                ..
             } => trace.push(TraceEvent::LookAndSelect {
                 look: *look,
                 min_select: *min_select,
@@ -611,12 +661,12 @@ impl<'a> BoundPack<'a> {
                 sources: sources.clone(),
                 target: target.clone(),
             }),
-            Step::SetPowerFromCount { zone, controller } => {
-                trace.push(TraceEvent::SetPowerFromCount {
-                    zone: zone.clone(),
-                    controller: controller.clone(),
-                })
-            }
+            Step::SetPowerFromCount {
+                zone, controller, ..
+            } => trace.push(TraceEvent::SetPowerFromCount {
+                zone: zone.clone(),
+                controller: controller.clone(),
+            }),
         }
         Ok(())
     }
@@ -653,6 +703,10 @@ fn parse_definition(value: &Value, expected_index: usize) -> Result<Definition, 
         semantic_index,
         semantic_key,
         registry_name,
+        characteristics: value
+            .get("characteristics")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Default::default())),
     })
 }
 
@@ -666,6 +720,7 @@ fn parse_program(value: &Value) -> Result<Program, IrError> {
         kind_name,
         definition_index,
         steps,
+        metadata: value.clone(),
     })
 }
 
@@ -730,6 +785,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::RestrictBlocking => Step::RestrictBlocking {
             target: str_field(value, "target")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
             duration: str_field(value, "duration")?.to_owned(),
         },
         Opcode::DealDamage => Step::DealDamage {
@@ -749,6 +805,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             min_select: i64_field(value, "min_select")?,
             max_select: i64_field(value, "max_select")?,
             destination: str_field(value, "destination")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
         },
         Opcode::Branch => Step::Branch {
             condition: parse_condition(object_field(value, "condition")?)?,
@@ -773,6 +830,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::SetPowerFromCount => Step::SetPowerFromCount {
             zone: str_field(value, "zone")?.to_owned(),
             controller: str_field(value, "controller")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
         },
     };
     Ok(step)

@@ -47,10 +47,20 @@ checks that every binding resolves to a real `CardDefId`; W2-179 remains the
 owner of `ContentPack`, definition storage, and match-state layout.
 
 `v1/two_deck.fixtures.json` contains deterministic lowering expectations for
-representative branch, linked-exile, multi-target, and trigger programs. These
-are compiler fixtures, not claims of end-to-end rules conformance. Runtime
-interpretation will require differential traces against the existing effect
-path before it can replace it.
+representative branch, linked-exile, multi-target, and trigger programs. The
+Rust loader additionally lowers the complete checked-in pack into live
+`CardDefinition` values. When `Game::new` receives the exact UR Lessons and GW
+Allies decklists (in either seat order), that compiled pack supplies the match's
+characteristics, costs, targets, triggers, static abilities, and effects. Other
+deck configurations retain the broader general content pack.
+
+The compiled pack carries its pack key, IR hash, and source hash in
+`ContentPackManifest.compiled_semantics`. Oracle text is copied from the
+reviewed registry strictly as presentation data; it does not supply runtime
+rules behavior. `managym/tests/authored_match_tests.rs` differentially checks
+all admitted definitions, then runs a fixed complete match through normal game
+actions to a winner while requiring compiled spells, triggers, and damage to
+affect the world.
 
 One source fact is intentionally conspicuous: the checked-in UR product deck
 currently contains 41 cards while the milestone prose calls it a 40-card deck.

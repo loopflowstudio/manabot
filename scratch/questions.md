@@ -38,3 +38,14 @@
   It proves the 35-target frontier with admitted Igneous Inspiration and 33
   admitted permanents; the separate Lightning Bolt IR and holdout audit remain
   a later artifact slice rather than being coupled to runtime binding.
+
+# Authored-match assumptions
+
+- The task seed is the acceptance contract because this branch has no existing
+  scratch design document.
+- “On compiled semantics” means the exact UR Lessons versus GW Allies deck
+  pairing must construct its live `Game` from the checked-in typed IR. Other
+  deck configurations retain the broader legacy content pack.
+- The compiled pack may reuse the existing registry's oracle text strictly as
+  presentation copy; all rules-relevant characteristics, costs, targets,
+  triggers, and effects come from the typed IR.

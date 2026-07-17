@@ -22,15 +22,24 @@ pub struct ContentPackDefinitionManifest {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CompiledSemanticManifest {
+    pub pack_key: String,
+    pub ir_hash: String,
+    pub source_hash: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackManifest {
     pub schema_version: u32,
     pub content_digest: String,
+    pub compiled_semantics: Option<CompiledSemanticManifest>,
     pub definitions: Vec<ContentPackDefinitionManifest>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ContentPack {
     pub schema_version: u32,
+    compiled_semantics: Option<CompiledSemanticManifest>,
     cards_by_name: BTreeMap<String, CardDefId>,
     definitions: Vec<Arc<CardDefinition>>,
 }
@@ -67,6 +76,7 @@ impl ContentPack {
         ContentPackManifest {
             schema_version: self.schema_version,
             content_digest: self.content_digest(),
+            compiled_semantics: self.compiled_semantics.clone(),
             definitions: self
                 .definition_entries()
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
@@ -82,6 +92,7 @@ impl Default for ContentPack {
     fn default() -> Self {
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
+            compiled_semantics: None,
             cards_by_name: BTreeMap::new(),
             definitions: Vec::new(),
         };
@@ -91,6 +102,26 @@ impl Default for ContentPack {
 }
 
 impl ContentPack {
+    pub(crate) fn from_compiled_semantics(
+        definitions: Vec<CardDefinition>,
+        compiled_semantics: CompiledSemanticManifest,
+    ) -> Self {
+        let mut out = Self {
+            schema_version: CONTENT_PACK_SCHEMA_VERSION,
+            compiled_semantics: Some(compiled_semantics),
+            cards_by_name: BTreeMap::new(),
+            definitions: Vec::with_capacity(definitions.len()),
+        };
+        for definition in definitions {
+            out.register_card(definition);
+        }
+        out
+    }
+
+    pub fn compiled_semantics(&self) -> Option<&CompiledSemanticManifest> {
+        self.compiled_semantics.as_ref()
+    }
+
     pub fn register_all_cards(&mut self) {
         self.register_basic_lands();
         self.register_alpha();

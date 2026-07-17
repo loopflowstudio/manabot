@@ -281,8 +281,14 @@ struct ConformancePair {
 impl ConformancePair {
     fn new(orientation: Orientation, game_seed: u64) -> Result<Self, String> {
         let configs = player_configs(orientation)?;
-        let mut reference = Game::new(configs.clone(), game_seed, false);
-        let optimized = Game::new(configs, game_seed, true);
+        // Frozen v1 receipts predate the compiled authored pack and include
+        // the original content allocation in their checkpoint hash. Replay
+        // them against that exact recorded world; ordinary exact-deck matches
+        // select the compiled pack through `Game::new`.
+        let content = default_content_pack();
+        let mut reference =
+            Game::new_with_content(configs.clone(), game_seed, false, Arc::clone(&content));
+        let optimized = Game::new_with_content(configs, game_seed, true, content);
         normalize_reference(&mut reference)?;
         let pair = Self {
             reference,

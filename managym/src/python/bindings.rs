@@ -2050,6 +2050,15 @@ impl PyEnv {
         let out = PyDict::new_bound(py);
         out.set_item("schema_version", manifest.schema_version)?;
         out.set_item("content_digest", manifest.content_digest)?;
+        if let Some(compiled) = manifest.compiled_semantics {
+            let semantic = PyDict::new_bound(py);
+            semantic.set_item("pack_key", compiled.pack_key)?;
+            semantic.set_item("ir_hash", compiled.ir_hash)?;
+            semantic.set_item("source_hash", compiled.source_hash)?;
+            out.set_item("compiled_semantics", semantic)?;
+        } else {
+            out.set_item("compiled_semantics", py.None())?;
+        }
         let definitions = PyList::empty_bound(py);
         for entry in manifest.definitions {
             let definition = PyDict::new_bound(py);

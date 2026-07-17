@@ -6,12 +6,13 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
-    cardsets::alpha::default_content_pack,
+    cardsets::alpha::{default_content_pack, ContentPack},
     flow::{
         game::{Game, GameState},
         priority::PriorityState,
         turn::TurnState,
     },
+    semantic::content_pack_for_authored_match,
     state::{
         game_object::{CardId, CardVec, IdGenerator, Incarnation, PermanentVec, PlayerId},
         player::{Player, PlayerConfig},
@@ -19,12 +20,25 @@ use crate::{
     },
 };
 
+use std::sync::Arc;
+
 impl Game {
     pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
+        let content = content_pack_for_authored_match(&player_configs)
+            .unwrap_or_else(|error| panic!("compiled authored content is invalid: {error}"))
+            .unwrap_or_else(default_content_pack);
+        Self::new_with_content(player_configs, seed, skip_trivial, content)
+    }
+
+    pub fn new_with_content(
+        player_configs: Vec<PlayerConfig>,
+        seed: u64,
+        skip_trivial: bool,
+        content: Arc<ContentPack>,
+    ) -> Self {
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
         let mut id_gen = IdGenerator::default();
-        let content = default_content_pack();
 
         let mut players = [
             Player::new(id_gen.next_id(), 0, player_configs[0].name.clone()),
