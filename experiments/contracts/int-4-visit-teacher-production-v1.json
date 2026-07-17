@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "experiment": "int-4-visit-teacher-production-v1",
+  "status": "preregistered_before_production_execution",
+  "base_iteration": {
+    "contract_sha256": "9c3f0f600b70ca4fef7131086f6d9b350f9612e690cbb9d621e961a5de27d03c",
+    "profile": "iteration",
+    "profile_sha256": "214b990b900c4be3934b06d529c1df1065430c129226b2f57597cd49c508f9e1"
+  },
+  "expected_runtime": {
+    "production_source_sha256": "30f0db1800cef320c1ef02265f18ee93e8450e0eb66647b4e6374f2371d74dc1",
+    "chip": "Apple M4 Max",
+    "machine": "arm64",
+    "operating_system": "macOS 26.0.1",
+    "python": "3.12.12",
+    "torch": "2.10.0",
+    "mps_available": true
+  },
+  "controls": [
+    {
+      "arm": "policy_only",
+      "sha256": "3bfedccf5aa6ed7621d99284ea8cea3975d8b195cecf6426d37dd7abc812c978",
+      "deterministic": true
+    },
+    {
+      "arm": "policy_value",
+      "sha256": "92ced7abb31bc68298b48cc08ed7eb57f3dde50295a22d50ea2fe32f7e359176",
+      "deterministic": true
+    }
+  ],
+  "calibration": {
+    "seed": 6197,
+    "roots": 16,
+    "warmup_roots": 2,
+    "flat_sims_per_action_min": 1,
+    "flat_sims_per_action_max": 128,
+    "selection": "minimum_absolute_relative_p50_gap_then_lower_sims",
+    "max_realized_p50_gap": 0.1
+  },
+  "competencies": {
+    "seed": 4197,
+    "runs_per_agent_scenario": 100,
+    "scenarios": [
+      "s1_counter_the_bomb",
+      "s2_hold_the_wipe",
+      "s3_bolt_the_threat",
+      "s4_race_vs_block",
+      "s5_hold_up_quench"
+    ],
+    "scripted_authority": "manabot.verify.competency.SCENARIOS"
+  },
+  "teacher_gates": {
+    "high_vs_low_win_rate": 0.55,
+    "high_vs_policy_value_win_rate": 0.55,
+    "high_vs_random_win_rate": 0.8,
+    "high_top_action_agreement": 0.7,
+    "high_median_js_divergence": 0.1,
+    "delayed_scenario_correct_rate": 0.2,
+    "competency_max_regression_vs_random": 0.1,
+    "high_p95_decision_ms": 500.0,
+    "high_labels_per_second_per_worker": 2.0,
+    "max_playout_cap_rate": 0.001
+  },
+  "admission_gates": {
+    "median_win_rate": 0.55,
+    "winning_training_seeds": 2,
+    "per_seed_win_rate": 0.5,
+    "competency_max_regression": 0.1
+  },
+  "resource_accounting": {
+    "isolated_spawned_children": true,
+    "ledger": "resource-ledger.jsonl",
+    "ledger_schema_version": 1,
+    "ledger_mode": "append_only_hash_chained_attempt_receipts",
+    "failed_attempts_charged": true,
+    "launch_requires_remaining_capacity": true,
+    "measure": [
+      "peak_rss_bytes",
+      "user_cpu_seconds",
+      "system_cpu_seconds",
+      "wall_seconds",
+      "artifact_bytes"
+    ],
+    "workers": 4,
+    "wall_hours": 16,
+    "core_hours": 64,
+    "artifact_bytes": 4294967296
+  },
+  "decisions": {
+    "admit_student_search": "median paired win rate at least 0.55, above 0.50 for two of three seeds, and no competency over 0.10 below the paired student",
+    "admit_student": "visit/value student clears the same cross-seed strength rule against both exact Teacher-0 controls and no competency is over 0.10 below policy_value",
+    "prototype_failure": "neither candidate clears its complete strength and competency gates"
+  },
+  "integrity": {
+    "required": [
+      "zero_illegal_commands",
+      "zero_target_integrity_failures",
+      "zero_viewer_boundary_leaks",
+      "zero_authoritative_root_mutations",
+      "finite_in_range_targets",
+      "all_sampled_roots_present",
+      "exact_trajectory_and_search_replay",
+      "exact_contract_runtime_control_and_artifact_identities",
+      "exact_job_output_bytes_bound_to_stage_results",
+      "exact_stage_result_bytes_bound_to_manifest_gate_inputs",
+      "cumulative_attempt_resources_within_registered_caps"
+    ],
+    "failure_disposition": "invalid_no_admission"
+  }
+}
