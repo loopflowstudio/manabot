@@ -33,6 +33,7 @@ from manabot.sim.mcts import (
     _mix_seed as _mcts_mix_seed,
     determinized_puct,
 )
+from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 import managym
 
@@ -379,6 +380,8 @@ def record_teacher_trajectories(
                         "player_seed": player_seed,
                         "call_index": search_call_index,
                         "call_seed": call_seed,
+                        "branch_driver_id": result.branch_driver_id,
+                        "branch_counters": result.branch_receipt["counters"],
                     },
                 }
             )
@@ -403,6 +406,7 @@ def record_teacher_trajectories(
             "worlds": worlds,
             "c_puct": c_puct,
             "max_steps": max_steps,
+            "branch_driver_id": SELECTED_BRANCH_DRIVER_ID,
         },
         "seed": seed,
         "provenance": provenance or {},

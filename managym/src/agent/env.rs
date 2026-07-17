@@ -12,6 +12,7 @@ use crate::{
     cardsets::alpha::ContentPackManifest,
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
+    search_state::{BranchDriver, FullCloneDriver, SearchStateWitness},
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
@@ -178,6 +179,17 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    /// Project the complete action-aligned structured surface used by search.
+    pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| {
+                AgentError("env.structured_search_offers called before reset".to_string())
+            })?
+            .structured_search_offers()
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
     /// Apply one prompt-bound structured submission through the atomic path.
     pub fn step_structured(
         &mut self,
@@ -338,6 +350,63 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
         })
+    }
+
+    /// Production search fork bound to the RUL-1 retained driver.
+    pub fn selected_fork(&self) -> Result<Env, AgentError> {
+        let source = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.selected_fork called before reset".to_string()))?;
+        let game = FullCloneDriver.fork_exact(source);
+        Ok(Env {
+            game: Some(game),
+            skip_trivial: self.skip_trivial,
+            seed: self.seed,
+            profiler: Profiler::new(false, 64),
+            hero_tracker: BehaviorTracker::new(false),
+            villain_tracker: BehaviorTracker::new(false),
+        })
+    }
+
+    pub fn selected_determinize(
+        &mut self,
+        perspective: usize,
+        seed: u64,
+    ) -> Result<(), AgentError> {
+        if perspective > 1 {
+            return Err(AgentError(format!(
+                "determinize: perspective {perspective} out of range"
+            )));
+        }
+        let game = self.game.as_mut().ok_or_else(|| {
+            AgentError("env.selected_determinize called before reset".to_string())
+        })?;
+        FullCloneDriver.determinize(game, PlayerId(perspective), seed);
+        Ok(())
+    }
+
+    pub fn selected_reseed_rollout(&mut self, seed: u64) -> Result<(), AgentError> {
+        let game = self.game.as_mut().ok_or_else(|| {
+            AgentError("env.selected_reseed_rollout called before reset".to_string())
+        })?;
+        FullCloneDriver.reseed_rollout(game, seed);
+        Ok(())
+    }
+
+    pub fn selected_witness(&self) -> Result<SearchStateWitness, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.selected_witness called before reset".to_string()))?;
+        Ok(FullCloneDriver.witness(game))
+    }
+
+    pub fn selected_revision(&self) -> Result<u64, AgentError> {
+        self.game
+            .as_ref()
+            .map(|game| game.decision_epoch)
+            .ok_or_else(|| AgentError("env.selected_revision called before reset".to_string()))
     }
 
     /// Kind of the current action space, if any.

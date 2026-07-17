@@ -13,6 +13,8 @@ use pyo3::{
     types::{PyDict, PyList, PyModule},
 };
 #[cfg(feature = "python")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "python")]
 use serde_json::{json, Value};
 
 #[cfg(feature = "python")]
@@ -28,10 +30,15 @@ use crate::{
         observation_encoder::{
             ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
-        structured_offer::{OfferSubmission, StructuredOfferSet},
+        structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
+    },
+    experience::{
+        Command as ExperienceCommand, CommandId, MatchId, OfferId as ExperienceOfferId, PromptId,
+        Revision,
     },
     flow::turn::{PhaseKind, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
+    search_state::SearchStateWitness,
     state::{mana::ManaCost, player::PlayerConfig, zone::ZoneType},
 };
 
@@ -1865,6 +1872,141 @@ impl PyObservation {
 #[pyclass(name = "Env")]
 pub struct PyEnv {
     inner: Mutex<Env>,
+    selected_guard: bool,
+}
+
+#[cfg(feature = "python")]
+const SELECTED_BRANCH_DRIVER_ID: &str = "full_clone/current_game_v1";
+
+#[cfg(feature = "python")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectedMutationSite {
+    World,
+    Child,
+    Leaf,
+}
+
+#[cfg(feature = "python")]
+impl SelectedMutationSite {
+    fn parse(value: &str) -> PyResult<Self> {
+        match value {
+            "world" => Ok(Self::World),
+            "child" => Ok(Self::Child),
+            "leaf" => Ok(Self::Leaf),
+            _ => Err(PyAgentError::new_err(format!(
+                "unknown selected mutation site {value:?}"
+            ))),
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::World => "world",
+            Self::Child => "child",
+            Self::Leaf => "leaf",
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[derive(Clone, Debug, Default, Serialize)]
+struct SelectedSiteCounts {
+    world: u64,
+    child: u64,
+    leaf: u64,
+}
+
+#[cfg(feature = "python")]
+impl SelectedSiteCounts {
+    fn increment(&mut self, site: SelectedMutationSite) -> u64 {
+        let value = match site {
+            SelectedMutationSite::World => &mut self.world,
+            SelectedMutationSite::Child => &mut self.child,
+            SelectedMutationSite::Leaf => &mut self.leaf,
+        };
+        *value += 1;
+        *value
+    }
+
+    fn total(&self) -> u64 {
+        self.world + self.child + self.leaf
+    }
+}
+
+#[cfg(feature = "python")]
+#[derive(Clone, Debug, Default, Deserialize)]
+struct SelectedPreconditions {
+    offer_id: Option<u32>,
+    prompt_id: Option<u64>,
+    expected_revision: Option<u64>,
+    authority_hash: Option<String>,
+    legal_surface_hash: Option<String>,
+}
+
+#[cfg(feature = "python")]
+#[derive(Debug)]
+struct SelectedBranchRuntimeState {
+    match_id: String,
+    audit: bool,
+    next_command_id: u64,
+    next_apply_sequence: u64,
+    forks: SelectedSiteCounts,
+    applies: SelectedSiteCounts,
+    leaf_playouts: u64,
+    leaf_cap_hits: u64,
+    tapes: [Vec<Value>; 3],
+}
+
+#[cfg(feature = "python")]
+impl SelectedBranchRuntimeState {
+    fn tape_mut(&mut self, site: SelectedMutationSite) -> &mut Vec<Value> {
+        match site {
+            SelectedMutationSite::World => &mut self.tapes[0],
+            SelectedMutationSite::Child => &mut self.tapes[1],
+            SelectedMutationSite::Leaf => &mut self.tapes[2],
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "SelectedBranchRuntime")]
+pub struct PySelectedBranchRuntime {
+    inner: Mutex<SelectedBranchRuntimeState>,
+}
+
+#[cfg(feature = "python")]
+fn compact_search_witness(witness: &SearchStateWitness) -> Value {
+    json!({
+        "authority_hash": witness.authority.hash,
+        "legal_surface_hash": witness.legal_surface.hash,
+        "action_count": witness.legal_surface.action_count,
+        "acting_viewer_hash": witness.acting_projection.hash,
+        "viewer_hashes": [witness.viewers[0].hash, witness.viewers[1].hash],
+        "event_boundary": witness.diagnostics.event_boundary,
+        "rng_continuation": witness.diagnostics.rng_probe,
+        "terminal": witness.diagnostics.terminal,
+    })
+}
+
+#[cfg(feature = "python")]
+impl PyEnv {
+    fn reject_guarded_mutation(&self, operation: &str) -> PyResult<()> {
+        if self.selected_guard {
+            return Err(PyAgentError::new_err(format!(
+                "selected production branch forbids {operation}; use SelectedBranchRuntime"
+            )));
+        }
+        Ok(())
+    }
+
+    fn require_selected_guard(&self) -> PyResult<()> {
+        if !self.selected_guard {
+            return Err(PyAgentError::new_err(
+                "SelectedBranchRuntime requires a guarded selected branch",
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Prompt-bound structured offers. The private Rust mapping remains attached
@@ -1888,6 +2030,311 @@ impl PyStructuredOfferSet {
 
 #[cfg(feature = "python")]
 #[pymethods]
+impl PySelectedBranchRuntime {
+    #[new]
+    #[pyo3(signature = (match_id, audit=false))]
+    fn new(match_id: String, audit: bool) -> PyResult<Self> {
+        if match_id.trim().is_empty() {
+            return Err(PyAgentError::new_err(
+                "selected branch match_id must not be empty",
+            ));
+        }
+        Ok(Self {
+            inner: Mutex::new(SelectedBranchRuntimeState {
+                match_id,
+                audit,
+                next_command_id: 1,
+                next_apply_sequence: 1,
+                forks: SelectedSiteCounts::default(),
+                applies: SelectedSiteCounts::default(),
+                leaf_playouts: 0,
+                leaf_cap_hits: 0,
+                tapes: std::array::from_fn(|_| Vec::new()),
+            }),
+        })
+    }
+
+    #[getter]
+    fn driver_id(&self) -> &'static str {
+        SELECTED_BRANCH_DRIVER_ID
+    }
+
+    fn fork_exact(&self, source: &PyEnv, site: &str) -> PyResult<PyEnv> {
+        let site = SelectedMutationSite::parse(site)?;
+        let mut runtime = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("selected runtime lock poisoned"))?;
+        let source = source
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let fork = source.selected_fork().map_err(map_agent_err)?;
+        runtime.forks.increment(site);
+        Ok(PyEnv {
+            inner: Mutex::new(fork),
+            selected_guard: true,
+        })
+    }
+
+    fn determinize(&self, branch: &PyEnv, seed: u64, perspective: usize) -> PyResult<()> {
+        branch.require_selected_guard()?;
+        let mut env = branch
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.selected_determinize(perspective, seed)
+            .map_err(map_agent_err)
+    }
+
+    fn reseed_rollout(&self, branch: &PyEnv, seed: u64) -> PyResult<()> {
+        branch.require_selected_guard()?;
+        let mut env = branch
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.selected_reseed_rollout(seed).map_err(map_agent_err)
+    }
+
+    fn sample_policy_index(&self, branch: &PyEnv) -> PyResult<usize> {
+        branch.require_selected_guard()?;
+        let mut env = branch
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.random_action_index().map_err(map_agent_err)
+    }
+
+    #[pyo3(signature = (branch, site, policy_index, preconditions_json=None))]
+    fn apply_policy_choice(
+        &self,
+        py: Python<'_>,
+        branch: &PyEnv,
+        site: &str,
+        policy_index: usize,
+        preconditions_json: Option<&str>,
+    ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, String)> {
+        branch.require_selected_guard()?;
+        let site = SelectedMutationSite::parse(site)?;
+        let overrides = preconditions_json
+            .map(serde_json::from_str::<SelectedPreconditions>)
+            .transpose()
+            .map_err(|error| {
+                PyAgentError::new_err(format!("invalid selected preconditions: {error}"))
+            })?
+            .unwrap_or_default();
+
+        let mut runtime = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("selected runtime lock poisoned"))?;
+        let mut env = branch
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+
+        let require_witness = runtime.audit
+            || overrides.authority_hash.is_some()
+            || overrides.legal_surface_hash.is_some();
+        let current_witness = require_witness
+            .then(|| env.selected_witness())
+            .transpose()
+            .map_err(map_agent_err)?;
+        let current_revision = env.selected_revision().map_err(map_agent_err)?;
+        let current_offers = env.structured_search_offers().map_err(map_agent_err)?;
+        let current_offer = current_offers
+            .projection()
+            .offers
+            .get(policy_index)
+            .ok_or_else(|| {
+                PyAgentError::new_err(format!(
+                    "policy lookup key {policy_index} is out of range for {} offers",
+                    current_offers.projection().offers.len()
+                ))
+            })?;
+
+        let expected_offer_id = overrides.offer_id.unwrap_or(current_offer.id.0);
+        let expected_prompt_id = overrides.prompt_id.unwrap_or(current_revision);
+        let expected_revision = overrides.expected_revision.unwrap_or(current_revision);
+        let expected_authority_hash = overrides.authority_hash.as_deref().or_else(|| {
+            current_witness
+                .as_ref()
+                .map(|witness| witness.authority.hash.as_str())
+        });
+        let expected_legal_hash = overrides.legal_surface_hash.as_deref().or_else(|| {
+            current_witness
+                .as_ref()
+                .map(|witness| witness.legal_surface.hash.as_str())
+        });
+
+        if current_offer.id.0 != expected_offer_id {
+            return Err(PyAgentError::new_err("offer ID precondition mismatch"));
+        }
+        if current_revision != expected_prompt_id {
+            return Err(PyAgentError::new_err("prompt ID precondition mismatch"));
+        }
+        if current_revision != expected_revision {
+            return Err(PyAgentError::new_err("revision precondition mismatch"));
+        }
+        if expected_authority_hash.is_some_and(|expected| {
+            current_witness
+                .as_ref()
+                .is_none_or(|witness| witness.authority.hash != expected)
+        }) {
+            return Err(PyAgentError::new_err("authority precondition mismatch"));
+        }
+        if expected_legal_hash.is_some_and(|expected| {
+            current_witness
+                .as_ref()
+                .is_none_or(|witness| witness.legal_surface.hash != expected)
+        }) {
+            return Err(PyAgentError::new_err("legal-surface precondition mismatch"));
+        }
+
+        let command_id = format!("search.{}.{}", runtime.match_id, runtime.next_command_id);
+        let command = ExperienceCommand {
+            command_id: CommandId(command_id),
+            match_id: MatchId(runtime.match_id.clone()),
+            expected_revision: Revision(expected_revision),
+            prompt_id: PromptId(expected_prompt_id),
+            offer_id: ExperienceOfferId(expected_offer_id),
+            answers: Vec::new(),
+        };
+        if command.match_id.0 != runtime.match_id {
+            return Err(PyAgentError::new_err("match ID precondition mismatch"));
+        }
+        if command.expected_revision.0 != current_revision {
+            return Err(PyAgentError::new_err("revision precondition mismatch"));
+        }
+        if command.prompt_id.0 != current_revision {
+            return Err(PyAgentError::new_err("prompt ID precondition mismatch"));
+        }
+        if command.offer_id.0 != current_offer.id.0 {
+            return Err(PyAgentError::new_err("offer ID precondition mismatch"));
+        }
+        if !command.answers.is_empty() {
+            return Err(PyAgentError::new_err(
+                "search policy Command unexpectedly contains answers",
+            ));
+        }
+        let submission = OfferSubmission {
+            offer_id: StructuredOfferId(command.offer_id.0),
+            answers: Vec::new(),
+        };
+        let (observation, reward, terminated, truncated, info, native_actions) = env
+            .step_structured(&current_offers, &submission)
+            .map_err(map_agent_err)?;
+        if native_actions != 1 {
+            return Err(PyAgentError::new_err(format!(
+                "selected structured apply reported {native_actions} native actions"
+            )));
+        }
+        let post_witness = if runtime.audit {
+            compact_search_witness(&env.selected_witness().map_err(map_agent_err)?)
+        } else {
+            Value::Null
+        };
+
+        let apply_sequence = runtime.next_apply_sequence;
+        let site_sequence = runtime.applies.increment(site);
+        runtime.next_apply_sequence += 1;
+        runtime.next_command_id += 1;
+        let record = json!({
+            "site": site.as_str(),
+            "policy_index": policy_index,
+            "offer_id": expected_offer_id,
+            "command": command,
+            "source": {
+                "prompt_id": expected_prompt_id,
+                "expected_revision": expected_revision,
+                "authority_hash": expected_authority_hash,
+                "legal_surface_hash": expected_legal_hash,
+            },
+            "native_receipt": {
+                "driver_id": SELECTED_BRANCH_DRIVER_ID,
+                "apply_sequence": apply_sequence,
+                "site_sequence": site_sequence,
+                "accepted_apply_counter": runtime.applies.total(),
+                "native_apply_count": native_actions,
+                "terminal": terminated || truncated,
+            },
+            "post_apply_witness": post_witness,
+        });
+        if runtime.audit {
+            runtime.tape_mut(site).push(record.clone());
+        }
+
+        let py_info = info_dict_to_pydict(py, &info);
+        Ok((
+            PyObservation::from(observation),
+            reward,
+            terminated,
+            truncated,
+            py_info.into_any().unbind(),
+            serde_json::to_string(&record)
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        ))
+    }
+
+    #[pyo3(signature = (hit_cap=false))]
+    fn record_leaf_playout(&self, hit_cap: bool) -> PyResult<()> {
+        let mut runtime = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("selected runtime lock poisoned"))?;
+        runtime.leaf_playouts += 1;
+        runtime.leaf_cap_hits += u64::from(hit_cap);
+        Ok(())
+    }
+
+    fn snapshot_json(&self) -> PyResult<String> {
+        let runtime = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("selected runtime lock poisoned"))?;
+        let tape_lengths = SelectedSiteCounts {
+            world: runtime.tapes[0].len() as u64,
+            child: runtime.tapes[1].len() as u64,
+            leaf: runtime.tapes[2].len() as u64,
+        };
+        let reconciliation = if runtime.audit {
+            runtime.applies.world == tape_lengths.world
+                && runtime.applies.child == tape_lengths.child
+                && runtime.applies.leaf == tape_lengths.leaf
+                && runtime.applies.total() == tape_lengths.total()
+        } else {
+            true
+        };
+        serde_json::to_string(&json!({
+            "driver_id": SELECTED_BRANCH_DRIVER_ID,
+            "match_id": runtime.match_id,
+            "audit": runtime.audit,
+            "counters": {
+                "forks": &runtime.forks,
+                "applies": &runtime.applies,
+                "marks": 0,
+                "rollbacks": 0,
+                "random_playouts": runtime.leaf_playouts,
+                "random_playout_cap_hits": runtime.leaf_cap_hits,
+                "indexed_fallbacks": 0,
+            },
+            "tape_lengths": tape_lengths,
+            "tapes": {
+                "world": &runtime.tapes[0],
+                "child": &runtime.tapes[1],
+                "leaf": &runtime.tapes[2],
+            },
+            "reconciliation": {
+                "per_site_and_total": reconciliation,
+                "zero_unmeasured_fallback": true,
+            },
+        }))
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
 impl PyEnv {
     #[new]
     #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false))]
@@ -1904,6 +2351,7 @@ impl PyEnv {
                 enable_profiler,
                 enable_behavior_tracking,
             )),
+            selected_guard: false,
         }
     }
 
@@ -1938,6 +2386,7 @@ impl PyEnv {
         py: Python<'_>,
         action: i64,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
+        self.reject_guarded_mutation("Env.step(index)")?;
         let mut env = self
             .inner
             .lock()
@@ -1966,6 +2415,52 @@ impl PyEnv {
         })
     }
 
+    /// Complete action-aligned structured surface used by the selected
+    /// production search backend.
+    fn structured_search_offers(&self) -> PyResult<PyStructuredOfferSet> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(PyStructuredOfferSet {
+            inner: env.structured_search_offers().map_err(map_agent_err)?,
+        })
+    }
+
+    /// Read-only revision, offer, and witness context for differential audit.
+    #[pyo3(signature = (include_witness=true))]
+    fn search_context_json(&self, include_witness: bool) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let revision = env.selected_revision().map_err(map_agent_err)?;
+        let witness = if include_witness {
+            compact_search_witness(&env.selected_witness().map_err(map_agent_err)?)
+        } else {
+            Value::Null
+        };
+        let offers = env.structured_search_offers().map_err(map_agent_err)?;
+        serde_json::to_string(&json!({
+            "revision": revision,
+            "prompt_id": revision,
+            "witness": witness,
+            "offers": offers.projection(),
+        }))
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Compact representation-neutral witness, including terminal states.
+    fn search_witness_json(&self) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let witness = env.selected_witness().map_err(map_agent_err)?;
+        serde_json::to_string(&compact_search_witness(&witness))
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Apply an ID-only submission through the atomic structured path.
     fn step_structured(
         &self,
@@ -1973,6 +2468,7 @@ impl PyEnv {
         offers: &PyStructuredOfferSet,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        self.reject_guarded_mutation("direct Env.step_structured")?;
         let submission: OfferSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
@@ -2000,6 +2496,7 @@ impl PyEnv {
         offers: &PyStructuredOfferSet,
         submission_json: &str,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject, usize)> {
+        self.reject_guarded_mutation("Env.step_legacy_submission")?;
         let submission: OfferSubmission = serde_json::from_str(submission_json)
             .map_err(|error| PyAgentError::new_err(format!("invalid offer submission: {error}")))?;
         let mut env = self
@@ -2099,6 +2596,7 @@ impl PyEnv {
     /// Independent copy of this env (current game state cloned; stepping the
     /// clone never mutates the original). Profiling/tracking disabled.
     fn clone_env(&self) -> PyResult<PyEnv> {
+        self.reject_guarded_mutation("Env.clone_env")?;
         let env = self
             .inner
             .lock()
@@ -2106,6 +2604,7 @@ impl PyEnv {
         let fork = env.fork().map_err(map_agent_err)?;
         Ok(PyEnv {
             inner: Mutex::new(fork),
+            selected_guard: false,
         })
     }
 
@@ -2228,6 +2727,7 @@ impl PyEnv {
     /// holding the current decision. Public state is preserved.
     #[pyo3(signature = (seed, perspective=None))]
     fn determinize(&self, seed: u64, perspective: Option<usize>) -> PyResult<()> {
+        self.reject_guarded_mutation("direct Env.determinize")?;
         let mut env = self
             .inner
             .lock()
@@ -2250,6 +2750,7 @@ impl PyEnv {
         seed: u64,
         max_steps: usize,
     ) -> PyResult<Option<usize>> {
+        self.reject_guarded_mutation("Game::random_playout")?;
         py.allow_threads(|| {
             let mut env = self
                 .inner
@@ -2257,6 +2758,28 @@ impl PyEnv {
                 .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
             env.random_playout(seed, max_steps).map_err(map_agent_err)
         })
+    }
+
+    /// Reference-backend RNG setup. Guarded selected branches must use the
+    /// selected runtime method instead.
+    fn reseed_rollout(&self, seed: u64) -> PyResult<()> {
+        self.reject_guarded_mutation("direct rollout reseed")?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.selected_reseed_rollout(seed).map_err(map_agent_err)
+    }
+
+    /// Reference-backend uniform policy sampling. This only reads the current
+    /// action count and advances the branch-local RNG.
+    fn random_action_index(&self) -> PyResult<usize> {
+        self.reject_guarded_mutation("direct policy sampling")?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.random_action_index().map_err(map_agent_err)
     }
 
     /// Flat determinized Monte Carlo evaluation of the current action space.
@@ -2373,6 +2896,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEventData>()?;
 
     m.add_class::<PyStructuredOfferSet>()?;
+    m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())

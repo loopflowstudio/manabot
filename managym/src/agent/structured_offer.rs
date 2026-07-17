@@ -64,14 +64,34 @@ pub enum SubjectRef {
 pub enum PromptKind {
     Priority,
     DeclareAttackers,
+    DeclareBlockers,
+    ChooseTarget,
+    Scry,
+    LookAndSelect,
+    PayOrNot,
+    Modal,
+    DiscardThenDraw,
+    Waterbend,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OfferVerb {
+    ActivateAbility,
     Cast,
+    ChooseMode,
+    ChooseTarget,
+    DeclareAttacker,
     DeclareAttackers,
+    DeclareBlocker,
+    Decline,
     PassPriority,
+    PayCost,
+    PlayLand,
+    ScryBottom,
+    ScryKeep,
+    SelectCard,
+    WaterbendTap,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -169,6 +189,10 @@ pub enum AtomicCommand {
         player: PlayerId,
         attackers: Vec<PermanentId>,
     },
+    SearchAction {
+        binding: OfferSetBinding,
+        action: Action,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -187,6 +211,9 @@ enum InternalOffer {
         role: RoleId,
         attackers: BTreeMap<CandidateId, PermanentId>,
         declaration_order: Vec<PermanentId>,
+    },
+    SearchAction {
+        action: Action,
     },
 }
 
@@ -295,6 +322,15 @@ impl StructuredOfferSet {
                     attackers: selected_attackers,
                 })
             }
+            InternalOffer::SearchAction { action } => {
+                if !submission.answers.is_empty() {
+                    return Err(StructuredOfferError::UnexpectedAnswers);
+                }
+                Ok(AtomicCommand::SearchAction {
+                    binding: self.binding,
+                    action: action.clone(),
+                })
+            }
         }
     }
 }
@@ -390,6 +426,66 @@ impl Game {
             Some(_) => Err(StructuredOfferError::WrongDecision),
             None => Err(StructuredOfferError::NoActiveActionSpace),
         }
+    }
+
+    /// Project one stable structured offer for every action in the current
+    /// learner-facing policy surface.
+    ///
+    /// Unlike the presentation-oriented projection above, this projection is
+    /// deliberately action-aligned: one policy lookup row decodes to one
+    /// exact cloned `Action`. The decoded action is still applied by the
+    /// atomic structured executor, never by passing the policy index to
+    /// `Game::step`.
+    pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+        if self.is_game_over() {
+            return Err(StructuredOfferError::GameOver);
+        }
+        let action_space = self
+            .current_action_space
+            .as_ref()
+            .ok_or(StructuredOfferError::NoActiveActionSpace)?;
+        let actor = action_space
+            .player
+            .ok_or(StructuredOfferError::MissingActor)?;
+        let wire_actor = wire_player_id(actor)?;
+        if action_space.actions.is_empty() {
+            return Err(StructuredOfferError::Invariant(
+                "search action space is empty".to_string(),
+            ));
+        }
+
+        let mut offers = Vec::with_capacity(action_space.actions.len());
+        let mut internal = BTreeMap::new();
+        for action in &action_space.actions {
+            let id = next_offer_id(offers.len())?;
+            let label = format!("{:?}", action.action_type());
+            offers.push(InteractionOffer {
+                id,
+                actor: wire_actor,
+                verb: search_offer_verb(action),
+                source: None,
+                label: label.clone(),
+                help: None,
+                choices: Vec::new(),
+                confirm_label: label,
+            });
+            internal.insert(
+                id,
+                InternalOffer::SearchAction {
+                    action: action.clone(),
+                },
+            );
+        }
+
+        Ok(StructuredOfferSet {
+            projection: StructuredOfferProjection {
+                actor: wire_actor,
+                kind: search_prompt_kind(action_space.kind)?,
+                offers,
+            },
+            binding: OfferSetBinding(self.decision_epoch),
+            internal,
+        })
     }
 
     /// Project the currently covered priority actions without changing state.
@@ -647,7 +743,8 @@ impl Game {
         let binding = match command {
             AtomicCommand::PassPriority { binding, .. }
             | AtomicCommand::CastSpell { binding, .. }
-            | AtomicCommand::DeclareAttackers { binding, .. } => *binding,
+            | AtomicCommand::DeclareAttackers { binding, .. }
+            | AtomicCommand::SearchAction { binding, .. } => *binding,
         };
         if binding != OfferSetBinding(self.decision_epoch) {
             return Err(StructuredOfferError::StaleOrIllegal(
@@ -796,17 +893,22 @@ impl Game {
                 }
                 Ok((done, actions))
             }
+            AtomicCommand::SearchAction { .. } => Err(StructuredOfferError::WrongDecision),
         }
     }
 
     /// Apply one decoded structured command as a single rules mutation.
     ///
-    /// The current engine has no transaction journal yet, so this prototype
-    /// snapshots once and restores on failure. Projection never clones state.
+    /// Presentation Commands snapshot and restore on failure because the
+    /// current engine has no transaction journal. Action-aligned search
+    /// Commands validate every fallible precondition before their commit point.
     pub fn apply_atomic_command(
         &mut self,
         command: &AtomicCommand,
     ) -> Result<bool, StructuredOfferError> {
+        if matches!(command, AtomicCommand::SearchAction { .. }) {
+            return self.apply_search_action(command);
+        }
         let checkpoint = self.clone();
         match self.apply_atomic_command_inner(command) {
             Ok(game_over) => Ok(game_over),
@@ -817,6 +919,49 @@ impl Game {
         }
     }
 
+    /// Commit one action-aligned search Command after every fallible check.
+    ///
+    /// `structured_search_offers` stores an exact clone of a currently legal
+    /// action. Binding and equality are revalidated before `current_action_space`
+    /// is touched, so no rollback snapshot is needed on this hot path. A legal
+    /// action becoming unexecutable without a new decision epoch is an engine
+    /// invariant failure, not a recoverable Command error.
+    fn apply_search_action(
+        &mut self,
+        command: &AtomicCommand,
+    ) -> Result<bool, StructuredOfferError> {
+        let AtomicCommand::SearchAction { binding, action } = command else {
+            return Err(StructuredOfferError::WrongDecision);
+        };
+        if *binding != OfferSetBinding(self.decision_epoch) {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "offer set no longer names the current decision".to_string(),
+            ));
+        }
+        if self.is_game_over() {
+            return Err(StructuredOfferError::GameOver);
+        }
+        let offered = self
+            .current_action_space
+            .as_ref()
+            .ok_or(StructuredOfferError::NoActiveActionSpace)?
+            .actions
+            .iter()
+            .any(|legal| legal == action);
+        if !offered {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "search action is no longer offered".to_string(),
+            ));
+        }
+
+        let action = action.clone();
+        self.current_action_space.take();
+        self.execute_action(&action).unwrap_or_else(|error| {
+            panic!("structured search offer admitted an unexecutable action: {error}")
+        });
+        Ok(self.finish_action_step())
+    }
+
     fn apply_atomic_command_inner(
         &mut self,
         command: &AtomicCommand,
@@ -824,7 +969,8 @@ impl Game {
         let binding = match command {
             AtomicCommand::PassPriority { binding, .. }
             | AtomicCommand::CastSpell { binding, .. }
-            | AtomicCommand::DeclareAttackers { binding, .. } => *binding,
+            | AtomicCommand::DeclareAttackers { binding, .. }
+            | AtomicCommand::SearchAction { binding, .. } => *binding,
         };
         if binding != OfferSetBinding(self.decision_epoch) {
             return Err(StructuredOfferError::StaleOrIllegal(
@@ -940,6 +1086,19 @@ impl Game {
                     self.declare_attacker(attacker, selected.contains(&attacker))
                         .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
                 }
+                Ok(self.finish_action_step())
+            }
+            AtomicCommand::SearchAction { action, .. } => {
+                let offered = action_space.actions.iter().any(|legal| legal == action);
+                if !offered {
+                    return Err(StructuredOfferError::StaleOrIllegal(
+                        "search action is no longer offered".to_string(),
+                    ));
+                }
+                let action = action.clone();
+                self.current_action_space.take();
+                self.execute_action(&action)
+                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
                 Ok(self.finish_action_step())
             }
         }
@@ -1107,5 +1266,44 @@ fn to_action_target(target: Target) -> ActionTarget {
         Target::Player(player) => ActionTarget::Player(player),
         Target::Permanent(permanent) => ActionTarget::Permanent(permanent),
         Target::StackSpell(card) => ActionTarget::StackSpell(card),
+    }
+}
+
+fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOfferError> {
+    match kind {
+        ActionSpaceKind::Priority => Ok(PromptKind::Priority),
+        ActionSpaceKind::DeclareAttacker => Ok(PromptKind::DeclareAttackers),
+        ActionSpaceKind::DeclareBlocker => Ok(PromptKind::DeclareBlockers),
+        ActionSpaceKind::ChooseTarget => Ok(PromptKind::ChooseTarget),
+        ActionSpaceKind::Scry => Ok(PromptKind::Scry),
+        ActionSpaceKind::LookAndSelect => Ok(PromptKind::LookAndSelect),
+        ActionSpaceKind::PayOrNot => Ok(PromptKind::PayOrNot),
+        ActionSpaceKind::Modal => Ok(PromptKind::Modal),
+        ActionSpaceKind::DiscardThenDraw => Ok(PromptKind::DiscardThenDraw),
+        ActionSpaceKind::Waterbend => Ok(PromptKind::Waterbend),
+        ActionSpaceKind::GameOver => Err(StructuredOfferError::GameOver),
+    }
+}
+
+fn search_offer_verb(action: &Action) -> OfferVerb {
+    match action {
+        Action::PlayLand { .. } => OfferVerb::PlayLand,
+        Action::CastSpell { .. } => OfferVerb::Cast,
+        Action::ActivateAbility { .. } => OfferVerb::ActivateAbility,
+        Action::PassPriority { .. } => OfferVerb::PassPriority,
+        Action::DeclareAttacker { .. } => OfferVerb::DeclareAttacker,
+        Action::DeclareBlocker { .. } => OfferVerb::DeclareBlocker,
+        Action::ChooseTarget { .. } => OfferVerb::ChooseTarget,
+        Action::ScryCard {
+            to_bottom: false, ..
+        } => OfferVerb::ScryKeep,
+        Action::ScryCard {
+            to_bottom: true, ..
+        } => OfferVerb::ScryBottom,
+        Action::SelectCard { .. } => OfferVerb::SelectCard,
+        Action::Decline { .. } => OfferVerb::Decline,
+        Action::PayCost { .. } => OfferVerb::PayCost,
+        Action::ChooseMode { .. } => OfferVerb::ChooseMode,
+        Action::WaterbendTap { .. } => OfferVerb::WaterbendTap,
     }
 }

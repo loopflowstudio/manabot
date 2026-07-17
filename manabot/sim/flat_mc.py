@@ -239,6 +239,7 @@ def make_player(
         )
     if kind == "determinized_puct":
         from manabot.sim.mcts import DeterminizedPuctPlayer
+        from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
 
         return (
             DeterminizedPuctPlayer(
@@ -247,11 +248,15 @@ def make_player(
                 c_puct=float(spec.get("c_puct", 1.5)),
                 max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
                 seed=seed,
+                branch_driver_id=str(
+                    spec.get("branch_driver_id", SELECTED_BRANCH_DRIVER_ID)
+                ),
             ),
             None,
         )
     if kind == "agent_puct":
         from manabot.sim.mcts import AgentLeafEvaluator, DeterminizedPuctPlayer
+        from manabot.sim.search_branch import SELECTED_BRANCH_DRIVER_ID
 
         if str(spec.get("device", "cpu")) != "cpu":
             raise ValueError("agent_puct inference is CPU-only")
@@ -264,6 +269,9 @@ def make_player(
                 max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
                 seed=seed,
                 evaluator=AgentLeafEvaluator(agent, obs_space),
+                branch_driver_id=str(
+                    spec.get("branch_driver_id", SELECTED_BRANCH_DRIVER_ID)
+                ),
             ),
             obs_space,
         )

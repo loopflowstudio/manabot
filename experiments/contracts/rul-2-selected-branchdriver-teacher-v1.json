@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "experiment": "rul-2-selected-branchdriver-teacher-v1",
+  "runtime_seed": 1197,
+  "expected_runtime": {
+    "source_sha256": "24d301266db8e48c5577026474e06bd648db7441c64e6e5051e186d1398428ec",
+    "pack_manifest_sha256": "ca86657d16d1e1a855ba47fc7a1c0b0c8f20428bbd6815f223a9187d5cfa3932",
+    "deck_counts": {
+      "ur": 41,
+      "gw": 40
+    },
+    "drivers": {
+      "selected": "full_clone/current_game_v1",
+      "reference": "legacy_env_clone/reference_v1"
+    }
+  },
+  "exactness": {
+    "deal_seeds": [1197],
+    "simulations": 1,
+    "worlds": 1,
+    "max_steps": 20,
+    "max_decisions": 500
+  },
+  "cells": {
+    "interactive-single-8-v1": {
+      "workers": 1,
+      "simulations": 8,
+      "worlds": 4,
+      "deal_seeds": [1197, 1419],
+      "max_steps": 2000,
+      "max_decisions": 500,
+      "gates": {
+        "decisions_per_second_min": 15.0,
+        "traversals_per_second_min": 120.0,
+        "p95_decision_ms_max": 125.0,
+        "peak_rss_bytes_max": 536870912
+      }
+    },
+    "saturated-4x128-v1": {
+      "workers": 4,
+      "simulations": 128,
+      "worlds": 4,
+      "deal_seeds": [1197, 1419, 1887, 2197],
+      "max_steps": 2000,
+      "max_decisions": 500,
+      "gates": {
+        "decisions_per_second_min": 4.0,
+        "traversals_per_second_min": 512.0,
+        "p95_decision_ms_max": 2000.0,
+        "peak_rss_bytes_max": 2147483648
+      }
+    }
+  }
+}
