@@ -195,22 +195,24 @@ def load_checkpoint_agent(path: str) -> tuple[Agent, ObservationSpace]:
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     hypers = checkpoint["hypers"]
-    obs_space = ObservationSpace(
-        ObservationSpaceHypers(**hypers["observation_hypers"])
-    )
+    obs_space = ObservationSpace(ObservationSpaceHypers(**hypers["observation_hypers"]))
     agent = Agent(obs_space, AgentHypers(**hypers["agent_hypers"]))
     agent.load_state_dict(checkpoint["model_state_dict"])
     agent.eval()
     return agent, obs_space
 
 
-def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, ObservationSpace | None]:
+def make_player(
+    spec: dict[str, Any], seed: int
+) -> tuple[MatchupPlayer, ObservationSpace | None]:
     """Build a player from a picklable spec.
 
     Specs:
         {"kind": "search", "sims": 64, "max_steps": 2000}
         {"kind": "determinized_puct", "sims": 64, "worlds": 4,
          "c_puct": 1.5, "max_steps": 2000}
+        {"kind": "agent_puct", "sims": 16, "worlds": 4,
+         "checkpoint": "/abs/visit-value.pt", "device": "cpu"}
         {"kind": "policy_search", "sims": 16, "checkpoint": "/abs/path.pt",
          "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
@@ -247,6 +249,23 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
                 seed=seed,
             ),
             None,
+        )
+    if kind == "agent_puct":
+        from manabot.sim.mcts import AgentLeafEvaluator, DeterminizedPuctPlayer
+
+        if str(spec.get("device", "cpu")) != "cpu":
+            raise ValueError("agent_puct inference is CPU-only")
+        agent, obs_space = load_checkpoint_agent(spec["checkpoint"])
+        return (
+            DeterminizedPuctPlayer(
+                int(spec["sims"]),
+                worlds=int(spec.get("worlds", 4)),
+                c_puct=float(spec.get("c_puct", 1.5)),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                seed=seed,
+                evaluator=AgentLeafEvaluator(agent, obs_space),
+            ),
+            obs_space,
         )
     if kind == "policy_search":
         from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
@@ -307,7 +326,9 @@ def make_player(spec: dict[str, Any], seed: int) -> tuple[MatchupPlayer, Observa
     if kind == "checkpoint":
         agent, obs_space = load_checkpoint_agent(spec["path"])
         return (
-            AgentMatchupPlayer(agent, deterministic=bool(spec.get("deterministic", False))),
+            AgentMatchupPlayer(
+                agent, deterministic=bool(spec.get("deterministic", False))
+            ),
             obs_space,
         )
     raise ValueError(f"unknown player spec kind: {kind}")
@@ -319,6 +340,8 @@ def spec_name(spec: dict[str, Any]) -> str:
         return f"search-{spec['sims']}"
     if kind == "determinized_puct":
         return spec.get("name", f"dpuct-{spec['sims']}-w{spec.get('worlds', 4)}")
+    if kind == "agent_puct":
+        return spec.get("name", f"agent-puct-{spec['sims']}-w{spec.get('worlds', 4)}")
     if kind == "policy_search":
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
@@ -463,9 +486,7 @@ def aggregate_records(records: list[GameRecord]) -> dict[str, float]:
         "win_rate": wins / num_games if num_games else 0.0,
         "win_ci_lower": lo,
         "win_ci_upper": hi,
-        "mean_steps": (
-            float(np.mean([r.steps for r in records])) if records else 0.0
-        ),
+        "mean_steps": (float(np.mean([r.steps for r in records])) if records else 0.0),
         "draws_or_caps": float(sum(r.winner is None for r in records)),
     }
     for seat in (0, 1):

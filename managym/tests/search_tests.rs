@@ -261,6 +261,36 @@ fn determinize_is_deterministic_in_seed() {
 }
 
 #[test]
+fn determinize_ignores_authority_private_allocation() {
+    let mut game = make_game(31);
+    advance_random(&mut game, 30, 37);
+    assert!(!game.is_game_over());
+
+    let viewer = PlayerId(0);
+    let mut world_a = game.clone();
+    let mut world_b = game.clone();
+    world_a.determinize(viewer, 101);
+    world_b.determinize(viewer, 202);
+    assert_ne!(
+        zone_snapshot(&world_a, ZoneType::Hand, PlayerId(1)),
+        zone_snapshot(&world_b, ZoneType::Hand, PlayerId(1)),
+        "setup must produce distinct authority-private allocations"
+    );
+
+    world_a.determinize(viewer, 777);
+    world_b.determinize(viewer, 777);
+    for zone in [ZoneType::Hand, ZoneType::Library] {
+        for player in [PlayerId(0), PlayerId(1)] {
+            assert_eq!(
+                zone_snapshot(&world_a, zone, player),
+                zone_snapshot(&world_b, zone, player),
+                "viewer-equivalent roots diverged in {zone:?} for {player:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn random_playout_terminates_with_winner() {
     for seed in 0..5u64 {
         let mut game = make_game(seed);

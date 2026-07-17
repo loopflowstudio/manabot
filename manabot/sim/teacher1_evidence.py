@@ -272,6 +272,7 @@ class ReplayReceipt:
     search_visit_mismatches: int
     search_q_mismatches: int
     search_value_mismatches: int
+    search_world_mismatches: int
     search_metadata_mismatches: int
 
     @property
@@ -287,6 +288,7 @@ class ReplayReceipt:
                 self.search_visit_mismatches,
                 self.search_q_mismatches,
                 self.search_value_mismatches,
+                self.search_world_mismatches,
                 self.search_metadata_mismatches,
             )
         )
@@ -362,6 +364,13 @@ def record_teacher_trajectories(
                         "visit_counts": result.visit_counts.astype(int).tolist(),
                         "q_values": result.q_values.astype(float).tolist(),
                         "root_value": result.root_value,
+                        "world_visit_counts": result.world_visit_counts.astype(
+                            int
+                        ).tolist(),
+                        "world_q_values": result.world_q_values.astype(float).tolist(),
+                        "world_root_values": result.world_root_values.astype(
+                            float
+                        ).tolist(),
                         "tree_nodes": result.tree_nodes,
                         "max_depth": result.max_depth,
                         "cap_hits": result.cap_hits,
@@ -387,7 +396,7 @@ def record_teacher_trajectories(
             }
         )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "teacher": {
             "kind": "determinized_puct",
             "simulations": simulations,
@@ -424,6 +433,7 @@ def replay_teacher_trajectories(
     search_visit_mismatches = 0
     search_q_mismatches = 0
     search_value_mismatches = 0
+    search_world_mismatches = 0
     search_metadata_mismatches = 0
     for game in artifact["games"]:
         game_index = int(game["game_index"])
@@ -484,6 +494,25 @@ def replay_teacher_trajectories(
                 if rerun.root_value != float(expected_search["root_value"]):
                     search_value_mismatches += 1
                 if (
+                    not np.array_equal(
+                        rerun.world_visit_counts,
+                        np.asarray(
+                            expected_search["world_visit_counts"], dtype=np.int64
+                        ),
+                    )
+                    or not np.array_equal(
+                        rerun.world_q_values,
+                        np.asarray(expected_search["world_q_values"], dtype=np.float32),
+                    )
+                    or not np.array_equal(
+                        rerun.world_root_values,
+                        np.asarray(
+                            expected_search["world_root_values"], dtype=np.float32
+                        ),
+                    )
+                ):
+                    search_world_mismatches += 1
+                if (
                     rerun.tree_nodes != int(expected_search["tree_nodes"])
                     or rerun.max_depth != int(expected_search["max_depth"])
                     or rerun.cap_hits != int(expected_search["cap_hits"])
@@ -508,6 +537,7 @@ def replay_teacher_trajectories(
         search_visit_mismatches=search_visit_mismatches,
         search_q_mismatches=search_q_mismatches,
         search_value_mismatches=search_value_mismatches,
+        search_world_mismatches=search_world_mismatches,
         search_metadata_mismatches=search_metadata_mismatches,
     )
 

@@ -12,11 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import time
-from typing import Any
+from typing import Any, Mapping, Protocol
 
 import numpy as np
+import torch
 
-from manabot.env import Env
+from manabot.env import Env, ObservationSpace
+from manabot.model.agent import Agent
 from manabot.sim.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 _U64_MASK = (1 << 64) - 1
@@ -45,6 +47,131 @@ class PuctResult:
     worlds: int
     tree_nodes: int
     max_depth: int
+    world_visit_counts: np.ndarray
+    world_q_values: np.ndarray
+    world_root_values: np.ndarray
+
+
+@dataclass(frozen=True)
+class LeafEvaluation:
+    """Policy and root-perspective value returned for one expanded leaf."""
+
+    priors: np.ndarray
+    root_value: float
+    cap_hit: bool = False
+
+
+class LeafEvaluator(Protocol):
+    """Supply root priors and evaluate newly expanded nonterminal nodes."""
+
+    def root_priors(
+        self, observation: Any | None, *, action_count: int
+    ) -> np.ndarray: ...
+
+    def evaluate(
+        self,
+        env: Any,
+        observation: Any,
+        *,
+        root_player: int,
+        node_player: int,
+        seed: int,
+        max_steps: int,
+    ) -> LeafEvaluation: ...
+
+
+def _uniform_priors(action_count: int) -> np.ndarray:
+    if action_count < 1:
+        raise RuntimeError("nonterminal PUCT node has no legal actions")
+    return np.full(action_count, 1.0 / action_count, dtype=np.float64)
+
+
+class UniformRandomLeafEvaluator:
+    """The frozen Teacher-1 policy: uniform priors and random playout leaves."""
+
+    def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
+        del observation
+        return _uniform_priors(action_count)
+
+    def evaluate(
+        self,
+        env: Any,
+        observation: Any,
+        *,
+        root_player: int,
+        node_player: int,
+        seed: int,
+        max_steps: int,
+    ) -> LeafEvaluation:
+        del observation, node_player
+        rollout = env.clone_env()
+        winner = rollout.random_playout(seed=seed, max_steps=max_steps)
+        hit_cap = winner is None and not rollout.is_game_over()
+        return LeafEvaluation(
+            priors=_uniform_priors(int(env.action_count())),
+            root_value=_root_score(winner, root_player),
+            cap_hit=hit_cap,
+        )
+
+
+class AgentLeafEvaluator:
+    """Frozen CPU manabot priors and actor-relative value for PUCT leaves."""
+
+    def __init__(self, agent: Agent, observation_space: ObservationSpace):
+        try:
+            device = next(agent.parameters()).device
+        except StopIteration as exc:  # pragma: no cover - Agent always has parameters
+            raise ValueError(
+                "agent leaf evaluator requires a parameterized model"
+            ) from exc
+        if device.type != "cpu":
+            raise ValueError("agent leaf evaluator requires a CPU model")
+        self.agent = agent.eval()
+        self.observation_space = observation_space
+
+    def _predict(
+        self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
+    ) -> tuple[np.ndarray, float]:
+        encoded = (
+            observation
+            if isinstance(observation, Mapping)
+            else self.observation_space.encode(observation)
+        )
+        tensor_obs = {
+            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
+            for key, value in encoded.items()
+        }
+        with torch.inference_mode():
+            logits, value_logit = self.agent(tensor_obs)
+            priors = torch.softmax(logits[0, :action_count], dim=-1)
+            node_value = torch.sigmoid(value_logit[0])
+        return (
+            priors.detach().cpu().numpy().astype(np.float64),
+            float(node_value.item()),
+        )
+
+    def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
+        if observation is None:
+            raise ValueError("agent leaf evaluator requires the root observation")
+        priors, _ = self._predict(observation, action_count=action_count)
+        return priors
+
+    def evaluate(
+        self,
+        env: Any,
+        observation: Any,
+        *,
+        root_player: int,
+        node_player: int,
+        seed: int,
+        max_steps: int,
+    ) -> LeafEvaluation:
+        del seed, max_steps
+        priors, node_value = self._predict(
+            observation, action_count=int(env.action_count())
+        )
+        root_value = node_value if node_player == root_player else 1.0 - node_value
+        return LeafEvaluation(priors=priors, root_value=root_value)
 
 
 @dataclass
@@ -80,7 +207,13 @@ class _Node:
     children: dict[int, "_Node"] = field(default_factory=dict)
 
     @classmethod
-    def from_env(cls, env: Any, *, terminal: bool | None = None) -> "_Node":
+    def from_env(
+        cls,
+        env: Any,
+        *,
+        terminal: bool | None = None,
+        priors: np.ndarray | None = None,
+    ) -> "_Node":
         is_terminal = env.is_game_over() if terminal is None else terminal
         if is_terminal:
             return cls(
@@ -95,14 +228,21 @@ class _Node:
         if player is None:
             raise RuntimeError("nonterminal PUCT node has no acting player")
         action_count = int(env.action_count())
-        if action_count < 1:
-            raise RuntimeError("nonterminal PUCT node has no legal actions")
+        node_priors = _uniform_priors(action_count) if priors is None else priors
+        if node_priors.shape != (action_count,):
+            raise RuntimeError("leaf evaluator returned the wrong prior shape")
+        if (
+            not np.all(np.isfinite(node_priors))
+            or np.any(node_priors < 0.0)
+            or not math.isclose(float(node_priors.sum()), 1.0, abs_tol=1e-6)
+        ):
+            raise RuntimeError("leaf evaluator returned invalid priors")
         return cls(
             env=env,
             player=int(player),
             visits=np.zeros(action_count, dtype=np.int64),
             value_sums=np.zeros(action_count, dtype=np.float64),
-            priors=np.full(action_count, 1.0 / action_count, dtype=np.float64),
+            priors=np.asarray(node_priors, dtype=np.float64),
             terminal=False,
         )
 
@@ -126,15 +266,6 @@ def _select_action(node: _Node, hero: int, c_puct: float) -> int:
     return int(np.argmax(acting_q + exploration))
 
 
-def _evaluate_leaf(
-    env: Any, *, hero: int, seed: int, max_steps: int
-) -> tuple[float, bool]:
-    rollout = env.clone_env()
-    winner = rollout.random_playout(seed=seed, max_steps=max_steps)
-    hit_cap = winner is None and not rollout.is_game_over()
-    return _root_score(winner, hero), hit_cap
-
-
 def _simulate(
     root: _Node,
     *,
@@ -142,6 +273,7 @@ def _simulate(
     c_puct: float,
     rollout_seed: int,
     max_steps: int,
+    evaluator: LeafEvaluator,
 ) -> tuple[float, bool, int, int]:
     node = root
     path: list[tuple[_Node, int]] = []
@@ -163,8 +295,26 @@ def _simulate(
         child = node.children.get(action)
         if child is None:
             child_env = node.env.clone_env()
-            _, _, terminated, truncated, _ = child_env.step(action)
-            child = _Node.from_env(child_env, terminal=bool(terminated or truncated))
+            child_observation, _, terminated, truncated, _ = child_env.step(action)
+            is_terminal = bool(terminated or truncated)
+            evaluation: LeafEvaluation | None = None
+            if not is_terminal:
+                child_player = child_env.current_agent_index()
+                if child_player is None:
+                    raise RuntimeError("nonterminal PUCT child has no acting player")
+                evaluation = evaluator.evaluate(
+                    child_env,
+                    child_observation,
+                    root_player=hero,
+                    node_player=int(child_player),
+                    seed=rollout_seed,
+                    max_steps=max(1, max_steps - depth - 1),
+                )
+            child = _Node.from_env(
+                child_env,
+                terminal=is_terminal,
+                priors=evaluation.priors if evaluation is not None else None,
+            )
             node.children[action] = child
             added_nodes += 1
             depth += 1
@@ -174,12 +324,9 @@ def _simulate(
                 value = 0.5
                 hit_cap = True
             else:
-                value, hit_cap = _evaluate_leaf(
-                    child_env,
-                    hero=hero,
-                    seed=rollout_seed,
-                    max_steps=max(1, max_steps - depth),
-                )
+                assert evaluation is not None
+                value = evaluation.root_value
+                hit_cap = evaluation.cap_hit
             break
 
         node = child
@@ -199,6 +346,8 @@ def determinized_puct(
     seed: int,
     c_puct: float = 1.5,
     max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
+    evaluator: LeafEvaluator | None = None,
+    root_observation: Any | None = None,
 ) -> PuctResult:
     """Search one decision and return aggregated root visits and values.
 
@@ -222,12 +371,17 @@ def determinized_puct(
         raise RuntimeError("PUCT root has no acting player")
     hero = int(hero)
     action_count = int(root_env.action_count())
+    evaluator = evaluator or UniformRandomLeafEvaluator()
+    root_priors = evaluator.root_priors(root_observation, action_count=action_count)
     visits = np.zeros(action_count, dtype=np.int64)
     value_sums = np.zeros(action_count, dtype=np.float64)
     total_value = 0.0
     cap_hits = 0
     tree_nodes = 0
     max_depth = 0
+    world_visit_rows: list[np.ndarray] = []
+    world_q_rows: list[np.ndarray] = []
+    world_root_values: list[float] = []
 
     per_world = [simulations // worlds] * worlds
     for world_index in range(simulations % worlds):
@@ -239,8 +393,9 @@ def determinized_puct(
         world.determinize(seed=world_seed, perspective=hero)
         if int(world.action_count()) != action_count:
             raise RuntimeError("determinization changed the root legal action count")
-        root = _Node.from_env(world)
+        root = _Node.from_env(world, priors=root_priors.copy())
         tree_nodes += 1
+        world_value = 0.0
         for simulation_index in range(world_simulations):
             rollout_seed = _mix_seed(world_seed, simulation_index + 1)
             value, hit_cap, depth, added = _simulate(
@@ -249,13 +404,25 @@ def determinized_puct(
                 c_puct=c_puct,
                 rollout_seed=rollout_seed,
                 max_steps=max_steps,
+                evaluator=evaluator,
             )
             total_value += value
+            world_value += value
             cap_hits += int(hit_cap)
             tree_nodes += added
             max_depth = max(max_depth, depth)
         visits += root.visits
         value_sums += root.value_sums
+        world_visit_rows.append(root.visits.copy())
+        world_q_rows.append(
+            np.divide(
+                root.value_sums,
+                root.visits,
+                out=np.full(action_count, 0.5, dtype=np.float64),
+                where=root.visits > 0,
+            ).astype(np.float32)
+        )
+        world_root_values.append(world_value / world_simulations)
 
     q_values = np.divide(
         value_sums,
@@ -272,6 +439,9 @@ def determinized_puct(
         worlds=worlds,
         tree_nodes=tree_nodes,
         max_depth=max_depth,
+        world_visit_counts=np.stack(world_visit_rows),
+        world_q_values=np.stack(world_q_rows),
+        world_root_values=np.asarray(world_root_values, dtype=np.float32),
     )
 
 
@@ -286,6 +456,7 @@ class DeterminizedPuctPlayer:
         c_puct: float = 1.5,
         max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
         seed: int = 0,
+        evaluator: LeafEvaluator | None = None,
     ):
         if simulations < 1 or worlds < 1 or worlds > simulations:
             raise ValueError("simulations must be >= 1 and worlds in [1, simulations]")
@@ -293,6 +464,7 @@ class DeterminizedPuctPlayer:
         self.worlds = worlds
         self.c_puct = c_puct
         self.max_steps = max_steps
+        self.evaluator = evaluator or UniformRandomLeafEvaluator()
         self._seed = seed
         self._calls = 0
         self.stats = PuctSearchStats()
@@ -302,7 +474,6 @@ class DeterminizedPuctPlayer:
         self.last_result: PuctResult | None = None
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
-        del obs
         self._calls += 1
         call_seed = _mix_seed(self._seed, self._calls)
         started = time.perf_counter()
@@ -313,6 +484,8 @@ class DeterminizedPuctPlayer:
             seed=call_seed,
             c_puct=self.c_puct,
             max_steps=self.max_steps,
+            evaluator=self.evaluator,
+            root_observation=obs,
         )
         elapsed = time.perf_counter() - started
         self.last_result = result

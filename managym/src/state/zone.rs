@@ -222,6 +222,21 @@ impl ZoneManager {
         self.zone_cards_mut(zone, player).shuffle(rng);
     }
 
+    /// Shuffle an unordered hidden zone from a canonical starting order.
+    ///
+    /// Belief-state sampling must depend on the viewer-visible card multiset
+    /// and seed, never on the authority's current private ordering.
+    pub fn shuffle_canonical<R: rand::Rng + ?Sized>(
+        &mut self,
+        zone: ZoneType,
+        player: PlayerId,
+        rng: &mut R,
+    ) {
+        let cards = self.zone_cards_mut(zone, player);
+        cards.sort_unstable_by_key(|card| card.0);
+        cards.shuffle(rng);
+    }
+
     /// Resample `player`'s hidden zones (hand + library) as one pool.
     ///
     /// The union of hand and library is shuffled, then split back so the hand
@@ -234,6 +249,7 @@ impl ZoneManager {
         let mut pool: Vec<CardId> = Vec::with_capacity(hand_size + self.library[idx].len());
         pool.append(&mut self.hand[idx]);
         pool.append(&mut self.library[idx]);
+        pool.sort_unstable_by_key(|card| card.0);
         pool.shuffle(rng);
         let library = pool.split_off(hand_size);
         for card in &pool {

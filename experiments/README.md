@@ -53,6 +53,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [teacher0](w2-234-teacher0.md) | can a search-supervised policy/value student learn from Teacher-0? | proceed to scale-up — joint policy/value matches policy-only CE/top-1, improves held-out value Brier 0.2536→0.2043, 71%→73% vs random |
 | [teacher1](w2-234-teacher1.md) | does the determinized PUCT substrate work end-to-end? | substrate pass — tree search, node reuse, alternating backup, self-play shards all function; priors still uniform, playouts random |
 | [teacher1-pilot](w2-234-teacher1-pilot.md) | do budgets 8/32/128 give strong, legal, affordable targets? | **preregistered, unrun** — fail-closed until the terminal Teacher-0 manifest and control lock exist |
+| [INT-4 smoke](int-4-visit-teacher-smoke.md) | does the visit teacher → 2×2 students → four-agent arena → Study pipeline execute on real states? | engineering substrate pass, **not admission evidence** — 507 labels, exact 175-decision replay, four matched checkpoints, complete smoke arena, and cross-language Study validation; production controls and competencies remain |
 
 ### Platform evidence (W2)
 

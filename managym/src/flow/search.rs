@@ -49,7 +49,7 @@ impl Game {
         self.state.zones.resample_hidden(opponent, &mut rng);
         self.state
             .zones
-            .shuffle(ZoneType::Library, perspective, &mut rng);
+            .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
 
         // A pending mid-resolution decision may have revealed library cards
         // to the deciding player (scry / look-at-top-N). Those cards are

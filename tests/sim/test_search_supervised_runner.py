@@ -9,7 +9,7 @@ from experiments.runners.run_search_supervised import _validate_dataset_manifest
 
 
 def _args() -> Namespace:
-    return Namespace(games=12, workers=2, seed=197, sims=8)
+    return Namespace(games=12, workers=2, seed=197, sims=8, games_per_shard=6)
 
 
 def _manifest() -> dict:
@@ -19,6 +19,7 @@ def _manifest() -> dict:
         "workers": 2,
         "seed": 197,
         "sims": 8,
+        "games_per_shard": 6,
         "policy_target_kind": "visit_distribution",
         "value_target_kind": "root_value",
         "provenance": {"teacher_spec": teacher},
@@ -41,8 +42,7 @@ def _validate(manifest: dict, paths: list[Path] | None = None) -> None:
         },
         policy_target_kind="visit_distribution",
         value_target_kind="root_value",
-        shard_paths=paths
-        or [Path("shard_00.npz"), Path("shard_01.npz")],
+        shard_paths=paths or [Path("shard_00.npz"), Path("shard_01.npz")],
     )
 
 
@@ -73,6 +73,7 @@ def test_legacy_flat_teacher_manifest_has_unambiguous_targets() -> None:
         ("workers", 1),
         ("seed", 198),
         ("sims", 4),
+        ("games_per_shard", 4),
         ("policy_target_kind", "score_softmax"),
         ("value_target_kind", "terminal_outcome"),
     ],

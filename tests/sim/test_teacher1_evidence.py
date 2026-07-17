@@ -6,8 +6,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from manabot.sim.mcts import determinized_puct
 from manabot.sim.teacher1_evidence import (
+    ContractError,
     _fresh_env,
     build_command,
     build_viewer_frame,
@@ -15,7 +18,36 @@ from manabot.sim.teacher1_evidence import (
     record_teacher_trajectories,
     replay_teacher_trajectories,
     runtime_fingerprints,
+    validate_runtime_fingerprints,
 )
+
+
+def test_viewer_equivalent_authorities_produce_identical_search_labels() -> None:
+    env = _fresh_env(97)
+    viewer = int(env._engine.current_agent_index())
+    first = env._engine.clone_env()
+    second = env._engine.clone_env()
+    first.determinize(seed=101, perspective=viewer)
+    second.determinize(seed=202, perspective=viewer)
+    assert first.state_digest() != second.state_digest()
+
+    first_result = determinized_puct(
+        first, simulations=8, worlds=2, seed=303, max_steps=2000
+    )
+    second_result = determinized_puct(
+        second, simulations=8, worlds=2, seed=303, max_steps=2000
+    )
+
+    assert np.array_equal(first_result.visit_counts, second_result.visit_counts)
+    assert np.array_equal(first_result.q_values, second_result.q_values)
+    assert first_result.root_value == second_result.root_value
+    assert np.array_equal(
+        first_result.world_visit_counts, second_result.world_visit_counts
+    )
+    assert np.array_equal(first_result.world_q_values, second_result.world_q_values)
+    assert np.array_equal(
+        first_result.world_root_values, second_result.world_root_values
+    )
 
 
 def test_viewer_frame_redacts_private_hand_and_binds_legal_command() -> None:
@@ -65,6 +97,7 @@ def test_audit_trajectory_replays_and_preserves_target_invariants() -> None:
     assert receipt.search_visit_mismatches == 0
     assert receipt.search_q_mismatches == 0
     assert receipt.search_value_mismatches == 0
+    assert receipt.search_world_mismatches == 0
     for decision in artifact["games"][0]["decisions"]:
         search = decision["search"]
         assert sum(search["visit_counts"]) == 1
@@ -73,6 +106,9 @@ def test_audit_trajectory_replays_and_preserves_target_invariants() -> None:
         assert search["root_unchanged"]
         assert search["call_index"] >= 1
         assert np.isfinite(search["root_value"])
+        assert len(search["world_visit_counts"]) == 1
+        assert len(search["world_q_values"]) == 1
+        assert len(search["world_root_values"]) == 1
         assert decision["seat"] == decision["actor"]
         assert decision["opponent_class"] == "search"
 
@@ -108,6 +144,17 @@ def test_audit_trajectory_replays_and_preserves_target_invariants() -> None:
     )
     assert not tampered_receipt.passed
     assert tampered_receipt.search_value_mismatches == 1
+
+    tampered = deepcopy(artifact)
+    tampered["games"][0]["decisions"][0]["search"]["world_q_values"][0][0] += 0.125
+    tampered_receipt = replay_teacher_trajectories(
+        tampered,
+        content_hash=runtime["experience_content_hash"],
+        asset_manifest_hash=runtime["asset_manifest_hash"],
+        sampled_search_roots=[{"game_index": 0, "decision_index": 0}],
+    )
+    assert not tampered_receipt.passed
+    assert tampered_receipt.search_world_mismatches == 1
 
     tampered = deepcopy(artifact)
     first_command = tampered["games"][0]["decisions"][0]["command"]
@@ -151,7 +198,7 @@ def test_root_stability_reports_declared_budgets_without_mutating_roots() -> Non
         assert budget["mean_max_depth"] >= 1
 
 
-def test_contract_runtime_fingerprints_are_frozen() -> None:
+def test_superseded_contract_rejects_the_current_runtime() -> None:
     import json
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -160,10 +207,8 @@ def test_contract_runtime_fingerprints_are_frozen() -> None:
     )
     runtime = runtime_fingerprints(seed=int(contract["seeds"]["runtime"]))
 
-    assert all(
-        runtime[key] == expected
-        for key, expected in contract["expected_fingerprints"].items()
-    )
+    with pytest.raises(ContractError, match="runtime does not match"):
+        validate_runtime_fingerprints(contract["expected_fingerprints"], runtime)
     assert contract["seeds"]["future_training"] == [197, 419, 887]
     assert contract["teacher"]["budgets"] == [8, 32, 128]
     assert contract["evaluation"]["stability_repeat_search_seeds"] == [

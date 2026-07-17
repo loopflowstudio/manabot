@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "experiment": "int-4-visit-teacher-iteration-v1",
+  "supersedes": "w2-234-teacher1-pilot-v1",
+  "algorithm": "determinized_puct_uniform_prior_random_leaf/v1",
+  "runtime_seed": 197,
+  "study_model_seed": 197,
+  "content_pack": {
+    "id": "w2-interactive-deck",
+    "version": "1"
+  },
+  "incumbent_controls": [
+    {
+      "arm": "policy_only",
+      "sha256": "3bfedccf5aa6ed7621d99284ea8cea3975d8b195cecf6426d37dd7abc812c978"
+    },
+    {
+      "arm": "policy_value",
+      "sha256": "92ced7abb31bc68298b48cc08ed7eb57f3dde50295a22d50ea2fe32f7e359176"
+    }
+  ],
+  "expected_fingerprints": {
+    "world": "w2",
+    "engine_source_sha256": "b06079570640efef11c0833f199399f9dbd9cb05cc53aa01cbf76f5cad17dcd0",
+    "engine_extension_sha256": "890fe39524a32629cf6610c2088607dca66e884abef0ccdece8f556fe9a5466d",
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "content_manifest_sha256": "02fab67db308685ae2dc14197c9afb368769ef9f78a3e87d77ce342d1777ad01",
+    "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+    "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+    "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+    "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+    "iteration_source_sha256": "14a3c5ff6594ad3c354abd06a9e888a3ad2c2d6e2d741db8954efa4f68c89dea",
+    "study_schema_sha256": "ff8d9a97830e77e1099e6aa1992af4afed5b3bc81e4dd2085592490ffa3a997c",
+    "python": "3.12.12",
+    "torch": "2.10.0",
+    "machine": "arm64",
+    "mps_available": true
+  },
+  "profiles": {
+    "iteration": {
+      "evidence_class": "preregistered_iteration",
+      "teacher_budgets": [8, 32, 128],
+      "high_budget": 128,
+      "worlds": 4,
+      "c_puct": 1.5,
+      "max_steps": 2000,
+      "teacher_seed_blocks": [
+        {"id": "block-1197", "seed": 1197, "games": 16},
+        {"id": "block-1419", "seed": 1419, "games": 16},
+        {"id": "block-1887", "seed": 1887, "games": 16}
+      ],
+      "stability_roots": 192,
+      "stability_seed": 2197,
+      "stability_repeat_seeds": [2197001, 2197002, 2197003],
+      "dataset_games": 256,
+      "games_per_shard": 8,
+      "dataset_seed": 197000,
+      "audit_games": 4,
+      "sampled_search_roots": [
+        {"game_index": 0, "decision_index": 0},
+        {"game_index": 0, "decision_index": 8},
+        {"game_index": 1, "decision_index": 0},
+        {"game_index": 1, "decision_index": 8},
+        {"game_index": 2, "decision_index": 0},
+        {"game_index": 2, "decision_index": 8},
+        {"game_index": 3, "decision_index": 0},
+        {"game_index": 3, "decision_index": 8}
+      ],
+      "training_seeds": [197, 419, 887],
+      "training_device": "mps",
+      "epochs": 25,
+      "batch_size": 1024,
+      "learning_rate": 0.001,
+      "val_fraction": 0.1,
+      "student_search_simulations": 128,
+      "arena_seed_blocks": [
+        {"id": "block-1197", "seed": 1197, "games": 16},
+        {"id": "block-1419", "seed": 1419, "games": 16},
+        {"id": "block-1887", "seed": 1887, "games": 16}
+      ],
+      "ablation_seed_blocks": [
+        {"id": "block-1197", "seed": 1197, "games": 16}
+      ]
+    },
+    "smoke": {
+      "evidence_class": "engineering_smoke_non_admission",
+      "teacher_budgets": [4, 8],
+      "high_budget": 8,
+      "worlds": 2,
+      "c_puct": 1.5,
+      "max_steps": 2000,
+      "teacher_seed_blocks": [
+        {"id": "smoke", "seed": 51197, "games": 2}
+      ],
+      "stability_roots": 2,
+      "stability_seed": 52197,
+      "stability_repeat_seeds": [5219701, 5219702],
+      "dataset_games": 4,
+      "games_per_shard": 2,
+      "dataset_seed": 53197,
+      "audit_games": 1,
+      "sampled_search_roots": [
+        {"game_index": 0, "decision_index": 0}
+      ],
+      "training_seeds": [197],
+      "training_device": "cpu",
+      "epochs": 1,
+      "batch_size": 256,
+      "learning_rate": 0.001,
+      "val_fraction": 0.25,
+      "student_search_simulations": 4,
+      "arena_seed_blocks": [
+        {"id": "smoke", "seed": 54197, "games": 2}
+      ],
+      "ablation_seed_blocks": [
+        {"id": "smoke", "seed": 55197, "games": 2}
+      ]
+    }
+  },
+  "caps": {
+    "wall_hours": 16,
+    "core_hours": 64,
+    "artifact_bytes": 4294967296,
+    "workers": 4
+  }
+}

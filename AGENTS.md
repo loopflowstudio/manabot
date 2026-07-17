@@ -34,9 +34,11 @@ contracts, receipts, wandb history — is never renamed.
   Never emit an un-uv'ed Python command in docs, scripts, or instructions.
 - Python is pinned to 3.12 (PyO3 caps at 3.13; the venv is 3.12). Fresh venvs:
   `uv venv --python 3.12`.
-- After changing Rust under `managym/src`, rebuild the extension:
-  `cd managym && uv run maturin build --release -i ../.venv/bin/python`, then
-  place the cp312 `.so` from the wheel at `managym/_managym.cpython-312-darwin.so`.
+- After changing Rust under `managym/src`, rebuild from the repository root so
+  uv uses the pinned root environment instead of creating a nested venv:
+  `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
+  then place the cp312 `.so` from the wheel at
+  `managym/_managym.cpython-312-darwin.so`.
 - Play against the bot: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
