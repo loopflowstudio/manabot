@@ -87,18 +87,22 @@ class PresentationProjector:
         action: dict[str, Any],
         *,
         actor_index: int,
-    ) -> None:
+    ) -> bool:
         """Stage exact identities selected through an authority offer.
 
         Casting and target selection can complete resolution in the same
         engine step, so the post-step stack is intentionally not consulted.
         Staged choices never become presentation facts unless the engine then
         commits the matching spell/damage/resolution domain events.
+
+        Returns whether the transitional Lightning Bolt presentation branch
+        dispatched on a card name. Authority receipts count that branch as an
+        exercised fallback instead of inferring its absence.
         """
 
         focus = action.get("focus")
         if not isinstance(focus, list) or not focus:
-            return
+            return False
         selected = int(focus[0])
         if action.get("type") == "PRIORITY_CAST_SPELL":
             cards = [*observation.agent_cards, *observation.opponent_cards]
@@ -106,18 +110,19 @@ class PresentationProjector:
                 (candidate for candidate in cards if int(candidate.id) == selected),
                 None,
             )
+            used_card_name_dispatch = card is not None and card.name == "Lightning Bolt"
             self._pending_bolt = (
                 _PendingBolt(
                     object_id=_object_id(selected),
                     controller=actor_index,
                 )
-                if card is not None and card.name == "Lightning Bolt"
+                if used_card_name_dispatch
                 else None
             )
-            return
+            return used_card_name_dispatch
 
         if action.get("type") != "CHOOSE_TARGET" or self._pending_bolt is None:
-            return
+            return False
         permanent_ids = {
             int(permanent.id)
             for permanent in [
@@ -135,6 +140,7 @@ class PresentationProjector:
             controller=self._pending_bolt.controller,
             targets=(*self._pending_bolt.targets, subject),
         )
+        return False
 
     def observe(self, observation: managym.Observation) -> None:
         """Consume the committed semantic events produced by one engine step."""

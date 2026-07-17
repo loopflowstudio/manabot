@@ -21,7 +21,14 @@ import managym
 
 from . import trace as trace_store, villain as villain_module
 from .curated_pack import CURATED_PACK
-from .enums import ActionEnum, ActionSpaceEnum, PhaseEnum, StepEnum, ZoneEnum
+from .enums import (
+    ActionEnum,
+    ActionSpaceEnum,
+    EventTypeEnum,
+    PhaseEnum,
+    StepEnum,
+    ZoneEnum,
+)
 from .experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
 from .presentation import PresentationProjector
 from .replay_index import (
@@ -165,6 +172,29 @@ class DecisionContext:
 PublishedPrompt = DecisionContext
 
 
+@dataclass(frozen=True)
+class AuthorityTransition:
+    """Authority-private evidence for one exact engine transition."""
+
+    actor: int
+    source: str | None
+    automatic: bool
+    from_revision: int
+    to_revision: int
+    action_space: str
+    action_type: str
+    legal_action_count: int
+    offer_count: int
+    prompt_id: int | None
+    offer: dict[str, Any] | None
+    command: dict[str, Any] | None
+    state_before: str
+    state_after: str
+    semantic_events: list[dict[str, Any]]
+    presentation_events: list[dict[str, Any]]
+    encountered_definition_ids: list[int]
+
+
 def _enum_name(enum_type, value: Any) -> str:
     try:
         return enum_type(int(value)).name
@@ -281,6 +311,110 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
             obs.opponent_permanents,
         ),
     }
+
+
+def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
+    """Resolve live card, permanent, and stack identities to typed definitions."""
+
+    result: dict[int, int] = {}
+    for cards, permanents in (
+        (obs.agent_cards, obs.agent_permanents),
+        (obs.opponent_cards, obs.opponent_permanents),
+    ):
+        for card in cards:
+            result[int(card.id)] = int(card.registry_key)
+        battlefield_cards = [
+            card for card in cards if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+        ]
+        for index, permanent in enumerate(permanents):
+            if index < len(battlefield_cards):
+                result[int(permanent.id)] = int(battlefield_cards[index].registry_key)
+    for stack_object in obs.stack_objects:
+        result[int(stack_object.stack_object_id)] = int(
+            stack_object.source_card_registry_key
+        )
+    return result
+
+
+def _semantic_event_payload(
+    event: managym.EventData,
+    definition_ids: dict[int, int],
+) -> dict[str, Any]:
+    related_definitions = sorted(
+        {
+            definition_ids[identity]
+            for identity in (int(event.source_id), int(event.target_id))
+            if identity in definition_ids
+        }
+    )
+    return {
+        "event_type": _enum_name(EventTypeEnum, event.event_type),
+        "source_kind": int(event.source_kind),
+        "source_id": int(event.source_id),
+        "source_incarnation": int(event.source_incarnation),
+        "target_kind": int(event.target_kind),
+        "target_id": int(event.target_id),
+        "target_incarnation": int(event.target_incarnation),
+        "amount": int(event.amount),
+        "controller_id": int(event.controller_id),
+        "from_zone": int(event.from_zone),
+        "to_zone": int(event.to_zone),
+        "definition_ids": related_definitions,
+    }
+
+
+def _encountered_definition_ids(
+    before: managym.Observation,
+    after: managym.Observation,
+    action: dict[str, Any],
+    semantic_events: list[dict[str, Any]],
+) -> list[int]:
+    before_ids = _definition_ids_by_object(before)
+    after_ids = _definition_ids_by_object(after)
+    identities = {
+        int(identity)
+        for identity in action.get("focus", [])
+        if isinstance(identity, int)
+    }
+    definitions = {
+        mapping[identity]
+        for mapping in (before_ids, after_ids)
+        for identity in identities
+        if identity in mapping
+    }
+    definitions.update(
+        definition_id
+        for event in semantic_events
+        for definition_id in event["definition_ids"]
+    )
+    definitions.update(
+        int(stack_object.source_card_registry_key)
+        for stack_object in [*before.stack_objects, *after.stack_objects]
+    )
+
+    before_taps: dict[int, tuple[int, bool]] = {}
+    after_taps: dict[int, tuple[int, bool]] = {}
+    for observation, target in ((before, before_taps), (after, after_taps)):
+        for cards, permanents in (
+            (observation.agent_cards, observation.agent_permanents),
+            (observation.opponent_cards, observation.opponent_permanents),
+        ):
+            battlefield_cards = [
+                card
+                for card in cards
+                if _enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+            ]
+            for index, permanent in enumerate(permanents):
+                if index < len(battlefield_cards):
+                    target[int(permanent.id)] = (
+                        int(battlefield_cards[index].registry_key),
+                        bool(permanent.tapped),
+                    )
+    for identity, (definition_id, was_tapped) in before_taps.items():
+        current = after_taps.get(identity)
+        if current is not None and not was_tapped and current[1]:
+            definitions.add(definition_id)
+    return sorted(definitions)
 
 
 def _player_label(player: managym.Player) -> str:
@@ -635,10 +769,14 @@ class GameSession:
         *,
         id_factory: Callable[[str], str] | None = None,
         clock: Callable[[], str] | None = None,
+        villain_offer_policy: Callable[[DecisionContext], int] | None = None,
+        capture_authority_evidence: bool = False,
     ):
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
+        self._villain_offer_policy = villain_offer_policy
+        self._capture_authority_evidence = capture_authority_evidence
         self.env: managym.Env | None = None
         self.obs: managym.Observation | None = None
         self.villain_policy: VillainPolicy | None = None
@@ -680,6 +818,13 @@ class GameSession:
         self._authority_command_seq = 0
         self._study_roots: dict[int, managym.Env] = {}
         self._study_provider: StudyForkProvider | None = None
+        self.authority_transitions: list[AuthorityTransition] = []
+        self.authority_fallback_counters = {
+            "legacy_fixed_action": 0,
+            "card_name_dispatch": 0,
+            "candidate_cap": 0,
+            "client_legality": 0,
+        }
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -738,6 +883,13 @@ class GameSession:
         self._authority_command_seq = 0
         self._study_roots = {}
         self._study_provider = None
+        self.authority_transitions = []
+        self.authority_fallback_counters = {
+            "legacy_fixed_action": 0,
+            "card_name_dispatch": 0,
+            "candidate_cap": 0,
+            "client_legality": 0,
+        }
 
         # Setup itself is an authority snapshot. Clear staged facts before any
         # auto-play transition so each subsequent drain belongs to one exact
@@ -780,6 +932,8 @@ class GameSession:
         )
         if selected is None:
             raise RuntimeError("Hero action has no unique authority offer.")
+        self.authority_fallback_counters["legacy_fixed_action"] += 1
+        self.authority_fallback_counters["client_legality"] += 1
         command = self._authority_command(context, selected, "compat")
         batch_cursor = self.presentation.next_seq
         self._apply_bound_command(context, command, source="client")
@@ -996,7 +1150,12 @@ class GameSession:
             raise RuntimeError("Cannot step without an active game.")
 
         observation = serialize_observation(self.obs)
+        before_observation = self.obs
+        state_before = (
+            self.env.state_digest() if self._capture_authority_evidence else None
+        )
         actor_index = HERO_PLAYER_INDEX if actor == "hero" else 1
+        selected_offer: dict[str, Any] | None = None
         if not auto:
             if context is None or command is None or source not in {"client", "policy"}:
                 raise RuntimeError("Deliberate engine actions require a bound command.")
@@ -1026,13 +1185,33 @@ class GameSession:
             self._study_roots[int(row.ordinal)] = self.env.clone_env()
             self.canonical_decisions.append(row)
         action_description = actions[action_index]["description"]
-        self.presentation.note_action(
+        if self.presentation.note_action(
             self.obs,
             actions[action_index],
             actor_index=actor_index,
-        )
+        ):
+            self.authority_fallback_counters["card_name_dispatch"] += 1
         from_revision = self.revision
         next_obs, reward, _, _, _ = self.env.step(action_index)
+        state_after: str | None = None
+        semantic_events: list[dict[str, Any]] = []
+        encountered_definition_ids: list[int] = []
+        if self._capture_authority_evidence:
+            state_after = self.env.state_digest()
+            definition_ids = {
+                **_definition_ids_by_object(before_observation),
+                **_definition_ids_by_object(next_obs),
+            }
+            semantic_events = [
+                _semantic_event_payload(event, definition_ids)
+                for event in next_obs.recent_events
+            ]
+            encountered_definition_ids = _encountered_definition_ids(
+                before_observation,
+                next_obs,
+                actions[action_index],
+                semantic_events,
+            )
         self.presentation.observe(next_obs)
         if actor == "villain":
             self._pending_villain_log.append(f"Villain: {action_description}")
@@ -1050,11 +1229,41 @@ class GameSession:
         self.obs = next_obs
         self._advance_protocol_revision()
         caused_by = None if command is None else str(command["command_id"])
-        self._commit_step_presentation(
+        presentation_events = self._commit_step_presentation(
             from_revision=from_revision,
             actor=actor_index,
             caused_by=caused_by,
         )
+        if self._capture_authority_evidence:
+            assert state_before is not None and state_after is not None
+            self.authority_transitions.append(
+                AuthorityTransition(
+                    actor=actor_index,
+                    source=source,
+                    automatic=auto,
+                    from_revision=from_revision,
+                    to_revision=self.revision,
+                    action_space=(
+                        context.action_space
+                        if context is not None
+                        else _enum_name(
+                            ActionSpaceEnum,
+                            before_observation.action_space.action_space_type,
+                        )
+                    ),
+                    action_type=str(actions[action_index]["type"]),
+                    legal_action_count=len(actions),
+                    offer_count=0 if context is None else len(context.offers),
+                    prompt_id=None if context is None else context.prompt_id,
+                    offer=deepcopy(selected_offer),
+                    command=deepcopy(command),
+                    state_before=state_before,
+                    state_after=state_after,
+                    semantic_events=semantic_events,
+                    presentation_events=deepcopy(presentation_events),
+                    encountered_definition_ids=encountered_definition_ids,
+                )
+            )
 
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
@@ -1069,21 +1278,31 @@ class GameSession:
             steps += 1
 
             context = self._build_decision_context(self.obs, viewer=1)
-            action_index = int(self.villain_policy(self.env, self.obs))
-            if action_index < 0 or action_index >= len(context.actions):
-                raise RuntimeError(
-                    f"Villain policy selected invalid action index: {action_index}"
-                )
-            matching = [
-                offer_id
-                for offer_id, engine_index in context.action_by_offer.items()
-                if engine_index == action_index
-            ]
-            if len(matching) != 1:
-                raise RuntimeError(
-                    "Villain policy action does not map to one authority offer."
-                )
-            command = self._authority_command(context, matching[0], "policy")
+            if self._villain_offer_policy is not None:
+                offer_id = int(self._villain_offer_policy(context))
+                action_index = context.action_by_offer.get(offer_id)
+                if action_index is None:
+                    raise RuntimeError(
+                        f"Villain offer policy selected unknown offer: {offer_id}"
+                    )
+            else:
+                self.authority_fallback_counters["legacy_fixed_action"] += 1
+                action_index = int(self.villain_policy(self.env, self.obs))
+                if action_index < 0 or action_index >= len(context.actions):
+                    raise RuntimeError(
+                        f"Villain policy selected invalid action index: {action_index}"
+                    )
+                matching = [
+                    candidate_offer_id
+                    for candidate_offer_id, engine_index in context.action_by_offer.items()
+                    if engine_index == action_index
+                ]
+                if len(matching) != 1:
+                    raise RuntimeError(
+                        "Villain policy action does not map to one authority offer."
+                    )
+                offer_id = matching[0]
+            command = self._authority_command(context, offer_id, "policy")
             self._apply_bound_command(
                 context,
                 command,
@@ -1201,7 +1420,7 @@ class GameSession:
         from_revision: int,
         actor: int,
         caused_by: str | None,
-    ) -> None:
+    ) -> list[dict[str, Any]]:
         """Commit one engine step into both authorized semantic tracks."""
         authority_events = self.presentation.drain(
             from_revision=from_revision,
@@ -1231,6 +1450,7 @@ class GameSession:
                 self.trace.events[index],
                 presentation=deepcopy(live_events),
             )
+        return authority_events
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:
         if self.obs is None or self.obs.game_over:
@@ -1277,6 +1497,8 @@ class GameSession:
             }
             for offer_id, action in enumerate(actions)
         ]
+        if len(offers) != len(actions):
+            self.authority_fallback_counters["candidate_cap"] += 1
         prompt_view = {
             "id": prompt_id,
             "actor": viewer,
