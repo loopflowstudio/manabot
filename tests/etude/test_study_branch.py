@@ -11,6 +11,7 @@ from etude.replay_index import (
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecisionAddress,
+    restore_decision,
 )
 from etude.server import GameSession
 from etude.study_branch import StudyBranchUnavailableError
@@ -65,8 +66,12 @@ def test_historical_address_forks_executes_structured_command_and_returns(tmp_pa
     )
     recorded_events = list(session.trace.events)
 
+    baseline_return = session.fork_study(address).return_to_recorded()
     branch = session.fork_study(address)
+    sibling = session.fork_study(address)
     original_offers = branch.structured_offers()
+    sibling_offers = sibling.structured_offers()
+    assert sibling_offers == original_offers
     assert original_offers["actor"] == 0
     pass_offer = next(
         offer for offer in original_offers["offers"] if offer["verb"] == "pass_priority"
@@ -79,18 +84,32 @@ def test_historical_address_forks_executes_structured_command_and_returns(tmp_pa
     assert observation.agent.player_index == 0
     assert observation.opponent.player_index == 1
     assert all(int(card.zone) != 1 for card in observation.opponent_cards)
+    assert sibling.structured_offers() == sibling_offers
 
     returned = branch.return_to_recorded()
+    sibling_returned = sibling.return_to_recorded()
+    expected = restore_decision(replay, address, authorized_viewer=0)
+    assert returned.source_digest == baseline_return.source_digest
+    assert sibling_returned.source_digest == baseline_return.source_digest
     assert returned.address == address
-    assert returned.frame == row.frame
-    assert returned.offer == row.offer
-    assert returned.command == row.command
-    assert returned.presentation_cursor == row.presentation_cursor
+    assert returned.frame == expected.frame
+    assert returned.offer == expected.offer
+    assert returned.command == expected.command
+    assert returned.presentation_cursor == expected.presentation_cursor
+    assert returned.continuation == expected.continuation
+    assert returned.frame.projection.agent.player_index == returned.viewer
+    assert not returned.frame.projection.opponent.hand
     with pytest.raises(StudyBranchUnavailableError, match="returned to replay"):
         branch.structured_offers()
 
     fresh = session.fork_study(address)
     assert fresh.structured_offers() == original_offers
+    fresh_returned = fresh.return_to_recorded()
+    assert fresh_returned.source_digest == baseline_return.source_digest
+    assert fresh_returned.frame == returned.frame
+    assert fresh_returned.offer == returned.offer
+    assert fresh_returned.presentation_cursor == returned.presentation_cursor
+    assert fresh_returned.continuation == returned.continuation
     assert session.trace.events == recorded_events
     assert (
         json.dumps(session.trace.canonical_replay, sort_keys=True, separators=(",", ":"))

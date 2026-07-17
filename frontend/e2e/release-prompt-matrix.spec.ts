@@ -592,9 +592,15 @@ async function assertReducedMotion(page: Page, label: string): Promise<void> {
   expect(offenders, `${label}: perceptible motion remains`).toEqual([]);
 
   const stage = page.getByTestId('presentation-stage');
-  if (await stage.isVisible()) {
-    await expect(stage).toHaveAttribute('data-reduced-motion', 'true');
-  }
+  const stagesWithoutReducedMotion = await stage.evaluateAll(
+    (stages) =>
+      stages.filter((candidate) => candidate.getAttribute('data-reduced-motion') !== 'true')
+        .length,
+  );
+  expect(
+    stagesWithoutReducedMotion,
+    `${label}: presentation stage ignores reduced motion`,
+  ).toBe(0);
 }
 
 async function auditAccessibility(page: Page, label: string): Promise<void> {

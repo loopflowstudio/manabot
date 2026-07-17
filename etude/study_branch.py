@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping
 
+from pydantic import Field
+
 import managym
 
 from .replay_index import (
@@ -24,6 +26,12 @@ class StudyBranchUnavailableError(ValueError):
     """The canonical row has no retained authority-private rules root."""
 
 
+class StudyReturnReceipt(RestoredReplayDecision):
+    """Exact canonical return bound to its retained rules authority root."""
+
+    source_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class StudyBranch:
     """One ephemeral exact fork for a single historical viewer."""
 
@@ -31,9 +39,13 @@ class StudyBranch:
         self,
         env: managym.Env,
         restored: RestoredReplayDecision,
+        source: managym.Env,
+        source_digest: str,
     ) -> None:
         self._env: managym.Env | None = env
         self._restored: RestoredReplayDecision | None = restored.model_copy(deep=True)
+        self._source: managym.Env | None = source
+        self._source_digest: str | None = source_digest
         self._offers: Any | None = None
 
     @property
@@ -91,14 +103,31 @@ class StudyBranch:
             int(legacy_actions),
         )
 
-    def return_to_recorded(self) -> RestoredReplayDecision:
-        """Close the branch and return the exact canonical row and cursor."""
+    def return_to_recorded(self) -> StudyReturnReceipt:
+        """Close the branch and return the source-bound canonical decision."""
         _, restored = self._require_open()
-        returned = restored.model_copy(deep=True)
+        source = self._source
+        source_digest = self._source_digest
+        if (
+            source is None
+            or source_digest is None
+            or source.state_digest() != source_digest
+        ):
+            self._close()
+            raise StudyBranchUnavailableError("Retained Study root drifted.")
+        returned = StudyReturnReceipt(
+            **restored.model_dump(mode="python"),
+            source_digest=source_digest,
+        )
+        self._close()
+        return returned
+
+    def _close(self) -> None:
         self._offers = None
         self._env = None
         self._restored = None
-        return returned
+        self._source = None
+        self._source_digest = None
 
     def _require_open(self) -> tuple[managym.Env, RestoredReplayDecision]:
         if self._env is None or self._restored is None:
@@ -116,14 +145,14 @@ class StudyForkProvider:
     ) -> None:
         replay = replay.model_copy(deep=True)
         replay_rows = {int(row.ordinal): row for row in replay.decisions}
-        retained: dict[int, managym.Env] = {}
+        retained: dict[int, tuple[managym.Env, str]] = {}
         for ordinal, env in roots.items():
             row = replay_rows.get(int(ordinal))
             if row is None or env.current_agent_index() != row.viewer:
                 raise StudyBranchUnavailableError(
                     "Retained Study root differs from its canonical decision."
                 )
-            retained[int(ordinal)] = env
+            retained[int(ordinal)] = (env, env.state_digest())
         self._replay = replay
         self._roots = retained
 
@@ -133,9 +162,13 @@ class StudyForkProvider:
             raw_address,
             authorized_viewer=authorized_viewer,
         )
-        root = self._roots.get(int(restored.ordinal))
-        if root is None:
+        retained = self._roots.get(int(restored.ordinal))
+        if retained is None:
             raise DecisionNotFoundError("decision not found")
-        if root.current_agent_index() != restored.viewer:
+        root, source_digest = retained
+        if (
+            root.current_agent_index() != restored.viewer
+            or root.state_digest() != source_digest
+        ):
             raise StudyBranchUnavailableError("Retained Study root drifted.")
-        return StudyBranch(root.clone_env(), restored)
+        return StudyBranch(root.clone_env(), restored, root, source_digest)
