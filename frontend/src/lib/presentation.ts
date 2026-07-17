@@ -272,15 +272,29 @@ export function validatePresentationUpdate(
   toRevision: number,
 ): void {
   validatePresentationEvents(events);
+  let previousSeq: number | null = null;
+  let previousFrom = fromRevision;
+  let previousTo = fromRevision;
   for (const event of events) {
     if (
-      event.from_revision !== fromRevision
-      || event.to_revision !== toRevision
+      event.from_revision < fromRevision
+      || event.to_revision > toRevision
+      || event.from_revision >= event.to_revision
+      || event.from_revision < previousFrom
+      || event.to_revision < previousTo
     ) {
       throw new Error(
-        `Presentation event ${event.seq} spans ${event.from_revision} -> ${event.to_revision}, expected ${fromRevision} -> ${toRevision}`,
+        `Presentation event ${event.seq} spans invalid sub-transition ${event.from_revision} -> ${event.to_revision} inside ${fromRevision} -> ${toRevision}`,
       );
     }
+    if (previousSeq !== null && event.seq !== previousSeq + 1) {
+      throw new Error(
+        `Presentation update sequence gap: expected ${previousSeq + 1}, received ${event.seq}`,
+      );
+    }
+    previousSeq = event.seq;
+    previousFrom = event.from_revision;
+    previousTo = event.to_revision;
   }
 }
 

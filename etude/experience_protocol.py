@@ -282,7 +282,10 @@ class LegacyPlayerView(ProtocolModel):
     life: Int32
     zone_counts: dict[str, UInt32]
     library_count: UInt32
-    hand_hidden_count: UInt32 | None = None
+    hand_hidden_count: UInt32 | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]
     exile: list[LegacyCardView]
@@ -338,10 +341,22 @@ class ExperienceFrame(ProtocolModel):
     winner: UInt8 | None
     action_space: str
     stops: StopsConfig
-    deck_names: DeckNames | None = None
-    asset_pack: AssetPackReference | None = None
-    log: list[str] | None = None
-    auto_passed: UInt32 | None = None
+    deck_names: DeckNames | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    asset_pack: AssetPackReference | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    log: list[str] | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
+    auto_passed: UInt32 | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class PresentationImportance(str, Enum):

@@ -16,6 +16,7 @@ from etude.experience_protocol import (
     UInt32,
     UInt64,
 )
+from etude.replay_index import ReplayDecisionAddress, decision_payload_sha256
 
 STUDY_VERSION: Literal[1] = 1
 
@@ -329,6 +330,10 @@ class StudyArtifact(ProtocolModel):
     def _validate_landmark(self, landmark: StudyLandmark) -> None:
         context = f"landmark {landmark.id}"
         frame = landmark.frame
+        try:
+            address = ReplayDecisionAddress.parse(landmark.decision_id)
+        except ValueError as exc:
+            raise ValueError(f"{context}: decision_id is not an erd1 address") from exc
         pack = self.identity.content_pack
         if frame.match_id != self.identity.match_id:
             raise ValueError(f"{context}: frame match does not match study identity")
@@ -362,6 +367,23 @@ class StudyArtifact(ProtocolModel):
             raise ValueError(f"{context}: selected offer differs from frame offer")
 
         self._validate_command(landmark.played, landmark, context, selected=True)
+        if (
+            address.replay_id != self.identity.source_replay_id
+            or address.match_id != self.identity.match_id
+            or address.viewer != landmark.viewer
+            or address.revision != frame.revision
+            or address.prompt_id != landmark.prompt_id
+            or address.offer_id != landmark.offer_id
+            or address.command_id != landmark.played.command_id
+            or address.decision_sha256
+            != decision_payload_sha256(
+                frame,
+                landmark.offer,
+                landmark.played,
+                address.presentation_cursor,
+            )
+        ):
+            raise ValueError(f"{context}: replay decision address drifted")
         if not landmark.alternatives:
             raise ValueError(f"{context}: no decision alternatives recorded")
         alternative_ids = {alternative.id for alternative in landmark.alternatives}

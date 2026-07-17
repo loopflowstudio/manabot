@@ -263,7 +263,13 @@ export class GameSocketController {
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
-        this.applyRecovery(message.recovery, sessionId, resumeToken);
+        this.applyRecovery(
+          message.recovery,
+          sessionId,
+          resumeToken,
+          message.log ?? [],
+          message.auto_passed ?? 0,
+        );
       } else if (message.type === 'observation') {
         gameStore.applyObservation(
           message.data,
@@ -342,7 +348,11 @@ export class GameSocketController {
       ...(current ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(update.frame),
     );
-    gameStore.applyFrame(update.frame);
+    gameStore.applyFrame({
+      ...update.frame,
+      ...(update.log ? { log: update.log } : {}),
+      ...(update.auto_passed ? { auto_passed: update.auto_passed } : {}),
+    });
     try {
       validatePresentationUpdate(
         update.presentation,
@@ -371,6 +381,8 @@ export class GameSocketController {
     recovery: RecoveryEnvelope,
     sessionId?: string,
     resumeToken?: string,
+    log: string[] = [],
+    autoPassed = 0,
   ): void {
     const current = gameStore.protocolFrame;
     const next = recovery.frame;
@@ -387,7 +399,15 @@ export class GameSocketController {
       ...(current ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(next),
     );
-    gameStore.applyFrame(next, sessionId, resumeToken);
+    gameStore.applyFrame(
+      {
+        ...next,
+        ...(log.length > 0 ? { log } : {}),
+        ...(autoPassed > 0 ? { auto_passed: autoPassed } : {}),
+      },
+      sessionId,
+      resumeToken,
+    );
     try {
       this.presentationCursor = validatePresentationTail(
         recovery.presentation_tail,

@@ -15,9 +15,9 @@
   "events": [
     {
       "seq": 1,
-      "from_revision": 1,
-      "to_revision": 2,
-      "caused_by": "curated-combat-1",
+      "from_revision": 2,
+      "to_revision": 3,
+      "caused_by": null,
       "group": 1,
       "importance": "emphasized",
       "suggested_ms": 500,
@@ -30,8 +30,8 @@
     },
     {
       "seq": 2,
-      "from_revision": 2,
-      "to_revision": 3,
+      "from_revision": 3,
+      "to_revision": 4,
       "caused_by": "curated-combat-2",
       "group": 2,
       "importance": "normal",
@@ -45,8 +45,8 @@
     },
     {
       "seq": 3,
-      "from_revision": 2,
-      "to_revision": 3,
+      "from_revision": 3,
+      "to_revision": 4,
       "caused_by": "curated-combat-2",
       "group": 3,
       "importance": "critical",
@@ -61,8 +61,8 @@
     },
     {
       "seq": 4,
-      "from_revision": 2,
-      "to_revision": 3,
+      "from_revision": 3,
+      "to_revision": 4,
       "caused_by": "curated-combat-2",
       "group": 4,
       "importance": "critical",
@@ -77,8 +77,8 @@
     },
     {
       "seq": 5,
-      "from_revision": 2,
-      "to_revision": 3,
+      "from_revision": 3,
+      "to_revision": 4,
       "caused_by": "curated-combat-2",
       "group": 5,
       "importance": "critical",
@@ -94,8 +94,8 @@
     },
     {
       "seq": 6,
-      "from_revision": 2,
-      "to_revision": 3,
+      "from_revision": 3,
+      "to_revision": 4,
       "caused_by": "curated-combat-2",
       "group": 6,
       "importance": "emphasized",

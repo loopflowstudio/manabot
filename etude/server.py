@@ -6,13 +6,14 @@ FastAPI server for interactive managym play over WebSocket.
 from __future__ import annotations
 
 from contextlib import suppress
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
 import secrets
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -21,8 +22,21 @@ import managym
 from . import trace as trace_store, villain as villain_module
 from .curated_pack import CURATED_PACK
 from .enums import ActionEnum, ActionSpaceEnum, PhaseEnum, StepEnum, ZoneEnum
-from .experience_protocol import PROTOCOL_VERSION
+from .experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
 from .presentation import PresentationProjector
+from .replay_index import (
+    CANONICAL_REPLAY_VERSION,
+    CanonicalReplayUnavailableError,
+    CanonicalReplayV1,
+    DecisionNotFoundError,
+    InvalidAddressError,
+    ReplayDecision,
+    ViewerPresentationTrack,
+    load_canonical_replay,
+    project_replay,
+    projection_with_addresses,
+    restore_decision,
+)
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
@@ -133,15 +147,21 @@ SESSION_REGISTRY: dict[str, SessionRecord] = {}
 
 
 @dataclass(frozen=True)
-class PublishedPrompt:
-    """One immutable mapping from wire offer IDs to current engine actions."""
+class DecisionContext:
+    """One immutable actor-safe frame and its engine lowering map."""
 
+    viewer: int
     revision: int
     prompt_id: int
     action_space: str
     action_by_offer: dict[int, int]
     actions: list[dict[str, Any]]
     offers: list[dict[str, Any]]
+    frame: dict[str, Any]
+
+
+# Transitional name retained for type references in downstream tests.
+PublishedPrompt = DecisionContext
 
 
 def _enum_name(enum_type, value: Any) -> str:
@@ -391,21 +411,26 @@ def describe_actions(obs: managym.Observation) -> list[dict[str, Any]]:
     return results
 
 
-def hero_view(obs: managym.Observation) -> dict[str, Any]:
-    """Serialize an observation for the human player.
+def viewer_view(obs: managym.Observation, viewer: int) -> dict[str, Any]:
+    """Serialize an observation for one acting viewer.
 
     Two guarantees, regardless of whose perspective the engine observation is
-    from (at game over it can be the villain's):
-      1. ``agent`` is always the hero and ``opponent`` always the villain.
-      2. The villain's hand is redacted (libraries are never serialized).
+    from:
+      1. ``agent`` is always ``viewer`` and ``opponent`` the other player.
+      2. The opponent's hand is redacted (libraries are never serialized).
     """
     data = serialize_observation(obs)
-    if int(data["agent"]["player_index"]) != HERO_PLAYER_INDEX:
+    if int(data["agent"]["player_index"]) != viewer:
         data["agent"], data["opponent"] = data["opponent"], data["agent"]
         data["won"] = bool(obs.game_over) and not bool(obs.won)
 
     trace_store.redact_observation(data)
     return data
+
+
+def hero_view(obs: managym.Observation) -> dict[str, Any]:
+    """Backwards-compatible player-0 projection for the live table."""
+    return viewer_view(obs, HERO_PLAYER_INDEX)
 
 
 def _winner_for_hero(obs: managym.Observation) -> int | None:
@@ -603,8 +628,16 @@ def _parse_game_config(config: Any) -> GameConfig:
 
 
 class GameSession:
-    def __init__(self, trace_dir: Path | None = None):
+    def __init__(
+        self,
+        trace_dir: Path | None = None,
+        *,
+        id_factory: Callable[[str], str] | None = None,
+        clock: Callable[[], str] | None = None,
+    ):
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
+        self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
+        self._clock = clock or trace_store.utc_now_iso
         self.env: managym.Env | None = None
         self.obs: managym.Observation | None = None
         self.villain_policy: VillainPolicy | None = None
@@ -629,7 +662,7 @@ class GameSession:
         self._auto_passed_since_surface = 0
         # Protocol-v1 adapter state. The engine remains authoritative; this
         # layer only gives each surfaced positional action a stable envelope.
-        self.match_id = secrets.token_urlsafe(16)
+        self.match_id = self._id_factory("match")
         self.revision = 0
         self._next_prompt_id = 1
         self.published_prompt: PublishedPrompt | None = None
@@ -637,6 +670,13 @@ class GameSession:
         self.presentation = PresentationProjector()
         self.presentation_events: list[dict[str, Any]] = []
         self._last_presentation_cursor = 0
+        # Durable replay truth is unbounded by the live reconnect ledger.
+        self.canonical_decisions: list[ReplayDecision] = []
+        self.canonical_presentation: dict[int, list[dict[str, Any]]] = {
+            HERO_PLAYER_INDEX: [],
+            1: [],
+        }
+        self._authority_command_seq = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -670,7 +710,7 @@ class GameSession:
             final_observation={},
             winner=None,
             end_reason="disconnect",
-            timestamp=trace_store.utc_now_iso(),
+            timestamp=self._clock(),
         )
         self._trace_saved = False
         self.trace_id = None
@@ -682,7 +722,7 @@ class GameSession:
         self.auto_pass = config.auto_pass
         self._f6_turn = None
         self._auto_passed_since_surface = 0
-        self.match_id = secrets.token_urlsafe(16)
+        self.match_id = self._id_factory("match")
         self.revision = 0
         self._next_prompt_id = 1
         self.published_prompt = None
@@ -690,15 +730,19 @@ class GameSession:
         self.presentation.reset()
         self.presentation_events = []
         self._last_presentation_cursor = 0
+        self.canonical_decisions = []
+        self.canonical_presentation = {HERO_PLAYER_INDEX: [], 1: []}
+        self._authority_command_seq = 0
 
-        self._advance()
-        # Initial setup is an authority snapshot, not a command transition.
-        # Do not let any setup facts leak into the first accepted command.
+        # Setup itself is an authority snapshot. Clear staged facts before any
+        # auto-play transition so each subsequent drain belongs to one exact
+        # engine action/revision pair.
         self.presentation.drain(
             from_revision=self.revision,
             to_revision=self.revision,
             caused_by=None,
         )
+        self._advance()
         self._last_presentation_cursor = self.presentation.next_seq
         return self._wire_message(reason="initial_connect")
 
@@ -715,20 +759,27 @@ class GameSession:
         except Exception as exc:
             raise ValueError("Action index must be an integer.") from exc
 
-        actions = describe_actions(self.obs)
-        if action_index < 0 or action_index >= len(actions):
+        context = self._publish_current_prompt()
+        if context is None:
+            raise ValueError("No current decision is available.")
+        if action_index < 0 or action_index >= len(context.actions):
             raise ValueError(f"Action index out of range: {action_index}")
 
-        base_revision = self.revision
-        trace_start = len(self.trace.events)
-        self._step_and_record(actor="hero", action_index=action_index, actions=actions)
-        self._advance()
-        self._advance_protocol_revision()
-        self._commit_presentation(
-            base_revision=base_revision,
-            caused_by=None,
-            trace_start=trace_start,
+        selected = next(
+            (
+                offer_id
+                for offer_id, engine_index in context.action_by_offer.items()
+                if engine_index == action_index
+            ),
+            None,
         )
+        if selected is None:
+            raise RuntimeError("Hero action has no unique authority offer.")
+        command = self._authority_command(context, selected, "compat")
+        batch_cursor = self.presentation.next_seq
+        self._apply_bound_command(context, command, source="client")
+        self._advance()
+        self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
     def hero_command(self, raw: Any) -> dict[str, Any]:
@@ -745,6 +796,8 @@ class GameSession:
         command_id = raw.get("command_id")
         if not isinstance(command_id, str) or not command_id:
             raise ValueError("command_id must be a non-empty string.")
+        if command_id.startswith("authority."):
+            return self._reject_command(raw, "reserved_command_id", recover=False)
 
         # Check retries before any revision/match validation. A response may
         # have been lost after the original command committed.
@@ -760,17 +813,16 @@ class GameSession:
         if raw.get("match_id") != self.match_id:
             return self._reject_command(raw, "wrong_match", recover=False)
 
-        prompt = self.published_prompt
-        if prompt is None:
+        context = self.published_prompt
+        if context is None:
             return self._reject_command(raw, "authority_busy", recover=True)
-        if raw.get("expected_revision") != prompt.revision:
+        if raw.get("expected_revision") != context.revision:
             return self._reject_command(raw, "stale_revision", recover=True)
-        if raw.get("prompt_id") != prompt.prompt_id:
+        if raw.get("prompt_id") != context.prompt_id:
             return self._reject_command(raw, "stale_prompt", recover=True)
 
         offer_id = raw.get("offer_id")
-        action_index = prompt.action_by_offer.get(offer_id)
-        if action_index is None:
+        if context.action_by_offer.get(offer_id) is None:
             return self._reject_command(raw, "unknown_offer", recover=True)
         if raw.get("answers") != []:
             return self._reject_command(raw, "invalid_selection", recover=False)
@@ -779,21 +831,23 @@ class GameSession:
         if not _is_hero_turn(self.obs):
             return self._reject_command(raw, "not_actor", recover=False)
 
-        base_revision = self.revision
-        trace_start = len(self.trace.events)
-        self._step_and_record(
-            actor="hero",
-            action_index=action_index,
-            actions=prompt.actions,
-        )
+        try:
+            command = Command.model_validate(raw).model_dump(mode="json")
+        except Exception:
+            return self._reject_command(raw, "invalid_command", recover=False)
+
+        base_revision = context.revision
+        batch_cursor = self.presentation.next_seq
+        self._apply_bound_command(context, command, source="client")
         self._advance()
-        self._advance_protocol_revision()
-        presentation = self._commit_presentation(
-            base_revision=base_revision,
-            caused_by=command_id,
-            trace_start=trace_start,
-        )
+        self._last_presentation_cursor = batch_cursor
+        presentation = [
+            dict(event)
+            for event in self.presentation_events
+            if int(event["seq"]) >= batch_cursor
+        ]
         frame = self._experience_frame()
+        transient = self._drain_surface_metadata()
         receipt = {
             "command_id": command_id,
             "actor": HERO_PLAYER_INDEX,
@@ -813,6 +867,7 @@ class GameSession:
                 "frame": frame,
                 "presentation": presentation,
                 "receipt": receipt,
+                **transient,
             },
         }
 
@@ -839,15 +894,12 @@ class GameSession:
                 raise ValueError("auto_pass must be a boolean.")
             self.auto_pass = raw_auto_pass
 
-        base_revision = self.revision
-        trace_start = len(self.trace.events)
-        self._advance()
+        # Stop configuration is versioned authority state even though it is not
+        # a player decision and therefore never receives a replay ordinal.
         self._advance_protocol_revision()
-        self._commit_presentation(
-            base_revision=base_revision,
-            caused_by=None,
-            trace_start=trace_start,
-        )
+        batch_cursor = self.presentation.next_seq
+        self._advance()
+        self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
     def pass_turn(self) -> dict[str, Any]:
@@ -859,16 +911,10 @@ class GameSession:
             raise ValueError("Game is already over. Start a new game.")
 
         if _is_hero_turn(self.obs) and _is_priority_space(self.obs):
-            base_revision = self.revision
-            trace_start = len(self.trace.events)
+            batch_cursor = self.presentation.next_seq
             self._f6_turn = int(self.obs.turn.turn_number)
             self._advance()
-            self._advance_protocol_revision()
-            self._commit_presentation(
-                base_revision=base_revision,
-                caused_by=None,
-                trace_start=trace_start,
-            )
+            self._last_presentation_cursor = batch_cursor
         return self._wire_message()
 
     def current_message(self, presentation_cursor: int | None = None) -> dict[str, Any]:
@@ -881,23 +927,105 @@ class GameSession:
             presentation_cursor=presentation_cursor,
         )
 
+    def _authority_command(
+        self,
+        context: DecisionContext,
+        offer_id: int,
+        namespace: str,
+    ) -> dict[str, Any]:
+        """Create a collision-free authority-local bound command."""
+        self._authority_command_seq += 1
+        return {
+            "command_id": (
+                f"authority.{namespace}.{self.match_id}.{self._authority_command_seq}"
+            ),
+            "match_id": self.match_id,
+            "expected_revision": context.revision,
+            "prompt_id": context.prompt_id,
+            "offer_id": offer_id,
+            "answers": [],
+        }
+
+    def _apply_bound_command(
+        self,
+        context: DecisionContext,
+        raw_command: dict[str, Any],
+        *,
+        source: str,
+    ) -> None:
+        """Validate, capture, and lower one deliberate authority command."""
+        command = Command.model_validate(raw_command)
+        if (
+            command.match_id != self.match_id
+            or command.expected_revision != context.revision
+            or command.prompt_id != context.prompt_id
+        ):
+            raise RuntimeError("Bound command identity differs from decision context.")
+        action_index = context.action_by_offer.get(command.offer_id)
+        matching_offers = [
+            offer for offer in context.offers if int(offer["id"]) == command.offer_id
+        ]
+        if action_index is None or len(matching_offers) != 1:
+            raise RuntimeError("Bound command does not lower through one exact offer.")
+        actor = "hero" if context.viewer == HERO_PLAYER_INDEX else "villain"
+        self._step_and_record(
+            actor=actor,
+            action_index=action_index,
+            actions=context.actions,
+            context=context,
+            command=command.model_dump(mode="json"),
+            source=source,
+        )
+
     def _step_and_record(
         self,
         actor: str,
         action_index: int,
         actions: list[dict[str, Any]],
         auto: bool = False,
+        context: DecisionContext | None = None,
+        command: dict[str, Any] | None = None,
+        source: str | None = None,
     ) -> None:
         if self.env is None or self.obs is None or self.trace is None:
             raise RuntimeError("Cannot step without an active game.")
 
         observation = serialize_observation(self.obs)
+        actor_index = HERO_PLAYER_INDEX if actor == "hero" else 1
+        if not auto:
+            if context is None or command is None or source not in {"client", "policy"}:
+                raise RuntimeError("Deliberate engine actions require a bound command.")
+            if context.viewer != actor_index:
+                raise RuntimeError("Decision context actor differs from engine actor.")
+            offer_id = int(command["offer_id"])
+            selected_offer = next(
+                offer for offer in context.offers if int(offer["id"]) == offer_id
+            )
+            row = ReplayDecision.model_validate(
+                {
+                    "ordinal": len(self.canonical_decisions),
+                    "viewer": actor_index,
+                    "source": source,
+                    "revision": context.revision,
+                    "prompt_id": context.prompt_id,
+                    "offer_id": offer_id,
+                    "command_id": command["command_id"],
+                    "presentation_cursor": len(
+                        self.canonical_presentation[actor_index]
+                    ),
+                    "frame": context.frame,
+                    "offer": selected_offer,
+                    "command": command,
+                }
+            )
+            self.canonical_decisions.append(row)
         action_description = actions[action_index]["description"]
         self.presentation.note_action(
             self.obs,
             actions[action_index],
-            actor_index=HERO_PLAYER_INDEX if actor == "hero" else 1,
+            actor_index=actor_index,
         )
+        from_revision = self.revision
         next_obs, reward, _, _, _ = self.env.step(action_index)
         self.presentation.observe(next_obs)
         if actor == "villain":
@@ -914,6 +1042,13 @@ class GameSession:
             )
         )
         self.obs = next_obs
+        self._advance_protocol_revision()
+        caused_by = None if command is None else str(command["command_id"])
+        self._commit_step_presentation(
+            from_revision=from_revision,
+            actor=actor_index,
+            caused_by=caused_by,
+        )
 
     def _auto_play_villain(self) -> None:
         if self.env is None or self.obs is None or self.trace is None:
@@ -927,14 +1062,26 @@ class GameSession:
                 raise RuntimeError("Villain auto-play exceeded safety step limit.")
             steps += 1
 
-            actions = describe_actions(self.obs)
+            context = self._build_decision_context(self.obs, viewer=1)
             action_index = int(self.villain_policy(self.env, self.obs))
-            if action_index < 0 or action_index >= len(actions):
+            if action_index < 0 or action_index >= len(context.actions):
                 raise RuntimeError(
                     f"Villain policy selected invalid action index: {action_index}"
                 )
-            self._step_and_record(
-                actor="villain", action_index=action_index, actions=actions
+            matching = [
+                offer_id
+                for offer_id, engine_index in context.action_by_offer.items()
+                if engine_index == action_index
+            ]
+            if len(matching) != 1:
+                raise RuntimeError(
+                    "Villain policy action does not map to one authority offer."
+                )
+            command = self._authority_command(context, matching[0], "policy")
+            self._apply_bound_command(
+                context,
+                command,
+                source="policy",
             )
 
     def _advance(self) -> None:
@@ -1026,48 +1173,58 @@ class GameSession:
         self._pending_villain_log = []
         return pending
 
+    def _drain_surface_metadata(self) -> dict[str, Any]:
+        """Drain compatibility narration outside the canonical frame."""
+        payload: dict[str, Any] = {}
+        log = self._drain_pending_villain_log()
+        auto_passed = self._auto_passed_since_surface
+        self._auto_passed_since_surface = 0
+        if log:
+            payload["log"] = log
+        if auto_passed:
+            payload["auto_passed"] = auto_passed
+        return payload
+
     def _advance_protocol_revision(self) -> None:
         self.revision += 1
         self.published_prompt = None
 
-    def _commit_presentation(
+    def _commit_step_presentation(
         self,
         *,
-        base_revision: int,
+        from_revision: int,
+        actor: int,
         caused_by: str | None,
-        trace_start: int,
-    ) -> list[dict[str, Any]]:
-        """Bind pending facts to one transition and persist that same array.
-
-        The final trace step of the transition owns the batch. Live play and
-        replay therefore consume byte-for-byte equivalent semantic facts;
-        neither path reconstructs meaning from observation snapshots.
-        """
-
-        presentation = self.presentation.drain(
-            from_revision=base_revision,
+    ) -> None:
+        """Commit one engine step into both authorized semantic tracks."""
+        authority_events = self.presentation.drain(
+            from_revision=from_revision,
             to_revision=self.revision,
             caused_by=caused_by,
         )
-        self._last_presentation_cursor = (
-            int(presentation[0]["seq"]) if presentation else self.presentation.next_seq
-        )
-        self.presentation_events.extend(presentation)
+        viewer_events: dict[int, list[dict[str, Any]]] = {}
+        for viewer in (HERO_PLAYER_INDEX, 1):
+            projected: list[dict[str, Any]] = []
+            for event in authority_events:
+                copy = deepcopy(event)
+                if viewer != actor:
+                    copy["caused_by"] = None
+                projected.append(copy)
+            self.canonical_presentation[viewer].extend(projected)
+            viewer_events[viewer] = projected
+
+        live_events = viewer_events[HERO_PLAYER_INDEX]
+        self.presentation_events.extend(live_events)
         if len(self.presentation_events) > MAX_PRESENTATION_EVENTS:
             self.presentation_events = self.presentation_events[
                 -MAX_PRESENTATION_EVENTS:
             ]
-        if (
-            presentation
-            and self.trace is not None
-            and len(self.trace.events) > trace_start
-        ):
+        if live_events and self.trace is not None and self.trace.events:
             index = len(self.trace.events) - 1
             self.trace.events[index] = replace(
                 self.trace.events[index],
-                presentation=presentation,
+                presentation=deepcopy(live_events),
             )
-        return presentation
 
     def _publish_current_prompt(self) -> PublishedPrompt | None:
         if self.obs is None or self.obs.game_over:
@@ -1076,9 +1233,22 @@ class GameSession:
         if self.published_prompt is not None:
             return self.published_prompt
 
-        actions = describe_actions(self.obs)
+        self.published_prompt = self._build_decision_context(
+            self.obs,
+            viewer=HERO_PLAYER_INDEX,
+        )
+        return self.published_prompt
+
+    def _build_decision_context(
+        self,
+        obs: managym.Observation,
+        *,
+        viewer: int,
+    ) -> DecisionContext:
+        """Build one exact actor-safe frame and raw-action lowering map."""
+        actions = describe_actions(obs)
         action_space = _enum_name(
-            ActionSpaceEnum, int(self.obs.action_space.action_space_type)
+            ActionSpaceEnum, int(obs.action_space.action_space_type)
         )
         prompt_id = self._next_prompt_id
         self._next_prompt_id += 1
@@ -1088,7 +1258,7 @@ class GameSession:
         offers = [
             {
                 "id": offer_id,
-                "actor": HERO_PLAYER_INDEX,
+                "actor": viewer,
                 "verb": _offer_verb(str(action.get("type", ""))),
                 "source": None,
                 "label": action["description"],
@@ -1101,75 +1271,88 @@ class GameSession:
             }
             for offer_id, action in enumerate(actions)
         ]
-        self.published_prompt = PublishedPrompt(
+        prompt_view = {
+            "id": prompt_id,
+            "actor": viewer,
+            "kind": action_space.lower(),
+            "title": "Your priority"
+            if action_space == "PRIORITY"
+            else "Choose an action",
+            "instruction": "Choose an action",
+        }
+        frame = self._build_frame(
+            obs,
+            viewer=viewer,
+            prompt=prompt_view,
+            offers=offers,
+            action_space=action_space,
+        )
+        return DecisionContext(
+            viewer=viewer,
             revision=self.revision,
             prompt_id=prompt_id,
             action_space=action_space,
             action_by_offer=action_by_offer,
             actions=actions,
             offers=offers,
+            frame=frame,
         )
-        return self.published_prompt
 
-    def _experience_frame(self) -> dict[str, Any]:
-        if self.obs is None:
-            raise RuntimeError("No observation available.")
-
-        prompt = self._publish_current_prompt()
-        data = hero_view(self.obs)
-        log = self._drain_pending_villain_log()
-        auto_passed = self._auto_passed_since_surface
-        self._auto_passed_since_surface = 0
-        if self.obs.game_over:
-            self._finalize_trace(end_reason="game_over")
-        prompt_view = None
-        if prompt is not None:
-            title = (
-                "Your priority"
-                if prompt.action_space == "PRIORITY"
-                else "Choose an action"
-            )
-            prompt_view = {
-                "id": prompt.prompt_id,
-                "actor": HERO_PLAYER_INDEX,
-                "kind": prompt.action_space.lower(),
-                "title": title,
-                "instruction": "Choose an action",
-            }
-
-        frame_core = {
+    def _build_frame(
+        self,
+        obs: managym.Observation,
+        *,
+        viewer: int,
+        prompt: dict[str, Any] | None,
+        offers: list[dict[str, Any]],
+        action_space: str,
+    ) -> dict[str, Any]:
+        frame_without_hash: dict[str, Any] = {
             "protocol": PROTOCOL_VERSION,
             "match_id": self.match_id,
             "revision": self.revision,
             "content_hash": CONTENT_HASH,
             "asset_manifest_hash": ASSET_MANIFEST_HASH,
-            "status": "game_over" if self.obs.game_over else "ready",
-            "prompt": prompt_view,
-            # This first slice deliberately carries the established hero-view
-            # projection. Semantic table projection is a later migration.
-            "projection": data,
-            "offers": [] if prompt is None else prompt.offers,
-        }
-        frame_hash = hashlib.sha256(
-            json.dumps(frame_core, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        frame = {
-            **frame_core,
-            "frame_hash": frame_hash,
-            "winner": _winner_for_hero(self.obs),
-            "action_space": "" if prompt is None else prompt.action_space,
+            "status": "game_over" if obs.game_over else "ready",
+            "prompt": prompt,
+            "projection": viewer_view(obs, viewer),
+            "offers": offers,
+            "winner": _winner_for_hero(obs) if viewer == HERO_PLAYER_INDEX else None,
+            "action_space": action_space,
             "stops": self._stops_payload(),
+            "deck_names": dict(self.deck_names) if self.deck_names else None,
+            "asset_pack": dict(self.asset_pack) if self.asset_pack else None,
+            "log": None,
+            "auto_passed": None,
         }
-        if self.deck_names:
-            frame["deck_names"] = dict(self.deck_names)
-        frame["asset_pack"] = (
-            dict(self.asset_pack) if self.asset_pack is not None else None
+        frame_without_hash["frame_hash"] = hashlib.sha256(
+            json.dumps(
+                frame_without_hash,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        return ExperienceFrame.model_validate(frame_without_hash).model_dump(
+            mode="json"
         )
-        if log:
-            frame["log"] = log
-        if auto_passed:
-            frame["auto_passed"] = auto_passed
-        return frame
+
+    def _experience_frame(self) -> dict[str, Any]:
+        if self.obs is None:
+            raise RuntimeError("No observation available.")
+
+        if self.obs.game_over:
+            self._finalize_trace(end_reason="game_over")
+            return self._build_frame(
+                self.obs,
+                viewer=HERO_PLAYER_INDEX,
+                prompt=None,
+                offers=[],
+                action_space="",
+            )
+        prompt = self._publish_current_prompt()
+        if prompt is None:
+            raise RuntimeError("Non-terminal authority has no decision context.")
+        return deepcopy(prompt.frame)
 
     def _presentation_recovery_tail(
         self, requested_cursor: int | None
@@ -1238,6 +1421,7 @@ class GameSession:
         )
         frame = recovery["frame"]
         prompt = self.published_prompt
+        transient = self._drain_surface_metadata()
         payload: dict[str, Any] = {
             "type": "game_over" if frame["projection"]["game_over"] else "observation",
             "data": frame["projection"],
@@ -1253,10 +1437,7 @@ class GameSession:
             payload["deck_names"] = frame["deck_names"]
         if "asset_pack" in frame:
             payload["asset_pack"] = frame["asset_pack"]
-        if "log" in frame:
-            payload["log"] = frame["log"]
-        if "auto_passed" in frame:
-            payload["auto_passed"] = frame["auto_passed"]
+        payload.update(transient)
         return payload
 
     def _reject_command(
@@ -1285,11 +1466,28 @@ class GameSession:
         if self._trace_saved:
             return
 
+        canonical = CanonicalReplayV1(
+            version=CANONICAL_REPLAY_VERSION,
+            replay_id=f"replay.{self.match_id}",
+            match_id=self.match_id,
+            content_hash=CONTENT_HASH,
+            asset_manifest_hash=ASSET_MANIFEST_HASH,
+            decisions=[row.model_copy(deep=True) for row in self.canonical_decisions],
+            presentation_tracks=[
+                ViewerPresentationTrack(
+                    viewer=viewer,
+                    head=len(events),
+                    events=deepcopy(events),
+                )
+                for viewer, events in sorted(self.canonical_presentation.items())
+            ],
+        )
         final_trace = replace(
             self.trace,
             final_observation=serialize_observation(self.obs),
             winner=_winner_for_hero(self.obs),
             end_reason=end_reason,
+            canonical_replay=canonical.model_dump(mode="json"),
         )
         path = trace_store.save_trace(final_trace, self.trace_dir)
         self.trace = final_trace
@@ -1528,6 +1726,38 @@ async def play_socket(websocket: WebSocket) -> None:
 @app.get("/api/traces")
 async def list_traces() -> list[dict[str, Any]]:
     return trace_store.list_trace_summaries()
+
+
+def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:
+    try:
+        return load_canonical_replay(trace_store.load_trace(trace_id))
+    except ValueError as exc:
+        if isinstance(exc, CanonicalReplayUnavailableError):
+            raise HTTPException(
+                status_code=409,
+                detail="canonical_replay_unavailable",
+            ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="decision_not_found") from exc
+
+
+@app.get("/api/traces/{trace_id}/decisions")
+async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
+    replay = _load_trace_replay(trace_id)
+    return projection_with_addresses(project_replay(replay, HERO_PLAYER_INDEX))
+
+
+@app.get("/api/traces/{trace_id}/decisions/{address}")
+async def get_trace_decision(trace_id: str, address: str) -> dict[str, Any]:
+    replay = _load_trace_replay(trace_id)
+    try:
+        restored = restore_decision(replay, address, HERO_PLAYER_INDEX)
+    except InvalidAddressError as exc:
+        raise HTTPException(status_code=400, detail="invalid_address") from exc
+    except DecisionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="decision_not_found") from exc
+    return restored.model_dump(mode="json")
 
 
 @app.get("/api/traces/{trace_id}")

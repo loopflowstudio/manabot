@@ -1,10 +1,10 @@
 {
   "version": 1,
   "identity": {
-    "artifact_id": "study-curated-bolt-target-1",
-    "source_replay_id": "experience-v1/bolt-target",
-    "source_replay_sha256": "138047db09b8fa397f01d21effcdfab6d9098364cfc7c89568fca2c6a74958d5",
-    "match_id": "fixture-match",
+    "artifact_id": "study-pinned-curated-decision-1",
+    "source_replay_id": "replay.pinned-curated-match",
+    "source_replay_sha256": "692f3ae12a7792d54690f9f5b206756c42fbe06deb2fc1ac0fa7b607fc352149",
+    "match_id": "pinned-curated-match",
     "content_pack": {
       "id": "tla-ur-lessons-vs-gw-allies",
       "version": "1.0.0",
@@ -13,48 +13,48 @@
     },
     "engine": {
       "version": "managym-python-adapter",
-      "build_sha256": "3194068e434f1e2f050c99a33f5fb6eb35e2437e07c2e233c01a565ee01f09e0"
+      "build_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     "model": {
-      "id": "structured-policy-v1",
-      "checkpoint_sha256": "9168f071c207a4daec4b396b9c829fdf0936fe37c786bd6d1c3d93c37cb15a78"
+      "id": "passive-policy",
+      "checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     "analysis_budget": {
-      "id": "study-fixture-64n-8w-8r",
-      "max_nodes": 64,
-      "sampled_worlds": 8,
-      "rollouts_per_world": 8
+      "id": "fixture-only",
+      "max_nodes": 1,
+      "sampled_worlds": 1,
+      "rollouts_per_world": 1
     },
     "knowledge_scope": "historical_viewer"
   },
   "landmarks": [
     {
-      "id": "bolt-target-choice",
-      "decision_id": "fixture-match:revision-2:prompt-3",
-      "match_state_hash": "fixture-frame-hash",
+      "id": "pinned-decision-6",
+      "decision_id": "erd1.WzEsInJlcGxheS5waW5uZWQtY3VyYXRlZC1tYXRjaCIsInBpbm5lZC1jdXJhdGVkLW1hdGNoIiwiNiIsIjAiLCI2IiwiNyIsIjAiLCJwaW5uZWQtaHVtYW4tMCIsIjUiLCIzZjlkM2Y0NDZjZWYwMDFhZDhlNTJhOGE2YTljNzdmYjIxNmY4NWY3ZmFhMGMwNGFkY2U5NTg3NWVlOGMxMjg5Il0",
+      "match_state_hash": "f714ccaf78af5b0e3ba45267f1078e9b4de636468b6fde561b42cc519806084e",
       "viewer": 0,
-      "prompt_id": 3,
-      "offer_id": 1,
+      "prompt_id": 7,
+      "offer_id": 0,
       "frame": {
         "protocol": 1,
-        "match_id": "fixture-match",
-        "revision": 2,
-        "frame_hash": "fixture-frame-hash",
+        "match_id": "pinned-curated-match",
+        "revision": 6,
+        "frame_hash": "f714ccaf78af5b0e3ba45267f1078e9b4de636468b6fde561b42cc519806084e",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
         "status": "ready",
         "prompt": {
-          "id": 3,
+          "id": 7,
           "actor": 0,
-          "kind": "choose_target",
-          "title": "Choose an action",
+          "kind": "priority",
+          "title": "Your priority",
           "instruction": "Choose an action"
         },
         "projection": {
           "game_over": false,
           "won": false,
           "turn": {
-            "turn_number": 1,
+            "turn_number": 7,
             "phase": "PRECOMBAT_MAIN",
             "step": "PRECOMBAT_MAIN_STEP",
             "active_player_id": 0,
@@ -66,9 +66,208 @@
             "is_active": true,
             "is_agent": true,
             "life": 20,
-            "zone_counts": {},
-            "library_count": 16,
-            "hand": [],
+            "zone_counts": {
+              "LIBRARY": 31,
+              "HAND": 10,
+              "BATTLEFIELD": 0,
+              "GRAVEYARD": 0,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 31,
+            "hand": [
+              {
+                "id": 8,
+                "registry_key": 46,
+                "name": "Fire Nation Cadets",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 9,
+                "registry_key": 40,
+                "name": "Firebending Lesson",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 42,
+                "registry_key": 36,
+                "name": "Tiger-Seal",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 12,
+                "registry_key": 40,
+                "name": "Firebending Lesson",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 28,
+                "registry_key": 41,
+                "name": "It'll Quench Ya!",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 3,
+                "registry_key": 42,
+                "name": "Accumulate Wisdom",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 27,
+                "registry_key": 41,
+                "name": "It'll Quench Ya!",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 4,
+                "registry_key": 27,
+                "name": "Divide by Zero",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 10,
+                "registry_key": 40,
+                "name": "Firebending Lesson",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "id": 29,
+                "registry_key": 3,
+                "name": "Mountain",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 0,
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
             "graveyard": [],
             "exile": [],
             "stack": [],
@@ -80,9 +279,17 @@
             "is_active": false,
             "is_agent": false,
             "life": 20,
-            "zone_counts": {},
-            "library_count": 13,
-            "hand_hidden_count": 7,
+            "zone_counts": {
+              "LIBRARY": 30,
+              "HAND": 10,
+              "BATTLEFIELD": 0,
+              "GRAVEYARD": 0,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 30,
+            "hand_hidden_count": 10,
             "hand": [],
             "graveyard": [],
             "exile": [],
@@ -94,76 +301,94 @@
           {
             "id": 0,
             "actor": 0,
-            "verb": "choose",
+            "verb": "play_land",
             "source": null,
-            "label": "Target Hero",
+            "label": "Play Mountain",
             "help": null,
             "choices": [],
-            "confirm_label": "Target Hero",
-            "action_type": "CHOOSE_TARGET",
-            "focus": [0]
+            "confirm_label": "Play Mountain",
+            "action_type": "PRIORITY_PLAY_LAND",
+            "focus": [
+              29
+            ]
           },
           {
             "id": 1,
             "actor": 0,
-            "verb": "choose",
+            "verb": "pass_priority",
             "source": null,
-            "label": "Target Villain",
+            "label": "Pass priority",
             "help": null,
             "choices": [],
-            "confirm_label": "Target Villain",
-            "action_type": "CHOOSE_TARGET",
-            "focus": [1]
+            "confirm_label": "Pass priority",
+            "action_type": "PRIORITY_PASS_PRIORITY",
+            "focus": []
           }
         ],
         "winner": null,
-        "action_space": "CHOOSE_TARGET",
+        "action_space": "PRIORITY",
         "stops": {
-          "my": ["main1", "main2"],
-          "opponent": ["end_step"],
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
           "stop_on_stack": true,
           "auto_pass": false
+        },
+        "deck_names": {
+          "hero": "UR Lessons",
+          "villain": "GW Allies"
+        },
+        "asset_pack": {
+          "id": "tla-ur-lessons-vs-gw-allies",
+          "version": "1.0.0",
+          "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
         }
       },
       "offer": {
-        "id": 1,
+        "id": 0,
         "actor": 0,
-        "verb": "choose",
+        "verb": "play_land",
         "source": null,
-        "label": "Target Villain",
+        "label": "Play Mountain",
         "help": null,
         "choices": [],
-        "confirm_label": "Target Villain",
-        "action_type": "CHOOSE_TARGET",
-        "focus": [1]
+        "confirm_label": "Play Mountain",
+        "action_type": "PRIORITY_PLAY_LAND",
+        "focus": [
+          29
+        ]
       },
       "played": {
-        "command_id": "fixture-target-command",
-        "match_id": "fixture-match",
-        "expected_revision": 2,
-        "prompt_id": 3,
-        "offer_id": 1,
+        "command_id": "pinned-human-0",
+        "match_id": "pinned-curated-match",
+        "expected_revision": 6,
+        "prompt_id": 7,
+        "offer_id": 0,
         "answers": []
       },
       "alternatives": [
         {
-          "id": "target-hero",
+          "id": "offer-0",
           "command": {
-            "command_id": "analysis-target-hero",
-            "match_id": "fixture-match",
-            "expected_revision": 2,
-            "prompt_id": 3,
+            "command_id": "study-offer-0",
+            "match_id": "pinned-curated-match",
+            "expected_revision": 6,
+            "prompt_id": 7,
             "offer_id": 0,
             "answers": []
           }
         },
         {
-          "id": "target-villain",
+          "id": "offer-1",
           "command": {
-            "command_id": "fixture-target-command",
-            "match_id": "fixture-match",
-            "expected_revision": 2,
-            "prompt_id": 3,
+            "command_id": "study-offer-1",
+            "match_id": "pinned-curated-match",
+            "expected_revision": 6,
+            "prompt_id": 7,
             "offer_id": 1,
             "answers": []
           }
@@ -171,54 +396,66 @@
       ],
       "evidence": {
         "policy_mass": [
-          {"alternative": "target-hero", "probability": 0.38},
-          {"alternative": "target-villain", "probability": 0.62}
+          {
+            "alternative": "offer-0",
+            "probability": 0.5
+          },
+          {
+            "alternative": "offer-1",
+            "probability": 0.5
+          }
         ],
         "search_value": [
           {
-            "alternative": "target-hero",
+            "alternative": "offer-0",
             "perspective": 0,
-            "expected_match_points": 0.41
+            "expected_match_points": 0.0
           },
           {
-            "alternative": "target-villain",
+            "alternative": "offer-1",
             "perspective": 0,
-            "expected_match_points": 0.56
+            "expected_match_points": 0.0
           }
         ],
         "visits": [
-          {"alternative": "target-hero", "visits": 21},
-          {"alternative": "target-villain", "visits": 43}
+          {
+            "alternative": "offer-0",
+            "visits": 1
+          },
+          {
+            "alternative": "offer-1",
+            "visits": 1
+          }
         ],
         "sampled_world_robustness": [
           {
-            "alternative": "target-hero",
-            "favorable_worlds": 5,
-            "sampled_worlds": 8
+            "alternative": "offer-0",
+            "favorable_worlds": 1,
+            "sampled_worlds": 1
           },
           {
-            "alternative": "target-villain",
-            "favorable_worlds": 7,
-            "sampled_worlds": 8
+            "alternative": "offer-1",
+            "favorable_worlds": 1,
+            "sampled_worlds": 1
           }
         ],
         "uncertainty": [
           {
-            "alternative": "target-hero",
-            "standard_error": 0.08,
-            "method": "world-bootstrap-v1"
+            "alternative": "offer-0",
+            "standard_error": 0.0,
+            "method": "fixture"
           },
           {
-            "alternative": "target-villain",
-            "standard_error": 0.06,
-            "method": "world-bootstrap-v1"
+            "alternative": "offer-1",
+            "standard_error": 0.0,
+            "method": "fixture"
           }
         ],
         "provenance": {
-          "producer": "study-fixture-recorder",
+          "producer": "canonical-replay-fixture",
           "producer_version": "1",
-          "generated_at": "2026-07-15T23:30:00Z",
-          "evidence_sha256": "b7d12fc52bcdbf27ef894dc5743884ca7f58dcbb78492130dd89f7d3c9c75323"
+          "generated_at": "2026-07-16T00:00:00+00:00",
+          "evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
         }
       }
     }

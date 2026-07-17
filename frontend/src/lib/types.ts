@@ -315,6 +315,9 @@ export interface FrameUpdate {
   frame: ExperienceFrame;
   presentation: PresentationEvent[];
   receipt: CommandReceipt | null;
+  /** Compatibility narration stays outside the immutable canonical frame. */
+  log?: string[];
+  auto_passed?: number;
 }
 
 export interface RecoveryEnvelope {

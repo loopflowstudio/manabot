@@ -64,13 +64,19 @@ describe('Lightning Bolt presentation fixture', () => {
     );
   });
 
-  it('binds a live batch to its authoritative FrameUpdate revisions', () => {
+  it('accepts ordered per-action transitions inside one authoritative FrameUpdate', () => {
     expect(() =>
       validatePresentationUpdate(LIGHTNING_BOLT_PRESENTATION.events, 41, 43),
-    ).toThrow(/expected 41 -> 43/);
+    ).not.toThrow();
     expect(() =>
       validatePresentationUpdate(LIGHTNING_BOLT_PRESENTATION.events, 42, 43),
     ).not.toThrow();
+    const stepped = structuredClone(LIGHTNING_BOLT_PRESENTATION.events);
+    stepped[0].from_revision = 41;
+    stepped[0].to_revision = 42;
+    expect(() => validatePresentationUpdate(stepped, 41, 43)).not.toThrow();
+    for (const event of stepped.slice(1)) event.seq += 1;
+    expect(() => validatePresentationUpdate(stepped, 41, 43)).toThrow(/sequence gap/);
   });
 
   it('requires a contiguous authority-addressed recovery tail', () => {

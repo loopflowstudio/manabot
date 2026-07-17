@@ -388,7 +388,10 @@ def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
     recovery = session.current_recovery("explicit_resync")
     assert recovery["presentation_cursor"] == live_presentation[0]["seq"]
     assert recovery["presentation_tail"] == live_presentation
-    assert all(beat["caused_by"] for beat in live_presentation)
+    # Player-0's track preserves the opponent's semantic attack but does not
+    # expose the private policy command that caused it.
+    assert curated_tape[0]["caused_by"] is None
+    assert all(beat["caused_by"] for beat in curated_tape[1:])
 
 
 def test_named_deck_selection_and_custom_deck_names(isolated_traces):

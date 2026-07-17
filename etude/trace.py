@@ -56,7 +56,6 @@ class TraceEvent:
     # Authoritative semantic beats caused by this exact engine step. Live play,
     # replay, and the decision-inspector seam consume these same persisted
     # objects; no consumer reconstructs them from observation differences.
-    presentation: list[dict[str, Any]] = field(default_factory=list)
     # True when the server auto-passed this priority window (stops system /
     # F6), False for decisions the human actually clicked. Competency metrics
     # must not credit auto-passes as deliberate passes.
@@ -75,6 +74,10 @@ class Trace:
     winner: int | None
     end_reason: str
     timestamp: str
+    # Complete mixed-view replay truth. It remains authority-private and is
+    # removed from the established trace API before any redaction mode is
+    # applied. Legacy traces omit it.
+    canonical_replay: dict[str, Any] | None = None
 
 
 def utc_now_iso() -> str:
@@ -214,6 +217,9 @@ def prepare_trace_payload(
     """Normalize a stored trace for the viewer: hero-perspective throughout,
     with the villain's hand redacted unless ``reveal_hidden``."""
     prepared = deepcopy(payload)
+    # ``reveal_hidden`` is a legacy post-game observation aid. It never grants
+    # access to the mixed-view canonical authority artifact.
+    prepared.pop("canonical_replay", None)
 
     observations = [
         event.get("observation", {}) for event in prepared.get("events", [])

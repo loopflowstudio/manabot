@@ -4,6 +4,7 @@ import type {
   InteractionOffer,
   PresentationEvent,
 } from './types';
+import { parseReplayDecisionAddress } from './replay-index';
 
 export const STUDY_VERSION = 1 as const;
 export type StudyVersion = typeof STUDY_VERSION;
@@ -244,6 +245,12 @@ export function assertViewerSafeStudyArtifact(artifact: StudyArtifact): void {
   for (const landmark of artifact.landmarks) {
     const { frame } = landmark;
     const pack = artifact.identity.content_pack;
+    let address: ReturnType<typeof parseReplayDecisionAddress>;
+    try {
+      address = parseReplayDecisionAddress(landmark.decision_id);
+    } catch {
+      fail(`${landmark.id}: decision_id is not an erd1 address`);
+    }
     if (frame.match_id !== artifact.identity.match_id) {
       fail(`${landmark.id}: frame match does not match study identity`);
     }
@@ -282,6 +289,17 @@ export function assertViewerSafeStudyArtifact(artifact: StudyArtifact): void {
     }
 
     assertCommandBinding(landmark.played, landmark, true);
+    if (
+      address.replay_id !== artifact.identity.source_replay_id
+      || address.match_id !== artifact.identity.match_id
+      || address.viewer !== String(landmark.viewer)
+      || address.revision !== String(frame.revision)
+      || address.prompt_id !== String(landmark.prompt_id)
+      || address.offer_id !== String(landmark.offer_id)
+      || address.command_id !== landmark.played.command_id
+    ) {
+      fail(`${landmark.id}: replay decision address drifted`);
+    }
     if (landmark.alternatives.length === 0) {
       fail(`${landmark.id}: no decision alternatives recorded`);
     }

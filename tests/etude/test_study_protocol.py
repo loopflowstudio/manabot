@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 import pytest
 
+from etude.replay_index import ReplayDecisionAddress
 from etude.study_protocol import KnowledgeScope, StudyArtifact
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
@@ -17,7 +18,9 @@ FIXTURE = json.loads(
         encoding="utf-8"
     )
 )
-SOURCE_REPLAY_BYTES = (PROTOCOL_DIR / "fixtures" / "bolt-target.json").read_bytes()
+SOURCE_REPLAY_BYTES = (
+    PROTOCOL_DIR / "fixtures" / "canonical-replay-player-0.json"
+).read_bytes()
 SOURCE_REPLAY = json.loads(SOURCE_REPLAY_BYTES)
 RUST_SCHEMA = json.loads(
     (PROTOCOL_DIR / "study-v1.schema.json").read_text(encoding="utf-8")
@@ -75,15 +78,24 @@ def test_python_round_trips_shared_historical_decision_and_distinct_evidence():
     artifact = StudyArtifact.model_validate(FIXTURE)
 
     assert artifact.model_dump(mode="json", exclude_unset=True) == FIXTURE
-    assert artifact.identity.source_replay_sha256 == hashlib.sha256(
-        SOURCE_REPLAY_BYTES
-    ).hexdigest()
+    assert (
+        artifact.identity.source_replay_sha256
+        == hashlib.sha256(SOURCE_REPLAY_BYTES).hexdigest()
+    )
     landmark = artifact.landmarks[0]
-    assert landmark.frame.model_dump(mode="json", exclude_unset=True) == SOURCE_REPLAY[
-        "recovery"
-    ]["frame"]
-    assert landmark.played.model_dump(mode="json") == SOURCE_REPLAY["command"]
-    assert landmark.frame.offers[1] == landmark.offer
+    address = ReplayDecisionAddress.parse(landmark.decision_id)
+    source_row = next(
+        row for row in SOURCE_REPLAY["decisions"] if row["ordinal"] == address.ordinal
+    )
+    assert (
+        landmark.frame.model_dump(mode="json", exclude_unset=True)
+        == source_row["frame"]
+    )
+    assert landmark.played.model_dump(mode="json") == source_row["command"]
+    assert (
+        next(offer for offer in landmark.frame.offers if offer.id == landmark.offer_id)
+        == landmark.offer
+    )
     assert landmark.played.offer_id == landmark.offer_id
     assert {row.alternative for row in landmark.evidence.policy_mass} == {
         alternative.id for alternative in landmark.alternatives
@@ -99,11 +111,8 @@ def test_python_study_shapes_match_rust_generated_schema():
             PYTHON_SCHEMA["$defs"][name]
         ), name
     assert [
-        variant["const"]
-        for variant in RUST_SCHEMA["$defs"]["KnowledgeScope"]["oneOf"]
-    ] == [
-        value.value for value in KnowledgeScope
-    ]
+        variant["const"] for variant in RUST_SCHEMA["$defs"]["KnowledgeScope"]["oneOf"]
+    ] == [value.value for value in KnowledgeScope]
 
 
 def test_default_study_evidence_rejects_opponent_private_hand_identity():

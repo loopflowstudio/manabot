@@ -1,11 +1,11 @@
 use managym::{
-    experience::ProtocolV1ConformanceBundle,
+    canonical_replay::{CanonicalReplayProjectionV1, ReplayDecisionAddress},
     study::{StudyArtifact, StudyVersion},
 };
 use schemars::schema_for;
 
 const FIXTURE: &str = include_str!("../../protocol/fixtures/study-curated-decision.json");
-const SOURCE_REPLAY: &str = include_str!("../../protocol/fixtures/bolt-target.json");
+const SOURCE_REPLAY: &str = include_str!("../../protocol/fixtures/canonical-replay-player-0.json");
 const CHECKED_IN_SCHEMA: &str = include_str!("../../protocol/study-v1.schema.json");
 
 #[test]
@@ -20,7 +20,7 @@ fn study_protocol_shared_fixture_round_trips_and_restores_exact_decision() {
     assert_eq!(artifact.version, StudyVersion(1));
     let landmark = &artifact.landmarks[0];
     assert_eq!(artifact.identity.match_id, landmark.frame.match_id.0);
-    assert_eq!(landmark.prompt_id.0, 3);
+    assert_eq!(landmark.prompt_id, landmark.played.prompt_id);
     assert_eq!(landmark.offer_id, landmark.offer.id);
     assert_eq!(landmark.played.offer_id, landmark.offer_id);
     assert_eq!(landmark.alternatives.len(), 2);
@@ -30,15 +30,21 @@ fn study_protocol_shared_fixture_round_trips_and_restores_exact_decision() {
     assert_eq!(landmark.evidence.sampled_world_robustness.len(), 2);
     assert_eq!(landmark.evidence.uncertainty.len(), 2);
 
-    let source_replay: ProtocolV1ConformanceBundle =
+    let source_replay: CanonicalReplayProjectionV1 =
         serde_json::from_str(SOURCE_REPLAY).expect("source replay fixture");
+    let address = ReplayDecisionAddress::parse(&landmark.decision_id).unwrap();
+    let source_row = source_replay
+        .decisions
+        .iter()
+        .find(|row| row.ordinal == address.ordinal)
+        .expect("landmark address resolves in source projection");
     assert_eq!(
         serde_json::to_value(&landmark.frame).unwrap(),
-        serde_json::to_value(&source_replay.recovery.frame).unwrap()
+        serde_json::to_value(&source_row.frame).unwrap()
     );
     assert_eq!(
         serde_json::to_value(&landmark.played).unwrap(),
-        serde_json::to_value(&source_replay.command).unwrap()
+        serde_json::to_value(&source_row.command).unwrap()
     );
 
     let frame_offer = landmark

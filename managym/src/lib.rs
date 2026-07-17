@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod benchmark;
+pub mod canonical_replay;
 pub mod cardsets;
 pub mod conformance;
 pub mod experience;

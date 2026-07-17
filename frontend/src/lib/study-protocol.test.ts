@@ -13,6 +13,7 @@ import {
   type StudyArtifact,
   type StudyDecisionIndex,
 } from './study-protocol';
+import { parseReplayDecisionAddress, type CanonicalReplayProjectionV1 } from './replay-index';
 
 interface SchemaNode {
   $defs?: Record<string, SchemaNode>;
@@ -34,7 +35,10 @@ const fixture: unknown = JSON.parse(
   ),
 );
 const sourceReplay: unknown = JSON.parse(
-  readFileSync(new URL('../../../protocol/fixtures/bolt-target.json', import.meta.url), 'utf8'),
+  readFileSync(
+    new URL('../../../protocol/fixtures/canonical-replay-player-0.json', import.meta.url),
+    'utf8',
+  ),
 );
 const recordedDecisionSchema = JSON.parse(
   readFileSync(
@@ -129,13 +133,15 @@ describe('study protocol v1', () => {
     expect(() => assertViewerSafeStudyArtifact(artifact)).not.toThrow();
     expect(artifact.version).toBe(STUDY_VERSION);
     const landmark = artifact.landmarks[0];
-    const replay = sourceReplay as {
-      recovery: { frame: StudyArtifact['landmarks'][number]['frame'] };
-      command: StudyArtifact['landmarks'][number]['played'];
-    };
-    expect(landmark.frame).toEqual(replay.recovery.frame);
-    expect(landmark.played).toEqual(replay.command);
-    expect(landmark.offer).toEqual(landmark.frame.offers[1]);
+    const replay = sourceReplay as CanonicalReplayProjectionV1;
+    const address = parseReplayDecisionAddress(landmark.decision_id);
+    const row = replay.decisions.find(({ ordinal }) => ordinal === Number(address.ordinal));
+    expect(row).toBeDefined();
+    expect(landmark.frame).toEqual(row?.frame);
+    expect(landmark.played).toEqual(row?.command);
+    expect(landmark.offer).toEqual(
+      landmark.frame.offers.find(({ id }) => id === landmark.offer_id),
+    );
     expect(landmark.played.offer_id).toBe(landmark.offer_id);
     expect(landmark.evidence.policy_mass).not.toBe(landmark.evidence.search_value);
     expect(landmark.evidence.visits).not.toBe(landmark.evidence.uncertainty);

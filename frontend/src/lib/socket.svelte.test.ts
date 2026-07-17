@@ -149,6 +149,56 @@ describe('GameSocketController offline gameplay', () => {
 });
 
 describe('GameSocketController presentation seam', () => {
+  it('accepts contiguous semantic sub-transitions inside one batched update', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(41));
+    const controller = new GameSocketController();
+    const stepped = structuredClone(LIGHTNING_BOLT_PRESENTATION.events);
+    stepped[0].from_revision = 41;
+    stepped[0].to_revision = 42;
+
+    deliver(controller, {
+      type: 'command_outcome',
+      status: 'accepted',
+      update: {
+        base_revision: 41,
+        frame: frameAt(43),
+        presentation: stepped,
+        receipt: null,
+      },
+    });
+
+    expect(gameStore.protocolFrame?.revision).toBe(43);
+    expect(gameStore.errorMessage).toBeNull();
+    expect(presentationPlayer.events.map(({ seq }) => seq)).toEqual([900, 901, 902, 903, 904]);
+  });
+
+  it('keeps transient narration outside the canonical frame DTO', () => {
+    gameStore.prepareForNewGame();
+    presentationPlayer.clear();
+    gameStore.applyFrame(frameAt(42));
+    const controller = new GameSocketController();
+
+    deliver(controller, {
+      type: 'command_outcome',
+      status: 'accepted',
+      update: {
+        base_revision: 42,
+        frame: frameAt(43),
+        presentation: LIGHTNING_BOLT_PRESENTATION.events,
+        receipt: null,
+        log: ['Villain: Pass priority'],
+        auto_passed: 2,
+      },
+    });
+
+    expect(gameStore.actionLog.map(({ text }) => text)).toContain('Villain: Pass priority');
+    expect(gameStore.actionLog.map(({ text }) => text).join('\n')).toContain(
+      'Auto-passed 2 priority windows.',
+    );
+  });
+
   it('commits the FrameUpdate before enqueueing its semantic events', () => {
     gameStore.prepareForNewGame();
     presentationPlayer.clear();

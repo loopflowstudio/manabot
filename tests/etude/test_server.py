@@ -130,7 +130,9 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                 assert outcome["update"]["base_revision"] == frame["revision"]
                 frame = outcome["update"]["frame"]
 
-    assert frame["revision"] == 4
+    record = next(iter(server.SESSION_REGISTRY.values()))
+    assert frame["revision"] == len(record.game.trace.events)
+    assert frame["revision"] > 4  # policy decisions now own intermediate revisions
     assert frame["projection"]["opponent"]["life"] == 17
     record = next(iter(server.SESSION_REGISTRY.values()))
     assert [event.action_description for event in record.game.trace.events[:3]] == [
@@ -484,11 +486,16 @@ def test_wire_message_includes_pending_villain_log_on_observation(monkeypatch):
     )
     session._pending_villain_log = ["Villain: Pass priority"]
 
-    monkeypatch.setattr(server, "hero_view", lambda obs: {"game_over": False})
+    session.published_prompt = SimpleNamespace(actions=[])
     monkeypatch.setattr(
-        server,
-        "describe_actions",
-        lambda obs: [{"index": 0, "description": "Pass priority"}],
+        session,
+        "_experience_frame",
+        lambda: {
+            "projection": {"game_over": False},
+            "winner": None,
+            "action_space": "PRIORITY",
+            "stops": {},
+        },
     )
 
     payload = session._wire_message()
@@ -513,9 +520,16 @@ def test_wire_message_includes_pending_villain_log_on_game_over(monkeypatch):
     )
     session._pending_villain_log = ["Villain: Attack with Gray Ogre"]
 
-    monkeypatch.setattr(server, "hero_view", lambda obs: {"game_over": True})
-    monkeypatch.setattr(server, "_winner_for_hero", lambda obs: 1)
-    monkeypatch.setattr(session, "_finalize_trace", lambda end_reason: None)
+    monkeypatch.setattr(
+        session,
+        "_experience_frame",
+        lambda: {
+            "projection": {"game_over": True},
+            "winner": 1,
+            "action_space": "",
+            "stops": {},
+        },
+    )
 
     payload = session._wire_message()
 

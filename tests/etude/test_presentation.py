@@ -75,9 +75,13 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
         "died",
     ]
     assert [event["seq"] for event in live_events] == list(range(len(live_events)))
-    assert all(event["from_revision"] == 1 for event in live_events)
-    assert all(event["to_revision"] == 2 for event in live_events)
-    assert all(event["caused_by"] == "command-target" for event in live_events)
+    assert all(event["from_revision"] == 1 for event in bolt_events)
+    assert all(event["to_revision"] == 2 for event in bolt_events)
+    assert all(event["caused_by"] == "command-target" for event in bolt_events)
+    assert all(
+        1 <= event["from_revision"] < event["to_revision"] <= session.revision
+        for event in live_events
+    )
     assert bolt_events[3]["kind"]["amount"] == 3
 
     target_id = bolt_events[1]["kind"]["target"]["id"]

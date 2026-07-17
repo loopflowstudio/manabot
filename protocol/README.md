@@ -46,14 +46,49 @@ represents them as `number`. The certified fixture is far below
 `Number.MAX_SAFE_INTEGER`; the wire contract must gain an explicit safe-integer
 limit or string encoding before long-lived counters can approach that boundary.
 
+## Canonical replay decision index v1
+
+`managym/src/canonical_replay.rs` owns the safe projection contract and address
+grammar; `gui/replay_index.py` owns the complete mixed-view Game record and
+authorized restoration. A complete replay contains every deliberate human and
+opponent-policy decision in one contiguous global ordinal sequence. Automatic
+passes and rules resolution advance authority revisions and presentation tracks
+but never receive decision ordinals.
+
+The complete artifact is persisted only inside a trace and never checked into a
+client fixture. `canonical-replay-player-0.json` and
+`canonical-replay-player-1.json` are separate viewer-safe projections from one
+deterministic UR Lessons versus GW Allies match. Their ordinal union equals the
+private metadata-only chronology in `canonical-replay-authority-metadata.json`.
+Neither safe artifact contains the other viewer's frames, offers, commands, or
+private hand identities.
+
+An `erd1.` address is unpadded base64url over a fixed JSON array. Every numeric
+identity is a canonical decimal string, so JavaScript never rounds a `u64`.
+The address binds replay, match, global ordinal, viewer, revision, prompt,
+offer, command, presentation cursor, and a SHA-256 digest of the exact
+viewer-safe frame/offer/command row.
+
+Regenerate and verify the shared artifacts with:
+
+```bash
+uv run --extra dev python scripts/generate_replay_fixtures.py
+cargo run --locked --manifest-path managym/Cargo.toml \
+  --example export_canonical_replay -- protocol/canonical-replay-v1.schema.json
+cargo test --locked --manifest-path managym/Cargo.toml --test canonical_replay_tests
+uv run --extra dev pytest -q tests/gui/test_replay_index.py
+npm --prefix frontend test -- --run src/lib/replay-index.test.ts
+```
+
 ## Study artifact v1
 
 `managym/src/study.rs` owns the separate, closed study evidence contract and
 generates `study-v1.schema.json`. Its shared
-`fixtures/study-curated-decision.json` pins one historical decision from the
-curated UR Lessons versus GW Allies matchup. The artifact embeds the exact
+`fixtures/study-curated-decision.json` carries one Game-issued `erd1` address
+from the player-0 canonical replay projection. The artifact embeds the exact
 viewer-safe `ExperienceFrame`, the selected `InteractionOffer`, and the played
-`Command`; consumers never reconstruct that history from current state.
+`Command`; validators bind those copies back to the address and consumers never
+reconstruct that history from current state.
 
 The artifact pins content and asset pack, engine build, model checkpoint,
 match state, viewer, decision, prompt, offer, source replay, and analysis

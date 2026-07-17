@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use schemars::JsonSchema;
 use serde::{de, Deserialize, Deserializer, Serialize};
 
+use crate::canonical_replay::{decision_payload_sha256, ReplayDecisionAddress};
 use crate::experience::{
     Command, ExperienceFrame, InteractionOffer, OfferId, PlayerId, PresentationEvent, PromptId,
     ReplayCursor,
@@ -474,6 +475,8 @@ impl StudyArtifact {
     fn validate_landmark(&self, landmark: &StudyLandmark) -> Result<(), String> {
         let context = format!("landmark {}", landmark.id);
         let frame = &landmark.frame;
+        let address = ReplayDecisionAddress::parse(&landmark.decision_id)
+            .map_err(|_| format!("{context}: decision_id is not an erd1 address"))?;
         if frame.match_id.0 != self.identity.match_id {
             return Err(format!(
                 "{context}: frame match does not match study identity"
@@ -524,6 +527,23 @@ impl StudyArtifact {
         }
 
         validate_command_binding(&landmark.played, landmark, true, &context)?;
+        if address.replay_id != self.identity.source_replay_id
+            || address.match_id != self.identity.match_id
+            || address.viewer != landmark.viewer.0
+            || address.revision != frame.revision.0
+            || address.prompt_id != landmark.prompt_id.0
+            || address.offer_id != landmark.offer_id.0
+            || address.command_id != landmark.played.command_id.0
+            || address.decision_sha256
+                != decision_payload_sha256(
+                    frame,
+                    &landmark.offer,
+                    &landmark.played,
+                    address.presentation_cursor,
+                )?
+        {
+            return Err(format!("{context}: replay decision address drifted"));
+        }
         if landmark.alternatives.is_empty() {
             return Err(format!("{context}: no decision alternatives recorded"));
         }
