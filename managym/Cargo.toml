@@ -3,6 +3,16 @@ name = "managym"
 version = "0.1.0"
 edition = "2021"
 
+# Agent worktrees build this crate once or twice, then disappear. Keep file and
+# line debugging without retaining a full incremental compiler graph per clone.
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.test]
+debug = 1
+incremental = false
+
 [lib]
 name = "managym"
 crate-type = ["cdylib", "rlib"]
