@@ -970,13 +970,28 @@ class BoundSemanticPack:
             ) from error
         return cls.bind(manifest, schema_path=schema_path, ir_path=ir_path)
 
-    def _definition_row(self, card_def_id: int) -> int:
+    def definition_row(self, card_def_id: int) -> int:
+        """Return the admitted semantic row for one runtime definition."""
+
         try:
             return self.definition_row_by_card_def_id[card_def_id]
         except KeyError as error:
             raise UnadmittedDefinitionError(
                 f"visible CardDefId {card_def_id} is absent from semantic IR"
             ) from error
+
+    def program_rows(self, definition_row: int) -> tuple[int, ...]:
+        """Return the typed program rows owned by one semantic definition."""
+
+        if not 0 <= definition_row < len(self.ir.definitions):
+            raise SemanticProjectionError(
+                f"definition row {definition_row} is outside the semantic catalog"
+            )
+        start = int(self.catalog.definition_program_offsets[definition_row])
+        stop = int(self.catalog.definition_program_offsets[definition_row + 1])
+        return tuple(
+            int(row) for row in self.catalog.definition_program_rows[start:stop]
+        )
 
     def project_observation(
         self,
@@ -998,7 +1013,7 @@ class BoundSemanticPack:
             role = self.schema.object_roles[role_name]
             for slot, card in enumerate(cards):
                 card_def_id = int(card.registry_key)
-                definition_rows.append(self._definition_row(card_def_id))
+                definition_rows.append(self.definition_row(card_def_id))
                 roles.append(role)
                 slots.append(slot)
                 identity_ids.append(card_def_id)
@@ -1008,7 +1023,7 @@ class BoundSemanticPack:
             if int(stack_object.kind) == 0:  # spell already appears in visible cards
                 continue
             card_def_id = int(stack_object.source_card_registry_key)
-            definition_rows.append(self._definition_row(card_def_id))
+            definition_rows.append(self.definition_row(card_def_id))
             roles.append(stack_role)
             slots.append(slot)
             identity_ids.append(card_def_id)

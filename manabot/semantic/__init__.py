@@ -18,6 +18,14 @@ from .learning import (
     UnknownOpcodeError,
     UnknownSchemaError,
 )
+from .policy import (
+    RuntimeObjectRow,
+    RuntimeSubject,
+    SemanticDecision,
+    SemanticDecisionAdapter,
+    SemanticDecisionError,
+    SubjectBinding,
+)
 
 __all__ = [
     "IR_SCHEMA_VERSION",
@@ -28,7 +36,13 @@ __all__ = [
     "SOURCE_SCHEMA_VERSION",
     "SemanticArtifactHeader",
     "SemanticCompileError",
+    "SemanticDecision",
+    "SemanticDecisionAdapter",
+    "SemanticDecisionError",
+    "RuntimeObjectRow",
+    "RuntimeSubject",
     "SemanticProjectionError",
+    "SubjectBinding",
     "UnadmittedDefinitionError",
     "UnknownOpcodeError",
     "UnknownSchemaError",

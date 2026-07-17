@@ -21,3 +21,20 @@
   completed `GameSession`. Durable root persistence or reconstruction is a
   later Game storage decision; this provider never rebuilds authority from
   legacy trace actions.
+
+# INT-2 assumptions carried into implementation
+
+- The requested combat frontier is satisfied by complete atomic attacker
+  declarations. Blocker and mid-resolution decisions remain a fixed,
+  arm-identical executor and are counted explicitly; they are not presented as
+  learned competencies.
+- Lightning Bolt is added through a separately named experimental semantic
+  source and IR. The production `two_deck.source.json` remains the exact UR/GW
+  product artifact.
+- The first supervised labels use a bounded deterministic engine oracle. Search
+  is introduced only if a measured policy failure leaves label quality and
+  representation quality confounded.
+- The first implementation slice is the reusable real-engine decision seam.
+  It proves the 35-target frontier with admitted Igneous Inspiration and 33
+  admitted permanents; the separate Lightning Bolt IR and holdout audit remain
+  a later artifact slice rather than being coupled to runtime binding.
