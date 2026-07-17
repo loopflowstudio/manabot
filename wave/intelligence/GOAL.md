@@ -36,6 +36,10 @@ later Intelligence capability. Drafting is separate and is not a prerequisite.
 - Search teachers and students are compared in actual selected matchups at
   explicit compute budgets, with legality, competencies, seat-balanced
   strength, calibration, latency, throughput, label cost, and uncertainty.
+- Every admitted candidate enters a versioned, world-pinned skill arena. The
+  primary hill-climbing signal is a population rating at a declared compute
+  class, reported with paired-deal uncertainty and the underlying matchup
+  matrix; ratings never cross world or arena-version boundaries.
 - A semantic policy consumes viewer-safe runtime facts, typed ability programs,
   and structured legal offers, emits atomic `Command` values, and is evaluated
   on real play—including held-out cards or compositions of known operations.
@@ -54,7 +58,8 @@ later Intelligence capability. Drafting is separate and is not a prerequisite.
 Lead with building:
 
 1. make the thinnest end-to-end prototype that can act in the real engine;
-2. measure behavior, learning, strength, and cost;
+2. place it on the common skill-and-cost scoreboard and measure behavior,
+   learning, strength, and cost;
 3. identify a surprising or confounded result;
 4. run the smallest diagnostic kata or ablation that separates the live
    explanations;

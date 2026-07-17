@@ -7,21 +7,25 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 ## Discipline
 
-1. **Predict first, in git.** Question, numeric prediction, kill criteria,
+1. **Build before diagnosing.** Primary experiments exercise a runnable agent,
+   teacher, or training loop in the real engine. Use katas and ablations to
+   resolve an observed ambiguity or choose between concrete next builds, not
+   as admission tests before integration.
+2. **Predict first, in git.** Question, numeric prediction, kill criteria,
    and cost cap are committed *before* the run. No pre-run commit → the
    result is exploratory, not evidence.
-2. **Name the strongest confound.** Every report says how its result could
+3. **Name the strongest confound.** Every report says how its result could
    be wrong and what would discriminate.
-3. **Mechanism over aggregates.** "Can/cannot" claims need a behavioral
+4. **Mechanism over aggregates.** "Can/cannot" claims need a behavioral
    probe (competency scenario, action-level stat, per-bucket metric) — win
    rates alone are strength claims only.
-4. **Numbers trace.** Every number in any doc traces to a report; every
+5. **Numbers trace.** Every number in any doc traces to a report; every
    report traces to store rows or data files. Refutations stay on the
    record, dated, never silently edited.
-5. **Seeds are the unit.** Game-level CIs quantify one checkpoint's eval
+6. **Seeds are the unit.** Game-level CIs quantify one checkpoint's eval
    noise; claims about a *method* need independent training seeds and
    cross-seed uncertainty. Three seeds are three data points.
-6. **Protect the instrument.** Engine determinism, throughput, state
+7. **Protect the instrument.** Engine determinism, throughput, state
    injection, and search primitives are what make experiments cheap —
    changes that break them are failing changes regardless of green tests.
 

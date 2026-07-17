@@ -70,6 +70,8 @@ results are recorded alongside positive ones.
 
 - [experiments/](experiments/README.md) — the experiment ledger and frozen
   contracts
+- [manabot/RESEARCH.md](manabot/RESEARCH.md) — the agent research thesis,
+  evidence map, skill-rating contract, and capability frontiers
 - [WORLDS.md](WORLDS.md) — observation/action world versioning and which
   baselines are alive
 - [wave/](wave/README.md) — the active portfolios: rules, game, study,

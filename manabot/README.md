@@ -53,6 +53,15 @@ Experiment-specific driver scripts live in
 only reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+## Research program
+
+[RESEARCH.md](RESEARCH.md) is the durable map from runnable manabots to a
+bounded superhuman claim. It records the builder's loop, the world-pinned skill
+rating we are establishing, accepted evidence, and the value-learning,
+teacher/student, belief-modeling, and semantic-transfer frontiers. Live work
+and ownership remain in Linear; frozen predictions and results remain in
+`experiments/`.
+
 ## Style
 
 ```python
