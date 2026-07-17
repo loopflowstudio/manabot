@@ -17,17 +17,17 @@ pre-registered `iteration` profile remains 256 games, four arms × three seeds,
 uv run experiments/runners/run_visit_teacher_iteration.py \
   --contract experiments/contracts/int-4-visit-teacher-iteration-v1.json \
   --profile smoke \
-  --out-dir .runs/int-4-visit-teacher-smoke-rebased-v1
+  --out-dir .runs/int-4-visit-teacher-smoke-post-pr132-v1
 
 uv run experiments/runners/run_visit_teacher_iteration.py \
   --contract experiments/contracts/int-4-visit-teacher-iteration-v1.json \
   --profile smoke \
-  --out-dir .runs/int-4-visit-teacher-smoke-rebased-v1 \
+  --out-dir .runs/int-4-visit-teacher-smoke-post-pr132-v1 \
   --verify
 ```
 
 Contract SHA-256:
-`d704d8f58d09aca78df3fb95bb3ea63dad5f558cd0b6e470880888e446b9413a`.
+`9c3f0f600b70ca4fef7131086f6d9b350f9612e690cbb9d621e961a5de27d03c`.
 Runtime source SHA-256:
 `14a3c5ff6594ad3c354abd06a9e888a3ad2c2d6e2d741db8954efa4f68c89dea`.
 The complete checked-in receipt is
@@ -50,7 +50,7 @@ visit/value student, and student-guided PUCT round robin ran without illegal
 actions or caps. The two-game results are deliberately not interpreted.
 
 The selected historical decision produced Study artifact
-`33fa40dbd97baf423d12616bb8ec2c15477f7ec0d9b84719dafbe3b85efb13b5`.
+`35e0949d2e1c325ca52768e2649fd4ca987990213259fcea4cbf36d3e6365e3a`.
 Both `etude.StudyArtifact` and the Rust-owned
 `managym::study::StudyArtifact::validate` accepted it. No deal seed, search
 seed, opponent hand, or sampled hidden state entered the artifact.
@@ -59,8 +59,8 @@ seed, opponent hand, or sampled hidden state entered the artifact.
 
 | Traversals | Decisions | p50 | p95 | Labels/s | Traversals/s | Max depth | Cap hits |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 4 | 105 | 1.61 ms | 3.44 ms | 561.3 | 2,245.3 | 2 | 0 |
-| 8 | 100 | 3.49 ms | 6.02 ms | 279.7 | 2,237.6 | 3 | 0 |
+| 4 | 105 | 1.59 ms | 3.22 ms | 593.7 | 2,375.0 | 2 | 0 |
+| 8 | 100 | 3.35 ms | 5.74 ms | 294.3 | 2,354.2 | 3 | 0 |
 
 These same-host numbers are fresh cost evidence, but the host was not quiesced
 and the cells were not isolated child-process RSS measurements. The production
