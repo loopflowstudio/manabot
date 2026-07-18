@@ -37,10 +37,15 @@ from etude.advice_identity import (
     AdviceIdentity,
     AdviceRequestIdentity,
     AdvisorIdentity,
+    CheckpointArtifact,
     CodeSourceArtifact,
 )
 from etude.experience_protocol import ExperienceFrame, InteractionOffer, ProtocolModel
-from etude.replay_index import InvalidAddressError, ReplayDecisionAddress
+from etude.replay_index import (
+    DecisionNotFoundError,
+    InvalidAddressError,
+    ReplayDecisionAddress,
+)
 from etude.study_branch import (
     StudyBranchUnavailableError,
     StudyForkProvider,
@@ -65,6 +70,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = REPO_ROOT / "protocol" / "fixtures" / "advice-curated-decision.json"
 VERSIONED_FIXTURE_PATH = (
     REPO_ROOT / "protocol" / "fixtures" / "advice-belief-conditioned-v1.json"
+)
+CHECKPOINT_VERSIONED_FIXTURE_PATH = (
+    REPO_ROOT / "protocol" / "fixtures" / "advice-checkpoint-policy-v1.json"
 )
 
 
@@ -897,6 +905,8 @@ class LiveAdvisorDecisionResolver:
             resolved = self.provider.resolve_live_advisor_decision(
                 address.serialize(), viewer.rules_viewer
             )
+        except DecisionNotFoundError as error:
+            raise AdvisorUnavailable("decision_not_found") from error
         except StudyBranchUnavailableError as error:
             raise AdvisorUnavailable("decision_root_unavailable") from error
         return _resolved_advisor_decision(
@@ -920,6 +930,8 @@ class StudyAdvisorDecisionResolver:
             resolved = self.provider.resolve_advisor_decision(
                 address.serialize(), viewer.rules_viewer
             )
+        except DecisionNotFoundError as error:
+            raise AdvisorUnavailable("decision_not_found") from error
         except StudyBranchUnavailableError as error:
             raise AdvisorUnavailable("decision_root_unavailable") from error
         return _resolved_advisor_decision(
@@ -955,8 +967,6 @@ class StaticBeliefDistributionResolver:
 class RegisteredAdvisor:
     identity: AdvisorIdentity
     source_paths: tuple[Path, ...]
-    checkpoint_path: Path | None = None
-    checkpoint_manifest_path: Path | None = None
 
     def verify_artifact(self) -> None:
         artifact = self.identity.artifact
@@ -964,21 +974,90 @@ class RegisteredAdvisor:
             if source_bundle_sha256(self.source_paths) != artifact.source_bundle_sha256:
                 raise AdvisorUnavailable("advisor_artifact_mismatch")
             return
+        self._checkpoint_registration(artifact)
+
+    def checkpoint_evaluator(self) -> Any | None:
+        """Build the sole registered checkpoint evaluator, if selected."""
+
+        artifact = self.identity.artifact
+        if isinstance(artifact, CodeSourceArtifact):
+            return None
+        registration = self._checkpoint_registration(artifact)
+        compute = self.identity.compute
         if (
-            self.checkpoint_path is None
-            or not self.checkpoint_path.is_file()
-            or self.checkpoint_manifest_path is None
-            or not self.checkpoint_manifest_path.is_file()
+            compute.simulations_per_scenario != registration.simulations
+            or compute.sampled_worlds != registration.sampled_worlds
+            or compute.c_puct != registration.c_puct
+            or compute.max_steps != registration.max_steps
+            or compute.branch_driver_id != registration.branch_driver_id
         ):
-            raise AdvisorUnavailable("advisor_artifact_unavailable")
-        digest = hashlib.sha256(self.checkpoint_path.read_bytes()).hexdigest()
-        if digest != artifact.checkpoint_sha256:
+            raise AdvisorUnavailable("compute_mismatch")
+        if self.identity.evaluator_id != "checkpoint_policy_neutral_value":
+            raise AdvisorUnavailable("evaluator_mismatch")
+
+        from manabot.sim.flat_mc import load_checkpoint_agent
+        from manabot.sim.mcts import AgentLeafEvaluator
+        from manabot.sim.search_runtime import (
+            model_action_abi_sha256,
+            model_observation_abi_sha256,
+        )
+
+        agent, observation_space = load_checkpoint_agent(
+            str(registration.checkpoint_path)
+        )
+        parameter_count = sum(parameter.numel() for parameter in agent.parameters())
+        if parameter_count != registration.parameter_count:
             raise AdvisorUnavailable("advisor_artifact_mismatch")
-        manifest_digest = hashlib.sha256(
-            self.checkpoint_manifest_path.read_bytes()
-        ).hexdigest()
-        if manifest_digest != artifact.manifest_sha256:
+        if (
+            model_observation_abi_sha256(observation_space)
+            != artifact.observation_abi.sha256
+        ):
+            raise AdvisorUnavailable("observation_abi_mismatch")
+        if model_action_abi_sha256(observation_space) != artifact.action_abi.sha256:
+            raise AdvisorUnavailable("action_abi_mismatch")
+        return AgentLeafEvaluator(
+            agent,
+            observation_space,
+            value_mode=artifact.value_mode,
+        )
+
+    def _checkpoint_registration(self, artifact: CheckpointArtifact) -> Any:
+        from manabot.sim.search_runtime import (
+            RetainedCheckpointMismatchError,
+            RetainedCheckpointUnavailableError,
+            retained_int7_policy_only_checkpoint,
+        )
+
+        try:
+            registration = retained_int7_policy_only_checkpoint(
+                int(artifact.training_seed)
+            )
+        except RetainedCheckpointUnavailableError as exc:
+            raise AdvisorUnavailable("advisor_artifact_unavailable") from exc
+        except RetainedCheckpointMismatchError as exc:
+            raise AdvisorUnavailable("advisor_artifact_mismatch") from exc
+        expected_observation_abi = AbiIdentity(
+            name="manabot_observation",
+            version=registration.world_id,
+            sha256=registration.observation_abi_sha256,
+        )
+        expected_action_abi = AbiIdentity(
+            name="manabot_action",
+            version=registration.world_id,
+            sha256=registration.action_abi_sha256,
+        )
+        if (
+            artifact.checkpoint_id != registration.checkpoint_id
+            or artifact.checkpoint_sha256 != registration.checkpoint_sha256
+            or artifact.checkpoint_bytes != registration.checkpoint_bytes
+            or artifact.manifest_sha256 != registration.manifest_sha256
+            or artifact.observation_abi != expected_observation_abi
+            or artifact.action_abi != expected_action_abi
+            or artifact.value_mode != registration.value_mode
+            or self.identity.world_id != registration.world_id
+        ):
             raise AdvisorUnavailable("advisor_artifact_mismatch")
+        return registration
 
 
 ADVISOR_SOURCE_PATHS = (
@@ -1244,6 +1323,12 @@ class AdviceProvider:
         )
 
         compute = identity.compute
+        evaluator = self.registered.checkpoint_evaluator()
+        root_observation = (
+            decision.root.observation_for_player(request.viewer.rules_viewer)
+            if evaluator is not None
+            else None
+        )
         result = conditional_determinized_puct_beliefs(
             decision.root,
             beliefs=beliefs,
@@ -1252,6 +1337,8 @@ class AdviceProvider:
             seed=identity.seed.root_seed,
             c_puct=compute.c_puct,
             max_steps=compute.max_steps,
+            evaluator=evaluator,
+            root_observation=root_observation,
             branch_driver_id=compute.branch_driver_id,
             branch_audit=True,
             branch_match_id=identity.match_id,
@@ -1492,17 +1579,29 @@ def load_versioned_advice_fixture() -> VersionedAdviceFixture:
     return VersionedAdviceFixture.model_validate(payload)
 
 
+@functools.cache
+def load_checkpoint_versioned_advice_fixture() -> VersionedAdviceFixture:
+    payload = json.loads(CHECKPOINT_VERSIONED_FIXTURE_PATH.read_text(encoding="utf-8"))
+    return VersionedAdviceFixture.model_validate(payload)
+
+
 def request_versioned_fixture_advice(request: AdviceRequest) -> bytes:
     """Serve the checked v1 slice or fail closed without adapting identity."""
 
     if request.is_legacy:
         raise ValueError("versioned fixture adapter requires advice-v1")
-    fixture = load_versioned_advice_fixture()
-    if request == fixture.request:
-        assert fixture.request.advisor_identity is not None
+    fixtures = (
+        load_versioned_advice_fixture(),
+        load_checkpoint_versioned_advice_fixture(),
+    )
+    matched = next(
+        (fixture for fixture in fixtures if request == fixture.request), None
+    )
+    if matched is not None:
+        assert matched.request.advisor_identity is not None
         try:
             RegisteredAdvisor(
-                fixture.request.advisor_identity,
+                matched.request.advisor_identity,
                 ADVISOR_SOURCE_PATHS,
             ).verify_artifact()
         except AdvisorUnavailable as unavailable:
@@ -1515,7 +1614,15 @@ def request_versioned_fixture_advice(request: AdviceRequest) -> bytes:
                     request_sha256=advice_request_sha256(request),
                 )
             )
-        return serialize_advice_response(fixture.response)
+        return serialize_advice_response(matched.response)
+    fixture = next(
+        (
+            candidate
+            for candidate in fixtures
+            if candidate.request.advisor_identity == request.advisor_identity
+        ),
+        fixtures[0],
+    )
     assert request.advisor_identity is not None
     assert fixture.request.advisor_identity is not None
     mismatch = _identity_mismatch_reason(

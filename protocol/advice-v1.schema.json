@@ -559,7 +559,10 @@
           "type": "string"
         },
         "evaluator_id": {
-          "const": "uniform_random_terminal",
+          "enum": [
+            "uniform_random_terminal",
+            "checkpoint_policy_neutral_value"
+          ],
           "title": "Evaluator Id",
           "type": "string"
         },
@@ -1457,6 +1460,15 @@
     "CheckpointArtifact": {
       "additionalProperties": false,
       "properties": {
+        "action_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "checkpoint_bytes": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Checkpoint Bytes",
+          "type": "integer"
+        },
         "checkpoint_id": {
           "title": "Checkpoint Id",
           "type": "string"
@@ -1475,13 +1487,35 @@
           "pattern": "^[0-9a-f]{64}$",
           "title": "Manifest Sha256",
           "type": "string"
+        },
+        "observation_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "training_seed": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Training Seed",
+          "type": "integer"
+        },
+        "value_mode": {
+          "enum": [
+            "neutral",
+            "learned"
+          ],
+          "title": "Value Mode",
+          "type": "string"
         }
       },
       "required": [
         "kind",
         "checkpoint_id",
         "checkpoint_sha256",
-        "manifest_sha256"
+        "checkpoint_bytes",
+        "manifest_sha256",
+        "training_seed",
+        "observation_abi",
+        "action_abi",
+        "value_mode"
       ],
       "title": "CheckpointArtifact",
       "type": "object"

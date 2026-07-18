@@ -45,7 +45,12 @@ class CheckpointArtifact(ProtocolModel):
     kind: Literal["checkpoint"]
     checkpoint_id: str
     checkpoint_sha256: str = Field(pattern=SHA256_PATTERN)
+    checkpoint_bytes: UInt64
     manifest_sha256: str = Field(pattern=SHA256_PATTERN)
+    training_seed: UInt64
+    observation_abi: AbiIdentity
+    action_abi: AbiIdentity
+    value_mode: Literal["neutral", "learned"]
 
 
 AdvisorArtifact: TypeAlias = Annotated[
@@ -89,7 +94,10 @@ class AdvisorIdentity(ProtocolModel):
     possible_world_abi: AbiIdentity
     information_boundary: Literal["historical_viewer"]
     planner_id: Literal["determinized_puct"]
-    evaluator_id: Literal["uniform_random_terminal"]
+    evaluator_id: Literal[
+        "uniform_random_terminal",
+        "checkpoint_policy_neutral_value",
+    ]
     artifact: AdvisorArtifact
     compute: AdvisorComputeIdentity
     seed: AdvisorSeedIdentity

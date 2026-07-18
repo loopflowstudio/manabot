@@ -294,7 +294,7 @@ def test_belief_digest_mismatch_is_typed_unavailable(
     assert response.strategy is None
 
 
-def test_missing_checkpoint_bytes_are_never_substituted(
+def test_unregistered_checkpoint_identity_is_never_substituted(
     runtime: AdvisorRuntime,
 ) -> None:
     assert runtime.request.advisor_identity is not None
@@ -304,7 +304,20 @@ def test_missing_checkpoint_bytes_are_never_substituted(
                 kind="checkpoint",
                 checkpoint_id="missing-belief-advisor",
                 checkpoint_sha256="a" * 64,
+                checkpoint_bytes=1,
                 manifest_sha256="b" * 64,
+                training_seed=197,
+                observation_abi=AbiIdentity(
+                    name="manabot_observation",
+                    version="w2",
+                    sha256="c" * 64,
+                ),
+                action_abi=AbiIdentity(
+                    name="manabot_action",
+                    version="w2",
+                    sha256="d" * 64,
+                ),
+                value_mode="neutral",
             )
         }
     )
@@ -331,17 +344,13 @@ def test_missing_checkpoint_bytes_are_never_substituted(
         }
     )
     provider = AdviceProvider(
-        registered=RegisteredAdvisor(
-            checkpoint_identity,
-            ADVISOR_SOURCE_PATHS,
-            checkpoint_path=None,
-        ),
+        registered=RegisteredAdvisor(checkpoint_identity, ADVISOR_SOURCE_PATHS),
         decision_resolver=runtime.provider.decision_resolver,
         belief_resolver=runtime.provider.belief_resolver,
     )
     response = parse_advice_response_bytes(provider.advise(request, recompute=True))
     assert response.status == "unavailable"
-    assert response.reason == "advisor_artifact_unavailable"
+    assert response.reason == "advisor_artifact_mismatch"
     assert response.strategy is None
 
 

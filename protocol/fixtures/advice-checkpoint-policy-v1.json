@@ -1,0 +1,693 @@
+{
+  "contract": "advice-fixture-v1",
+  "request": {
+    "address": "erd1.WzEsInJlcGxheS5hdXRob3JlZC1hdXRob3JpdHktbWF0Y2giLCJhdXRob3JlZC1hdXRob3JpdHktbWF0Y2giLCIxIiwiMCIsIjEiLCIyIiwiMSIsImF1dGhvcmVkLWF1dGhvcml0eS5oZXJvLjEiLCIwIiwiOGM2NTk1ZTc3NGViNjFkYTA4M2I0MzhhNjlmMWQ5ZGJiMzBiZDYzNjRhOTI5NDNhZWEzNzE1MDc1YzJmNTQ4ZiJd",
+    "advisor_identity": {
+      "action_abi": {
+        "name": "semantic_decision_frame",
+        "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+        "version": "3"
+      },
+      "artifact": {
+        "action_abi": {
+          "name": "manabot_action",
+          "sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+          "version": "w2"
+        },
+        "checkpoint_bytes": 428629,
+        "checkpoint_id": "int-7-visit_policy_only-seed-197-1673a237ef2460d0",
+        "checkpoint_sha256": "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
+        "kind": "checkpoint",
+        "manifest_sha256": "3f7a00e179fe49fe111ff8a361501ca8080e501fa7189abeaacb66194a5de5bf",
+        "observation_abi": {
+          "name": "manabot_observation",
+          "sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+          "version": "w2"
+        },
+        "training_seed": 197,
+        "value_mode": "neutral"
+      },
+      "compute": {
+        "branch_driver_id": "full_clone/current_game_v1",
+        "c_puct": 1.5,
+        "id": "int7-policy-only-puct-s32-w4-v1",
+        "max_steps": 2000,
+        "sampled_worlds": 4,
+        "simulations_per_scenario": 32
+      },
+      "content_sha256": "ca86657d16d1e1a855ba47fc7a1c0b0c8f20428bbd6815f223a9187d5cfa3932",
+      "evaluator_id": "checkpoint_policy_neutral_value",
+      "information_boundary": "historical_viewer",
+      "kind": "advisor_identity_v1",
+      "match_id": "authored-authority-match",
+      "observation_abi": {
+        "name": "experience_frame",
+        "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+        "version": "experience-v1"
+      },
+      "planner_id": "determinized_puct",
+      "possible_world_abi": {
+        "name": "possible_world_space",
+        "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+        "version": "1"
+      },
+      "seed": {
+        "derivation_id": "conditional-search-paired-inverse-cdf-v1",
+        "plan_id": "historical-compatible-world-belief-v1",
+        "root_seed": 197
+      },
+      "source_replay_id": "replay.authored-authority-match",
+      "source_replay_sha256": "1524e1307d1758d3a6d314cdddfa9d34fcf880ef33ce7a88b6db52ea17388640",
+      "world_id": "w2"
+    },
+    "comparison_scenario": null,
+    "contract": "advice-v1",
+    "identity": null,
+    "scenario": {
+      "audience": {
+        "kind": "personal"
+      },
+      "author_viewer_id": "viewer.authored-match.pilot",
+      "id": "authored-compatible-world-prior",
+      "provenance": {
+        "created_at_table_revision": 1,
+        "kind": "player_authored",
+        "shared_at_table_revision": null
+      },
+      "source": {
+        "advice_identity": {
+          "action_abi": {
+            "name": "semantic_decision_frame",
+            "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+            "version": "3"
+          },
+          "artifact": {
+            "action_abi": {
+              "name": "manabot_action",
+              "sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+              "version": "w2"
+            },
+            "checkpoint_bytes": 428629,
+            "checkpoint_id": "int-7-visit_policy_only-seed-197-1673a237ef2460d0",
+            "checkpoint_sha256": "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
+            "kind": "checkpoint",
+            "manifest_sha256": "3f7a00e179fe49fe111ff8a361501ca8080e501fa7189abeaacb66194a5de5bf",
+            "observation_abi": {
+              "name": "manabot_observation",
+              "sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+              "version": "w2"
+            },
+            "training_seed": 197,
+            "value_mode": "neutral"
+          },
+          "compute": {
+            "branch_driver_id": "full_clone/current_game_v1",
+            "c_puct": 1.5,
+            "id": "int7-policy-only-puct-s32-w4-v1",
+            "max_steps": 2000,
+            "sampled_worlds": 4,
+            "simulations_per_scenario": 32
+          },
+          "content_sha256": "ca86657d16d1e1a855ba47fc7a1c0b0c8f20428bbd6815f223a9187d5cfa3932",
+          "evaluator_id": "checkpoint_policy_neutral_value",
+          "information_boundary": "historical_viewer",
+          "kind": "advisor_identity_v1",
+          "match_id": "authored-authority-match",
+          "observation_abi": {
+            "name": "experience_frame",
+            "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+            "version": "experience-v1"
+          },
+          "planner_id": "determinized_puct",
+          "possible_world_abi": {
+            "name": "possible_world_space",
+            "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+            "version": "1"
+          },
+          "seed": {
+            "derivation_id": "conditional-search-paired-inverse-cdf-v1",
+            "plan_id": "historical-compatible-world-belief-v1",
+            "root_seed": 197
+          },
+          "source_replay_id": "replay.authored-authority-match",
+          "source_replay_sha256": "1524e1307d1758d3a6d314cdddfa9d34fcf880ef33ce7a88b6db52ea17388640",
+          "world_id": "w2"
+        },
+        "decision_address": "erd1.WzEsInJlcGxheS5hdXRob3JlZC1hdXRob3JpdHktbWF0Y2giLCJhdXRob3JlZC1hdXRob3JpdHktbWF0Y2giLCIxIiwiMCIsIjEiLCIyIiwiMSIsImF1dGhvcmVkLWF1dGhvcml0eS5oZXJvLjEiLCIwIiwiOGM2NTk1ZTc3NGViNjFkYTA4M2I0MzhhNjlmMWQ5ZGJiMzBiZDYzNjRhOTI5NDNhZWEzNzE1MDc1YzJmNTQ4ZiJd",
+        "gam6_scenario_id": "authored-compatible-world-prior"
+      }
+    },
+    "scenario_id": null,
+    "viewer": {
+      "rules_viewer": 0,
+      "table_id": "authored-authority-match",
+      "viewer_id": "viewer.authored-match.pilot"
+    }
+  },
+  "response": {
+    "address": "erd1.WzEsInJlcGxheS5hdXRob3JlZC1hdXRob3JpdHktbWF0Y2giLCJhdXRob3JlZC1hdXRob3JpdHktbWF0Y2giLCIxIiwiMCIsIjEiLCIyIiwiMSIsImF1dGhvcmVkLWF1dGhvcml0eS5oZXJvLjEiLCIwIiwiOGM2NTk1ZTc3NGViNjFkYTA4M2I0MzhhNjlmMWQ5ZGJiMzBiZDYzNjRhOTI5NDNhZWEzNzE1MDc1YzJmNTQ4ZiJd",
+    "contract": "advice-v1",
+    "deltas": null,
+    "evidence": null,
+    "frame": {
+      "action_space": "PRIORITY",
+      "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+      "asset_pack": {
+        "id": "tla-ur-lessons-vs-gw-allies",
+        "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+        "version": "1.0.0"
+      },
+      "content_hash": "legacy-content-unversioned",
+      "deck_names": {
+        "hero": "UR Lessons",
+        "villain": "GW Allies"
+      },
+      "frame_hash": "1efd88d4df67a1fb728511583c8198e890058ea64aecee3f42c8953ff51eb5b8",
+      "match_id": "authored-authority-match",
+      "offers": [
+        {
+          "action_type": "PRIORITY_CAST_SPELL",
+          "actor": 0,
+          "choices": [],
+          "confirm_label": "Cast Tiger-Seal",
+          "focus": [
+            42
+          ],
+          "help": null,
+          "id": 0,
+          "label": "Cast Tiger-Seal",
+          "source": null,
+          "verb": "cast"
+        },
+        {
+          "action_type": "PRIORITY_PASS_PRIORITY",
+          "actor": 0,
+          "choices": [],
+          "confirm_label": "Pass priority",
+          "focus": [],
+          "help": null,
+          "id": 1,
+          "label": "Pass priority",
+          "source": null,
+          "verb": "pass_priority"
+        }
+      ],
+      "projection": {
+        "agent": {
+          "battlefield": [
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 83,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            }
+          ],
+          "exile": [],
+          "graveyard": [],
+          "hand": [
+            {
+              "id": 31,
+              "mana_value": 0,
+              "name": "Mountain",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 2,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "zone": "HAND"
+            },
+            {
+              "id": 42,
+              "mana_value": 1,
+              "name": "Tiger-Seal",
+              "owner_id": 0,
+              "power": 3,
+              "registry_key": 25,
+              "toughness": 3,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "zone": "HAND"
+            },
+            {
+              "id": 20,
+              "mana_value": 0,
+              "name": "Island",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 1,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "zone": "HAND"
+            },
+            {
+              "id": 21,
+              "mana_value": 0,
+              "name": "Island",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 1,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": true,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "zone": "HAND"
+            },
+            {
+              "id": 4,
+              "mana_value": 3,
+              "name": "Divide by Zero",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 4,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "HAND"
+            },
+            {
+              "id": 9,
+              "mana_value": 1,
+              "name": "Firebending Lesson",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 16,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "HAND"
+            }
+          ],
+          "id": 0,
+          "is_active": true,
+          "is_agent": true,
+          "library_count": 34,
+          "life": 20,
+          "player_index": 0,
+          "stack": [],
+          "zone_counts": {
+            "BATTLEFIELD": 1,
+            "COMMAND": 0,
+            "EXILE": 0,
+            "GRAVEYARD": 0,
+            "HAND": 6,
+            "LIBRARY": 34,
+            "STACK": 0
+          }
+        },
+        "game_over": false,
+        "opponent": {
+          "battlefield": [],
+          "exile": [],
+          "graveyard": [],
+          "hand": [],
+          "hand_hidden_count": 7,
+          "id": 1,
+          "is_active": false,
+          "is_agent": false,
+          "library_count": 33,
+          "life": 20,
+          "player_index": 1,
+          "stack": [],
+          "zone_counts": {
+            "BATTLEFIELD": 0,
+            "COMMAND": 0,
+            "EXILE": 0,
+            "GRAVEYARD": 0,
+            "HAND": 7,
+            "LIBRARY": 33,
+            "STACK": 0
+          }
+        },
+        "turn": {
+          "active_player_id": 0,
+          "agent_player_id": 0,
+          "phase": "PRECOMBAT_MAIN",
+          "step": "PRECOMBAT_MAIN_STEP",
+          "turn_number": 1
+        },
+        "won": false
+      },
+      "prompt": {
+        "actor": 0,
+        "id": 2,
+        "instruction": "Choose an action",
+        "kind": "priority",
+        "title": "Your priority"
+      },
+      "protocol": 1,
+      "revision": 1,
+      "status": "ready",
+      "stops": {
+        "auto_pass": false,
+        "my": [
+          "main1",
+          "main2"
+        ],
+        "opponent": [
+          "end_step"
+        ],
+        "stop_on_stack": true
+      },
+      "winner": null
+    },
+    "identity": {
+      "action_abi": {
+        "name": "semantic_decision_frame",
+        "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+        "version": "3"
+      },
+      "artifact": {
+        "action_abi": {
+          "name": "manabot_action",
+          "sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+          "version": "w2"
+        },
+        "checkpoint_bytes": 428629,
+        "checkpoint_id": "int-7-visit_policy_only-seed-197-1673a237ef2460d0",
+        "checkpoint_sha256": "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
+        "kind": "checkpoint",
+        "manifest_sha256": "3f7a00e179fe49fe111ff8a361501ca8080e501fa7189abeaacb66194a5de5bf",
+        "observation_abi": {
+          "name": "manabot_observation",
+          "sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+          "version": "w2"
+        },
+        "training_seed": 197,
+        "value_mode": "neutral"
+      },
+      "compute": {
+        "branch_driver_id": "full_clone/current_game_v1",
+        "c_puct": 1.5,
+        "id": "int7-policy-only-puct-s32-w4-v1",
+        "max_steps": 2000,
+        "sampled_worlds": 4,
+        "simulations_per_scenario": 32
+      },
+      "content_sha256": "ca86657d16d1e1a855ba47fc7a1c0b0c8f20428bbd6815f223a9187d5cfa3932",
+      "evaluator_id": "checkpoint_policy_neutral_value",
+      "information_boundary": "historical_viewer",
+      "kind": "advisor_identity_v1",
+      "match_id": "authored-authority-match",
+      "observation_abi": {
+        "name": "experience_frame",
+        "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+        "version": "experience-v1"
+      },
+      "planner_id": "determinized_puct",
+      "possible_world_abi": {
+        "name": "possible_world_space",
+        "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+        "version": "1"
+      },
+      "seed": {
+        "derivation_id": "conditional-search-paired-inverse-cdf-v1",
+        "plan_id": "historical-compatible-world-belief-v1",
+        "root_seed": 197
+      },
+      "source_replay_id": "replay.authored-authority-match",
+      "source_replay_sha256": "1524e1307d1758d3a6d314cdddfa9d34fcf880ef33ce7a88b6db52ea17388640",
+      "world_id": "w2"
+    },
+    "offers": [
+      {
+        "action_type": "PRIORITY_CAST_SPELL",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Cast Tiger-Seal",
+        "focus": [
+          42
+        ],
+        "help": null,
+        "id": 0,
+        "label": "Cast Tiger-Seal",
+        "source": null,
+        "verb": "cast"
+      },
+      {
+        "action_type": "PRIORITY_PASS_PRIORITY",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Pass priority",
+        "focus": [],
+        "help": null,
+        "id": 1,
+        "label": "Pass priority",
+        "source": null,
+        "verb": "pass_priority"
+      }
+    ],
+    "reason": null,
+    "request_sha256": "b40323a328425c4d743b6f7bcf9691a579cce22ab36ed0561535544233ee4908",
+    "response_sha256": "4adc987a2b938ae5288ae9c1340434e1a3e9634867d89e4849f77fcb908ceb75",
+    "scenario": null,
+    "serialization": "advisor-canonical-json-v1",
+    "status": "ok",
+    "strategy": {
+      "advisor_identity": {
+        "action_abi": {
+          "name": "semantic_decision_frame",
+          "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+          "version": "3"
+        },
+        "artifact": {
+          "action_abi": {
+            "name": "manabot_action",
+            "sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+            "version": "w2"
+          },
+          "checkpoint_bytes": 428629,
+          "checkpoint_id": "int-7-visit_policy_only-seed-197-1673a237ef2460d0",
+          "checkpoint_sha256": "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
+          "kind": "checkpoint",
+          "manifest_sha256": "3f7a00e179fe49fe111ff8a361501ca8080e501fa7189abeaacb66194a5de5bf",
+          "observation_abi": {
+            "name": "manabot_observation",
+            "sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+            "version": "w2"
+          },
+          "training_seed": 197,
+          "value_mode": "neutral"
+        },
+        "compute": {
+          "branch_driver_id": "full_clone/current_game_v1",
+          "c_puct": 1.5,
+          "id": "int7-policy-only-puct-s32-w4-v1",
+          "max_steps": 2000,
+          "sampled_worlds": 4,
+          "simulations_per_scenario": 32
+        },
+        "content_sha256": "ca86657d16d1e1a855ba47fc7a1c0b0c8f20428bbd6815f223a9187d5cfa3932",
+        "evaluator_id": "checkpoint_policy_neutral_value",
+        "information_boundary": "historical_viewer",
+        "kind": "advisor_identity_v1",
+        "match_id": "authored-authority-match",
+        "observation_abi": {
+          "name": "experience_frame",
+          "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+          "version": "experience-v1"
+        },
+        "planner_id": "determinized_puct",
+        "possible_world_abi": {
+          "name": "possible_world_space",
+          "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+          "version": "1"
+        },
+        "seed": {
+          "derivation_id": "conditional-search-paired-inverse-cdf-v1",
+          "plan_id": "historical-compatible-world-belief-v1",
+          "root_seed": 197
+        },
+        "source_replay_id": "replay.authored-authority-match",
+        "source_replay_sha256": "1524e1307d1758d3a6d314cdddfa9d34fcf880ef33ce7a88b6db52ea17388640",
+        "world_id": "w2"
+      },
+      "comparison": null,
+      "decision_sha256": "8c6595e774eb61da083b438a69f1d9dbb30bd6364a92943aea3715075c2f548f",
+      "offers": [
+        {
+          "actor": 0,
+          "label": "PriorityCastSpell",
+          "offer_id": 0,
+          "verb": "cast"
+        },
+        {
+          "actor": 0,
+          "label": "PriorityPassPriority",
+          "offer_id": 1,
+          "verb": "pass_priority"
+        }
+      ],
+      "plan_sha256": "2fbd13046fd07aef0c74a17468ebfcc7593e5309a4ebbba57bec2939988d0f39",
+      "policy_semantic": "puct_visit_distribution/v1",
+      "prior_sha256": "dfea7b4fc109d554cf284fdf122000174eea20e101f8d319c9d388774eb9a874",
+      "realized_compute": {
+        "cap_hits": 0,
+        "conditions_searched": 1,
+        "materialized_worlds": 4,
+        "total_simulations": 32,
+        "total_tree_nodes": 36,
+        "unique_materialized_worlds": 4
+      },
+      "scenarios": [
+        {
+          "actions": [
+            {
+              "label": "PriorityCastSpell",
+              "offer_id": 0,
+              "probability": 0.625,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.5,
+                "visits": 20
+              },
+              "robustness": {
+                "co_best_worlds": 4,
+                "covered_worlds": 4,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 1.0,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 4,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.0,
+                "visits": null
+              },
+              "visits": 20
+            },
+            {
+              "label": "PriorityPassPriority",
+              "offer_id": 1,
+              "probability": 0.375,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.5,
+                "visits": 12
+              },
+              "robustness": {
+                "co_best_worlds": 4,
+                "covered_worlds": 4,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 1.0,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 4,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.0,
+                "visits": null
+              },
+              "visits": 12
+            }
+          ],
+          "belief": {
+            "belief_model_id": "compatible-world-prior/v1",
+            "distribution_sha256": "bdfd112650c68f636288d0719fc8e40dd8af5ea4c4bfffb215cfa0156b228a3a",
+            "normalization_error": 4.440892098500626e-16,
+            "normalized_belief_sha256": "c2e66ceed17b3567e20c8bc2f8656144fb4a9b971c9ae76e453a495e671d6fbd",
+            "positive_support": 57066,
+            "provenance_identity": "player_authored:viewer.authored-match.pilot:1",
+            "provenance_kind": "player_authored",
+            "scenario_id": "authored-compatible-world-prior",
+            "space_identity": "dd493ca6612b2b3f5ca5d2d243b7e49ff9aa046383e9fca4fa09a226fe40e77d"
+          },
+          "cap_hits": 0,
+          "condition_mass": 1.0,
+          "root_uncertainty": {
+            "co_best_worlds": null,
+            "covered_worlds": 4,
+            "method": "between_world_standard_error/v1",
+            "simulations": null,
+            "status": "available",
+            "value": 0.0,
+            "visits": null
+          },
+          "root_value": {
+            "co_best_worlds": null,
+            "covered_worlds": null,
+            "method": null,
+            "simulations": 32,
+            "status": "available",
+            "value": 0.5,
+            "visits": null
+          },
+          "sampled_worlds": 4,
+          "scenario_id": "authored-compatible-world-prior",
+          "simulations": 32,
+          "support": 57066,
+          "tree_nodes": 36
+        }
+      ],
+      "schema_version": 1,
+      "viewer_frame_sha256": "1efd88d4df67a1fb728511583c8198e890058ea64aecee3f42c8953ff51eb5b8"
+    }
+  }
+}

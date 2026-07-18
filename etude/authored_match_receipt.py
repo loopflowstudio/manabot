@@ -186,7 +186,9 @@ def _terminal_witness(
     }
 
 
-def _play_fixed_match() -> tuple[GameSession, dict[str, Any]]:
+def play_fixed_authored_match() -> tuple[GameSession, dict[str, Any]]:
+    """Return the deterministic authored Game session with retained Study roots."""
+
     hero_policy = DeterministicServerOfferPolicy(POLICY_SEED)
     villain_policy = DeterministicServerOfferPolicy(POLICY_SEED)
     temporary = TemporaryDirectory()
@@ -339,7 +341,7 @@ def _ledger(
 def generate_authored_match_receipt() -> dict[str, Any]:
     semantic_ir = _load_semantic_ir()
     programs_by_definition, programs_by_key = _program_index(semantic_ir)
-    session, terminal_frame = _play_fixed_match()
+    session, terminal_frame = play_fixed_authored_match()
     if session.env is None:
         raise RuntimeError("authored authority environment is unavailable")
     manifest = session.env.content_pack_manifest()
