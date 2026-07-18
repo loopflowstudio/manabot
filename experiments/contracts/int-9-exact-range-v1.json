@@ -1,0 +1,185 @@
+{
+  "schema_version": 2,
+  "experiment": "int-9-exact-range-v1",
+  "registration_status": "implementation_smoke_pending_likelihood_artifact_lock",
+  "world": "w2",
+  "content_pack": {
+    "id": "w2-interactive-deck",
+    "version": "1",
+    "content_digest": "2444fc15283068d79f74d49f8297bdbe3cc581a62a1eee976b35a8cecd8a0ef4",
+    "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+    "symmetric_deck": {
+      "Island": 12,
+      "Mountain": 12,
+      "Gray Ogre": 6,
+      "Wind Drake": 6,
+      "Man-o'-War": 4,
+      "Raging Goblin": 4,
+      "Lightning Bolt": 6,
+      "Counterspell": 4,
+      "Ancestral Recall": 3,
+      "Pyroclasm": 3
+    }
+  },
+  "algorithm": {
+    "belief_state": "normalized_probability_over_managym_possible_world_space/v1",
+    "viewer_history": "semantic_observation_and_transition_receipt/v1",
+    "public_commitment": "managym_viewer_visible_commitment/v1",
+    "materialization": "possible_world_space_index_common_random_numbers/v1",
+    "command": "managym_revision_bound_semantic_command/v1",
+    "epsilon": 0.05,
+    "counterfactual_seed": 907,
+    "likelihood_batch_size": 256,
+    "action_temperature": 1.0
+  },
+  "artifacts": {
+    "likelihood_checkpoint": {
+      "status": "unresolved_required",
+      "path": null,
+      "sha256": null,
+      "required_arm": "world-w2 policy_value",
+      "failure_policy": "fail_closed_without_substitution"
+    },
+    "policy_only_opponent": {
+      "status": "unresolved_required",
+      "path": null,
+      "sha256": null
+    },
+    "frozen_learned_opponent": {
+      "status": "unresolved_required",
+      "path": null,
+      "sha256": null
+    }
+  },
+  "expected_fingerprints": {
+    "world": "w2",
+    "engine_source_sha256": "5120f11ffecfc6cb18cd18208adbf2bf0c5d1b607f7c0b78e3a559f83e58e770",
+    "engine_extension_sha256": "c95a85bba1128e6c3afdade5b5cf59dfeb3b1ec464fdd403cdf155a5cf834f8e",
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "int9_source_sha256": "7e151c544086e853b3d8ed4a6e7fd0868f46a66dcba6b13e724952880318caa2",
+    "semantic_decision_version": 3,
+    "possible_world_space_version": 1,
+    "content_digest": "2444fc15283068d79f74d49f8297bdbe3cc581a62a1eee976b35a8cecd8a0ef4",
+    "content_manifest_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+    "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+    "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+    "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+    "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707"
+  },
+  "arena": {
+    "id": "w2-interactive-belief-v1",
+    "rating_model": "batch_bradley_terry_elo_random_anchor_zero/v1",
+    "pairing": "seat_balanced_paired_deals/v1",
+    "opponents": [
+      "scripted_competencies",
+      "policy_only",
+      "flat_search_64",
+      "likelihood_policy",
+      "frozen_learned"
+    ],
+    "required_primary_cell": "belief_vs_compatible_prior"
+  },
+  "profiles": {
+    "smoke": {
+      "evidence_class": "engineering_smoke_non_admission",
+      "sims_per_action": 2,
+      "rollouts_per_world": 1,
+      "max_steps": 2000,
+      "paired_deal_blocks": [
+        {"id": "smoke-1907", "seed": 1907, "games": 2}
+      ],
+      "competency_runs": 2,
+      "known_truth_games": 1
+    },
+    "arena": {
+      "evidence_class": "preregistered_arena",
+      "sims_per_action": 64,
+      "rollouts_per_world": 4,
+      "max_steps": 2000,
+      "paired_deal_blocks": [
+        {"id": "block-1907", "seed": 1907, "games": 32},
+        {"id": "block-2419", "seed": 2419, "games": 32},
+        {"id": "block-2887", "seed": 2887, "games": 32}
+      ],
+      "competency_runs": 100,
+      "known_truth_games": 64
+    }
+  },
+  "required_evidence": {
+    "gameplay": [
+      "full_matchup_matrix",
+      "batch_bradley_terry_rating",
+      "paired_deal_bootstrap_interval",
+      "raw_playout_counts"
+    ],
+    "calibration": [
+      "true_hand_log_loss",
+      "per_card_brier",
+      "per_card_ece",
+      "top_hand_mass",
+      "true_hand_rank",
+      "effective_range_size",
+      "sample_collision_rate"
+    ],
+    "integrity": [
+      "illegal_commands",
+      "replay_mismatches",
+      "materialization_failures",
+      "viewer_equivalent_root_mismatches",
+      "opponent_private_cards_exposed"
+    ],
+    "competencies": [
+      "counter_the_bomb",
+      "hold_the_wipe",
+      "bolt_the_threat",
+      "race_vs_block",
+      "hold_up_quench"
+    ],
+    "systems": [
+      "p50_search_latency_ms",
+      "p95_search_latency_ms",
+      "p50_end_to_end_latency_ms",
+      "p95_end_to_end_latency_ms",
+      "rollouts_per_second",
+      "peak_rss_bytes",
+      "peak_range_bytes"
+    ]
+  },
+  "gates": {
+    "integrity": {
+      "illegal_commands": 0,
+      "replay_mismatches": 0,
+      "materialization_failures": 0,
+      "viewer_equivalent_root_mismatches": 0,
+      "opponent_private_cards_exposed": 0
+    },
+    "matched_compute": {
+      "configured_worlds_per_action_ratio_min": 1.0,
+      "configured_worlds_per_action_ratio_max": 1.0,
+      "configured_rollouts_per_world_ratio_min": 1.0,
+      "configured_rollouts_per_world_ratio_max": 1.0,
+      "end_to_end_p95_ratio_max": 1.1
+    },
+    "improved_play": {
+      "belief_minus_compatible_prior_paired_bootstrap_lower_gt": 0.0,
+      "belief_minus_compatible_prior_rating_lower_gt": 0.0
+    }
+  },
+  "ambiguity_followup": {
+    "next": "preregister_smallest_information_by_continuation_slice",
+    "microgame": "only_if_that_slice_remains_ambiguous"
+  },
+  "caps": {
+    "wall_hours": 16,
+    "core_hours": 64,
+    "workers": 4,
+    "artifact_bytes": 4294967296,
+    "peak_range_bytes": 536870912
+  },
+  "exclusions": [
+    "public_belief_solving",
+    "continual_resolving",
+    "broad_deck_generalization",
+    "broad_card_pool_generalization"
+  ]
+}

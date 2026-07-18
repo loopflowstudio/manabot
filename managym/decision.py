@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
-SEMANTIC_DECISION_VERSION: int = 2
+SEMANTIC_DECISION_VERSION: int = 3
 
 
 class SemanticContractError(Exception):
@@ -99,6 +99,7 @@ class TransitionReceipt:
     before_revision: int
     after_revision: int
     command_id: str
+    public_commitment: Mapping[str, Any] | None
     events: tuple[str, ...]
     next_decision: str | None
 
@@ -109,6 +110,7 @@ class TransitionReceipt:
             before_revision=int(payload["before_revision"]),
             after_revision=int(payload["after_revision"]),
             command_id=str(payload["command_id"]),
+            public_commitment=payload.get("public_commitment"),
             events=tuple(payload["events"]),
             next_decision=payload["next_decision"],
         )

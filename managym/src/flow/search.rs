@@ -2,11 +2,13 @@
 // Determinized-search primitives on Game: hidden-information resampling and
 // uniformly-random playouts to terminal. Used by flat Monte Carlo search.
 
+use std::collections::BTreeSet;
+
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::action::AgentError,
+    agent::action::{ActionSpace, ActionSpaceKind, AgentError},
     flow::game::Game,
     state::{game_object::PlayerId, zone::ZoneType},
 };
@@ -51,20 +53,39 @@ impl Game {
             .zones
             .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
 
-        // A pending mid-resolution decision may have revealed library cards
-        // to the deciding player (scry / look-at-top-N). Those cards are
-        // known information — pin them back on top in their revealed order.
-        if let Some(suspended) = &self.state.suspended_decision {
-            let player = suspended.decision.player();
-            let revealed = suspended.decision.revealed_cards().to_vec();
-            if !revealed.is_empty() {
-                let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-                library.retain(|card| !revealed.contains(card));
-                // revealed[0] is the top of the library = last element.
-                for card in revealed.iter().rev() {
-                    library.push(*card);
-                }
-            }
+        self.repin_revealed_library_cards();
+    }
+
+    pub(crate) fn refresh_priority_actions(&mut self, player: PlayerId) {
+        self.invalidate_mana_cache(PlayerId(0));
+        self.invalidate_mana_cache(PlayerId(1));
+        let actions = self.compute_player_actions(player);
+        self.publish_action_space(ActionSpace {
+            player: Some(player),
+            kind: ActionSpaceKind::Priority,
+            actions,
+            focus: Vec::new(),
+        });
+    }
+
+    pub(crate) fn repin_revealed_library_cards(&mut self) {
+        let Some(suspended) = &self.state.suspended_decision else {
+            return;
+        };
+        let player = suspended.decision.player();
+        let revealed = suspended.decision.revealed_cards().to_vec();
+        if revealed.is_empty() {
+            return;
+        }
+        for card in &revealed {
+            self.state.zones.move_card(*card, player, ZoneType::Library);
+        }
+        let revealed_set = revealed.iter().copied().collect::<BTreeSet<_>>();
+        let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
+        library.retain(|card| !revealed_set.contains(card));
+        // revealed[0] is the top of the library = last element.
+        for card in revealed.iter().rev() {
+            library.push(*card);
         }
     }
 

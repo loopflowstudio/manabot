@@ -2652,6 +2652,68 @@ impl PyEnv {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Canonical viewer-relative PossibleWorldSpace as read-only JSON.
+    fn possible_world_space_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let projection = env.possible_world_space(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&projection)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Evaluate one typed WorldQuery against an identity-bound canonical
+    /// space and return its canonical support receipt as JSON.
+    fn possible_world_support_json(
+        &self,
+        viewer: usize,
+        space_identity: &str,
+        query_json: &str,
+    ) -> PyResult<String> {
+        let query: crate::possible_worlds::WorldQueryWire = serde_json::from_str(query_json)
+            .map_err(|error| {
+                PyAgentError::new_err(format!("invalid possible-world query: {error}"))
+            })?;
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let receipt = env
+            .possible_world_support(viewer, space_identity, query)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&receipt).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Materialize one identity-bound canonical world into an isolated Env.
+    #[pyo3(signature = (viewer, space_identity, world_index, seed, refresh_opponent_priority=false))]
+    fn materialize_possible_world(
+        &self,
+        viewer: usize,
+        space_identity: &str,
+        world_index: usize,
+        seed: u64,
+        refresh_opponent_priority: bool,
+    ) -> PyResult<PyEnv> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let branch = env
+            .materialize_possible_world(
+                viewer,
+                space_identity,
+                world_index,
+                seed,
+                refresh_opponent_priority,
+            )
+            .map_err(map_agent_err)?;
+        Ok(PyEnv {
+            inner: Mutex::new(branch),
+            selected_guard: false,
+        })
+    }
+
     /// Validate and atomically apply one revision-bound semantic Command
     /// (`{"command_id","expected_revision","offer_id","answers"}`), returning
     /// canonical JSON of `{"receipt","observation"}`. Fails closed without
@@ -2884,6 +2946,39 @@ impl PyEnv {
                 .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
             let result = env
                 .flat_mc_scores(worlds, rollouts, seed, max_steps)
+                .map_err(map_agent_err)?;
+            Ok((result.scores, result.simulations, result.cap_hits))
+        })
+    }
+
+    /// Flat MC over caller-sampled canonical world indexes. Returns no hidden
+    /// hand identities; the authoritative materializer validates each row.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (viewer, space_identity, world_indexes, world_seeds, rollouts, max_steps=2000))]
+    fn flat_mc_scores_for_worlds(
+        &self,
+        py: Python<'_>,
+        viewer: usize,
+        space_identity: &str,
+        world_indexes: Vec<usize>,
+        world_seeds: Vec<u64>,
+        rollouts: usize,
+        max_steps: usize,
+    ) -> PyResult<(Vec<f64>, u64, u64)> {
+        py.allow_threads(|| {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            let result = env
+                .flat_mc_scores_for_worlds(
+                    viewer,
+                    space_identity,
+                    &world_indexes,
+                    &world_seeds,
+                    rollouts,
+                    max_steps,
+                )
                 .map_err(map_agent_err)?;
             Ok((result.scores, result.simulations, result.cap_hits))
         })

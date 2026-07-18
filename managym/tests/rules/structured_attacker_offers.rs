@@ -506,6 +506,7 @@ fn structured_attacker_offer_fixture_matches_typed_wire_shape() {
             id: OfferId(0),
             actor: 0,
             verb: OfferVerb::DeclareAttackers,
+            public_commitment: None,
             source: None,
             label: "Declare attackers".to_string(),
             help: None,

@@ -39,6 +39,7 @@ from manabot.verify.util import (
     _select_agent_action,
     winner_from_info_or_obs,
 )
+from managym.decision import Command, DecisionFrame
 
 DEFAULT_MAX_PLAYOUT_STEPS = 2000
 DEFAULT_ROLLOUTS_PER_WORLD = 4
@@ -220,6 +221,9 @@ def make_player(
         {"kind": "value_greedy", "checkpoint": "/abs/value.pt", "device": "cpu"}
         {"kind": "value_search", "sims": 64, "checkpoint": "/abs/value.pt",
          "depth": 0, "rollouts_per_world": 1, "device": "cpu"}
+        {"kind": "exact_range", "sims": 64, "checkpoint": "/abs/policy.pt",
+         "checkpoint_sha256": "...", "epsilon": 0.05}
+        {"kind": "uniform_range", ...same fields...}
     Returns (player, observation_space_or_None). Checkpoint players carry the
     ObservationSpace their encoder was trained with.
     """
@@ -329,6 +333,35 @@ def make_player(
             ),
             None,
         )
+    if kind in ("exact_range", "uniform_range"):
+        from manabot.belief.likelihood import FrozenPolicyLikelihood
+        from manabot.belief.player import ExactRangePlayer, RangeSampling
+
+        likelihood = FrozenPolicyLikelihood(
+            spec["checkpoint"],
+            expected_sha256=str(spec["checkpoint_sha256"]),
+            batch_size=int(spec.get("likelihood_batch_size", 256)),
+            device=str(spec.get("device", "cpu")),
+            counterfactual_seed=int(spec.get("counterfactual_seed", 0)),
+        )
+        return (
+            ExactRangePlayer(
+                int(spec["sims"]),
+                likelihood=likelihood,
+                sampling=(
+                    RangeSampling.BELIEF
+                    if kind == "exact_range"
+                    else RangeSampling.COMPATIBLE_PRIOR
+                ),
+                epsilon=float(spec.get("epsilon", 0.05)),
+                rollouts_per_world=int(
+                    spec.get("rollouts_per_world", DEFAULT_ROLLOUTS_PER_WORLD)
+                ),
+                max_steps=int(spec.get("max_steps", DEFAULT_MAX_PLAYOUT_STEPS)),
+                seed=seed,
+            ),
+            likelihood.obs_space,
+        )
     if kind == "random":
         return RandomMatchupPlayer(seed=seed), None
     if kind == "checkpoint":
@@ -359,6 +392,9 @@ def spec_name(spec: dict[str, Any]) -> str:
     if kind == "value_search":
         depth = int(spec.get("depth", 0))
         return spec.get("name", f"vsearch-{spec['sims']}-d{depth}")
+    if kind in ("exact_range", "uniform_range"):
+        default = "belief" if kind == "exact_range" else "uniform"
+        return spec.get("name", f"{default}-{spec['sims']}")
     return kind
 
 
@@ -389,6 +425,12 @@ class MatchupResult:
     hero_search: SearchStats | None
     villain_search: SearchStats | None
     wall_seconds: float
+    hero_evidence: dict[str, Any] | None = None
+    villain_evidence: dict[str, Any] | None = None
+    hero_known_truth: list[dict[str, Any]] = field(default_factory=list)
+    villain_known_truth: list[dict[str, Any]] = field(default_factory=list)
+    hero_replays: list[dict[str, Any]] = field(default_factory=list)
+    villain_replays: list[dict[str, Any]] = field(default_factory=list)
 
 
 def play_games(
@@ -432,6 +474,8 @@ def play_games(
     )
 
     records: list[GameRecord] = []
+    hero_known_truth: list[Any] = []
+    villain_known_truth: list[Any] = []
     start = time.perf_counter()
     for i in range(num_games):
         game_index = game_offset + i
@@ -440,6 +484,14 @@ def play_games(
             seed=seed + game_index,
             options={"match": match_swapped} if hero_seat == 1 else None,
         )
+        villain_seat = (hero_seat + 1) % 2
+        for player, seat in (
+            (hero_player, hero_seat),
+            (villain_player, villain_seat),
+        ):
+            start_game = getattr(player, "start_game", None)
+            if start_game is not None:
+                start_game(env, seat)
         done = False
         steps = 0
         info: dict[str, Any] = {}
@@ -453,10 +505,77 @@ def play_games(
             counts = hero_decisions if acting == hero_seat else villain_decisions
             counts[kind] = counts.get(kind, 0) + 1
             player = hero_player if acting == hero_seat else villain_player
+            record_counts = {
+                id(observer): len(tracker.records)
+                for observer in (hero_player, villain_player)
+                if (tracker := getattr(observer, "tracker", None)) is not None
+            }
             action = player.act(env, obs)
-            obs, _, terminated, truncated, info = env.step(action)
+            for observer in (hero_player, villain_player):
+                prepare_step = getattr(observer, "prepare_step", None)
+                if prepare_step is not None:
+                    prepare_step(env, acting, action)
+            semantic_execution = any(
+                getattr(observer, "tracker", None) is not None
+                for observer in (hero_player, villain_player)
+            )
+            transition = None
+            if semantic_execution:
+                command_id = f"flat-mc-{seed}-{game_index}-{steps}"
+                command_for_action = getattr(player, "command_for_action", None)
+                if command_for_action is not None:
+                    command = command_for_action(
+                        env._engine, action, command_id=command_id
+                    )
+                else:
+                    frame = DecisionFrame.from_json(
+                        env._engine.semantic_decision_frame_json()
+                    )
+                    if action < 0 or action >= len(frame.offers):
+                        raise RuntimeError("action is outside the DecisionFrame")
+                    command = Command(
+                        command_id=command_id,
+                        expected_revision=frame.revision,
+                        offer_id=int(frame.offers[action]["id"]),
+                    )
+                obs, _, terminated, truncated, info, transition = env.step_semantic(
+                    command
+                )
+            else:
+                obs, _, terminated, truncated, info = env.step(action)
+            for observer in (hero_player, villain_player):
+                observe_step = getattr(observer, "observe_step", None)
+                if observe_step is not None:
+                    if transition is None:
+                        raise RuntimeError(
+                            "belief observer requires a semantic TransitionReceipt"
+                        )
+                    observe_step(env, acting, transition)
+            for observer, audit_points in (
+                (hero_player, hero_known_truth),
+                (villain_player, villain_known_truth),
+            ):
+                tracker = getattr(observer, "tracker", None)
+                if tracker is None or len(tracker.records) == record_counts.get(
+                    id(observer), 0
+                ):
+                    continue
+                from manabot.belief.audit import score_known_truth
+
+                audit_points.append(
+                    score_known_truth(
+                        env._engine,
+                        tracker,
+                        game_index=game_index,
+                        step=steps,
+                    )
+                )
             steps += 1
             done = bool(terminated or truncated)
+        for player in (hero_player, villain_player):
+            finish_game = getattr(player, "finish_game", None)
+            if finish_game is not None:
+                finish_game(game_index=game_index, seed=seed + game_index)
         winner = winner_from_info_or_obs(info, env.last_raw_obs)
         records.append(
             GameRecord(
@@ -472,13 +591,48 @@ def play_games(
         )
     wall_seconds = time.perf_counter() - start
 
+    hero_evidence = (
+        hero_player.evidence_stats() if hasattr(hero_player, "evidence_stats") else None
+    )
+    villain_evidence = (
+        villain_player.evidence_stats()
+        if hasattr(villain_player, "evidence_stats")
+        else None
+    )
+    if hero_evidence is not None and hero_known_truth:
+        from manabot.belief.audit import aggregate_known_truth
+
+        hero_evidence["calibration"] = aggregate_known_truth(hero_known_truth)
+    if villain_evidence is not None and villain_known_truth:
+        from manabot.belief.audit import aggregate_known_truth
+
+        villain_evidence["calibration"] = aggregate_known_truth(villain_known_truth)
+
     return MatchupResult(
         hero=spec_name(hero_spec),
         villain=spec_name(villain_spec),
         records=records,
-        hero_search=getattr(hero_player, "stats", None),
-        villain_search=getattr(villain_player, "stats", None),
+        hero_search=getattr(
+            hero_player, "search_stats", getattr(hero_player, "stats", None)
+        ),
+        villain_search=getattr(
+            villain_player, "search_stats", getattr(villain_player, "stats", None)
+        ),
         wall_seconds=wall_seconds,
+        hero_evidence=hero_evidence,
+        villain_evidence=villain_evidence,
+        hero_known_truth=[point.to_dict() for point in hero_known_truth],
+        villain_known_truth=[point.to_dict() for point in villain_known_truth],
+        hero_replays=(
+            hero_player.replay_receipts()
+            if hasattr(hero_player, "replay_receipts")
+            else []
+        ),
+        villain_replays=(
+            villain_player.replay_receipts()
+            if hasattr(villain_player, "replay_receipts")
+            else []
+        ),
     )
 
 

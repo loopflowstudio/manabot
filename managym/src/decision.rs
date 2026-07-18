@@ -15,7 +15,9 @@ use sha2::{Digest, Sha256};
 use crate::{
     agent::{
         observation::{EventData, Observation as AgentObservation},
-        structured_offer::{ChoiceAnswer, InteractionOffer, OfferId, OfferSubmission},
+        structured_offer::{
+            ChoiceAnswer, InteractionOffer, OfferId, OfferSubmission, PublicCommitment,
+        },
     },
     flow::game::Game,
     state::{
@@ -27,7 +29,7 @@ use crate::{
 /// Canonical serialization and digest contract for the semantic decision
 /// slice. Increment when DecisionFrame/Observation field inclusion, ordering,
 /// or digest algorithm changes.
-pub const SEMANTIC_DECISION_VERSION: u16 = 2;
+pub const SEMANTIC_DECISION_VERSION: u16 = 3;
 
 /// Stable digest of one complete legal offer set at a revision. Any change to
 /// the legal actions, their order, or their binding revision changes it.
@@ -76,7 +78,7 @@ pub struct Command {
 
 /// Typed identity for one composite Observation. `viewer_state_hash` digests
 /// the viewer-safe projection only; it never includes opponent-private state.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ObservationIdentity {
     pub schema_version: u16,
     pub revision: u64,
@@ -108,6 +110,7 @@ pub struct TransitionReceipt {
     pub before_revision: u64,
     pub after_revision: u64,
     pub command_id: String,
+    pub public_commitment: Option<PublicCommitment>,
     pub events: Vec<EventIdentity>,
     pub next_decision: Option<DecisionFingerprint>,
 }
@@ -198,7 +201,7 @@ struct CanonicalEventIdentity {
 
 impl From<&EventData> for CanonicalEventIdentity {
     fn from(event: &EventData) -> Self {
-        Self {
+        let mut canonical = Self {
             event_type: event.event_type,
             source_kind: event.source_kind,
             source_id: event.source_id,
@@ -210,7 +213,18 @@ impl From<&EventData> for CanonicalEventIdentity {
             to_zone: event.to_zone,
             source_incarnation: event.source_incarnation,
             target_incarnation: event.target_incarnation,
+        };
+        let moves_into_hidden_zone = event.from_zone >= 0
+            && matches!(
+                event.to_zone,
+                zone if zone == ZoneType::Hand as i32 || zone == ZoneType::Library as i32
+            );
+        if moves_into_hidden_zone {
+            canonical.source_kind = 0;
+            canonical.source_id = -1;
+            canonical.source_incarnation = -1;
         }
+        canonical
     }
 }
 
@@ -362,13 +376,13 @@ impl Game {
             })?;
         let projection = offers.projection();
         let actor = PlayerId(projection.actor as usize);
-        if !projection
+        let public_commitment = projection
             .offers
             .iter()
-            .any(|offer| offer.id.0 == command.offer_id)
-        {
-            return Err(SemanticError::UnknownOffer(command.offer_id));
-        }
+            .find(|offer| offer.id.0 == command.offer_id)
+            .ok_or(SemanticError::UnknownOffer(command.offer_id))?
+            .public_commitment
+            .clone();
 
         let submission = OfferSubmission {
             offer_id: OfferId(command.offer_id),
@@ -425,6 +439,7 @@ impl Game {
                 before_revision,
                 after_revision,
                 command_id: command.command_id.clone(),
+                public_commitment,
                 events: event_identities,
                 next_decision,
             },
@@ -511,6 +526,66 @@ mod tests {
     }
 
     #[test]
+    fn receipt_carries_the_provider_owned_public_commitment() {
+        let mut game = first_game();
+        let frame = game.semantic_decision_frame().expect("first frame");
+        let land = frame
+            .offers
+            .iter()
+            .find_map(|offer| match &offer.public_commitment {
+                Some(PublicCommitment::PlayLand { card }) => Some((offer.id.0, card.clone())),
+                _ => None,
+            })
+            .expect("seeded opener has a public land commitment");
+        let command = Command {
+            command_id: "public-land".to_string(),
+            expected_revision: frame.revision,
+            offer_id: land.0,
+            answers: Vec::new(),
+            object_preconditions: Vec::new(),
+        };
+
+        let transition = game
+            .execute_semantic_command(&command)
+            .expect("land commitment executes");
+
+        assert_eq!(
+            transition.receipt.public_commitment,
+            Some(PublicCommitment::PlayLand { card: land.1 })
+        );
+    }
+
+    #[test]
+    fn event_identity_masks_cards_moving_into_hidden_zones() {
+        let hidden_move = |source_id| EventData {
+            event_type: 1,
+            source_kind: 1,
+            source_id,
+            target_kind: 0,
+            target_id: -1,
+            amount: 0,
+            controller_id: 1,
+            from_zone: ZoneType::Library as i32,
+            to_zone: ZoneType::Hand as i32,
+            source_incarnation: source_id,
+            target_incarnation: -1,
+        };
+        assert_eq!(
+            event_identity(&hidden_move(17)),
+            event_identity(&hidden_move(29)),
+        );
+
+        let mut public_move_a = hidden_move(17);
+        public_move_a.to_zone = ZoneType::Graveyard as i32;
+        let mut public_move_b = hidden_move(29);
+        public_move_b.to_zone = ZoneType::Graveyard as i32;
+        assert_ne!(
+            event_identity(&public_move_a),
+            event_identity(&public_move_b)
+        );
+    }
+
+    #[test]
     fn observation_is_viewer_safe_and_decision_only_for_actor() {
         let game = first_game();
         let actor = game
@@ -567,6 +642,10 @@ mod tests {
             "publishing a new decision advances the revision"
         );
         assert_eq!(receipt.command_id, "cmd-1");
+        assert_eq!(
+            receipt.public_commitment,
+            Some(PublicCommitment::PassPriority)
+        );
         assert_eq!(observation.identity.revision, receipt.after_revision);
         assert!(receipt.next_decision.is_some(), "match is not terminal");
     }

@@ -94,6 +94,17 @@ pub enum OfferVerb {
     WaterbendTap,
 }
 
+/// Viewer-observable identity of an admitted public commitment. This is
+/// intentionally narrower than `Action`: private object IDs, positional
+/// indexes, and unresolved prompt structure are excluded.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PublicCommitment {
+    PassPriority,
+    Cast { card: String },
+    PlayLand { card: String },
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CandidateValue {
@@ -135,6 +146,8 @@ pub struct InteractionOffer {
     pub id: OfferId,
     pub actor: u8,
     pub verb: OfferVerb,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub public_commitment: Option<PublicCommitment>,
     pub source: Option<SubjectRef>,
     pub label: String,
     pub help: Option<String>,
@@ -492,10 +505,21 @@ impl Game {
         for action in &action_space.actions {
             let id = next_offer_id(offers.len())?;
             let label = format!("{:?}", action.action_type());
+            let public_commitment = match action {
+                Action::PassPriority { .. } => Some(PublicCommitment::PassPriority),
+                Action::CastSpell { card, .. } => Some(PublicCommitment::Cast {
+                    card: self.state.cards[*card].name.clone(),
+                }),
+                Action::PlayLand { card, .. } => Some(PublicCommitment::PlayLand {
+                    card: self.state.cards[*card].name.clone(),
+                }),
+                _ => None,
+            };
             offers.push(InteractionOffer {
                 id,
                 actor: wire_actor,
                 verb: search_offer_verb(action),
+                public_commitment,
                 source: None,
                 label: label.clone(),
                 help: None,
@@ -553,6 +577,7 @@ impl Game {
                         id,
                         actor: wire_player_id(*player)?,
                         verb: OfferVerb::PassPriority,
+                        public_commitment: None,
                         source: None,
                         label: "Pass priority".to_string(),
                         help: None,
@@ -609,6 +634,7 @@ impl Game {
                         id,
                         actor: wire_player_id(*player)?,
                         verb: OfferVerb::Cast,
+                        public_commitment: None,
                         source: Some(SubjectRef::Object {
                             id: object_render_id(
                                 card_ref.id,
@@ -709,6 +735,7 @@ impl Game {
             id,
             actor: wire_actor,
             verb: OfferVerb::DeclareAttackers,
+            public_commitment: None,
             source: None,
             label: "Declare attackers".to_string(),
             help: None,

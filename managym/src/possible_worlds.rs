@@ -14,13 +14,18 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::observation::Observation,
+    agent::action::ActionSpaceKind,
+    decision::ObservationIdentity,
     flow::game::Game,
     state::{
         game_object::{CardId, PlayerId},
         zone::ZoneType,
     },
 };
+
+/// Canonical serialization contract for a viewer-relative possible-world
+/// space. Increment when identity or projection field inclusion changes.
+pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 1;
 
 /// Stable, viewer-meaningful identity for a canonical query. Equivalent query
 /// constructions share one canonical form and therefore one digest.
@@ -94,6 +99,32 @@ pub enum WorldQuery {
     Not(CountQuery),
 }
 
+/// Stable wire grammar for Python/Etude consumers. Conversion enters the
+/// same authoritative `WorldQuery` canonicalizer and evaluator used in Rust.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum WorldQueryWire {
+    True,
+    Has { card: String, at_least: u32 },
+    Lacks { card: String, fewer_than: u32 },
+    Exactly { card: String, count: u32 },
+    NotExactly { card: String, count: u32 },
+}
+
+impl From<WorldQueryWire> for WorldQuery {
+    fn from(query: WorldQueryWire) -> Self {
+        match query {
+            WorldQueryWire::True => Self::True,
+            WorldQueryWire::Has { card, at_least } => Self::Has { card, at_least },
+            WorldQueryWire::Lacks { card, fewer_than } => Self::Lacks { card, fewer_than },
+            WorldQueryWire::Exactly { card, count } => Self::Q(CountQuery::Exactly { card, count }),
+            WorldQueryWire::NotExactly { card, count } => {
+                Self::Not(CountQuery::Exactly { card, count })
+            }
+        }
+    }
+}
+
 /// Normalized query form. Tautologies and impossibilities are folded against
 /// the space's pool, so semantically-equivalent queries share one canonical
 /// form, one digest, and one conditioned support.
@@ -150,13 +181,20 @@ impl WorldQuery {
 
     /// Fold tautologies and impossibilities against `space`'s pool.
     pub fn canonicalize(&self, space: &PossibleWorldSpace) -> CanonicalWorldQuery {
-        let pool = |name: &str| space.pool.get(name).copied().unwrap_or(0);
+        let maximum = |name: &str| {
+            space
+                .pool
+                .get(name)
+                .copied()
+                .unwrap_or(0)
+                .min(space.hand_size)
+        };
         match self {
             WorldQuery::True => CanonicalWorldQuery::True,
             WorldQuery::Has { card, at_least } => {
                 if *at_least == 0 {
                     CanonicalWorldQuery::True
-                } else if *at_least > pool(card) {
+                } else if *at_least > maximum(card) {
                     CanonicalWorldQuery::Empty
                 } else {
                     CanonicalWorldQuery::Has {
@@ -168,7 +206,7 @@ impl WorldQuery {
             WorldQuery::Lacks { card, fewer_than } => {
                 if *fewer_than == 0 {
                     CanonicalWorldQuery::Empty
-                } else if *fewer_than > pool(card) {
+                } else if *fewer_than > maximum(card) {
                     CanonicalWorldQuery::True
                 } else {
                     CanonicalWorldQuery::Lacks {
@@ -178,7 +216,7 @@ impl WorldQuery {
                 }
             }
             WorldQuery::Q(CountQuery::Exactly { card, count }) => {
-                if *count > pool(card) {
+                if *count > maximum(card) {
                     CanonicalWorldQuery::Empty
                 } else if *count == 0 {
                     CanonicalWorldQuery::Lacks {
@@ -193,7 +231,7 @@ impl WorldQuery {
                 }
             }
             WorldQuery::Not(CountQuery::Exactly { card, count }) => {
-                if *count > pool(card) {
+                if *count > maximum(card) {
                     CanonicalWorldQuery::True
                 } else if *count == 0 {
                     CanonicalWorldQuery::Has {
@@ -245,6 +283,80 @@ pub enum MaterializeError {
     /// The world is not realizable from the opponent's unseen pool, or the
     /// source state does not match the space's domain.
     InconsistentWorld,
+    /// The source revision/viewer projection no longer matches the source
+    /// from which this space was constructed.
+    StaleSource,
+    /// A likelihood branch can refresh only an acting priority prompt. Other
+    /// hand-dependent prompt kinds do not yet have an authoritative rebuild.
+    UnsupportedActingPrompt,
+}
+
+impl std::fmt::Display for MaterializeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InconsistentWorld => write!(f, "world is inconsistent with its source space"),
+            Self::StaleSource => write!(f, "possible-world source identity is stale"),
+            Self::UnsupportedActingPrompt => {
+                write!(f, "cannot refresh the acting non-priority prompt")
+            }
+        }
+    }
+}
+
+impl std::error::Error for MaterializeError {}
+
+/// Whether materialization preserves the fixed viewer's current root or
+/// refreshes the hypothetical opponent's authoritative priority legality.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MaterializeMode {
+    PreserveViewerRoot,
+    RefreshOpponentPriority,
+}
+
+/// JSON-safe row in the canonical Python projection. Exact integer weights
+/// are strings so the contract is not constrained by JSON's numeric range.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PossibleWorldProjection {
+    pub index: usize,
+    pub hand: BTreeMap<String, u32>,
+    pub weight: String,
+}
+
+/// Read-only, identity-bound projection consumed by manabot. It contains no
+/// physical card IDs and does not grant mutation authority.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PossibleWorldSpaceProjection {
+    pub schema_version: u16,
+    pub identity: String,
+    pub viewer: u8,
+    pub opponent: u8,
+    pub source_observation: ObservationIdentity,
+    pub hand_size: u32,
+    pub pool: BTreeMap<String, u32>,
+    pub total_weight: String,
+    pub worlds: Vec<PossibleWorldProjection>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SupportReceiptProjection {
+    pub space_identity: String,
+    pub query_digest: String,
+    pub canonical_digest: String,
+    pub canonical_query: CanonicalWorldQuery,
+    pub support_size: usize,
+    pub total_weight: String,
+}
+
+#[derive(serde::Serialize)]
+struct PossibleWorldSpaceIdentity<'a> {
+    schema_version: u16,
+    viewer: u8,
+    opponent: u8,
+    source_observation: &'a ObservationIdentity,
+    hand_size: u32,
+    pool: &'a BTreeMap<String, u32>,
+    worlds: &'a [PossibleWorld],
+    total_weight: String,
 }
 
 /// A viewer-relative, revision-bound space over the opponent's hand-count
@@ -253,7 +365,9 @@ pub enum MaterializeError {
 /// cards are excluded by construction).
 #[derive(Clone, Debug)]
 pub struct PossibleWorldSpace {
+    viewer: PlayerId,
     opponent: PlayerId,
+    source_observation: ObservationIdentity,
     hand_size: u32,
     pool: BTreeMap<String, u32>,
     worlds: Vec<PossibleWorld>,
@@ -261,6 +375,11 @@ pub struct PossibleWorldSpace {
 }
 
 impl PossibleWorldSpace {
+    /// Viewer whose information boundary defines this space.
+    pub fn viewer(&self) -> PlayerId {
+        self.viewer
+    }
+
     /// The opponent whose hidden hand this space hypothesizes about.
     pub fn opponent(&self) -> PlayerId {
         self.opponent
@@ -287,6 +406,64 @@ impl PossibleWorldSpace {
         &self.worlds
     }
 
+    /// Stable identity of the complete ordered space and its source
+    /// viewer-observation identity.
+    pub fn identity(&self) -> String {
+        let payload = PossibleWorldSpaceIdentity {
+            schema_version: POSSIBLE_WORLD_SPACE_VERSION,
+            viewer: self.viewer.0 as u8,
+            opponent: self.opponent.0 as u8,
+            source_observation: &self.source_observation,
+            hand_size: self.hand_size,
+            pool: &self.pool,
+            worlds: &self.worlds,
+            total_weight: self.total_weight.to_string(),
+        };
+        blake3::hash(&serde_json::to_vec(&payload).expect("possible-world identity serializes"))
+            .to_hex()
+            .to_string()
+    }
+
+    /// Canonical read-only projection for cross-language consumers.
+    pub fn projection(&self) -> PossibleWorldSpaceProjection {
+        PossibleWorldSpaceProjection {
+            schema_version: POSSIBLE_WORLD_SPACE_VERSION,
+            identity: self.identity(),
+            viewer: self.viewer.0 as u8,
+            opponent: self.opponent.0 as u8,
+            source_observation: self.source_observation.clone(),
+            hand_size: self.hand_size,
+            pool: self.pool.clone(),
+            total_weight: self.total_weight.to_string(),
+            worlds: self
+                .worlds
+                .iter()
+                .enumerate()
+                .map(|(index, world)| PossibleWorldProjection {
+                    index,
+                    hand: world.hand.clone(),
+                    weight: world.weight.to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    /// Evaluate one typed query through the authoritative canonicalizer and
+    /// return an identity-bound, JSON-safe support receipt.
+    pub fn support_projection(&self, query: WorldQueryWire) -> SupportReceiptProjection {
+        let query: WorldQuery = query.into();
+        let canonical_query = query.canonicalize(self);
+        let receipt = self.support_receipt(&query);
+        SupportReceiptProjection {
+            space_identity: self.identity(),
+            query_digest: receipt.query_digest.hex(),
+            canonical_digest: receipt.canonical_digest.hex(),
+            canonical_query,
+            support_size: receipt.support_size,
+            total_weight: receipt.total_weight.to_string(),
+        }
+    }
+
     /// Build the space for `viewer` from a live `Game`. The opponent is the
     /// other player; the unseen pool is the opponent's Hand ∪ Library name
     /// multiset; `H` is the opponent's current hand size.
@@ -303,14 +480,36 @@ impl PossibleWorldSpace {
             }
         }
         let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
-        Self::from_pool(opponent, hand_size, pool)
+        let source_observation = game
+            .semantic_observation(viewer)
+            .expect("valid viewer has a semantic observation")
+            .identity;
+        Self::from_parts(viewer, opponent, source_observation, hand_size, pool)
     }
 
     /// Build the space directly from a pool. Used by weight/canonicalization
     /// tests that do not need a live `Game`; `materialize` still works when
     /// given a source `Game` whose opponent pool matches.
+    #[cfg(test)]
     pub(crate) fn from_pool(
         opponent: PlayerId,
+        hand_size: u32,
+        pool: BTreeMap<String, u32>,
+    ) -> Self {
+        let viewer = PlayerId((opponent.0 + 1) % 2);
+        let source_observation = ObservationIdentity {
+            schema_version: 0,
+            revision: 0,
+            viewer: viewer.0 as u8,
+            viewer_state_hash: "fixture".to_string(),
+        };
+        Self::from_parts(viewer, opponent, source_observation, hand_size, pool)
+    }
+
+    fn from_parts(
+        viewer: PlayerId,
+        opponent: PlayerId,
+        source_observation: ObservationIdentity,
         hand_size: u32,
         pool: BTreeMap<String, u32>,
     ) -> Self {
@@ -320,7 +519,9 @@ impl PossibleWorldSpace {
         let mut current: BTreeMap<String, u32> = BTreeMap::new();
         enumerate(&names, 0, hand_size, &mut current, &mut worlds, &pool);
         Self {
+            viewer,
             opponent,
+            source_observation,
             hand_size,
             pool,
             worlds,
@@ -386,8 +587,10 @@ impl PossibleWorldSpace {
     /// Clones the source, reassigns only the opponent's hand+library split to
     /// match the world (lowest `CardId`s of each name to hand; seeded library
     /// shuffle), reusing the `resample_hidden` zone-update pattern. The
-    /// viewer's zones, all public zones, and any viewer suspended-decision
-    /// revealed cards are untouched. Deterministic per `(source, world, seed)`.
+    /// Public zones and any suspended-decision revealed library cards are
+    /// preserved. The viewer's unknown library order is shuffled from the
+    /// same seed, as is the opponent's remaining library. Deterministic per
+    /// `(source, world, seed)`.
     /// No `journal_zones` call: the branch is an independent clone; undo is the
     /// driver's job.
     pub fn materialize(
@@ -396,6 +599,34 @@ impl PossibleWorldSpace {
         world: &PossibleWorld,
         seed: u64,
     ) -> Result<Game, MaterializeError> {
+        self.materialize_with_mode(source, world, seed, MaterializeMode::PreserveViewerRoot)
+    }
+
+    /// Materialize one canonical row by index. This is the only consumer
+    /// surface required by manabot; callers cannot supply a parallel hand
+    /// schema or physical-card selection.
+    pub fn materialize_index(
+        &self,
+        source: &Game,
+        world_index: usize,
+        seed: u64,
+        mode: MaterializeMode,
+    ) -> Result<Game, MaterializeError> {
+        let world = self
+            .worlds
+            .get(world_index)
+            .ok_or(MaterializeError::InconsistentWorld)?;
+        self.materialize_with_mode(source, world, seed, mode)
+    }
+
+    fn materialize_with_mode(
+        &self,
+        source: &Game,
+        world: &PossibleWorld,
+        seed: u64,
+        mode: MaterializeMode,
+    ) -> Result<Game, MaterializeError> {
+        self.validate_source(source)?;
         let sum_k: u32 = world.hand.values().copied().sum();
         if sum_k != self.hand_size {
             return Err(MaterializeError::InconsistentWorld);
@@ -446,6 +677,11 @@ impl PossibleWorldSpace {
             .state
             .zones
             .reassign_hidden(opponent, new_hand, new_library);
+        branch
+            .state
+            .zones
+            .shuffle_canonical(ZoneType::Library, self.viewer, &mut rng);
+        branch.repin_revealed_library_cards();
 
         // Fail closed: the realized hand name-multiset must equal the world.
         let mut realized: BTreeMap<String, u32> = BTreeMap::new();
@@ -458,7 +694,51 @@ impl PossibleWorldSpace {
             return Err(MaterializeError::InconsistentWorld);
         }
 
+        if mode == MaterializeMode::RefreshOpponentPriority
+            && branch
+                .current_action_space
+                .as_ref()
+                .is_some_and(|space| space.player == Some(opponent))
+        {
+            if branch
+                .current_action_space
+                .as_ref()
+                .is_some_and(|space| space.kind != ActionSpaceKind::Priority)
+            {
+                return Err(MaterializeError::UnsupportedActingPrompt);
+            }
+            branch.refresh_priority_actions(opponent);
+        }
+
         Ok(branch)
+    }
+
+    fn validate_source(&self, source: &Game) -> Result<(), MaterializeError> {
+        if self.source_observation.schema_version != 0 {
+            let current = source
+                .semantic_observation(self.viewer)
+                .map_err(|_| MaterializeError::StaleSource)?;
+            if current.identity.schema_version != self.source_observation.schema_version
+                || current.identity.revision != self.source_observation.revision
+                || current.identity.viewer != self.source_observation.viewer
+                || current.identity.viewer_state_hash != self.source_observation.viewer_state_hash
+            {
+                return Err(MaterializeError::StaleSource);
+            }
+        }
+        let mut current_pool = BTreeMap::new();
+        for zone in [ZoneType::Hand, ZoneType::Library] {
+            for &card in source.state.zones.zone_cards(zone, self.opponent) {
+                *current_pool
+                    .entry(source.state.cards[card].name.clone())
+                    .or_insert(0) += 1;
+            }
+        }
+        let current_hand_size = source.state.zones.size(ZoneType::Hand, self.opponent) as u32;
+        if current_pool != self.pool || current_hand_size != self.hand_size {
+            return Err(MaterializeError::StaleSource);
+        }
+        Ok(())
     }
 }
 
@@ -502,14 +782,13 @@ fn enumerate(
     current.remove(name);
 }
 
-/// Narrow adapter over the current (pre-semantic) viewer projection.
-///
-/// RUL-7 owns the semantic `Observation` contracts (no published parent PR
-/// yet). This slice depends on the viewer projection through exactly this one
-/// call site, so later RUL-7 integration is mechanical: swap the projection
-/// here, leave the space, query grammar, and materializer untouched.
-pub fn viewer_observation(game: &Game, viewer: PlayerId) -> Observation {
-    Observation::for_player(game, viewer)
+/// Canonical semantic Observation used by viewer-equivalence tests.
+pub fn viewer_observation(game: &Game, viewer: PlayerId) -> serde_json::Value {
+    serde_json::to_value(
+        game.semantic_observation(viewer)
+            .expect("valid viewer has a semantic observation"),
+    )
+    .expect("semantic observation serializes")
 }
 
 #[cfg(test)]
@@ -651,6 +930,24 @@ mod tests {
             }
             .canonicalize(&space),
             CanonicalWorldQuery::Empty,
+        );
+
+        let bounded = PossibleWorldSpace::from_pool(PlayerId(0), 2, pool(&[("A", 4), ("B", 4)]));
+        assert_eq!(
+            WorldQuery::Has {
+                card: "A".into(),
+                at_least: 3,
+            }
+            .canonicalize(&bounded),
+            CanonicalWorldQuery::Empty,
+        );
+        assert_eq!(
+            WorldQuery::Lacks {
+                card: "A".into(),
+                fewer_than: 3,
+            }
+            .canonicalize(&bounded),
+            CanonicalWorldQuery::True,
         );
         assert_eq!(
             WorldQuery::Lacks {

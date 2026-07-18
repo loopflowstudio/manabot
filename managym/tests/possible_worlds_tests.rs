@@ -6,8 +6,8 @@ use std::collections::HashSet;
 
 use managym::{
     possible_worlds::{
-        viewer_observation, CanonicalWorldQuery, ConditioningError, CountQuery, PossibleWorldSpace,
-        WorldQuery,
+        viewer_observation, CanonicalWorldQuery, ConditioningError, CountQuery, MaterializeError,
+        MaterializeMode, PossibleWorldSpace, WorldQuery,
     },
     semantic::SemanticPack,
     state::game_object::PlayerId,
@@ -93,6 +93,40 @@ fn exact_weights_total_to_choose_n_h() {
 }
 
 #[test]
+fn projection_is_ordered_identity_bound_and_rejects_a_stale_source() {
+    let game = gwallies_decision_with_lesson();
+    let space = PossibleWorldSpace::for_viewer(&game, VIEWER);
+    let projection = space.projection();
+
+    assert_eq!(projection.identity, space.identity());
+    assert_eq!(projection.viewer, VIEWER.0 as u8);
+    assert_eq!(projection.opponent, OPPONENT.0 as u8);
+    assert_eq!(
+        projection
+            .worlds
+            .iter()
+            .map(|world| world.index)
+            .collect::<Vec<_>>(),
+        (0..projection.worlds.len()).collect::<Vec<_>>()
+    );
+
+    let branch = space
+        .materialize_index(&game, 0, 19, MaterializeMode::PreserveViewerRoot)
+        .expect("identity-bound row materializes");
+    assert_eq!(
+        viewer_observation(&branch, VIEWER),
+        viewer_observation(&game, VIEWER)
+    );
+
+    let mut stale = game.clone();
+    stale.step(0).expect("advance the source revision");
+    assert!(matches!(
+        space.materialize_index(&stale, 0, 19, MaterializeMode::PreserveViewerRoot),
+        Err(MaterializeError::StaleSource)
+    ));
+}
+
+#[test]
 fn viewer_relative_slice_preserves_observation_and_hides_truth() {
     let game = gwallies_decision_with_lesson();
     let space = PossibleWorldSpace::for_viewer(&game, VIEWER);
@@ -167,11 +201,17 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
         .iter()
         .map(|c| c.0 as i32)
         .collect();
-    let projected_ids: HashSet<i32> = branch_obs
-        .agent_cards
+    let viewer_state = &branch_obs["viewer_state"];
+    let projected_ids: HashSet<i32> = viewer_state["agent_cards"]
+        .as_array()
+        .expect("agent cards array")
         .iter()
-        .chain(branch_obs.opponent_cards.iter())
-        .map(|c| c.id)
+        .chain(
+            viewer_state["opponent_cards"]
+                .as_array()
+                .expect("opponent cards array"),
+        )
+        .map(|card| card["id"].as_i64().expect("public card id") as i32)
         .collect();
     for id in &opponent_hand_ids {
         assert!(
@@ -180,7 +220,10 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
         );
     }
     assert_eq!(
-        branch_obs.opponent.zone_counts[1], h as i32,
+        viewer_state["opponent"]["zone_counts"][1]
+            .as_i64()
+            .expect("public opponent hand count"),
+        h as i64,
         "public opponent hand-size count must be present"
     );
 }

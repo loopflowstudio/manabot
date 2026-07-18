@@ -11,6 +11,11 @@ from gymnasium import spaces
 # Local imports
 from manabot.infra.log import getLogger
 import managym
+from managym.decision import (
+    Command,
+    SemanticContractError,
+    SemanticTransition,
+)
 
 # Local directory imports
 from .match import Match, Reward
@@ -154,6 +159,43 @@ class Env(gym.Env):
         py_obs = self.obs_space.encode(raw_obs)
         self._last_obs = raw_obs
         return py_obs, reward, terminated, truncated, info
+
+    def step_semantic(
+        self, command: Command
+    ) -> tuple[dict, float, bool, bool, dict, SemanticTransition]:
+        """Execute one authoritative semantic Command.
+
+        This evaluation path deliberately bypasses positional ``Env.step`` and
+        consumes the native atomic semantic-step result, including its ordinary
+        next-actor observation and canonical transition receipt.
+        """
+
+        try:
+            transition_json, raw_obs, raw_reward, terminated, truncated, info = (
+                self._engine.step_semantic_command(command.to_json())
+            )
+        except Exception as error:  # managym.AgentError
+            message = str(error)
+            code = message.split(":", 1)[0] if ":" in message else None
+            raise SemanticContractError(message, code=code) from error
+
+        transition = SemanticTransition.from_json(transition_json)
+        reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
+        info["true_terminated"] = terminated
+        info["true_truncated"] = truncated
+        winner = self._engine.winner_index()
+        if winner is not None:
+            info["winner_index"] = int(winner)
+        add_truncation_flags(raw_obs, info, self.obs_space.encoder)
+        self._last_obs = raw_obs
+        return (
+            self.obs_space.encode(raw_obs),
+            reward,
+            terminated,
+            truncated,
+            info,
+            transition,
+        )
 
     def scenario_refresh(self) -> tuple[dict, "managym.Observation"]:
         """Re-sync after managym scenario_* state injection.

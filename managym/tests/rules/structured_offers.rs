@@ -340,6 +340,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 id: OfferId(0),
                 actor: 0,
                 verb: OfferVerb::Cast,
+                public_commitment: None,
                 source: Some(SubjectRef::Object {
                     id: ObjectRenderId {
                         entity: 31,
@@ -380,6 +381,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 id: OfferId(1),
                 actor: 0,
                 verb: OfferVerb::PassPriority,
+                public_commitment: None,
                 source: None,
                 label: "Pass priority".to_string(),
                 help: None,
