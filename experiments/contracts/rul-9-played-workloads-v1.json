@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "experiment": "rul-9-played-workloads-v1",
+  "claim": "played_release_and_selected_branchdriver_training_fit_product_budgets",
+  "representation_decision": "retain full_clone/current_game_v1 unless this workload supplies contrary decision-bearing evidence",
+  "release": {
+    "matchup": "ur-lessons-vs-gw-allies",
+    "seed": 0,
+    "surfaces": [
+      "live",
+      "headless",
+      "replay"
+    ],
+    "warmups": 1,
+    "repetitions": 10,
+    "commands_per_game": 132,
+    "authority_receipt_sha256": "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147",
+    "parity_receipt_sha256": "af198bb3dcac542a6a34f1cbd8250938e4bfe0e79df7d284de4928873cc0f60b",
+    "terminal_state_sha256": "e48de247d72f816cee9de64d596c79504e16564e003f65bf86d65ac887ae2de7"
+  },
+  "training": {
+    "provider": "rul-2-selected-branchdriver-teacher-v1",
+    "cell": "saturated-4x128-v1",
+    "driver": "full_clone/current_game_v1",
+    "workers": 4,
+    "simulations": 128,
+    "worlds": 4,
+    "deal_seeds": [
+      1197,
+      1419,
+      1887,
+      2197
+    ],
+    "seat_assignment": "alternating-ur-seat-v1",
+    "max_steps": 2000,
+    "max_decisions": 500,
+    "rss_interval_seconds": 0.005
+  },
+  "expected_inputs": {
+    "semantic_ir_file_sha256": "73070b743d938765c0b571374d7fc1c4a3c9efa92cad5795968dd1bc3a445f85",
+    "semantic_source_file_sha256": "8154ebe3277443e45ba91c5ffc8b312eb602900dfd0e2d0d70491362a96a6990",
+    "learning_schema_file_sha256": "a156c592414d0d4838c5423e2cb471fc49a4450f21d62e5e5c198ba948ae7034"
+  },
+  "authority_fallback_counters": [
+    "legacy_fixed_action",
+    "card_name_dispatch",
+    "candidate_cap",
+    "client_legality"
+  ],
+  "training_fallback_counters": [
+    "indexed_fallbacks",
+    "root_cap_hits",
+    "random_playout_cap_hits"
+  ],
+  "budgets": {
+    "release": {
+      "live_command_p95_ms_max": 100.0,
+      "inner_command_p95_ms_max": 10.0,
+      "engine_steps_per_second_min": 500.0,
+      "live_games_per_second_min": 1.0,
+      "peak_rss_bytes_max": 536870912
+    },
+    "training": {
+      "steps_per_second_min": 4.0,
+      "traversals_per_second_min": 512.0,
+      "games_per_second_min": 0.04,
+      "puct_p95_ms_max": 2000.0,
+      "command_p95_ms_max": 10.0,
+      "peak_rss_bytes_max": 2147483648
+    },
+    "semantic": {
+      "catalog_tokens_max": 4096,
+      "definition_tokens_max": 160,
+      "visible_references_max": 128,
+      "overflow_count_max": 0
+    }
+  },
+  "diagnostics": {
+    "expanded_physical_object_tokens_frontier": 4096,
+    "expanded_frontier_is_gating": false,
+    "miss_attribution": [
+      "native_command_apply",
+      "search",
+      "semantic_projection",
+      "presentation_protocol",
+      "process_scheduling",
+      "visible_zone_and_definition_pressure"
+    ]
+  },
+  "predictions": {
+    "release": "Live Command p95 stays below 100 ms, headless and replay exceed 500 semantic steps/s, live completion exceeds 1 game/s, and release RSS stays below 512 MiB.",
+    "training": "The selected saturated teacher exceeds 4 root steps/s, 512 traversals/s, and 0.04 complete games/s with PUCT p95 below 2 seconds and RSS below 2 GiB.",
+    "capacity": "The shared catalog stays below 4096 tokens, definitions stay below 160 tokens, visible references stay below 128, and every fallback, cap, projection, and overflow counter is zero.",
+    "diagnostic": "Naive per-physical-object semantic expansion may exceed 4096 tokens late in a training game; shared catalog references, rather than clipping or a new representation, should explain the miss."
+  },
+  "strongest_confound": "Absolute latency and RSS are single-host evidence even though source, binary, workload, seeds, and worker topology are exact.",
+  "limitations": [
+    "one fixed release seed",
+    "four fixed production training games",
+    "no learned runtime-policy training",
+    "no representation comparison",
+    "no INT-9 possible-world workload",
+    "no RUL-5 receipt mutation"
+  ]
+}
