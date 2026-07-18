@@ -9,18 +9,22 @@ pm:
 
 ## Objective
 
-Build increasingly strong manabots by making runnable agents and search systems,
-playing them in authoritative Magic worlds, measuring what they actually do,
-and iterating toward superhuman performance. Typed card programs, structured
-commands, search, self-play, and Study evidence matter when they improve a
-working agent—not as prerequisites that must be proven in isolation before one
-may be built.
+Build increasingly strong manabots as pilots, opponents, teammates, sparring
+partners, and advisors in Etude Fantasia's AI-assisted Pro Tour testing house.
+Make runnable agents and search systems, play them in authoritative Magic
+worlds, measure what they actually do, and iterate toward superhuman
+performance. Typed card programs, structured commands, search, self-play, and
+Study evidence matter when they improve a working agent—not as prerequisites
+that must be proven in isolation before one may be built.
 
-The authored Etude Fantasia game and Study experience are part of the research
-loop. They create real opponents, decisions, human questions, and model-version
-comparisons. Intelligence owns the policies, search, training, evaluation, and
-evidence behind those experiences; it does not own rules authority or Game's
-Study experience.
+The first player-facing AI loop starts from one canonical viewer decision and
+an explicit viewer-safe belief. One pinned advisor and compute class return the
+complete aligned strategy distribution, values, robustness, uncertainty, and
+provenance; changing only the belief makes the delta inspectable. The same
+decision, belief, advisor, compute, and provenance identities yield the same
+advice live or in Study. Intelligence owns policies, priors, model-inferred
+beliefs, search, training, evaluation, and attributable evidence. It does not
+own match facts, player-authored beliefs, rules authority, or Game's surface.
 
 The immediate architecture program is defined in
 [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md): consume managym's canonical
@@ -33,7 +37,9 @@ The product north star places manabots in Avatar Cube Team Sealed as pilots,
 teammates, and opponents. The first robot team may use fixed authored decks,
 and manabots need not sideboard. Once a manabot can play the selected world,
 constructing three legal decks from a shared sealed pool becomes an important
-later Intelligence capability. Drafting is separate and is not a prerequisite.
+later Intelligence capability. A versioned, world-pinned Elo arena measures
+the resulting players at declared compute classes. Drafting is separate and is
+not a prerequisite.
 
 ## Measures
 
@@ -47,6 +53,10 @@ later Intelligence capability. Drafting is separate and is not a prerequisite.
   prior and typed conditions such as `Has(Bolt)` and `NoLands`, returning
   aligned complete action distributions, values, condition mass, uncertainty,
   and exact provenance without exposing actual hidden truth.
+- Advice for one decision is identity-pinned to its viewer-safe belief,
+  advisor, planner/evaluator, compute class, seed plan, and evidence bytes. The
+  same identity is reproducible through live play and Study, while a mismatch
+  returns typed unavailability rather than adapted or invented evidence.
 - A supervised belief head maps lossless viewer history to a calibrated
   normalized distribution over managym's world hypotheses. Both policy and
   value are conditioned on that `BeliefState`; actual hidden worlds remain
@@ -55,9 +65,9 @@ later Intelligence capability. Drafting is separate and is not a prerequisite.
   belief, history, target, source, seed, and exact byte identities and replay
   through the same semantic Commands as live play.
 - Every admitted candidate enters a versioned, world-pinned skill arena. The
-  primary hill-climbing signal is a population rating at a declared compute
-  class, reported with paired-deal uncertainty and the underlying matchup
-  matrix; ratings never cross world or arena-version boundaries.
+  primary hill-climbing signal is a population Elo rating at a declared
+  compute class, reported with paired-deal uncertainty and the underlying
+  matchup matrix; ratings never cross world or arena-version boundaries.
 - A semantic policy consumes viewer-safe runtime facts, typed ability programs,
   and structured legal offers, emits atomic `Command` values, and is evaluated
   on real play—including held-out cards or compositions of known operations.
@@ -107,11 +117,12 @@ delay prototypes until every representation is settled. A proven full-clone
 path and exact small world support are acceptable first backends when they fit
 the measured budget.
 
-Game owns Study decision navigation, reveal, comparison, explanation, and
-human research consent. Intelligence emits attributable evidence; it does not
-build a second replay, legality, presentation, or hidden-information system.
-Etude or an LLM may construct a typed `WorldQuery`; neither can inspect actual
-hidden authority or introduce arbitrary query semantics.
+Game owns player-authored belief input, Study decision navigation, reveal,
+comparison, explanation, roles, and human research consent. Intelligence emits
+model-inferred beliefs and attributable advice; it does not build a second
+replay, legality, presentation, or hidden-information system. Etude or an LLM
+may construct a typed `WorldQuery`; neither can inspect actual hidden authority
+or introduce arbitrary query semantics.
 
 An external LLM may be a teacher, baseline, or grounded narrator. It is not the
 inner-loop rules oracle or source of legal actions. Open-ended card coverage,

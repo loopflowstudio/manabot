@@ -15,6 +15,14 @@ matchups run end to end through general semantic machinery, measuring their
 behavior and cost, and hardening the exact seams that real play exposes. It does
 not pursue open-ended card or format breadth.
 
+Rules supplies the facts and typed hidden-world language behind Etude
+Fantasia's first AI-assisted testing-house experience. At one canonical viewer
+decision, `PossibleWorldSpace` and `WorldQuery` let a player state a read as an
+exact viewer-safe condition without learning whether it is true. The same
+Observation, decision, query, and fork identities mean the same thing live or
+in Study. Facts remain distinct from player-authored beliefs, model-inferred
+beliefs, and advice; only normal legal Commands mutate the authoritative match.
+
 The product north star is a versioned Avatar Cube Team Sealed world, but the
 current two-deck matchup remains the next executable step. Grow toward the cube
 through playable content increments; do not replace the current vertical slice
@@ -49,6 +57,10 @@ learning, and Study slice depends on it.
   and materialize compatible hidden worlds without exposing actual truth;
   conditional manabot search uses that same kernel rather than a parallel hand
   ontology.
+- Equivalent canonical queries at the same viewer Observation produce the same
+  support and conditioning receipts live or in Study. Empty support is explicit,
+  query validation never reveals the actual hidden world, and hypothetical
+  materialization or exploration cannot mutate the retained match.
 - The retained branch representation runs real search and interactive Study
   workloads with exact isolation and return, bounded p95 latency, competitive
   whole-rollout throughput, and measured peak RSS.
@@ -98,6 +110,8 @@ exact Rules fork and return provider.
 Rules also owns possible-world meaning, the reference compatible-deal measure,
 typed query validation/filtering, and legal world materialization. Intelligence
 owns priors, learned beliefs, sampling policy, and planning over that domain.
+Game owns player-authored query construction and presentation. Neither Game nor
+Intelligence may upgrade a belief or advice artifact into a match fact.
 
 Use immutable versioned `ContentPack` definitions plus compact dense mutable
 facts unless a measured consumer demonstrates a better representation. Offline
