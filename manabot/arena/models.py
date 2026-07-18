@@ -115,13 +115,64 @@ class PlayerRegistration(StrictModel):
                 raise ValueError(
                     "checkpoint artifact identity cannot be a mutable alias"
                 )
-            expected_checkpoint_spec = {
-                "kind": "checkpoint",
-                "deterministic": True,
-                "device": "cpu",
-                "batch_size": 1,
-            }
-            if self.player_spec != expected_checkpoint_spec:
+            kind = self.player_spec.get("kind")
+            if kind == "checkpoint":
+                expected_checkpoint_spec = {
+                    "kind": "checkpoint",
+                    "deterministic": True,
+                    "device": "cpu",
+                    "batch_size": 1,
+                }
+                if self.player_spec != expected_checkpoint_spec:
+                    raise ValueError("checkpoint inference spec must be fully explicit")
+            elif kind == "policy_prior_puct":
+                required_keys = {
+                    "kind",
+                    "sims",
+                    "worlds",
+                    "c_puct",
+                    "max_steps",
+                    "branch_driver_id",
+                    "device",
+                    "batch_size",
+                    "deterministic",
+                    "root_noise",
+                    "implementation_source_sha256",
+                }
+                if set(self.player_spec) != required_keys:
+                    raise ValueError("policy-prior PUCT spec must be fully explicit")
+                if (
+                    self.player_spec["sims"] not in {8, 32, 128}
+                    or self.player_spec["worlds"] != 4
+                    or self.player_spec["c_puct"] != 1.5
+                    or self.player_spec["max_steps"] != 2000
+                    or self.player_spec["branch_driver_id"]
+                    != "full_clone/current_game_v1"
+                    or self.player_spec["device"] != "cpu"
+                    or self.player_spec["batch_size"] != 1
+                    or self.player_spec["deterministic"] is not True
+                    or self.player_spec["root_noise"] != "none"
+                    or not isinstance(
+                        self.player_spec["implementation_source_sha256"], str
+                    )
+                    or len(self.player_spec["implementation_source_sha256"]) != 64
+                ):
+                    raise ValueError("policy-prior PUCT parameters are frozen")
+                if (
+                    self.search_semantics is None
+                    or self.search_semantics.model_dump()
+                    != {
+                        "branch_audit": False,
+                        "root_prior": "checkpoint-policy-softmax-v1",
+                        "leaf_evaluator": "uniform-random-terminal-v1",
+                    }
+                    or self.search_call_seed_derivation_id
+                    != "mcts-mix-comparison-seed-decision-v1"
+                ):
+                    raise ValueError(
+                        "policy-prior PUCT requires frozen search and seed semantics"
+                    )
+            else:
                 raise ValueError("checkpoint inference spec must be fully explicit")
         if self.player_spec.get("kind") == "determinized_puct":
             required_keys = {

@@ -14,20 +14,26 @@ from manabot.infra.hypers import MatchHypers, RewardHypers
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 
+from .guidance import build_arena_player
 from .models import ArenaKey, PlayerRegistration, canonical_sha256
-from .players import build_player
 from .replay import replay_games, write_trace
 
 
 def derive_seed(
-    key: ArenaKey, pair: tuple[str, str], deal_seed: int, player_id: str
+    key: ArenaKey,
+    pair: tuple[str, str],
+    deal_seed: int,
+    player_id: str,
+    *,
+    comparison_seed_aliases: dict[str, str] | None = None,
 ) -> int:
+    aliases = comparison_seed_aliases or {}
     identity = canonical_sha256(
         {
             "arena_key": key.model_dump(),
-            "pair": sorted(pair),
+            "pair": sorted(aliases.get(member, member) for member in pair),
             "deal_seed": deal_seed,
-            "player_id": player_id,
+            "player_id": aliases.get(player_id, player_id),
         }
     )
     return int(identity[:16], 16)
@@ -49,6 +55,7 @@ def play_cell(
     deal_seeds: tuple[int, ...],
     out_dir: Path,
     checkpoint_paths: dict[str, str] | None = None,
+    comparison_seed_aliases: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     import torch
 
@@ -61,14 +68,18 @@ def play_cell(
     for block, deal_seed in enumerate(deal_seeds):
         seeds = {
             registration.player_id: derive_seed(
-                key, pair, deal_seed, registration.player_id
+                key,
+                pair,
+                deal_seed,
+                registration.player_id,
+                comparison_seed_aliases=comparison_seed_aliases,
             )
             for registration in (player_a, player_b)
         }
         for leg in (0, 1):
             seat_players = [player_a, player_b] if leg == 0 else [player_b, player_a]
             built = {
-                registration.player_id: build_player(
+                registration.player_id: build_arena_player(
                     registration,
                     seed=seeds[registration.player_id],
                     checkpoint_path=checkpoint_paths.get(registration.player_id),

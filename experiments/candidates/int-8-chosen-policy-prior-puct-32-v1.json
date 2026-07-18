@@ -1,0 +1,40 @@
+{
+  "artifact_id": "int-4-smoke-chosen-policy-only-seed-197-9004b87e2be4a893",
+  "checkpoint_bytes": 428935,
+  "checkpoint_sha256": "9004b87e2be4a8934b9e276c5249c8881ab74aa96d6b0327c4fc71fcd2f051dc",
+  "compute_class_id": "policy-prior-puct-cpu-s32-w4-random-leaf-v1",
+  "content_suite": "w2-interactive-mirror-v1",
+  "display_name": "INT-8 chosen-action policy-prior PUCT 32 v1",
+  "information_boundary": "acting-viewer-history-only-v1",
+  "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+  "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+  "evidence_class": "fixture",
+  "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+  "parameter_count": 102722,
+  "player_id": "chosen-policy-prior-puct-32-v1",
+  "player_seed_derivation_id": "arena-comparison-alias-player-v1",
+  "player_spec": {
+    "batch_size": 1,
+    "branch_driver_id": "full_clone/current_game_v1",
+    "c_puct": 1.5,
+    "deterministic": true,
+    "device": "cpu",
+    "implementation_source_sha256": "d7b78ce0325bb64caae487713a85f6eb725802283ace491925cf49fea880b69c",
+    "kind": "policy_prior_puct",
+    "max_steps": 2000,
+    "root_noise": "none",
+    "sims": 32,
+    "worlds": 4
+  },
+  "role": "challenger",
+  "runner_kind": "checkpoint",
+  "search_call_seed_derivation_id": "mcts-mix-comparison-seed-decision-v1",
+  "search_semantics": {
+    "branch_audit": false,
+    "leaf_evaluator": "uniform-random-terminal-v1",
+    "root_prior": "checkpoint-policy-softmax-v1"
+  },
+  "source_sha256": null,
+  "training_seed": 197,
+  "world": "w2"
+}

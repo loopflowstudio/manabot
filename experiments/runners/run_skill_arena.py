@@ -15,7 +15,10 @@ import sys
 import time
 from typing import Any
 
+import numpy as np
+
 from manabot.arena.competency import run_competencies
+from manabot.arena.guidance import build_arena_player
 from manabot.arena.match import play_cell
 from manabot.arena.models import (
     ArenaContract,
@@ -24,7 +27,6 @@ from manabot.arena.models import (
     canonical_sha256,
     file_sha256,
 )
-from manabot.arena.players import build_player
 from manabot.arena.profile import (
     native_gameplay_profiles,
     profile_players,
@@ -172,7 +174,7 @@ def preflight_candidate(
             raise ArenaError("checkpoint candidate byte-size mismatch")
         checkpoint_paths[registration.player_id] = str(checkpoint_path)
         if validate_checkpoint_load:
-            player, observation_space = build_player(
+            player, observation_space = build_arena_player(
                 registration, seed=0, checkpoint_path=str(checkpoint_path)
             )
             if observation_space is None:
@@ -186,6 +188,8 @@ def preflight_candidate(
             ):
                 raise ArenaError("checkpoint candidate observation-shape mismatch")
             agent = getattr(player, "agent", None)
+            if agent is None:
+                agent = getattr(getattr(player, "evaluator", None), "agent", None)
             parameter_count = (
                 sum(parameter.numel() for parameter in agent.parameters())
                 if agent is not None
@@ -219,6 +223,7 @@ def play_cells(
     deal_seeds: tuple[int, ...],
     out_dir: Path,
     checkpoint_paths: dict[str, str] | None = None,
+    comparison_seed_aliases: dict[str, str] | None = None,
 ) -> list[tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]]:
     jobs = [
         {
@@ -228,6 +233,7 @@ def play_cells(
             "deal_seeds": deal_seeds,
             "out_dir": out_dir,
             "checkpoint_paths": checkpoint_paths,
+            "comparison_seed_aliases": comparison_seed_aliases,
         }
         for first, second in pairs
     ]
@@ -263,27 +269,47 @@ def artifact_bytes(out_dir: Path) -> int:
 
 
 def resource_cap_receipt(
-    out_dir: Path, contract: ArenaContract, *, started: float
+    out_dir: Path,
+    contract: ArenaContract,
+    *,
+    started: float,
+    wall_hours_max: float | None = None,
+    core_hours_max: float | None = None,
+    artifact_bytes_max: int | None = None,
+    additional_artifact_dirs: tuple[Path, ...] = (),
 ) -> dict[str, Any]:
     wall_seconds = time.perf_counter() - started
     wall_hours = wall_seconds / 3600.0
     core_hours = wall_hours * contract.resource_caps.outcome_workers
-    current_artifact_bytes = artifact_bytes(out_dir)
+    current_artifact_bytes = artifact_bytes(out_dir) + sum(
+        artifact_bytes(path) for path in additional_artifact_dirs if path.exists()
+    )
+    wall_limit = (
+        contract.resource_caps.wall_hours if wall_hours_max is None else wall_hours_max
+    )
+    core_limit = (
+        contract.resource_caps.core_hours if core_hours_max is None else core_hours_max
+    )
+    artifact_limit = (
+        contract.resource_caps.artifact_bytes
+        if artifact_bytes_max is None
+        else artifact_bytes_max
+    )
     clauses = {
         "wall_hours": {
             "actual": wall_hours,
-            "maximum": contract.resource_caps.wall_hours,
-            "passed": wall_hours <= contract.resource_caps.wall_hours,
+            "maximum": wall_limit,
+            "passed": wall_hours <= wall_limit,
         },
         "core_hours_conservative": {
             "actual": core_hours,
-            "maximum": contract.resource_caps.core_hours,
-            "passed": core_hours <= contract.resource_caps.core_hours,
+            "maximum": core_limit,
+            "passed": core_hours <= core_limit,
         },
         "artifact_bytes_at_decision": {
             "actual": current_artifact_bytes,
-            "maximum": contract.resource_caps.artifact_bytes,
-            "passed": current_artifact_bytes <= contract.resource_caps.artifact_bytes,
+            "maximum": artifact_limit,
+            "passed": current_artifact_bytes <= artifact_limit,
         },
     }
     return {
@@ -466,18 +492,361 @@ def promotion_payload(
     return {**disposition, "input_sha256": canonical_sha256(disposition)}
 
 
+INT8_EVIDENCE_CLASS = "engineering_smoke_only_no_admission_claim"
+INT8_COMPARISON_ALIAS = "int-8-guidance-comparison-v1"
+INT8_BUDGETS = (8, 32, 128)
+INT8_IMPLEMENTATION_SOURCE_PATHS = (
+    "experiments/runners/run_skill_arena.py",
+    "manabot/arena/competency.py",
+    "manabot/arena/guidance.py",
+    "manabot/arena/int8_input.py",
+    "manabot/arena/match.py",
+    "manabot/arena/models.py",
+    "manabot/arena/players.py",
+    "manabot/arena/profile.py",
+    "manabot/arena/rating.py",
+    "manabot/arena/replay.py",
+)
+INT8_MODULE_PATHS = {
+    "guidance": "manabot/arena/guidance.py",
+    "retained_input": "manabot/arena/int8_input.py",
+}
+
+
+def diagnostic_profile_variants(
+    candidates: list[PlayerRegistration],
+) -> list[PlayerRegistration]:
+    """Materialize the frozen 8/32/128 profile identities for each prior arm."""
+
+    variants = []
+    for candidate in candidates:
+        if candidate.player_spec["sims"] != 32:
+            raise ArenaError("diagnostic gameplay candidates must use 32 traversals")
+        stem = candidate.player_id.removesuffix("-32-v1")
+        for budget in INT8_BUDGETS:
+            spec = {**candidate.player_spec, "sims": budget}
+            variants.append(
+                PlayerRegistration.model_validate(
+                    candidate.model_copy(
+                        update={
+                            "player_id": f"{stem}-{budget}-v1",
+                            "display_name": candidate.display_name.replace(
+                                "32 v1", f"{budget} v1"
+                            ),
+                            "player_spec": spec,
+                            "compute_class_id": candidate.compute_class_id.replace(
+                                "s32", f"s{budget}"
+                            ),
+                        }
+                    ).model_dump()
+                )
+            )
+    if len({variant.player_id for variant in variants}) != 9:
+        raise ArenaError("diagnostic profile variant identities are not unique")
+    return variants
+
+
+def _profile_arm(registration: PlayerRegistration) -> str:
+    if registration.player_id.startswith("uniform-prior"):
+        return "uniform"
+    if registration.player_id.startswith("chosen-policy-prior"):
+        return "chosen"
+    if registration.player_id.startswith("visit-policy-prior"):
+        return "visit"
+    raise ArenaError(f"unknown diagnostic prior arm: {registration.player_id}")
+
+
+def _agreement_payload(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    left_samples = left["samples"]
+    right_samples = right["samples"]
+    if [row["root_id"] for row in left_samples] != [
+        row["root_id"] for row in right_samples
+    ]:
+        raise ArenaError("label agreement roots are not matched")
+    rows = [
+        {
+            "root_id": left_row["root_id"],
+            "action_space_kind": left_row["action_space_kind"],
+            "legal_action_count": left_row["legal_action_count"],
+            "agreed": int(left_row["action"] == right_row["action"]),
+        }
+        for left_row, right_row in zip(left_samples, right_samples, strict=True)
+    ]
+
+    def summarize(group: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "roots": len(group),
+            "agreements": sum(int(row["agreed"]) for row in group),
+            "rate": sum(int(row["agreed"]) for row in group) / len(group),
+        }
+
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        bucket = f"{row['action_space_kind']}__legal-{row['legal_action_count']}"
+        buckets.setdefault(bucket, []).append(row)
+    return {
+        "aggregate": summarize(rows),
+        "buckets": {key: summarize(group) for key, group in sorted(buckets.items())},
+    }
+
+
+def guidance_mechanism_payload(
+    profile: dict[str, Any], variants: list[PlayerRegistration]
+) -> dict[str, Any]:
+    by_arm_budget = {
+        (_profile_arm(variant), int(variant.player_spec["sims"])): profile["players"][
+            variant.player_id
+        ]
+        for variant in variants
+    }
+    agreement_pairs = {
+        "uniform32_vs_chosen32": (("uniform", 32), ("chosen", 32)),
+        "uniform32_vs_visit32": (("uniform", 32), ("visit", 32)),
+        "chosen32_vs_visit32": (("chosen", 32), ("visit", 32)),
+        "uniform32_vs_uniform128": (("uniform", 32), ("uniform", 128)),
+        "chosen32_vs_uniform128": (("chosen", 32), ("uniform", 128)),
+        "visit32_vs_uniform128": (("visit", 32), ("uniform", 128)),
+    }
+    agreements = {
+        name: _agreement_payload(by_arm_budget[left], by_arm_budget[right])
+        for name, (left, right) in agreement_pairs.items()
+    }
+    return {
+        "schema_version": 1,
+        "evidence_class": INT8_EVIDENCE_CLASS,
+        "root_corpus_sha256": profile["root_corpus_sha256"],
+        "profile_registration_sha256": {
+            variant.player_id: variant.identity_sha256 for variant in variants
+        },
+        "selected_command_agreement": agreements,
+        "high_budget_reference": "uniform-prior-puct-128-v1",
+        "player_metrics": {
+            variant.player_id: {
+                "budget": int(variant.player_spec["sims"]),
+                "arm": _profile_arm(variant),
+                "p50_seconds": profile["players"][variant.player_id]["p50_seconds"],
+                "p95_seconds": profile["players"][variant.player_id]["p95_seconds"],
+                "nodes_per_second": profile["players"][variant.player_id][
+                    "nodes_per_second"
+                ],
+                "decisions_per_second": profile["players"][variant.player_id][
+                    "decisions_per_second"
+                ],
+                "cpu_seconds_per_label": profile["players"][variant.player_id][
+                    "cpu_seconds_per_label"
+                ],
+                "nodes_per_label": profile["players"][variant.player_id][
+                    "nodes_per_label"
+                ],
+                "mechanism": profile["players"][variant.player_id]["mechanism"],
+            }
+            for variant in variants
+        },
+    }
+
+
+def _candidate_anchor_scores(
+    rows: list[dict[str, Any]], candidate_id: str, anchor_ids: set[str]
+) -> dict[tuple[str, int, int], float]:
+    scores = {}
+    for row in rows:
+        if row["player_a"] != candidate_id or row["player_b"] not in anchor_ids:
+            continue
+        key = (str(row["player_b"]), int(row["deal_block"]), int(row["leg"]))
+        scores[key] = float(row["score_a"])
+    return scores
+
+
+def _competency_correct_count(competencies: dict[str, Any], player_id: str) -> int:
+    return sum(
+        int(bool(run["correct"]))
+        for scenario in competencies["players"][player_id].values()
+        for run in scenario["runs"]
+    )
+
+
+def diagnostic_decision_payload(
+    *,
+    candidates: list[PlayerRegistration],
+    rows: list[dict[str, Any]],
+    competencies: dict[str, Any],
+    profile: dict[str, Any],
+    mechanism: dict[str, Any],
+    resource_caps: dict[str, Any],
+    anchor_ids: set[str],
+) -> dict[str, Any]:
+    candidate_by_arm = {_profile_arm(candidate): candidate for candidate in candidates}
+    if set(candidate_by_arm) != {"uniform", "chosen", "visit"}:
+        raise ArenaError("diagnostic requires exactly uniform/chosen/visit candidates")
+    row_integrity = all(
+        row.get("replay_passed")
+        and not any(int(value) for value in row["integrity"].values())
+        for row in rows
+    )
+    profile_integrity = all(
+        int(player["root_mutations"]) == 0
+        and int(player["illegal_actions"]) == 0
+        and float(player["playout_cap_rate"]) <= 0.001
+        for player in profile["players"].values()
+    )
+    integrity = {
+        "match_rows_passed": row_integrity,
+        "profile_rows_passed": profile_integrity,
+        "resource_caps_passed": bool(resource_caps["passed"]),
+        "passed": row_integrity and profile_integrity and bool(resource_caps["passed"]),
+    }
+    base = {
+        "schema_version": 1,
+        "evidence_class": INT8_EVIDENCE_CLASS,
+        "promotion_eligible": False,
+        "admission_eligible": False,
+        "method_level_claim": False,
+        "integrity": integrity,
+    }
+    if not integrity["passed"]:
+        unsigned = {
+            **base,
+            "disposition": "invalid_integrity",
+            "decision": None,
+            "reason": "zero_tolerance_or_resource_cap_gate",
+        }
+        return {**unsigned, "input_sha256": canonical_sha256(unsigned)}
+    scores = {
+        arm: _candidate_anchor_scores(rows, candidate.player_id, anchor_ids)
+        for arm, candidate in candidate_by_arm.items()
+    }
+    if not scores["uniform"] or any(
+        set(arm_scores) != set(scores["uniform"]) for arm_scores in scores.values()
+    ):
+        raise ArenaError("paired arena score cells are incomplete")
+    paired_delta = {
+        arm: float(
+            np.mean(
+                [
+                    scores[arm][key] - scores["uniform"][key]
+                    for key in sorted(scores["uniform"])
+                ]
+            )
+        )
+        for arm in ("chosen", "visit")
+    }
+    competency_counts = {
+        arm: _competency_correct_count(competencies, candidate.player_id)
+        for arm, candidate in candidate_by_arm.items()
+    }
+    agreements = mechanism["selected_command_agreement"]
+    uniform_agreement = agreements["uniform32_vs_uniform128"]["aggregate"]["rate"]
+    label_improvement = {
+        "chosen": agreements["chosen32_vs_uniform128"]["aggregate"]["rate"]
+        - uniform_agreement,
+        "visit": agreements["visit32_vs_uniform128"]["aggregate"]["rate"]
+        - uniform_agreement,
+    }
+    metrics = mechanism["player_metrics"]
+    uniform_cost = metrics["uniform-prior-puct-32-v1"]
+    clauses = {}
+    for arm, other in (("chosen", "visit"), ("visit", "chosen")):
+        candidate_id = candidate_by_arm[arm].player_id
+        p95_ratio = float(metrics[candidate_id]["p95_seconds"]) / float(
+            uniform_cost["p95_seconds"]
+        )
+        nodes_ratio = float(metrics[candidate_id]["nodes_per_second"]) / float(
+            uniform_cost["nodes_per_second"]
+        )
+        arm_clauses = {
+            "arena_delta": {
+                "actual": paired_delta[arm],
+                "minimum": 0.05,
+                "passed": paired_delta[arm] >= 0.05,
+            },
+            "arena_separation": {
+                "actual": paired_delta[arm] - paired_delta[other],
+                "minimum": 0.05,
+                "passed": paired_delta[arm] - paired_delta[other] >= 0.05,
+            },
+            "high_budget_label_agreement_improvement": {
+                "actual": label_improvement[arm],
+                "minimum": 0.05,
+                "passed": label_improvement[arm] >= 0.05,
+            },
+            "competency_noninferiority": {
+                "actual": competency_counts[arm] - competency_counts[other],
+                "minimum": 0,
+                "passed": competency_counts[arm] >= competency_counts[other],
+            },
+            "p95_latency_ratio": {
+                "actual": p95_ratio,
+                "maximum": 1.10,
+                "passed": p95_ratio <= 1.10,
+            },
+            "nodes_per_second_ratio": {
+                "actual": nodes_ratio,
+                "minimum": 0.90,
+                "passed": nodes_ratio >= 0.90,
+            },
+        }
+        clauses[arm] = {
+            "clauses": arm_clauses,
+            "passed": all(clause["passed"] for clause in arm_clauses.values()),
+        }
+    clearing = [arm for arm in ("chosen", "visit") if clauses[arm]["passed"]]
+    decision = (
+        f"next_corpus_{'chosen_action' if clearing == ['chosen'] else 'visit_distribution'}"
+        if len(clearing) == 1
+        else "kill_retained_smoke_policy_guidance"
+    )
+    unsigned = {
+        **base,
+        "disposition": INT8_EVIDENCE_CLASS,
+        "decision": decision,
+        "reason": "exactly_one_signal_cleared"
+        if len(clearing) == 1
+        else "zero_or_two_signals_cleared",
+        "paired_arena_delta": paired_delta,
+        "high_budget_label_agreement_improvement": label_improvement,
+        "competency_correct_counts": competency_counts,
+        "arms": clauses,
+    }
+    return {**unsigned, "input_sha256": canonical_sha256(unsigned)}
+
+
 def verify_manifest(
-    out_dir: Path, contract: ArenaContract, contract_sha: str
+    out_dir: Path,
+    contract: ArenaContract,
+    contract_sha: str,
+    *,
+    expected_runtime: dict[str, Any] | None = None,
+    experiment_contract_sha256: str | None = None,
+    int8_authority: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     manifest = load_json(out_dir / "manifest.json")
+    artifact_kind = manifest.get("kind")
+    if artifact_kind not in {
+        "anchor-freeze",
+        "challenge",
+        "guidance-diagnostic",
+    }:
+        raise ArenaError("manifest artifact kind is unsupported")
+    if artifact_kind == "guidance-diagnostic" and (
+        manifest.get("evidence_class") != INT8_EVIDENCE_CLASS
+        or manifest.get("comparison_seed_alias") != INT8_COMPARISON_ALIAS
+    ):
+        raise ArenaError("diagnostic evidence class or comparison alias mismatch")
     if manifest.get("manifest_sha256") != manifest_digest(manifest):
         raise ArenaError("manifest digest mismatch")
     if manifest.get("contract_sha256") != contract_sha:
         raise ArenaError("manifest contract mismatch")
     if manifest.get("arena_key") != contract.key.model_dump():
         raise ArenaError("manifest arena key mismatch")
-    if manifest.get("runtime") != contract.runtime:
+    runtime = contract.runtime if expected_runtime is None else expected_runtime
+    if manifest.get("runtime") != runtime:
         raise ArenaError("manifest runtime identity mismatch")
+    if experiment_contract_sha256 is not None and (
+        manifest.get("experiment_contract_sha256") != experiment_contract_sha256
+        or manifest.get("int8_authority") != int8_authority
+        or manifest.get("evidence_class") != INT8_EVIDENCE_CLASS
+    ):
+        raise ArenaError("INT-8 additive authority binding mismatch")
     profile_name = str(manifest.get("profile"))
     if profile_name not in contract.profiles:
         raise ArenaError("manifest profile mismatch")
@@ -512,7 +881,11 @@ def verify_manifest(
         validated_rows = [MatchRow.model_validate(row) for row in rows]
     except ValueError as error:
         raise ArenaError(f"match row identity mismatch: {error}") from error
-    expected_cells = 10 if manifest["kind"] == "anchor-freeze" else 15
+    expected_cells = {
+        "anchor-freeze": 10,
+        "challenge": 15,
+        "guidance-diagnostic": 28,
+    }[artifact_kind]
     expected_games = expected_cells * len(schedule.deal_seeds) * 2
     if len(rows) != expected_games:
         raise ArenaError("match schedule game-count mismatch")
@@ -535,7 +908,11 @@ def verify_manifest(
     local_rows = [
         row for row in validated_rows if row.game_trace_sha256 in traced_games
     ]
-    expected_local_cells = 10 if manifest["kind"] == "anchor-freeze" else 5
+    expected_local_cells = {
+        "anchor-freeze": 10,
+        "challenge": 5,
+        "guidance-diagnostic": 18,
+    }[artifact_kind]
     if len(local_rows) != expected_local_cells * len(schedule.deal_seeds) * 2:
         raise ArenaError("local trace-to-match coverage mismatch")
     if any(
@@ -548,17 +925,53 @@ def verify_manifest(
         for player in load_json(out_dir / "players.json")
     ]
     expected_players = list(contract.anchors)
-    if manifest["kind"] == "challenge":
+    if artifact_kind == "challenge":
         expected_players.append(
             PlayerRegistration.model_validate(manifest["candidate"])
         )
+    diagnostic_candidates = (
+        [
+            PlayerRegistration.model_validate(candidate)
+            for candidate in manifest.get("candidates", [])
+        ]
+        if artifact_kind == "guidance-diagnostic"
+        else []
+    )
+    profile_variants = (
+        [
+            PlayerRegistration.model_validate(variant)
+            for variant in manifest.get("profile_variants", [])
+        ]
+        if artifact_kind == "guidance-diagnostic"
+        else []
+    )
+    if artifact_kind == "guidance-diagnostic":
+        if (
+            len(diagnostic_candidates) != 3
+            or [_profile_arm(candidate) for candidate in diagnostic_candidates]
+            != ["uniform", "chosen", "visit"]
+            or profile_variants != diagnostic_profile_variants(diagnostic_candidates)
+        ):
+            raise ArenaError("diagnostic candidate registry mismatch")
+        expected_players.extend(diagnostic_candidates)
     if players != expected_players:
         raise ArenaError("player registry artifact mismatch")
     candidate = (
         PlayerRegistration.model_validate(manifest["candidate"])
-        if manifest["kind"] == "challenge"
+        if artifact_kind == "challenge"
         else None
     )
+    registration_by_id = {
+        registration.player_id: registration for registration in expected_players
+    }
+    if any(
+        row.player_a_registration_sha256
+        != registration_by_id[row.player_a].identity_sha256
+        or row.player_b_registration_sha256
+        != registration_by_id[row.player_b].identity_sha256
+        for row in validated_rows
+    ):
+        raise ArenaError("match row registration binding mismatch")
     _, recomputed_rating = rating_payload(rows, schedule, contract)
     stored_rating = load_json(out_dir / "rating.json")
     if recomputed_rating != stored_rating:
@@ -589,21 +1002,27 @@ def verify_manifest(
                     f"competency aggregate mismatch: {player_id}/{scenario_name}"
                 )
     profile_payload = load_json(out_dir / "profile.json")
-    native_rows = (
-        rows
-        if manifest["kind"] == "anchor-freeze"
-        else [
+    if artifact_kind == "anchor-freeze":
+        native_rows = rows
+    elif artifact_kind == "challenge":
+        native_rows = [
             row
             for row in rows
             if manifest["candidate"]["player_id"] in {row["player_a"], row["player_b"]}
         ]
-    )
+    else:
+        diagnostic_ids = {candidate.player_id for candidate in diagnostic_candidates}
+        native_rows = [
+            row
+            for row in rows
+            if diagnostic_ids.intersection({row["player_a"], row["player_b"]})
+        ]
     if profile_payload["native_gameplay"] != native_gameplay_profiles(
         native_rows, worker_count=contract.resource_caps.outcome_workers
     ):
         raise ArenaError("native gameplay cost recomputation mismatch")
     verify_profile(profile_payload["matched_root"])
-    if manifest["kind"] == "anchor-freeze":
+    if artifact_kind == "anchor-freeze":
         if source_profile_games is None:
             raise ArenaError("anchor artifact has no matched-root source trace")
         expected_roots = select_profile_roots(
@@ -615,11 +1034,12 @@ def verify_manifest(
             root["root_id"] for root in expected_roots
         ]:
             raise ArenaError("matched-root selection recomputation mismatch")
-    expected_profile_players = (
-        {player.player_id for player in contract.anchors}
-        if candidate is None
-        else {candidate.player_id}
-    )
+    if artifact_kind == "anchor-freeze":
+        expected_profile_players = {player.player_id for player in contract.anchors}
+    elif artifact_kind == "challenge":
+        expected_profile_players = {candidate.player_id}
+    else:
+        expected_profile_players = {variant.player_id for variant in profile_variants}
     if set(profile_payload["matched_root"]["players"]) != expected_profile_players:
         raise ArenaError("matched-root profile player identity mismatch")
     resource_receipt = profile_payload["resource_caps"]
@@ -630,25 +1050,69 @@ def verify_manifest(
         raise ArenaError("resource cap receipt mismatch")
     if artifact_bytes(out_dir) > contract.resource_caps.artifact_bytes:
         raise ArenaError("artifact resource cap exceeded")
-    disposition_rows = (
-        [
+    if artifact_kind == "guidance-diagnostic":
+        expected_cap_maxima = {
+            "wall_hours": 2.0,
+            "core_hours_conservative": 8.0,
+            "artifact_bytes_at_decision": 1073741824.0,
+        }
+        actual_cap_maxima = {
+            name: float(clause["maximum"])
+            for name, clause in resource_receipt["clauses"].items()
+        }
+        if actual_cap_maxima != expected_cap_maxima:
+            raise ArenaError("diagnostic resource-cap identity mismatch")
+        mechanism = guidance_mechanism_payload(
+            profile_payload["matched_root"], profile_variants
+        )
+        if mechanism != load_json(out_dir / "mechanism.json"):
+            raise ArenaError("diagnostic mechanism recomputation mismatch")
+        diagnostic_ids = {
+            registration.player_id for registration in diagnostic_candidates
+        }
+        diagnostic_rows = [
             row
             for row in rows
-            if candidate.player_id in {row["player_a"], row["player_b"]}
+            if row["player_a"] in diagnostic_ids or row["player_b"] in diagnostic_ids
         ]
-        if candidate is not None
-        else rows
-    )
-    recomputed_promotion = promotion_payload(
-        candidate,
-        disposition_rows,
-        smoke=contract.profiles[profile_name].disposition != "production",
-        profile=profile_payload,
-        competencies=competencies,
-        contract=contract,
-    )
-    if recomputed_promotion != load_json(out_dir / "promotion.json"):
-        raise ArenaError("promotion receipt recomputation mismatch")
+        decision = diagnostic_decision_payload(
+            candidates=diagnostic_candidates,
+            rows=diagnostic_rows,
+            competencies=competencies,
+            profile=profile_payload["matched_root"],
+            mechanism=mechanism,
+            resource_caps=resource_receipt,
+            anchor_ids={anchor.player_id for anchor in contract.anchors},
+        )
+        if decision != load_json(out_dir / "decision.json"):
+            raise ArenaError("diagnostic decision recomputation mismatch")
+        if (
+            decision.get("evidence_class") != INT8_EVIDENCE_CLASS
+            or decision.get("promotion_eligible") is not False
+            or decision.get("admission_eligible") is not False
+            or decision.get("method_level_claim") is not False
+        ):
+            raise ArenaError("diagnostic non-admission boundary mismatch")
+    else:
+        disposition_rows = (
+            [
+                row
+                for row in rows
+                if candidate.player_id in {row["player_a"], row["player_b"]}
+            ]
+            if candidate is not None
+            else rows
+        )
+        recomputed_promotion = promotion_payload(
+            candidate,
+            disposition_rows,
+            smoke=contract.profiles[profile_name].disposition != "production",
+            profile=profile_payload,
+            competencies=competencies,
+            contract=contract,
+        )
+        if recomputed_promotion != load_json(out_dir / "promotion.json"):
+            raise ArenaError("promotion receipt recomputation mismatch")
     return {
         "verified": True,
         "manifest_sha256": manifest["manifest_sha256"],
@@ -660,7 +1124,21 @@ def verify_manifest(
 
 def freeze_anchors(args: argparse.Namespace) -> None:
     started = time.perf_counter()
-    contract, contract_sha, runtime = preflight_contract(args.contract)
+    experiment_contract_sha = None
+    int8_authority = None
+    if getattr(args, "experiment_contract", None) is None:
+        contract, contract_sha, runtime = preflight_contract(args.contract)
+    else:
+        (
+            contract,
+            contract_sha,
+            runtime,
+            _,
+            experiment_contract_sha,
+            int8_authority,
+            _,
+            _,
+        ) = preflight_int8_dependencies(args, validate_checkpoint_load=True)
     profile = contract.profiles[args.profile]
     schedule = contract.schedules[args.profile]
     if args.out_dir.exists():
@@ -760,6 +1238,15 @@ def freeze_anchors(args: argparse.Namespace) -> None:
             "runtime": runtime,
             "traces": portable_trace_receipts(traces),
             "artifacts": artifact_receipts(args.out_dir, names),
+            **(
+                {
+                    "evidence_class": INT8_EVIDENCE_CLASS,
+                    "experiment_contract_sha256": experiment_contract_sha,
+                    "int8_authority": int8_authority,
+                }
+                if experiment_contract_sha is not None
+                else {}
+            ),
         },
     )
     print(
@@ -958,6 +1445,477 @@ def challenge(args: argparse.Namespace) -> None:
     )
 
 
+def preflight_diagnostic_contract(
+    path: Path,
+    *,
+    arena_contract: ArenaContract,
+    arena_contract_sha256: str,
+    candidates: list[PlayerRegistration],
+    candidate_paths: list[Path],
+    input_compatibility: dict[str, Any],
+) -> tuple[dict[str, Any], str, dict[str, Any], dict[str, Any]]:
+    contract = load_json(path)
+    current_runtime = arena_runtime_fingerprints()
+    current_implementation = {
+        "source_paths": list(INT8_IMPLEMENTATION_SOURCE_PATHS),
+        "source_sha256": source_digest(INT8_IMPLEMENTATION_SOURCE_PATHS),
+    }
+    current_modules = {
+        name: {"path": module_path, "sha256": file_sha256(REPO_ROOT / module_path)}
+        for name, module_path in INT8_MODULE_PATHS.items()
+    }
+    expected_arena = {
+        "contract_file_sha256": arena_contract_sha256,
+        "arena_key_sha256": canonical_sha256(arena_contract.key.model_dump()),
+        "anchor_cohort_sha256": arena_contract.key.anchor_cohort_sha256,
+        "rating_prior_sha256": arena_contract.key.rating_prior_sha256,
+        "anchor_registration_identity_sha256": {
+            anchor.player_id: anchor.identity_sha256
+            for anchor in arena_contract.anchors
+        },
+        "profile": "smoke",
+        "deal_seeds": list(arena_contract.schedules["smoke"].deal_seeds),
+        "competency_seeds": list(arena_contract.schedules["smoke"].competency_seeds),
+    }
+    expected_candidates = {
+        candidate.player_id: candidate.identity_sha256 for candidate in candidates
+    }
+    expected_candidate_files = {
+        candidate.player_id: file_sha256(candidate_path)
+        for candidate, candidate_path in zip(candidates, candidate_paths, strict=True)
+    }
+    expected_input = {
+        "input_manifest_sha256": input_compatibility["input_manifest_sha256"],
+        "payload_sha256": input_compatibility["payload_sha256"],
+        "contract_file_sha256": input_compatibility["contract_file_sha256"],
+        "contract_canonical_sha256": input_compatibility["contract_canonical_sha256"],
+        "loader_source_sha256": input_compatibility["loader_source_sha256"],
+    }
+    checks = {
+        "schema_version": (contract.get("schema_version"), 1),
+        "experiment": (
+            contract.get("experiment"),
+            "int-8-student-signal-guidance-v1",
+        ),
+        "evidence_class": (contract.get("evidence_class"), INT8_EVIDENCE_CLASS),
+        "arena": (contract.get("arena"), expected_arena),
+        "input": (contract.get("input"), expected_input),
+        "candidates": (contract.get("candidates"), expected_candidates),
+        "candidate_files": (
+            contract.get("candidate_files"),
+            expected_candidate_files,
+        ),
+        "current_runtime": (contract.get("current_runtime"), current_runtime),
+        "current_arena_implementation": (
+            contract.get("current_arena_implementation"),
+            current_implementation,
+        ),
+        "modules": (contract.get("modules"), current_modules),
+        "factors": (
+            contract.get("factors"),
+            {
+                "world": "w2",
+                "content_suite": "w2-interactive-mirror-v1",
+                "information_boundary": "acting-viewer-history-only-v1",
+                "priors": [
+                    "uniform-v1",
+                    "chosen-policy-only-9004b87e2be4a893",
+                    "visit-policy-only-c2c8dcec02dbcf19",
+                ],
+                "leaf_evaluator": "uniform-random-terminal-v1",
+                "root_noise": "none",
+                "worlds": 4,
+                "c_puct": 1.5,
+                "max_steps": 2000,
+                "branch_driver_id": "full_clone/current_game_v1",
+                "matched_root_traversals": [8, 32, 128],
+                "arena_traversals": 32,
+                "comparison_seed_alias": INT8_COMPARISON_ALIAS,
+                "training": "none",
+            },
+        ),
+        "decision_thresholds": (
+            contract.get("decision_thresholds"),
+            {
+                "paired_arena_delta_minimum": 0.05,
+                "other_signal_separation_minimum": 0.05,
+                "high_budget_label_agreement_improvement_minimum": 0.05,
+                "competency_correct_count_difference_minimum": 0,
+                "p95_latency_ratio_maximum": 1.1,
+                "nodes_per_second_ratio_minimum": 0.9,
+                "ambiguous_result": "kill_retained_smoke_policy_guidance",
+            },
+        ),
+        "resource_caps": (
+            contract.get("resource_caps"),
+            {
+                "wall_hours": 2.0,
+                "core_hours": 8.0,
+                "artifact_bytes": 1073741824,
+                "workers": 4,
+            },
+        ),
+    }
+    mismatches = {
+        name: {"actual": actual, "expected": expected}
+        for name, (actual, expected) in checks.items()
+        if actual != expected
+    }
+    if mismatches:
+        raise ArenaError(
+            "INT-8 diagnostic contract drift: " + json.dumps(mismatches, sort_keys=True)
+        )
+    orchestration = contract.get("orchestration_source", {})
+    orchestration_path = REPO_ROOT / str(orchestration.get("path", ""))
+    if (
+        orchestration.get("path")
+        != "experiments/runners/run_int8_student_signal_guidance.py"
+        or not orchestration_path.is_file()
+        or orchestration.get("sha256") != file_sha256(orchestration_path)
+    ):
+        raise ArenaError("INT-8 orchestration source identity drift")
+    int8_authority = {
+        "frozen_int6_contract_sha256": arena_contract_sha256,
+        "current_arena_implementation": current_implementation,
+        "modules": current_modules,
+        "candidate_identity_sha256": expected_candidates,
+        "candidate_file_sha256": expected_candidate_files,
+    }
+    return contract, file_sha256(path), current_runtime, int8_authority
+
+
+def preflight_int8_dependencies(
+    args: argparse.Namespace,
+    *,
+    validate_checkpoint_load: bool,
+) -> tuple[
+    ArenaContract,
+    str,
+    dict[str, Any],
+    dict[str, Any],
+    str,
+    dict[str, Any],
+    list[PlayerRegistration],
+    dict[str, str],
+]:
+    """Validate INT-8 without asking the frozen INT-6 receipt to describe new code."""
+
+    contract = ArenaContract.model_validate(load_json(args.contract))
+    contract_sha = file_sha256(args.contract)
+    input_compatibility = load_json(args.input_compatibility)
+    if (
+        input_compatibility.get("status") != "compatible"
+        or input_compatibility.get("evidence_class") != INT8_EVIDENCE_CLASS
+        or any(
+            input_compatibility.get(field)
+            for field in (
+                "conversion_performed",
+                "rewriting_performed",
+                "retraining_performed",
+                "substitution_performed",
+            )
+        )
+    ):
+        raise ArenaError("INT-8 retained-input compatibility receipt is invalid")
+    candidate_arguments = [
+        (args.uniform_candidate, None),
+        (args.chosen_candidate, args.chosen_checkpoint),
+        (args.visit_candidate, args.visit_checkpoint),
+    ]
+    candidates = []
+    checkpoint_paths: dict[str, str] = {}
+    for candidate_path, checkpoint_path in candidate_arguments:
+        candidate, paths = preflight_candidate(
+            candidate_path,
+            checkpoint_path,
+            contract=contract,
+            profile_name="smoke",
+            validate_checkpoint_load=validate_checkpoint_load,
+        )
+        candidates.append(candidate)
+        checkpoint_paths.update(paths)
+    if [_profile_arm(candidate) for candidate in candidates] != [
+        "uniform",
+        "chosen",
+        "visit",
+    ]:
+        raise ArenaError("INT-8 candidate ordering or identities drifted")
+    (
+        _,
+        experiment_contract_sha,
+        runtime,
+        int8_authority,
+    ) = preflight_diagnostic_contract(
+        args.experiment_contract,
+        arena_contract=contract,
+        arena_contract_sha256=contract_sha,
+        candidates=candidates,
+        candidate_paths=[path for path, _ in candidate_arguments],
+        input_compatibility=input_compatibility,
+    )
+    return (
+        contract,
+        contract_sha,
+        runtime,
+        input_compatibility,
+        experiment_contract_sha,
+        int8_authority,
+        candidates,
+        checkpoint_paths,
+    )
+
+
+def diagnostic(args: argparse.Namespace) -> None:
+    started = getattr(args, "task_started", time.perf_counter())
+    if args.profile != "smoke":
+        raise ArenaError("INT-8 diagnostic is smoke-only")
+    (
+        contract,
+        contract_sha,
+        runtime,
+        input_compatibility,
+        experiment_contract_sha,
+        int8_authority,
+        candidates,
+        source_checkpoint_paths,
+    ) = preflight_int8_dependencies(args, validate_checkpoint_load=not args.verify)
+    profile_variants = diagnostic_profile_variants(candidates)
+    experiment_contract = load_json(args.experiment_contract)
+    if args.anchor_artifact.name != "manifest.json":
+        raise ArenaError("--anchor-artifact must name the frozen manifest.json")
+    anchor_dir = args.anchor_artifact.parent
+    anchor_verification = verify_manifest(
+        anchor_dir,
+        contract,
+        contract_sha,
+        expected_runtime=runtime,
+        experiment_contract_sha256=experiment_contract_sha,
+        int8_authority=int8_authority,
+    )
+    anchor_manifest = load_json(args.anchor_artifact)
+    if (
+        anchor_manifest.get("kind") != "anchor-freeze"
+        or anchor_manifest.get("profile") != "smoke"
+    ):
+        raise ArenaError("INT-8 requires one smoke anchor-freeze artifact")
+    if args.verify:
+        verification = verify_manifest(
+            args.out_dir,
+            contract,
+            contract_sha,
+            expected_runtime=runtime,
+            experiment_contract_sha256=experiment_contract_sha,
+            int8_authority=int8_authority,
+        )
+        manifest = load_json(args.out_dir / "manifest.json")
+        if (
+            manifest.get("anchor_manifest_sha256")
+            != anchor_verification["manifest_sha256"]
+            or manifest.get("experiment_contract_sha256") != experiment_contract_sha
+        ):
+            raise ArenaError("diagnostic dependency binding mismatch")
+        anchor_corpus = load_json(anchor_dir / "profile.json")["matched_root"][
+            "root_corpus_sha256"
+        ]
+        diagnostic_corpus = load_json(args.out_dir / "profile.json")["matched_root"]
+        if diagnostic_corpus["root_corpus_sha256"] != anchor_corpus:
+            raise ArenaError("diagnostic matched-root corpus drift")
+        print(json.dumps(verification, sort_keys=True))
+        return
+    if args.out_dir.exists():
+        raise ArenaError("output directory already exists")
+    args.out_dir.mkdir(parents=True)
+    checkpoint_paths: dict[str, str] = {}
+    for candidate in candidates:
+        if candidate.runner_kind != "checkpoint":
+            continue
+        source = Path(source_checkpoint_paths[candidate.player_id])
+        retained = args.out_dir / "checkpoints" / f"{candidate.player_id}.pt"
+        retained.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, retained)
+        checkpoint_paths[candidate.player_id] = str(retained)
+        arm = _profile_arm(candidate)
+        for variant in profile_variants:
+            if _profile_arm(variant) == arm:
+                checkpoint_paths[variant.player_id] = str(retained)
+    aliases = {
+        registration.player_id: INT8_COMPARISON_ALIAS
+        for registration in [*candidates, *profile_variants]
+    }
+    append_ledger(
+        args.out_dir,
+        "preflight",
+        {
+            "contract_sha256": contract_sha,
+            "experiment_contract_sha256": experiment_contract_sha,
+            "input_compatibility_sha256": file_sha256(args.input_compatibility),
+            "anchor_manifest_sha256": anchor_verification["manifest_sha256"],
+            "candidate_sha256": {
+                candidate.player_id: candidate.identity_sha256
+                for candidate in candidates
+            },
+        },
+    )
+    schedule = contract.schedules["smoke"]
+    new_rows: list[dict[str, Any]] = []
+    traces = []
+    replays = []
+    pairs = [
+        *(
+            (candidate, anchor)
+            for candidate in candidates
+            for anchor in contract.anchors
+        ),
+        *combinations(candidates, 2),
+    ]
+    for cell_rows, trace, replay in play_cells(
+        contract=contract,
+        pairs=pairs,
+        deal_seeds=schedule.deal_seeds,
+        out_dir=args.out_dir,
+        checkpoint_paths=checkpoint_paths,
+        comparison_seed_aliases=aliases,
+    ):
+        new_rows.extend(cell_rows)
+        traces.append(trace)
+        replays.append(replay)
+    anchor_rows = read_jsonl(anchor_dir / "matches.jsonl")
+    rows = anchor_rows + new_rows
+    write_jsonl(args.out_dir / "matches.jsonl", rows)
+    write_json(
+        args.out_dir / "players.json",
+        [
+            registration.model_dump()
+            for registration in (*contract.anchors, *candidates)
+        ],
+    )
+    anchor_competencies = load_json(anchor_dir / "competencies.json")
+    candidate_competencies = run_competencies(
+        candidates,
+        seeds=schedule.competency_seeds,
+        checkpoint_paths=checkpoint_paths,
+        comparison_seed_aliases=aliases,
+    )
+    competencies = dict(anchor_competencies)
+    competencies["players"] = dict(anchor_competencies["players"])
+    competencies["players"].update(candidate_competencies["players"])
+    write_json(args.out_dir / "competencies.json", competencies)
+    fit, rating = rating_payload(rows, schedule, contract)
+    matrix = payoff_matrix(rows)
+    source_trace = anchor_dir / "traces/random-v1__scripted-greedy-v1.commands.jsonl.gz"
+    matched_root = profile_players(
+        profile_variants,
+        source_games=read_trace(source_trace),
+        profile_roots=contract.profile_roots,
+        checkpoint_paths=checkpoint_paths,
+        comparison_seed_aliases=aliases,
+    )
+    profile_payload = {
+        "native_gameplay": native_gameplay_profiles(
+            new_rows, worker_count=contract.resource_caps.outcome_workers
+        ),
+        "matched_root": matched_root,
+    }
+    profile_payload["resource_caps"] = resource_cap_receipt(
+        args.out_dir,
+        contract,
+        started=started,
+        wall_hours_max=2.0,
+        core_hours_max=8.0,
+        artifact_bytes_max=1073741824,
+        additional_artifact_dirs=(anchor_dir,),
+    )
+    mechanism = guidance_mechanism_payload(matched_root, profile_variants)
+    decision = diagnostic_decision_payload(
+        candidates=candidates,
+        rows=new_rows,
+        competencies=competencies,
+        profile=matched_root,
+        mechanism=mechanism,
+        resource_caps=profile_payload["resource_caps"],
+        anchor_ids={anchor.player_id for anchor in contract.anchors},
+    )
+    replay_payload = {
+        "passed": all(item["passed"] for item in replays),
+        "cells": replays,
+        "anchor_verification": anchor_verification,
+    }
+    write_json(args.out_dir / "replay.json", replay_payload)
+    write_json(args.out_dir / "rating.json", rating)
+    write_json(args.out_dir / "payoff-matrix.json", matrix)
+    write_json(args.out_dir / "profile.json", profile_payload)
+    write_json(args.out_dir / "mechanism.json", mechanism)
+    write_json(args.out_dir / "decision.json", decision)
+    (args.out_dir / "report.md").write_text(
+        report_markdown(
+            fit=fit, promotion=decision, matrix=matrix, replay=replay_payload
+        )
+    )
+    append_ledger(
+        args.out_dir,
+        "complete",
+        {
+            "new_games": len(new_rows),
+            "combined_games": len(rows),
+            "decision": decision["decision"],
+        },
+    )
+    names = [
+        "resource-ledger.jsonl",
+        "players.json",
+        "matches.jsonl",
+        "replay.json",
+        "competencies.json",
+        "profile.json",
+        "mechanism.json",
+        "rating.json",
+        "payoff-matrix.json",
+        "decision.json",
+        "report.md",
+    ]
+    names.extend(
+        f"checkpoints/{candidate.player_id}.pt"
+        for candidate in candidates
+        if candidate.runner_kind == "checkpoint"
+    )
+    manifest = finalize_manifest(
+        args.out_dir,
+        {
+            "schema_version": 1,
+            "kind": "guidance-diagnostic",
+            "profile": "smoke",
+            "evidence_class": INT8_EVIDENCE_CLASS,
+            "contract_sha256": contract_sha,
+            "experiment_contract_sha256": experiment_contract_sha,
+            "input_compatibility_sha256": file_sha256(args.input_compatibility),
+            "arena_key": contract.key.model_dump(),
+            "runtime": runtime,
+            "int8_authority": int8_authority,
+            "anchor_manifest_sha256": anchor_verification["manifest_sha256"],
+            "candidates": [candidate.model_dump() for candidate in candidates],
+            "profile_variants": [variant.model_dump() for variant in profile_variants],
+            "comparison_seed_alias": INT8_COMPARISON_ALIAS,
+            "traces": portable_trace_receipts(traces),
+            "artifacts": artifact_receipts(args.out_dir, names),
+        },
+    )
+    print(
+        json.dumps(
+            {
+                "state": "complete",
+                "manifest": str(args.out_dir / "manifest.json"),
+                "manifest_sha256": manifest["manifest_sha256"],
+                "evidence_class": INT8_EVIDENCE_CLASS,
+                "decision": decision["decision"],
+                "promotion_eligible": False,
+                "admission_eligible": False,
+                "contract_prediction": experiment_contract.get("prediction"),
+            },
+            sort_keys=True,
+        )
+    )
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -977,6 +1935,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--profile", choices=("smoke", "production"), default="production"
     )
     challenge_parser.add_argument("--verify", action="store_true")
+    diagnostic_parser = subparsers.add_parser("guidance-diagnostic")
+    diagnostic_parser.add_argument("--contract", type=Path, required=True)
+    diagnostic_parser.add_argument("--experiment-contract", type=Path, required=True)
+    diagnostic_parser.add_argument("--input-compatibility", type=Path, required=True)
+    diagnostic_parser.add_argument("--anchor-artifact", type=Path, required=True)
+    diagnostic_parser.add_argument("--uniform-candidate", type=Path, required=True)
+    diagnostic_parser.add_argument("--chosen-candidate", type=Path, required=True)
+    diagnostic_parser.add_argument("--chosen-checkpoint", type=Path, required=True)
+    diagnostic_parser.add_argument("--visit-candidate", type=Path, required=True)
+    diagnostic_parser.add_argument("--visit-checkpoint", type=Path, required=True)
+    diagnostic_parser.add_argument("--out-dir", type=Path, required=True)
+    diagnostic_parser.add_argument("--profile", choices=("smoke",), default="smoke")
+    diagnostic_parser.add_argument("--verify", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -985,8 +1956,10 @@ def main(argv: list[str] | None = None) -> None:
     try:
         if args.command == "freeze-anchors":
             freeze_anchors(args)
-        else:
+        elif args.command == "challenge":
             challenge(args)
+        else:
+            diagnostic(args)
     except (ArenaError, ValueError, FileNotFoundError) as error:
         print(
             json.dumps(

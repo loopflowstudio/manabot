@@ -1,5 +1,22 @@
-from manabot.arena.competency import competency_noninferiority
+from manabot.arena.competency import competency_noninferiority, competency_seed
 from manabot.verify.competency import SCENARIOS
+
+
+def test_competency_comparison_alias_shares_seed() -> None:
+    assert competency_seed("candidate-a", "hold-the-wipe", 62001) != competency_seed(
+        "candidate-b", "hold-the-wipe", 62001
+    )
+    assert competency_seed(
+        "candidate-a",
+        "hold-the-wipe",
+        62001,
+        comparison_seed_alias="guidance-arm",
+    ) == competency_seed(
+        "candidate-b",
+        "hold-the-wipe",
+        62001,
+        comparison_seed_alias="guidance-arm",
+    )
 
 
 def test_competency_noninferiority_bootstraps_paired_scenario_seeds() -> None:

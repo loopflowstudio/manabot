@@ -2,11 +2,38 @@ import json
 from pathlib import Path
 
 from experiments.runners.run_skill_arena import play_cells
-from manabot.arena.match import play_cell
+from manabot.arena.match import derive_seed, play_cell
 from manabot.arena.models import ArenaContract, MatchRow
 from manabot.arena.replay import read_trace, replay_games
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_comparison_alias_shares_seed_without_changing_default_identity() -> None:
+    contract = ArenaContract.model_validate(
+        json.loads(
+            (ROOT / "experiments/contracts/int-6-skill-arena-v1.json").read_text()
+        )
+    )
+    key = contract.key
+    default = derive_seed(key, ("candidate-a", "random-v1"), 61001, "candidate-a")
+    assert default != derive_seed(
+        key, ("candidate-b", "random-v1"), 61001, "candidate-b"
+    )
+    aliases = {"candidate-a": "guidance-arm", "candidate-b": "guidance-arm"}
+    assert derive_seed(
+        key,
+        ("candidate-a", "random-v1"),
+        61001,
+        "candidate-a",
+        comparison_seed_aliases=aliases,
+    ) == derive_seed(
+        key,
+        ("candidate-b", "random-v1"),
+        61001,
+        "candidate-b",
+        comparison_seed_aliases=aliases,
+    )
 
 
 def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> None:

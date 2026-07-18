@@ -12,12 +12,21 @@ from manabot.verify.competency import (
     run_scenario_once,
 )
 
+from .guidance import build_arena_player
 from .models import PlayerRegistration, canonical_sha256
-from .players import build_player
 
 
-def competency_seed(player_id: str, scenario: str, run_seed: int) -> int:
-    return int(canonical_sha256([player_id, scenario, run_seed])[:16], 16)
+def competency_seed(
+    player_id: str,
+    scenario: str,
+    run_seed: int,
+    *,
+    comparison_seed_alias: str | None = None,
+) -> int:
+    return int(
+        canonical_sha256([comparison_seed_alias or player_id, scenario, run_seed])[:16],
+        16,
+    )
 
 
 def run_competencies(
@@ -25,8 +34,10 @@ def run_competencies(
     *,
     seeds: tuple[int, ...],
     checkpoint_paths: dict[str, str] | None = None,
+    comparison_seed_aliases: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     checkpoint_paths = checkpoint_paths or {}
+    comparison_seed_aliases = comparison_seed_aliases or {}
     evidence: dict[str, Any] = {
         "schema_version": 1,
         "scenario_authority": "manabot.verify.competency.SCENARIOS",
@@ -39,8 +50,15 @@ def run_competencies(
         for scenario_name, scenario in SCENARIOS.items():
             runs = []
             for run_seed in seeds:
-                seed = competency_seed(registration.player_id, scenario_name, run_seed)
-                player, obs_space = build_player(
+                seed = competency_seed(
+                    registration.player_id,
+                    scenario_name,
+                    run_seed,
+                    comparison_seed_alias=comparison_seed_aliases.get(
+                        registration.player_id
+                    ),
+                )
+                player, obs_space = build_arena_player(
                     registration,
                     seed=seed,
                     checkpoint_path=checkpoint_paths.get(registration.player_id),

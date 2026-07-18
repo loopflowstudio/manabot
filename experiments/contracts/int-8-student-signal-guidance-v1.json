@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "experiment": "int-8-student-signal-guidance-v1",
+  "evidence_class": "engineering_smoke_only_no_admission_claim",
+  "input": {
+    "input_manifest_sha256": "cfba4f299d86b0db83556c783b9bf63cfb92094353e4c5ea2ac1950b4671a7ba",
+    "payload_sha256": "13868767846b7004f140cfade3652909347bdbb6708b69cb8c10b36ec2756eb0",
+    "contract_file_sha256": "bbbba03856b74047a8f8cec44f23a3c28b92558bff0001c602e4211c75d260a7",
+    "contract_canonical_sha256": "9c3f0f600b70ca4fef7131086f6d9b350f9612e690cbb9d621e961a5de27d03c",
+    "loader_source_sha256": "946c5e7a8452b6b8eba56cdf074a924d064a92dd2e36fd6afeebc2f1666c221d"
+  },
+  "arena": {
+    "contract_file_sha256": "fc9cb76c0d80ad64951455ac6fede94b1355f383dde2f2964d0e578f62671a71",
+    "arena_key_sha256": "6b913617581e496b5d122bdc17bf1ab0fc038bec534818038de2796ef78e16a4",
+    "anchor_cohort_sha256": "3a29f51662e37a02c493b1bffaf6e618a1f5b14322e701499160cf09ba659362",
+    "rating_prior_sha256": "ff4920af7c3c325eabcfe1e715c0abf7e1569393f30d572da80012c15dabc904",
+    "anchor_registration_identity_sha256": {
+      "random-v1": "d1bbcda218602bcab299f01dee0b64fd795cab0289a77d4a53acee834f59febb",
+      "scripted-greedy-v1": "7fad8c4167eb969bb6aa39393594893bab5ca3f56c1165c257029db8e20b4bc3",
+      "flat-mc-4-v1": "7afbd87ae0134a2cd448944b35c69cb8c5c798b35552771aa921a7a3bf2604ee",
+      "flat-mc-16-v1": "be11c9e146021a0b3c6121b3c9c63436bd51ac056ed8280b44e80bb818582e2e",
+      "flat-mc-64-v1": "a885d0f6a81979d1adea9c9d7822ac93837b22d7c67d040fadc20a3803b6ec76"
+    },
+    "profile": "smoke",
+    "deal_seeds": [61001, 61002],
+    "competency_seeds": [62001, 62002]
+  },
+  "current_runtime": {
+    "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+    "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+    "content_digest": "2444fc15283068d79f74d49f8297bdbe3cc581a62a1eee976b35a8cecd8a0ef4",
+    "content_manifest_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+    "content_schema_version": 1,
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "c95a85bba1128e6c3afdade5b5cf59dfeb3b1ec464fdd403cdf155a5cf834f8e",
+    "engine_source_sha256": "5120f11ffecfc6cb18cd18208adbf2bf0c5d1b607f7c0b78e3a559f83e58e770",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+    "inference_device": "cpu",
+    "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+    "numpy_version": "2.4.2",
+    "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+    "platform_machine": "arm64",
+    "platform_system": "Darwin",
+    "psutil_version": "7.2.2",
+    "pydantic_version": "2.12.5",
+    "python_version": "3.12.12",
+    "torch_threads_per_player": 1,
+    "torch_version": "2.10.0",
+    "world": "w2"
+  },
+  "current_arena_implementation": {
+    "source_paths": [
+      "experiments/runners/run_skill_arena.py",
+      "manabot/arena/competency.py",
+      "manabot/arena/guidance.py",
+      "manabot/arena/int8_input.py",
+      "manabot/arena/match.py",
+      "manabot/arena/models.py",
+      "manabot/arena/players.py",
+      "manabot/arena/profile.py",
+      "manabot/arena/rating.py",
+      "manabot/arena/replay.py"
+    ],
+    "source_sha256": "51ed17e4bded0a6647e3fab0a7d10ba2f450ad46439cef775e26d8f1a7d5c6db"
+  },
+  "modules": {
+    "guidance": {
+      "path": "manabot/arena/guidance.py",
+      "sha256": "d7b78ce0325bb64caae487713a85f6eb725802283ace491925cf49fea880b69c"
+    },
+    "retained_input": {
+      "path": "manabot/arena/int8_input.py",
+      "sha256": "5a28a25b8ed705e964d47431e038a52a27237b1559c151d2111ce3276af6b8b4"
+    }
+  },
+  "candidates": {
+    "uniform-prior-puct-32-v1": "720a077086f3a9745009821ede562733a4180f276d568480c6e6c7c66f900391",
+    "chosen-policy-prior-puct-32-v1": "cfb6ad52029648c2748cadb9f1db99fc9be8f02fb9970d3ab96c364e59c5ce93",
+    "visit-policy-prior-puct-32-v1": "aeb2c9ed929c91b7b4a192f6b47bb7d3aaa197d1dd540467fc1c5dc9a51a85fd"
+  },
+  "candidate_files": {
+    "uniform-prior-puct-32-v1": "f251ea7a316bd7894d8691cc0a2054e735581a8ea6239b36dc8f4b5674496107",
+    "chosen-policy-prior-puct-32-v1": "3ba5ada1990450ca2edd612f6618738939068882185a19231ec8e5fbd469d5e7",
+    "visit-policy-prior-puct-32-v1": "b25acc3c2e18305ab5b586ace5994e392d62ee93ba374e6b2d96b9ede3f2d758"
+  },
+  "factors": {
+    "world": "w2",
+    "content_suite": "w2-interactive-mirror-v1",
+    "information_boundary": "acting-viewer-history-only-v1",
+    "priors": [
+      "uniform-v1",
+      "chosen-policy-only-9004b87e2be4a893",
+      "visit-policy-only-c2c8dcec02dbcf19"
+    ],
+    "leaf_evaluator": "uniform-random-terminal-v1",
+    "root_noise": "none",
+    "worlds": 4,
+    "c_puct": 1.5,
+    "max_steps": 2000,
+    "branch_driver_id": "full_clone/current_game_v1",
+    "matched_root_traversals": [8, 32, 128],
+    "arena_traversals": 32,
+    "comparison_seed_alias": "int-8-guidance-comparison-v1",
+    "training": "none"
+  },
+  "decision_thresholds": {
+    "paired_arena_delta_minimum": 0.05,
+    "other_signal_separation_minimum": 0.05,
+    "high_budget_label_agreement_improvement_minimum": 0.05,
+    "competency_correct_count_difference_minimum": 0,
+    "p95_latency_ratio_maximum": 1.1,
+    "nodes_per_second_ratio_minimum": 0.9,
+    "ambiguous_result": "kill_retained_smoke_policy_guidance"
+  },
+  "resource_caps": {
+    "wall_hours": 2.0,
+    "core_hours": 8.0,
+    "artifact_bytes": 1073741824,
+    "workers": 4
+  },
+  "prediction": {
+    "mechanism": "visit supervision better reproduces the source teacher distribution than chosen-action supervision",
+    "decision": "kill_retained_smoke_policy_guidance",
+    "limitation": "one 507-label training seed cannot support admission, promotion, gameplay-strength, or method-level claims"
+  },
+  "orchestration_source": {
+    "path": "experiments/runners/run_int8_student_signal_guidance.py",
+    "sha256": "6e07c7894dddc27cf69716e4f27eea26f3c2f8a2ab0f839136e6954b5f8ed5f6"
+  }
+}

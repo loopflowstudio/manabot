@@ -74,5 +74,9 @@ def test_random_player_has_isolated_matched_root_cost(tmp_path: Path) -> None:
     assert player["illegal_actions"] == 0
     dpuct = profile["players"][candidate.player_id]
     assert dpuct["samples"][0]["simulations"] == 32
+    assert dpuct["samples"][0]["tree_nodes"] > 0
+    assert dpuct["mechanism"]["available"]
+    assert dpuct["nodes_per_second"] > 0
+    assert dpuct["cpu_seconds_per_label"] > 0
     assert dpuct["playout_cap_rate"] <= 0.001
     assert dpuct["root_mutations"] == 0

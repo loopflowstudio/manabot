@@ -1,0 +1,35 @@
+{
+  "artifact_id": null,
+  "checkpoint_bytes": null,
+  "checkpoint_sha256": null,
+  "compute_class_id": "dpuct-cpu-s32-w4-random-leaf-v1",
+  "content_suite": "w2-interactive-mirror-v1",
+  "display_name": "INT-8 uniform-prior PUCT 32 v1",
+  "information_boundary": "acting-viewer-history-only-v1",
+  "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+  "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+  "evidence_class": "production",
+  "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+  "parameter_count": null,
+  "player_id": "uniform-prior-puct-32-v1",
+  "player_seed_derivation_id": "arena-comparison-alias-player-v1",
+  "player_spec": {
+    "branch_driver_id": "full_clone/current_game_v1",
+    "c_puct": 1.5,
+    "kind": "determinized_puct",
+    "max_steps": 2000,
+    "sims": 32,
+    "worlds": 4
+  },
+  "role": "challenger",
+  "runner_kind": "code",
+  "search_call_seed_derivation_id": "mcts-mix-comparison-seed-decision-v1",
+  "search_semantics": {
+    "branch_audit": false,
+    "leaf_evaluator": "uniform-random-terminal-v1",
+    "root_prior": "uniform-v1"
+  },
+  "source_sha256": "767bd4dfb7816669c61e9e1363bd169bd3fd25897552c1b56f24a061af5e2bff",
+  "training_seed": null,
+  "world": "w2"
+}

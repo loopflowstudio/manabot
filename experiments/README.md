@@ -55,6 +55,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [teacher1-pilot](w2-234-teacher1-pilot.md) | do budgets 8/32/128 give strong, legal, affordable targets? | **preregistered, unrun** — fail-closed until the terminal Teacher-0 manifest and control lock exist |
 | [INT-4 smoke](int-4-visit-teacher-smoke.md) | does the visit teacher → 2×2 students → four-agent arena → Study pipeline execute on real states? | engineering substrate pass, **not admission evidence** — 507 labels, exact 175-decision replay, four matched checkpoints, complete smoke arena, and cross-language Study validation; production controls and competencies remain |
 | [INT-4 production harness](int-4-visit-teacher-production.md) | can the registered multi-seed iteration fail closed on exact controls and produce independently verified admission evidence? | harness ready, **production not run** — exact frozen Teacher-0 bytes are absent; no substitution or production claim |
+| [INT-8 student signal guidance](int-8-student-signal-guidance.md) | should the recovered chosen-action or visit-distribution policy guide bounded PUCT? | `kill_retained_smoke_policy_guidance` — both arms lost paired score to uniform, added inference cost, and improved uniform-128 agreement by <0.05; one-seed smoke evidence only |
 
 ### Platform evidence (W2)
 
