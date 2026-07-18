@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "experiment": "int-11-semantic-runtime-policy-v1",
+  "claim": "bounded_learned_semantic_runtime_policy_development_evidence",
+  "world": "w2",
+  "information_boundary": "acting_viewer_experience_frame_v1",
+  "command_boundary": "semantic_decision_structured_command_v1",
+  "arms": [
+    "semantic",
+    "identity_only",
+    "structure_shuffled"
+  ],
+  "model_seeds": [
+    1101,
+    1102,
+    1103
+  ],
+  "dataset": {
+    "seed": 11100,
+    "train_repetitions": 4,
+    "evaluation_repetitions": 2,
+    "identity_holdout": "tla.fire_nation_cadets",
+    "composition_holdout": "tla.south_pole_voyager",
+    "composition_known_operations": [
+      "gain_life",
+      "branch"
+    ],
+    "target_spell": "stx.igneous_inspiration",
+    "required_prompt_kinds": [
+      "priority",
+      "declare_attackers"
+    ],
+    "minimum_target_candidates": 35,
+    "minimum_combat_branches": 64
+  },
+  "model": {
+    "architecture_version": 1,
+    "hidden_dim": 32,
+    "attention_heads": 4,
+    "transformer_layers": 2,
+    "dropout": 0.0
+  },
+  "training": {
+    "epochs": 36,
+    "learning_rate": 0.003,
+    "weight_decay": 0.0001,
+    "sample_efficiency_threshold": 0.9,
+    "max_wall_clock_seconds": 600
+  },
+  "evaluation": {
+    "arena_version": "development_paired_arena_v1",
+    "promotion_authority": false,
+    "deal_seeds": [
+      11201,
+      11202
+    ],
+    "arena_combat_fixture": "tla.otter_penguin",
+    "arena_command_cap": 32,
+    "latency_warmup": 8,
+    "latency_samples": 32,
+    "throughput_repetitions": 16,
+    "command_replay": "required"
+  },
+  "gates": {
+    "illegal_commands": 0,
+    "replay_mismatches": 0,
+    "viewer_private_feature_mismatches": 0,
+    "minimum_training_seeds": 3,
+    "minimum_legal_choices": 33,
+    "semantic_competency_agreement": 0.9,
+    "semantic_latency_ratio_max": 2.0
+  },
+  "predictions": {
+    "semantic": "At least 90% aggregate agreement for every seed and exact lethal attacker selection in the bounded matchup.",
+    "transfer": "Semantic mean holdout loss or exact agreement improves over identity-only without more than 2x p95 inference latency.",
+    "strongest_confound": "The deterministic oracle and micro-matchup may be too simple for semantic structure to affect paired strength even when holdout loss differs."
+  },
+  "limitations": [
+    "development evidence only; no INT-6 rating or promotion",
+    "no Teacher-0 checkpoint substitution",
+    "no unknown semantic primitives",
+    "no Rules, Study UI, or card-coverage expansion",
+    "training seed, not evaluation game, is the method-level unit"
+  ]
+}

@@ -26,6 +26,16 @@ from .policy import (
     SemanticDecisionError,
     SubjectBinding,
 )
+from .runtime_policy import (
+    POLICY_ARMS,
+    PolicyTargets,
+    RuntimeCatalog,
+    RuntimePolicyError,
+    RuntimePolicyFeatures,
+    RuntimePolicyProjector,
+    SemanticRuntimePolicy,
+    targets_from_submission,
+)
 
 __all__ = [
     "IR_SCHEMA_VERSION",
@@ -41,11 +51,19 @@ __all__ = [
     "SemanticDecisionError",
     "RuntimeObjectRow",
     "RuntimeSubject",
+    "RuntimeCatalog",
+    "RuntimePolicyError",
+    "RuntimePolicyFeatures",
+    "RuntimePolicyProjector",
+    "SemanticRuntimePolicy",
     "SemanticProjectionError",
     "SubjectBinding",
+    "POLICY_ARMS",
+    "PolicyTargets",
     "UnadmittedDefinitionError",
     "UnknownOpcodeError",
     "UnknownSchemaError",
     "compile_source",
     "validate_fixtures",
+    "targets_from_submission",
 ]

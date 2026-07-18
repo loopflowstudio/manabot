@@ -64,6 +64,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [milestone-1](milestone-1-two-deck-slice.md) | all four rules stages landed for the UR-Lessons-vs-GW-Allies slice |
 | [opcode-alignment-v1](opcode-alignment-v1.md) | semantic-program-only encoder: 91.7% zero-shot held-out cluster accuracy vs 0.0% for opaque card-id arms |
 | [structured-policy-decoder](structured-policy-decoder.md) | structured decoder matches legacy adapter exactly (6435/6435 actions) at comparable latency — migration evidence |
+| [INT-11 semantic runtime policy](int-11-semantic-runtime-policy.md) | learned priority/target/combat policy executes 144 legal Commands and 36/36 terminal paired games across three seeds; identity transfer beats identity-only but matches structure-shuffled, so structure evidence is null/ambiguous |
 | [w2-179](w2-179-content-pack-local-diagnostic.md) | immutable ContentPack / mutable Card seam with deterministic CardDefId hashing |
 | [w2-182](w2-182-search-branching-v1.md) | full-clone branching baseline: 2,194 sims/s, clone p50 4.5µs |
 | [w2-198](w2-198-compact-clone-undo-v1.md) | compact clone+undo at parity with full clone (2,097 sims/s) with journal accounting |
