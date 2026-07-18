@@ -5,10 +5,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertAddressBindsReplayDecision,
+  assertRestoredReplayDecisionBinds,
   assertViewerSafeReplayProjection,
+  assertViewerSafeReplayProjectionResponse,
+  canonicalReplayProjectionSha256,
   parseReplayDecisionAddress,
   serializeReplayDecisionAddress,
   type CanonicalReplayProjectionV1,
+  type CanonicalReplayProjectionResponseV1,
+  type RestoredReplayDecision,
 } from './replay-index';
 import type { StudyArtifact } from './study-protocol';
 
@@ -31,6 +36,28 @@ const study = fixture<StudyArtifact>('study-curated-decision.json');
 const schema = fixture<object>('../canonical-replay-v1.schema.json');
 const validate = new Ajv2020({ strict: false, validateFormats: false })
   .compile<CanonicalReplayProjectionV1>(schema);
+
+function addressedProjection(): CanonicalReplayProjectionResponseV1 {
+  return {
+    ...structuredClone(playerZero),
+    decisions: playerZero.decisions.map((row) => ({
+      ...structuredClone(row),
+      address: serializeReplayDecisionAddress({
+        version: 1,
+        replay_id: playerZero.replay_id,
+        match_id: playerZero.match_id,
+        ordinal: String(row.ordinal),
+        viewer: String(row.viewer),
+        revision: String(row.revision),
+        prompt_id: String(row.prompt_id),
+        offer_id: String(row.offer_id),
+        command_id: row.command_id,
+        presentation_cursor: String(row.presentation_cursor),
+        decision_sha256: '0'.repeat(64),
+      }),
+    })),
+  };
+}
 
 describe('canonical replay viewer projection', () => {
   it('validates both isolated viewers whose ordinals form the authority timeline', () => {
@@ -97,5 +124,41 @@ describe('canonical replay viewer projection', () => {
         /decision binding drifted/,
       );
     }
+  });
+
+  it('uses one semantic viewer-projection digest across replay and Study', async () => {
+    await expect(canonicalReplayProjectionSha256(playerZero)).resolves.toBe(
+      study.identity.source_replay_sha256,
+    );
+  });
+
+  it('validates addressed responses and exact restored decisions', () => {
+    const projection = addressedProjection();
+    expect(() => assertViewerSafeReplayProjectionResponse(projection)).not.toThrow();
+
+    const row = projection.decisions[0];
+    const restored: RestoredReplayDecision = {
+      address: row.address,
+      ordinal: row.ordinal,
+      viewer: row.viewer,
+      revision: row.revision,
+      presentation_cursor: row.presentation_cursor,
+      frame: structuredClone(row.frame),
+      offer: structuredClone(row.offer),
+      command: structuredClone(row.command),
+      continuation: [],
+    };
+    expect(() => assertRestoredReplayDecisionBinds(projection, restored)).not.toThrow();
+
+    const drifted = structuredClone(projection);
+    drifted.decisions[0].address = projection.decisions[1].address;
+    expect(() => assertViewerSafeReplayProjectionResponse(drifted)).toThrow(
+      /identity drifted/,
+    );
+
+    restored.offer.label = 'Client-authored label';
+    expect(() => assertRestoredReplayDecisionBinds(projection, restored)).toThrow(
+      /identity drifted/,
+    );
   });
 });

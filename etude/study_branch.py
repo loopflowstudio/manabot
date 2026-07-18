@@ -73,6 +73,11 @@ class StudyBranch:
         self._offers = offers
         return projection
 
+    def current_observation(self) -> managym.Observation:
+        """Return the branch's current viewer-safe authority observation."""
+        env, restored = self._require_open()
+        return env.observation_for_player(restored.viewer)
+
     def submit(
         self,
         submission: Mapping[str, Any],

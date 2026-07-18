@@ -1,7 +1,6 @@
 """Cross-language and privacy conformance for study artifact v1."""
 
 from copy import deepcopy
-import hashlib
 import json
 from pathlib import Path
 
@@ -9,7 +8,11 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 import pytest
 
-from etude.replay_index import ReplayDecisionAddress
+from etude.replay_index import (
+    CanonicalReplayProjectionV1,
+    ReplayDecisionAddress,
+    canonical_projection_sha256,
+)
 from etude.study_protocol import KnowledgeScope, StudyArtifact
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
@@ -18,10 +21,11 @@ FIXTURE = json.loads(
         encoding="utf-8"
     )
 )
-SOURCE_REPLAY_BYTES = (
-    PROTOCOL_DIR / "fixtures" / "canonical-replay-player-0.json"
-).read_bytes()
-SOURCE_REPLAY = json.loads(SOURCE_REPLAY_BYTES)
+SOURCE_REPLAY = json.loads(
+    (PROTOCOL_DIR / "fixtures" / "canonical-replay-player-0.json").read_text(
+        encoding="utf-8"
+    )
+)
 RUST_SCHEMA = json.loads(
     (PROTOCOL_DIR / "study-v1.schema.json").read_text(encoding="utf-8")
 )
@@ -78,9 +82,8 @@ def test_python_round_trips_shared_historical_decision_and_distinct_evidence():
     artifact = StudyArtifact.model_validate(FIXTURE)
 
     assert artifact.model_dump(mode="json", exclude_unset=True) == FIXTURE
-    assert (
-        artifact.identity.source_replay_sha256
-        == hashlib.sha256(SOURCE_REPLAY_BYTES).hexdigest()
+    assert artifact.identity.source_replay_sha256 == canonical_projection_sha256(
+        CanonicalReplayProjectionV1.model_validate(SOURCE_REPLAY)
     )
     landmark = artifact.landmarks[0]
     address = ReplayDecisionAddress.parse(landmark.decision_id)

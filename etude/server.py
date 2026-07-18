@@ -34,18 +34,33 @@ from .experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
 from .presentation import PresentationProjector
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
+    CanonicalReplayProjectionV1,
     CanonicalReplayUnavailableError,
     CanonicalReplayV1,
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecision,
+    RestoredReplayDecision,
     ViewerPresentationTrack,
+    canonical_projection_sha256,
     load_canonical_replay,
     project_replay,
     projection_with_addresses,
     restore_decision,
 )
-from .study_branch import StudyBranch, StudyForkProvider
+from .study_branch import StudyBranch, StudyBranchUnavailableError, StudyForkProvider
+from .study_runtime import (
+    HistoricalStudyEvidenceProvider,
+    HistoricalStudyEvidenceRequest,
+    JoinedStudyEvidence,
+    StudyEvidenceMismatchError,
+    StudyEvidenceUnavailableError,
+    StudyPlanKind,
+    StudyPlanUnavailableError,
+    UnavailableHistoricalStudyEvidenceProvider,
+    join_historical_study_evidence,
+    select_study_plan,
+)
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
@@ -194,6 +209,28 @@ class AuthorityTransition:
     semantic_events: list[dict[str, Any]]
     presentation_events: list[dict[str, Any]]
     encountered_definition_ids: list[int]
+
+
+class StudyAttemptNotFoundError(ValueError):
+    """No live Study attempt exists under this authority session."""
+
+
+class StudyCommandUnavailableError(ValueError):
+    """A canonical replay offer cannot lower through the retained Study fork."""
+
+
+@dataclass
+class StudyAttempt:
+    attempt_id: str
+    trace_id: str
+    address: str
+    projection: CanonicalReplayProjectionV1
+    restored: RestoredReplayDecision
+    branch: StudyBranch
+    retry_command: Command
+    retry_projection: dict[str, Any]
+    retry_presentation: list[dict[str, Any]]
+    evidence: JoinedStudyEvidence | None = None
 
 
 def _enum_name(enum_type, value: Any) -> str:
@@ -772,12 +809,18 @@ class GameSession:
         clock: Callable[[], str] | None = None,
         villain_offer_policy: Callable[[DecisionContext], int] | None = None,
         capture_authority_evidence: bool = False,
+        historical_evidence_provider: HistoricalStudyEvidenceProvider | None = None,
+        allow_fixture_study_evidence: bool = False,
     ):
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
         self._villain_offer_policy = villain_offer_policy
         self._capture_authority_evidence = capture_authority_evidence
+        self._historical_evidence_provider = (
+            historical_evidence_provider or UnavailableHistoricalStudyEvidenceProvider()
+        )
+        self._allow_fixture_study_evidence = allow_fixture_study_evidence
         self.env: managym.Env | None = None
         self.obs: managym.Observation | None = None
         self.villain_policy: VillainPolicy | None = None
@@ -826,6 +869,8 @@ class GameSession:
             "candidate_cap": 0,
             "client_legality": 0,
         }
+        self._study_attempts: dict[str, StudyAttempt] = {}
+        self._study_attempt_seq = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
         if self.trace is not None:
@@ -891,6 +936,8 @@ class GameSession:
             "candidate_cap": 0,
             "client_legality": 0,
         }
+        self._close_study_attempts()
+        self._study_attempt_seq = 0
 
         # Setup itself is an authority snapshot. Clear staged facts before any
         # auto-play transition so each subsequent drain belongs to one exact
@@ -1731,7 +1778,249 @@ class GameSession:
             raise ValueError("Study roots are unavailable until the match is complete.")
         return self._study_provider.fork(raw_address, HERO_PLAYER_INDEX)
 
+    def retry_study(
+        self,
+        *,
+        trace_id: str,
+        replay: CanonicalReplayV1,
+        raw_address: str,
+        raw_command: Any,
+    ) -> dict[str, Any]:
+        """Commit one canonical command on an exact retained Study fork."""
+        if self.trace_id != trace_id or self._study_provider is None:
+            raise StudyBranchUnavailableError(
+                "Study roots are unavailable for this recording."
+            )
+        if self._study_attempts:
+            raise StudyCommandUnavailableError("study_attempt_active")
+        projection = project_replay(replay, HERO_PLAYER_INDEX)
+        restored = restore_decision(replay, raw_address, HERO_PLAYER_INDEX)
+        command = Command.model_validate(raw_command)
+        prompt = restored.frame.prompt
+        if (
+            not command.command_id
+            or prompt is None
+            or command.match_id != restored.frame.match_id
+            or command.expected_revision != restored.revision
+            or command.prompt_id != prompt.id
+            or not any(offer.id == command.offer_id for offer in restored.frame.offers)
+        ):
+            raise StudyCommandUnavailableError("study_command_identity_mismatch")
+
+        branch = self.fork_study(raw_address)
+        try:
+            retry_projection, presentation = self._execute_study_command(
+                branch,
+                restored,
+                command,
+            )
+        except Exception:
+            with suppress(StudyBranchUnavailableError):
+                branch.return_to_recorded()
+            raise
+
+        self._study_attempt_seq += 1
+        attempt_id = self._id_factory(f"study-attempt-{self._study_attempt_seq}")
+        while not attempt_id or attempt_id in self._study_attempts:
+            attempt_id = secrets.token_urlsafe(18)
+        attempt = StudyAttempt(
+            attempt_id=attempt_id,
+            trace_id=trace_id,
+            address=raw_address,
+            projection=projection,
+            restored=restored,
+            branch=branch,
+            retry_command=command,
+            retry_projection=retry_projection,
+            retry_presentation=presentation,
+        )
+        self._study_attempts[attempt_id] = attempt
+        return {
+            "attempt_id": attempt_id,
+            "trace_id": trace_id,
+            "address": raw_address,
+            "retry": {
+                "command": command.model_dump(mode="json"),
+                "projection": deepcopy(retry_projection),
+                "presentation": deepcopy(presentation),
+            },
+            "return_to": {
+                "address": raw_address,
+                "ordinal": restored.ordinal,
+                "presentation_cursor": restored.presentation_cursor,
+            },
+        }
+
+    def reveal_study(self, attempt_id: str) -> dict[str, Any]:
+        """Release evidence only after the attempt owns an accepted Retry."""
+        attempt = self._require_study_attempt(attempt_id)
+        request = HistoricalStudyEvidenceRequest(
+            projection=attempt.projection.model_copy(deep=True),
+            source_replay_sha256=canonical_projection_sha256(attempt.projection),
+            address=attempt.address,
+            restored=attempt.restored.model_copy(deep=True),
+        )
+        raw_artifact = self._historical_evidence_provider.artifact_for(request)
+        joined = join_historical_study_evidence(
+            request,
+            raw_artifact,
+            allow_fixture_evidence=self._allow_fixture_study_evidence,
+        )
+        attempt.evidence = joined
+        return {
+            "attempt_id": attempt_id,
+            "artifact": joined.artifact.model_dump(mode="json"),
+        }
+
+    def preview_study_plan(
+        self,
+        attempt_id: str,
+        kind: StudyPlanKind,
+    ) -> dict[str, Any]:
+        """Project one labelled plan without reusing the player's Retry fork."""
+        attempt = self._require_study_attempt(attempt_id)
+        if attempt.evidence is None:
+            raise StudyEvidenceUnavailableError("study_evidence_not_revealed")
+        selection = select_study_plan(attempt.evidence.landmark, kind)
+
+        if kind == "played":
+            projection = self._recorded_continuation_projection(attempt)
+            presentation = [
+                event.model_dump(mode="json") for event in attempt.restored.continuation
+            ]
+        else:
+            preview = self.fork_study(attempt.address)
+            try:
+                projection, presentation = self._execute_study_command(
+                    preview,
+                    attempt.restored,
+                    selection.command,
+                )
+            finally:
+                with suppress(StudyBranchUnavailableError):
+                    preview.return_to_recorded()
+
+        return {
+            "attempt_id": attempt_id,
+            "plan": kind,
+            "alternative_id": selection.alternative_id,
+            "command": selection.command.model_dump(mode="json"),
+            "offer": selection.offer.model_dump(mode="json"),
+            "projection": deepcopy(projection),
+            "presentation": deepcopy(presentation),
+            "return_to": {
+                "address": attempt.address,
+                "ordinal": attempt.restored.ordinal,
+                "presentation_cursor": attempt.restored.presentation_cursor,
+            },
+        }
+
+    def return_from_study(self, attempt_id: str) -> dict[str, Any]:
+        """Close one branch and restore the exact canonical decision."""
+        attempt = self._study_attempts.pop(attempt_id, None)
+        if attempt is None:
+            raise StudyAttemptNotFoundError("study_attempt_not_found")
+        receipt = attempt.branch.return_to_recorded()
+        restored = RestoredReplayDecision.model_validate(
+            receipt.model_dump(mode="python", exclude={"source_digest"})
+        )
+        if restored != attempt.restored:
+            raise RuntimeError("Study return identity drifted.")
+        return restored.model_dump(mode="json")
+
+    def has_study_attempt(self, attempt_id: str) -> bool:
+        return attempt_id in self._study_attempts
+
+    def _require_study_attempt(self, attempt_id: str) -> StudyAttempt:
+        attempt = self._study_attempts.get(attempt_id)
+        if attempt is None:
+            raise StudyAttemptNotFoundError("study_attempt_not_found")
+        return attempt
+
+    def _execute_study_command(
+        self,
+        branch: StudyBranch,
+        restored: RestoredReplayDecision,
+        command: Command,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        canonical_offer = next(
+            (offer for offer in restored.frame.offers if offer.id == command.offer_id),
+            None,
+        )
+        if canonical_offer is None:
+            raise StudyCommandUnavailableError("study_command_offer_missing")
+
+        try:
+            structured = branch.structured_offers()
+        except (managym.AgentError, StudyBranchUnavailableError) as exc:
+            raise StudyCommandUnavailableError("study_command_not_structured") from exc
+        matches = [
+            offer
+            for offer in structured.get("offers", [])
+            if offer.get("actor") == canonical_offer.actor
+            and offer.get("verb") == canonical_offer.verb.value
+            and offer.get("source")
+            == (
+                None
+                if canonical_offer.source is None
+                else canonical_offer.source.model_dump(mode="json")
+            )
+            and offer.get("choices")
+            == [choice.model_dump(mode="json") for choice in canonical_offer.choices]
+        ]
+        if len(matches) != 1:
+            raise StudyCommandUnavailableError("study_command_not_structured")
+
+        before = branch.current_observation()
+        projector = PresentationProjector()
+        projector.note_action(
+            before,
+            {
+                "type": canonical_offer.action_type,
+                "focus": list(canonical_offer.focus),
+            },
+            actor_index=restored.viewer,
+        )
+        try:
+            observation, _, _, _, _, legacy_actions = branch.submit(
+                {
+                    "offer_id": matches[0]["id"],
+                    "answers": command.model_dump(mode="json")["answers"],
+                }
+            )
+        except (managym.AgentError, StudyBranchUnavailableError) as exc:
+            raise StudyCommandUnavailableError("study_command_rejected") from exc
+        projector.observe(observation)
+        presentation = projector.drain(
+            from_revision=restored.revision,
+            to_revision=restored.revision + max(1, legacy_actions),
+            caused_by=command.command_id,
+        )
+        return viewer_view(observation, restored.viewer), presentation
+
+    @staticmethod
+    def _recorded_continuation_projection(
+        attempt: StudyAttempt,
+    ) -> dict[str, Any]:
+        later = next(
+            (
+                row
+                for row in attempt.projection.decisions
+                if row.ordinal > attempt.restored.ordinal
+            ),
+            None,
+        )
+        frame = attempt.restored.frame if later is None else later.frame
+        return deepcopy(frame.projection.model_dump(mode="json"))
+
+    def _close_study_attempts(self) -> None:
+        for attempt in self._study_attempts.values():
+            with suppress(StudyBranchUnavailableError):
+                attempt.branch.return_to_recorded()
+        self._study_attempts = {}
+
     def close(self, end_reason: str) -> None:
+        self._close_study_attempts()
         if self.trace is not None and not self._trace_saved:
             self._finalize_trace(end_reason=end_reason)
 
@@ -1744,6 +2033,11 @@ def _error_message(message: str) -> dict[str, str]:
     return {"type": "error", "message": message}
 
 
+def _new_game_session() -> GameSession:
+    """Construct the normal runtime authority with unavailable Study evidence."""
+    return GameSession()
+
+
 def _create_session_record() -> SessionRecord:
     while True:
         session_id = secrets.token_urlsafe(12)
@@ -1753,7 +2047,7 @@ def _create_session_record() -> SessionRecord:
     record = SessionRecord(
         session_id=session_id,
         resume_token=secrets.token_urlsafe(24),
-        game=GameSession(),
+        game=_new_game_session(),
     )
     SESSION_REGISTRY[session_id] = record
     return record
@@ -1979,6 +2273,34 @@ def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:
         raise HTTPException(status_code=404, detail="decision_not_found") from exc
 
 
+def _live_record_for_trace(trace_id: str) -> SessionRecord:
+    _cleanup_expired_sessions()
+    matches = [
+        record
+        for record in SESSION_REGISTRY.values()
+        if record.game.trace_id == trace_id
+    ]
+    if len(matches) != 1:
+        raise HTTPException(status_code=409, detail="study_branch_unavailable")
+    record = matches[0]
+    record.touch()
+    return record
+
+
+def _live_record_for_attempt(attempt_id: str) -> SessionRecord:
+    _cleanup_expired_sessions()
+    matches = [
+        record
+        for record in SESSION_REGISTRY.values()
+        if record.game.has_study_attempt(attempt_id)
+    ]
+    if len(matches) != 1:
+        raise HTTPException(status_code=404, detail="study_attempt_not_found")
+    record = matches[0]
+    record.touch()
+    return record
+
+
 @app.get("/api/traces/{trace_id}/decisions")
 async def get_trace_decisions(trace_id: str) -> dict[str, Any]:
     replay = _load_trace_replay(trace_id)
@@ -1995,6 +2317,73 @@ async def get_trace_decision(trace_id: str, address: str) -> dict[str, Any]:
     except DecisionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="decision_not_found") from exc
     return restored.model_dump(mode="json")
+
+
+@app.post("/api/traces/{trace_id}/decisions/{address}/retry")
+async def retry_trace_decision(
+    trace_id: str,
+    address: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    replay = _load_trace_replay(trace_id)
+    record = _live_record_for_trace(trace_id)
+    try:
+        return record.game.retry_study(
+            trace_id=trace_id,
+            replay=replay,
+            raw_address=address,
+            raw_command=payload.get("command"),
+        )
+    except InvalidAddressError as exc:
+        raise HTTPException(status_code=400, detail="invalid_address") from exc
+    except DecisionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="decision_not_found") from exc
+    except StudyBranchUnavailableError as exc:
+        raise HTTPException(status_code=409, detail="study_branch_unavailable") from exc
+    except StudyCommandUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="study_command_invalid") from exc
+
+
+@app.post("/api/study-attempts/{attempt_id}/reveal")
+async def reveal_study_attempt(attempt_id: str) -> dict[str, Any]:
+    record = _live_record_for_attempt(attempt_id)
+    try:
+        return record.game.reveal_study(attempt_id)
+    except StudyEvidenceUnavailableError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="study_evidence_unavailable",
+        ) from exc
+    except StudyEvidenceMismatchError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/study-attempts/{attempt_id}/preview")
+async def preview_study_attempt(
+    attempt_id: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    raw_plan = payload.get("plan")
+    if raw_plan not in {"played", "policy", "search"}:
+        raise HTTPException(status_code=400, detail="study_plan_invalid")
+    record = _live_record_for_attempt(attempt_id)
+    try:
+        return record.game.preview_study_plan(attempt_id, raw_plan)
+    except StudyEvidenceUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (StudyPlanUnavailableError, StudyCommandUnavailableError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/study-attempts/{attempt_id}/return")
+async def return_from_study_attempt(attempt_id: str) -> dict[str, Any]:
+    record = _live_record_for_attempt(attempt_id)
+    try:
+        return record.game.return_from_study(attempt_id)
+    except StudyAttemptNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="study_attempt_not_found") from exc
 
 
 @app.get("/api/traces/{trace_id}")

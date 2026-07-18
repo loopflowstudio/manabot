@@ -81,6 +81,15 @@ def decision_payload_sha256(
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 
+def canonical_projection_sha256(
+    projection: "CanonicalReplayProjectionV1",
+) -> str:
+    """Hash the closed semantic viewer projection, independent of formatting."""
+    return hashlib.sha256(
+        _canonical_json(projection.model_dump(mode="json"))
+    ).hexdigest()
+
+
 class ReplayDecision(ProtocolModel):
     ordinal: UInt64
     viewer: UInt8
@@ -253,9 +262,7 @@ class CanonicalReplayProjectionV1(ProtocolModel):
                 or row.frame.content_hash != self.content_hash
                 or row.frame.asset_manifest_hash != self.asset_manifest_hash
             ):
-                raise ValueError(
-                    "decision identity differs from canonical projection"
-                )
+                raise ValueError("decision identity differs from canonical projection")
             if row.ordinal <= previous_ordinal:
                 raise ValueError("canonical projection ordinals are not increasing")
             if row.command_id in command_ids:

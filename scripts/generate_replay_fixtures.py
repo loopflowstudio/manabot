@@ -7,7 +7,6 @@ Run from the repository root with:
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -15,6 +14,7 @@ from tempfile import TemporaryDirectory
 from etude.replay_index import (
     CanonicalReplayV1,
     ReplayDecisionAddress,
+    canonical_projection_sha256,
     project_replay,
 )
 from etude.server import GameSession
@@ -83,7 +83,6 @@ def _play_pinned_match() -> CanonicalReplayV1:
 
 def _study_fixture(
     replay: CanonicalReplayV1,
-    player_zero_bytes: bytes,
 ) -> dict:
     projection = project_replay(replay, 0)
     row = projection.decisions[0]
@@ -147,7 +146,7 @@ def _study_fixture(
         "identity": {
             "artifact_id": "study-pinned-curated-decision-1",
             "source_replay_id": replay.replay_id,
-            "source_replay_sha256": hashlib.sha256(player_zero_bytes).hexdigest(),
+            "source_replay_sha256": canonical_projection_sha256(projection),
             "match_id": replay.match_id,
             "content_pack": {
                 "id": asset_pack.id,
@@ -214,7 +213,7 @@ def main() -> None:
         _json_bytes(metadata)
     )
     (FIXTURES / "study-curated-decision.json").write_bytes(
-        _json_bytes(_study_fixture(first, projections[0]))
+        _json_bytes(_study_fixture(first))
     )
 
 

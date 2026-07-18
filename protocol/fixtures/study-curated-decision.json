@@ -3,7 +3,7 @@
   "identity": {
     "artifact_id": "study-pinned-curated-decision-1",
     "source_replay_id": "replay.pinned-curated-match",
-    "source_replay_sha256": "692f3ae12a7792d54690f9f5b206756c42fbe06deb2fc1ac0fa7b607fc352149",
+    "source_replay_sha256": "caafcc7b3fd4444aa5b5e109d22166385f74ef7de20275afb73ff167e2ff1305",
     "match_id": "pinned-curated-match",
     "content_pack": {
       "id": "tla-ur-lessons-vs-gw-allies",

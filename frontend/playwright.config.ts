@@ -5,9 +5,9 @@ import { defineConfig } from '@playwright/test';
 const apiPort = process.env.ETUDE_API_PORT ?? '8011';
 const frontendPort = process.env.ETUDE_FRONTEND_PORT ?? '5183';
 const externalServers = process.env.ETUDE_EXTERNAL_SERVERS === '1';
-// The backend needs the repo venv's uvicorn (see AGENTS.md); override with
-// ETUDE_UVICORN when testing against a different venv.
-const uvicorn = process.env.ETUDE_UVICORN ?? '.venv/bin/uvicorn';
+// The backend must run through the repository's uv environment (see AGENTS.md).
+// ETUDE_UVICORN can still replace the complete command for another environment.
+const uvicorn = process.env.ETUDE_UVICORN ?? 'uv run --active --no-sync uvicorn';
 
 export default defineConfig({
   testDir: './e2e',

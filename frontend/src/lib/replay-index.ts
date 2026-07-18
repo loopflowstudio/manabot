@@ -92,6 +92,14 @@ function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
+export async function canonicalReplayProjectionSha256(
+  projection: CanonicalReplayProjectionV1,
+): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(canonical(projection)));
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function safeInteger(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`invalid canonical replay: ${field} is not a safe non-negative integer`);
@@ -268,4 +276,35 @@ export function assertViewerSafeReplayProjection(
   if (validatePresentationTail(projection.presentation, 0) !== projection.presentation_head) {
     throw new Error('canonical replay projection presentation head drifted');
   }
+}
+
+export function assertViewerSafeReplayProjectionResponse(
+  projection: CanonicalReplayProjectionResponseV1,
+): void {
+  assertViewerSafeReplayProjection(projection);
+  for (const row of projection.decisions) {
+    const address = parseReplayDecisionAddress(row.address);
+    assertAddressBindsReplayDecision(address, projection, row);
+  }
+}
+
+export function assertRestoredReplayDecisionBinds(
+  projection: CanonicalReplayProjectionResponseV1,
+  restored: RestoredReplayDecision,
+): void {
+  const row = projection.decisions.find(({ address }) => address === restored.address);
+  if (
+    row === undefined
+    || restored.ordinal !== row.ordinal
+    || restored.viewer !== row.viewer
+    || restored.revision !== row.revision
+    || restored.presentation_cursor !== row.presentation_cursor
+    || !sameJson(restored.frame, row.frame)
+    || !sameJson(restored.offer, row.offer)
+    || !sameJson(restored.command, row.command)
+  ) {
+    throw new Error('restored replay decision identity drifted');
+  }
+  const address = parseReplayDecisionAddress(restored.address);
+  assertAddressBindsReplayDecision(address, projection, row);
 }
