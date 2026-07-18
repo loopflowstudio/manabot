@@ -33,6 +33,7 @@ VISIT_DISTRIBUTION_TARGET = "visit_distribution"
 CHOSEN_ACTION_TARGET = "chosen_action"
 TERMINAL_OUTCOME_TARGET = "terminal_outcome"
 ROOT_VALUE_TARGET = "root_value"
+BLENDED_VALUE_TARGET = "blend_50_50"
 
 
 @dataclass(frozen=True)
@@ -88,6 +89,15 @@ def value_targets_from_dataset(
         if ((values[usable] < 0) | (values[usable] > 1)).any():
             raise ValueError("root_value targets must be in [0, 1]")
         return usable, np.nan_to_num(values, nan=0.0)
+    if value_target_kind == BLENDED_VALUE_TARGET:
+        outcome_usable, outcomes = outcome_targets(dataset["winner"], dataset["seat"])
+        roots = np.asarray(dataset[ROOT_VALUE_KEY], dtype=np.float32)
+        root_usable = np.isfinite(roots)
+        if ((roots[root_usable] < 0) | (roots[root_usable] > 1)).any():
+            raise ValueError("root_value targets must be in [0, 1]")
+        usable = outcome_usable & root_usable
+        targets = 0.5 * outcomes + 0.5 * np.nan_to_num(roots, nan=0.0)
+        return usable, targets.astype(np.float32, copy=False)
     raise ValueError(f"unsupported value target kind: {value_target_kind}")
 
 
@@ -112,7 +122,7 @@ def _validate_dataset(
         pass
     else:
         raise ValueError(f"unsupported policy target kind: {policy_target_kind}")
-    if value_target_kind == ROOT_VALUE_TARGET:
+    if value_target_kind in {ROOT_VALUE_TARGET, BLENDED_VALUE_TARGET}:
         required.add(ROOT_VALUE_KEY)
     elif value_target_kind != TERMINAL_OUTCOME_TARGET:
         raise ValueError(f"unsupported value target kind: {value_target_kind}")
@@ -318,6 +328,7 @@ def train_search_supervised(
     batch_size: int = 512,
     val_fraction: float = 0.1,
     seed: int = 0,
+    split_seed: int | None = None,
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
     initial_agent_state: dict[str, Any] | None = None,
@@ -356,7 +367,11 @@ def train_search_supervised(
         agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
 
-    train_idx, val_idx = split_by_game(dataset, val_fraction=val_fraction, seed=seed)
+    train_idx, val_idx = split_by_game(
+        dataset,
+        val_fraction=val_fraction,
+        seed=seed if split_seed is None else split_seed,
+    )
     value_usable, value_targets = value_targets_from_dataset(dataset, value_target_kind)
     initial_validation = evaluate_search_supervised(
         agent,

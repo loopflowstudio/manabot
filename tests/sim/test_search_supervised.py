@@ -19,11 +19,13 @@ from manabot.sim.distill import (
 )
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.search_supervised import (
+    BLENDED_VALUE_TARGET,
     CHOSEN_ACTION_TARGET,
     ROOT_VALUE_TARGET,
     VISIT_DISTRIBUTION_TARGET,
     outcome_targets,
     train_search_supervised,
+    value_targets_from_dataset,
 )
 from manabot.verify.util import INTERACTIVE_DECK
 
@@ -176,6 +178,46 @@ def test_visit_and_root_value_columns_are_supported_for_future_mcts() -> None:
     assert initial.value_rows > 0
     assert np.isfinite(history[-1].validation.policy_loss)
     assert np.isfinite(history[-1].validation.value_brier)
+
+
+def test_fixed_blend_is_probability_space_average() -> None:
+    dataset = _dataset(seed=24)
+    outcomes = (
+        dataset["winner"].astype(np.int64) == dataset["seat"].astype(np.int64)
+    ).astype(np.float32)
+    roots = np.linspace(0.0, 1.0, len(outcomes), dtype=np.float32)
+    dataset[ROOT_VALUE_KEY] = roots
+
+    usable, targets = value_targets_from_dataset(dataset, BLENDED_VALUE_TARGET)
+
+    assert usable.all()
+    np.testing.assert_allclose(targets, 0.5 * outcomes + 0.5 * roots)
+
+
+def test_split_seed_is_independent_from_model_seed() -> None:
+    dataset = _dataset(seed=25)
+    first, _, _, _ = train_search_supervised(
+        dataset,
+        epochs=1,
+        batch_size=32,
+        val_fraction=0.25,
+        seed=101,
+        split_seed=197,
+    )
+    second, _, _, _ = train_search_supervised(
+        dataset,
+        epochs=1,
+        batch_size=32,
+        val_fraction=0.25,
+        seed=102,
+        split_seed=197,
+    )
+    assert any(
+        not torch.equal(left, right)
+        for left, right in zip(
+            first.state_dict().values(), second.state_dict().values()
+        )
+    )
 
 
 def test_teacher_action_must_be_represented_by_legal_mask() -> None:

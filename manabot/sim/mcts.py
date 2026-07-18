@@ -130,7 +130,13 @@ class UniformRandomLeafEvaluator:
 class AgentLeafEvaluator:
     """Frozen CPU manabot priors and actor-relative value for PUCT leaves."""
 
-    def __init__(self, agent: Agent, observation_space: ObservationSpace):
+    def __init__(
+        self,
+        agent: Agent,
+        observation_space: ObservationSpace,
+        *,
+        value_mode: str = "learned",
+    ):
         try:
             device = next(agent.parameters()).device
         except StopIteration as exc:  # pragma: no cover - Agent always has parameters
@@ -139,8 +145,15 @@ class AgentLeafEvaluator:
             ) from exc
         if device.type != "cpu":
             raise ValueError("agent leaf evaluator requires a CPU model")
+        if value_mode not in {"learned", "neutral"}:
+            raise ValueError(
+                "agent leaf evaluator value_mode must be learned or neutral"
+            )
         self.agent = agent.eval()
         self.observation_space = observation_space
+        self.value_mode = value_mode
+        self.forward_calls = 0
+        self.last_root_priors: np.ndarray | None = None
 
     def _predict(
         self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
@@ -158,15 +171,17 @@ class AgentLeafEvaluator:
             logits, value_logit = self.agent(tensor_obs)
             priors = torch.softmax(logits[0, :action_count], dim=-1)
             node_value = torch.sigmoid(value_logit[0])
+        self.forward_calls += 1
         return (
             priors.detach().cpu().numpy().astype(np.float64),
-            float(node_value.item()),
+            0.5 if self.value_mode == "neutral" else float(node_value.item()),
         )
 
     def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
         if observation is None:
             raise ValueError("agent leaf evaluator requires the root observation")
         priors, _ = self._predict(observation, action_count=action_count)
+        self.last_root_priors = priors.copy()
         return priors
 
     def evaluate(

@@ -1,0 +1,171 @@
+{
+  "arena": {
+    "anchor_cohort_sha256": "3a29f51662e37a02c493b1bffaf6e618a1f5b14322e701499160cf09ba659362",
+    "anchor_registration_identity_sha256": {
+      "flat-mc-16-v1": "be11c9e146021a0b3c6121b3c9c63436bd51ac056ed8280b44e80bb818582e2e",
+      "flat-mc-4-v1": "7afbd87ae0134a2cd448944b35c69cb8c5c798b35552771aa921a7a3bf2604ee",
+      "flat-mc-64-v1": "a885d0f6a81979d1adea9c9d7822ac93837b22d7c67d040fadc20a3803b6ec76",
+      "random-v1": "d1bbcda218602bcab299f01dee0b64fd795cab0289a77d4a53acee834f59febb",
+      "scripted-greedy-v1": "7fad8c4167eb969bb6aa39393594893bab5ca3f56c1165c257029db8e20b4bc3"
+    },
+    "arena_key_sha256": "6b913617581e496b5d122bdc17bf1ab0fc038bec534818038de2796ef78e16a4",
+    "competency_seeds": [
+      62001,
+      62002
+    ],
+    "contract_file_sha256": "fc9cb76c0d80ad64951455ac6fede94b1355f383dde2f2964d0e578f62671a71",
+    "contract_path": "experiments/contracts/int-6-skill-arena-v1.json",
+    "deal_seeds": [
+      61001,
+      61002
+    ],
+    "profile": "smoke",
+    "profile_roots": {
+      "measured": 128,
+      "sampler_interval_ms": 5,
+      "selection": "deal-leg-revision-canonical-v1",
+      "source_cell": "random-v1__scripted-greedy-v1",
+      "warmup": 16
+    },
+    "rating_prior_sha256": "ff4920af7c3c325eabcfe1e715c0abf7e1569393f30d572da80012c15dabc904"
+  },
+  "current_arena_implementation": {
+    "source_paths": [
+      "experiments/runners/run_skill_arena.py",
+      "manabot/arena/competency.py",
+      "manabot/arena/guidance.py",
+      "manabot/arena/int8_input.py",
+      "manabot/arena/match.py",
+      "manabot/arena/models.py",
+      "manabot/arena/players.py",
+      "manabot/arena/profile.py",
+      "manabot/arena/rating.py",
+      "manabot/arena/replay.py"
+    ],
+    "source_sha256": "51ed17e4bded0a6647e3fab0a7d10ba2f450ad46439cef775e26d8f1a7d5c6db"
+  },
+  "current_runtime": {
+    "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+    "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+    "content_digest": "2444fc15283068d79f74d49f8297bdbe3cc581a62a1eee976b35a8cecd8a0ef4",
+    "content_manifest_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+    "content_schema_version": 1,
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "c95a85bba1128e6c3afdade5b5cf59dfeb3b1ec464fdd403cdf155a5cf834f8e",
+    "engine_source_sha256": "2b781e7282dc47d01fe634312a221542c3a3bfbd4c1d02c8279582397b990b8c",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+    "inference_device": "cpu",
+    "matchup_sha256": "0b7526c243918a85b4f148583f49fd01fa387b941d193215d35b15c0844bd707",
+    "numpy_version": "2.4.2",
+    "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+    "platform_machine": "arm64",
+    "platform_system": "Darwin",
+    "psutil_version": "7.2.2",
+    "pydantic_version": "2.12.5",
+    "python_version": "3.12.12",
+    "torch_threads_per_player": 1,
+    "torch_version": "2.10.0",
+    "world": "w2"
+  },
+  "decision": {
+    "admission_eligible": false,
+    "ambiguous": "retain_point_winner_but_smoke_ambiguous",
+    "competency_noninferiority_difference_minimum": 0,
+    "integrity_failure": "kill_invalid_evidence",
+    "method_level_claim": false,
+    "paired_score_separation_minimum": 0.05,
+    "primary": "mean_seed_specific_diagnostic_rating",
+    "promotion_eligible": false,
+    "tie_order": [
+      "visit_policy_only",
+      "visit_terminal",
+      "visit_blend_50_50",
+      "visit_teacher_root"
+    ]
+  },
+  "evidence_class": "engineering_smoke_only_no_admission_claim",
+  "experiment": "int-7-value-target-comparison-v1",
+  "factors": {
+    "architecture": "default-Agent-102722-parameters",
+    "batch_size": 256,
+    "blend_formula": "0.5 * terminal_outcome + 0.5 * root_value",
+    "content_suite": "w2-interactive-mirror-v1",
+    "device": "cpu",
+    "epochs": 10,
+    "information_boundary": "acting-viewer-history-only-v1",
+    "joint_value_weight": 1.0,
+    "matrix_cells": 136,
+    "matrix_games": 544,
+    "matrix_players": 17,
+    "measured_roots": 128,
+    "model_seeds": [
+      197,
+      198,
+      199
+    ],
+    "optimizer": "Adam(lr=0.001,default_betas,default_epsilon)",
+    "policy_target": "visit_distribution",
+    "policy_weight": 1.0,
+    "puct": {
+      "batch_size": 1,
+      "branch_driver_id": "full_clone/current_game_v1",
+      "c_puct": 1.5,
+      "max_steps": 2000,
+      "policy_only_value": 0.5,
+      "root_noise": "none",
+      "traversals": 32,
+      "worlds": 4
+    },
+    "split_seed": 197,
+    "teacher_data_seeds": 1,
+    "torch_threads": 1,
+    "validation_game_fraction": 0.25,
+    "value_targets": [
+      "none",
+      "terminal_outcome",
+      "root_value",
+      "blend_50_50"
+    ],
+    "world": "w2"
+  },
+  "implementation": {
+    "files": {
+      "experiments/runners/run_int7_value_target_comparison.py": "33d40e5b9a34c585c5e082bbd2847f87560604aac3233f2c428e7d47b9372457",
+      "manabot/arena/int7_value_targets.py": "028ffd26bfde872e81d46dba3a8eb3fcaa6c854484a2c99f1c7e52a4fe777e4d",
+      "manabot/sim/mcts.py": "429a56b47ca73e161272d087030f6e6963e51cea14477c69273acc61f0866ccf",
+      "manabot/sim/search_supervised.py": "8232e3ede76acef0f019e7cf3d48ca6776e7efff976e3202081841f0e2234c25"
+    },
+    "player_source_sha256": "236e52d29e223be118b19c65f77dce9eb0cef8ce9b250987a0284d727d2c742a",
+    "source_paths": [
+      "experiments/runners/run_int7_value_target_comparison.py",
+      "manabot/arena/int7_value_targets.py",
+      "manabot/sim/mcts.py",
+      "manabot/sim/search_supervised.py"
+    ],
+    "source_sha256": "512843c61858e7652f361f62656adc82fff3d086e3b464d314925ea8eb58257c"
+  },
+  "input": {
+    "contract_canonical_sha256": "9c3f0f600b70ca4fef7131086f6d9b350f9612e690cbb9d621e961a5de27d03c",
+    "contract_file_sha256": "bbbba03856b74047a8f8cec44f23a3c28b92558bff0001c602e4211c75d260a7",
+    "games": 4,
+    "input_manifest_sha256": "cfba4f299d86b0db83556c783b9bf63cfb92094353e4c5ea2ac1950b4671a7ba",
+    "loader_source_sha256": "946c5e7a8452b6b8eba56cdf074a924d064a92dd2e36fd6afeebc2f1666c221d",
+    "path": "experiments/data/int-8-retained-int-4-smoke-v1/sha256/13868767846b7004f140cfade3652909347bdbb6708b69cb8c10b36ec2756eb0/input-manifest.json",
+    "payload_sha256": "13868767846b7004f140cfade3652909347bdbb6708b69cb8c10b36ec2756eb0",
+    "rows": 507,
+    "trajectory_audit_sha256": "ae03c3bda06bdd65b090fefcaf1e23bb717c6f6566cc08731092c7911770f14f"
+  },
+  "prediction": {
+    "limitation": "one 507-label teacher/data seed cannot support a method, strength, rating, promotion, or admission claim",
+    "point_winner": "visit_terminal",
+    "scale_decision": "retain_point_winner_but_smoke_ambiguous"
+  },
+  "resource_caps": {
+    "artifact_bytes": 2147483648,
+    "core_hours": 24.0,
+    "wall_hours": 6.0,
+    "workers": 4
+  },
+  "schema_version": 1
+}

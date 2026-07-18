@@ -137,6 +137,32 @@ def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
     assert result.cap_hits == 0
 
 
+def test_agent_leaf_evaluator_neutral_mode_keeps_forward_and_priors() -> None:
+    root, observation = _fresh_engine_and_observation(seed=36)
+    observation_space = ObservationSpace()
+    agent = Agent(observation_space, AgentHypers())
+    learned = AgentLeafEvaluator(agent, observation_space, value_mode="learned")
+    neutral = AgentLeafEvaluator(agent, observation_space, value_mode="neutral")
+    action_count = int(root.action_count())
+    actor = int(root.current_agent_index())
+
+    learned_priors = learned.root_priors(observation, action_count=action_count)
+    neutral_priors = neutral.root_priors(observation, action_count=action_count)
+    evaluation = neutral.evaluate(
+        root,
+        observation,
+        root_player=actor,
+        node_player=actor,
+        seed=3,
+        max_steps=2000,
+    )
+
+    np.testing.assert_allclose(neutral_priors, learned_priors)
+    assert evaluation.root_value == 0.5
+    assert learned.forward_calls == 1
+    assert neutral.forward_calls == 2
+
+
 def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
     tmp_path: Path,
 ) -> None:
