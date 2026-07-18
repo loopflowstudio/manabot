@@ -8,9 +8,9 @@ without exposing a mixed-view replay or mutable engine root to clients.
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
 
 import managym
 
@@ -26,10 +26,29 @@ class StudyBranchUnavailableError(ValueError):
     """The canonical row has no retained authority-private rules root."""
 
 
+STUDY_BRANCH_DRIVER = "full_clone/current_game_v1"
+STUDY_COMMAND_PATH = "structured_offers/step_structured_v1"
+
+
+class StudyExecutionReceipt(BaseModel):
+    """The authority-private execution path used by one consumed branch."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: Literal["full_clone/current_game_v1"] = STUDY_BRANCH_DRIVER
+    command_path: Literal["structured_offers/step_structured_v1"] = STUDY_COMMAND_PATH
+    published_offer_sets: NonNegativeInt
+    accepted_commands: NonNegativeInt
+    rejected_commands: NonNegativeInt
+    committed_engine_actions: NonNegativeInt
+    fallback_commands: Literal[0] = 0
+
+
 class StudyReturnReceipt(RestoredReplayDecision):
     """Exact canonical return bound to its retained rules authority root."""
 
     source_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    execution: StudyExecutionReceipt
 
 
 class StudyBranch:
@@ -47,6 +66,10 @@ class StudyBranch:
         self._source: managym.Env | None = source
         self._source_digest: str | None = source_digest
         self._offers: Any | None = None
+        self._published_offer_sets = 0
+        self._accepted_commands = 0
+        self._rejected_commands = 0
+        self._committed_engine_actions = 0
 
     @property
     def viewer(self) -> int:
@@ -64,13 +87,19 @@ class StudyBranch:
             raise StudyBranchUnavailableError(
                 "Study branch is waiting on another player's decision."
             )
-        offers = env.structured_offers()
+        try:
+            offers = env.structured_offers()
+        except managym.AgentError as exc:
+            raise StudyBranchUnavailableError(
+                "Study decision has no native structured offer surface."
+            ) from exc
         projection = json.loads(offers.projection_json())
         if projection.get("actor") != restored.viewer:
             raise StudyBranchUnavailableError(
                 "Structured offer actor differs from the recorded viewer."
             )
         self._offers = offers
+        self._published_offer_sets += 1
         return projection
 
     def current_observation(self) -> managym.Observation:
@@ -89,15 +118,37 @@ class StudyBranch:
                 "Study branch is waiting on another player's decision."
             )
         if self._offers is None:
+            self._rejected_commands += 1
             raise StudyBranchUnavailableError(
                 "Publish structured offers before submitting a Study command."
             )
 
-        _, reward, terminated, truncated, info, legacy_actions = env.step_structured(
-            self._offers,
-            json.dumps(dict(submission), sort_keys=True, separators=(",", ":")),
-        )
+        offers = self._offers
         self._offers = None
+        branch_digest = env.state_digest()
+        try:
+            submission_json = json.dumps(
+                dict(submission), sort_keys=True, separators=(",", ":")
+            )
+            (
+                _,
+                reward,
+                terminated,
+                truncated,
+                info,
+                engine_actions,
+            ) = env.step_structured(offers, submission_json)
+        except (managym.AgentError, TypeError, ValueError, OverflowError) as exc:
+            self._rejected_commands += 1
+            if env.state_digest() != branch_digest:
+                self._close()
+                raise StudyBranchUnavailableError(
+                    "Rejected Study command mutated its branch."
+                ) from exc
+            raise StudyBranchUnavailableError(f"Study command rejected: {exc}") from exc
+
+        self._accepted_commands += 1
+        self._committed_engine_actions += int(engine_actions)
         observation = env.observation_for_player(restored.viewer)
         return (
             observation,
@@ -105,7 +156,7 @@ class StudyBranch:
             bool(terminated),
             bool(truncated),
             dict(info),
-            int(legacy_actions),
+            int(engine_actions),
         )
 
     def return_to_recorded(self) -> StudyReturnReceipt:
@@ -123,9 +174,18 @@ class StudyBranch:
         returned = StudyReturnReceipt(
             **restored.model_dump(mode="python"),
             source_digest=source_digest,
+            execution=self._execution_receipt(),
         )
         self._close()
         return returned
+
+    def _execution_receipt(self) -> StudyExecutionReceipt:
+        return StudyExecutionReceipt(
+            published_offer_sets=self._published_offer_sets,
+            accepted_commands=self._accepted_commands,
+            rejected_commands=self._rejected_commands,
+            committed_engine_actions=self._committed_engine_actions,
+        )
 
     def _close(self) -> None:
         self._offers = None
@@ -133,6 +193,10 @@ class StudyBranch:
         self._restored = None
         self._source = None
         self._source_digest = None
+        self._published_offer_sets = 0
+        self._accepted_commands = 0
+        self._rejected_commands = 0
+        self._committed_engine_actions = 0
 
     def _require_open(self) -> tuple[managym.Env, RestoredReplayDecision]:
         if self._env is None or self._restored is None:

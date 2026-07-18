@@ -24,6 +24,8 @@ offline. Schemas and three-language conformance fixtures live in
   transitions, spell sequences) derived from engine events
 - **`curated_pack.py`**: the frozen curated matchup asset pack
 - **`study_protocol.py`**: viewer-safe study artifacts and decision evidence
+- **`study_branch.py`**: source-bound historical forks, native structured
+  execution, typed failure, and consuming exact-return receipts
 - **`trace.py`**: trace persistence with hand redaction (traces land in
   `etude/traces/`; override with `ETUDE_TRACES_DIR`)
 - **`villain.py`**: opponent policies for the hero to face

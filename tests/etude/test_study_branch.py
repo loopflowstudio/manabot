@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from pydantic import ValidationError
 import pytest
 
 from etude.replay_index import (
@@ -14,7 +15,12 @@ from etude.replay_index import (
     restore_decision,
 )
 from etude.server import GameSession
-from etude.study_branch import StudyBranchUnavailableError
+from etude.study_branch import (
+    StudyBranchUnavailableError,
+    StudyExecutionReceipt,
+    StudyForkProvider,
+)
+import managym
 
 
 def _completed_session(tmp_path) -> tuple[GameSession, CanonicalReplayV1]:
@@ -22,6 +28,7 @@ def _completed_session(tmp_path) -> tuple[GameSession, CanonicalReplayV1]:
         tmp_path,
         id_factory=lambda kind: f"study-fork-{kind}",
         clock=lambda: "2026-07-17T00:00:00+00:00",
+        villain_offer_policy=lambda context: int(context.offers[-1]["id"]),
     )
     session.new_game(
         {
@@ -55,6 +62,48 @@ def _completed_session(tmp_path) -> tuple[GameSession, CanonicalReplayV1]:
     assert session.trace is not None
     assert session.trace.canonical_replay is not None
     return session, CanonicalReplayV1.model_validate(session.trace.canonical_replay)
+
+
+def _first_cast(
+    session: GameSession, replay: CanonicalReplayV1
+) -> tuple[object, str, dict, dict]:
+    for row in replay.decisions:
+        if row.viewer != 0:
+            continue
+        address = ReplayDecisionAddress.from_decision(replay, row).serialize()
+        branch = session.fork_study(address)
+        try:
+            projection = branch.structured_offers()
+        except StudyBranchUnavailableError:
+            branch.return_to_recorded()
+            continue
+        cast = next(
+            (offer for offer in projection["offers"] if offer["verb"] == "cast"),
+            None,
+        )
+        branch.return_to_recorded()
+        if cast is not None:
+            return row, address, projection, cast
+    pytest.fail("deterministic Study source has no native cast offer")
+
+
+def _submission(offer: dict) -> dict:
+    return {
+        "offer_id": offer["id"],
+        "answers": [
+            {
+                "kind": "candidates",
+                "role": choice["role"],
+                "candidates": [
+                    candidate["id"]
+                    for candidate in choice["candidates"]["initial"][
+                        : int(choice["min"])
+                    ]
+                ],
+            }
+            for choice in offer["choices"]
+        ],
+    }
 
 
 def test_historical_address_forks_executes_structured_command_and_returns(tmp_path):
@@ -97,6 +146,18 @@ def test_historical_address_forks_executes_structured_command_and_returns(tmp_pa
     assert returned.command == expected.command
     assert returned.presentation_cursor == expected.presentation_cursor
     assert returned.continuation == expected.continuation
+    assert returned.execution.model_dump() == {
+        "driver": "full_clone/current_game_v1",
+        "command_path": "structured_offers/step_structured_v1",
+        "published_offer_sets": 1,
+        "accepted_commands": 1,
+        "rejected_commands": 0,
+        "committed_engine_actions": 1,
+        "fallback_commands": 0,
+    }
+    assert sibling_returned.execution.published_offer_sets == 2
+    assert sibling_returned.execution.accepted_commands == 0
+    assert sibling_returned.execution.fallback_commands == 0
     assert returned.frame.projection.agent.player_index == returned.viewer
     assert not returned.frame.projection.opponent.hand
     with pytest.raises(StudyBranchUnavailableError, match="returned to replay"):
@@ -111,8 +172,11 @@ def test_historical_address_forks_executes_structured_command_and_returns(tmp_pa
     assert fresh_returned.presentation_cursor == returned.presentation_cursor
     assert fresh_returned.continuation == returned.continuation
     assert session.trace.events == recorded_events
+    assert not any(session.authority_fallback_counters.values())
     assert (
-        json.dumps(session.trace.canonical_replay, sort_keys=True, separators=(",", ":"))
+        json.dumps(
+            session.trace.canonical_replay, sort_keys=True, separators=(",", ":")
+        )
         == recorded_replay
     )
 
@@ -134,3 +198,108 @@ def test_study_fork_fails_closed_for_invalid_missing_and_other_viewer(tmp_path):
     other_viewer = ReplayDecisionAddress.from_decision(replay, player_one).serialize()
     with pytest.raises(DecisionNotFoundError, match="decision not found"):
         session.fork_study(other_viewer)
+
+
+def test_submission_failures_are_typed_one_shot_and_zero_fallback(tmp_path):
+    session, replay = _completed_session(tmp_path)
+    _, address, original_projection, cast = _first_cast(session, replay)
+    baseline = session.fork_study(address).return_to_recorded()
+    branch = session.fork_study(address)
+
+    branch.structured_offers()
+    with pytest.raises(StudyBranchUnavailableError, match="unknown offer"):
+        branch.submit({"offer_id": 2**31 - 1, "answers": []})
+    with pytest.raises(StudyBranchUnavailableError, match="Publish structured"):
+        branch.submit(_submission(cast))
+
+    assert branch.structured_offers() == original_projection
+    observation, _, _, _, _, engine_actions = branch.submit(_submission(cast))
+    returned = branch.return_to_recorded()
+
+    assert engine_actions == 1
+    assert not observation.opponent_cards
+    assert returned.source_digest == baseline.source_digest
+    assert returned.execution.published_offer_sets == 2
+    assert returned.execution.accepted_commands == 1
+    assert returned.execution.rejected_commands == 2
+    assert returned.execution.committed_engine_actions == 1
+    assert returned.execution.fallback_commands == 0
+
+
+def test_projected_object_incarnation_cannot_replace_native_binding(tmp_path):
+    session, replay = _completed_session(tmp_path)
+    _, address, _, expected_cast = _first_cast(session, replay)
+    branch = session.fork_study(address)
+    projected = branch.structured_offers()
+    cast = next(offer for offer in projected["offers"] if offer["verb"] == "cast")
+    expected_ref = dict(expected_cast["source"]["id"])
+
+    cast["source"]["id"]["incarnation"] += 1_000
+    observation, _, _, _, _, _ = branch.submit(_submission(cast))
+    returned = branch.return_to_recorded()
+
+    moved = next(
+        card for card in observation.agent_cards if card.id == expected_ref["entity"]
+    )
+    assert int(moved.zone) == int(managym.ZoneEnum.STACK)
+    assert expected_ref["incarnation"] >= 0
+    assert returned.execution.accepted_commands == 1
+    assert returned.execution.fallback_commands == 0
+
+
+def test_unsupported_native_surface_is_typed_and_returnable(tmp_path):
+    session, replay = _completed_session(tmp_path)
+    unsupported = next(
+        row
+        for row in replay.decisions
+        if row.viewer == 0 and row.frame.action_space == "DISCARD_THEN_DRAW"
+    )
+    address = ReplayDecisionAddress.from_decision(replay, unsupported).serialize()
+    branch = session.fork_study(address)
+
+    with pytest.raises(
+        StudyBranchUnavailableError, match="no native structured offer surface"
+    ):
+        branch.structured_offers()
+
+    returned = branch.return_to_recorded()
+    assert returned.execution.published_offer_sets == 0
+    assert returned.execution.accepted_commands == 0
+    assert returned.execution.rejected_commands == 0
+    assert returned.execution.fallback_commands == 0
+
+
+def test_retained_root_drift_consumes_return_and_blocks_later_forks(tmp_path):
+    session, replay = _completed_session(tmp_path)
+    row, address, _, _ = _first_cast(session, replay)
+    assert session._study_provider is not None
+    retained, _ = session._study_provider._roots[int(row.ordinal)]
+    isolated_root = retained.clone_env()
+    provider = StudyForkProvider(replay, {int(row.ordinal): isolated_root})
+    branch = provider.fork(address, authorized_viewer=0)
+
+    isolated_root.step(0)
+    with pytest.raises(StudyBranchUnavailableError, match="root drifted"):
+        branch.return_to_recorded()
+    with pytest.raises(StudyBranchUnavailableError, match="returned to replay"):
+        branch.structured_offers()
+    with pytest.raises(StudyBranchUnavailableError, match="root drifted"):
+        provider.fork(address, authorized_viewer=0)
+
+
+def test_execution_receipt_schema_rejects_negative_counts_and_fallback() -> None:
+    with pytest.raises(ValidationError):
+        StudyExecutionReceipt(
+            published_offer_sets=-1,
+            accepted_commands=0,
+            rejected_commands=0,
+            committed_engine_actions=0,
+        )
+    with pytest.raises(ValidationError):
+        StudyExecutionReceipt(
+            published_offer_sets=0,
+            accepted_commands=0,
+            rejected_commands=0,
+            committed_engine_actions=0,
+            fallback_commands=1,
+        )

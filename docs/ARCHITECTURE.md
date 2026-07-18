@@ -247,7 +247,7 @@ The durable learning and evaluation identities are:
 | `PlayerRegistration` | manabot | Immutable algorithm/checkpoint bytes, world, information boundary, compute class, and seed policy. |
 | `ArenaKey` | manabot | World, content suite, viewer boundary, arena/rating versions, frozen anchor cohort, and compute class. |
 | `DecisionEvidence` | manabot evidence consumed by Etude | Immutable alternatives, policy/visits, values, robustness, uncertainty, and typed unavailable fields bound to one exact replay decision. |
-| `StudyReturnReceipt` | Etude adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest; fails closed if the retained root drifts. |
+| `StudyReturnReceipt` | Etude adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest and a full-clone/structured-only execution receipt; fails closed if the retained root drifts or a rejected command mutates its child. |
 
 ## Laws of physics
 
@@ -576,9 +576,12 @@ typed unavailability, then emits `DecisionEvidence` or a
 Current main already proves the authority-private fork/execute/return half:
 `StudyForkProvider` retains a managym root, clones it for exploration, checks
 source and sibling isolation, and returns a consuming `StudyReturnReceipt`
-bound to the captured source digest. The convergence work is to move the
-remaining match/replay identity into managym and attach exact conditional
-manabot evidence to that proven return seam.
+bound to the captured source digest. RUL-6 measures the production seam under
+sequential and retained-sibling load and makes its full-clone,
+`step_structured`-only, zero-fallback execution path explicit in that receipt.
+The convergence work is to move the remaining match/replay identity into
+managym and attach exact conditional manabot evidence to that proven return
+seam.
 
 Etude presents full distributions, values, robustness, uncertainty, and deltas
 without private sampled worlds. Queries may overlap; displays label conditional
