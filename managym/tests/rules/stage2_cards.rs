@@ -11,8 +11,11 @@ use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
         observation::Observation,
+        structured_offer::PublicCommitment,
     },
+    decision::Command,
     flow::turn::StepKind,
+    possible_worlds::{viewer_observation, MaterializeMode, PossibleWorldSpace},
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
         zone::ZoneType,
@@ -410,6 +413,151 @@ fn pop_quiz_learn_can_be_declined() {
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
     assert_eq!(hand(&s, 0).len(), hand_size, "no discard, no draw");
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1); // just Pop Quiz
+}
+
+#[test]
+fn discard_then_draw_public_commitment_is_viewer_safe_and_authoritative() {
+    let mut s = Scenario::new(
+        deck(&[("Island", 24), ("Pop Quiz", 16)]),
+        deck(&[("Plains", 40)]),
+        52,
+    );
+    force_lands(&mut s, 0, "Island", 3);
+    clear_hand(&mut s, 0);
+    s.force_card_in_hand(0, "Pop Quiz");
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_and_resolve(&mut s);
+
+    let root = s.game().clone();
+    let frame = root.semantic_decision_frame().expect("discard frame");
+    let non_actor = root
+        .semantic_observation(PlayerId(1))
+        .expect("non-actor Observation");
+    assert!(non_actor.decision.is_none());
+    assert!(non_actor.viewer_state["opponent_cards"]
+        .as_array()
+        .expect("opponent cards")
+        .iter()
+        .all(|card| card["zone"].as_i64() != Some(ZoneType::Hand as i64)));
+
+    let (discard_id, discarded_card) = frame
+        .offers
+        .iter()
+        .find_map(|offer| match &offer.public_commitment {
+            Some(PublicCommitment::Discard { card }) => Some((offer.id.0, card.clone())),
+            _ => None,
+        })
+        .expect("one hand card has a discard commitment");
+    let decline_id = frame
+        .offers
+        .iter()
+        .find(|offer| offer.public_commitment == Some(PublicCommitment::DeclineDiscard))
+        .expect("decline commitment")
+        .id
+        .0;
+
+    let mut discard_branch = root.clone();
+    let discard = discard_branch
+        .execute_semantic_command(&Command {
+            command_id: "public-commitment-discard".to_string(),
+            expected_revision: frame.revision,
+            offer_id: discard_id,
+            answers: Vec::new(),
+            object_preconditions: Vec::new(),
+        })
+        .expect("discard command executes");
+    assert_eq!(
+        discard.receipt.public_commitment,
+        Some(PublicCommitment::Discard {
+            card: discarded_card
+        })
+    );
+
+    let mut decline_branch = root;
+    let decline = decline_branch
+        .execute_semantic_command(&Command {
+            command_id: "public-commitment-decline".to_string(),
+            expected_revision: frame.revision,
+            offer_id: decline_id,
+            answers: Vec::new(),
+            object_preconditions: Vec::new(),
+        })
+        .expect("decline command executes");
+    assert_eq!(
+        decline.receipt.public_commitment,
+        Some(PublicCommitment::DeclineDiscard)
+    );
+}
+
+#[test]
+fn discard_public_commitment_materialization_rebuilds_hypothetical_hand() {
+    let mut s = Scenario::new(
+        deck(&[("Island", 24), ("Pop Quiz", 16)]),
+        deck(&[("Plains", 40)]),
+        53,
+    );
+    force_lands(&mut s, 0, "Island", 3);
+    clear_hand(&mut s, 0);
+    s.force_card_in_hand(0, "Pop Quiz");
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_and_resolve(&mut s);
+
+    let root = s.game().clone();
+    let root_witness = root.state.deterministic_hash();
+    let root_cursor = root.semantic_event_cursor();
+    let root_observation = viewer_observation(&root, PlayerId(1));
+    let space = PossibleWorldSpace::for_viewer(&root, PlayerId(1));
+    let world_index = space
+        .worlds()
+        .iter()
+        .position(|world| world.hand.get("Island").copied().unwrap_or(0) > 0)
+        .expect("one hypothesis contains Island");
+    let world = &space.worlds()[world_index];
+    let mut branch = space
+        .materialize_index(
+            &root,
+            world_index,
+            907,
+            MaterializeMode::RefreshOpponentCommitment,
+        )
+        .expect("discard prompt materializes");
+    let frame = branch.semantic_decision_frame().expect("refreshed frame");
+    let mut commitments = BTreeMap::new();
+    for offer in &frame.offers {
+        if let Some(PublicCommitment::Discard { card }) = &offer.public_commitment {
+            *commitments.entry(card.clone()).or_insert(0_u32) += 1;
+        }
+    }
+    assert_eq!(commitments, world.hand);
+
+    let island = frame
+        .offers
+        .iter()
+        .find(|offer| {
+            offer.public_commitment
+                == Some(PublicCommitment::Discard {
+                    card: "Island".to_string(),
+                })
+        })
+        .expect("hypothetical Island offer");
+    let transition = branch
+        .execute_semantic_command(&Command {
+            command_id: "materialized-public-commitment-discard".to_string(),
+            expected_revision: frame.revision,
+            offer_id: island.id.0,
+            answers: Vec::new(),
+            object_preconditions: Vec::new(),
+        })
+        .expect("hypothetical discard executes");
+    assert_eq!(
+        transition.receipt.public_commitment,
+        Some(PublicCommitment::Discard {
+            card: "Island".to_string()
+        })
+    );
+    assert_eq!(root.state.deterministic_hash(), root_witness);
+    assert_eq!(root.semantic_event_cursor(), root_cursor);
+    assert_eq!(viewer_observation(&root, PlayerId(1)), root_observation);
 }
 
 #[test]

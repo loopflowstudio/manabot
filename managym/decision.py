@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
-SEMANTIC_DECISION_VERSION: int = 3
+SEMANTIC_DECISION_VERSION: int = 4
 
 
 class SemanticContractError(Exception):

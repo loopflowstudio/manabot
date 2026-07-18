@@ -28,7 +28,7 @@ def test_contract_pins_world_arena_evidence_and_exclusions() -> None:
     assert contract["algorithm"]["belief_state"].startswith(
         "normalized_probability_over_managym_possible_world_space"
     )
-    assert contract["expected_fingerprints"]["semantic_decision_version"] == 3
+    assert contract["expected_fingerprints"]["semantic_decision_version"] == 4
     assert contract["expected_fingerprints"]["possible_world_space_version"] == 1
     assert {
         "engine_source_sha256",

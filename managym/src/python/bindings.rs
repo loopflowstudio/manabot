@@ -2686,14 +2686,14 @@ impl PyEnv {
     }
 
     /// Materialize one identity-bound canonical world into an isolated Env.
-    #[pyo3(signature = (viewer, space_identity, world_index, seed, refresh_opponent_priority=false))]
+    #[pyo3(signature = (viewer, space_identity, world_index, seed, refresh_opponent_commitment=false))]
     fn materialize_possible_world(
         &self,
         viewer: usize,
         space_identity: &str,
         world_index: usize,
         seed: u64,
-        refresh_opponent_priority: bool,
+        refresh_opponent_commitment: bool,
     ) -> PyResult<PyEnv> {
         let env = self
             .inner
@@ -2705,7 +2705,7 @@ impl PyEnv {
                 space_identity,
                 world_index,
                 seed,
-                refresh_opponent_priority,
+                refresh_opponent_commitment,
             )
             .map_err(map_agent_err)?;
         Ok(PyEnv {

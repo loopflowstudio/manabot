@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import time
@@ -11,6 +11,7 @@ from typing import Any, Mapping, Protocol
 from manabot.belief.likelihood import (
     LikelihoodResult,
     RulesProviderGap,
+    public_commitment_key,
 )
 from manabot.belief.range import BeliefError, BeliefState
 from managym.decision import Observation, SemanticTransition
@@ -159,83 +160,125 @@ class BeliefTracker:
         started = time.perf_counter()
         before_space = self.space
         commitment = transition.receipt.public_commitment
-        if acting != self.viewer and commitment is not None:
+        opponent_commitment = commitment if acting != self.viewer else None
+        pending_commitment = self._pending_public_commitment
+        if opponent_commitment is not None:
+            public_commitment_key(opponent_commitment)
             if self.likelihood is None or likelihood_root is None:
                 raise BeliefError(
                     "opponent commitment requires a likelihood model and retained root"
                 )
-            likelihood = self.likelihood.evaluate(
-                likelihood_root,
-                viewer=self.viewer,
-                commitment=commitment,
-                belief=self.posterior,
-            )
-            self.posterior = self.posterior.condition_likelihood(
-                likelihood.likelihoods,
-                likelihood.legal_action_counts,
-                likelihood.matching_action_counts,
-                epsilon=self.epsilon,
-            )
-            self.stats.action_updates += 1
-            self.stats.likelihood_seconds += likelihood.seconds
-            if commitment.get("kind") in {"cast", "play_land"}:
-                self._pending_public_commitment = commitment
-            elif commitment.get("kind") == "pass_priority":
-                self._pending_public_commitment = None
+            if opponent_commitment.get("kind") in {
+                "cast",
+                "play_land",
+                "discard",
+            }:
+                pending_commitment = opponent_commitment
+            else:
+                pending_commitment = None
 
         next_observation = Observation.from_json(
             after_engine.semantic_observation_json(self.viewer)
         )
         next_space = PossibleWorldSpace.from_engine(after_engine, self.viewer)
+        if transition.receipt.before_revision != self.observation.revision:
+            raise BeliefError("transition before revision differs from tracker root")
+        if transition.receipt.after_revision != next_observation.revision:
+            raise BeliefError(
+                "transition after revision differs from canonical Observation"
+            )
+        if transition.receipt.schema_version != next_observation.schema_version:
+            raise BeliefError("transition schema differs from canonical Observation")
+        if (
+            next_space.source_revision != next_observation.revision
+            or next_space.source_viewer_state_hash != next_observation.viewer_state_hash
+        ):
+            raise BeliefError(
+                "next PossibleWorldSpace differs from canonical Observation"
+            )
         transport_commitment = (
-            commitment or self._pending_public_commitment
-            if acting != self.viewer
-            else None
+            opponent_commitment or pending_commitment if acting != self.viewer else None
         )
         known_exits, known_returns, hidden_draws = self._public_transport_facts(
             before_space, next_space, transport_commitment
         )
         if known_exits:
-            self._pending_public_commitment = None
-        self.posterior = self.posterior.transport(
+            pending_commitment = None
+
+        posterior = self.posterior
+        likelihood_seconds = 0.0
+        action_updates = 0
+        if opponent_commitment is not None:
+            assert self.likelihood is not None and likelihood_root is not None
+            likelihood = self.likelihood.evaluate(
+                likelihood_root,
+                viewer=self.viewer,
+                commitment=opponent_commitment,
+                belief=posterior,
+            )
+            posterior = posterior.condition_likelihood(
+                likelihood.likelihoods,
+                likelihood.legal_action_counts,
+                likelihood.matching_action_counts,
+                epsilon=self.epsilon,
+            )
+            action_updates = 1
+            likelihood_seconds = likelihood.seconds
+
+        posterior = posterior.transport(
             next_space,
             known_exits=known_exits,
             known_returns=known_returns,
             hidden_draws=hidden_draws,
         )
-        self.prior = BeliefState.compatible_prior(next_space)
+        prior = BeliefState.compatible_prior(next_space)
+        elapsed = time.perf_counter() - started
+        stats = replace(
+            self.stats,
+            update_durations=[*self.stats.update_durations, elapsed],
+        )
+        stats.updates += 1
+        stats.action_updates += action_updates
+        stats.hidden_draws += hidden_draws
+        stats.known_exits += len(known_exits)
+        stats.known_returns += len(known_returns)
+        stats.update_seconds += elapsed
+        stats.likelihood_seconds += likelihood_seconds
+        stats.peak_range_bytes = max(
+            stats.peak_range_bytes,
+            posterior.probability_bytes
+            + prior.probability_bytes
+            + posterior.space.allocated_bytes,
+        )
+        stats.peak_support_size = max(stats.peak_support_size, posterior.support_size)
+        record = BeliefTransitionRecord(
+            sequence=len(self.records),
+            observation_revision=next_observation.revision,
+            observation_hash=next_observation.viewer_state_hash,
+            before_space_id=before_space.identity,
+            after_space_id=next_space.identity,
+            command_id=transition.receipt.command_id,
+            public_commitment=opponent_commitment,
+            event_ids=transition.receipt.events,
+            hidden_draws=hidden_draws,
+            known_exits=tuple(known_exits),
+            known_returns=tuple(known_returns),
+            posterior_digest=posterior.digest,
+            prior_digest=prior.digest,
+            posterior_normalization_error=posterior.normalization_error,
+            prior_normalization_error=prior.normalization_error,
+            support_size=posterior.support_size,
+            positive_support_size=posterior.positive_support_size,
+            effective_range_size=posterior.effective_range_size,
+        )
+
+        self.posterior = posterior
+        self.prior = prior
         self.space = next_space
         self.observation = next_observation
-        self.stats.hidden_draws += hidden_draws
-        self.stats.known_exits += len(known_exits)
-        self.stats.known_returns += len(known_returns)
-        self.stats.updates += 1
-        elapsed = time.perf_counter() - started
-        self.stats.update_seconds += elapsed
-        self.stats.update_durations.append(elapsed)
-        self._record_size()
-        self.records.append(
-            BeliefTransitionRecord(
-                sequence=len(self.records),
-                observation_revision=next_observation.revision,
-                observation_hash=next_observation.viewer_state_hash,
-                before_space_id=before_space.identity,
-                after_space_id=next_space.identity,
-                command_id=transition.receipt.command_id,
-                public_commitment=commitment if acting != self.viewer else None,
-                event_ids=transition.receipt.events,
-                hidden_draws=hidden_draws,
-                known_exits=tuple(known_exits),
-                known_returns=tuple(known_returns),
-                posterior_digest=self.posterior.digest,
-                prior_digest=self.prior.digest,
-                posterior_normalization_error=self.posterior.normalization_error,
-                prior_normalization_error=self.prior.normalization_error,
-                support_size=self.posterior.support_size,
-                positive_support_size=self.posterior.positive_support_size,
-                effective_range_size=self.posterior.effective_range_size,
-            )
-        )
+        self.stats = stats
+        self._pending_public_commitment = pending_commitment
+        self.records = [*self.records, record]
 
     @staticmethod
     def _public_transport_facts(
@@ -260,6 +303,7 @@ class BeliefTracker:
             if commitment is None or commitment.get("kind") not in {
                 "cast",
                 "play_land",
+                "discard",
             }:
                 raise RulesProviderGap(
                     "hidden-pool exit has no canonical public commitment identity"

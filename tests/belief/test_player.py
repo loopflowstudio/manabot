@@ -18,7 +18,7 @@ from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.flat_mc import play_games
 from manabot.sim.teacher1_evidence import _fresh_env
-from managym.decision import DecisionFrame
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 
 
 class NeutralLikelihood:
@@ -47,7 +47,7 @@ def test_python_authority_exposes_only_canonical_exact_world_materialization() -
 
 def test_provider_commitment_groups_duplicate_semantic_offers() -> None:
     frame = DecisionFrame(
-        schema_version=3,
+        schema_version=SEMANTIC_DECISION_VERSION,
         revision=4,
         actor=1,
         fingerprint="frame",
@@ -69,6 +69,30 @@ def test_provider_commitment_groups_duplicate_semantic_offers() -> None:
 
     assert matching == [0, 1]
     assert legal_count == 4
+
+
+def test_provider_commitment_groups_discard_family_without_physical_identity() -> None:
+    frame = DecisionFrame(
+        schema_version=SEMANTIC_DECISION_VERSION,
+        revision=29,
+        actor=0,
+        fingerprint="discard-frame",
+        offers=(
+            {"id": 0, "public_commitment": {"kind": "discard", "card": "Island"}},
+            {"id": 1, "public_commitment": {"kind": "discard", "card": "Island"}},
+            {"id": 2, "public_commitment": {"kind": "decline_discard"}},
+        ),
+        object_candidates=(),
+    )
+
+    discard, legal_count = _matching_offer_indexes(
+        frame, {"kind": "discard", "card": "Island"}
+    )
+    decline, _ = _matching_offer_indexes(frame, {"kind": "decline_discard"})
+
+    assert discard == [0, 1]
+    assert decline == [2]
+    assert legal_count == 3
 
 
 def test_frozen_likelihood_fails_closed_on_checkpoint_hash(tmp_path: Path) -> None:

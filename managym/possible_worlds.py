@@ -209,7 +209,7 @@ class PossibleWorldSpace:
         index: int,
         *,
         seed: int,
-        refresh_opponent_priority: bool = False,
+        refresh_opponent_commitment: bool = False,
     ) -> Any:
         self.world(index)
         try:
@@ -218,7 +218,7 @@ class PossibleWorldSpace:
                 self.identity,
                 index,
                 seed,
-                refresh_opponent_priority,
+                refresh_opponent_commitment,
             )
         except Exception as error:
             raise PossibleWorldError(str(error)) from error

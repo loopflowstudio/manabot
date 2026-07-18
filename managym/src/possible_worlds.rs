@@ -286,8 +286,9 @@ pub enum MaterializeError {
     /// The source revision/viewer projection no longer matches the source
     /// from which this space was constructed.
     StaleSource,
-    /// A likelihood branch can refresh only an acting priority prompt. Other
-    /// hand-dependent prompt kinds do not yet have an authoritative rebuild.
+    /// A likelihood branch can refresh only an admitted acting commitment
+    /// prompt. Other hand-dependent prompts do not yet have an authoritative
+    /// rebuild.
     UnsupportedActingPrompt,
 }
 
@@ -297,7 +298,7 @@ impl std::fmt::Display for MaterializeError {
             Self::InconsistentWorld => write!(f, "world is inconsistent with its source space"),
             Self::StaleSource => write!(f, "possible-world source identity is stale"),
             Self::UnsupportedActingPrompt => {
-                write!(f, "cannot refresh the acting non-priority prompt")
+                write!(f, "cannot refresh the acting unsupported prompt")
             }
         }
     }
@@ -306,11 +307,11 @@ impl std::fmt::Display for MaterializeError {
 impl std::error::Error for MaterializeError {}
 
 /// Whether materialization preserves the fixed viewer's current root or
-/// refreshes the hypothetical opponent's authoritative priority legality.
+/// refreshes the hypothetical opponent's authoritative commitment decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaterializeMode {
     PreserveViewerRoot,
-    RefreshOpponentPriority,
+    RefreshOpponentCommitment,
 }
 
 /// JSON-safe row in the canonical Python projection. Exact integer weights
@@ -694,20 +695,31 @@ impl PossibleWorldSpace {
             return Err(MaterializeError::InconsistentWorld);
         }
 
-        if mode == MaterializeMode::RefreshOpponentPriority
+        if mode == MaterializeMode::RefreshOpponentCommitment
             && branch
                 .current_action_space
                 .as_ref()
                 .is_some_and(|space| space.player == Some(opponent))
         {
-            if branch
+            let kind = branch
                 .current_action_space
                 .as_ref()
-                .is_some_and(|space| space.kind != ActionSpaceKind::Priority)
-            {
-                return Err(MaterializeError::UnsupportedActingPrompt);
+                .map(|space| space.kind)
+                .ok_or(MaterializeError::UnsupportedActingPrompt)?;
+            match kind {
+                ActionSpaceKind::Priority => branch.refresh_priority_actions(opponent),
+                ActionSpaceKind::DiscardThenDraw => {
+                    let refreshed = branch
+                        .suspended_decision_action_space()
+                        .filter(|space| {
+                            space.player == Some(opponent)
+                                && space.kind == ActionSpaceKind::DiscardThenDraw
+                        })
+                        .ok_or(MaterializeError::UnsupportedActingPrompt)?;
+                    branch.publish_action_space(refreshed);
+                }
+                _ => return Err(MaterializeError::UnsupportedActingPrompt),
             }
-            branch.refresh_priority_actions(opponent);
         }
 
         Ok(branch)

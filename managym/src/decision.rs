@@ -29,7 +29,7 @@ use crate::{
 /// Canonical serialization and digest contract for the semantic decision
 /// slice. Increment when DecisionFrame/Observation field inclusion, ordering,
 /// or digest algorithm changes.
-pub const SEMANTIC_DECISION_VERSION: u16 = 3;
+pub const SEMANTIC_DECISION_VERSION: u16 = 4;
 
 /// Stable digest of one complete legal offer set at a revision. Any change to
 /// the legal actions, their order, or their binding revision changes it.

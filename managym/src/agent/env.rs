@@ -322,7 +322,7 @@ impl Env {
         space_identity: &str,
         world_index: usize,
         seed: u64,
-        refresh_opponent_priority: bool,
+        refresh_opponent_commitment: bool,
     ) -> Result<Env, AgentError> {
         let game = self.game.as_ref().ok_or_else(|| {
             AgentError("env.materialize_possible_world called before reset".to_string())
@@ -338,8 +338,8 @@ impl Env {
                 "materialize_possible_world: space identity mismatch".to_string(),
             ));
         }
-        let mode = if refresh_opponent_priority {
-            MaterializeMode::RefreshOpponentPriority
+        let mode = if refresh_opponent_commitment {
+            MaterializeMode::RefreshOpponentCommitment
         } else {
             MaterializeMode::PreserveViewerRoot
         };

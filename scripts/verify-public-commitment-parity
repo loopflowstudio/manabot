@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+uv run --python 3.12 --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
+cargo test --manifest-path managym/Cargo.toml public_commitment --no-fail-fast
+uv run --extra dev pytest -q \
+  tests/semantic/test_decision_contract.py \
+  tests/belief/test_player.py \
+  tests/belief/test_tracker.py \
+  tests/etude/test_public_commitment_parity.py
+uv run --extra dev python -m etude.public_commitment_parity verify

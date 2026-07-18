@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 import json
 from typing import Any, Mapping
@@ -16,6 +17,14 @@ from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 @dataclass
 class FakeEngine:
     space: PossibleWorldSpace | None = None
+    witness: str = "fixed-witness"
+    event_cursor: int = 7
+
+    def state_digest(self) -> str:
+        return self.witness
+
+    def semantic_event_cursor(self) -> int:
+        return self.event_cursor
 
     def possible_world_space_json(self, viewer: int) -> str:
         assert self.space is not None and viewer == self.space.viewer
@@ -140,6 +149,18 @@ class FixedLikelihood:
         )
 
 
+def _tracker_snapshot(tracker: BeliefTracker) -> tuple[Any, ...]:
+    return (
+        tracker.posterior.digest,
+        tracker.prior.digest,
+        tracker.space.identity,
+        tracker.observation,
+        deepcopy(tracker.stats),
+        tuple(tracker.records),
+        deepcopy(tracker._pending_public_commitment),
+    )
+
+
 def test_action_update_changes_posterior_but_not_compatible_prior() -> None:
     _, before, observation = _state(
         "before",
@@ -261,6 +282,84 @@ def test_known_exit_and_return_follow_canonical_pool_changes() -> None:
     assert tracker.posterior.space.hand_size == 2
 
 
+def test_discard_conditions_and_transports_one_named_exit_and_hidden_draw() -> None:
+    _, before, observation = _state(
+        "discard-before",
+        1,
+        {"A": 2, "B": 1},
+        1,
+        [({"A": 1}, 2), ({"B": 1}, 1)],
+    )
+    after_engine, after, after_observation = _state(
+        "discard-after",
+        2,
+        {"A": 1, "B": 1},
+        1,
+        [({"A": 1}, 1), ({"B": 1}, 1)],
+    )
+    model = FixedLikelihood((0.75, 0.25))
+    tracker = BeliefTracker(
+        before,
+        observation,
+        likelihood=model,
+        epsilon=0.0,
+        model_id="test-model",
+    )
+
+    tracker.observe(
+        after_engine,
+        acting=1,
+        transition=_transition(
+            1, 2, {"kind": "discard", "card": "A"}, after_observation
+        ),
+        likelihood_root="discard-root",
+    )
+
+    assert tracker.space.identity == after.identity
+    assert tracker.stats.action_updates == 1
+    assert tracker.stats.known_exits == 1
+    assert tracker.stats.hidden_draws == 1
+    assert tracker._pending_public_commitment is None
+    assert tracker.records[-1].known_exits == ("A",)
+    assert tracker.records[-1].public_commitment == {"kind": "discard", "card": "A"}
+
+
+def test_decline_discard_is_a_likelihood_only_commitment() -> None:
+    _, before, observation = _state(
+        "decline-before",
+        1,
+        {"A": 1, "B": 1},
+        1,
+        [({"A": 1}, 1), ({"B": 1}, 1)],
+    )
+    after_engine, _, after_observation = _state(
+        "decline-after",
+        2,
+        {"A": 1, "B": 1},
+        1,
+        [({"A": 1}, 1), ({"B": 1}, 1)],
+    )
+    tracker = BeliefTracker(
+        before,
+        observation,
+        likelihood=FixedLikelihood((0.4, 0.6)),
+        epsilon=0.0,
+        model_id="test-model",
+    )
+
+    tracker.observe(
+        after_engine,
+        acting=1,
+        transition=_transition(1, 2, {"kind": "decline_discard"}, after_observation),
+        likelihood_root="decline-root",
+    )
+
+    assert tracker.stats.action_updates == 1
+    assert tracker.stats.known_exits == 0
+    assert tracker.stats.hidden_draws == 0
+    assert tracker._pending_public_commitment is None
+
+
 def test_unidentified_hidden_pool_exit_is_typed_provider_gap() -> None:
     _, first, observation = _state("gap-first", 1, {"A": 2}, 1, [({"A": 1}, 2)])
     after_engine, _, after_observation = _state("gap-after", 2, {"A": 1}, 0, [({}, 1)])
@@ -296,6 +395,9 @@ def test_one_public_commitment_cannot_explain_multiple_hidden_pool_exits() -> No
         epsilon=0.0,
         model_id="test-model",
     )
+    before_tracker = _tracker_snapshot(tracker)
+    before_witness = after_engine.state_digest()
+    before_cursor = after_engine.semantic_event_cursor()
 
     with pytest.raises(RulesProviderGap, match="does not match canonical pool"):
         tracker.observe(
@@ -306,6 +408,52 @@ def test_one_public_commitment_cannot_explain_multiple_hidden_pool_exits() -> No
             ),
             likelihood_root="cast-root",
         )
+    assert _tracker_snapshot(tracker) == before_tracker
+    assert after_engine.state_digest() == before_witness
+    assert after_engine.semantic_event_cursor() == before_cursor
+
+
+def test_unsupported_commitment_fails_atomically_before_likelihood() -> None:
+    _, before, observation = _state(
+        "unsupported-before",
+        1,
+        {"A": 1, "B": 1},
+        1,
+        [({"A": 1}, 1), ({"B": 1}, 1)],
+    )
+    after_engine, _, after_observation = _state(
+        "unsupported-after",
+        2,
+        {"A": 1, "B": 1},
+        1,
+        [({"A": 1}, 1), ({"B": 1}, 1)],
+    )
+    model = FixedLikelihood((0.5, 0.5))
+    tracker = BeliefTracker(
+        before,
+        observation,
+        likelihood=model,
+        epsilon=0.0,
+        model_id="test-model",
+    )
+    before_tracker = _tracker_snapshot(tracker)
+    before_witness = after_engine.state_digest()
+    before_cursor = after_engine.semantic_event_cursor()
+
+    with pytest.raises(RulesProviderGap, match="unsupported public commitment"):
+        tracker.observe(
+            after_engine,
+            acting=1,
+            transition=_transition(
+                1, 2, {"kind": "declare_attacker"}, after_observation
+            ),
+            likelihood_root="unsupported-root",
+        )
+
+    assert model.calls == []
+    assert _tracker_snapshot(tracker) == before_tracker
+    assert after_engine.state_digest() == before_witness
+    assert after_engine.semantic_event_cursor() == before_cursor
 
 
 def test_tracker_receipt_binds_observation_space_and_belief_identities() -> None:

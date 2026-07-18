@@ -103,6 +103,8 @@ pub enum PublicCommitment {
     PassPriority,
     Cast { card: String },
     PlayLand { card: String },
+    Discard { card: String },
+    DeclineDiscard,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -505,14 +507,22 @@ impl Game {
         for action in &action_space.actions {
             let id = next_offer_id(offers.len())?;
             let label = format!("{:?}", action.action_type());
-            let public_commitment = match action {
-                Action::PassPriority { .. } => Some(PublicCommitment::PassPriority),
-                Action::CastSpell { card, .. } => Some(PublicCommitment::Cast {
+            let public_commitment = match (action_space.kind, action) {
+                (_, Action::PassPriority { .. }) => Some(PublicCommitment::PassPriority),
+                (_, Action::CastSpell { card, .. }) => Some(PublicCommitment::Cast {
                     card: self.state.cards[*card].name.clone(),
                 }),
-                Action::PlayLand { card, .. } => Some(PublicCommitment::PlayLand {
+                (_, Action::PlayLand { card, .. }) => Some(PublicCommitment::PlayLand {
                     card: self.state.cards[*card].name.clone(),
                 }),
+                (ActionSpaceKind::DiscardThenDraw, Action::SelectCard { card, .. }) => {
+                    Some(PublicCommitment::Discard {
+                        card: self.state.cards[*card].name.clone(),
+                    })
+                }
+                (ActionSpaceKind::DiscardThenDraw, Action::Decline { .. }) => {
+                    Some(PublicCommitment::DeclineDiscard)
+                }
                 _ => None,
             };
             offers.push(InteractionOffer {

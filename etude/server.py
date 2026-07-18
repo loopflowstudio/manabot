@@ -21,7 +21,11 @@ from fastapi.responses import Response
 from pydantic import ValidationError
 
 import managym
-from managym.decision import Command as SemanticCommand, SemanticTransition
+from managym.decision import (
+    Command as SemanticCommand,
+    SemanticTransition,
+    TransitionReceipt,
+)
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
@@ -286,6 +290,7 @@ class AuthorityTransition:
     prompt_id: int | None
     offer: dict[str, Any] | None
     command: dict[str, Any] | None
+    semantic_receipt: TransitionReceipt | None
     state_before: str
     state_after: str
     semantic_events: list[dict[str, Any]]
@@ -1351,6 +1356,7 @@ class GameSession:
         ):
             self.authority_fallback_counters["card_name_dispatch"] += 1
         from_revision = self.revision
+        semantic_transition: SemanticTransition | None = None
         if auto:
             next_obs, reward, _, _, _ = self.env.step(action_index)
         else:
@@ -1438,6 +1444,11 @@ class GameSession:
                     prompt_id=None if context is None else context.prompt_id,
                     offer=deepcopy(selected_offer),
                     command=deepcopy(command),
+                    semantic_receipt=(
+                        None
+                        if semantic_transition is None
+                        else semantic_transition.receipt
+                    ),
                     state_before=state_before,
                     state_after=state_after,
                     semantic_events=semantic_events,

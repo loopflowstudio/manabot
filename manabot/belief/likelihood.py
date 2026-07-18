@@ -38,11 +38,17 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _commitment_key(value: Mapping[str, Any]) -> str:
+def public_commitment_key(value: Mapping[str, Any]) -> str:
     kind = value.get("kind")
-    if kind not in {"pass_priority", "cast", "play_land"}:
+    if kind not in {
+        "pass_priority",
+        "cast",
+        "play_land",
+        "discard",
+        "decline_discard",
+    }:
         raise RulesProviderGap(f"unsupported public commitment kind {kind!r}")
-    if kind in {"cast", "play_land"} and not value.get("card"):
+    if kind in {"cast", "play_land", "discard"} and not value.get("card"):
         raise RulesProviderGap(f"{kind} commitment has no canonical card name")
     return json.dumps(dict(value), sort_keys=True, separators=(",", ":"))
 
@@ -52,12 +58,12 @@ def _matching_offer_indexes(
 ) -> tuple[list[int], int]:
     """Group offers only by managym's provider-owned public identity."""
 
-    observed_key = _commitment_key(observed)
+    observed_key = public_commitment_key(observed)
     groups: dict[str, list[int]] = {}
     for index, offer in enumerate(frame.offers):
         commitment = offer.get("public_commitment")
         key = (
-            _commitment_key(commitment)
+            public_commitment_key(commitment)
             if isinstance(commitment, Mapping)
             else f"unsupported-offer:{offer['id']}"
         )
@@ -156,7 +162,7 @@ class FrozenPolicyLikelihood:
             hypothesis = root_space.materialize(
                 row,
                 seed=self.counterfactual_seed,
-                refresh_opponent_priority=True,
+                refresh_opponent_commitment=True,
             )
             if hypothesis.current_agent_index() != opponent:
                 raise RulesProviderGap(
@@ -186,4 +192,5 @@ __all__ = [
     "RulesProviderGap",
     "_matching_offer_indexes",
     "file_sha256",
+    "public_commitment_key",
 ]
