@@ -1,0 +1,914 @@
+{
+  "artifact": {
+    "version": 1,
+    "identity": {
+      "artifact_id": "advice-pinned-curated-decision-6",
+      "source_replay_id": "replay.pinned-curated-match",
+      "source_replay_sha256": "e846d3486bc2b1ce4cb5f33b61fbe056fb0817171b2e7f99c9c8f116940a837b",
+      "match_id": "pinned-curated-match",
+      "content_pack": {
+        "id": "tla-ur-lessons-vs-gw-allies",
+        "version": "1.0.0",
+        "content_hash": "legacy-content-unversioned",
+        "asset_manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
+      },
+      "engine": {
+        "version": "managym-python-adapter",
+        "build_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "model": {
+        "id": "flat-mc-search-v1",
+        "checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "analysis_budget": {
+        "id": "1w-8r-16s",
+        "max_nodes": 256,
+        "sampled_worlds": 16,
+        "rollouts_per_world": 8
+      },
+      "knowledge_scope": "historical_viewer"
+    },
+    "landmarks": [
+      {
+        "id": "advice-scenario-a",
+        "decision_id": "erd1.WzEsInJlcGxheS5waW5uZWQtY3VyYXRlZC1tYXRjaCIsInBpbm5lZC1jdXJhdGVkLW1hdGNoIiwiNiIsIjAiLCI2IiwiNyIsIjAiLCJwaW5uZWQtaHVtYW4tMCIsIjUiLCI3YTFlZTYzODVjNDgwOWRjZjRiOTdhYzMxZWY5Y2E5NjcxMWI0OTE5ZjRjMzM2ZGY2Yzc1ZjU1ZGI4MDVhYWNmIl0",
+        "match_state_hash": "8ac9a4a79a6ef9ea88e90b31d5366d6a2b8d69eaea7d93d0758c5ef999227f89",
+        "viewer": 0,
+        "prompt_id": 7,
+        "offer_id": 0,
+        "frame": {
+          "protocol": 1,
+          "match_id": "pinned-curated-match",
+          "revision": 6,
+          "frame_hash": "8ac9a4a79a6ef9ea88e90b31d5366d6a2b8d69eaea7d93d0758c5ef999227f89",
+          "content_hash": "legacy-content-unversioned",
+          "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+          "status": "ready",
+          "prompt": {
+            "id": 7,
+            "actor": 0,
+            "kind": "priority",
+            "title": "Your priority",
+            "instruction": "Choose an action"
+          },
+          "projection": {
+            "game_over": false,
+            "won": false,
+            "turn": {
+              "turn_number": 7,
+              "phase": "PRECOMBAT_MAIN",
+              "step": "PRECOMBAT_MAIN_STEP",
+              "active_player_id": 0,
+              "agent_player_id": 0
+            },
+            "agent": {
+              "player_index": 0,
+              "id": 0,
+              "is_active": true,
+              "is_agent": true,
+              "life": 20,
+              "zone_counts": {
+                "LIBRARY": 31,
+                "HAND": 10,
+                "BATTLEFIELD": 0,
+                "GRAVEYARD": 0,
+                "STACK": 0,
+                "EXILE": 0,
+                "COMMAND": 0
+              },
+              "library_count": 31,
+              "hand": [
+                {
+                  "id": 8,
+                  "registry_key": 15,
+                  "name": "Fire Nation Cadets",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 1,
+                  "toughness": 2,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": true,
+                    "is_land": false,
+                    "is_spell": false,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 9,
+                  "registry_key": 16,
+                  "name": "Firebending Lesson",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 42,
+                  "registry_key": 25,
+                  "name": "Tiger-Seal",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 3,
+                  "toughness": 3,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": true,
+                    "is_land": false,
+                    "is_spell": false,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 12,
+                  "registry_key": 16,
+                  "name": "Firebending Lesson",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 28,
+                  "registry_key": 20,
+                  "name": "It'll Quench Ya!",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 2,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 3,
+                  "registry_key": 7,
+                  "name": "Accumulate Wisdom",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 2,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 27,
+                  "registry_key": 20,
+                  "name": "It'll Quench Ya!",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 2,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 4,
+                  "registry_key": 4,
+                  "name": "Divide by Zero",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 3,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 10,
+                  "registry_key": 16,
+                  "name": "Firebending Lesson",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 29,
+                  "registry_key": 2,
+                  "name": "Mountain",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 0,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": true,
+                    "is_spell": false,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                }
+              ],
+              "graveyard": [],
+              "exile": [],
+              "stack": [],
+              "battlefield": []
+            },
+            "opponent": {
+              "player_index": 1,
+              "id": 1,
+              "is_active": false,
+              "is_agent": false,
+              "life": 20,
+              "zone_counts": {
+                "LIBRARY": 30,
+                "HAND": 10,
+                "BATTLEFIELD": 0,
+                "GRAVEYARD": 0,
+                "STACK": 0,
+                "EXILE": 0,
+                "COMMAND": 0
+              },
+              "library_count": 30,
+              "hand_hidden_count": 10,
+              "hand": [],
+              "graveyard": [],
+              "exile": [],
+              "stack": [],
+              "battlefield": []
+            }
+          },
+          "offers": [
+            {
+              "id": 0,
+              "actor": 0,
+              "verb": "play_land",
+              "source": null,
+              "label": "Play Mountain",
+              "help": null,
+              "choices": [],
+              "confirm_label": "Play Mountain",
+              "action_type": "PRIORITY_PLAY_LAND",
+              "focus": [
+                29
+              ]
+            },
+            {
+              "id": 1,
+              "actor": 0,
+              "verb": "pass_priority",
+              "source": null,
+              "label": "Pass priority",
+              "help": null,
+              "choices": [],
+              "confirm_label": "Pass priority",
+              "action_type": "PRIORITY_PASS_PRIORITY",
+              "focus": []
+            }
+          ],
+          "winner": null,
+          "action_space": "PRIORITY",
+          "stops": {
+            "my": [
+              "main1",
+              "main2"
+            ],
+            "opponent": [
+              "end_step"
+            ],
+            "stop_on_stack": true,
+            "auto_pass": false
+          },
+          "deck_names": {
+            "hero": "UR Lessons",
+            "villain": "GW Allies"
+          },
+          "asset_pack": {
+            "id": "tla-ur-lessons-vs-gw-allies",
+            "version": "1.0.0",
+            "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
+          }
+        },
+        "offer": {
+          "id": 0,
+          "actor": 0,
+          "verb": "play_land",
+          "source": null,
+          "label": "Play Mountain",
+          "help": null,
+          "choices": [],
+          "confirm_label": "Play Mountain",
+          "action_type": "PRIORITY_PLAY_LAND",
+          "focus": [
+            29
+          ]
+        },
+        "played": {
+          "command_id": "pinned-human-0",
+          "match_id": "pinned-curated-match",
+          "expected_revision": 6,
+          "prompt_id": 7,
+          "offer_id": 0,
+          "answers": []
+        },
+        "alternatives": [
+          {
+            "id": "offer-0",
+            "command": {
+              "command_id": "study-offer-0",
+              "match_id": "pinned-curated-match",
+              "expected_revision": 6,
+              "prompt_id": 7,
+              "offer_id": 0,
+              "answers": []
+            }
+          },
+          {
+            "id": "offer-1",
+            "command": {
+              "command_id": "study-offer-1",
+              "match_id": "pinned-curated-match",
+              "expected_revision": 6,
+              "prompt_id": 7,
+              "offer_id": 1,
+              "answers": []
+            }
+          }
+        ],
+        "evidence": {
+          "policy_mass": [
+            {
+              "alternative": "offer-0",
+              "probability": 0.75
+            },
+            {
+              "alternative": "offer-1",
+              "probability": 0.25
+            }
+          ],
+          "search_value": [
+            {
+              "alternative": "offer-0",
+              "perspective": 0,
+              "expected_match_points": 0.2421875
+            },
+            {
+              "alternative": "offer-1",
+              "perspective": 0,
+              "expected_match_points": 0.2109375
+            }
+          ],
+          "visits": [
+            {
+              "alternative": "offer-0",
+              "visits": 128
+            },
+            {
+              "alternative": "offer-1",
+              "visits": 128
+            }
+          ],
+          "sampled_world_robustness": [
+            {
+              "alternative": "offer-0",
+              "favorable_worlds": 1,
+              "sampled_worlds": 16
+            },
+            {
+              "alternative": "offer-1",
+              "favorable_worlds": 1,
+              "sampled_worlds": 16
+            }
+          ],
+          "uncertainty": [
+            {
+              "alternative": "offer-0",
+              "standard_error": 0.05034871884748741,
+              "method": "flat-mc-seed-spread"
+            },
+            {
+              "alternative": "offer-1",
+              "standard_error": 0.05317858816839098,
+              "method": "flat-mc-seed-spread"
+            }
+          ],
+          "provenance": {
+            "producer": "flat-mc-search:v1:seeds-101-116",
+            "producer_version": "1",
+            "generated_at": "2026-07-16T00:00:00+00:00",
+            "evidence_sha256": "aa3e41513fba3a7ffc221ddedbfd4ad477f9ea2443a49729d78599bdf282f35f"
+          }
+        }
+      },
+      {
+        "id": "advice-scenario-b",
+        "decision_id": "erd1.WzEsInJlcGxheS5waW5uZWQtY3VyYXRlZC1tYXRjaCIsInBpbm5lZC1jdXJhdGVkLW1hdGNoIiwiNiIsIjAiLCI2IiwiNyIsIjAiLCJwaW5uZWQtaHVtYW4tMCIsIjUiLCI3YTFlZTYzODVjNDgwOWRjZjRiOTdhYzMxZWY5Y2E5NjcxMWI0OTE5ZjRjMzM2ZGY2Yzc1ZjU1ZGI4MDVhYWNmIl0",
+        "match_state_hash": "8ac9a4a79a6ef9ea88e90b31d5366d6a2b8d69eaea7d93d0758c5ef999227f89",
+        "viewer": 0,
+        "prompt_id": 7,
+        "offer_id": 0,
+        "frame": {
+          "protocol": 1,
+          "match_id": "pinned-curated-match",
+          "revision": 6,
+          "frame_hash": "8ac9a4a79a6ef9ea88e90b31d5366d6a2b8d69eaea7d93d0758c5ef999227f89",
+          "content_hash": "legacy-content-unversioned",
+          "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+          "status": "ready",
+          "prompt": {
+            "id": 7,
+            "actor": 0,
+            "kind": "priority",
+            "title": "Your priority",
+            "instruction": "Choose an action"
+          },
+          "projection": {
+            "game_over": false,
+            "won": false,
+            "turn": {
+              "turn_number": 7,
+              "phase": "PRECOMBAT_MAIN",
+              "step": "PRECOMBAT_MAIN_STEP",
+              "active_player_id": 0,
+              "agent_player_id": 0
+            },
+            "agent": {
+              "player_index": 0,
+              "id": 0,
+              "is_active": true,
+              "is_agent": true,
+              "life": 20,
+              "zone_counts": {
+                "LIBRARY": 31,
+                "HAND": 10,
+                "BATTLEFIELD": 0,
+                "GRAVEYARD": 0,
+                "STACK": 0,
+                "EXILE": 0,
+                "COMMAND": 0
+              },
+              "library_count": 31,
+              "hand": [
+                {
+                  "id": 8,
+                  "registry_key": 15,
+                  "name": "Fire Nation Cadets",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 1,
+                  "toughness": 2,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": true,
+                    "is_land": false,
+                    "is_spell": false,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 9,
+                  "registry_key": 16,
+                  "name": "Firebending Lesson",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 42,
+                  "registry_key": 25,
+                  "name": "Tiger-Seal",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 3,
+                  "toughness": 3,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": true,
+                    "is_land": false,
+                    "is_spell": false,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 12,
+                  "registry_key": 16,
+                  "name": "Firebending Lesson",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 28,
+                  "registry_key": 20,
+                  "name": "It'll Quench Ya!",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 2,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 3,
+                  "registry_key": 7,
+                  "name": "Accumulate Wisdom",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 2,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 27,
+                  "registry_key": 20,
+                  "name": "It'll Quench Ya!",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 2,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 4,
+                  "registry_key": 4,
+                  "name": "Divide by Zero",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 3,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 10,
+                  "registry_key": 16,
+                  "name": "Firebending Lesson",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 1,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": false,
+                    "is_spell": true,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                },
+                {
+                  "id": 29,
+                  "registry_key": 2,
+                  "name": "Mountain",
+                  "zone": "HAND",
+                  "owner_id": 0,
+                  "power": 0,
+                  "toughness": 0,
+                  "mana_value": 0,
+                  "types": {
+                    "is_creature": false,
+                    "is_land": true,
+                    "is_spell": false,
+                    "is_artifact": false,
+                    "is_enchantment": false,
+                    "is_planeswalker": false,
+                    "is_battle": false
+                  }
+                }
+              ],
+              "graveyard": [],
+              "exile": [],
+              "stack": [],
+              "battlefield": []
+            },
+            "opponent": {
+              "player_index": 1,
+              "id": 1,
+              "is_active": false,
+              "is_agent": false,
+              "life": 20,
+              "zone_counts": {
+                "LIBRARY": 30,
+                "HAND": 10,
+                "BATTLEFIELD": 0,
+                "GRAVEYARD": 0,
+                "STACK": 0,
+                "EXILE": 0,
+                "COMMAND": 0
+              },
+              "library_count": 30,
+              "hand_hidden_count": 10,
+              "hand": [],
+              "graveyard": [],
+              "exile": [],
+              "stack": [],
+              "battlefield": []
+            }
+          },
+          "offers": [
+            {
+              "id": 0,
+              "actor": 0,
+              "verb": "play_land",
+              "source": null,
+              "label": "Play Mountain",
+              "help": null,
+              "choices": [],
+              "confirm_label": "Play Mountain",
+              "action_type": "PRIORITY_PLAY_LAND",
+              "focus": [
+                29
+              ]
+            },
+            {
+              "id": 1,
+              "actor": 0,
+              "verb": "pass_priority",
+              "source": null,
+              "label": "Pass priority",
+              "help": null,
+              "choices": [],
+              "confirm_label": "Pass priority",
+              "action_type": "PRIORITY_PASS_PRIORITY",
+              "focus": []
+            }
+          ],
+          "winner": null,
+          "action_space": "PRIORITY",
+          "stops": {
+            "my": [
+              "main1",
+              "main2"
+            ],
+            "opponent": [
+              "end_step"
+            ],
+            "stop_on_stack": true,
+            "auto_pass": false
+          },
+          "deck_names": {
+            "hero": "UR Lessons",
+            "villain": "GW Allies"
+          },
+          "asset_pack": {
+            "id": "tla-ur-lessons-vs-gw-allies",
+            "version": "1.0.0",
+            "manifest_sha256": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787"
+          }
+        },
+        "offer": {
+          "id": 0,
+          "actor": 0,
+          "verb": "play_land",
+          "source": null,
+          "label": "Play Mountain",
+          "help": null,
+          "choices": [],
+          "confirm_label": "Play Mountain",
+          "action_type": "PRIORITY_PLAY_LAND",
+          "focus": [
+            29
+          ]
+        },
+        "played": {
+          "command_id": "pinned-human-0",
+          "match_id": "pinned-curated-match",
+          "expected_revision": 6,
+          "prompt_id": 7,
+          "offer_id": 0,
+          "answers": []
+        },
+        "alternatives": [
+          {
+            "id": "offer-0",
+            "command": {
+              "command_id": "study-offer-0",
+              "match_id": "pinned-curated-match",
+              "expected_revision": 6,
+              "prompt_id": 7,
+              "offer_id": 0,
+              "answers": []
+            }
+          },
+          {
+            "id": "offer-1",
+            "command": {
+              "command_id": "study-offer-1",
+              "match_id": "pinned-curated-match",
+              "expected_revision": 6,
+              "prompt_id": 7,
+              "offer_id": 1,
+              "answers": []
+            }
+          }
+        ],
+        "evidence": {
+          "policy_mass": [
+            {
+              "alternative": "offer-0",
+              "probability": 0.6875
+            },
+            {
+              "alternative": "offer-1",
+              "probability": 0.3125
+            }
+          ],
+          "search_value": [
+            {
+              "alternative": "offer-0",
+              "perspective": 0,
+              "expected_match_points": 0.3046875
+            },
+            {
+              "alternative": "offer-1",
+              "perspective": 0,
+              "expected_match_points": 0.3359375
+            }
+          ],
+          "visits": [
+            {
+              "alternative": "offer-0",
+              "visits": 128
+            },
+            {
+              "alternative": "offer-1",
+              "visits": 128
+            }
+          ],
+          "sampled_world_robustness": [
+            {
+              "alternative": "offer-0",
+              "favorable_worlds": 0,
+              "sampled_worlds": 16
+            },
+            {
+              "alternative": "offer-1",
+              "favorable_worlds": 5,
+              "sampled_worlds": 16
+            }
+          ],
+          "uncertainty": [
+            {
+              "alternative": "offer-0",
+              "standard_error": 0.05225232999190881,
+              "method": "flat-mc-seed-spread"
+            },
+            {
+              "alternative": "offer-1",
+              "standard_error": 0.07630697154421737,
+              "method": "flat-mc-seed-spread"
+            }
+          ],
+          "provenance": {
+            "producer": "flat-mc-search:v1:seeds-201-216",
+            "producer_version": "1",
+            "generated_at": "2026-07-16T00:00:00+00:00",
+            "evidence_sha256": "afe814d6c39b5040f5aa55852930f2c608d624c6459689fce46c3c9955c800ec"
+          }
+        }
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "landmark_id": "advice-scenario-a",
+      "label": "Opponent curving out",
+      "description": "Believe the opponent has kept a low-curve Allies hand and is likely to spend their mana each turn to commit bodies to the board.",
+      "inferred_range": "Likely two or three cheap creatures already committed; few instant-speed tricks expected in hand.",
+      "belief_kind": "opponent-curved-out",
+      "seed_family": "101-116"
+    },
+    {
+      "landmark_id": "advice-scenario-b",
+      "label": "Opponent holding interaction",
+      "description": "Believe the opponent is holding removal or a combat trick back and may not spend their mana this turn.",
+      "inferred_range": "Likely fewer committed bodies; one or more reactive cards held in hand against an open board.",
+      "belief_kind": "opponent-holding-interaction",
+      "seed_family": "201-216"
+    }
+  ]
+}

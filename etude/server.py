@@ -20,6 +20,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 import managym
 
 from . import trace as trace_store, villain as villain_module
+from .advice import AdviceRequest, advice_meta, request_advice
 from .curated_pack import CURATED_PACK
 from .enums import (
     ActionEnum,
@@ -2008,3 +2009,28 @@ async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict[str, Any
     payload = trace_store.prepare_trace_payload(payload, reveal_hidden=reveal_hidden)
     payload["id"] = trace_id
     return payload
+
+
+@app.get("/api/advice")
+async def get_advice_meta() -> dict[str, Any]:
+    """Bootstrap for the shared decision-advice surface.
+
+    Returns the pinned ``erd1`` decision address, the two belief-scenario
+    summaries, and the request identity the caller must supply. Both the live
+    play page and the replay/Study page consume this, then POST ``/api/advice``
+    per scenario. The fixture is static and loaded once.
+    """
+    return advice_meta().model_dump(mode="json")
+
+
+@app.post("/api/advice")
+async def post_advice(payload: AdviceRequest) -> dict[str, Any]:
+    """One advice request: real flat-MC evidence for one scenario at one decision.
+
+    Used by both live and Study through the same request shape. Fails closed to
+    a typed ``unavailable`` state (no evidence) on identity mismatch, unknown
+    scenario, or wrong address. This endpoint is the adapter seam for GAM-4
+    (live decision address / retry/compare) and INT-13 (search evidence).
+    """
+    response = request_advice(payload.address, payload.scenario_id, payload.identity)
+    return response.model_dump(mode="json")

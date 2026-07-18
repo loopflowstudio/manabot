@@ -2,7 +2,9 @@
   import { onMount, untrack } from 'svelte';
 
   import GameBoard from '$lib/components/GameBoard.svelte';
+  import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
   import Timeline from '$lib/components/Timeline.svelte';
+  import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
   import { createReplayStore } from '$lib/replay.svelte';
   import { replayLogEntries } from '$lib/replay';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
@@ -13,7 +15,45 @@
 
   onMount(() => {
     void loadTraces();
+    void loadAdviceMeta();
   });
+
+  // The Study advice surface shows the fixture's pinned decision beside the
+  // board. The fork/Retry/return UI belongs to GAM-4's substrate and is out
+  // of scope; this is advisory + comparison only, through the same
+  // POST /api/advice seam the live page uses.
+  let adviceMetaState = $state<AdviceMeta | null>(null);
+  let adviceResponse = $state<AdviceResponse | null>(null);
+  let adviceSelectedScenario = $state('');
+  let adviceStatus = $state<'ok' | 'unavailable' | 'loading'>('loading');
+
+  async function loadAdviceMeta(): Promise<void> {
+    try {
+      const meta = await fetchAdviceMeta();
+      adviceMetaState = meta;
+      adviceSelectedScenario = meta.scenarios[0]?.landmark_id ?? '';
+      await loadAdvice(adviceSelectedScenario);
+    } catch {
+      adviceStatus = 'unavailable';
+    }
+  }
+
+  async function loadAdvice(scenarioId: string): Promise<void> {
+    if (!adviceMetaState || !scenarioId) return;
+    adviceSelectedScenario = scenarioId;
+    adviceStatus = 'loading';
+    try {
+      const response = await postAdvice({
+        address: adviceMetaState.address,
+        scenario_id: scenarioId,
+        identity: adviceMetaState.identity,
+      });
+      adviceResponse = response;
+      adviceStatus = response.status;
+    } catch {
+      adviceStatus = 'unavailable';
+    }
+  }
 
   $effect(() => {
     if (!replayStore.playing) {
@@ -318,6 +358,23 @@
                 focusedIds={new Set()}
                 winner={currentFrame.observation.game_over ? replayStore.trace.winner : undefined}
                 {presentationPlayer}
+              />
+            </div>
+
+            <div class="mt-3 border-t border-line pt-4">
+              <DecisionAdvice
+                mode="study"
+                scenarios={adviceMetaState?.scenarios ?? []}
+                selectedScenarioId={adviceSelectedScenario}
+                frame={adviceResponse?.frame ?? null}
+                offers={adviceResponse?.offers ?? []}
+                evidence={adviceResponse?.evidence ?? null}
+                deltas={adviceResponse?.deltas ?? null}
+                status={adviceStatus}
+                reason={adviceResponse?.reason ?? null}
+                advisorId={adviceMetaState?.identity.advisor_id ?? ''}
+                computeId={adviceMetaState?.identity.compute_id ?? ''}
+                onSelectScenario={(id) => void loadAdvice(id)}
               />
             </div>
           </div>

@@ -3,12 +3,14 @@
 
   import { buildClickableTargets, filterActionsForTarget, focusIdsForActionIndexes } from '$lib/action-map';
   import ActionPanel from '$lib/components/ActionPanel.svelte';
+  import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
+  import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
   import { gameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
   import { connect, disconnect, sendAction, sendNewGame, sendPassTurn, sendSetStops } from '$lib/socket.svelte';
@@ -18,10 +20,49 @@
 
   onMount(() => {
     connect();
+    void loadAdviceMeta();
     return () => {
       disconnect();
     };
   });
+
+  // The live advice surface loads the fixture's pinned completed-match
+  // decision as the demonstration beside the ActionPanel. The live frame
+  // during play has no erd1 address yet (the canonical replay finalizes at
+  // game close), so live-address advice is a future GAM-4 integration point
+  // via this same POST /api/advice seam.
+  let adviceMetaState = $state<AdviceMeta | null>(null);
+  let adviceResponse = $state<AdviceResponse | null>(null);
+  let adviceSelectedScenario = $state('');
+  let adviceStatus = $state<'ok' | 'unavailable' | 'loading'>('loading');
+
+  async function loadAdviceMeta(): Promise<void> {
+    try {
+      const meta = await fetchAdviceMeta();
+      adviceMetaState = meta;
+      adviceSelectedScenario = meta.scenarios[0]?.landmark_id ?? '';
+      await loadAdvice(adviceSelectedScenario);
+    } catch {
+      adviceStatus = 'unavailable';
+    }
+  }
+
+  async function loadAdvice(scenarioId: string): Promise<void> {
+    if (!adviceMetaState || !scenarioId) return;
+    adviceSelectedScenario = scenarioId;
+    adviceStatus = 'loading';
+    try {
+      const response = await postAdvice({
+        address: adviceMetaState.address,
+        scenario_id: scenarioId,
+        identity: adviceMetaState.identity,
+      });
+      adviceResponse = response;
+      adviceStatus = response.status;
+    } catch {
+      adviceStatus = 'unavailable';
+    }
+  }
 
   const clickableTargets = $derived(buildClickableTargets(gameStore.actions));
   const filteredActions = $derived(
@@ -281,6 +322,23 @@
             gameStore.clearFocus();
           }}
         />
+
+        <div class="border-t border-line pt-4">
+          <DecisionAdvice
+            mode="live"
+            scenarios={adviceMetaState?.scenarios ?? []}
+            selectedScenarioId={adviceSelectedScenario}
+            frame={adviceResponse?.frame ?? null}
+            offers={adviceResponse?.offers ?? []}
+            evidence={adviceResponse?.evidence ?? null}
+            deltas={adviceResponse?.deltas ?? null}
+            status={adviceStatus}
+            reason={adviceResponse?.reason ?? null}
+            advisorId={adviceMetaState?.identity.advisor_id ?? ''}
+            computeId={adviceMetaState?.identity.compute_id ?? ''}
+            onSelectScenario={(id) => void loadAdvice(id)}
+          />
+        </div>
 
         <div class="border-t border-line pt-4">
           <StopsPanel
