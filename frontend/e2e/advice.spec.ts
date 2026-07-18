@@ -135,7 +135,7 @@ test('POST /api/advice fails closed with a typed unavailable state on identity m
     return response.json() as Promise<{ status: string; reason: string | null; evidence: unknown }>;
   }, meta);
   expect(closed.status).toBe('unavailable');
-  expect(closed.reason).toBe('identity_mismatch');
+  expect(closed.reason).toBe('legacy_identity_incomplete');
   expect(closed.evidence).toBeNull();
   expect(consoleErrors, `console errors: ${consoleErrors.join('\n')}`).toEqual([]);
 });

@@ -12,6 +12,7 @@ from etude import server
 from etude.testing_house_protocol import (
     REQUEST_ADAPTER,
     REQUEST_TYPES,
+    BeliefScenario,
     TestingHouseV1ConformanceBundle as ControlBundle,
     testing_house_schema as control_schema,
 )
@@ -33,6 +34,24 @@ def test_control_fixture_round_trips_through_checked_schema_and_python():
     bundle = ControlBundle.model_validate(FIXTURE)
     assert bundle.model_dump(mode="json") == FIXTURE
     assert control_schema() == SCHEMA
+
+
+def test_belief_provenance_preserves_authored_wire_and_accepts_model_identity():
+    authored = FIXTURE["events"][0]["table"]["beliefs"][0]
+    parsed = BeliefScenario.model_validate(authored)
+    assert parsed.model_dump(mode="json") == authored
+
+    inferred = json.loads(json.dumps(authored))
+    inferred["id"] = "belief-model-inferred"
+    inferred["provenance"] = {
+        "kind": "model_inferred",
+        "belief_model_id": "belief-head-w2-v1",
+        "checkpoint_sha256": "1" * 64,
+        "artifact_manifest_sha256": "2" * 64,
+        "viewer_history_sha256": "3" * 64,
+    }
+    model = BeliefScenario.model_validate(inferred)
+    assert model.provenance.kind == "model_inferred"
 
 
 def test_request_union_and_authorization_dispatch_are_the_same_closed_set():

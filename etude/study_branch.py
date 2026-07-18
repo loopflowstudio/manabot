@@ -7,6 +7,7 @@ without exposing a mixed-view replay or mutable engine root to clients.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from typing import Any, Literal, Mapping
 
@@ -49,6 +50,15 @@ class StudyReturnReceipt(RestoredReplayDecision):
 
     source_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     execution: StudyExecutionReceipt
+
+
+@dataclass(frozen=True)
+class ResolvedStudyAdvisorDecision:
+    """Game-owned handoff of one validated replay row and isolated root."""
+
+    restored: RestoredReplayDecision
+    root: managym.Env
+    source_digest: str
 
 
 class StudyBranch:
@@ -226,6 +236,38 @@ class StudyForkProvider:
         self._roots = retained
 
     def fork(self, raw_address: str, authorized_viewer: int) -> StudyBranch:
+        restored, root, source_digest = self._resolve(raw_address, authorized_viewer)
+        return StudyBranch(
+            root.clone_env(),
+            restored,
+            root,
+            source_digest,
+        )
+
+    def resolve_advisor_decision(
+        self,
+        raw_address: str,
+        authorized_viewer: int,
+    ) -> ResolvedStudyAdvisorDecision:
+        """Resolve one exact decision for an injected Intelligence consumer.
+
+        The provider validates replay identity, viewer authority, retained-root
+        presence, and source immutability before returning an isolated clone.
+        Callers never read GameSession root storage or reconstruct replay facts.
+        """
+
+        restored, root, source_digest = self._resolve(raw_address, authorized_viewer)
+        return ResolvedStudyAdvisorDecision(
+            restored=restored.model_copy(deep=True),
+            root=root.clone_env(),
+            source_digest=source_digest,
+        )
+
+    def _resolve(
+        self,
+        raw_address: str,
+        authorized_viewer: int,
+    ) -> tuple[RestoredReplayDecision, managym.Env, str]:
         restored = restore_decision(
             self._replay,
             raw_address,
@@ -240,4 +282,4 @@ class StudyForkProvider:
             or root.state_digest() != source_digest
         ):
             raise StudyBranchUnavailableError("Retained Study root drifted.")
-        return StudyBranch(root.clone_env(), restored, root, source_digest)
+        return restored, root, source_digest

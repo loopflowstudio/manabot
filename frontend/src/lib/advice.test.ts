@@ -105,7 +105,7 @@ describe('advice fixture and adapter twin', () => {
     const wrong = { ...meta.identity, advisor_id: 'not-the-advisor' };
     expect(selectAdvice(fixture, meta.address, SCENARIO_A, wrong)).toMatchObject({
       status: 'unavailable',
-      reason: 'identity_mismatch',
+      reason: 'legacy_identity_incomplete',
       evidence: null,
     });
     expect(selectAdvice(fixture, meta.address, 'advice-scenario-z', meta.identity)).toMatchObject({

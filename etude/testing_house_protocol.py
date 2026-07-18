@@ -12,7 +12,7 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field, TypeAdapter
 
-from .advice import AdviceRequestIdentity
+from .advice_identity import AdviceIdentity
 from .experience_protocol import Command, ProtocolModel, UInt64
 
 TESTING_HOUSE_VERSION: Literal["testing-house-v1"] = "testing-house-v1"
@@ -68,7 +68,7 @@ class ParticipantPresence(ProtocolModel):
 class BeliefSource(ProtocolModel):
     decision_address: str
     gam6_scenario_id: str
-    advice_identity: AdviceRequestIdentity
+    advice_identity: AdviceIdentity
 
 
 class PersonalAudience(ProtocolModel):
@@ -86,10 +86,24 @@ BeliefAudience: TypeAlias = Annotated[
 ]
 
 
-class BeliefProvenance(ProtocolModel):
+class PlayerAuthoredBeliefProvenance(ProtocolModel):
     kind: Literal["player_authored"] = "player_authored"
     created_at_table_revision: UInt64
     shared_at_table_revision: UInt64 | None = None
+
+
+class ModelInferredBeliefProvenance(ProtocolModel):
+    kind: Literal["model_inferred"] = "model_inferred"
+    belief_model_id: str
+    checkpoint_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    artifact_manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    viewer_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+BeliefProvenance: TypeAlias = Annotated[
+    PlayerAuthoredBeliefProvenance | ModelInferredBeliefProvenance,
+    Field(discriminator="kind"),
+]
 
 
 class BeliefScenario(ProtocolModel):

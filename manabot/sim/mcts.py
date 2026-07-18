@@ -12,14 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import time
-from typing import Any, Mapping, Protocol
+from typing import TYPE_CHECKING, Any, Mapping, Protocol
 
 import numpy as np
-import torch
 
 from manabot.env import Env, ObservationSpace
-from manabot.model.agent import Agent
-from manabot.sim.flat_mc import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.sim.search_branch import (
     SELECTED_BRANCH_DRIVER_ID,
     BranchSession,
@@ -27,6 +24,10 @@ from manabot.sim.search_branch import (
     branch_backend as resolve_branch_backend,
     structured_random_playout,
 )
+from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
+
+if TYPE_CHECKING:
+    from manabot.model.agent import Agent
 
 _U64_MASK = (1 << 64) - 1
 
@@ -158,6 +159,8 @@ class AgentLeafEvaluator:
     def _predict(
         self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
     ) -> tuple[np.ndarray, float]:
+        import torch
+
         encoded = (
             observation
             if isinstance(observation, Mapping)

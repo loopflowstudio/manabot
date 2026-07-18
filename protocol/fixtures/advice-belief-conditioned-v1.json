@@ -1,0 +1,940 @@
+{
+  "contract": "advice-fixture-v1",
+  "request": {
+    "address": "erd1.WzEsInJlcGxheS5pbnQxMi1tYXRjaCIsImludDEyLW1hdGNoIiwiMzIiLCIwIiwiMzIiLCIzMyIsIjAiLCJpbnQxMi1jb21tYW5kLTE4IiwiMzAiLCJkMzc4MGEyNDdiNTU2OTg4ZmZjY2JiN2YwZjRjMmYyNzQ2YzkxMDgwNDM2NWQ1ZjcwOGExYTk1Zjg2NTA2ZWFmIl0",
+    "advisor_identity": {
+      "action_abi": {
+        "name": "semantic_decision_frame",
+        "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+        "version": "3"
+      },
+      "artifact": {
+        "kind": "code_source",
+        "source_bundle_sha256": "2e4b897496283c4d82a78ec4d1e10120702724c2ee0d192f91e20a154771ec70"
+      },
+      "compute": {
+        "branch_driver_id": "full_clone/current_game_v1",
+        "c_puct": 1.5,
+        "id": "puct-8-traversal-2-world-v1",
+        "max_steps": 80,
+        "sampled_worlds": 2,
+        "simulations_per_scenario": 8
+      },
+      "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+      "evaluator_id": "uniform_random_terminal",
+      "information_boundary": "historical_viewer",
+      "kind": "advisor_identity_v1",
+      "match_id": "int12-match",
+      "observation_abi": {
+        "name": "experience_frame",
+        "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+        "version": "experience-v1"
+      },
+      "planner_id": "determinized_puct",
+      "possible_world_abi": {
+        "name": "possible_world_space",
+        "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+        "version": "1"
+      },
+      "seed": {
+        "derivation_id": "same-uniform-draws-per-scenario-v1",
+        "plan_id": "paired-belief-inverse-cdf-v1",
+        "root_seed": 197
+      },
+      "source_replay_id": "replay.int12-match",
+      "source_replay_sha256": "f9712b41aa7d99c8981c582fa5512524a2ad1ebb7012ff27bc4a55ad2ecd876c",
+      "world_id": "w2"
+    },
+    "comparison_scenario": {
+      "audience": {
+        "kind": "personal"
+      },
+      "author_viewer_id": "viewer.int12.pilot",
+      "id": "authored-bolt-heavy-range",
+      "provenance": {
+        "created_at_table_revision": 2,
+        "kind": "player_authored",
+        "shared_at_table_revision": null
+      },
+      "source": {
+        "advice_identity": {
+          "action_abi": {
+            "name": "semantic_decision_frame",
+            "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+            "version": "3"
+          },
+          "artifact": {
+            "kind": "code_source",
+            "source_bundle_sha256": "2e4b897496283c4d82a78ec4d1e10120702724c2ee0d192f91e20a154771ec70"
+          },
+          "compute": {
+            "branch_driver_id": "full_clone/current_game_v1",
+            "c_puct": 1.5,
+            "id": "puct-8-traversal-2-world-v1",
+            "max_steps": 80,
+            "sampled_worlds": 2,
+            "simulations_per_scenario": 8
+          },
+          "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+          "evaluator_id": "uniform_random_terminal",
+          "information_boundary": "historical_viewer",
+          "kind": "advisor_identity_v1",
+          "match_id": "int12-match",
+          "observation_abi": {
+            "name": "experience_frame",
+            "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+            "version": "experience-v1"
+          },
+          "planner_id": "determinized_puct",
+          "possible_world_abi": {
+            "name": "possible_world_space",
+            "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+            "version": "1"
+          },
+          "seed": {
+            "derivation_id": "same-uniform-draws-per-scenario-v1",
+            "plan_id": "paired-belief-inverse-cdf-v1",
+            "root_seed": 197
+          },
+          "source_replay_id": "replay.int12-match",
+          "source_replay_sha256": "f9712b41aa7d99c8981c582fa5512524a2ad1ebb7012ff27bc4a55ad2ecd876c",
+          "world_id": "w2"
+        },
+        "decision_address": "erd1.WzEsInJlcGxheS5pbnQxMi1tYXRjaCIsImludDEyLW1hdGNoIiwiMzIiLCIwIiwiMzIiLCIzMyIsIjAiLCJpbnQxMi1jb21tYW5kLTE4IiwiMzAiLCJkMzc4MGEyNDdiNTU2OTg4ZmZjY2JiN2YwZjRjMmYyNzQ2YzkxMDgwNDM2NWQ1ZjcwOGExYTk1Zjg2NTA2ZWFmIl0",
+        "gam6_scenario_id": "authored-bolt-heavy-range"
+      }
+    },
+    "contract": "advice-v1",
+    "identity": null,
+    "scenario": {
+      "audience": {
+        "kind": "personal"
+      },
+      "author_viewer_id": "viewer.int12.pilot",
+      "id": "authored-compatible-deal-prior",
+      "provenance": {
+        "created_at_table_revision": 1,
+        "kind": "player_authored",
+        "shared_at_table_revision": null
+      },
+      "source": {
+        "advice_identity": {
+          "action_abi": {
+            "name": "semantic_decision_frame",
+            "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+            "version": "3"
+          },
+          "artifact": {
+            "kind": "code_source",
+            "source_bundle_sha256": "2e4b897496283c4d82a78ec4d1e10120702724c2ee0d192f91e20a154771ec70"
+          },
+          "compute": {
+            "branch_driver_id": "full_clone/current_game_v1",
+            "c_puct": 1.5,
+            "id": "puct-8-traversal-2-world-v1",
+            "max_steps": 80,
+            "sampled_worlds": 2,
+            "simulations_per_scenario": 8
+          },
+          "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+          "evaluator_id": "uniform_random_terminal",
+          "information_boundary": "historical_viewer",
+          "kind": "advisor_identity_v1",
+          "match_id": "int12-match",
+          "observation_abi": {
+            "name": "experience_frame",
+            "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+            "version": "experience-v1"
+          },
+          "planner_id": "determinized_puct",
+          "possible_world_abi": {
+            "name": "possible_world_space",
+            "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+            "version": "1"
+          },
+          "seed": {
+            "derivation_id": "same-uniform-draws-per-scenario-v1",
+            "plan_id": "paired-belief-inverse-cdf-v1",
+            "root_seed": 197
+          },
+          "source_replay_id": "replay.int12-match",
+          "source_replay_sha256": "f9712b41aa7d99c8981c582fa5512524a2ad1ebb7012ff27bc4a55ad2ecd876c",
+          "world_id": "w2"
+        },
+        "decision_address": "erd1.WzEsInJlcGxheS5pbnQxMi1tYXRjaCIsImludDEyLW1hdGNoIiwiMzIiLCIwIiwiMzIiLCIzMyIsIjAiLCJpbnQxMi1jb21tYW5kLTE4IiwiMzAiLCJkMzc4MGEyNDdiNTU2OTg4ZmZjY2JiN2YwZjRjMmYyNzQ2YzkxMDgwNDM2NWQ1ZjcwOGExYTk1Zjg2NTA2ZWFmIl0",
+        "gam6_scenario_id": "authored-compatible-deal-prior"
+      }
+    },
+    "scenario_id": null,
+    "viewer": {
+      "rules_viewer": 0,
+      "table_id": "int12-match",
+      "viewer_id": "viewer.int12.pilot"
+    }
+  },
+  "response": {
+    "address": "erd1.WzEsInJlcGxheS5pbnQxMi1tYXRjaCIsImludDEyLW1hdGNoIiwiMzIiLCIwIiwiMzIiLCIzMyIsIjAiLCJpbnQxMi1jb21tYW5kLTE4IiwiMzAiLCJkMzc4MGEyNDdiNTU2OTg4ZmZjY2JiN2YwZjRjMmYyNzQ2YzkxMDgwNDM2NWQ1ZjcwOGExYTk1Zjg2NTA2ZWFmIl0",
+    "contract": "advice-v1",
+    "deltas": null,
+    "evidence": null,
+    "frame": {
+      "action_space": "PRIORITY",
+      "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+      "content_hash": "legacy-content-unversioned",
+      "deck_names": {
+        "hero": "Interactive",
+        "villain": "Interactive"
+      },
+      "frame_hash": "0a446a2267ec82fc77cf530d9a752c453a313f20a0905d9df4324f660fb134b9",
+      "match_id": "int12-match",
+      "offers": [
+        {
+          "action_type": "PRIORITY_CAST_SPELL",
+          "actor": 0,
+          "choices": [],
+          "confirm_label": "Cast Pyroclasm",
+          "focus": [
+            51
+          ],
+          "help": null,
+          "id": 0,
+          "label": "Cast Pyroclasm",
+          "source": null,
+          "verb": "cast"
+        },
+        {
+          "action_type": "PRIORITY_PASS_PRIORITY",
+          "actor": 0,
+          "choices": [],
+          "confirm_label": "Pass priority",
+          "focus": [],
+          "help": null,
+          "id": 1,
+          "label": "Pass priority",
+          "source": null,
+          "verb": "pass_priority"
+        }
+      ],
+      "projection": {
+        "agent": {
+          "battlefield": [
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 122,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 123,
+              "name": "Mountain",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 126,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 129,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 131,
+              "name": "Mountain",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 2,
+              "base_toughness": 2,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 133,
+              "name": "Wind Drake",
+              "plus1_counters": 0,
+              "power": 2,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 2
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 134,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 135,
+              "name": "Mountain",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            }
+          ],
+          "exile": [],
+          "graveyard": [
+            {
+              "id": 31,
+              "mana_value": 1,
+              "name": "Lightning Bolt",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 7,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "GRAVEYARD"
+            },
+            {
+              "id": 28,
+              "mana_value": 1,
+              "name": "Lightning Bolt",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 7,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "GRAVEYARD"
+            },
+            {
+              "id": 53,
+              "mana_value": 1,
+              "name": "Raging Goblin",
+              "owner_id": 0,
+              "power": 1,
+              "registry_key": 12,
+              "toughness": 1,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": true,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": false
+              },
+              "zone": "GRAVEYARD"
+            },
+            {
+              "id": 7,
+              "mana_value": 2,
+              "name": "Counterspell",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 9,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "GRAVEYARD"
+            },
+            {
+              "id": 30,
+              "mana_value": 1,
+              "name": "Lightning Bolt",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 7,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "GRAVEYARD"
+            }
+          ],
+          "hand": [
+            {
+              "id": 51,
+              "mana_value": 2,
+              "name": "Pyroclasm",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 23,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "HAND"
+            }
+          ],
+          "id": 0,
+          "is_active": true,
+          "is_agent": true,
+          "library_count": 46,
+          "life": 11,
+          "player_index": 0,
+          "stack": [],
+          "zone_counts": {
+            "BATTLEFIELD": 8,
+            "COMMAND": 0,
+            "EXILE": 0,
+            "GRAVEYARD": 5,
+            "HAND": 1,
+            "LIBRARY": 46,
+            "STACK": 0
+          }
+        },
+        "game_over": false,
+        "opponent": {
+          "battlefield": [],
+          "exile": [],
+          "graveyard": [],
+          "hand": [],
+          "hand_hidden_count": 14,
+          "id": 1,
+          "is_active": false,
+          "is_agent": false,
+          "library_count": 46,
+          "life": 16,
+          "player_index": 1,
+          "stack": [],
+          "zone_counts": {
+            "BATTLEFIELD": 0,
+            "COMMAND": 0,
+            "EXILE": 0,
+            "GRAVEYARD": 0,
+            "HAND": 14,
+            "LIBRARY": 46,
+            "STACK": 0
+          }
+        },
+        "turn": {
+          "active_player_id": 0,
+          "agent_player_id": 0,
+          "phase": "PRECOMBAT_MAIN",
+          "step": "PRECOMBAT_MAIN_STEP",
+          "turn_number": 15
+        },
+        "won": false
+      },
+      "prompt": {
+        "actor": 0,
+        "id": 33,
+        "instruction": "Choose an action",
+        "kind": "priority",
+        "title": "Your priority"
+      },
+      "protocol": 1,
+      "revision": 32,
+      "status": "ready",
+      "stops": {
+        "auto_pass": false,
+        "my": [
+          "main1",
+          "main2"
+        ],
+        "opponent": [
+          "end_step"
+        ],
+        "stop_on_stack": true
+      },
+      "winner": null
+    },
+    "identity": {
+      "action_abi": {
+        "name": "semantic_decision_frame",
+        "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+        "version": "3"
+      },
+      "artifact": {
+        "kind": "code_source",
+        "source_bundle_sha256": "2e4b897496283c4d82a78ec4d1e10120702724c2ee0d192f91e20a154771ec70"
+      },
+      "compute": {
+        "branch_driver_id": "full_clone/current_game_v1",
+        "c_puct": 1.5,
+        "id": "puct-8-traversal-2-world-v1",
+        "max_steps": 80,
+        "sampled_worlds": 2,
+        "simulations_per_scenario": 8
+      },
+      "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+      "evaluator_id": "uniform_random_terminal",
+      "information_boundary": "historical_viewer",
+      "kind": "advisor_identity_v1",
+      "match_id": "int12-match",
+      "observation_abi": {
+        "name": "experience_frame",
+        "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+        "version": "experience-v1"
+      },
+      "planner_id": "determinized_puct",
+      "possible_world_abi": {
+        "name": "possible_world_space",
+        "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+        "version": "1"
+      },
+      "seed": {
+        "derivation_id": "same-uniform-draws-per-scenario-v1",
+        "plan_id": "paired-belief-inverse-cdf-v1",
+        "root_seed": 197
+      },
+      "source_replay_id": "replay.int12-match",
+      "source_replay_sha256": "f9712b41aa7d99c8981c582fa5512524a2ad1ebb7012ff27bc4a55ad2ecd876c",
+      "world_id": "w2"
+    },
+    "offers": [
+      {
+        "action_type": "PRIORITY_CAST_SPELL",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Cast Pyroclasm",
+        "focus": [
+          51
+        ],
+        "help": null,
+        "id": 0,
+        "label": "Cast Pyroclasm",
+        "source": null,
+        "verb": "cast"
+      },
+      {
+        "action_type": "PRIORITY_PASS_PRIORITY",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Pass priority",
+        "focus": [],
+        "help": null,
+        "id": 1,
+        "label": "Pass priority",
+        "source": null,
+        "verb": "pass_priority"
+      }
+    ],
+    "reason": null,
+    "request_sha256": "fc72c84938af87dd6b6e83869ec2d3a477e1b20cf44113cc08ee876d3f603dc1",
+    "response_sha256": "237c91b9c16aeaa41de48c3af990b807233574716ae5272f5b4d69d9d556dc6f",
+    "scenario": null,
+    "serialization": "advisor-canonical-json-v1",
+    "status": "ok",
+    "strategy": {
+      "advisor_identity": {
+        "action_abi": {
+          "name": "semantic_decision_frame",
+          "sha256": "cdc46a66310130d398f35dda31580a0acdeba0f3daa153f3d80602137009d5e2",
+          "version": "3"
+        },
+        "artifact": {
+          "kind": "code_source",
+          "source_bundle_sha256": "2e4b897496283c4d82a78ec4d1e10120702724c2ee0d192f91e20a154771ec70"
+        },
+        "compute": {
+          "branch_driver_id": "full_clone/current_game_v1",
+          "c_puct": 1.5,
+          "id": "puct-8-traversal-2-world-v1",
+          "max_steps": 80,
+          "sampled_worlds": 2,
+          "simulations_per_scenario": 8
+        },
+        "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+        "evaluator_id": "uniform_random_terminal",
+        "information_boundary": "historical_viewer",
+        "kind": "advisor_identity_v1",
+        "match_id": "int12-match",
+        "observation_abi": {
+          "name": "experience_frame",
+          "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+          "version": "experience-v1"
+        },
+        "planner_id": "determinized_puct",
+        "possible_world_abi": {
+          "name": "possible_world_space",
+          "sha256": "767c5ffbdae1483f0ccae6212d2afe87dd6654ca7741a44f3657ac1744cd7100",
+          "version": "1"
+        },
+        "seed": {
+          "derivation_id": "same-uniform-draws-per-scenario-v1",
+          "plan_id": "paired-belief-inverse-cdf-v1",
+          "root_seed": 197
+        },
+        "source_replay_id": "replay.int12-match",
+        "source_replay_sha256": "f9712b41aa7d99c8981c582fa5512524a2ad1ebb7012ff27bc4a55ad2ecd876c",
+        "world_id": "w2"
+      },
+      "comparison": {
+        "actions": [
+          {
+            "offer_id": 0,
+            "policy_probability": -0.125,
+            "q": {
+              "reason": null,
+              "status": "available",
+              "value": -0.10000002384185791
+            },
+            "robustness": {
+              "reason": null,
+              "status": "available",
+              "value": 0.0
+            },
+            "uncertainty": {
+              "reason": null,
+              "status": "available",
+              "value": -0.0833333432674408
+            }
+          },
+          {
+            "offer_id": 1,
+            "policy_probability": 0.125,
+            "q": {
+              "reason": null,
+              "status": "available",
+              "value": -0.125
+            },
+            "robustness": {
+              "reason": null,
+              "status": "available",
+              "value": 0.0
+            },
+            "uncertainty": {
+              "reason": null,
+              "status": "available",
+              "value": 0.125
+            }
+          }
+        ],
+        "left_belief_sha256": "92dc2c6c0f6a875b8b0f41412852211351a0fa48fe24f8eace35d580bb054dcb",
+        "left_scenario_id": "authored-compatible-deal-prior",
+        "right_belief_sha256": "fdda78388bf352eb0eeddcc92f592bcbcc9004e11d72799258d10da511a3f25e",
+        "right_scenario_id": "authored-bolt-heavy-range",
+        "root_uncertainty": {
+          "reason": null,
+          "status": "available",
+          "value": 0.0
+        },
+        "root_value": {
+          "reason": null,
+          "status": "available",
+          "value": -0.125
+        },
+        "semantic": "left_minus_right"
+      },
+      "decision_sha256": "d3780a247b556988ffccbb7f0f4c2f2746c910804365d5f708a1a95f86506eaf",
+      "offers": [
+        {
+          "actor": 0,
+          "label": "PriorityCastSpell",
+          "offer_id": 0,
+          "verb": "cast"
+        },
+        {
+          "actor": 0,
+          "label": "PriorityPassPriority",
+          "offer_id": 1,
+          "verb": "pass_priority"
+        }
+      ],
+      "plan_sha256": "9bc23afed1b53d4105feeafe7f32eb8832840bfe62b1d76ee5021b7046ebb06c",
+      "policy_semantic": "puct_visit_distribution/v1",
+      "prior_sha256": "bdb54c1b6f37dff8feb780fb09eb42c85140c6ead95a7161778458ebd80747d5",
+      "realized_compute": {
+        "cap_hits": 14,
+        "conditions_searched": 2,
+        "materialized_worlds": 4,
+        "total_simulations": 16,
+        "total_tree_nodes": 20,
+        "unique_materialized_worlds": 4
+      },
+      "scenarios": [
+        {
+          "actions": [
+            {
+              "label": "PriorityCastSpell",
+              "offer_id": 0,
+              "probability": 0.5,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.5,
+                "visits": 4
+              },
+              "robustness": {
+                "co_best_worlds": 2,
+                "covered_worlds": 2,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 1.0,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 2,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.0,
+                "visits": null
+              },
+              "visits": 4
+            },
+            {
+              "label": "PriorityPassPriority",
+              "offer_id": 1,
+              "probability": 0.5,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.375,
+                "visits": 4
+              },
+              "robustness": {
+                "co_best_worlds": 1,
+                "covered_worlds": 2,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.5,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 2,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.125,
+                "visits": null
+              },
+              "visits": 4
+            }
+          ],
+          "belief": {
+            "belief_model_id": "compatible-deal-prior/v1",
+            "distribution_sha256": "802d9f31996246a35c0651c1face66359608da0108a5e4d215b3ae6c758c19a2",
+            "normalization_error": 0.0,
+            "normalized_belief_sha256": "92dc2c6c0f6a875b8b0f41412852211351a0fa48fe24f8eace35d580bb054dcb",
+            "positive_support": 473178,
+            "provenance_identity": "player_authored:viewer.int12.pilot:1",
+            "provenance_kind": "player_authored",
+            "scenario_id": "authored-compatible-deal-prior",
+            "space_identity": "92a8f8b24facdb9c0de6a7cb3e01bb3fea4d287a217ecfc5ba6e400618b20089"
+          },
+          "cap_hits": 7,
+          "condition_mass": 1.0,
+          "root_uncertainty": {
+            "co_best_worlds": null,
+            "covered_worlds": 2,
+            "method": "between_world_standard_error/v1",
+            "simulations": null,
+            "status": "available",
+            "value": 0.0625,
+            "visits": null
+          },
+          "root_value": {
+            "co_best_worlds": null,
+            "covered_worlds": null,
+            "method": null,
+            "simulations": 8,
+            "status": "available",
+            "value": 0.4375,
+            "visits": null
+          },
+          "sampled_worlds": 2,
+          "scenario_id": "authored-compatible-deal-prior",
+          "simulations": 8,
+          "support": 473178,
+          "tree_nodes": 10
+        },
+        {
+          "actions": [
+            {
+              "label": "PriorityCastSpell",
+              "offer_id": 0,
+              "probability": 0.625,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.6000000238418579,
+                "visits": 5
+              },
+              "robustness": {
+                "co_best_worlds": 2,
+                "covered_worlds": 2,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 1.0,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 2,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.0833333432674408,
+                "visits": null
+              },
+              "visits": 5
+            },
+            {
+              "label": "PriorityPassPriority",
+              "offer_id": 1,
+              "probability": 0.375,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.5,
+                "visits": 3
+              },
+              "robustness": {
+                "co_best_worlds": 1,
+                "covered_worlds": 2,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.5,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 2,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.0,
+                "visits": null
+              },
+              "visits": 3
+            }
+          ],
+          "belief": {
+            "belief_model_id": "authored-bolt-heavy-range/v1",
+            "distribution_sha256": "bfcde98d28306dd6eb3960b42226a5a87f2a624052f36aed933e0e3237e466ae",
+            "normalization_error": 0.0,
+            "normalized_belief_sha256": "fdda78388bf352eb0eeddcc92f592bcbcc9004e11d72799258d10da511a3f25e",
+            "positive_support": 313634,
+            "provenance_identity": "player_authored:viewer.int12.pilot:2",
+            "provenance_kind": "player_authored",
+            "scenario_id": "authored-bolt-heavy-range",
+            "space_identity": "92a8f8b24facdb9c0de6a7cb3e01bb3fea4d287a217ecfc5ba6e400618b20089"
+          },
+          "cap_hits": 7,
+          "condition_mass": 1.0,
+          "root_uncertainty": {
+            "co_best_worlds": null,
+            "covered_worlds": 2,
+            "method": "between_world_standard_error/v1",
+            "simulations": null,
+            "status": "available",
+            "value": 0.0625,
+            "visits": null
+          },
+          "root_value": {
+            "co_best_worlds": null,
+            "covered_worlds": null,
+            "method": null,
+            "simulations": 8,
+            "status": "available",
+            "value": 0.5625,
+            "visits": null
+          },
+          "sampled_worlds": 2,
+          "scenario_id": "authored-bolt-heavy-range",
+          "simulations": 8,
+          "support": 313634,
+          "tree_nodes": 10
+        }
+      ],
+      "schema_version": 1,
+      "viewer_frame_sha256": "0a446a2267ec82fc77cf530d9a752c453a313f20a0905d9df4324f660fb134b9"
+    }
+  }
+}

@@ -99,12 +99,12 @@ describe('DecisionAdvice', () => {
           evidence: null,
           deltas: null,
           status: 'unavailable',
-          reason: 'identity_mismatch',
+          reason: 'legacy_identity_incomplete',
         },
       },
     );
     expect(body).toContain('data-testid="advice-unavailable"');
-    expect(body).toContain('data-reason="identity_mismatch"');
+    expect(body).toContain('data-reason="legacy_identity_incomplete"');
     expect(body).not.toContain('data-testid="advice-facts"');
     expect(body).not.toContain('data-testid="advice-advice"');
   });

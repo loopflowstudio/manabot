@@ -1,0 +1,3006 @@
+{
+  "$defs": {
+    "AbiIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "sha256"
+      ],
+      "title": "AbiIdentity",
+      "type": "object"
+    },
+    "AdviceRequest": {
+      "additionalProperties": false,
+      "description": "The sole POST /api/advice body, bridging legacy and advice-v1 callers.",
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "advisor_identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "comparison_scenario": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BeliefScenario"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "contract": {
+          "anyOf": [
+            {
+              "const": "advice-v1",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contract"
+        },
+        "identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdviceRequestIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BeliefScenario"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scenario_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario Id"
+        },
+        "viewer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewerIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "title": "AdviceRequest",
+      "type": "object"
+    },
+    "AdviceRequestIdentity": {
+      "additionalProperties": false,
+      "description": "Legacy GAM-6 replay/advisor/compute identity.\n\nIt is intentionally unchanged so checked testing-house fixtures and\nexisting imports continue to round-trip while callers migrate to\n:class:`AdvisorIdentity`.",
+      "properties": {
+        "advisor_id": {
+          "title": "Advisor Id",
+          "type": "string"
+        },
+        "compute_id": {
+          "title": "Compute Id",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "source_replay_id": {
+          "title": "Source Replay Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_replay_id",
+        "match_id",
+        "advisor_id",
+        "compute_id"
+      ],
+      "title": "AdviceRequestIdentity",
+      "type": "object"
+    },
+    "AdviceResponse": {
+      "additionalProperties": false,
+      "description": "One advice response: real evidence on success, typed closed on failure.",
+      "properties": {
+        "address": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Address"
+        },
+        "contract": {
+          "const": "advice-v1",
+          "default": "advice-v1",
+          "title": "Contract",
+          "type": "string"
+        },
+        "deltas": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deltas"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DecisionEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExperienceFrame"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdviceRequestIdentity"
+            },
+            {
+              "$ref": "#/$defs/AdvisorIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Identity"
+        },
+        "offers": {
+          "items": {
+            "$ref": "#/$defs/InteractionOffer"
+          },
+          "title": "Offers",
+          "type": "array"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "legacy_identity_incomplete",
+                "scenario_not_found",
+                "decision_not_found",
+                "replay_mismatch",
+                "match_mismatch",
+                "world_mismatch",
+                "content_mismatch",
+                "observation_abi_mismatch",
+                "action_abi_mismatch",
+                "possible_world_abi_mismatch",
+                "information_boundary_mismatch",
+                "planner_mismatch",
+                "evaluator_mismatch",
+                "advisor_artifact_unavailable",
+                "advisor_artifact_mismatch",
+                "compute_mismatch",
+                "seed_plan_mismatch",
+                "decision_identity_mismatch",
+                "decision_root_unavailable",
+                "action_identity_mismatch",
+                "belief_artifact_unavailable",
+                "belief_distribution_unavailable",
+                "belief_distribution_mismatch",
+                "belief_viewer_mismatch",
+                "belief_decision_mismatch",
+                "belief_provenance_mismatch",
+                "belief_space_mismatch",
+                "belief_invalid",
+                "policy_mass_invalid",
+                "private_projection_failure"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "request_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Sha256"
+        },
+        "response_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Sha256"
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdviceScenarioSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "serialization": {
+          "const": "advisor-canonical-json-v1",
+          "default": "advisor-canonical-json-v1",
+          "title": "Serialization",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "strategy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorStrategyEvidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "AdviceResponse",
+      "type": "object"
+    },
+    "AdviceScenarioSummary": {
+      "additionalProperties": false,
+      "description": "Viewer-safe presentation metadata for one belief scenario.",
+      "properties": {
+        "belief_kind": {
+          "title": "Belief Kind",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "inferred_range": {
+          "title": "Inferred Range",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "landmark_id": {
+          "title": "Landmark Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "landmark_id",
+        "label",
+        "description",
+        "inferred_range",
+        "belief_kind"
+      ],
+      "title": "AdviceScenarioSummary",
+      "type": "object"
+    },
+    "AdvisorComparison": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/AdvisorOfferDelta"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "left_belief_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Left Belief Sha256",
+          "type": "string"
+        },
+        "left_scenario_id": {
+          "title": "Left Scenario Id",
+          "type": "string"
+        },
+        "right_belief_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Right Belief Sha256",
+          "type": "string"
+        },
+        "right_scenario_id": {
+          "title": "Right Scenario Id",
+          "type": "string"
+        },
+        "root_uncertainty": {
+          "$ref": "#/$defs/AdvisorDeltaQuantity"
+        },
+        "root_value": {
+          "$ref": "#/$defs/AdvisorDeltaQuantity"
+        },
+        "semantic": {
+          "const": "left_minus_right",
+          "default": "left_minus_right",
+          "title": "Semantic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "left_scenario_id",
+        "right_scenario_id",
+        "left_belief_sha256",
+        "right_belief_sha256",
+        "actions",
+        "root_value",
+        "root_uncertainty"
+      ],
+      "title": "AdvisorComparison",
+      "type": "object"
+    },
+    "AdvisorComputeIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_driver_id": {
+          "title": "Branch Driver Id",
+          "type": "string"
+        },
+        "c_puct": {
+          "exclusiveMinimum": 0.0,
+          "title": "C Puct",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "max_steps": {
+          "exclusiveMinimum": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Max Steps",
+          "type": "integer"
+        },
+        "sampled_worlds": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Sampled Worlds",
+          "type": "integer"
+        },
+        "simulations_per_scenario": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Simulations Per Scenario",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "simulations_per_scenario",
+        "sampled_worlds",
+        "c_puct",
+        "max_steps",
+        "branch_driver_id"
+      ],
+      "title": "AdvisorComputeIdentity",
+      "type": "object"
+    },
+    "AdvisorDeltaQuantity": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "anyOf": [
+            {
+              "const": "comparison_quantity_unavailable",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "AdvisorDeltaQuantity",
+      "type": "object"
+    },
+    "AdvisorIdentity": {
+      "additionalProperties": false,
+      "description": "Fully pinned identity for one versioned advice computation.",
+      "properties": {
+        "action_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "artifact": {
+          "discriminator": {
+            "mapping": {
+              "checkpoint": "#/$defs/CheckpointArtifact",
+              "code_source": "#/$defs/CodeSourceArtifact"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CodeSourceArtifact"
+            },
+            {
+              "$ref": "#/$defs/CheckpointArtifact"
+            }
+          ],
+          "title": "Artifact"
+        },
+        "compute": {
+          "$ref": "#/$defs/AdvisorComputeIdentity"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "evaluator_id": {
+          "const": "uniform_random_terminal",
+          "title": "Evaluator Id",
+          "type": "string"
+        },
+        "information_boundary": {
+          "const": "historical_viewer",
+          "title": "Information Boundary",
+          "type": "string"
+        },
+        "kind": {
+          "const": "advisor_identity_v1",
+          "default": "advisor_identity_v1",
+          "title": "Kind",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "observation_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "planner_id": {
+          "const": "determinized_puct",
+          "title": "Planner Id",
+          "type": "string"
+        },
+        "possible_world_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "seed": {
+          "$ref": "#/$defs/AdvisorSeedIdentity"
+        },
+        "source_replay_id": {
+          "title": "Source Replay Id",
+          "type": "string"
+        },
+        "source_replay_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Replay Sha256",
+          "type": "string"
+        },
+        "world_id": {
+          "title": "World Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_replay_id",
+        "source_replay_sha256",
+        "match_id",
+        "world_id",
+        "content_sha256",
+        "observation_abi",
+        "action_abi",
+        "possible_world_abi",
+        "information_boundary",
+        "planner_id",
+        "evaluator_id",
+        "artifact",
+        "compute",
+        "seed"
+      ],
+      "title": "AdvisorIdentity",
+      "type": "object"
+    },
+    "AdvisorOfferDelta": {
+      "additionalProperties": false,
+      "properties": {
+        "offer_id": {
+          "minimum": 0,
+          "title": "Offer Id",
+          "type": "integer"
+        },
+        "policy_probability": {
+          "title": "Policy Probability",
+          "type": "number"
+        },
+        "q": {
+          "$ref": "#/$defs/AdvisorDeltaQuantity"
+        },
+        "robustness": {
+          "$ref": "#/$defs/AdvisorDeltaQuantity"
+        },
+        "uncertainty": {
+          "$ref": "#/$defs/AdvisorDeltaQuantity"
+        }
+      },
+      "required": [
+        "offer_id",
+        "policy_probability",
+        "q",
+        "robustness",
+        "uncertainty"
+      ],
+      "title": "AdvisorOfferDelta",
+      "type": "object"
+    },
+    "AdvisorOfferEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "offer_id": {
+          "minimum": 0,
+          "title": "Offer Id",
+          "type": "integer"
+        },
+        "probability": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Probability",
+          "type": "number"
+        },
+        "q": {
+          "discriminator": {
+            "mapping": {
+              "available": "#/$defs/AvailableQuantity",
+              "unavailable": "#/$defs/UnavailableQuantity"
+            },
+            "propertyName": "status"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AvailableQuantity"
+            },
+            {
+              "$ref": "#/$defs/UnavailableQuantity"
+            }
+          ],
+          "title": "Q"
+        },
+        "robustness": {
+          "discriminator": {
+            "mapping": {
+              "available": "#/$defs/AvailableQuantity",
+              "unavailable": "#/$defs/UnavailableQuantity"
+            },
+            "propertyName": "status"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AvailableQuantity"
+            },
+            {
+              "$ref": "#/$defs/UnavailableQuantity"
+            }
+          ],
+          "title": "Robustness"
+        },
+        "uncertainty": {
+          "discriminator": {
+            "mapping": {
+              "available": "#/$defs/AvailableQuantity",
+              "unavailable": "#/$defs/UnavailableQuantity"
+            },
+            "propertyName": "status"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AvailableQuantity"
+            },
+            {
+              "$ref": "#/$defs/UnavailableQuantity"
+            }
+          ],
+          "title": "Uncertainty"
+        },
+        "visits": {
+          "minimum": 0,
+          "title": "Visits",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offer_id",
+        "label",
+        "probability",
+        "visits",
+        "q",
+        "robustness",
+        "uncertainty"
+      ],
+      "title": "AdvisorOfferEvidence",
+      "type": "object"
+    },
+    "AdvisorScenarioEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/AdvisorOfferEvidence"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "belief": {
+          "$ref": "#/$defs/BeliefNormalizationReceipt"
+        },
+        "cap_hits": {
+          "minimum": 0,
+          "title": "Cap Hits",
+          "type": "integer"
+        },
+        "condition_mass": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Condition Mass",
+          "type": "number"
+        },
+        "root_uncertainty": {
+          "discriminator": {
+            "mapping": {
+              "available": "#/$defs/AvailableQuantity",
+              "unavailable": "#/$defs/UnavailableQuantity"
+            },
+            "propertyName": "status"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AvailableQuantity"
+            },
+            {
+              "$ref": "#/$defs/UnavailableQuantity"
+            }
+          ],
+          "title": "Root Uncertainty"
+        },
+        "root_value": {
+          "discriminator": {
+            "mapping": {
+              "available": "#/$defs/AvailableQuantity",
+              "unavailable": "#/$defs/UnavailableQuantity"
+            },
+            "propertyName": "status"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AvailableQuantity"
+            },
+            {
+              "$ref": "#/$defs/UnavailableQuantity"
+            }
+          ],
+          "title": "Root Value"
+        },
+        "sampled_worlds": {
+          "minimum": 1,
+          "title": "Sampled Worlds",
+          "type": "integer"
+        },
+        "scenario_id": {
+          "title": "Scenario Id",
+          "type": "string"
+        },
+        "simulations": {
+          "minimum": 1,
+          "title": "Simulations",
+          "type": "integer"
+        },
+        "support": {
+          "minimum": 1,
+          "title": "Support",
+          "type": "integer"
+        },
+        "tree_nodes": {
+          "minimum": 0,
+          "title": "Tree Nodes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scenario_id",
+        "belief",
+        "condition_mass",
+        "support",
+        "sampled_worlds",
+        "actions",
+        "root_value",
+        "root_uncertainty",
+        "simulations",
+        "cap_hits",
+        "tree_nodes"
+      ],
+      "title": "AdvisorScenarioEvidence",
+      "type": "object"
+    },
+    "AdvisorSeedIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "derivation_id": {
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "root_seed": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Root Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan_id",
+        "root_seed",
+        "derivation_id"
+      ],
+      "title": "AdvisorSeedIdentity",
+      "type": "object"
+    },
+    "AdvisorSemanticOffer": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "minimum": 0,
+          "title": "Actor",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "offer_id": {
+          "minimum": 0,
+          "title": "Offer Id",
+          "type": "integer"
+        },
+        "verb": {
+          "title": "Verb",
+          "type": "string"
+        }
+      },
+      "required": [
+        "offer_id",
+        "actor",
+        "verb",
+        "label"
+      ],
+      "title": "AdvisorSemanticOffer",
+      "type": "object"
+    },
+    "AdvisorStrategyEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "advisor_identity": {
+          "$ref": "#/$defs/AdvisorIdentity"
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorComparison"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Decision Sha256",
+          "type": "string"
+        },
+        "offers": {
+          "items": {
+            "$ref": "#/$defs/AdvisorSemanticOffer"
+          },
+          "title": "Offers",
+          "type": "array"
+        },
+        "plan_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Plan Sha256",
+          "type": "string"
+        },
+        "policy_semantic": {
+          "const": "puct_visit_distribution/v1",
+          "title": "Policy Semantic",
+          "type": "string"
+        },
+        "prior_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prior Sha256",
+          "type": "string"
+        },
+        "realized_compute": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Realized Compute",
+          "type": "object"
+        },
+        "scenarios": {
+          "items": {
+            "$ref": "#/$defs/AdvisorScenarioEvidence"
+          },
+          "title": "Scenarios",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "viewer_frame_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Viewer Frame Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "policy_semantic",
+        "decision_sha256",
+        "viewer_frame_sha256",
+        "advisor_identity",
+        "offers",
+        "scenarios",
+        "realized_compute",
+        "prior_sha256",
+        "plan_sha256"
+      ],
+      "title": "AdvisorStrategyEvidence",
+      "type": "object"
+    },
+    "AssetPackReference": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "manifest_sha256"
+      ],
+      "title": "AssetPackReference",
+      "type": "object"
+    },
+    "AssignChoiceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "destinations": {
+          "$ref": "#/$defs/CandidateSource"
+        },
+        "kind": {
+          "const": "assign",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "max_per_source": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Max Per Source",
+          "type": "integer"
+        },
+        "min_per_source": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Min Per Source",
+          "type": "integer"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        },
+        "sources": {
+          "$ref": "#/$defs/CandidateSource"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "label",
+        "sources",
+        "destinations",
+        "min_per_source",
+        "max_per_source"
+      ],
+      "title": "AssignChoiceStep",
+      "type": "object"
+    },
+    "AuthorityStatus": {
+      "enum": [
+        "ready",
+        "thinking",
+        "resolving",
+        "reconnecting",
+        "game_over"
+      ],
+      "title": "AuthorityStatus",
+      "type": "string"
+    },
+    "AvailableQuantity": {
+      "additionalProperties": false,
+      "properties": {
+        "co_best_worlds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Co Best Worlds"
+        },
+        "covered_worlds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covered Worlds"
+        },
+        "method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Method"
+        },
+        "simulations": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Simulations"
+        },
+        "status": {
+          "const": "available",
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "visits": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Visits"
+        }
+      },
+      "required": [
+        "status",
+        "value"
+      ],
+      "title": "AvailableQuantity",
+      "type": "object"
+    },
+    "BeliefNormalizationReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "belief_model_id": {
+          "title": "Belief Model Id",
+          "type": "string"
+        },
+        "distribution_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Distribution Sha256",
+          "type": "string"
+        },
+        "normalization_error": {
+          "minimum": 0.0,
+          "title": "Normalization Error",
+          "type": "number"
+        },
+        "normalized_belief_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Normalized Belief Sha256",
+          "type": "string"
+        },
+        "positive_support": {
+          "minimum": 1,
+          "title": "Positive Support",
+          "type": "integer"
+        },
+        "provenance_identity": {
+          "title": "Provenance Identity",
+          "type": "string"
+        },
+        "provenance_kind": {
+          "enum": [
+            "player_authored",
+            "model_inferred"
+          ],
+          "title": "Provenance Kind",
+          "type": "string"
+        },
+        "scenario_id": {
+          "title": "Scenario Id",
+          "type": "string"
+        },
+        "space_identity": {
+          "title": "Space Identity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scenario_id",
+        "space_identity",
+        "belief_model_id",
+        "distribution_sha256",
+        "normalized_belief_sha256",
+        "positive_support",
+        "normalization_error",
+        "provenance_kind",
+        "provenance_identity"
+      ],
+      "title": "BeliefNormalizationReceipt",
+      "type": "object"
+    },
+    "BeliefScenario": {
+      "additionalProperties": false,
+      "properties": {
+        "audience": {
+          "discriminator": {
+            "mapping": {
+              "personal": "#/$defs/PersonalAudience",
+              "table": "#/$defs/TableAudience"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PersonalAudience"
+            },
+            {
+              "$ref": "#/$defs/TableAudience"
+            }
+          ],
+          "title": "Audience"
+        },
+        "author_viewer_id": {
+          "title": "Author Viewer Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "provenance": {
+          "discriminator": {
+            "mapping": {
+              "model_inferred": "#/$defs/ModelInferredBeliefProvenance",
+              "player_authored": "#/$defs/PlayerAuthoredBeliefProvenance"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PlayerAuthoredBeliefProvenance"
+            },
+            {
+              "$ref": "#/$defs/ModelInferredBeliefProvenance"
+            }
+          ],
+          "title": "Provenance"
+        },
+        "source": {
+          "$ref": "#/$defs/BeliefSource"
+        }
+      },
+      "required": [
+        "id",
+        "author_viewer_id",
+        "source",
+        "audience",
+        "provenance"
+      ],
+      "title": "BeliefScenario",
+      "type": "object"
+    },
+    "BeliefSource": {
+      "additionalProperties": false,
+      "properties": {
+        "advice_identity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdviceRequestIdentity"
+            },
+            {
+              "$ref": "#/$defs/AdvisorIdentity"
+            }
+          ],
+          "title": "Advice Identity"
+        },
+        "decision_address": {
+          "title": "Decision Address",
+          "type": "string"
+        },
+        "gam6_scenario_id": {
+          "title": "Gam6 Scenario Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_address",
+        "gam6_scenario_id",
+        "advice_identity"
+      ],
+      "title": "BeliefSource",
+      "type": "object"
+    },
+    "BooleanCandidateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "boolean",
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "title": "BooleanCandidateValue",
+      "type": "object"
+    },
+    "Candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "help": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Help"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "preview": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Preview"
+        },
+        "value": {
+          "discriminator": {
+            "mapping": {
+              "boolean": "#/$defs/BooleanCandidateValue",
+              "mode": "#/$defs/ModeCandidateValue",
+              "payment_plan": "#/$defs/PaymentPlanCandidateValue",
+              "subject": "#/$defs/SubjectCandidateValue"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SubjectCandidateValue"
+            },
+            {
+              "$ref": "#/$defs/ModeCandidateValue"
+            },
+            {
+              "$ref": "#/$defs/PaymentPlanCandidateValue"
+            },
+            {
+              "$ref": "#/$defs/BooleanCandidateValue"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "id",
+        "value",
+        "label",
+        "help",
+        "preview"
+      ],
+      "title": "Candidate",
+      "type": "object"
+    },
+    "CandidateSource": {
+      "additionalProperties": false,
+      "properties": {
+        "depends_on": {
+          "items": {
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "initial": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Candidate"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Initial"
+        }
+      },
+      "required": [
+        "id",
+        "depends_on",
+        "initial"
+      ],
+      "title": "CandidateSource",
+      "type": "object"
+    },
+    "CheckpointArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "checkpoint_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checkpoint Sha256",
+          "type": "string"
+        },
+        "kind": {
+          "const": "checkpoint",
+          "title": "Kind",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "checkpoint_id",
+        "checkpoint_sha256",
+        "manifest_sha256"
+      ],
+      "title": "CheckpointArtifact",
+      "type": "object"
+    },
+    "CodeSourceArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "code_source",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_bundle_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Bundle Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "source_bundle_sha256"
+      ],
+      "title": "CodeSourceArtifact",
+      "type": "object"
+    },
+    "DecisionEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_mass": {
+          "items": {
+            "$ref": "#/$defs/PolicyMass"
+          },
+          "title": "Policy Mass",
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/$defs/EvidenceProvenance"
+        },
+        "sampled_world_robustness": {
+          "items": {
+            "$ref": "#/$defs/SampledWorldRobustness"
+          },
+          "title": "Sampled World Robustness",
+          "type": "array"
+        },
+        "search_value": {
+          "items": {
+            "$ref": "#/$defs/SearchValue"
+          },
+          "title": "Search Value",
+          "type": "array"
+        },
+        "uncertainty": {
+          "items": {
+            "$ref": "#/$defs/UncertaintyEvidence"
+          },
+          "title": "Uncertainty",
+          "type": "array"
+        },
+        "visits": {
+          "items": {
+            "$ref": "#/$defs/VisitCount"
+          },
+          "title": "Visits",
+          "type": "array"
+        }
+      },
+      "required": [
+        "policy_mass",
+        "search_value",
+        "visits",
+        "sampled_world_robustness",
+        "uncertainty",
+        "provenance"
+      ],
+      "title": "DecisionEvidence",
+      "type": "object"
+    },
+    "DeckNames": {
+      "additionalProperties": false,
+      "properties": {
+        "hero": {
+          "title": "Hero",
+          "type": "string"
+        },
+        "villain": {
+          "title": "Villain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hero",
+        "villain"
+      ],
+      "title": "DeckNames",
+      "type": "object"
+    },
+    "EvidenceProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_sha256": {
+          "title": "Evidence Sha256",
+          "type": "string"
+        },
+        "generated_at": {
+          "title": "Generated At",
+          "type": "string"
+        },
+        "producer": {
+          "title": "Producer",
+          "type": "string"
+        },
+        "producer_version": {
+          "title": "Producer Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "producer",
+        "producer_version",
+        "generated_at",
+        "evidence_sha256"
+      ],
+      "title": "EvidenceProvenance",
+      "type": "object"
+    },
+    "ExperienceFrame": {
+      "additionalProperties": false,
+      "properties": {
+        "action_space": {
+          "title": "Action Space",
+          "type": "string"
+        },
+        "asset_manifest_hash": {
+          "title": "Asset Manifest Hash",
+          "type": "string"
+        },
+        "asset_pack": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssetPackReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "auto_passed": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Passed"
+        },
+        "content_hash": {
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "deck_names": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeckNames"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "frame_hash": {
+          "title": "Frame Hash",
+          "type": "string"
+        },
+        "log": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Log"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "offers": {
+          "items": {
+            "$ref": "#/$defs/InteractionOffer"
+          },
+          "title": "Offers",
+          "type": "array"
+        },
+        "projection": {
+          "$ref": "#/$defs/LegacyHeroObservation"
+        },
+        "prompt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "protocol": {
+          "const": 1,
+          "title": "Protocol",
+          "type": "integer"
+        },
+        "revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/AuthorityStatus"
+        },
+        "stops": {
+          "$ref": "#/$defs/StopsConfig"
+        },
+        "winner": {
+          "anyOf": [
+            {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Winner"
+        }
+      },
+      "required": [
+        "protocol",
+        "match_id",
+        "revision",
+        "frame_hash",
+        "content_hash",
+        "asset_manifest_hash",
+        "status",
+        "prompt",
+        "projection",
+        "offers",
+        "winner",
+        "action_space",
+        "stops"
+      ],
+      "title": "ExperienceFrame",
+      "type": "object"
+    },
+    "InteractionOffer": {
+      "additionalProperties": false,
+      "properties": {
+        "action_type": {
+          "title": "Action Type",
+          "type": "string"
+        },
+        "actor": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Actor",
+          "type": "integer"
+        },
+        "choices": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "assign": "#/$defs/AssignChoiceStep",
+                "number": "#/$defs/NumberChoiceStep",
+                "order": "#/$defs/OrderChoiceStep",
+                "payment": "#/$defs/PaymentChoiceStep",
+                "select": "#/$defs/SelectChoiceStep"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/SelectChoiceStep"
+              },
+              {
+                "$ref": "#/$defs/NumberChoiceStep"
+              },
+              {
+                "$ref": "#/$defs/AssignChoiceStep"
+              },
+              {
+                "$ref": "#/$defs/OrderChoiceStep"
+              },
+              {
+                "$ref": "#/$defs/PaymentChoiceStep"
+              }
+            ]
+          },
+          "title": "Choices",
+          "type": "array"
+        },
+        "confirm_label": {
+          "title": "Confirm Label",
+          "type": "string"
+        },
+        "focus": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Focus",
+          "type": "array"
+        },
+        "help": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Help"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "object": "#/$defs/ObjectSubject",
+                  "player": "#/$defs/PlayerSubject",
+                  "stack": "#/$defs/StackSubject"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ObjectSubject"
+                },
+                {
+                  "$ref": "#/$defs/StackSubject"
+                },
+                {
+                  "$ref": "#/$defs/PlayerSubject"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source"
+        },
+        "verb": {
+          "$ref": "#/$defs/OfferVerb"
+        }
+      },
+      "required": [
+        "id",
+        "actor",
+        "verb",
+        "source",
+        "label",
+        "help",
+        "choices",
+        "confirm_label",
+        "action_type",
+        "focus"
+      ],
+      "title": "InteractionOffer",
+      "type": "object"
+    },
+    "LegacyCardTypesView": {
+      "additionalProperties": false,
+      "properties": {
+        "is_artifact": {
+          "title": "Is Artifact",
+          "type": "boolean"
+        },
+        "is_battle": {
+          "title": "Is Battle",
+          "type": "boolean"
+        },
+        "is_creature": {
+          "title": "Is Creature",
+          "type": "boolean"
+        },
+        "is_enchantment": {
+          "title": "Is Enchantment",
+          "type": "boolean"
+        },
+        "is_land": {
+          "title": "Is Land",
+          "type": "boolean"
+        },
+        "is_planeswalker": {
+          "title": "Is Planeswalker",
+          "type": "boolean"
+        },
+        "is_spell": {
+          "title": "Is Spell",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "is_creature",
+        "is_land",
+        "is_spell",
+        "is_artifact",
+        "is_enchantment",
+        "is_planeswalker",
+        "is_battle"
+      ],
+      "title": "LegacyCardTypesView",
+      "type": "object"
+    },
+    "LegacyCardView": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "mana_value": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Mana Value",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "owner_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Owner Id",
+          "type": "integer"
+        },
+        "power": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Power",
+          "type": "integer"
+        },
+        "registry_key": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Registry Key",
+          "type": "integer"
+        },
+        "toughness": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Toughness",
+          "type": "integer"
+        },
+        "types": {
+          "$ref": "#/$defs/LegacyCardTypesView"
+        },
+        "zone": {
+          "title": "Zone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "registry_key",
+        "name",
+        "zone",
+        "owner_id",
+        "power",
+        "toughness",
+        "mana_value",
+        "types"
+      ],
+      "title": "LegacyCardView",
+      "type": "object"
+    },
+    "LegacyHeroObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "game_over": {
+          "title": "Game Over",
+          "type": "boolean"
+        },
+        "opponent": {
+          "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "turn": {
+          "$ref": "#/$defs/LegacyTurnView"
+        },
+        "won": {
+          "title": "Won",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "game_over",
+        "won",
+        "turn",
+        "agent",
+        "opponent"
+      ],
+      "title": "LegacyHeroObservation",
+      "type": "object"
+    },
+    "LegacyPermanentView": {
+      "additionalProperties": false,
+      "properties": {
+        "base_power": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Power"
+        },
+        "base_toughness": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Base Toughness"
+        },
+        "controller_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Controller Id",
+          "type": "integer"
+        },
+        "damage": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Damage",
+          "type": "integer"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Name"
+        },
+        "plus1_counters": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Plus1 Counters",
+          "type": "integer"
+        },
+        "power": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Power"
+        },
+        "summoning_sick": {
+          "title": "Summoning Sick",
+          "type": "boolean"
+        },
+        "tapped": {
+          "title": "Tapped",
+          "type": "boolean"
+        },
+        "toughness": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Toughness"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "controller_id",
+        "tapped",
+        "damage",
+        "summoning_sick",
+        "power",
+        "toughness",
+        "base_power",
+        "base_toughness",
+        "plus1_counters"
+      ],
+      "title": "LegacyPermanentView",
+      "type": "object"
+    },
+    "LegacyPlayerView": {
+      "additionalProperties": false,
+      "properties": {
+        "battlefield": {
+          "items": {
+            "$ref": "#/$defs/LegacyPermanentView"
+          },
+          "title": "Battlefield",
+          "type": "array"
+        },
+        "exile": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Exile",
+          "type": "array"
+        },
+        "graveyard": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Graveyard",
+          "type": "array"
+        },
+        "hand": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Hand",
+          "type": "array"
+        },
+        "hand_hidden_count": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hand Hidden Count"
+        },
+        "id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "is_agent": {
+          "title": "Is Agent",
+          "type": "boolean"
+        },
+        "library_count": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Library Count",
+          "type": "integer"
+        },
+        "life": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Life",
+          "type": "integer"
+        },
+        "player_index": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Player Index",
+          "type": "integer"
+        },
+        "stack": {
+          "items": {
+            "$ref": "#/$defs/LegacyCardView"
+          },
+          "title": "Stack",
+          "type": "array"
+        },
+        "zone_counts": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Zone Counts",
+          "type": "object"
+        }
+      },
+      "required": [
+        "player_index",
+        "id",
+        "is_active",
+        "is_agent",
+        "life",
+        "zone_counts",
+        "library_count",
+        "hand",
+        "graveyard",
+        "exile",
+        "stack",
+        "battlefield"
+      ],
+      "title": "LegacyPlayerView",
+      "type": "object"
+    },
+    "LegacyTurnView": {
+      "additionalProperties": false,
+      "properties": {
+        "active_player_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Active Player Id",
+          "type": "integer"
+        },
+        "agent_player_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Agent Player Id",
+          "type": "integer"
+        },
+        "phase": {
+          "title": "Phase",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "string"
+        },
+        "turn_number": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Turn Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turn_number",
+        "phase",
+        "step",
+        "active_player_id",
+        "agent_player_id"
+      ],
+      "title": "LegacyTurnView",
+      "type": "object"
+    },
+    "ModeCandidateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "mode",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "key"
+      ],
+      "title": "ModeCandidateValue",
+      "type": "object"
+    },
+    "ModelInferredBeliefProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Manifest Sha256",
+          "type": "string"
+        },
+        "belief_model_id": {
+          "title": "Belief Model Id",
+          "type": "string"
+        },
+        "checkpoint_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checkpoint Sha256",
+          "type": "string"
+        },
+        "kind": {
+          "const": "model_inferred",
+          "default": "model_inferred",
+          "title": "Kind",
+          "type": "string"
+        },
+        "viewer_history_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Viewer History Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "belief_model_id",
+        "checkpoint_sha256",
+        "artifact_manifest_sha256",
+        "viewer_history_sha256"
+      ],
+      "title": "ModelInferredBeliefProvenance",
+      "type": "object"
+    },
+    "NumberChoiceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "number",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "max": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Max",
+          "type": "integer"
+        },
+        "min": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Min",
+          "type": "integer"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "label",
+        "min",
+        "max"
+      ],
+      "title": "NumberChoiceStep",
+      "type": "object"
+    },
+    "ObjectRenderId": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Entity",
+          "type": "integer"
+        },
+        "incarnation": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Incarnation",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entity",
+        "incarnation"
+      ],
+      "title": "ObjectRenderId",
+      "type": "object"
+    },
+    "ObjectSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ObjectRenderId"
+        },
+        "kind": {
+          "const": "object",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "ObjectSubject",
+      "type": "object"
+    },
+    "OfferVerb": {
+      "enum": [
+        "cast",
+        "play_land",
+        "activate",
+        "pass_priority",
+        "declare_attackers",
+        "declare_blockers",
+        "choose",
+        "pay",
+        "special"
+      ],
+      "title": "OfferVerb",
+      "type": "string"
+    },
+    "OrderChoiceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "$ref": "#/$defs/CandidateSource"
+        },
+        "kind": {
+          "const": "order",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "label",
+        "candidates"
+      ],
+      "title": "OrderChoiceStep",
+      "type": "object"
+    },
+    "PaymentChoiceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_auto": {
+          "title": "Allow Auto",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "payment",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "plans": {
+          "$ref": "#/$defs/CandidateSource"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "label",
+        "plans",
+        "allow_auto"
+      ],
+      "title": "PaymentChoiceStep",
+      "type": "object"
+    },
+    "PaymentPlanCandidateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "payment_plan",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "PaymentPlanCandidateValue",
+      "type": "object"
+    },
+    "PersonalAudience": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "personal",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "PersonalAudience",
+      "type": "object"
+    },
+    "PlayerAuthoredBeliefProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at_table_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Created At Table Revision",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "player_authored",
+          "default": "player_authored",
+          "title": "Kind",
+          "type": "string"
+        },
+        "shared_at_table_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shared At Table Revision"
+        }
+      },
+      "required": [
+        "created_at_table_revision"
+      ],
+      "title": "PlayerAuthoredBeliefProvenance",
+      "type": "object"
+    },
+    "PlayerSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "player",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "PlayerSubject",
+      "type": "object"
+    },
+    "PolicyMass": {
+      "additionalProperties": false,
+      "properties": {
+        "alternative": {
+          "title": "Alternative",
+          "type": "string"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        }
+      },
+      "required": [
+        "alternative",
+        "probability"
+      ],
+      "title": "PolicyMass",
+      "type": "object"
+    },
+    "PromptView": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Actor",
+          "type": "integer"
+        },
+        "id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "instruction": {
+          "title": "Instruction",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "actor",
+        "kind",
+        "title",
+        "instruction"
+      ],
+      "title": "PromptView",
+      "type": "object"
+    },
+    "SampledWorldRobustness": {
+      "additionalProperties": false,
+      "properties": {
+        "alternative": {
+          "title": "Alternative",
+          "type": "string"
+        },
+        "favorable_worlds": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Favorable Worlds",
+          "type": "integer"
+        },
+        "sampled_worlds": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Sampled Worlds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "alternative",
+        "favorable_worlds",
+        "sampled_worlds"
+      ],
+      "title": "SampledWorldRobustness",
+      "type": "object"
+    },
+    "SearchValue": {
+      "additionalProperties": false,
+      "properties": {
+        "alternative": {
+          "title": "Alternative",
+          "type": "string"
+        },
+        "expected_match_points": {
+          "title": "Expected Match Points",
+          "type": "number"
+        },
+        "perspective": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Perspective",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "alternative",
+        "perspective",
+        "expected_match_points"
+      ],
+      "title": "SearchValue",
+      "type": "object"
+    },
+    "SelectChoiceStep": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "$ref": "#/$defs/CandidateSource"
+        },
+        "distinct": {
+          "title": "Distinct",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "select",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "max": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Max",
+          "type": "integer"
+        },
+        "min": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Min",
+          "type": "integer"
+        },
+        "ordered": {
+          "title": "Ordered",
+          "type": "boolean"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "label",
+        "candidates",
+        "min",
+        "max",
+        "ordered",
+        "distinct"
+      ],
+      "title": "SelectChoiceStep",
+      "type": "object"
+    },
+    "StackSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Id",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "stack",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "title": "StackSubject",
+      "type": "object"
+    },
+    "StopsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "auto_pass": {
+          "title": "Auto Pass",
+          "type": "boolean"
+        },
+        "my": {
+          "items": {
+            "type": "string"
+          },
+          "title": "My",
+          "type": "array"
+        },
+        "opponent": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Opponent",
+          "type": "array"
+        },
+        "stop_on_stack": {
+          "title": "Stop On Stack",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "my",
+        "opponent",
+        "stop_on_stack",
+        "auto_pass"
+      ],
+      "title": "StopsConfig",
+      "type": "object"
+    },
+    "SubjectCandidateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "subject",
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject": {
+          "discriminator": {
+            "mapping": {
+              "object": "#/$defs/ObjectSubject",
+              "player": "#/$defs/PlayerSubject",
+              "stack": "#/$defs/StackSubject"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ObjectSubject"
+            },
+            {
+              "$ref": "#/$defs/StackSubject"
+            },
+            {
+              "$ref": "#/$defs/PlayerSubject"
+            }
+          ],
+          "title": "Subject"
+        }
+      },
+      "required": [
+        "kind",
+        "subject"
+      ],
+      "title": "SubjectCandidateValue",
+      "type": "object"
+    },
+    "TableAudience": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "table",
+          "title": "Kind",
+          "type": "string"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "table_id"
+      ],
+      "title": "TableAudience",
+      "type": "object"
+    },
+    "UnavailableQuantity": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "enum": [
+            "no_realized_visits",
+            "no_realized_simulations",
+            "world_coverage_unrecorded",
+            "no_realized_world_coverage",
+            "insufficient_world_coverage",
+            "comparison_quantity_unavailable"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "status": {
+          "const": "unavailable",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reason"
+      ],
+      "title": "UnavailableQuantity",
+      "type": "object"
+    },
+    "UncertaintyEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "alternative": {
+          "title": "Alternative",
+          "type": "string"
+        },
+        "method": {
+          "title": "Method",
+          "type": "string"
+        },
+        "standard_error": {
+          "title": "Standard Error",
+          "type": "number"
+        }
+      },
+      "required": [
+        "alternative",
+        "standard_error",
+        "method"
+      ],
+      "title": "UncertaintyEvidence",
+      "type": "object"
+    },
+    "ViewerIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "rules_viewer": {
+          "const": 0,
+          "default": 0,
+          "title": "Rules Viewer",
+          "type": "integer"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
+        "viewer_id": {
+          "title": "Viewer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "viewer_id",
+        "table_id"
+      ],
+      "title": "ViewerIdentity",
+      "type": "object"
+    },
+    "VisitCount": {
+      "additionalProperties": false,
+      "properties": {
+        "alternative": {
+          "title": "Alternative",
+          "type": "string"
+        },
+        "visits": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Visits",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "alternative",
+        "visits"
+      ],
+      "title": "VisitCount",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Checked public request/response pair consumed by Game's prototype.",
+  "properties": {
+    "contract": {
+      "const": "advice-fixture-v1",
+      "default": "advice-fixture-v1",
+      "title": "Contract",
+      "type": "string"
+    },
+    "request": {
+      "$ref": "#/$defs/AdviceRequest"
+    },
+    "response": {
+      "$ref": "#/$defs/AdviceResponse"
+    }
+  },
+  "required": [
+    "request",
+    "response"
+  ],
+  "title": "VersionedAdviceFixture",
+  "type": "object"
+}

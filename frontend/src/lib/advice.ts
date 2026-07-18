@@ -206,7 +206,7 @@ export function selectAdvice(
   identity: AdviceRequestIdentity,
 ): AdviceResponse {
   if (!sameIdentity(identity, expectedIdentity(advice))) {
-    return unavailable('identity_mismatch', identity);
+    return unavailable('legacy_identity_incomplete', identity);
   }
   const landmark = advice.artifact.landmarks.find((lm) => lm.id === scenarioId);
   if (!landmark) {

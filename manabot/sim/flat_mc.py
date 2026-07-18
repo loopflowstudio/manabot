@@ -34,6 +34,7 @@ from manabot.infra.hypers import (
     RewardHypers,
 )
 from manabot.model.agent import Agent
+from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.util import (
     INTERACTIVE_DECK,
     _select_agent_action,
@@ -41,7 +42,6 @@ from manabot.verify.util import (
 )
 from managym.decision import Command, DecisionFrame
 
-DEFAULT_MAX_PLAYOUT_STEPS = 2000
 DEFAULT_ROLLOUTS_PER_WORLD = 4
 
 # managym ActionSpaceKind (managym/src/agent/action.rs), incl. the Stage-2/3
@@ -85,25 +85,6 @@ class MatchupPlayer(Protocol):
     """A player usable by play_games: picks an action index each decision."""
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int: ...
-
-
-@dataclass
-class SearchStats:
-    """Accumulated cost/behavior of a search player across games."""
-
-    decisions: int = 0
-    seconds: float = 0.0
-    simulations: int = 0
-    cap_hits: int = 0
-    decision_seconds: list[float] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, float]:
-        return {
-            "decisions": float(self.decisions),
-            "seconds": self.seconds,
-            "simulations": float(self.simulations),
-            "cap_hits": float(self.cap_hits),
-        }
 
 
 class FlatMCPlayer:

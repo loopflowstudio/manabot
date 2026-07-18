@@ -1,5 +1,30 @@
 {
   "$defs": {
+    "AbiIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "sha256"
+      ],
+      "title": "AbiIdentity",
+      "type": "object"
+    },
     "ActionMessage": {
       "additionalProperties": false,
       "properties": {
@@ -36,7 +61,7 @@
     },
     "AdviceRequestIdentity": {
       "additionalProperties": false,
-      "description": "The advisor + compute identity a request claims to incorporate.\n\nThe GAM-4 seam: this is the request contract GAM-4's live decision-address\nand retry/compare controls bind to. Mirrors the fixture's pinned\n``StudyIdentity`` -- the source replay and match must match, the advisor id\nmust match the pinned ``model.id``, and the compute id must match the pinned\n``analysis_budget.id``. When GAM-4 publishes the live ``erd1`` address, the\nsame identity flows through ``POST /api/advice`` unchanged.",
+      "description": "Legacy GAM-6 replay/advisor/compute identity.\n\nIt is intentionally unchanged so checked testing-house fixtures and\nexisting imports continue to round-trip while callers migrate to\n:class:`AdvisorIdentity`.",
       "properties": {
         "advisor_id": {
           "title": "Advisor Id",
@@ -62,6 +87,179 @@
         "compute_id"
       ],
       "title": "AdviceRequestIdentity",
+      "type": "object"
+    },
+    "AdvisorComputeIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_driver_id": {
+          "title": "Branch Driver Id",
+          "type": "string"
+        },
+        "c_puct": {
+          "exclusiveMinimum": 0.0,
+          "title": "C Puct",
+          "type": "number"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "max_steps": {
+          "exclusiveMinimum": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Max Steps",
+          "type": "integer"
+        },
+        "sampled_worlds": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Sampled Worlds",
+          "type": "integer"
+        },
+        "simulations_per_scenario": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Simulations Per Scenario",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "simulations_per_scenario",
+        "sampled_worlds",
+        "c_puct",
+        "max_steps",
+        "branch_driver_id"
+      ],
+      "title": "AdvisorComputeIdentity",
+      "type": "object"
+    },
+    "AdvisorIdentity": {
+      "additionalProperties": false,
+      "description": "Fully pinned identity for one versioned advice computation.",
+      "properties": {
+        "action_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "artifact": {
+          "discriminator": {
+            "mapping": {
+              "checkpoint": "#/$defs/CheckpointArtifact",
+              "code_source": "#/$defs/CodeSourceArtifact"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CodeSourceArtifact"
+            },
+            {
+              "$ref": "#/$defs/CheckpointArtifact"
+            }
+          ],
+          "title": "Artifact"
+        },
+        "compute": {
+          "$ref": "#/$defs/AdvisorComputeIdentity"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "evaluator_id": {
+          "const": "uniform_random_terminal",
+          "title": "Evaluator Id",
+          "type": "string"
+        },
+        "information_boundary": {
+          "const": "historical_viewer",
+          "title": "Information Boundary",
+          "type": "string"
+        },
+        "kind": {
+          "const": "advisor_identity_v1",
+          "default": "advisor_identity_v1",
+          "title": "Kind",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "observation_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "planner_id": {
+          "const": "determinized_puct",
+          "title": "Planner Id",
+          "type": "string"
+        },
+        "possible_world_abi": {
+          "$ref": "#/$defs/AbiIdentity"
+        },
+        "seed": {
+          "$ref": "#/$defs/AdvisorSeedIdentity"
+        },
+        "source_replay_id": {
+          "title": "Source Replay Id",
+          "type": "string"
+        },
+        "source_replay_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Replay Sha256",
+          "type": "string"
+        },
+        "world_id": {
+          "title": "World Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_replay_id",
+        "source_replay_sha256",
+        "match_id",
+        "world_id",
+        "content_sha256",
+        "observation_abi",
+        "action_abi",
+        "possible_world_abi",
+        "information_boundary",
+        "planner_id",
+        "evaluator_id",
+        "artifact",
+        "compute",
+        "seed"
+      ],
+      "title": "AdvisorIdentity",
+      "type": "object"
+    },
+    "AdvisorSeedIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "derivation_id": {
+          "title": "Derivation Id",
+          "type": "string"
+        },
+        "plan_id": {
+          "title": "Plan Id",
+          "type": "string"
+        },
+        "root_seed": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Root Seed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "plan_id",
+        "root_seed",
+        "derivation_id"
+      ],
+      "title": "AdvisorSeedIdentity",
       "type": "object"
     },
     "AssignmentsChoiceAnswer": {
@@ -158,42 +356,6 @@
       "title": "BeliefChangedEvent",
       "type": "object"
     },
-    "BeliefProvenance": {
-      "additionalProperties": false,
-      "properties": {
-        "created_at_table_revision": {
-          "maximum": 18446744073709551615,
-          "minimum": 0,
-          "title": "Created At Table Revision",
-          "type": "integer"
-        },
-        "kind": {
-          "const": "player_authored",
-          "default": "player_authored",
-          "title": "Kind",
-          "type": "string"
-        },
-        "shared_at_table_revision": {
-          "anyOf": [
-            {
-              "maximum": 18446744073709551615,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Shared At Table Revision"
-        }
-      },
-      "required": [
-        "created_at_table_revision"
-      ],
-      "title": "BeliefProvenance",
-      "type": "object"
-    },
     "BeliefScenario": {
       "additionalProperties": false,
       "properties": {
@@ -224,7 +386,22 @@
           "type": "string"
         },
         "provenance": {
-          "$ref": "#/$defs/BeliefProvenance"
+          "discriminator": {
+            "mapping": {
+              "model_inferred": "#/$defs/ModelInferredBeliefProvenance",
+              "player_authored": "#/$defs/PlayerAuthoredBeliefProvenance"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PlayerAuthoredBeliefProvenance"
+            },
+            {
+              "$ref": "#/$defs/ModelInferredBeliefProvenance"
+            }
+          ],
+          "title": "Provenance"
         },
         "source": {
           "$ref": "#/$defs/BeliefSource"
@@ -244,7 +421,15 @@
       "additionalProperties": false,
       "properties": {
         "advice_identity": {
-          "$ref": "#/$defs/AdviceRequestIdentity"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdviceRequestIdentity"
+            },
+            {
+              "$ref": "#/$defs/AdvisorIdentity"
+            }
+          ],
+          "title": "Advice Identity"
         },
         "decision_address": {
           "title": "Decision Address",
@@ -436,6 +621,59 @@
         "candidates"
       ],
       "title": "CandidatesChoiceAnswer",
+      "type": "object"
+    },
+    "CheckpointArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "title": "Checkpoint Id",
+          "type": "string"
+        },
+        "checkpoint_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checkpoint Sha256",
+          "type": "string"
+        },
+        "kind": {
+          "const": "checkpoint",
+          "title": "Kind",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "checkpoint_id",
+        "checkpoint_sha256",
+        "manifest_sha256"
+      ],
+      "title": "CheckpointArtifact",
+      "type": "object"
+    },
+    "CodeSourceArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "code_source",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_bundle_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Bundle Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "source_bundle_sha256"
+      ],
+      "title": "CodeSourceArtifact",
       "type": "object"
     },
     "Command": {
@@ -665,6 +903,44 @@
       "title": "JoinTableMessage",
       "type": "object"
     },
+    "ModelInferredBeliefProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Manifest Sha256",
+          "type": "string"
+        },
+        "belief_model_id": {
+          "title": "Belief Model Id",
+          "type": "string"
+        },
+        "checkpoint_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Checkpoint Sha256",
+          "type": "string"
+        },
+        "kind": {
+          "const": "model_inferred",
+          "default": "model_inferred",
+          "title": "Kind",
+          "type": "string"
+        },
+        "viewer_history_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Viewer History Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "belief_model_id",
+        "checkpoint_sha256",
+        "artifact_manifest_sha256",
+        "viewer_history_sha256"
+      ],
+      "title": "ModelInferredBeliefProvenance",
+      "type": "object"
+    },
     "NewGameMessage": {
       "additionalProperties": false,
       "properties": {
@@ -852,6 +1128,42 @@
         "kind"
       ],
       "title": "PersonalAudience",
+      "type": "object"
+    },
+    "PlayerAuthoredBeliefProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at_table_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Created At Table Revision",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "player_authored",
+          "default": "player_authored",
+          "title": "Kind",
+          "type": "string"
+        },
+        "shared_at_table_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shared At Table Revision"
+        }
+      },
+      "required": [
+        "created_at_table_revision"
+      ],
+      "title": "PlayerAuthoredBeliefProvenance",
       "type": "object"
     },
     "RematchMessage": {

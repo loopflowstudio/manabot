@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
@@ -39,6 +41,27 @@ RUST_VALIDATOR = Draft202012Validator(RUST_SCHEMA)
 
 SCENARIO_A = "advice-scenario-a"
 SCENARIO_B = "advice-scenario-b"
+
+
+def test_default_play_import_does_not_require_training_dependencies() -> None:
+    script = """
+import builtins
+import sys
+
+blocked = {'numpy', 'torch', 'pandas', 'psutil', 'wandb', 'gymnasium'}
+real_import = builtins.__import__
+
+def guarded(name, globals=None, locals=None, fromlist=(), level=0):
+    if name.split('.', 1)[0] in blocked:
+        raise ModuleNotFoundError(f'blocked clean-runtime dependency: {name}')
+    return real_import(name, globals, locals, fromlist, level)
+
+builtins.__import__ = guarded
+import etude.server
+assert 'manabot.sim.conditional_search' not in sys.modules
+assert 'numpy' not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", script], check=True)
 
 
 @pytest.fixture(autouse=True)
@@ -168,7 +191,7 @@ def test_deltas_are_signed_and_non_zero_for_at_least_one_action() -> None:
             )
 
 
-def test_request_advice_fails_closed_on_identity_mismatch() -> None:
+def test_request_advice_fails_closed_on_incomplete_legacy_identity() -> None:
     meta = advice_meta()
     wrong = AdviceRequestIdentity(
         source_replay_id=meta.identity.source_replay_id,
@@ -178,7 +201,7 @@ def test_request_advice_fails_closed_on_identity_mismatch() -> None:
     )
     response = request_advice(meta.address, SCENARIO_A, wrong)
     assert response.status == "unavailable"
-    assert response.reason == "identity_mismatch"
+    assert response.reason == "legacy_identity_incomplete"
     assert response.evidence is None
     assert response.deltas is None
     assert response.frame is None
@@ -246,7 +269,7 @@ def test_post_advice_endpoint_returns_evidence_and_fails_closed() -> None:
         )
         assert closed.status_code == 200
         assert closed.json()["status"] == "unavailable"
-        assert closed.json()["reason"] == "identity_mismatch"
+        assert closed.json()["reason"] == "legacy_identity_incomplete"
         assert closed.json()["evidence"] is None
 
 

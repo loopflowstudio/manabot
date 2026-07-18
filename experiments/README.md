@@ -66,6 +66,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [opcode-alignment-v1](opcode-alignment-v1.md) | semantic-program-only encoder: 91.7% zero-shot held-out cluster accuracy vs 0.0% for opaque card-id arms |
 | [structured-policy-decoder](structured-policy-decoder.md) | structured decoder matches legacy adapter exactly (6435/6435 actions) at comparable latency — migration evidence |
 | [INT-11 semantic runtime policy](int-11-semantic-runtime-policy.md) | learned priority/target/combat policy executes 144 legal Commands and 36/36 terminal paired games across three seeds; identity transfer beats identity-only but matches structure-shuffled, so structure evidence is null/ambiguous |
+| [INT-12 belief strategy advisor](int-12-belief-strategy-advisor.md) | one pinned exact-range comparison returns byte-identical live/Study advice with a 0.125 policy delta; cached p50 0.984 ms and fresh p50 16.981 s for the declared 16-simulation engineering profile, with no strength or service-SLO claim |
 | [w2-179](w2-179-content-pack-local-diagnostic.md) | immutable ContentPack / mutable Card seam with deterministic CardDefId hashing |
 | [w2-182](w2-182-search-branching-v1.md) | full-clone branching baseline: 2,194 sims/s, clone p50 4.5µs |
 | [w2-198](w2-198-compact-clone-undo-v1.md) | compact clone+undo at parity with full clone (2,097 sims/s) with journal accounting |

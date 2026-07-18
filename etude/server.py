@@ -17,13 +17,19 @@ import secrets
 from typing import Any, Callable
 
 from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from pydantic import ValidationError
 
 import managym
 from managym.decision import Command as SemanticCommand, SemanticTransition
 
 from . import trace as trace_store, villain as villain_module
-from .advice import AdviceRequest, advice_meta, request_advice
+from .advice import (
+    AdviceRequest,
+    advice_meta,
+    request_advice,
+    request_versioned_fixture_advice,
+)
 from .curated_pack import CURATED_PACK
 from .enums import (
     ActionEnum,
@@ -1868,12 +1874,31 @@ class GameSession:
             ],
         )
 
+    def study_fork_provider(self) -> StudyForkProvider:
+        """Expose Game's validated retained-root capability to consumers.
+
+        The provider owns replay lookup and isolated root cloning. Callers do
+        not receive or inspect ``GameSession``'s retained-root storage.
+        """
+
+        if self._study_provider is not None:
+            return self._study_provider
+        return StudyForkProvider(self.canonical_replay(), self._study_roots)
+
+    def resolve_live_advisor_decision(
+        self,
+        raw_address: str,
+        authorized_viewer: int,
+    ) -> Any:
+        """Resolve a committed live-session decision through Game authority."""
+
+        return self.study_fork_provider().resolve_advisor_decision(
+            raw_address, authorized_viewer
+        )
+
     def fork_study(self, raw_address: str) -> StudyBranch:
         """Fork one retained player-0 replay decision for ephemeral Study."""
-        provider = self._study_provider
-        if provider is None:
-            provider = StudyForkProvider(self.canonical_replay(), self._study_roots)
-        return provider.fork(raw_address, HERO_PLAYER_INDEX)
+        return self.study_fork_provider().fork(raw_address, HERO_PLAYER_INDEX)
 
     def retry_study(
         self,
@@ -3031,22 +3056,26 @@ async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict[str, Any
 async def get_advice_meta() -> dict[str, Any]:
     """Bootstrap for the shared decision-advice surface.
 
-    Returns the pinned ``erd1`` decision address, the two belief-scenario
-    summaries, and the request identity the caller must supply. Both the live
-    play page and the replay/Study page consume this, then POST ``/api/advice``
-    per scenario. The fixture is static and loaded once.
+    Returns the compatibility bootstrap plus the checked advice-v1 comparison
+    request consumed by both live play and Study.
     """
     return advice_meta().model_dump(mode="json")
 
 
-@app.post("/api/advice")
-async def post_advice(payload: AdviceRequest) -> dict[str, Any]:
-    """One advice request: checked conditional evidence at one decision.
+@app.post("/api/advice", response_model=None)
+async def post_advice(payload: AdviceRequest) -> dict[str, Any] | Response:
+    """Serve legacy GAM-6 or canonical advice-v1 through one endpoint.
 
-    Used by both live and Study through the same request shape. Fails closed to
-    a typed ``unavailable`` state (no evidence) on identity mismatch, unknown
-    scenario, or wrong address. This endpoint is the adapter seam for GAM-4
-    (live decision address / retry/compare) and INT-13 (search evidence).
+    Versioned success bytes are returned from the provider serializer without
+    framework re-encoding. Domain incompatibilities remain typed unavailable;
+    malformed request bodies use ordinary transport validation.
     """
+    if not payload.is_legacy:
+        return Response(
+            content=request_versioned_fixture_advice(payload),
+            media_type="application/json",
+        )
+    assert payload.scenario_id is not None
+    assert payload.identity is not None
     response = request_advice(payload.address, payload.scenario_id, payload.identity)
     return response.model_dump(mode="json")
