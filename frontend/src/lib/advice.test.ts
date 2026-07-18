@@ -32,11 +32,11 @@ describe('advice fixture and adapter twin', () => {
   it('validates the artifact through the study schema and viewer-safety', () => {
     expect(validate(fixture.artifact), JSON.stringify(validate.errors)).toBe(true);
     expect(() => assertViewerSafeAdviceArtifact(fixture)).not.toThrow();
-    expect(fixture.artifact.identity.model.id).toBe('flat-mc-search-v1');
-    expect(fixture.artifact.identity.analysis_budget.id).toBe('1w-8r-16s');
+    expect(fixture.artifact.identity.model.id).toBe('conditional-determinized-puct-v1');
+    expect(fixture.artifact.identity.analysis_budget.id).toBe('2w-16s-paired-seed-197');
   });
 
-  it('pins two scenarios at one decision with distinct non-uniform evidence', () => {
+  it('pins two scenarios at one decision with distinct conditional evidence', () => {
     const landmarks = fixture.artifact.landmarks;
     expect(landmarks).toHaveLength(2);
     expect(new Set(landmarks.map((lm) => lm.decision_id)).size).toBe(1);
@@ -44,8 +44,15 @@ describe('advice fixture and adapter twin', () => {
     const massA = landmarks[0].evidence.policy_mass.map((r) => r.probability);
     const massB = landmarks[1].evidence.policy_mass.map((r) => r.probability);
     expect(massA).not.toEqual(massB);
-    expect(Math.max(...massA)).not.toBe(Math.min(...massA));
-    expect(Math.max(...massB)).not.toBe(Math.min(...massB));
+    expect(
+      [massA, massB].some((mass) => Math.max(...mass) !== Math.min(...mass)),
+    ).toBe(true);
+    expect(new Set(fixture.scenarios.map((scenario) => scenario.seed_plan))).toEqual(
+      new Set(['paired-seed-197']),
+    );
+    expect(new Set(landmarks.map((lm) => lm.evidence.provenance.producer))).toEqual(
+      new Set(['conditional-determinized-puct:v1:paired-seed-197']),
+    );
   });
 
   it('cross-references scenarios to landmarks and keeps opponent hands empty', () => {
@@ -57,12 +64,26 @@ describe('advice fixture and adapter twin', () => {
     }
   });
 
+  it('rejects cross-scenario seed-plan and producer drift', () => {
+    const seedDrift = JSON.parse(JSON.stringify(fixture)) as AdviceArtifact;
+    seedDrift.scenarios[1].seed_plan = 'different-seed-plan';
+    expect(() => assertViewerSafeAdviceArtifact(seedDrift)).toThrow(
+      'advice scenarios must share one paired seed plan',
+    );
+
+    const producerDrift = JSON.parse(JSON.stringify(fixture)) as AdviceArtifact;
+    producerDrift.artifact.landmarks[1].evidence.provenance.producer = 'different-producer';
+    expect(() => assertViewerSafeAdviceArtifact(producerDrift)).toThrow(
+      'advice scenarios must share one producer identity',
+    );
+  });
+
   it('bootstraps the pinned address, scenarios, and expected identity', () => {
     const meta = adviceMeta(fixture);
     expect(meta.address.startsWith('erd1.')).toBe(true);
     expect(meta.scenarios).toHaveLength(2);
-    expect(meta.identity.advisor_id).toBe('flat-mc-search-v1');
-    expect(meta.identity.compute_id).toBe('1w-8r-16s');
+    expect(meta.identity.advisor_id).toBe('conditional-determinized-puct-v1');
+    expect(meta.identity.compute_id).toBe('2w-16s-paired-seed-197');
   });
 
   it('returns real evidence and deltas for each scenario', () => {

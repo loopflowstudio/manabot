@@ -62,8 +62,8 @@ describe('DecisionAdvice', () => {
 
   it('renders the advisor identity and advisory-only footer', () => {
     const { body } = render(DecisionAdvice, { props: defaultProps() });
-    expect(body).toContain('flat-mc-search-v1');
-    expect(body).toContain('1w-8r-16s');
+    expect(body).toContain('conditional-determinized-puct-v1');
+    expect(body).toContain('2w-16s-paired-seed-197');
     expect(body).toContain('advisory only');
   });
 

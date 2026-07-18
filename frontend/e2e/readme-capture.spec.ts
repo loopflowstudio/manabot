@@ -50,8 +50,8 @@ test('README hero shows the versioned belief-to-strategy prototype', async ({ pa
   await expect(page.getByTestId('advice-delta-row')).toHaveCount(2);
   await expect(page.getByTestId('advice-deltas')).toContainText('policy');
   await expect(page.getByTestId('advice-deltas')).toContainText('value');
-  await expect(page.getByTestId('advice-footer')).toContainText('flat-mc-search-v1');
-  await expect(page.getByTestId('advice-footer')).toContainText('1w-8r-16s');
+  await expect(page.getByTestId('advice-footer')).toContainText('conditional-determinized-puct-v1');
+  await expect(page.getByTestId('advice-footer')).toContainText('2w-16s-paired-seed-197');
   await expect(page.getByTestId('advice-footer')).toContainText(
     'advisory only — submit through the ActionPanel',
   );

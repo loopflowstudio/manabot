@@ -20,10 +20,10 @@ pretending either read is the hidden truth.
      width="720">
 
 *Prototype shown: a checked fixture generated from real, identity-pinned
-flat-MC evidence at one completed-match decision. The same component renders in
-the play and replay/Study hosts today. Binding it to the actual live or selected
-replay decision, player-authored belief entry, Retry and return, and shared
-watcher roles are still being connected.*
+conditional-search evidence at one completed-match decision. The same component
+renders in the play and replay/Study hosts today. Binding it to the actual live
+or selected replay decision, player-authored belief entry, Retry and return,
+and shared watcher roles are still being connected.*
 
 ## What runs today
 

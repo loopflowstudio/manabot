@@ -17,13 +17,13 @@
         "build_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
       },
       "model": {
-        "id": "flat-mc-search-v1",
+        "id": "conditional-determinized-puct-v1",
         "checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
       },
       "analysis_budget": {
-        "id": "1w-8r-16s",
-        "max_nodes": 256,
-        "sampled_worlds": 16,
+        "id": "2w-16s-paired-seed-197",
+        "max_nodes": 16,
+        "sampled_worlds": 2,
         "rollouts_per_world": 8
       },
       "knowledge_scope": "historical_viewer"
@@ -399,64 +399,64 @@
           "policy_mass": [
             {
               "alternative": "offer-0",
-              "probability": 0.75
+              "probability": 0.4375
             },
             {
               "alternative": "offer-1",
-              "probability": 0.25
+              "probability": 0.5625
             }
           ],
           "search_value": [
             {
               "alternative": "offer-0",
               "perspective": 0,
-              "expected_match_points": 0.2421875
+              "expected_match_points": 0.2857142984867096
             },
             {
               "alternative": "offer-1",
               "perspective": 0,
-              "expected_match_points": 0.2109375
+              "expected_match_points": 0.3333333432674408
             }
           ],
           "visits": [
             {
               "alternative": "offer-0",
-              "visits": 128
+              "visits": 7
             },
             {
               "alternative": "offer-1",
-              "visits": 128
+              "visits": 9
             }
           ],
           "sampled_world_robustness": [
             {
               "alternative": "offer-0",
-              "favorable_worlds": 1,
-              "sampled_worlds": 16
+              "favorable_worlds": 0,
+              "sampled_worlds": 2
             },
             {
               "alternative": "offer-1",
-              "favorable_worlds": 1,
-              "sampled_worlds": 16
+              "favorable_worlds": 0,
+              "sampled_worlds": 2
             }
           ],
           "uncertainty": [
             {
               "alternative": "offer-0",
-              "standard_error": 0.05034871884748741,
-              "method": "flat-mc-seed-spread"
+              "standard_error": 0.0416666716337204,
+              "method": "int13-world-q-spread"
             },
             {
               "alternative": "offer-1",
-              "standard_error": 0.05317858816839098,
-              "method": "flat-mc-seed-spread"
+              "standard_error": 0.07500000298023224,
+              "method": "int13-world-q-spread"
             }
           ],
           "provenance": {
-            "producer": "flat-mc-search:v1:seeds-101-116",
+            "producer": "conditional-determinized-puct:v1:paired-seed-197",
             "producer_version": "1",
             "generated_at": "2026-07-16T00:00:00+00:00",
-            "evidence_sha256": "aa3e41513fba3a7ffc221ddedbfd4ad477f9ea2443a49729d78599bdf282f35f"
+            "evidence_sha256": "dd4ae1cb5f5c24bc9d50bf79529a3936e868601265fbd0630c5f6477f312f77c"
           }
         }
       },
@@ -830,64 +830,64 @@
           "policy_mass": [
             {
               "alternative": "offer-0",
-              "probability": 0.6875
+              "probability": 0.5
             },
             {
               "alternative": "offer-1",
-              "probability": 0.3125
+              "probability": 0.5
             }
           ],
           "search_value": [
             {
               "alternative": "offer-0",
               "perspective": 0,
-              "expected_match_points": 0.3046875
+              "expected_match_points": 0.0
             },
             {
               "alternative": "offer-1",
               "perspective": 0,
-              "expected_match_points": 0.3359375
+              "expected_match_points": 0.0
             }
           ],
           "visits": [
             {
               "alternative": "offer-0",
-              "visits": 128
+              "visits": 8
             },
             {
               "alternative": "offer-1",
-              "visits": 128
+              "visits": 8
             }
           ],
           "sampled_world_robustness": [
             {
               "alternative": "offer-0",
               "favorable_worlds": 0,
-              "sampled_worlds": 16
+              "sampled_worlds": 2
             },
             {
               "alternative": "offer-1",
-              "favorable_worlds": 5,
-              "sampled_worlds": 16
+              "favorable_worlds": 0,
+              "sampled_worlds": 2
             }
           ],
           "uncertainty": [
             {
               "alternative": "offer-0",
-              "standard_error": 0.05225232999190881,
-              "method": "flat-mc-seed-spread"
+              "standard_error": 0.0,
+              "method": "int13-world-q-spread"
             },
             {
               "alternative": "offer-1",
-              "standard_error": 0.07630697154421737,
-              "method": "flat-mc-seed-spread"
+              "standard_error": 0.0,
+              "method": "int13-world-q-spread"
             }
           ],
           "provenance": {
-            "producer": "flat-mc-search:v1:seeds-201-216",
+            "producer": "conditional-determinized-puct:v1:paired-seed-197",
             "producer_version": "1",
             "generated_at": "2026-07-16T00:00:00+00:00",
-            "evidence_sha256": "afe814d6c39b5040f5aa55852930f2c608d624c6459689fce46c3c9955c800ec"
+            "evidence_sha256": "179db2ab95a386189b804876ea8ca053edbc1937ff3a185938b474e25921540a"
           }
         }
       }
@@ -897,18 +897,20 @@
     {
       "landmark_id": "advice-scenario-a",
       "label": "Opponent curving out",
-      "description": "Believe the opponent has kept a low-curve Allies hand and is likely to spend their mana each turn to commit bodies to the board.",
-      "inferred_range": "Likely two or three cheap creatures already committed; few instant-speed tricks expected in hand.",
+      "description": "Believe the opponent kept a creature-dense Allies hand and is likely to spend its mana developing the board.",
+      "inferred_range": "Weighted toward cheap Allies and follow-up creatures, with no Allies at Last in the conditioned worlds.",
       "belief_kind": "opponent-curved-out",
-      "seed_family": "101-116"
+      "condition_id": "not(has:Allies at Last)",
+      "seed_plan": "paired-seed-197"
     },
     {
       "landmark_id": "advice-scenario-b",
       "label": "Opponent holding interaction",
-      "description": "Believe the opponent is holding removal or a combat trick back and may not spend their mana this turn.",
-      "inferred_range": "Likely fewer committed bodies; one or more reactive cards held in hand against an open board.",
+      "description": "Believe the opponent kept an interaction-heavy hand and may hold mana for tricks instead of developing every turn.",
+      "inferred_range": "Weighted toward Allies at Last and other instant-speed tricks, with fewer creature slots in the conditioned worlds.",
       "belief_kind": "opponent-holding-interaction",
-      "seed_family": "201-216"
+      "condition_id": "has:Allies at Last",
+      "seed_plan": "paired-seed-197"
     }
   ]
 }

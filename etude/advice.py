@@ -3,10 +3,11 @@
 This is the first AI-assisted play slice: a narrow, pure-Python consumer of a
 checked, identity-pinned advice fixture. It does NOT invoke search at runtime
 -- the fixture is the evidence. It validates the request identity against the
-fixture's pinned identity, exposes the two belief scenarios and their real
-flat-MC evidence at one ``erd1`` decision, and computes the explicit per-action
-deltas between them. Identity mismatch, unknown scenario, or wrong address fail
-closed to a typed ``unavailable`` state with no evidence.
+fixture's pinned identity, exposes two viewer-safe beliefs and their real
+conditional determinized-PUCT evidence at one ``erd1`` decision, and computes
+the explicit per-action deltas between them. Identity mismatch, unknown
+scenario, or wrong address fail closed to a typed ``unavailable`` state with no
+evidence.
 
 The adapter carries two explicit seams, each a named, typed binding point so
 the upstream waves plug in without duplicating the StudyArtifact substrate:
@@ -21,11 +22,11 @@ the upstream waves plug in without duplicating the StudyArtifact substrate:
   ``manabot.sim.conditional_search``) into the per-action ``DecisionEvidence``
   this surface renders, and ``int13_result_to_surface_deltas`` reconciles two
   INT-13 conditions into the surface's per-action delta dict. The prototype
-  serves fixture-backed flat-MC evidence at runtime; these mappings are the
-  typed binding point INT-13's live search fills when it publishes.
+  serves fixture-backed conditional-PUCT evidence at runtime; these mappings
+  are the typed binding point INT-13's live search fills when it publishes.
 
-This is a prototype advisor (``flat-mc-search-v1``), not a production advisor:
-the footer states "advisory only", and no strength or latency claim is made.
+This is a fixture-backed prototype advisor, not a production advisor: the
+footer states "advisory only", and no strength or latency claim is made.
 """
 
 from __future__ import annotations
@@ -35,9 +36,10 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import statistics
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from etude.experience_protocol import ExperienceFrame, InteractionOffer, ProtocolModel
 from etude.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
@@ -85,27 +87,68 @@ class AdviceScenarioSummary(ProtocolModel):
 
 
 class AdviceScenarioRecord(AdviceScenarioSummary):
-    """The fixture's scenario metadata, including the pinned seed family.
+    """The fixture's scenario metadata, including its conditional-search binding.
 
-    ``seed_family`` is generator provenance, not a request field; the adapter
-    cross-references each record to a landmark by ``landmark_id``.
+    ``condition_id`` and ``seed_plan`` are generator provenance, not request
+    fields; the adapter cross-references each record to a landmark by
+    ``landmark_id``. Both scenarios use the same seed plan, so their visible
+    delta is attributable to belief conditioning rather than random-seed drift.
     """
 
-    seed_family: str
+    condition_id: str
+    seed_plan: str
 
 
 class AdviceArtifact(ProtocolModel):
     """Wrapper around a ``StudyArtifact`` plus a prototype presentation layer.
 
     The ``artifact`` is a standard ``StudyArtifact`` (two landmarks at the same
-    ``erd1`` decision, each with real flat-MC evidence) and validates through
-    both the Pydantic model and the Rust-owned ``study-v1`` schema. The
-    ``scenarios`` array is a prototype presentation layer validated here, not by
-    the Rust schema.
+    ``erd1`` decision, each with evidence from one paired conditional-PUCT run)
+    and validates through both the Pydantic model and the Rust-owned
+    ``study-v1`` schema. The ``scenarios`` array is a prototype presentation
+    layer validated here, not by the Rust schema.
     """
 
     artifact: StudyArtifact
     scenarios: list[AdviceScenarioRecord]
+
+    @model_validator(mode="after")
+    def validate_comparison_identity(self) -> AdviceArtifact:
+        landmarks = self.artifact.landmarks
+        if len(landmarks) != 2 or len(self.scenarios) != 2:
+            raise ValueError("advice comparison must contain exactly two scenarios")
+        landmark_ids = {landmark.id for landmark in landmarks}
+        scenario_ids = {scenario.landmark_id for scenario in self.scenarios}
+        if scenario_ids != landmark_ids:
+            raise ValueError("advice scenarios do not cover the artifact landmarks")
+        if len({scenario.condition_id for scenario in self.scenarios}) != 2:
+            raise ValueError("advice scenarios must bind distinct conditions")
+        if len({scenario.seed_plan for scenario in self.scenarios}) != 1:
+            raise ValueError("advice scenarios must share one paired seed plan")
+        if len({landmark.decision_id for landmark in landmarks}) != 1:
+            raise ValueError("advice landmarks must share one decision address")
+
+        first, second = landmarks
+        if (
+            second.frame != first.frame
+            or second.offer != first.offer
+            or second.played != first.played
+            or second.alternatives != first.alternatives
+        ):
+            raise ValueError(
+                "advice landmarks must share facts, command, and action vocabulary"
+            )
+        if first.evidence == second.evidence:
+            raise ValueError("advice conditions must produce distinct evidence")
+        if (
+            len({landmark.evidence.provenance.producer for landmark in landmarks}) != 1
+            or len(
+                {landmark.evidence.provenance.generated_at for landmark in landmarks}
+            )
+            != 1
+        ):
+            raise ValueError("advice scenarios must share one producer identity")
+        return self
 
 
 class AdviceResponse(ProtocolModel):
@@ -147,14 +190,7 @@ def load_advice_fixture() -> AdviceArtifact:
     cross-reference landmarks by id.
     """
     payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-    artifact = AdviceArtifact.model_validate(payload)
-    landmark_ids = {landmark.id for landmark in artifact.artifact.landmarks}
-    scenario_ids = {scenario.landmark_id for scenario in artifact.scenarios}
-    if scenario_ids != landmark_ids:
-        raise ValueError("advice scenarios do not cover the artifact landmarks")
-    if len({landmark.decision_id for landmark in artifact.artifact.landmarks}) != 1:
-        raise ValueError("advice landmarks must share one decision address")
-    return artifact
+    return AdviceArtifact.model_validate(payload)
 
 
 def _expected_identity(artifact: AdviceArtifact) -> AdviceRequestIdentity:
@@ -239,11 +275,10 @@ def int13_condition_to_decision_evidence(
     This is the explicit binding point where INT-13's determinized-PUCT search
     evidence (``manabot.sim.conditional_search.ConditionResult``) becomes the
     per-action ``DecisionEvidence`` the shared live/Study surface renders. The
-    prototype serves fixture-backed flat-MC evidence at runtime; this mapping is
-    not on the fixture request path. When INT-13's live search publishes, the
-    ``POST /api/advice`` server can route a live-address request to this mapping
-    instead of the static fixture, without changing the surface or the
-    ``DecisionEvidence`` contract.
+    prototype serves checked conditional-PUCT evidence from the static fixture
+    at runtime. When INT-13's live search publishes, the ``POST /api/advice``
+    server can route a live-address request to this mapping instead, without
+    changing the surface or the ``DecisionEvidence`` contract.
 
     Field mapping (``ConditionResult`` -> ``DecisionEvidence``):
 
@@ -251,15 +286,11 @@ def int13_condition_to_decision_evidence(
       distribution) and ``visits`` (raw per-action counts).
     - ``q_values`` -> ``search_value.expected_match_points`` (INT-13 q-values
       are mean per-action win-probability estimates).
-    - ``uncertainty`` (one scalar) -> ``uncertainty.standard_error`` per action,
-      broadcast with ``method = "int13-scalar-broadcast"``. INT-13 does not yet
-      expose per-action standard error; the broadcast is a documented gap, not a
-      per-action precision claim.
-    - ``condition_mass`` / ``sampled_worlds`` -> ``sampled_world_robustness``
-      with ``favorable_worlds`` per action set to ``sampled_worlds`` when that
-      action's mean q exceeds 0.5 and 0 otherwise (a viewer-safe per-action
-      favorability proxy; the exact per-action favorable-world count is an
-      INT-13 future field).
+    - ``world_q_values`` -> per-action ``uncertainty.standard_error`` using the
+      standard error across searched worlds, and
+      ``sampled_world_robustness.favorable_worlds`` by counting worlds whose
+      per-action q-value exceeds 0.5. These are real per-world search values,
+      not scalar broadcasts or aggregate proxies.
 
     ``producer`` is the INT-13 provenance string (e.g.
     ``"int-13-determinized-puct:v1"``). The returned dict validates as a
@@ -270,10 +301,15 @@ def int13_condition_to_decision_evidence(
     num_actions = len(alternative_ids)
     if len(visit_counts) != num_actions or len(q_values) != num_actions:
         raise ValueError("int13 condition action count does not match alternative_ids")
+    world_q_values = [list(row) for row in condition.world_q_values]
+    if len(world_q_values) != int(condition.sampled_worlds) or any(
+        len(row) != num_actions for row in world_q_values
+    ):
+        raise ValueError("int13 condition world q-values do not match sampled worlds")
     total_visits = sum(visit_counts)
     denom = total_visits if total_visits > 0 else 1
     policy_mass = [
-        {"alternative": alt, "probability": count / denom}
+        {"alternative": alt, "probability": float(count) / float(denom)}
         for alt, count in zip(alternative_ids, visit_counts, strict=True)
     ]
     search_value = [
@@ -288,23 +324,30 @@ def int13_condition_to_decision_evidence(
         {"alternative": alt, "visits": int(count)}
         for alt, count in zip(alternative_ids, visit_counts, strict=True)
     ]
-    sampled = int(condition.sampled_worlds)
+    sampled = len(world_q_values)
     sampled_world_robustness = [
         {
             "alternative": alt,
-            "favorable_worlds": sampled if float(q) > 0.5 else 0,
+            "favorable_worlds": sum(
+                1 for world_values in world_q_values if world_values[index] > 0.5
+            ),
             "sampled_worlds": sampled,
         }
-        for alt, q in zip(alternative_ids, q_values, strict=True)
+        for index, alt in enumerate(alternative_ids)
     ]
-    uncertainty = [
-        {
-            "alternative": alt,
-            "standard_error": float(condition.uncertainty),
-            "method": "int13-scalar-broadcast",
-        }
-        for alt in alternative_ids
-    ]
+    uncertainty = []
+    for index, alt in enumerate(alternative_ids):
+        samples = [float(world_values[index]) for world_values in world_q_values]
+        standard_error = (
+            statistics.stdev(samples) / math.sqrt(sampled) if sampled > 1 else 0.0
+        )
+        uncertainty.append(
+            {
+                "alternative": alt,
+                "standard_error": standard_error,
+                "method": "int13-world-q-spread",
+            }
+        )
     core = {
         "policy_mass": policy_mass,
         "search_value": search_value,

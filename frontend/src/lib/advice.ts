@@ -32,7 +32,8 @@ export interface AdviceScenarioSummary {
 }
 
 export interface AdviceScenarioRecord extends AdviceScenarioSummary {
-  seed_family: string;
+  condition_id: string;
+  seed_plan: string;
 }
 
 export interface AdviceArtifact {
@@ -73,6 +74,9 @@ export interface AdviceRequest {
  */
 export function assertViewerSafeAdviceArtifact(advice: AdviceArtifact): void {
   assertViewerSafeStudyArtifact(advice.artifact);
+  if (advice.artifact.landmarks.length !== 2 || advice.scenarios.length !== 2) {
+    throw new Error('advice comparison must contain exactly two scenarios');
+  }
   const landmarkIds = new Set(advice.artifact.landmarks.map((lm) => lm.id));
   const scenarioIds = new Set(advice.scenarios.map((s) => s.landmark_id));
   if (scenarioIds.size !== landmarkIds.size || [...scenarioIds].some((id) => !landmarkIds.has(id))) {
@@ -81,6 +85,30 @@ export function assertViewerSafeAdviceArtifact(advice: AdviceArtifact): void {
   const decisionIds = new Set(advice.artifact.landmarks.map((lm) => lm.decision_id));
   if (decisionIds.size !== 1) {
     throw new Error('advice landmarks must share one decision address');
+  }
+  if (new Set(advice.scenarios.map((s) => s.condition_id)).size !== 2) {
+    throw new Error('advice scenarios must bind distinct conditions');
+  }
+  if (new Set(advice.scenarios.map((s) => s.seed_plan)).size !== 1) {
+    throw new Error('advice scenarios must share one paired seed plan');
+  }
+  const [first, second] = advice.artifact.landmarks;
+  if (
+    JSON.stringify(second.frame) !== JSON.stringify(first.frame) ||
+    JSON.stringify(second.offer) !== JSON.stringify(first.offer) ||
+    JSON.stringify(second.played) !== JSON.stringify(first.played) ||
+    JSON.stringify(second.alternatives) !== JSON.stringify(first.alternatives)
+  ) {
+    throw new Error('advice landmarks must share facts, command, and action vocabulary');
+  }
+  if (JSON.stringify(first.evidence) === JSON.stringify(second.evidence)) {
+    throw new Error('advice conditions must produce distinct evidence');
+  }
+  if (
+    new Set(advice.artifact.landmarks.map((lm) => lm.evidence.provenance.producer)).size !== 1 ||
+    new Set(advice.artifact.landmarks.map((lm) => lm.evidence.provenance.generated_at)).size !== 1
+  ) {
+    throw new Error('advice scenarios must share one producer identity');
   }
 }
 

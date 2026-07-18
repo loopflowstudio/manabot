@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import numpy as np
 import pytest
 
 from etude.advice import (
+    AdviceArtifact,
     AdviceRequestIdentity,
     advice_meta,
     compute_deltas,
@@ -55,21 +57,26 @@ def test_fixture_validates_as_study_artifact_through_model_and_schema() -> None:
     artifact = StudyArtifact.model_validate(FIXTURE["artifact"])
     errors = list(RUST_VALIDATOR.iter_errors(FIXTURE["artifact"]))
     assert not errors
-    assert artifact.identity.model.id == "flat-mc-search-v1"
-    assert artifact.identity.analysis_budget.id == "1w-8r-16s"
+    assert artifact.identity.model.id == "conditional-determinized-puct-v1"
+    assert artifact.identity.analysis_budget.id == "2w-16s-paired-seed-197"
 
 
-def test_two_scenarios_share_one_decision_with_distinct_non_uniform_evidence() -> None:
+def test_two_scenarios_share_one_decision_with_distinct_conditional_evidence() -> None:
     artifact = load_advice_fixture()
     landmarks = artifact.artifact.landmarks
     assert len(landmarks) == 2
     assert len({lm.decision_id for lm in landmarks}) == 1
     assert {lm.id for lm in landmarks} == {SCENARIO_A, SCENARIO_B}
-    for landmark in landmarks:
-        assert policy_mass_is_non_uniform(landmark)
+    assert any(policy_mass_is_non_uniform(landmark) for landmark in landmarks)
     mass_a = [row.probability for row in landmarks[0].evidence.policy_mass]
     mass_b = [row.probability for row in landmarks[1].evidence.policy_mass]
     assert mass_a != mass_b
+    assert {landmark.evidence.provenance.producer for landmark in landmarks} == {
+        "conditional-determinized-puct:v1:paired-seed-197"
+    }
+    assert (
+        len({landmark.evidence.provenance.generated_at for landmark in landmarks}) == 1
+    )
 
 
 def test_scenarios_cross_reference_landmarks() -> None:
@@ -81,7 +88,28 @@ def test_scenarios_cross_reference_landmarks() -> None:
         assert scenario.label
         assert scenario.inferred_range
         assert scenario.belief_kind
-        assert scenario.seed_family
+        assert scenario.condition_id
+        assert scenario.seed_plan == "paired-seed-197"
+    assert {scenario.condition_id for scenario in artifact.scenarios} == {
+        "has:Allies at Last",
+        "not(has:Allies at Last)",
+    }
+
+
+def test_fixture_rejects_cross_scenario_seed_plan_drift() -> None:
+    payload = copy.deepcopy(FIXTURE)
+    payload["scenarios"][1]["seed_plan"] = "different-seed-plan"
+    with pytest.raises(ValueError, match="share one paired seed plan"):
+        AdviceArtifact.model_validate(payload)
+
+
+def test_fixture_rejects_cross_scenario_producer_drift() -> None:
+    payload = copy.deepcopy(FIXTURE)
+    payload["artifact"]["landmarks"][1]["evidence"]["provenance"]["producer"] = (
+        "different-producer"
+    )
+    with pytest.raises(ValueError, match="share one producer identity"):
+        AdviceArtifact.model_validate(payload)
 
 
 def test_advice_meta_returns_pinned_address_scenarios_and_identity() -> None:
@@ -91,8 +119,8 @@ def test_advice_meta_returns_pinned_address_scenarios_and_identity() -> None:
     assert len(meta.scenarios) == 2
     assert meta.identity.source_replay_id == artifact.artifact.identity.source_replay_id
     assert meta.identity.match_id == artifact.artifact.identity.match_id
-    assert meta.identity.advisor_id == "flat-mc-search-v1"
-    assert meta.identity.compute_id == "1w-8r-16s"
+    assert meta.identity.advisor_id == "conditional-determinized-puct-v1"
+    assert meta.identity.compute_id == "2w-16s-paired-seed-197"
 
 
 def test_request_advice_returns_real_evidence_and_deltas_for_each_scenario() -> None:
@@ -186,7 +214,7 @@ def test_get_advice_meta_endpoint_returns_pinned_decision() -> None:
     body = response.json()
     assert body["address"].startswith("erd1.")
     assert len(body["scenarios"]) == 2
-    assert body["identity"]["advisor_id"] == "flat-mc-search-v1"
+    assert body["identity"]["advisor_id"] == "conditional-determinized-puct-v1"
 
 
 def test_post_advice_endpoint_returns_evidence_and_fails_closed() -> None:
@@ -224,8 +252,8 @@ def test_post_advice_endpoint_returns_evidence_and_fails_closed() -> None:
 
 # ---------------------------------------------------------------------------
 # Explicit INT-13 adapter seam: ConditionResult -> DecisionEvidence mapping.
-# These tests prove the seam is real and typed against the INT-13 contracts on
-# main, without wiring INT-13 into the fixture-backed runtime path.
+# These tests prove the fixture/runtime mapping remains typed against the
+# INT-13 contracts on main.
 # ---------------------------------------------------------------------------
 
 GENERATED_AT = "2026-07-18T00:00:00+00:00"
@@ -239,9 +267,15 @@ def _condition(
     q_values: list[float],
     *,
     uncertainty: float = 0.05,
-    sampled_worlds: int = 16,
+    world_q_values: list[list[float]] | None = None,
 ) -> ConditionResult:
     """Build a minimal real ConditionResult for seam tests."""
+    if world_q_values is None:
+        world_q_values = [
+            [min(1.0, value + 0.1) for value in q_values],
+            [max(0.0, value - 0.1) for value in q_values],
+        ]
+    sampled_worlds = len(world_q_values)
     return ConditionResult(
         condition_id=condition_id,
         condition_mass=1.0,
@@ -250,8 +284,10 @@ def _condition(
         visit_counts=np.asarray(visit_counts, dtype=np.float64),
         q_values=np.asarray(q_values, dtype=np.float64),
         root_value=float(q_values[0]),
-        world_q_values=np.asarray(q_values, dtype=np.float64),
-        world_root_values=np.asarray(q_values, dtype=np.float64),
+        world_q_values=np.asarray(world_q_values, dtype=np.float64),
+        world_root_values=np.asarray(
+            [sum(row) / len(row) for row in world_q_values], dtype=np.float64
+        ),
         uncertainty=uncertainty,
         simulations=int(sum(visit_counts)),
         cap_hits=0,
@@ -277,17 +313,16 @@ def test_int13_seam_maps_condition_to_decision_evidence() -> None:
     assert [
         row.expected_match_points for row in evidence.search_value
     ] == pytest.approx([0.6, 0.3])
-    # uncertainty is the documented scalar broadcast, not a per-action claim.
-    assert [row.method for row in evidence.uncertainty] == [
-        "int13-scalar-broadcast"
-    ] * 2
+    # Uncertainty comes from real per-world q-value spread for each action.
+    assert [row.method for row in evidence.uncertainty] == ["int13-world-q-spread"] * 2
     assert [row.standard_error for row in evidence.uncertainty] == pytest.approx(
-        [0.05, 0.05]
+        [0.1, 0.1]
     )
-    # Favorable-worlds proxy: q > 0.5 flags the first action only.
+    # Favorability counts searched worlds, not an aggregate q-value proxy.
     robust = {row.alternative: row for row in evidence.sampled_world_robustness}
-    assert robust["offer-0"].favorable_worlds == 16
+    assert robust["offer-0"].favorable_worlds == 1
     assert robust["offer-1"].favorable_worlds == 0
+    assert robust["offer-0"].sampled_worlds == 2
     # Provenance is content-addressed and INT-13-named.
     assert evidence.provenance.producer == INT13_PRODUCER
     assert evidence.provenance.generated_at == GENERATED_AT

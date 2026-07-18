@@ -2414,7 +2414,7 @@ async def get_advice_meta() -> dict[str, Any]:
 
 @app.post("/api/advice")
 async def post_advice(payload: AdviceRequest) -> dict[str, Any]:
-    """One advice request: real flat-MC evidence for one scenario at one decision.
+    """One advice request: checked conditional evidence at one decision.
 
     Used by both live and Study through the same request shape. Fails closed to
     a typed ``unavailable`` state (no evidence) on identity mismatch, unknown
