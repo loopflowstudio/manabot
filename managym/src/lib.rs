@@ -6,6 +6,7 @@ pub mod conformance;
 pub mod experience;
 pub mod flow;
 pub mod infra;
+pub mod possible_worlds;
 pub mod python;
 pub mod search_state;
 pub mod semantic;

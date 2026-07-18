@@ -261,4 +261,29 @@ impl ZoneManager {
         self.hand[idx] = pool;
         self.library[idx] = library;
     }
+
+    /// Reassign `player`'s hand and library to exactly `new_hand` and
+    /// `new_library`, updating `card_zones` for every card. Used by exact
+    /// possible-world materialization: the caller chooses which physical
+    /// cards land in which hidden zone, so the resulting branch is a valid
+    /// authoritative state rather than a uniform sample. The union of
+    /// `new_hand` and `new_library` must be exactly the prior hand ∪ library.
+    pub(crate) fn reassign_hidden(
+        &mut self,
+        player: PlayerId,
+        new_hand: Vec<CardId>,
+        new_library: Vec<CardId>,
+    ) {
+        let idx = player.0;
+        for &card in &new_hand {
+            self.ensure_slot(card);
+            self.card_zones[card.0] = Some(ZoneType::Hand);
+        }
+        for &card in &new_library {
+            self.ensure_slot(card);
+            self.card_zones[card.0] = Some(ZoneType::Library);
+        }
+        self.hand[idx] = new_hand;
+        self.library[idx] = new_library;
+    }
 }
