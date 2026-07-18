@@ -4,12 +4,9 @@
 
 > Build the world, play it, measure it, then isolate what surprised us.
 
-Rules previously organized architectural invariants into independent proof and
-benchmark Projects. That work produced valuable substrate, but the portfolio
-now leads with playable curated worlds and real search/Study consumers.
-Conformance, fuzzing, benchmarks, and micro-katas remain available when a
-running slice exposes ambiguity or when a safety-critical invariant requires a
-gate.
+Rules leads with playable curated worlds and real search/Study consumers.
+Conformance, fuzzing, benchmarks, and micro-katas are instruments for observed
+ambiguity or safety-critical invariants, not substitute products.
 
 ## Shipped substrate
 
@@ -35,18 +32,28 @@ gate.
 
 ## Runtime evidence
 
-- Compact full clone is a strong baseline because mutable state is already
-  dense and immutable definitions are shared.
-- Compact clone plus fine-grained undo did not clear its preregistered material
-  win: flat throughput was slightly worse and peak RSS roughly 50% higher,
-  largely because inverse-journal rollback cost more than copying the compact
-  state.
-- Dense event-page COW plus undo has been implemented and measured against both
-  baselines. Its decision belongs to the real search and Study integrations;
-  clone latency alone never selects a production representation.
-- Revision-bound receipts must identify a reproducible relevant source closure
-  and survive verification from another checkout. Incidental worktree paths,
-  nested agent worktrees, and unrelated files are not source identity.
+- Compact full clone is retained because mutable state is dense, immutable
+  definitions are shared, and clone-plus-undo and page-COW did not justify a
+  production split under measured workloads.
+- RUL-2 ran `full_clone/current_game_v1` through the authored PUCT teacher with
+  revision-bound Commands at world, child, and leaf. Selected/reference traces
+  were exact with zero fallback; selected delivered 35.76 decisions/s at
+  interactive p95 65.99 ms and 4.70 decisions/s saturated at p95 1343.29 ms
+  with matched RSS.
+- PR #136 recorded a checked seed-0 UR Lessons versus GW Allies release-stack
+  authority trace: terminal revision 132, 132 Commands across nine prompt
+  families, 26 admitted typed programs, ordered semantic/presentation events,
+  and zero legacy fixed-action, card-name, candidate-cap, or client-legality
+  fallback. Authored replay parity, workload budgets, and another
+  creator-selected increment remain open.
+- PRs #129 and #134 provide a Rules-owned Study fork over compact full clone.
+  A historical viewer-safe decision can execute a structured command, preserve
+  retained source and siblings, and return a consuming receipt with the exact
+  canonical source digest, frame, offer, command, event cursor, and
+  continuation. Retained-root drift fails closed.
+- Revision-bound receipts identify a reproducible relevant source closure.
+  Incidental worktree paths, nested agent worktrees, and unrelated files are
+  not source identity.
 
 ## Durable design decisions
 
@@ -63,9 +70,9 @@ gate.
 - Use safe outer forks and dense transactional execution where real workload
   measurements justify them. Persistent collections, page COW, or undo are not
   adopted by doctrine.
-- A historical Study identity must resolve to an exact viewer-safe fork,
-  execute normal structured commands, preserve the recorded source, and return
-  to the original state and event cursor in one action.
+- A historical Study identity resolves to an exact viewer-safe fork, executes
+  normal structured commands, preserves the recorded source, and returns to the
+  original state and event cursor in one action.
 - A new diagnostic must name the play, search, or Study behavior it explains
   and the runtime decision it can change.
 
@@ -80,12 +87,12 @@ gate.
 
 ## Open tensions
 
-- Make the compiled semantic path the exercised production authority for a
-  complete authored match rather than a parallel acceptance substrate.
-- Integrate the selected branch runtime into actual Intelligence search and
-  Study fork/return before optimizing another benchmark-only representation.
+- Prove revision-by-revision live/headless/replay parity for the shipped
+  authored trace without creating a parallel replay authority.
+- Finish Study consumer evidence with fork/apply/return latency and peak RSS
+  budgets plus focused multi-seed, nested, stale/pack, and privacy stress.
 - Preserve dense-state speed as card semantics and event histories grow.
-- Let creator-selected content pressure the IR naturally without turning each
-  card into a one-off kernel exception.
+- Let the next creator-selected content increment pressure the IR naturally
+  without turning each card into a one-off kernel exception.
 - Keep exactness non-negotiable without allowing proof infrastructure to become
   a substitute for playing the world.
