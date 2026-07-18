@@ -613,7 +613,7 @@ impl Observation {
         }
     }
 
-    fn event_data(event: &GameEvent) -> Vec<EventData> {
+    pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
             GameEvent::CardMoved {

@@ -32,6 +32,7 @@ use crate::{
         },
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
     },
+    decision::Command as SemanticCommand,
     experience::{
         Command as ExperienceCommand, CommandId, MatchId, OfferId as ExperienceOfferId, PromptId,
         Revision,
@@ -2627,6 +2628,47 @@ impl PyEnv {
             env.observation_for_player(player_index)
                 .map_err(map_agent_err)?,
         ))
+    }
+
+    /// Shared semantic DecisionFrame for the current revision, as canonical
+    /// JSON. See `managym.decision.DecisionFrame`.
+    fn semantic_decision_frame_json(&self) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let frame = env.semantic_decision_frame().map_err(map_agent_err)?;
+        serde_json::to_string(&frame).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Composite viewer-safe Observation for `viewer`, as canonical JSON.
+    fn semantic_observation_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let observation = env.semantic_observation(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&observation)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Validate and atomically apply one revision-bound semantic Command
+    /// (`{"command_id","expected_revision","offer_id","answers"}`), returning
+    /// canonical JSON of `{"receipt","observation"}`. Fails closed without
+    /// mutation on stale, unknown, or illegal commands.
+    fn execute_semantic_command_json(&self, command_json: &str) -> PyResult<String> {
+        self.reject_guarded_mutation("Env.execute_semantic_command_json")?;
+        let command: SemanticCommand = serde_json::from_str(command_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid semantic command: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let transition = env
+            .execute_semantic_command(&command)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&transition)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     fn is_game_over(&self) -> PyResult<bool> {

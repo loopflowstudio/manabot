@@ -3,6 +3,7 @@ pub mod benchmark;
 pub mod canonical_replay;
 pub mod cardsets;
 pub mod conformance;
+pub mod decision;
 pub mod experience;
 pub mod flow;
 pub mod infra;

@@ -10,6 +10,10 @@ use crate::{
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     cardsets::alpha::ContentPackManifest,
+    decision::{
+        Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
+        SemanticTransition,
+    },
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     search_state::{BranchDriver, FullCloneDriver, SearchStateWitness},
@@ -245,6 +249,44 @@ impl Env {
             info,
             legacy_actions,
         ))
+    }
+
+    /// Project the current shared semantic decision frame. See
+    /// [`Game::semantic_decision_frame`].
+    pub fn semantic_decision_frame(&self) -> Result<DecisionFrame, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| {
+                AgentError("env.semantic_decision_frame called before reset".to_string())
+            })?
+            .semantic_decision_frame()
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Project the composite viewer-safe semantic observation for `viewer`.
+    /// See [`Game::semantic_observation`].
+    pub fn semantic_observation(&self, viewer: usize) -> Result<SemanticObservation, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.semantic_observation called before reset".to_string()))?
+            .semantic_observation(PlayerId(viewer))
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
+    /// Validate and apply one revision-bound semantic Command atomically,
+    /// returning the fail-closed receipt and next observation. See
+    /// [`Game::execute_semantic_command`].
+    pub fn execute_semantic_command(
+        &mut self,
+        command: &SemanticCommand,
+    ) -> Result<SemanticTransition, AgentError> {
+        self.game
+            .as_mut()
+            .ok_or_else(|| {
+                AgentError("env.execute_semantic_command called before reset".to_string())
+            })?
+            .execute_semantic_command(command)
+            .map_err(|error| AgentError(error.to_string()))
     }
 
     /// Canonical semantic digest used by differential ABI assertions.
