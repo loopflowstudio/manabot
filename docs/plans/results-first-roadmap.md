@@ -30,8 +30,10 @@ The first agent worth being proud of is defined by three observables:
 3. its recommended actions visibly change in reasonable ways when specific
    cards are assumed in hand.
 
-The exact-Bayes tracker over the compatible-deal prior already supplies 1 and
-2 mathematically; the ladder makes all three observable, live, and measured.
+The exact-Bayes tracker over the compatible-deal prior already supplies the
+normalized machinery for 1 and 2; the ladder determines whether its prior and
+updates are reasonable in practice and makes all three observable, live, and
+measured.
 
 ## The results ladder
 
