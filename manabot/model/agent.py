@@ -86,19 +86,45 @@ class Agent(nn.Module):
         self.logger.info(f"Policy head: ({embed_dim} -> 1)")
         self.logger.info(f"Value head: ({embed_dim} -> 1)")
 
+        # Belief-conditioning side-input channel (INT-14). When
+        # max_conditions > 0, one neutral object row is appended to the
+        # attention sequence, built from a per-row condition_index and
+        # condition_weight provided as a side input by a conditional shard.
+        # No belief head is added; the policy and scalar value heads above
+        # are unchanged. index 0 is reserved for the neutral True/uniform
+        # condition used when the obs dict omits the condition keys (arena
+        # inference), so the uninformative prior is the inference default.
+        self.max_conditions = int(hypers.max_conditions)
+        if self.max_conditions > 0:
+            self.condition_index_embedding = nn.Embedding(
+                self.max_conditions, embed_dim
+            )
+            self.condition_embedding = ProjectionLayer(embed_dim + 1, embed_dim)
+            self.logger.info(
+                f"Condition channel: on (max_conditions={self.max_conditions}); "
+                "one neutral object row, no belief head"
+            )
+        else:
+            self.condition_index_embedding = None
+            self.condition_embedding = None
+
         # Static ownership mask over the concatenated object sequence
         # (agent player, opponent player, agent cards, opponent cards,
-        # agent permanents, opponent permanents).
-        is_agent_template = torch.cat(
-            [
-                torch.ones(1, dtype=torch.bool),
-                torch.zeros(1, dtype=torch.bool),
-                torch.ones(enc.cards_per_player, dtype=torch.bool),
-                torch.zeros(enc.cards_per_player, dtype=torch.bool),
-                torch.ones(enc.perms_per_player, dtype=torch.bool),
-                torch.zeros(enc.perms_per_player, dtype=torch.bool),
-            ]
-        ).unsqueeze(0)
+        # agent permanents, opponent permanents). When the condition channel
+        # is on, one neutral (non-agent) slot is appended so the perspective
+        # sign-flip in GameObjectAttention does not mis-attribute the
+        # condition tag as agent-owned.
+        is_agent_parts = [
+            torch.ones(1, dtype=torch.bool),
+            torch.zeros(1, dtype=torch.bool),
+            torch.ones(enc.cards_per_player, dtype=torch.bool),
+            torch.zeros(enc.cards_per_player, dtype=torch.bool),
+            torch.ones(enc.perms_per_player, dtype=torch.bool),
+            torch.zeros(enc.perms_per_player, dtype=torch.bool),
+        ]
+        if self.max_conditions > 0:
+            is_agent_parts.append(torch.zeros(1, dtype=torch.bool))
+        is_agent_template = torch.cat(is_agent_parts).unsqueeze(0)
         self.register_buffer("_is_agent_template", is_agent_template)
 
         # When True, forward() stashes raw pre-mask logits on
@@ -175,35 +201,64 @@ class Agent(nn.Module):
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
         enc_agent_perms = self.perm_embedding(obs["agent_permanents"])
         enc_opp_perms = self.perm_embedding(obs["opponent_permanents"])
-        objects = torch.cat(
-            [
-                enc_agent_player,
-                enc_opp_player,
-                enc_agent_cards,
-                enc_opp_cards,
-                enc_agent_perms,
-                enc_opp_perms,
-            ],
-            dim=1,
-        )
+        object_parts = [
+            enc_agent_player,
+            enc_opp_player,
+            enc_agent_cards,
+            enc_opp_cards,
+            enc_agent_perms,
+            enc_opp_perms,
+        ]
+        validity_parts = [
+            obs["agent_player_valid"],
+            obs["opponent_player_valid"],
+            obs["agent_cards_valid"],
+            obs["opponent_cards_valid"],
+            obs["agent_permanents_valid"],
+            obs["opponent_permanents_valid"],
+        ]
+
+        if self.max_conditions > 0:
+            object_parts.append(self._condition_row(obs))
+            batch = object_parts[0].shape[0]
+            validity_parts.append(torch.ones((batch, 1), device=object_parts[0].device))
+
+        objects = torch.cat(object_parts, dim=1)
 
         # The object layout is static, so the ownership mask is a registered
         # buffer expanded to the batch instead of six per-call allocations.
         batch = objects.shape[0]
         is_agent = self._is_agent_template.expand(batch, -1)
 
-        validity = torch.cat(
-            [
-                obs["agent_player_valid"],
-                obs["opponent_player_valid"],
-                obs["agent_cards_valid"],
-                obs["opponent_cards_valid"],
-                obs["agent_permanents_valid"],
-                obs["opponent_permanents_valid"],
-            ],
-            dim=1,
-        )
+        validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity
+
+    def _condition_row(self, obs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """Build the one-row belief-conditioning side input.
+
+        ``condition_index`` (long, in [0, max_conditions)) and
+        ``condition_weight`` (float) are provided per row by a conditional
+        shard. When the obs dict omits them (arena inference via the standard
+        ObservationSpace), the neutral True/uniform condition (index 0,
+        weight 1.0) is used — the uninformative prior that the ~0 strength
+        prediction is built on.
+        """
+
+        if self.condition_index_embedding is None or self.condition_embedding is None:
+            raise RuntimeError("condition channel is not enabled on this Agent")
+        index_embedding = self.condition_index_embedding
+        condition_embedding = self.condition_embedding
+        device = obs["agent_player"].device
+        batch = obs["agent_player"].shape[0]
+        if "condition_index" in obs and "condition_weight" in obs:
+            index = obs["condition_index"].long().to(device)
+            weight = obs["condition_weight"].float().to(device).unsqueeze(-1)
+        else:
+            index = torch.zeros((batch,), dtype=torch.long, device=device)
+            weight = torch.ones((batch, 1), dtype=torch.float32, device=device)
+        index_embed = index_embedding(index)
+        row = condition_embedding(torch.cat([index_embed, weight], dim=-1))
+        return row.unsqueeze(1)
 
     def get_action_and_value(
         self,

@@ -167,10 +167,21 @@ def _validate_dataset(
 def _batch_observations(
     dataset: dict[str, np.ndarray], indices: np.ndarray, device: torch.device
 ) -> dict[str, torch.Tensor]:
-    return {
+    obs = {
         key: torch.as_tensor(dataset[key][indices], dtype=torch.float32, device=device)
         for key in OBS_KEYS
     }
+    # Belief-conditioning side input (INT-14): pass the per-row condition
+    # tag through to the Agent when the dataset carries it. Backward
+    # compatible — flat-MC / Teacher-0/1 datasets lack these keys, so the
+    # Agent falls back to its neutral default condition at train time too.
+    for key in ("condition_index", "condition_weight"):
+        if key in dataset:
+            dtype = torch.long if key == "condition_index" else torch.float32
+            obs[key] = torch.as_tensor(
+                dataset[key][indices], dtype=dtype, device=device
+            )
+    return obs
 
 
 def _policy_targets(

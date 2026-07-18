@@ -71,6 +71,16 @@ class AgentHypers(BaseHypersModel):
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
     attention_on: bool = True
+    # Belief-conditioning side-input channel (INT-14). 0 = no condition
+    # channel (the plain Teacher-0/1 student; fully backward compatible).
+    # >0 = the Agent appends one neutral object row to the attention sequence
+    # built from a per-row condition_index (in [0, max_conditions)) and a
+    # condition_weight scalar, provided as a side input by a conditional
+    # shard. No belief head, range net, or per-hand value vector is added;
+    # the policy and scalar value heads are unchanged. When the obs dict
+    # omits the condition keys (arena inference), the Agent defaults to the
+    # neutral True/uniform condition (index 0, weight 1.0).
+    max_conditions: int = 0
 
 
 class TrainHypers(BaseHypersModel):
