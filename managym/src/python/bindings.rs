@@ -2671,6 +2671,45 @@ impl PyEnv {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Apply the shared semantic Command and return the ordinary acting
+    /// observation needed by Etude presentation and trace consumers.
+    fn step_semantic_command(
+        &self,
+        py: Python<'_>,
+        command_json: &str,
+    ) -> PyResult<(String, PyObservation, f64, bool, bool, PyObject)> {
+        self.reject_guarded_mutation("Env.step_semantic_command")?;
+        let command: SemanticCommand = serde_json::from_str(command_json)
+            .map_err(|error| PyAgentError::new_err(format!("invalid semantic command: {error}")))?;
+        let mut env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let (transition, observation, reward, terminated, truncated, info) =
+            env.step_semantic_command(&command).map_err(map_agent_err)?;
+        let transition = serde_json::to_string(&transition)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let py_dict = info_dict_to_pydict(py, &info);
+        Ok((
+            transition,
+            PyObservation::from(observation),
+            reward,
+            terminated,
+            truncated,
+            py_dict.into_any().unbind(),
+        ))
+    }
+
+    /// Cursor over committed semantic events. This is diagnostic identity,
+    /// never a mutation or replay API.
+    fn semantic_event_cursor(&self) -> PyResult<u64> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.semantic_event_cursor().map_err(map_agent_err)
+    }
+
     fn is_game_over(&self) -> PyResult<bool> {
         let env = self
             .inner

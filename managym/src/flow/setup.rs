@@ -111,6 +111,7 @@ impl Game {
             skip_trivial,
             current_action_space: None,
             decision_epoch: 0,
+            semantic_object_candidates: Default::default(),
             pending_choice: None,
             skip_trivial_count: 0,
             trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],

@@ -289,6 +289,41 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    pub fn step_semantic_command(
+        &mut self,
+        command: &SemanticCommand,
+    ) -> Result<(SemanticTransition, Observation, f64, bool, bool, InfoDict), AgentError> {
+        let game = self.game.as_mut().ok_or_else(|| {
+            AgentError("env.step_semantic_command called before reset".to_string())
+        })?;
+        let actor = current_agent(game)?;
+        let (transition, observation, done) = game
+            .execute_semantic_command_with_observation(command)
+            .map_err(|error| AgentError(error.to_string()))?;
+        let reward = if done {
+            game.winner_index()
+                .map(|winner| if winner == actor.0 { 1.0 } else { -1.0 })
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        Ok((
+            transition,
+            observation,
+            reward,
+            done,
+            false,
+            empty_info_dict(),
+        ))
+    }
+
+    pub fn semantic_event_cursor(&self) -> Result<u64, AgentError> {
+        self.game
+            .as_ref()
+            .map(Game::semantic_event_cursor)
+            .ok_or_else(|| AgentError("env.semantic_event_cursor called before reset".to_string()))
+    }
+
     /// Canonical semantic digest used by differential ABI assertions.
     ///
     /// The structured ABI can commit one logical choice where the legacy ABI

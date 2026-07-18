@@ -16,7 +16,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::TargetSpec,
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         target::Target as ActionTarget,
     },
 };
@@ -182,17 +182,24 @@ pub enum AtomicCommand {
         binding: OfferSetBinding,
         player: PlayerId,
         card: CardId,
-        targets: Vec<Target>,
+        targets: Vec<BoundTarget>,
     },
     DeclareAttackers {
         binding: OfferSetBinding,
         player: PlayerId,
-        attackers: Vec<PermanentId>,
+        attackers: Vec<ObjectRef>,
     },
     SearchAction {
         binding: OfferSetBinding,
         action: Action,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BoundTarget {
+    Player(PlayerId),
+    Permanent(ObjectRef),
+    StackSpell(CardId),
 }
 
 #[derive(Clone, Debug)]
@@ -204,13 +211,13 @@ enum InternalOffer {
         player: PlayerId,
         card: CardId,
         role: RoleId,
-        targets: BTreeMap<CandidateId, Target>,
+        targets: BTreeMap<CandidateId, BoundTarget>,
     },
     DeclareAttackers {
         player: PlayerId,
         role: RoleId,
-        attackers: BTreeMap<CandidateId, PermanentId>,
-        declaration_order: Vec<PermanentId>,
+        attackers: BTreeMap<CandidateId, ObjectRef>,
+        declaration_order: Vec<ObjectRef>,
     },
     SearchAction {
         action: Action,
@@ -227,6 +234,32 @@ pub struct StructuredOfferSet {
 impl StructuredOfferSet {
     pub fn projection(&self) -> &StructuredOfferProjection {
         &self.projection
+    }
+
+    pub(crate) fn object_candidate_bindings(
+        &self,
+    ) -> Vec<(OfferId, RoleId, CandidateId, ObjectRef)> {
+        let mut bindings = Vec::new();
+        for (offer_id, offer) in &self.internal {
+            match offer {
+                InternalOffer::CastSingleTarget { role, targets, .. } => {
+                    for (candidate_id, target) in targets {
+                        if let BoundTarget::Permanent(object_ref) = target {
+                            bindings.push((*offer_id, *role, *candidate_id, *object_ref));
+                        }
+                    }
+                }
+                InternalOffer::DeclareAttackers {
+                    role, attackers, ..
+                } => {
+                    bindings.extend(attackers.iter().map(|(candidate_id, object_ref)| {
+                        (*offer_id, *role, *candidate_id, *object_ref)
+                    }));
+                }
+                InternalOffer::PassPriority { .. } | InternalOffer::SearchAction { .. } => {}
+            }
+        }
+        bindings
     }
 
     /// Resolve only IDs minted by this offer set. Public candidate values are
@@ -294,16 +327,16 @@ impl StructuredOfferSet {
                 }
 
                 let mut selected = BTreeSet::new();
-                let mut selected_permanents = BTreeSet::new();
+                let mut selected_objects = BTreeSet::new();
                 for candidate in candidates {
                     if !selected.insert(*candidate) {
                         return Err(StructuredOfferError::DuplicateCandidate(*candidate));
                     }
-                    let permanent = attackers
+                    let object_ref = attackers
                         .get(candidate)
                         .copied()
                         .ok_or(StructuredOfferError::UnknownCandidate(*candidate))?;
-                    selected_permanents.insert(permanent);
+                    selected_objects.insert(object_ref);
                 }
 
                 // The wire choice is unordered, but rules events must retain
@@ -313,7 +346,7 @@ impl StructuredOfferSet {
                 let selected_attackers = declaration_order
                     .iter()
                     .copied()
-                    .filter(|permanent| selected_permanents.contains(permanent))
+                    .filter(|object_ref| selected_objects.contains(object_ref))
                     .collect();
 
                 Ok(AtomicCommand::DeclareAttackers {
@@ -559,7 +592,8 @@ impl Game {
                     let mut target_by_candidate = BTreeMap::new();
                     for target in legal_targets {
                         let candidate_id = next_candidate_id(candidates.len())?;
-                        let (subject, label) = self.subject_and_label(target)?;
+                        let bound_target = self.bind_target(target)?;
+                        let (subject, label) = self.subject_and_label(bound_target)?;
                         candidates.push(Candidate {
                             id: candidate_id,
                             value: CandidateValue::Subject { subject },
@@ -567,7 +601,7 @@ impl Game {
                             help: None,
                             preview: None,
                         });
-                        target_by_candidate.insert(candidate_id, target);
+                        target_by_candidate.insert(candidate_id, bound_target);
                     }
 
                     let id = next_offer_id(offers.len())?;
@@ -576,7 +610,13 @@ impl Game {
                         actor: wire_player_id(*player)?,
                         verb: OfferVerb::Cast,
                         source: Some(SubjectRef::Object {
-                            id: object_render_id(card_ref.id),
+                            id: object_render_id(
+                                card_ref.id,
+                                self.current_object_ref(*card)
+                                    .ok_or(StructuredOfferError::InvalidCurrentTarget)?
+                                    .incarnation
+                                    .0,
+                            ),
                         }),
                         label: format!("Cast {}", card_ref.name),
                         help: None,
@@ -645,18 +685,21 @@ impl Game {
                     )
                 })?;
             let candidate_id = next_candidate_id(candidates.len())?;
+            let object_ref = self
+                .permanent_object_ref(*attacker)
+                .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
             candidates.push(Candidate {
                 id: candidate_id,
                 value: CandidateValue::Subject {
                     subject: SubjectRef::Object {
-                        id: object_render_id(permanent.id),
+                        id: object_render_id(permanent.id, object_ref.incarnation.0),
                     },
                 },
                 label: self.state.cards[permanent.card].name.clone(),
                 help: None,
                 preview: None,
             });
-            attacker_by_candidate.insert(candidate_id, *attacker);
+            attacker_by_candidate.insert(candidate_id, object_ref);
         }
 
         let max =
@@ -698,7 +741,13 @@ impl Game {
                     player: actor,
                     role,
                     attackers: attacker_by_candidate,
-                    declaration_order,
+                    declaration_order: declaration_order
+                        .into_iter()
+                        .map(|permanent| {
+                            self.permanent_object_ref(permanent)
+                                .ok_or(StructuredOfferError::InvalidCurrentTarget)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
                 },
             )]),
         })
@@ -813,7 +862,7 @@ impl Game {
                     .action_space()
                     .is_some_and(|space| space.kind == ActionSpaceKind::ChooseTarget)
                 {
-                    let wanted = to_action_target(targets[0]);
+                    let wanted = self.resolve_bound_target(targets[0])?;
                     let target = self
                         .action_space()
                         .and_then(|space| {
@@ -842,7 +891,17 @@ impl Game {
             AtomicCommand::DeclareAttackers {
                 player, attackers, ..
             } => {
-                let selected: BTreeSet<_> = attackers.iter().copied().collect();
+                let selected: BTreeSet<_> = attackers
+                    .iter()
+                    .map(|object_ref| {
+                        self.lookup_current_permanent(*object_ref).map_err(|_| {
+                            StructuredOfferError::StaleOrIllegal(format!(
+                                "attacker object {}@{} is no longer current",
+                                object_ref.entity.0, object_ref.incarnation.0
+                            ))
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
                 let mut actions = 0;
                 let mut done = false;
                 while self
@@ -1045,7 +1104,7 @@ impl Game {
                     .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
                 let target_action = Action::ChooseTarget {
                     player: *player,
-                    target: to_action_target(targets[0]),
+                    target: self.resolve_bound_target(targets[0])?,
                 };
                 self.execute_action(&target_action)
                     .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
@@ -1062,7 +1121,17 @@ impl Game {
                 }
 
                 let legal: BTreeSet<_> = declaration_order.iter().copied().collect();
-                let selected: BTreeSet<_> = attackers.iter().copied().collect();
+                let selected: BTreeSet<_> = attackers
+                    .iter()
+                    .map(|object_ref| {
+                        self.lookup_current_permanent(*object_ref).map_err(|_| {
+                            StructuredOfferError::StaleOrIllegal(format!(
+                                "attacker object {}@{} is no longer current",
+                                object_ref.entity.0, object_ref.incarnation.0
+                            ))
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
                 if selected.len() != attackers.len() {
                     return Err(StructuredOfferError::StaleOrIllegal(
                         "attacker declaration contains a duplicate permanent".to_string(),
@@ -1180,18 +1249,51 @@ impl Game {
         Ok((actor, declaration_order))
     }
 
+    fn bind_target(&self, target: Target) -> Result<BoundTarget, StructuredOfferError> {
+        match target {
+            Target::Player(player) => Ok(BoundTarget::Player(player)),
+            Target::Permanent(permanent) => self
+                .permanent_object_ref(permanent)
+                .map(BoundTarget::Permanent)
+                .ok_or(StructuredOfferError::InvalidCurrentTarget),
+            Target::StackSpell(card) => Ok(BoundTarget::StackSpell(card)),
+        }
+    }
+
+    fn resolve_bound_target(
+        &self,
+        target: BoundTarget,
+    ) -> Result<ActionTarget, StructuredOfferError> {
+        match target {
+            BoundTarget::Player(player) => Ok(ActionTarget::Player(player)),
+            BoundTarget::Permanent(object_ref) => self
+                .lookup_current_permanent(object_ref)
+                .map(ActionTarget::Permanent)
+                .map_err(|_| {
+                    StructuredOfferError::StaleOrIllegal(format!(
+                        "target object {}@{} is no longer current",
+                        object_ref.entity.0, object_ref.incarnation.0
+                    ))
+                }),
+            BoundTarget::StackSpell(card) => Ok(ActionTarget::StackSpell(card)),
+        }
+    }
+
     fn subject_and_label(
         &self,
-        target: Target,
+        target: BoundTarget,
     ) -> Result<(SubjectRef, String), StructuredOfferError> {
         match target {
-            Target::Player(player) => Ok((
+            BoundTarget::Player(player) => Ok((
                 SubjectRef::Player {
                     id: wire_player_id(player)?,
                 },
                 self.state.players[player.0].name.clone(),
             )),
-            Target::Permanent(permanent) => {
+            BoundTarget::Permanent(object_ref) => {
+                let permanent = self
+                    .lookup_current_permanent(object_ref)
+                    .map_err(|_| StructuredOfferError::InvalidCurrentTarget)?;
                 let permanent_ref = self
                     .state
                     .permanents
@@ -1200,12 +1302,12 @@ impl Game {
                     .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
                 Ok((
                     SubjectRef::Object {
-                        id: object_render_id(permanent_ref.id),
+                        id: object_render_id(permanent_ref.id, object_ref.incarnation.0),
                     },
                     self.state.cards[permanent_ref.card].name.clone(),
                 ))
             }
-            Target::StackSpell(_) => Err(StructuredOfferError::InvalidCurrentTarget),
+            BoundTarget::StackSpell(_) => Err(StructuredOfferError::InvalidCurrentTarget),
         }
     }
 }
@@ -1238,10 +1340,10 @@ fn candidate_answer(
     Ok(candidates)
 }
 
-fn object_render_id(id: ObjectId) -> ObjectRenderId {
+fn object_render_id(id: ObjectId, incarnation: u32) -> ObjectRenderId {
     ObjectRenderId {
         entity: id.0,
-        incarnation: 0,
+        incarnation,
     }
 }
 
@@ -1259,14 +1361,6 @@ fn next_candidate_id(len: usize) -> Result<CandidateId, StructuredOfferError> {
     u32::try_from(len)
         .map(CandidateId)
         .map_err(|_| StructuredOfferError::IdentityOverflow)
-}
-
-fn to_action_target(target: Target) -> ActionTarget {
-    match target {
-        Target::Player(player) => ActionTarget::Player(player),
-        Target::Permanent(permanent) => ActionTarget::Permanent(permanent),
-        Target::StackSpell(card) => ActionTarget::StackSpell(card),
-    }
 }
 
 fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOfferError> {

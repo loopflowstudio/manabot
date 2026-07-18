@@ -1,13 +1,14 @@
 // game.rs
 // Core game structs: GameState and Game.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{cell::RefCell, collections::BTreeMap, sync::Arc};
 
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
     cardsets::alpha::ContentPack,
+    decision::ObjectCandidateAddress,
     flow::{
         combat::CombatState,
         decision::SuspendedResolution,
@@ -113,6 +114,10 @@ pub struct Game {
     /// an exact search fork, while publishing any later decision invalidates
     /// commands decoded from an older structured offer set.
     pub(crate) decision_epoch: u64,
+    /// Authority-private exact bindings for object candidates already
+    /// published through semantic DecisionFrames. This derived index is not
+    /// part of the rules-state witness or client wire representation.
+    pub(crate) semantic_object_candidates: RefCell<BTreeMap<ObjectCandidateAddress, ObjectRef>>,
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
@@ -126,6 +131,7 @@ impl Clone for Game {
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
+            semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
@@ -203,6 +209,7 @@ impl Game {
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
+            semantic_object_candidates: self.semantic_object_candidates.clone(),
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),

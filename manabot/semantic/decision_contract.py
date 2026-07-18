@@ -43,6 +43,7 @@ class SemanticDecisionContract:
         *,
         command_id: str | None = None,
         answers: Sequence[Mapping[str, Any]] = (),
+        object_preconditions: Sequence[Mapping[str, Any]] = (),
     ) -> Command:
         # Fail closed locally before the round-trip: the offer must belong to
         # the exact frame this contract is bound to.
@@ -52,6 +53,7 @@ class SemanticDecisionContract:
             expected_revision=self.frame.revision,
             offer_id=offer_id,
             answers=tuple(answers),
+            object_preconditions=tuple(object_preconditions),
         )
 
     def apply_command(
@@ -71,7 +73,14 @@ class SemanticDecisionContract:
         *,
         command_id: str | None = None,
         answers: Sequence[Mapping[str, Any]] = (),
+        object_preconditions: Sequence[Mapping[str, Any]] = (),
     ) -> SemanticTransition:
         return self.apply_command(
-            env, self.command(offer_id, command_id=command_id, answers=answers)
+            env,
+            self.command(
+                offer_id,
+                command_id=command_id,
+                answers=answers,
+                object_preconditions=object_preconditions,
+            ),
         )

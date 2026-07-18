@@ -18,19 +18,33 @@ use crate::{
         structured_offer::{ChoiceAnswer, InteractionOffer, OfferId, OfferSubmission},
     },
     flow::game::Game,
-    state::{game_object::PlayerId, zone::ZoneType},
+    state::{
+        game_object::{ObjectLookupError, PlayerId},
+        zone::ZoneType,
+    },
 };
 
 /// Canonical serialization and digest contract for the semantic decision
 /// slice. Increment when DecisionFrame/Observation field inclusion, ordering,
 /// or digest algorithm changes.
-pub const SEMANTIC_DECISION_VERSION: u16 = 1;
+pub const SEMANTIC_DECISION_VERSION: u16 = 2;
 
 /// Stable digest of one complete legal offer set at a revision. Any change to
 /// the legal actions, their order, or their binding revision changes it.
 pub type DecisionFingerprint = String;
 /// Stable digest of one committed viewer-visible event.
 pub type EventIdentity = String;
+
+/// Public authorization address for one object-bearing candidate. Only opaque
+/// candidate identity crosses the wire; the exact ObjectRef remains bound in
+/// the match authority.
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct ObjectCandidateAddress {
+    pub decision_fingerprint: DecisionFingerprint,
+    pub offer_id: u32,
+    pub role: u16,
+    pub candidate_id: u32,
+}
 
 /// One revision-bound semantic decision: the actor, a fingerprint of the full
 /// legal offer set, and the offers themselves. Offers are projected from the
@@ -43,6 +57,8 @@ pub struct DecisionFrame {
     pub actor: u8,
     pub fingerprint: DecisionFingerprint,
     pub offers: Vec<InteractionOffer>,
+    #[serde(default)]
+    pub object_candidates: Vec<ObjectCandidateAddress>,
 }
 
 /// One atomic semantic commitment. `expected_revision` binds it to one exact
@@ -54,6 +70,8 @@ pub struct Command {
     pub expected_revision: u64,
     pub offer_id: u32,
     pub answers: Vec<ChoiceAnswer>,
+    #[serde(default)]
+    pub object_preconditions: Vec<ObjectCandidateAddress>,
 }
 
 /// Typed identity for one composite Observation. `viewer_state_hash` digests
@@ -111,6 +129,8 @@ pub enum SemanticError {
     ViewerSafetyViolation,
     StaleRevision { expected: u64, current: u64 },
     UnknownOffer(u32),
+    UnknownObjectCandidate,
+    StaleObject,
     IllegalCommand(String),
 }
 
@@ -129,12 +149,17 @@ impl std::fmt::Display for SemanticError {
             Self::StaleRevision { expected, current } => {
                 write!(
                     f,
-                    "stale command: expected revision {expected}, authority at {current}"
+                    "stale_revision: expected revision {expected}, authority at {current}"
                 )
             }
             Self::UnknownOffer(offer) => {
                 write!(f, "offer {offer} is absent from the current frame")
             }
+            Self::UnknownObjectCandidate => write!(
+                f,
+                "unknown_object_candidate: candidate address is not bound by this authority"
+            ),
+            Self::StaleObject => write!(f, "stale_object: bound object is no longer current"),
             Self::IllegalCommand(message) => write!(f, "illegal command: {message}"),
         }
     }
@@ -213,11 +238,28 @@ impl Game {
             })?;
         let projection = offers.projection();
         let projection_value = serde_json::to_value(projection).expect("projection serializes");
+        let fingerprint = decision_fingerprint(self.decision_epoch, &projection_value);
+        let mut object_candidates = Vec::new();
+        if let Ok(presentation) = self.structured_offers() {
+            let mut private = self.semantic_object_candidates.borrow_mut();
+            for (offer_id, role, candidate_id, object_ref) in
+                presentation.object_candidate_bindings()
+            {
+                let address = ObjectCandidateAddress {
+                    decision_fingerprint: fingerprint.clone(),
+                    offer_id: offer_id.0,
+                    role: role.0,
+                    candidate_id: candidate_id.0,
+                };
+                private.insert(address.clone(), object_ref);
+                object_candidates.push(address);
+            }
+        }
         Ok(DecisionFrame {
             schema_version: SEMANTIC_DECISION_VERSION,
             revision: self.decision_epoch,
             actor: projection.actor,
-            fingerprint: decision_fingerprint(self.decision_epoch, &projection_value),
+            fingerprint,
             offers: projection_value
                 .get("offers")
                 .and_then(Value::as_array)
@@ -231,6 +273,7 @@ impl Game {
                         .collect()
                 })
                 .expect("projection carries offers"),
+            object_candidates,
         })
     }
 
@@ -290,6 +333,14 @@ impl Game {
         &mut self,
         command: &Command,
     ) -> Result<SemanticTransition, SemanticError> {
+        self.execute_semantic_command_with_observation(command)
+            .map(|(transition, _, _)| transition)
+    }
+
+    pub(crate) fn execute_semantic_command_with_observation(
+        &mut self,
+        command: &Command,
+    ) -> Result<(SemanticTransition, AgentObservation, bool), SemanticError> {
         if self.is_game_over() {
             return Err(SemanticError::GameOver);
         }
@@ -324,9 +375,30 @@ impl Game {
             answers: command.answers.clone(),
         };
 
+        let atomic = offers
+            .decode(&submission)
+            .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
+        for address in &command.object_preconditions {
+            let object_ref = self
+                .semantic_object_candidates
+                .borrow()
+                .get(address)
+                .copied()
+                .ok_or(SemanticError::UnknownObjectCandidate)?;
+            match self.lookup_current_permanent(object_ref) {
+                Ok(_) => {}
+                Err(ObjectLookupError::StaleIncarnation | ObjectLookupError::WrongZone) => {
+                    return Err(SemanticError::StaleObject)
+                }
+                Err(ObjectLookupError::MissingEntity) => {
+                    return Err(SemanticError::UnknownObjectCandidate)
+                }
+            }
+        }
+
         let before_revision = self.decision_epoch;
         let done = self
-            .apply_offer_submission(&offers, &submission)
+            .apply_atomic_command(&atomic)
             .map_err(|error| SemanticError::IllegalCommand(error.to_string()))?;
         let after_revision = self.decision_epoch;
 
@@ -337,6 +409,7 @@ impl Game {
             .map(|event| event_identity(&event))
             .collect();
 
+        let agent_observation = AgentObservation::new(self, &events);
         let observation = self.semantic_observation(actor)?;
         let next_decision = if done {
             None
@@ -346,7 +419,7 @@ impl Game {
                 .map(|frame| frame.fingerprint)
         };
 
-        Ok(SemanticTransition {
+        let transition = SemanticTransition {
             receipt: TransitionReceipt {
                 schema_version: SEMANTIC_DECISION_VERSION,
                 before_revision,
@@ -356,7 +429,14 @@ impl Game {
                 next_decision,
             },
             observation,
-        })
+        };
+        Ok((transition, agent_observation, done))
+    }
+
+    /// Read-only cursor over committed rules events. Rejected Commands must
+    /// leave this and the deterministic state witness unchanged.
+    pub fn semantic_event_cursor(&self) -> u64 {
+        self.state.events.len() as u64
     }
 }
 
@@ -366,6 +446,7 @@ mod tests {
     use crate::{
         agent::structured_offer::{CandidateId, ChoiceAnswer, OfferVerb, RoleId},
         state::player::PlayerConfig,
+        state::zone::ZoneType,
     };
     use std::collections::BTreeMap;
 
@@ -406,6 +487,7 @@ mod tests {
             expected_revision: frame.revision,
             offer_id: pass.id.0,
             answers: Vec::new(),
+            object_preconditions: Vec::new(),
         }
     }
 
@@ -506,6 +588,7 @@ mod tests {
             expected_revision: stale_revision,
             offer_id: frame.offers[0].id.0,
             answers: Vec::new(),
+            object_preconditions: Vec::new(),
         };
         let error = game.execute_semantic_command(&stale).unwrap_err();
         assert!(matches!(
@@ -521,6 +604,7 @@ mod tests {
             expected_revision: current_frame.revision,
             offer_id: u32::MAX,
             answers: Vec::new(),
+            object_preconditions: Vec::new(),
         };
         let error = game.execute_semantic_command(&unknown).unwrap_err();
         assert!(matches!(error, SemanticError::UnknownOffer(u32::MAX)));
@@ -534,6 +618,7 @@ mod tests {
                 role: RoleId(1),
                 candidates: vec![CandidateId(0)],
             }],
+            object_preconditions: Vec::new(),
         };
         let error = game.execute_semantic_command(&illegal).unwrap_err();
         assert!(matches!(error, SemanticError::IllegalCommand(_)));
@@ -551,5 +636,90 @@ mod tests {
             .expect("next frame")
             .fingerprint;
         assert_ne!(first, next, "a new decision has a different fingerprint");
+    }
+
+    #[test]
+    fn authored_match_parity_exact_object_rejections_are_atomic() {
+        let mut game = first_game();
+        game.scenario_clear_hand(PlayerId(0));
+        game.scenario_clear_hand(PlayerId(1));
+        game.scenario_force_card_in_hand(PlayerId(0), "Lightning Bolt")
+            .expect("bolt in hand");
+        game.scenario_force_battlefield(PlayerId(0), "Mountain", true)
+            .expect("casting mana");
+        let permanent = game
+            .scenario_force_battlefield(PlayerId(1), "Gray Ogre", true)
+            .expect("object candidate");
+        game.scenario_refresh_priority()
+            .expect("refreshed priority");
+
+        let object_ref = game
+            .permanent_object_ref(permanent)
+            .expect("exact current object");
+        let frame = game.semantic_decision_frame().expect("semantic frame");
+        let address = frame
+            .object_candidates
+            .iter()
+            .find(|address| {
+                game.semantic_object_candidates
+                    .borrow()
+                    .get(*address)
+                    .is_some_and(|bound| *bound == object_ref)
+            })
+            .cloned()
+            .expect("candidate privately binds exact object");
+        let rendered = game.structured_offers().expect("structured offer");
+        let rendered_json = serde_json::to_value(rendered.projection()).expect("projection json");
+        assert!(rendered_json
+            .to_string()
+            .contains(&format!("\"incarnation\":{}", object_ref.incarnation.0)));
+
+        let card = game.state.permanents[permanent]
+            .as_ref()
+            .expect("permanent")
+            .card;
+        game.move_card(card, ZoneType::Graveyard);
+        let current = game.semantic_decision_frame().expect("current frame");
+        let pass = current
+            .offers
+            .iter()
+            .find(|offer| offer.verb == OfferVerb::PassPriority)
+            .expect("pass offer");
+        let stale_object = Command {
+            command_id: "stale-object".to_string(),
+            expected_revision: current.revision,
+            offer_id: pass.id.0,
+            answers: Vec::new(),
+            object_preconditions: vec![address],
+        };
+        let witness = game.state.deterministic_hash_value();
+        let cursor = game.semantic_event_cursor();
+        assert!(matches!(
+            game.execute_semantic_command(&stale_object),
+            Err(SemanticError::StaleObject)
+        ));
+        assert_eq!(game.state.deterministic_hash_value(), witness);
+        assert_eq!(game.semantic_event_cursor(), cursor);
+
+        let stale_revision = stale_object.expected_revision;
+        let advance = Command {
+            object_preconditions: Vec::new(),
+            command_id: "advance".to_string(),
+            ..stale_object.clone()
+        };
+        game.execute_semantic_command(&advance).expect("advance");
+        let stale = Command {
+            command_id: "stale-revision".to_string(),
+            ..advance
+        };
+        let witness = game.state.deterministic_hash_value();
+        let cursor = game.semantic_event_cursor();
+        assert!(matches!(
+            game.execute_semantic_command(&stale),
+            Err(SemanticError::StaleRevision { expected, current })
+                if expected == stale_revision && current > expected
+        ));
+        assert_eq!(game.state.deterministic_hash_value(), witness);
+        assert_eq!(game.semantic_event_cursor(), cursor);
     }
 }

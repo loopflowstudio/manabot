@@ -6,7 +6,7 @@ use managym::{
         observation::Observation,
         observation_encoder::ObservationEncoderConfig,
         structured_offer::{
-            AtomicCommand, Candidate, CandidateId, CandidateSource, CandidateSourceId,
+            AtomicCommand, BoundTarget, Candidate, CandidateId, CandidateSource, CandidateSourceId,
             CandidateValue, ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId,
             OfferSubmission, OfferVerb, PromptKind, RoleId, StructuredOfferError,
             StructuredOfferProjection, SubjectRef,
@@ -180,7 +180,7 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
     let AtomicCommand::CastSpell { card, targets, .. } = &command else {
         panic!("expected cast command")
     };
-    assert_eq!(targets, &[Target::Player(PlayerId(1))]);
+    assert_eq!(targets, &[BoundTarget::Player(PlayerId(1))]);
 
     let mut structured = root.clone();
     let mut legacy = root;

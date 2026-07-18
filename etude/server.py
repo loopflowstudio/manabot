@@ -18,6 +18,7 @@ from typing import Any, Callable
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 import managym
+from managym.decision import Command as SemanticCommand, SemanticTransition
 
 from . import trace as trace_store, villain as villain_module
 from .advice import AdviceRequest, advice_meta, request_advice
@@ -1240,7 +1241,29 @@ class GameSession:
         ):
             self.authority_fallback_counters["card_name_dispatch"] += 1
         from_revision = self.revision
-        next_obs, reward, _, _, _ = self.env.step(action_index)
+        if auto:
+            next_obs, reward, _, _, _ = self.env.step(action_index)
+        else:
+            assert command is not None
+            semantic_frame = json.loads(self.env.semantic_decision_frame_json())
+            if (
+                int(semantic_frame["actor"]) != actor_index
+                or len(semantic_frame["offers"]) != len(actions)
+                or int(semantic_frame["offers"][action_index]["id"])
+                != int(command["offer_id"])
+            ):
+                raise RuntimeError("Etude decision drifted from semantic authority.")
+            semantic_command = SemanticCommand(
+                command_id=str(command["command_id"]),
+                expected_revision=int(semantic_frame["revision"]),
+                offer_id=int(command["offer_id"]),
+            )
+            transition_json, next_obs, reward, _, _, _ = self.env.step_semantic_command(
+                semantic_command.to_json()
+            )
+            semantic_transition = SemanticTransition.from_json(transition_json)
+            if semantic_transition.receipt.command_id != str(command["command_id"]):
+                raise RuntimeError("Semantic receipt command identity drifted.")
         state_after: str | None = None
         semantic_events: list[dict[str, Any]] = []
         encountered_definition_ids: list[int] = []

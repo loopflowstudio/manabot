@@ -17,11 +17,15 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
-SEMANTIC_DECISION_VERSION: int = 1
+SEMANTIC_DECISION_VERSION: int = 2
 
 
 class SemanticContractError(Exception):
     """The shared semantic contract rejected a command or projection."""
+
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,7 @@ class DecisionFrame:
     actor: int
     fingerprint: str
     offers: tuple[Mapping[str, Any], ...]
+    object_candidates: tuple[Mapping[str, Any], ...]
 
     @classmethod
     def from_json(cls, text: str) -> "DecisionFrame":
@@ -44,6 +49,7 @@ class DecisionFrame:
             actor=int(payload["actor"]),
             fingerprint=str(payload["fingerprint"]),
             offers=tuple(payload["offers"]),
+            object_candidates=tuple(payload.get("object_candidates", ())),
         )
 
     def offer(self, offer_id: int) -> Mapping[str, Any]:
@@ -69,6 +75,7 @@ class Command:
     expected_revision: int
     offer_id: int
     answers: tuple[Mapping[str, Any], ...] = ()
+    object_preconditions: tuple[Mapping[str, Any], ...] = ()
 
     def to_json(self) -> str:
         return json.dumps(
@@ -77,6 +84,7 @@ class Command:
                 "expected_revision": self.expected_revision,
                 "offer_id": self.offer_id,
                 "answers": list(self.answers),
+                "object_preconditions": list(self.object_preconditions),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -177,5 +185,7 @@ def apply_semantic_command(
     try:
         result = env.execute_semantic_command_json(text)
     except Exception as error:  # managym.AgentError
-        raise SemanticContractError(str(error)) from error
+        message = str(error)
+        code = message.split(":", 1)[0] if ":" in message else None
+        raise SemanticContractError(message, code=code) from error
     return SemanticTransition.from_json(result)
