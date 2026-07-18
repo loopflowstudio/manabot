@@ -53,6 +53,43 @@ def test_manifest_digest_detects_tamper() -> None:
     assert stored["manifest_sha256"] != runner.manifest_digest(stored)
 
 
+def test_preregistration_identity_stays_frozen_after_later_result_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_root = tmp_path / "repo"
+    contract = repo_root / "experiments/contracts/frozen.json"
+    contract.parent.mkdir(parents=True)
+    contract.write_text('{"frozen": true}\n')
+    frozen_commit = "0" * 40
+    later_result_commit = "1" * 40
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: object) -> object:
+        calls.append(command)
+        if command[1] == "rev-parse":
+            assert command[-1] == f"{frozen_commit}^{{commit}}"
+            return runner.subprocess.CompletedProcess(
+                command, 0, stdout=f"{frozen_commit}\n"
+            )
+        if command[1] == "show":
+            assert command[2] == (f"{frozen_commit}:experiments/contracts/frozen.json")
+            return runner.subprocess.CompletedProcess(
+                command, 0, stdout=contract.read_bytes()
+            )
+        if command[1] == "log":
+            return runner.subprocess.CompletedProcess(
+                command, 0, stdout=f"{later_result_commit}\n"
+            )
+        raise AssertionError(f"unexpected git command: {command}")
+
+    monkeypatch.setattr(runner, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(runner, "FROZEN_PREREGISTRATION_COMMIT", frozen_commit)
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    assert runner._preregistration_commit(contract) == frozen_commit
+    assert all(command[1] != "log" for command in calls)
+
+
 def test_cli_separates_run_and_verify_only() -> None:
     verify = runner.parse_args(["--out-dir", "result", "--verify-only"])
     assert verify.verify_only is True

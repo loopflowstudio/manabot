@@ -85,6 +85,7 @@ EXPECTED_INPUT_SHA256 = (
 EXPECTED_PAYLOAD_SHA256 = (
     "13868767846b7004f140cfade3652909347bdbb6708b69cb8c10b36ec2756eb0"
 )
+FROZEN_PREREGISTRATION_COMMIT = "076e18ce52dfe7f99880f35bab177ae98b501560"
 INT7_SOURCE_PATHS = (
     "experiments/runners/run_int7_value_target_comparison.py",
     "manabot/arena/int7_value_targets.py",
@@ -163,6 +164,32 @@ def source_digest(paths: tuple[str, ...]) -> str:
     return source_bundle_sha256([REPO_ROOT / path for path in paths])
 
 
+def _committed_source_receipt(
+    commit: str, paths: tuple[str, ...]
+) -> tuple[str, dict[str, str]]:
+    digest = hashlib.sha256()
+    files = {}
+    for relative in sorted(paths):
+        try:
+            data = subprocess.run(
+                ["git", "show", f"{commit}:{relative}"],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+        except subprocess.CalledProcessError as exc:
+            raise Int7Error(
+                f"INT-7 frozen preregistration source is unavailable: {relative}"
+            ) from exc
+        encoded = relative.encode()
+        digest.update(len(encoded).to_bytes(4, "big"))
+        digest.update(encoded)
+        digest.update(len(data).to_bytes(8, "big"))
+        digest.update(data)
+        files[relative] = hashlib.sha256(data).hexdigest()
+    return digest.hexdigest(), files
+
+
 def manifest_digest(manifest: dict[str, Any]) -> str:
     unsigned = dict(manifest)
     unsigned.pop("manifest_sha256", None)
@@ -216,21 +243,29 @@ def _tree_snapshot(root: Path) -> list[tuple[str, int, str]]:
 
 def _preregistration_commit(contract_path: Path) -> str:
     relative = contract_path.resolve().relative_to(REPO_ROOT).as_posix()
-    commit = subprocess.run(
-        ["git", "log", "-1", "--format=%H", "--", relative],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    if not commit:
-        raise Int7Error("INT-7 contract has no preregistration commit")
-    committed = subprocess.run(
-        ["git", "show", f"{commit}:{relative}"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-    ).stdout
+    try:
+        commit = subprocess.run(
+            [
+                "git",
+                "rev-parse",
+                "--verify",
+                f"{FROZEN_PREREGISTRATION_COMMIT}^{{commit}}",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        committed = subprocess.run(
+            ["git", "show", f"{FROZEN_PREREGISTRATION_COMMIT}:{relative}"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+    except subprocess.CalledProcessError as exc:
+        raise Int7Error("INT-7 frozen preregistration commit is unavailable") from exc
+    if commit != FROZEN_PREREGISTRATION_COMMIT:
+        raise Int7Error("INT-7 frozen preregistration commit resolved unexpectedly")
     if committed != contract_path.read_bytes():
         raise Int7Error("INT-7 contract bytes are not the committed preregistration")
     return commit
@@ -248,6 +283,9 @@ def preflight_contract(
     contract_sha = file_sha256(contract_path)
     runtime = arena_runtime_fingerprints()
     input_receipt = verify_retained_input(INPUT_MANIFEST)
+    preregistration = (
+        _preregistration_commit(contract_path) if require_committed else None
+    )
     expected_arena = {
         "contract_path": "experiments/contracts/int-6-skill-arena-v1.json",
         "contract_file_sha256": EXPECTED_INT6_SHA256,
@@ -275,10 +313,18 @@ def preflight_contract(
             "ae03c3bda06bdd65b090fefcaf1e23bb717c6f6566cc08731092c7911770f14f"
         ),
     }
+    implementation_source_sha, implementation_files = (
+        _committed_source_receipt(preregistration, INT7_SOURCE_PATHS)
+        if preregistration is not None
+        else (
+            source_digest(INT7_SOURCE_PATHS),
+            {path: file_sha256(REPO_ROOT / path) for path in INT7_SOURCE_PATHS},
+        )
+    )
     expected_implementation = {
         "source_paths": list(INT7_SOURCE_PATHS),
-        "source_sha256": source_digest(INT7_SOURCE_PATHS),
-        "files": {path: file_sha256(REPO_ROOT / path) for path in INT7_SOURCE_PATHS},
+        "source_sha256": implementation_source_sha,
+        "files": implementation_files,
         "player_source_sha256": int7_player_source_sha256(),
     }
     expected_arena_implementation = {
@@ -356,9 +402,6 @@ def preflight_contract(
         "limitation": "one 507-label teacher/data seed cannot support a method, strength, rating, promotion, or admission claim",
     }:
         raise Int7Error("INT-7 contract prediction drift")
-    preregistration = (
-        _preregistration_commit(contract_path) if require_committed else None
-    )
     return contract, contract_sha, arena, runtime, preregistration
 
 
