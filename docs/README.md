@@ -2,6 +2,7 @@
 
 | Where | What |
 |---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Top-down system authority, central contracts, laws of physics, end-to-end search/learning flows, and convergence status |
 | [architecture/](architecture/) | Reference contracts: [experience protocol v1](architecture/experience-protocol-v1.md), [match-state hash](architecture/match-state-hash-v1.md), [presentation runtime](architecture/presentation-runtime.md) |
 | [research/](research/) | Deep dives: [Etude vs Phase](research/etude-vs-phase.md), [semantic kernel](research/semantic-kernel.md), [Phase experience research](research/phase-experience.md), [observation robustness](research/metta-observation-robustness.md), [intelligence development ladders](research/intelligence-development-ladders.md) |
 | [rules/](rules/) | Rules authority: [proposed events](rules/proposed-events-v1.md), [trigger/SBA stabilization](rules/stabilization-v1.md), the comprehensive rules PDF |

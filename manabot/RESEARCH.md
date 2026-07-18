@@ -10,6 +10,10 @@ This document is the durable map of that program. It records the research
 thesis, accepted evidence, current capability frontiers, and the decisions
 future experiments must make. Execution status and ownership live in Linear;
 frozen predictions, results, and provenance live in [`experiments/`](../experiments/README.md).
+The cross-package authority, Observation, belief/query, planning, artifact,
+arena, and Study contracts are defined in
+[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md); this research map operates
+inside those boundaries.
 
 ## The builder's loop
 

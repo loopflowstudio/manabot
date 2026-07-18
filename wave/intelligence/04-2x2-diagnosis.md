@@ -1,9 +1,15 @@
 # 04: The 2×2 Diagnosis (cycle D1) — launch spec
 
-Self-contained brief for running the intelligence wave's first diagnostic
-cycle. Written 2026-07-10 for dispatch from a fresh context; assumes no
-conversation history — everything needed is in this file and the paths it
-cites. World: **w2** (see `/WORLDS.md`).
+> **Roadmap disposition (2026-07-17):** retain this diagnostic for choosing the
+> later planner family after the authoritative `PlanningProblem` and first
+> conditional strategy teacher exist. It no longer gates the foundational
+> world-query, conditional-prior, or supervised belief-head work. See the
+> [Intelligence roadmap](README.md).
+
+Self-contained brief for running the intelligence wave's planner diagnostic.
+Written 2026-07-10 for dispatch from a fresh context; assumes no conversation
+history — everything needed is in this file and the paths it cites. World:
+**w2** (see `/WORLDS.md`).
 
 ## The question
 

@@ -25,6 +25,13 @@ proposed-event mutation, viewer-safe state, and safe forks remain foundational.
 They earn their complexity by powering a running world; they are not separate
 proof ladders that must be completed before a playable vertical slice begins.
 
+The immediate architecture objective is the provider sequence in
+[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md): make managym the complete
+match/Command/replay authority, land canonical Observation history, and define
+the typed possible-world/query/materialization kernel consumed by manabot and
+Etude. This work precedes new content breadth because every later play, search,
+learning, and Study slice depends on it.
+
 ## Measures
 
 - A selected Etude Fantasia matchup reaches terminal through compiled typed
@@ -34,6 +41,14 @@ proof ladders that must be completed before a playable vertical slice begins.
 - Live play, deterministic replay, Intelligence search, and Study branching
   consume projections of the same authoritative match and reproduce the same
   semantic consequences at shared identities.
+- One canonical viewer `Observation` stream retains all legally visible state,
+  events, and semantic decisions. Product frames, model tensors, agent memory,
+  and datasets are attributable derived views with no silent legality or
+  semantic truncation.
+- A viewer-relative `PossibleWorldSpace` and typed `WorldQuery` grammar filter
+  and materialize compatible hidden worlds without exposing actual truth;
+  conditional manabot search uses that same kernel rather than a parallel hand
+  ontology.
 - The retained branch representation runs real search and interactive Study
   workloads with exact isolation and return, bounded p95 latency, competitive
   whole-rollout throughput, and measured peak RSS.
@@ -79,6 +94,10 @@ Rules owns their authoritative frames, offers, commands, events, and state.
 Intelligence owns policies and search algorithms but supplies real branching
 and throughput workloads. Game owns Study branch navigation but consumes an
 exact Rules fork and return provider.
+
+Rules also owns possible-world meaning, the reference compatible-deal measure,
+typed query validation/filtering, and legal world materialization. Intelligence
+owns priors, learned beliefs, sampling policy, and planning over that domain.
 
 Use immutable versioned `ContentPack` definitions plus compact dense mutable
 facts unless a measured consumer demonstrates a better representation. Offline

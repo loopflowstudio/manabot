@@ -29,6 +29,11 @@ ambiguity or safety-critical invariants, not substitute products.
   viewer projection, stale-reference handling, differential execution,
   property/metamorphic checks, bounded fuzzing, and a pinned Phase overlap
   matrix exist as reusable instruments.
+- Study can exact-fork a retained historical managym root, execute a normal
+  structured command on one sibling, prove the source and other sibling did
+  not move, and consume a `StudyReturnReceipt` bound to the captured source
+  digest. This proves the adapter seam, not yet the unified `MatchAuthority` or
+  arbitrary historical manabot evidence resolution.
 
 ## Runtime evidence
 
@@ -76,6 +81,24 @@ ambiguity or safety-critical invariants, not substitute products.
 - A new diagnostic must name the play, search, or Study behavior it explains
   and the runtime decision it can change.
 
+## Architecture convergence (accepted 2026-07-17)
+
+- managym is the rules engine Etude Fantasia specifically needs, including
+  authoritative match identity/revision, semantic Commands, committed events,
+  replay, viewer Observations, and exact forks. Etude and manabot consume this
+  authority; they do not reconstruct it.
+- Observation is a central viewer protocol object composed from current
+  visible state, ordered visible events, and the complete current semantic
+  decision. managym preserves the lossless viewer stream; agent memory is an
+  Intelligence concern.
+- managym defines the viewer-relative possible-world domain, typed
+  `WorldQuery` grammar, compatible-deal measure, and materializer. Intelligence
+  owns probability and learned belief over that domain.
+- The high-priority provider order is: match/Command authority, canonical
+  Observation history, possible-world/query kernel, then a cross-consumer
+  Etude → search → replay → Study proof. New card breadth and branch
+  representations follow the exercised contracts.
+
 ## Ownership boundaries
 
 - **Game:** authored presentation, replay UX, recovery, accessibility,
@@ -87,10 +110,19 @@ ambiguity or safety-critical invariants, not substitute products.
 
 ## Open tensions
 
+- Migrate current Etude match/revision/replay bookkeeping into managym without
+  a flag day or a permanent second authority.
+- Replace action-position and duplicated offer/Command meaning one consumer at
+  a time while keeping the curated matchup playable.
 - Prove revision-by-revision live/headless/replay parity for the shipped
   authored trace without creating a parallel replay authority.
 - Finish Study consumer evidence with fork/apply/return latency and peak RSS
   budgets plus focused multi-seed, nested, stale/pack, and privacy stress.
+- Define a possible-world hypothesis quotient that is exact for the first hand
+  range and can scale without making physical-copy order public meaning.
+- Integrate the selected branch runtime into conditional Intelligence search
+  and Study fork/return before optimizing another benchmark-only
+  representation.
 - Preserve dense-state speed as card semantics and event histories grow.
 - Let the next creator-selected content increment pressure the IR naturally
   without turning each card into a one-off kernel exception.

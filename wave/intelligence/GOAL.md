@@ -22,6 +22,13 @@ comparisons. Intelligence owns the policies, search, training, evaluation, and
 evidence behind those experiences; it does not own rules authority or Game's
 Study experience.
 
+The immediate architecture program is defined in
+[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md): consume managym's canonical
+Command/Observation/world-query authority, ship conditional strategy search,
+train belief-conditioned policy/value students, learn calibrated beliefs from
+viewer history, and make the results available to Study and the world-pinned
+arena. These are the highest-priority next Intelligence tasks.
+
 The product north star places manabots in Avatar Cube Team Sealed as pilots,
 teammates, and opponents. The first robot team may use fixed authored decks,
 and manabots need not sideboard. Once a manabot can play the selected world,
@@ -36,6 +43,17 @@ later Intelligence capability. Drafting is separate and is not a prerequisite.
 - Search teachers and students are compared in actual selected matchups at
   explicit compute budgets, with legality, competencies, seat-balanced
   strength, calibration, latency, throughput, label cost, and uncertainty.
+- One historical/root Observation can be evaluated under the compatible-deal
+  prior and typed conditions such as `Has(Bolt)` and `NoLands`, returning
+  aligned complete action distributions, values, condition mass, uncertainty,
+  and exact provenance without exposing actual hidden truth.
+- A supervised belief head maps lossless viewer history to a calibrated
+  normalized distribution over managym's world hypotheses. Both policy and
+  value are conditioned on that `BeliefState`; actual hidden worlds remain
+  calibration targets rather than inference inputs.
+- Conditional teacher trajectories, shards, and checkpoints bind world/query,
+  belief, history, target, source, seed, and exact byte identities and replay
+  through the same semantic Commands as live play.
 - Every admitted candidate enters a versioned, world-pinned skill arena. The
   primary hill-climbing signal is a population rating at a declared compute
   class, reported with paired-deal uncertainty and the underlying matchup
@@ -81,14 +99,19 @@ ablations beside it so improvements remain interpretable.
 ## Dependencies and bounds
 
 Rules owns typed programs, structured offers and commands, viewer-safe state,
-identity, and exact forks. Intelligence consumes those interfaces and reports
-pressure back through real workloads; it does not delay prototypes until every
-possible kernel representation is settled. A proven full-clone path is an
-acceptable first backend when it fits the measured budget.
+identity, exact forks, possible-world/query meaning, the reference
+compatible-deal measure, and legal world materialization. Intelligence owns
+memory, priors and learned beliefs, sampling policy, planning, and learning over
+those interfaces. It reports pressure back through real workloads and does not
+delay prototypes until every representation is settled. A proven full-clone
+path and exact small world support are acceptable first backends when they fit
+the measured budget.
 
 Game owns Study decision navigation, reveal, comparison, explanation, and
 human research consent. Intelligence emits attributable evidence; it does not
 build a second replay, legality, presentation, or hidden-information system.
+Etude or an LLM may construct a typed `WorldQuery`; neither can inspect actual
+hidden authority or introduce arbitrary query semantics.
 
 An external LLM may be a teacher, baseline, or grounded narrator. It is not the
 inner-loop rules oracle or source of legal actions. Open-ended card coverage,

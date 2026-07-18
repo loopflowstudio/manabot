@@ -1,8 +1,15 @@
 # Beliefs (design doc — folded into the search wave 2026-07-10)
 
+> **Current disposition (2026-07-17): active research background, not the
+> roadmap.** The dormant activation gate below was superseded by the accepted
+> supervised conditional-belief architecture in
+> [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) and the prioritized
+> [Intelligence roadmap](README.md). Preserve this document's measured exact
+> range and game-theoretic cautions; use the top-down contract for ownership,
+> query semantics, policy/value conditioning, and implementation order.
+>
 > Formerly `wave/beliefs/`. Search and beliefs are one arc: decision-time
-> planning under hidden information. This doc is the design half; activation
-> criteria unchanged.
+> planning under hidden information.
 >
 > **Caveats added 2026-07-10 (advisor review):**
 > 1. The "announcement-proof" license below is stated too broadly. Naive
@@ -19,7 +26,8 @@
 >    The 2x2 ablation (information x continuation) is the discriminator and
 >    should precede any mechanism claims.
 
-> **Status: dormant, trigger-armed** (2026-07-09). This wave activates when
+> **Historical status: dormant, trigger-armed** (2026-07-09). This wave was to
+> activate when
 > the search wave's **Exit 1 tripwire** fires: two consecutive 10x rollout
 > increases gain < 2 points on the ladder AND an exploiter reaches ≥ 65%
 > against the frozen search-derived policy — the signature that strategy
@@ -27,7 +35,10 @@
 > listener when there is someone worth listening to. Until then, uniform
 > determinization is *exactly correct* against uninformative opponents, and a
 > belief tracker pointed at a random player converges, correctly and
-> uselessly, to the prior we already have.
+> uselessly, to the prior we already have. The 2026-07-17 architecture review
+> superseded this gate because conditional strategy comparison and supervised
+> belief learning are now product and platform capabilities, not only a remedy
+> for a diagnosed planner failure.
 
 ## Vision
 

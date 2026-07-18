@@ -55,6 +55,27 @@ gate before integration.
   cleanup. Default training, evaluation, and Study evidence use only the acting
   viewer's historical information.
 
+## Architecture convergence (accepted 2026-07-17)
+
+- managym owns the authoritative match, semantic Commands, canonical viewer
+  Observation stream, replay/forks, possible-world meaning, typed `WorldQuery`
+  grammar, compatible-deal measure, and materialization. Intelligence must not
+  create parallel meanings for hands or actions.
+- manabot owns agent memory, conditional priors and learned beliefs over the
+  managym world domain, planning, policy/value learning, teacher evidence,
+  datasets, checkpoints, opponents, arena evaluation, and Study evidence.
+- The product proof is a complete play distribution changing under typed
+  conditions such as `Has(Bolt)` without revealing actual truth. A
+  `ConditionalStrategyResult`, not one best action, is the primary result.
+- The first supervised student conditions policy and value on the canonical
+  compatible-deal prior restricted by curriculum queries. Actual hidden truth
+  supervises the belief head separately; policy is not trained as a clairvoyant
+  one-world model.
+- The high-priority order is: authoritative `PlanningProblem`, conditional
+  teacher/result, conditional trajectories/shards/student, supervised belief
+  head plus INT-9 adaptation, immutable self-play populations plus INT-6, and
+  conditional Study evidence.
+
 ## Ownership boundaries
 
 - **Rules:** authoritative semantics, state, legal offers and commands,
@@ -66,11 +87,17 @@ gate before integration.
 
 ## Open tensions
 
+- Decide the first belief-head representation—fixed categorical exact support
+  or structured hypothesis scorer—without changing the normalized
+  `BeliefState` contract.
+- Decide whether history reaches policy/value only through belief or also
+  through a separate agent-memory path; match protocol remains memory-free.
 - A plausible Transformer or graph/tree encoder must preserve structure without
   destroying the inference throughput needed for rollout-heavy training.
 - Real dynamic binding—joining static program roles to runtime objects and
   offers—is more important than another static classification result.
 - Early arena results are useful for iteration but remain vulnerable to weak
   opponents, one-seed variance, and hidden-information mistakes.
-- Search can improve labels while making data expensive or information-set
-  inconsistent; cost and honesty must be measured in the running teacher.
+- Conditional search can improve labels while making data expensive or
+  information-set inconsistent; belief calibration, strategy quality, cost,
+  and planner honesty must be measured separately in the running teacher.

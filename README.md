@@ -10,7 +10,7 @@ development of intelligent Magic: The Gathering humans.
 Etude Fantasia is built out of three main subsystems:
 - **Etude** (`etude`, Python + Svelte frontend): the authored play, replay,
   and study experience
-- **Manabot** (`manabot`, Python): the trainable agent, search and learning
+- **manabot** (`manabot`, Python): the trainable agent, search and learning
   library, Gymnasium wrappers, and experiment tracking
 - **managym** (Rust): the deterministic game and search environment, with PyO3
   Python bindings
@@ -76,6 +76,8 @@ results are recorded alongside positive ones.
   baselines are alive
 - [wave/](wave/README.md) — the active portfolios: rules, game, study,
   intelligence
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the top-down system
+  authority, identity, replay, belief, search, learning, arena, and Study map
 - [docs/research/](docs/README.md) — platform comparisons and deep dives
 - [paper/](paper/README.md) — the paper
 
@@ -96,15 +98,16 @@ cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- 
 uv run --extra dev pytest tests/
 ```
 
-Architecture and style live with their packages: [etude/](etude/README.md),
-[manabot/](manabot/README.md), [managym/](managym/README.md). Agent and
+The top-down system contract is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Package structure and style live with [etude/](etude/README.md),
+[manabot/](manabot/README.md), and [managym/](managym/README.md). Agent and
 contributor conventions are in [AGENTS.md](AGENTS.md).
 
 ## Map of the repository
 
 | Path | What it is |
 |---|---|
-| `etude/` | Experience server: authoritative play, presentation, study protocol, curated packs |
+| `etude/` | Experience server: transport, presentation, Study protocol, and adapters over managym authority |
 | `frontend/` | Etude's Svelte client |
 | `manabot/` | The trainable agent: env wrappers, models, search, training, verification |
 | `managym/` | Rust rules engine and vectorized environment (PyO3 bindings) |
@@ -129,6 +132,6 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 - **managym** — the rules environment the agent lives in.
 
 If it faces the player, it is Etude; if it trains or evaluates the agent, it
-is manabot; if it is the world, it is managym. Manabot is not a former name
+is manabot; if it is the world, it is managym. manabot is not a former name
 to erase: existing `manabot.*` contract/schema identifiers, experiment
 receipts, and wandb history keep their names and remain reproducible.

@@ -6,6 +6,11 @@ agent) and `etude` (the experience server).
 
 ## Architecture
 
+managym is Etude Fantasia's authoritative world: match execution, semantic
+Commands, viewer Observations, deterministic replay, exact forks, and the
+meaning and materialization of possible worlds. The cross-package contracts
+and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
 3. **`src/state/`**: Core game state (cards, players, zones, mana)

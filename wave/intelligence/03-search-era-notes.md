@@ -1,5 +1,11 @@
 # Search
 
+> **Historical strategy note.** The current priority, ownership, and
+> implementation order are in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md)
+> and the [Intelligence roadmap](README.md). In particular, the exclusions of
+> belief-conditioned search, self-play populations, and league play below have
+> been superseded.
+>
 > **Scope (2026-07-10):** this is the main wave — search AND beliefs, one arc:
 > decision-time planning under hidden information. The beliefs design lives in
 > [02-beliefs-design.md](02-beliefs-design.md). Two constraints now bind every
@@ -48,6 +54,7 @@ Three things fall out, and they are the reason to do this before anything else:
 - Auxiliary prediction heads (a good answer to a problem search solves better;
   revisit only if search fails)
 - Belief-conditioned / safe search, exploitability-minimizing methods
+  *(historical exclusion; conditional belief search is now high priority)*
 - Cube design, deck construction, drafting
 - Cardset expansion beyond what a strategically non-degenerate deck requires
 - GUI, publishing

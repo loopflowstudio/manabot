@@ -35,6 +35,11 @@ against or reusing any checkpoint, check its world tag.
 
 ## Architecture
 
+manabot owns memory, beliefs, planning, policy/value learning, teacher data,
+self-play, evaluation, and promotion evidence over the authoritative managym
+world. The cross-package contracts and convergence status are in
+[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
 2. **`manabot.model`**: trainable policy and value models (`Agent`, PPO
