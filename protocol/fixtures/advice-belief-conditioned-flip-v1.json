@@ -1,0 +1,845 @@
+{
+  "contract": "advice-fixture-v1",
+  "request": {
+    "address": "erd1.WzEsInJlcGxheS5pbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCJpbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCIwIiwiMCIsIjAiLCIyIiwiMSIsImludDE1LWNvdW50ZXJlZC13aXBlLWZvdXItd2lkZS12MS1jb21taXQiLCIwIiwiNmU4Yzg0OTRlMzZlZTQ1ODdhYzdmNzRmY2UwMjYyNjc0ZWIyNWZkOTg1YjQ4ZTlhYTA4MjRiNDRmZmYzMWFkMCJd",
+    "advisor_identity": {
+      "action_abi": {
+        "name": "semantic_decision_frame",
+        "sha256": "67616fe8fc6c0ca100da53c6d5a1b0494254210dc98e294cb1c931f0c4e106cf",
+        "version": "4"
+      },
+      "artifact": {
+        "kind": "code_source",
+        "source_bundle_sha256": "90146e3d326aa97a799e9dc8016d3aa9b7e3108a5195d6b841f0e2521f5cc62f"
+      },
+      "compute": {
+        "branch_driver_id": "full_clone/current_game_v1",
+        "c_puct": 1.5,
+        "id": "puct-512-traversal-16-world-counterspell-flip-v1",
+        "max_steps": 80,
+        "sampled_worlds": 16,
+        "simulations_per_scenario": 512
+      },
+      "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+      "evaluator_id": "uniform_random_terminal",
+      "information_boundary": "historical_viewer",
+      "kind": "advisor_identity_v1",
+      "match_id": "int15-countered-wipe-four-wide-v1-match",
+      "observation_abi": {
+        "name": "experience_frame",
+        "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+        "version": "experience-v1"
+      },
+      "planner_id": "determinized_puct",
+      "possible_world_abi": {
+        "name": "possible_world_space",
+        "sha256": "4cad4e7b9d9be459acf14e571d874b8a6c4ebc7c0555cb7ad31bc42a0c287ac9",
+        "version": "1"
+      },
+      "seed": {
+        "derivation_id": "same-uniform-draws-per-scenario-v1",
+        "plan_id": "paired-belief-inverse-cdf-v1",
+        "root_seed": 197
+      },
+      "source_replay_id": "replay.int15-countered-wipe-four-wide-v1-match",
+      "source_replay_sha256": "43f5fe5c14d5f5c6f520d1b75dadca3e2239e5df6207ce28f693cd7c94a00dd2",
+      "world_id": "w2"
+    },
+    "comparison_scenario": {
+      "audience": {
+        "kind": "personal"
+      },
+      "author_viewer_id": "viewer.int15.countered-wipe-four-wide-v1",
+      "id": "typed-lacks-counterspell",
+      "provenance": {
+        "created_at_table_revision": 2,
+        "kind": "player_authored",
+        "shared_at_table_revision": null
+      },
+      "source": {
+        "advice_identity": {
+          "action_abi": {
+            "name": "semantic_decision_frame",
+            "sha256": "67616fe8fc6c0ca100da53c6d5a1b0494254210dc98e294cb1c931f0c4e106cf",
+            "version": "4"
+          },
+          "artifact": {
+            "kind": "code_source",
+            "source_bundle_sha256": "90146e3d326aa97a799e9dc8016d3aa9b7e3108a5195d6b841f0e2521f5cc62f"
+          },
+          "compute": {
+            "branch_driver_id": "full_clone/current_game_v1",
+            "c_puct": 1.5,
+            "id": "puct-512-traversal-16-world-counterspell-flip-v1",
+            "max_steps": 80,
+            "sampled_worlds": 16,
+            "simulations_per_scenario": 512
+          },
+          "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+          "evaluator_id": "uniform_random_terminal",
+          "information_boundary": "historical_viewer",
+          "kind": "advisor_identity_v1",
+          "match_id": "int15-countered-wipe-four-wide-v1-match",
+          "observation_abi": {
+            "name": "experience_frame",
+            "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+            "version": "experience-v1"
+          },
+          "planner_id": "determinized_puct",
+          "possible_world_abi": {
+            "name": "possible_world_space",
+            "sha256": "4cad4e7b9d9be459acf14e571d874b8a6c4ebc7c0555cb7ad31bc42a0c287ac9",
+            "version": "1"
+          },
+          "seed": {
+            "derivation_id": "same-uniform-draws-per-scenario-v1",
+            "plan_id": "paired-belief-inverse-cdf-v1",
+            "root_seed": 197
+          },
+          "source_replay_id": "replay.int15-countered-wipe-four-wide-v1-match",
+          "source_replay_sha256": "43f5fe5c14d5f5c6f520d1b75dadca3e2239e5df6207ce28f693cd7c94a00dd2",
+          "world_id": "w2"
+        },
+        "decision_address": "erd1.WzEsInJlcGxheS5pbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCJpbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCIwIiwiMCIsIjAiLCIyIiwiMSIsImludDE1LWNvdW50ZXJlZC13aXBlLWZvdXItd2lkZS12MS1jb21taXQiLCIwIiwiNmU4Yzg0OTRlMzZlZTQ1ODdhYzdmNzRmY2UwMjYyNjc0ZWIyNWZkOTg1YjQ4ZTlhYTA4MjRiNDRmZmYzMWFkMCJd",
+        "gam6_scenario_id": "typed-lacks-counterspell"
+      }
+    },
+    "contract": "advice-v1",
+    "identity": null,
+    "scenario": {
+      "audience": {
+        "kind": "personal"
+      },
+      "author_viewer_id": "viewer.int15.countered-wipe-four-wide-v1",
+      "id": "typed-has-counterspell",
+      "provenance": {
+        "created_at_table_revision": 1,
+        "kind": "player_authored",
+        "shared_at_table_revision": null
+      },
+      "source": {
+        "advice_identity": {
+          "action_abi": {
+            "name": "semantic_decision_frame",
+            "sha256": "67616fe8fc6c0ca100da53c6d5a1b0494254210dc98e294cb1c931f0c4e106cf",
+            "version": "4"
+          },
+          "artifact": {
+            "kind": "code_source",
+            "source_bundle_sha256": "90146e3d326aa97a799e9dc8016d3aa9b7e3108a5195d6b841f0e2521f5cc62f"
+          },
+          "compute": {
+            "branch_driver_id": "full_clone/current_game_v1",
+            "c_puct": 1.5,
+            "id": "puct-512-traversal-16-world-counterspell-flip-v1",
+            "max_steps": 80,
+            "sampled_worlds": 16,
+            "simulations_per_scenario": 512
+          },
+          "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+          "evaluator_id": "uniform_random_terminal",
+          "information_boundary": "historical_viewer",
+          "kind": "advisor_identity_v1",
+          "match_id": "int15-countered-wipe-four-wide-v1-match",
+          "observation_abi": {
+            "name": "experience_frame",
+            "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+            "version": "experience-v1"
+          },
+          "planner_id": "determinized_puct",
+          "possible_world_abi": {
+            "name": "possible_world_space",
+            "sha256": "4cad4e7b9d9be459acf14e571d874b8a6c4ebc7c0555cb7ad31bc42a0c287ac9",
+            "version": "1"
+          },
+          "seed": {
+            "derivation_id": "same-uniform-draws-per-scenario-v1",
+            "plan_id": "paired-belief-inverse-cdf-v1",
+            "root_seed": 197
+          },
+          "source_replay_id": "replay.int15-countered-wipe-four-wide-v1-match",
+          "source_replay_sha256": "43f5fe5c14d5f5c6f520d1b75dadca3e2239e5df6207ce28f693cd7c94a00dd2",
+          "world_id": "w2"
+        },
+        "decision_address": "erd1.WzEsInJlcGxheS5pbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCJpbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCIwIiwiMCIsIjAiLCIyIiwiMSIsImludDE1LWNvdW50ZXJlZC13aXBlLWZvdXItd2lkZS12MS1jb21taXQiLCIwIiwiNmU4Yzg0OTRlMzZlZTQ1ODdhYzdmNzRmY2UwMjYyNjc0ZWIyNWZkOTg1YjQ4ZTlhYTA4MjRiNDRmZmYzMWFkMCJd",
+        "gam6_scenario_id": "typed-has-counterspell"
+      }
+    },
+    "scenario_id": null,
+    "viewer": {
+      "rules_viewer": 0,
+      "table_id": "int15-countered-wipe-four-wide-v1-match",
+      "viewer_id": "viewer.int15.countered-wipe-four-wide-v1"
+    }
+  },
+  "response": {
+    "address": "erd1.WzEsInJlcGxheS5pbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCJpbnQxNS1jb3VudGVyZWQtd2lwZS1mb3VyLXdpZGUtdjEtbWF0Y2giLCIwIiwiMCIsIjAiLCIyIiwiMSIsImludDE1LWNvdW50ZXJlZC13aXBlLWZvdXItd2lkZS12MS1jb21taXQiLCIwIiwiNmU4Yzg0OTRlMzZlZTQ1ODdhYzdmNzRmY2UwMjYyNjc0ZWIyNWZkOTg1YjQ4ZTlhYTA4MjRiNDRmZmYzMWFkMCJd",
+    "contract": "advice-v1",
+    "deltas": null,
+    "evidence": null,
+    "frame": {
+      "action_space": "PRIORITY",
+      "asset_manifest_hash": "f5816a2792a67a79dc7e1f02e1d71c6296e56537cacd25f24328c7d6104ee787",
+      "content_hash": "legacy-content-unversioned",
+      "deck_names": {
+        "hero": "Interactive",
+        "villain": "Interactive"
+      },
+      "frame_hash": "3aefc8e1b34d437ce89f40c7e3af885452d17570b7a9839196211eb0143d60cd",
+      "match_id": "int15-countered-wipe-four-wide-v1-match",
+      "offers": [
+        {
+          "action_type": "PRIORITY_CAST_SPELL",
+          "actor": 0,
+          "choices": [],
+          "confirm_label": "Cast Pyroclasm",
+          "focus": [
+            49
+          ],
+          "help": null,
+          "id": 0,
+          "label": "Cast Pyroclasm",
+          "source": null,
+          "verb": "cast"
+        },
+        {
+          "action_type": "PRIORITY_PASS_PRIORITY",
+          "actor": 0,
+          "choices": [],
+          "confirm_label": "Pass priority",
+          "focus": [],
+          "help": null,
+          "id": 1,
+          "label": "Pass priority",
+          "source": null,
+          "verb": "pass_priority"
+        }
+      ],
+      "projection": {
+        "agent": {
+          "battlefield": [
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 122,
+              "name": "Mountain",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 0,
+              "damage": 0,
+              "id": 124,
+              "name": "Mountain",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            }
+          ],
+          "exile": [],
+          "graveyard": [],
+          "hand": [
+            {
+              "id": 49,
+              "mana_value": 2,
+              "name": "Pyroclasm",
+              "owner_id": 0,
+              "power": 0,
+              "registry_key": 23,
+              "toughness": 0,
+              "types": {
+                "is_artifact": false,
+                "is_battle": false,
+                "is_creature": false,
+                "is_enchantment": false,
+                "is_land": false,
+                "is_planeswalker": false,
+                "is_spell": true
+              },
+              "zone": "HAND"
+            }
+          ],
+          "id": 0,
+          "is_active": true,
+          "is_agent": true,
+          "library_count": 57,
+          "life": 8,
+          "player_index": 0,
+          "stack": [],
+          "zone_counts": {
+            "BATTLEFIELD": 2,
+            "COMMAND": 0,
+            "EXILE": 0,
+            "GRAVEYARD": 0,
+            "HAND": 1,
+            "LIBRARY": 57,
+            "STACK": 0
+          }
+        },
+        "game_over": false,
+        "opponent": {
+          "battlefield": [
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 1,
+              "damage": 0,
+              "id": 123,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 0,
+              "base_toughness": 0,
+              "controller_id": 1,
+              "damage": 0,
+              "id": 125,
+              "name": "Island",
+              "plus1_counters": 0,
+              "power": 0,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 0
+            },
+            {
+              "base_power": 2,
+              "base_toughness": 2,
+              "controller_id": 1,
+              "damage": 0,
+              "id": 126,
+              "name": "Gray Ogre",
+              "plus1_counters": 0,
+              "power": 2,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 2
+            },
+            {
+              "base_power": 2,
+              "base_toughness": 2,
+              "controller_id": 1,
+              "damage": 0,
+              "id": 127,
+              "name": "Gray Ogre",
+              "plus1_counters": 0,
+              "power": 2,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 2
+            },
+            {
+              "base_power": 2,
+              "base_toughness": 2,
+              "controller_id": 1,
+              "damage": 0,
+              "id": 128,
+              "name": "Wind Drake",
+              "plus1_counters": 0,
+              "power": 2,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 2
+            },
+            {
+              "base_power": 1,
+              "base_toughness": 1,
+              "controller_id": 1,
+              "damage": 0,
+              "id": 129,
+              "name": "Raging Goblin",
+              "plus1_counters": 0,
+              "power": 1,
+              "summoning_sick": false,
+              "tapped": false,
+              "toughness": 1
+            }
+          ],
+          "exile": [],
+          "graveyard": [],
+          "hand": [],
+          "hand_hidden_count": 7,
+          "id": 1,
+          "is_active": false,
+          "is_agent": false,
+          "library_count": 47,
+          "life": 12,
+          "player_index": 1,
+          "stack": [],
+          "zone_counts": {
+            "BATTLEFIELD": 6,
+            "COMMAND": 0,
+            "EXILE": 0,
+            "GRAVEYARD": 0,
+            "HAND": 7,
+            "LIBRARY": 47,
+            "STACK": 0
+          }
+        },
+        "turn": {
+          "active_player_id": 0,
+          "agent_player_id": 0,
+          "phase": "PRECOMBAT_MAIN",
+          "step": "PRECOMBAT_MAIN_STEP",
+          "turn_number": 1
+        },
+        "won": false
+      },
+      "prompt": {
+        "actor": 0,
+        "id": 2,
+        "instruction": "Choose an action",
+        "kind": "priority",
+        "title": "Your priority"
+      },
+      "protocol": 1,
+      "revision": 0,
+      "status": "ready",
+      "stops": {
+        "auto_pass": false,
+        "my": [
+          "main1",
+          "main2"
+        ],
+        "opponent": [
+          "end_step"
+        ],
+        "stop_on_stack": true
+      },
+      "winner": null
+    },
+    "identity": {
+      "action_abi": {
+        "name": "semantic_decision_frame",
+        "sha256": "67616fe8fc6c0ca100da53c6d5a1b0494254210dc98e294cb1c931f0c4e106cf",
+        "version": "4"
+      },
+      "artifact": {
+        "kind": "code_source",
+        "source_bundle_sha256": "90146e3d326aa97a799e9dc8016d3aa9b7e3108a5195d6b841f0e2521f5cc62f"
+      },
+      "compute": {
+        "branch_driver_id": "full_clone/current_game_v1",
+        "c_puct": 1.5,
+        "id": "puct-512-traversal-16-world-counterspell-flip-v1",
+        "max_steps": 80,
+        "sampled_worlds": 16,
+        "simulations_per_scenario": 512
+      },
+      "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+      "evaluator_id": "uniform_random_terminal",
+      "information_boundary": "historical_viewer",
+      "kind": "advisor_identity_v1",
+      "match_id": "int15-countered-wipe-four-wide-v1-match",
+      "observation_abi": {
+        "name": "experience_frame",
+        "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+        "version": "experience-v1"
+      },
+      "planner_id": "determinized_puct",
+      "possible_world_abi": {
+        "name": "possible_world_space",
+        "sha256": "4cad4e7b9d9be459acf14e571d874b8a6c4ebc7c0555cb7ad31bc42a0c287ac9",
+        "version": "1"
+      },
+      "seed": {
+        "derivation_id": "same-uniform-draws-per-scenario-v1",
+        "plan_id": "paired-belief-inverse-cdf-v1",
+        "root_seed": 197
+      },
+      "source_replay_id": "replay.int15-countered-wipe-four-wide-v1-match",
+      "source_replay_sha256": "43f5fe5c14d5f5c6f520d1b75dadca3e2239e5df6207ce28f693cd7c94a00dd2",
+      "world_id": "w2"
+    },
+    "offers": [
+      {
+        "action_type": "PRIORITY_CAST_SPELL",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Cast Pyroclasm",
+        "focus": [
+          49
+        ],
+        "help": null,
+        "id": 0,
+        "label": "Cast Pyroclasm",
+        "source": null,
+        "verb": "cast"
+      },
+      {
+        "action_type": "PRIORITY_PASS_PRIORITY",
+        "actor": 0,
+        "choices": [],
+        "confirm_label": "Pass priority",
+        "focus": [],
+        "help": null,
+        "id": 1,
+        "label": "Pass priority",
+        "source": null,
+        "verb": "pass_priority"
+      }
+    ],
+    "reason": null,
+    "request_sha256": "eac6faca9a8f57b4bc76af48200ebb36ffcf136aa50d2914209e953a2122b6be",
+    "response_sha256": "c5f28f4e989470f56c0d1449d110ca8cd194041442c1e73ffdef9a04293d0238",
+    "scenario": null,
+    "serialization": "advisor-canonical-json-v1",
+    "status": "ok",
+    "strategy": {
+      "advisor_identity": {
+        "action_abi": {
+          "name": "semantic_decision_frame",
+          "sha256": "67616fe8fc6c0ca100da53c6d5a1b0494254210dc98e294cb1c931f0c4e106cf",
+          "version": "4"
+        },
+        "artifact": {
+          "kind": "code_source",
+          "source_bundle_sha256": "90146e3d326aa97a799e9dc8016d3aa9b7e3108a5195d6b841f0e2521f5cc62f"
+        },
+        "compute": {
+          "branch_driver_id": "full_clone/current_game_v1",
+          "c_puct": 1.5,
+          "id": "puct-512-traversal-16-world-counterspell-flip-v1",
+          "max_steps": 80,
+          "sampled_worlds": 16,
+          "simulations_per_scenario": 512
+        },
+        "content_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+        "evaluator_id": "uniform_random_terminal",
+        "information_boundary": "historical_viewer",
+        "kind": "advisor_identity_v1",
+        "match_id": "int15-countered-wipe-four-wide-v1-match",
+        "observation_abi": {
+          "name": "experience_frame",
+          "sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+          "version": "experience-v1"
+        },
+        "planner_id": "determinized_puct",
+        "possible_world_abi": {
+          "name": "possible_world_space",
+          "sha256": "4cad4e7b9d9be459acf14e571d874b8a6c4ebc7c0555cb7ad31bc42a0c287ac9",
+          "version": "1"
+        },
+        "seed": {
+          "derivation_id": "same-uniform-draws-per-scenario-v1",
+          "plan_id": "paired-belief-inverse-cdf-v1",
+          "root_seed": 197
+        },
+        "source_replay_id": "replay.int15-countered-wipe-four-wide-v1-match",
+        "source_replay_sha256": "43f5fe5c14d5f5c6f520d1b75dadca3e2239e5df6207ce28f693cd7c94a00dd2",
+        "world_id": "w2"
+      },
+      "comparison": {
+        "actions": [
+          {
+            "offer_id": 0,
+            "policy_probability": -0.1015625,
+            "q": {
+              "reason": null,
+              "status": "available",
+              "value": -0.15783121436834335
+            },
+            "robustness": {
+              "reason": null,
+              "status": "available",
+              "value": -0.375
+            },
+            "uncertainty": {
+              "reason": null,
+              "status": "available",
+              "value": -0.006866442751387262
+            }
+          },
+          {
+            "offer_id": 1,
+            "policy_probability": 0.1015625,
+            "q": {
+              "reason": null,
+              "status": "available",
+              "value": -0.024666741490364075
+            },
+            "robustness": {
+              "reason": null,
+              "status": "available",
+              "value": 0.375
+            },
+            "uncertainty": {
+              "reason": null,
+              "status": "available",
+              "value": 0.004281798844859679
+            }
+          }
+        ],
+        "left_belief_sha256": "a9b8177edc2c585081fb3fc655cf56606b458c499a75d79afcfaaf3398ddd15b",
+        "left_scenario_id": "typed-has-counterspell",
+        "right_belief_sha256": "9dfdc089d1c0337f1f9908031eef7d5d80d1839b96e1828435e91ed9145ade1d",
+        "right_scenario_id": "typed-lacks-counterspell",
+        "root_uncertainty": {
+          "reason": null,
+          "status": "available",
+          "value": 0.0014286923879799178
+        },
+        "root_value": {
+          "reason": null,
+          "status": "available",
+          "value": -0.0869140625
+        },
+        "semantic": "left_minus_right"
+      },
+      "decision_sha256": "6e8c8494e36ee4587ac7f74fce0262674eb25fd985b48e9aa0824b44fff31ad0",
+      "offers": [
+        {
+          "actor": 0,
+          "label": "PriorityCastSpell",
+          "offer_id": 0,
+          "verb": "cast"
+        },
+        {
+          "actor": 0,
+          "label": "PriorityPassPriority",
+          "offer_id": 1,
+          "verb": "pass_priority"
+        }
+      ],
+      "plan_sha256": "53a03807de473fa04eb673083cd28111bd33bb930f0bcf5204d7c3d2b919e9d7",
+      "policy_semantic": "puct_visit_distribution/v1",
+      "prior_sha256": "b338174b64af435665e18923e00f4179b9e4c745556136a651a68ded315c1689",
+      "realized_compute": {
+        "cap_hits": 315,
+        "conditions_searched": 2,
+        "materialized_worlds": 32,
+        "total_simulations": 1024,
+        "total_tree_nodes": 1056,
+        "unique_materialized_worlds": 32
+      },
+      "scenarios": [
+        {
+          "actions": [
+            {
+              "label": "PriorityCastSpell",
+              "offer_id": 0,
+              "probability": 0.435546875,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.10762331634759903,
+                "visits": 223
+              },
+              "robustness": {
+                "co_best_worlds": 5,
+                "covered_worlds": 16,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.3125,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 16,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.021092520912441466,
+                "visits": null
+              },
+              "visits": 223
+            },
+            {
+              "label": "PriorityPassPriority",
+              "offer_id": 1,
+              "probability": 0.564453125,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.19896194338798523,
+                "visits": 289
+              },
+              "robustness": {
+                "co_best_worlds": 11,
+                "covered_worlds": 16,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.6875,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 16,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.03533233049540234,
+                "visits": null
+              },
+              "visits": 289
+            }
+          ],
+          "belief": {
+            "belief_model_id": "typed-has-counterspell-compatible-prior/v1",
+            "distribution_sha256": "e1ab601f28851ac9a001d1ff766dac9f372d6fc5bf29b8a724ca2372dc98c056",
+            "normalization_error": 0.0,
+            "normalized_belief_sha256": "a9b8177edc2c585081fb3fc655cf56606b458c499a75d79afcfaaf3398ddd15b",
+            "positive_support": 4764,
+            "provenance_identity": "player_authored:viewer.int15.countered-wipe-four-wide-v1:1",
+            "provenance_kind": "player_authored",
+            "scenario_id": "typed-has-counterspell",
+            "space_identity": "f9f85000c4d38f36d9cd8c95c5437f35ead3059dcefcc16dcf17e86cef3a87f1"
+          },
+          "cap_hits": 135,
+          "condition_mass": 1.0,
+          "root_uncertainty": {
+            "co_best_worlds": null,
+            "covered_worlds": 16,
+            "method": "between_world_standard_error/v1",
+            "simulations": null,
+            "status": "available",
+            "value": 0.028994752957319528,
+            "visits": null
+          },
+          "root_value": {
+            "co_best_worlds": null,
+            "covered_worlds": null,
+            "method": null,
+            "simulations": 512,
+            "status": "available",
+            "value": 0.1591796875,
+            "visits": null
+          },
+          "sampled_worlds": 16,
+          "scenario_id": "typed-has-counterspell",
+          "simulations": 512,
+          "support": 4764,
+          "tree_nodes": 528
+        },
+        {
+          "actions": [
+            {
+              "label": "PriorityCastSpell",
+              "offer_id": 0,
+              "probability": 0.537109375,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.2654545307159424,
+                "visits": 275
+              },
+              "robustness": {
+                "co_best_worlds": 11,
+                "covered_worlds": 16,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.6875,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 16,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.027958963663828728,
+                "visits": null
+              },
+              "visits": 275
+            },
+            {
+              "label": "PriorityPassPriority",
+              "offer_id": 1,
+              "probability": 0.462890625,
+              "q": {
+                "co_best_worlds": null,
+                "covered_worlds": null,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.2236286848783493,
+                "visits": 237
+              },
+              "robustness": {
+                "co_best_worlds": 5,
+                "covered_worlds": 16,
+                "method": null,
+                "simulations": null,
+                "status": "available",
+                "value": 0.3125,
+                "visits": null
+              },
+              "uncertainty": {
+                "co_best_worlds": null,
+                "covered_worlds": 16,
+                "method": "between_world_standard_error/v1",
+                "simulations": null,
+                "status": "available",
+                "value": 0.03105053165054266,
+                "visits": null
+              },
+              "visits": 237
+            }
+          ],
+          "belief": {
+            "belief_model_id": "typed-lacks-counterspell-compatible-prior/v1",
+            "distribution_sha256": "5d1234eca7c3895cc61d8cdffd89e560a11d4c7fee2c88aff1d84decd77c4c83",
+            "normalization_error": 0.0,
+            "normalized_belief_sha256": "9dfdc089d1c0337f1f9908031eef7d5d80d1839b96e1828435e91ed9145ade1d",
+            "positive_support": 5840,
+            "provenance_identity": "player_authored:viewer.int15.countered-wipe-four-wide-v1:2",
+            "provenance_kind": "player_authored",
+            "scenario_id": "typed-lacks-counterspell",
+            "space_identity": "f9f85000c4d38f36d9cd8c95c5437f35ead3059dcefcc16dcf17e86cef3a87f1"
+          },
+          "cap_hits": 180,
+          "condition_mass": 1.0,
+          "root_uncertainty": {
+            "co_best_worlds": null,
+            "covered_worlds": 16,
+            "method": "between_world_standard_error/v1",
+            "simulations": null,
+            "status": "available",
+            "value": 0.02756606056933961,
+            "visits": null
+          },
+          "root_value": {
+            "co_best_worlds": null,
+            "covered_worlds": null,
+            "method": null,
+            "simulations": 512,
+            "status": "available",
+            "value": 0.24609375,
+            "visits": null
+          },
+          "sampled_worlds": 16,
+          "scenario_id": "typed-lacks-counterspell",
+          "simulations": 512,
+          "support": 5840,
+          "tree_nodes": 528
+        }
+      ],
+      "schema_version": 1,
+      "viewer_frame_sha256": "3aefc8e1b34d437ce89f40c7e3af885452d17570b7a9839196211eb0143d60cd"
+    }
+  }
+}

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import replace
+import hashlib
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 import numpy as np
 import pytest
 
+import etude.advice as advice_module
 from etude.advice import (
     ADVISOR_SOURCE_PATHS,
+    FLIP_VERSIONED_FIXTURE_PATH,
     VERSIONED_FIXTURE_PATH,
     AdviceProvider,
     AdviceRequest,
@@ -16,9 +21,11 @@ from etude.advice import (
     ResolvedAdvisorDecision,
     VersionedAdviceFixture,
     advice_schema,
+    load_flip_versioned_advice_fixture,
     load_versioned_advice_fixture,
     parse_advice_response_bytes,
     request_versioned_fixture_advice,
+    serialize_advice_response,
 )
 from etude.advice_identity import AbiIdentity, CheckpointArtifact
 from etude.server import app
@@ -94,15 +101,98 @@ def test_public_fixture_cannot_carry_authority_private_fields() -> None:
         assert forbidden not in serialized
 
 
-def test_versioned_endpoint_returns_the_provider_canonical_bytes() -> None:
+def test_historical_versioned_endpoint_is_explicitly_source_unavailable() -> None:
+    assert hashlib.sha256(VERSIONED_FIXTURE_PATH.read_bytes()).hexdigest() == (
+        "4a3fbeaa8461e00a785e961b9819508d2c1065ae98f058cc50a3783db0945e8d"
+    )
     fixture = load_versioned_advice_fixture()
     expected = request_versioned_fixture_advice(fixture.request)
+    expected_response = parse_advice_response_bytes(expected)
+    assert expected_response.status == "unavailable"
+    assert expected_response.reason == "advisor_artifact_mismatch"
     with TestClient(app) as client:
         response = client.post(
             "/api/advice", json=fixture.request.model_dump(mode="json")
         )
     assert response.status_code == 200
     assert response.content == expected
+    actual = parse_advice_response_bytes(response.content)
+    assert actual.status == "unavailable"
+    assert actual.reason == "advisor_artifact_mismatch"
+
+
+@pytest.mark.skipif(
+    not FLIP_VERSIONED_FIXTURE_PATH.is_file(),
+    reason="INT-15 fixture is generated only after RUL-11 lands",
+)
+def test_flip_endpoint_returns_checked_positive_canonical_bytes() -> None:
+    fixture = load_flip_versioned_advice_fixture()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/advice", json=fixture.request.model_dump(mode="json")
+        )
+    assert response.status_code == 200
+    actual = parse_advice_response_bytes(response.content)
+    assert actual.status == "ok"
+    assert actual.reason is None
+    assert actual.strategy is not None
+    assert actual.strategy.comparison is not None
+    assert len(actual.strategy.scenarios) == 2
+    top_offer_ids = []
+    for scenario in actual.strategy.scenarios:
+        probabilities = [action.probability for action in scenario.actions]
+        maximum = max(probabilities)
+        assert probabilities.count(maximum) == 1
+        top_offer_ids.append(scenario.actions[probabilities.index(maximum)].offer_id)
+    assert top_offer_ids[0] != top_offer_ids[1]
+    labels = {offer.id: offer.label for offer in actual.offers}
+    assert labels[top_offer_ids[0]] == "Pass priority"
+    assert labels[top_offer_ids[1]] == "Cast Pyroclasm"
+    assert response.content == serialize_advice_response(fixture.response)
+
+
+@pytest.mark.skipif(
+    not FLIP_VERSIONED_FIXTURE_PATH.is_file(),
+    reason="INT-15 fixture is generated only after RUL-11 lands",
+)
+def test_flip_endpoint_fails_closed_after_one_bound_source_byte_drifts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    fixture = load_flip_versioned_advice_fixture()
+    registration = next(
+        entry
+        for entry in advice_module.VERSIONED_ADVICE_FIXTURE_REGISTRY
+        if entry.fixture_id == "int-15-belief-conditioned-flip-v1"
+    )
+    copied_paths: list[Path] = []
+    for index, source in enumerate(registration.source_paths):
+        relative = source.relative_to(advice_module.REPO_ROOT)
+        copied = tmp_path / relative
+        copied.parent.mkdir(parents=True, exist_ok=True)
+        data = source.read_bytes()
+        if index == 0:
+            data = data[:-1] + bytes([data[-1] ^ 1])
+        copied.write_bytes(data)
+        copied_paths.append(copied)
+    drifted = replace(registration, source_paths=tuple(copied_paths))
+    monkeypatch.setattr(advice_module, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(
+        advice_module,
+        "VERSIONED_ADVICE_FIXTURE_REGISTRY",
+        tuple(
+            drifted if entry is registration else entry
+            for entry in advice_module.VERSIONED_ADVICE_FIXTURE_REGISTRY
+        ),
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/advice", json=fixture.request.model_dump(mode="json")
+        )
+    assert response.status_code == 200
+    actual = parse_advice_response_bytes(response.content)
+    assert actual.status == "unavailable"
+    assert actual.reason == "advisor_artifact_mismatch"
 
 
 @pytest.mark.parametrize(

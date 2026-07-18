@@ -535,3 +535,29 @@ def test_validate_result_rejects_wrong_condition_count() -> None:
     tampered = replace(result, conditions=result.conditions[:3])
     with pytest.raises(ConditionalSearchError, match="5 conditions"):
         validate_result(tampered)
+
+
+def test_validate_result_accepts_exact_explicit_condition_ids() -> None:
+    """Advice comparisons validate their ordered scenario ids, not legacy count."""
+
+    result = _run_search_fast()
+    from dataclasses import replace
+
+    conditions = result.conditions[:2]
+    explicit = replace(
+        result,
+        conditions=conditions,
+        comparison_deltas={
+            conditions[1].condition_id: result.comparison_deltas[
+                conditions[1].condition_id
+            ]
+        },
+    )
+    expected = tuple(condition.condition_id for condition in conditions)
+    validate_result(explicit, expected_condition_ids=expected)
+
+    with pytest.raises(ConditionalSearchError, match="expected conditions"):
+        validate_result(
+            explicit,
+            expected_condition_ids=tuple(reversed(expected)),
+        )

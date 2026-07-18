@@ -22,6 +22,7 @@ from typing import (
     TYPE_CHECKING,
     Annotated,
     Any,
+    Callable,
     Iterable,
     Literal,
     Mapping,
@@ -73,6 +74,9 @@ VERSIONED_FIXTURE_PATH = (
 )
 CHECKPOINT_VERSIONED_FIXTURE_PATH = (
     REPO_ROOT / "protocol" / "fixtures" / "advice-checkpoint-policy-v1.json"
+)
+FLIP_VERSIONED_FIXTURE_PATH = (
+    REPO_ROOT / "protocol" / "fixtures" / "advice-belief-conditioned-flip-v1.json"
 )
 
 
@@ -1320,6 +1324,7 @@ class AdviceProvider:
         from manabot.sim.conditional_search import (
             conditional_determinized_puct_beliefs,
             project_viewer_safe_result,
+            validate_result,
         )
 
         compute = identity.compute
@@ -1343,6 +1348,7 @@ class AdviceProvider:
             branch_audit=True,
             branch_match_id=identity.match_id,
         )
+        validate_result(result, expected_condition_ids=tuple(beliefs))
         search_finished = time.perf_counter_ns()
         offer_ids = [int(offer["id"]) for offer in decision.semantic_frame.offers]
         projected = project_viewer_safe_result(result, offer_ids=offer_ids)
@@ -1585,24 +1591,74 @@ def load_checkpoint_versioned_advice_fixture() -> VersionedAdviceFixture:
     return VersionedAdviceFixture.model_validate(payload)
 
 
+@functools.cache
+def load_flip_versioned_advice_fixture() -> VersionedAdviceFixture:
+    payload = json.loads(FLIP_VERSIONED_FIXTURE_PATH.read_text(encoding="utf-8"))
+    return VersionedAdviceFixture.model_validate(payload)
+
+
+@dataclass(frozen=True)
+class VersionedAdviceFixtureRegistration:
+    """One checked response paired with its exact artifact verification seam."""
+
+    fixture_id: str
+    path: Path
+    loader: Callable[[], VersionedAdviceFixture]
+    source_paths: tuple[Path, ...]
+
+    def load(self) -> VersionedAdviceFixture:
+        return self.loader()
+
+
+VERSIONED_ADVICE_FIXTURE_REGISTRY = (
+    VersionedAdviceFixtureRegistration(
+        fixture_id="int-12-belief-conditioned-v1",
+        path=VERSIONED_FIXTURE_PATH,
+        loader=load_versioned_advice_fixture,
+        source_paths=ADVISOR_SOURCE_PATHS,
+    ),
+    VersionedAdviceFixtureRegistration(
+        fixture_id="int-5-checkpoint-policy-v1",
+        path=CHECKPOINT_VERSIONED_FIXTURE_PATH,
+        loader=load_checkpoint_versioned_advice_fixture,
+        source_paths=ADVISOR_SOURCE_PATHS,
+    ),
+    VersionedAdviceFixtureRegistration(
+        fixture_id="int-15-belief-conditioned-flip-v1",
+        path=FLIP_VERSIONED_FIXTURE_PATH,
+        loader=load_flip_versioned_advice_fixture,
+        source_paths=ADVISOR_SOURCE_PATHS,
+    ),
+)
+
+
 def request_versioned_fixture_advice(request: AdviceRequest) -> bytes:
     """Serve the checked v1 slice or fail closed without adapting identity."""
 
     if request.is_legacy:
         raise ValueError("versioned fixture adapter requires advice-v1")
-    fixtures = (
-        load_versioned_advice_fixture(),
-        load_checkpoint_versioned_advice_fixture(),
+    registered_fixtures = tuple(
+        (registration, registration.load())
+        for registration in VERSIONED_ADVICE_FIXTURE_REGISTRY
+        if registration.path.is_file()
     )
-    matched = next(
-        (fixture for fixture in fixtures if request == fixture.request), None
+    if not registered_fixtures:
+        raise RuntimeError("no versioned advice fixtures are registered")
+    matched_registration = next(
+        (
+            (registration, fixture)
+            for registration, fixture in registered_fixtures
+            if request == fixture.request
+        ),
+        None,
     )
-    if matched is not None:
-        assert matched.request.advisor_identity is not None
+    if matched_registration is not None:
+        registration, matched_fixture = matched_registration
+        assert matched_fixture.request.advisor_identity is not None
         try:
             RegisteredAdvisor(
-                matched.request.advisor_identity,
-                ADVISOR_SOURCE_PATHS,
+                matched_fixture.request.advisor_identity,
+                registration.source_paths,
             ).verify_artifact()
         except AdvisorUnavailable as unavailable:
             return serialize_advice_response(
@@ -1614,14 +1670,14 @@ def request_versioned_fixture_advice(request: AdviceRequest) -> bytes:
                     request_sha256=advice_request_sha256(request),
                 )
             )
-        return serialize_advice_response(matched.response)
+        return serialize_advice_response(matched_fixture.response)
     fixture = next(
         (
             candidate
-            for candidate in fixtures
+            for _, candidate in registered_fixtures
             if candidate.request.advisor_identity == request.advisor_identity
         ),
-        fixtures[0],
+        registered_fixtures[0][1],
     )
     assert request.advisor_identity is not None
     assert fixture.request.advisor_identity is not None

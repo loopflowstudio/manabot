@@ -1295,17 +1295,49 @@ def result_sha256(result: ConditionalStrategyResult) -> str:
 # ---------------------------------------------------------------------------
 
 
-def validate_result(result: ConditionalStrategyResult) -> None:
-    """Fail closed on identity mismatch, action misalignment, or missing data."""
+def validate_result(
+    result: ConditionalStrategyResult,
+    *,
+    expected_condition_ids: Sequence[str] | None = None,
+) -> None:
+    """Fail closed on identity mismatch, action misalignment, or missing data.
+
+    The legacy INT-13 path retains its five-condition contract when callers do
+    not provide an explicit shape. Advice callers pass the exact ordered belief
+    scenario ids so a two-belief comparison receives the same validation
+    without pretending that it contains the legacy True/Has/Lacks/Q/Not(Q)
+    plan.
+    """
 
     if result.planner != PLANNER_NAME:
         raise ConditionalSearchError(
             f"planner is {result.planner!r}, expected {PLANNER_NAME!r}"
         )
-    if len(result.conditions) != 5:
-        raise ConditionalSearchError(
-            f"expected 5 conditions, got {len(result.conditions)}"
-        )
+    actual_condition_ids = tuple(cr.condition_id for cr in result.conditions)
+    if len(set(actual_condition_ids)) != len(actual_condition_ids):
+        raise ConditionalSearchError("condition ids must be unique")
+    if expected_condition_ids is None:
+        if len(result.conditions) != 5:
+            raise ConditionalSearchError(
+                f"expected 5 conditions, got {len(result.conditions)}"
+            )
+        if not actual_condition_ids or actual_condition_ids[0] != CONDITION_TRUE:
+            first = actual_condition_ids[0] if actual_condition_ids else None
+            raise ConditionalSearchError(
+                f"first condition is {first!r}, expected {CONDITION_TRUE!r}"
+            )
+    else:
+        expected = tuple(expected_condition_ids)
+        if not expected or any(not condition_id for condition_id in expected):
+            raise ConditionalSearchError(
+                "expected condition ids must be non-empty and non-blank"
+            )
+        if len(set(expected)) != len(expected):
+            raise ConditionalSearchError("expected condition ids must be unique")
+        if actual_condition_ids != expected:
+            raise ConditionalSearchError(
+                f"expected conditions {expected!r}, got {actual_condition_ids!r}"
+            )
     for cr in result.conditions:
         if int(cr.visit_counts.sum()) != cr.simulations:
             raise ConditionalSearchError(
@@ -1339,11 +1371,6 @@ def validate_result(result: ConditionalStrategyResult) -> None:
             raise ConditionalSearchError(
                 f"condition {cr.condition_id}: root_value {cr.root_value} out of [0, 1]"
             )
-    true_cr = result.conditions[0]
-    if true_cr.condition_id != CONDITION_TRUE:
-        raise ConditionalSearchError(
-            f"first condition is {true_cr.condition_id!r}, expected {CONDITION_TRUE!r}"
-        )
     for cr in result.conditions[1:]:
         if cr.condition_id not in result.comparison_deltas:
             raise ConditionalSearchError(
