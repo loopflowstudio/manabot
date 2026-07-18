@@ -1,2 +1,2 @@
-# Temporary: primary Claude OAuth is expired; remove after Claude routing is repaired.
-agent: codex
+# Temporary: managed Codex OAuth is unusable; remove after provider routing is repaired.
+agent: opencode:opencode/glm-5.2
