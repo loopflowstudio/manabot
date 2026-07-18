@@ -76,6 +76,28 @@ gate before integration.
   head plus INT-9 adaptation, immutable self-play populations plus INT-6, and
   conditional Study evidence.
 
+## Results-first reprioritization (2026-07-18)
+
+- The convergence push landed every planned instrument — world/query kernel,
+  exact-range tracker and player, conditional determinized PUCT with paired
+  sampling, versioned advice, conditional shards, visit teacher, world-pinned
+  arena — with zero committed production results across all of them.
+- Measured basis: the shipped belief comparison moves the advice policy by at
+  most 0.125 and never flips the top action (`top_action_changed` 0.0 in every
+  retained condition); INT-7 value heads improved held-out Brier while
+  weakening every complete player; INT-8 killed one-seed learned priors inside
+  PUCT (paired score −0.15 chosen / −0.10 visit vs uniform); the INT-4
+  production harness has never run (frozen Teacher-0 control bytes absent);
+  the arena has anchors and one challenger but no rating run.
+- Decision: the unit of progress is a frozen result on an existing instrument.
+  The R1–R4 results ladder in `docs/plans/results-first-roadmap.md` supersedes
+  the I1–I6 build ordering.
+  The supervised belief head, wider content pools, factorized-marginal belief
+  degradation, and new planner families wait for those artifacts.
+- Near-term strongest-player hypothesis: belief-weighted, uniform-prior
+  determinized PUCT at a larger declared budget. Learned components re-enter
+  only through arena admission.
+
 ## Ownership boundaries
 
 - **Rules:** authoritative semantics, state, legal offers and commands,

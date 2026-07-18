@@ -86,3 +86,13 @@ Advance by completing the nearest runnable player loop, then add the next
 smallest behavior that makes the Avatar Team Sealed destination more real. Do
 not create speculative lobby, social, tournament, or generalized cube-platform
 infrastructure ahead of an exercised need.
+
+As of 2026-07-18 the versioned advice surface serves belief-conditioned
+strategy evidence, but only for a pinned completed-match decision from checked
+fixtures. The nearest Game work is the live seam: an addressable canonical
+decision for the in-progress match (the live decision address deferred from
+GAM-4 — today the canonical replay address exists only at game close) and the
+player-authored belief input surface, so the same advice identity resolves
+mid-game against the tracked posterior instead of a fixture. This is the Game
+half of Intelligence's live-belief rung; the fork/Retry/return UI remains
+sequenced behind it.

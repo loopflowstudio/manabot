@@ -89,10 +89,10 @@ The labels in this document are precise:
 | Match authority | managym `Game`/`GameState` own rules mutation, while the Etude server separately owns match IDs, revisions, accepted commands, and historical decision bookkeeping. | — | One managym `MatchAuthority` owns match identity, revision, execution, committed Commands/events, replay, observation, and forks. |
 | Decisions | `ActionSpace` and `step(index)` are authoritative internally. `StructuredOfferSet`/`AtomicCommand` are a narrow bridge; Etude has a separate protocol `Command` and lowering context. | Structured command and compiled-semantic work continues in Rules. | A revision-bound semantic `DecisionFrame` and atomic `Command` are the common contract. Positional indices are private acceleration only. |
 | Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
-| Possible worlds | `Game::determinize` uniformly samples a compatible hidden hand and libraries. | **INT-9** adds exact hand-range support, public-action likelihood updates, calibration evidence, and weighted sampling. | managym defines `PossibleWorldSpace`, `WorldQuery`, the reference compatible-deal measure, and materialization. manabot owns normalized priors and learned beliefs over that domain. |
+| Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
 | Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
 | Learning | Teacher traces, NPZ shards, masked policy/value training, and checkpoints work end to end; stronger provenance lives mostly in experiment runners. | Visit-teacher and selected-branch work continue to harden this path. | Query-conditioned teacher rows, belief-conditioned policy/value, shared artifact manifests, and checkpoint-bound history/belief schemas. |
-| Evaluation | `play_games` provides deal-diverse, seat-balanced pairwise results and Wilson intervals. | **INT-6** designs a world-pinned, paired-deal arena with registered players, a full payoff matrix, ratings, uncertainty, and promotion gates. | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
+| Evaluation | `play_games` provides deal-diverse, seat-balanced pairwise results and Wilson intervals; INT-6's world-pinned, paired-deal arena landed 2026-07-18 with frozen anchors and one challenger, but zero committed rating runs. | — | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts, starting with its first committed rating run. |
 | Study | Etude identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Etude presents it without becoming another replay or belief engine. |
 
 The current implementation is not renamed into compliance. Migration is
@@ -616,11 +616,19 @@ Each step migrates at least one real Etude or manabot consumer and deletes its
 duplicate constructor. Contract-only substrate that no running path consumes
 does not complete a step.
 
+As of 2026-07-18 the substrate for steps 2–3 and the plumbing of steps 4–5
+exist without a single committed production result, so the binding constraint
+has moved from building to proving: the sequenced work is the results ladder
+in [docs/plans/results-first-roadmap.md](plans/results-first-roadmap.md)
+(first recommendation flip, live tracked beliefs, calibration curves, first
+arena and teacher runs). The learned belief head in step 4 is explicitly
+deferred until the flip, live-path, and calibration artifacts exist.
+
 ## Roadmaps and detailed contracts
 
 The immediate provider work is prioritized in the [Rules
-roadmap](../wave/rules/README.md) and [Intelligence
-roadmap](../wave/intelligence/README.md). Rules owns changes to managym
+goal](../wave/rules/GOAL.md) and the [results-first
+roadmap](plans/results-first-roadmap.md). Rules owns changes to managym
 authority; Intelligence owns manabot beliefs, planning, learning, opponents,
 and evaluation. Cross-wave work is integrated through runnable consumer slices,
 not by duplicating provider APIs.

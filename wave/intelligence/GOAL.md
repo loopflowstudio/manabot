@@ -26,12 +26,19 @@ advice live or in Study. Intelligence owns policies, priors, model-inferred
 beliefs, search, training, evaluation, and attributable evidence. It does not
 own match facts, player-authored beliefs, rules authority, or Game's surface.
 
-The immediate architecture program is defined in
-[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md): consume managym's canonical
-Command/Observation/world-query authority, ship conditional strategy search,
-train belief-conditioned policy/value students, learn calibrated beliefs from
-viewer history, and make the results available to Study and the world-pinned
-arena. These are the highest-priority next Intelligence tasks.
+The architecture program in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md)
+landed its substrate on 2026-07-18: world enumeration and the typed query
+grammar, the exact-Bayes range tracker and player, conditional determinized
+PUCT with paired sampling, the versioned advice surface, conditional shards,
+the visit teacher, and the world-pinned arena all run — and none has a
+committed production result. The highest-priority Intelligence work is now the
+results ladder in
+[docs/plans/results-first-roadmap.md](../../docs/plans/results-first-roadmap.md):
+freeze the first recommendation flip
+under a typed condition, put the tracked belief on the live play path, commit
+the first belief-calibration curves, and run the first arena admission
+including the exact-range player against a uniform-determinization control.
+The supervised belief head is explicitly deferred until those artifacts exist.
 
 The product north star places manabots in Avatar Cube Team Sealed as pilots,
 teammates, and opponents. The first robot team may use fixed authored decks,
@@ -42,6 +49,34 @@ the resulting players at declared compute classes. Drafting is separate and is
 not a prerequisite.
 
 ## Measures
+
+The first four are the 2026-07-18 results ladder
+([docs/plans/results-first-roadmap.md](../../docs/plans/results-first-roadmap.md));
+each closes only with a committed, replayable artifact on an instrument that
+already exists.
+
+- **R1 — the flip.** A frozen, exactly replayable fixture in which changing
+  only the typed condition (e.g. `Has(Counterspell)` vs `Lacks(Counterspell)`)
+  flips the advised top action under paired seeds at a declared offline
+  budget, served through the versioned advice comparison. A measured no-flip
+  at ~64× the fixture budget is an acceptable closure with the negative
+  result retained.
+- **R2 — live beliefs.** One full game through `./scripts/play` can request
+  advice mid-game whose belief receipt hashes the live exact-Bayes posterior
+  tracked from the compatible-deal prior — no static authored payload on the
+  path, same fail-closed identity discipline as the fixture path.
+- **R3 — calibration curves.** A committed repro script emits, for seeded
+  games, posterior mass on the opponent's actual hidden hand versus the
+  prior's mass across the decision sequence, with the action-likelihood model
+  byte-locked to a real checkpoint and no remaining `RulesProviderGap` on the
+  exercised path.
+- **R4 — first strength results.** A committed arena run (ratings, payoff
+  matrix, paired-deal uncertainty) over the frozen anchors, the dPUCT
+  challenger, and the exact-range player versus a uniform-determinization
+  control at matched compute; and one production visit-teacher iteration with
+  multi-seed students through the fail-closed harness.
+
+The standing target-state measures:
 
 - Every primary Project produces a runnable manabot, teacher, search system, or
   training loop that executes against real `managym` positions and can be

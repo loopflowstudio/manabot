@@ -40,6 +40,16 @@ the typed possible-world/query/materialization kernel consumed by manabot and
 Etude. This work precedes new content breadth because every later play, search,
 learning, and Study slice depends on it.
 
+The possible-world kernel landed on 2026-07-18 (Rust-owned enumeration,
+ordering, compatible-deal weights, identity, and materialization) and is
+consumed by the exact-range tracker and conditional search. The near-term
+provider pressure reported back by that running system is public-commitment
+identity coverage: belief tracking on the live path fails closed wherever
+managym cannot identify a public commitment at an admitted boundary (the
+`RulesProviderGap` cases). Closing those gaps on the selected matchup's
+exercised path unblocks Intelligence's live-belief and calibration rungs and
+outranks new content breadth.
+
 ## Measures
 
 - A selected Etude Fantasia matchup reaches terminal through compiled typed
