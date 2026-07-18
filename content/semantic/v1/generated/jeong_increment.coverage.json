@@ -1,0 +1,424 @@
+{
+  "admission_closure_complete": true,
+  "deck_definition_count": 30,
+  "decks": [
+    {
+      "card_count": 40,
+      "key": "gw_allies_jeong"
+    },
+    {
+      "card_count": 41,
+      "key": "ur_lessons"
+    }
+  ],
+  "definition_count": 32,
+  "definitions": [
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "mana"
+      ],
+      "semantic_key": "basic.forest"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "mana"
+      ],
+      "semantic_key": "basic.island"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "mana"
+      ],
+      "semantic_key": "basic.mountain"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "mana"
+      ],
+      "semantic_key": "basic.plains"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "learn",
+        "return_to_hand"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "stx.divide_by_zero"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "deal_damage",
+        "learn"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "stx.igneous_inspiration"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "draw_cards",
+        "learn"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "stx.pop_quiz"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "branch",
+        "look_and_select",
+        "put_top_cards_in_hand"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "tla.accumulate_wisdom"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "deal_power_damage"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "tla.allies_at_last"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana",
+        "earthbend"
+      ],
+      "program_count": 2,
+      "program_kinds": [
+        "triggered",
+        "triggered_mana"
+      ],
+      "semantic_key": "tla.badgermole_cub"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "gain_life",
+        "scry"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.compassionate_healer"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "branch",
+        "counter_unless_pays",
+        "draw_cards",
+        "set_power_from_count"
+      ],
+      "program_count": 3,
+      "program_kinds": [
+        "static",
+        "triggered"
+      ],
+      "semantic_key": "tla.dragonfly_swarm"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "exile_until_source_leaves"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.earth_kingdom_jailer"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "put_counters"
+      ],
+      "program_count": 2,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.earth_kings_lieutenant"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "for_each_target",
+        "modify_pt",
+        "untap"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "tla.fancy_footwork"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana",
+        "modify_pt"
+      ],
+      "program_count": 2,
+      "program_kinds": [
+        "activated",
+        "triggered"
+      ],
+      "semantic_key": "tla.fire_nation_cadets"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "branch",
+        "deal_damage"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "tla.firebending_lesson"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "branch",
+        "modify_pt"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "static"
+      ],
+      "semantic_key": "tla.first_time_flyer"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "create_token"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.forecasting_fortune_teller"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "create_token"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.invasion_reinforcements"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "counter_unless_pays"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "tla.itll_quench_ya"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "put_counters"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.jeong_jeongs_deserters"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "create_token"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.kyoshi_warriors"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "modify_pt",
+        "restrict_blocking"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.otter_penguin"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "branch",
+        "draw_cards",
+        "gain_life"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.south_pole_voyager"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "create_token",
+        "set_power_from_count"
+      ],
+      "program_count": 2,
+      "program_kinds": [
+        "static",
+        "triggered"
+      ],
+      "semantic_key": "tla.suki_kyoshi_warrior"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "tap",
+        "untap"
+      ],
+      "program_count": 2,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.tiger_seal"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "look_and_select"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "activated"
+      ],
+      "semantic_key": "tla.water_tribe_rallier"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "modify_pt"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "static"
+      ],
+      "semantic_key": "tla.white_lotus_reinforcements"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "branch",
+        "grant_keywords",
+        "modify_pt"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "spell"
+      ],
+      "semantic_key": "tla.yip_yip"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [],
+      "program_count": 0,
+      "program_kinds": [],
+      "semantic_key": "token.ally"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "draw_cards"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "activated"
+      ],
+      "semantic_key": "token.clue"
+    }
+  ],
+  "fixture_count": 1,
+  "ir_hash": "cff5c34b1e7179deb25f7660cf2b54621efa1f171085b9ca66781ad2d55eae93",
+  "no_card_name_dispatch": true,
+  "opcode_counts": {
+    "add_mana": 6,
+    "branch": 6,
+    "counter_unless_pays": 2,
+    "create_token": 4,
+    "deal_damage": 3,
+    "deal_power_damage": 1,
+    "draw_cards": 4,
+    "earthbend": 1,
+    "exile_until_source_leaves": 1,
+    "for_each_target": 1,
+    "gain_life": 2,
+    "grant_keywords": 1,
+    "learn": 3,
+    "look_and_select": 2,
+    "modify_pt": 6,
+    "put_counters": 3,
+    "put_top_cards_in_hand": 1,
+    "restrict_blocking": 1,
+    "return_to_hand": 1,
+    "scry": 1,
+    "set_power_from_count": 2,
+    "tap": 1,
+    "untap": 2
+  },
+  "pack_key": "tla-jeong-increment-v1",
+  "program_count": 38,
+  "referenced_definition_count": 2,
+  "schema_version": 1,
+  "source_hash": "3dead13f9409ce8cf5a70261f96a3fa7258a30084997021bbf9c91c3d4d2fe54"
+}

@@ -32,46 +32,109 @@ use super::{
 
 #[derive(Clone)]
 struct AuthoredRuntime {
+    pack_key: String,
     content: Arc<ContentPack>,
     decklists: Vec<std::collections::BTreeMap<String, usize>>,
 }
 
-static TWO_DECK_RUNTIME: OnceLock<Result<AuthoredRuntime, IrError>> = OnceLock::new();
+impl AuthoredRuntime {
+    fn compile(semantic: SemanticPack) -> Result<Self, IrError> {
+        let content = Arc::new(semantic.compile_content_pack()?);
+        let decklists = semantic
+            .decks
+            .iter()
+            .map(|deck| semantic.decklist(&deck.key))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            pack_key: semantic.pack_key,
+            content,
+            decklists,
+        })
+    }
+
+    fn matches(&self, player_configs: &[PlayerConfig]) -> bool {
+        if player_configs.len() != self.decklists.len() {
+            return false;
+        }
+        let mut unmatched = self.decklists.iter().collect::<Vec<_>>();
+        for config in player_configs {
+            let Some(index) = unmatched
+                .iter()
+                .position(|decklist| *decklist == &config.decklist)
+            else {
+                return false;
+            };
+            unmatched.remove(index);
+        }
+        unmatched.is_empty()
+    }
+}
+
+static AUTHORED_RUNTIME_CATALOG: OnceLock<Result<Vec<AuthoredRuntime>, IrError>> = OnceLock::new();
+
+fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
+    AUTHORED_RUNTIME_CATALOG
+        .get_or_init(|| {
+            [SemanticPack::two_deck()?, SemanticPack::jeong_increment()?]
+                .into_iter()
+                .map(AuthoredRuntime::compile)
+                .collect()
+        })
+        .clone()
+}
+
+fn select_authored_runtime<'a>(
+    player_configs: &[PlayerConfig],
+    catalog: &'a [AuthoredRuntime],
+) -> Result<Option<&'a AuthoredRuntime>, IrError> {
+    let matches = catalog
+        .iter()
+        .filter(|runtime| runtime.matches(player_configs))
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [runtime] => Ok(Some(runtime)),
+        _ => Err(IrError::Malformed(format!(
+            "authored content catalog is ambiguous for packs {:?}",
+            matches
+                .iter()
+                .map(|runtime| runtime.pack_key.as_str())
+                .collect::<Vec<_>>()
+        ))),
+    }
+}
 
 pub(crate) fn content_pack_for_authored_match(
     player_configs: &[PlayerConfig],
 ) -> Result<Option<Arc<ContentPack>>, IrError> {
-    let runtime = TWO_DECK_RUNTIME
-        .get_or_init(|| {
-            let semantic = SemanticPack::two_deck()?;
-            let content = Arc::new(semantic.compile_content_pack()?);
-            let decklists = semantic
-                .decks
-                .iter()
-                .map(|deck| semantic.decklist(&deck.key))
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok(AuthoredRuntime { content, decklists })
-        })
-        .clone()?;
+    let catalog = authored_runtime_catalog()?;
+    Ok(select_authored_runtime(player_configs, &catalog)?
+        .map(|runtime| Arc::clone(&runtime.content)))
+}
 
-    if player_configs.len() != runtime.decklists.len() {
-        return Ok(None);
+#[cfg(test)]
+mod catalog_tests {
+    use super::*;
+
+    fn configs(semantic: &SemanticPack, left: &str, right: &str) -> Vec<PlayerConfig> {
+        vec![
+            PlayerConfig::new("left", semantic.decklist(left).expect("left deck")),
+            PlayerConfig::new("right", semantic.decklist(right).expect("right deck")),
+        ]
     }
-    let mut matched = BTreeSet::new();
-    for config in player_configs {
-        let Some(index) = runtime
-            .decklists
-            .iter()
-            .position(|decklist| decklist == &config.decklist)
-        else {
-            return Ok(None);
-        };
-        matched.insert(index);
+
+    #[test]
+    fn duplicate_exact_catalog_entries_fail_closed() {
+        let semantic = SemanticPack::jeong_increment().expect("Jeong IR parses");
+        let player_configs = configs(&semantic, "ur_lessons", "gw_allies_jeong");
+        let runtime = AuthoredRuntime::compile(semantic).expect("Jeong pack compiles");
+        let duplicate = runtime.clone();
+
+        let error = select_authored_runtime(&player_configs, &[runtime, duplicate])
+            .err()
+            .expect("ambiguous catalog must fail closed");
+        assert!(error.to_string().contains("catalog is ambiguous"));
     }
-    if matched.len() != runtime.decklists.len() {
-        return Ok(None);
-    }
-    Ok(Some(runtime.content))
 }
 
 impl SemanticPack {

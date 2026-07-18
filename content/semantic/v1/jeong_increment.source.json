@@ -1,0 +1,1581 @@
+{
+  "schema_version": 1,
+  "pack_key": "tla-jeong-increment-v1",
+  "decks": [
+    {
+      "key": "ur_lessons",
+      "card_count": 41,
+      "cards": [
+        {
+          "definition": "basic.island",
+          "count": 9
+        },
+        {
+          "definition": "basic.mountain",
+          "count": 8
+        },
+        {
+          "definition": "tla.tiger_seal",
+          "count": 2
+        },
+        {
+          "definition": "tla.otter_penguin",
+          "count": 2
+        },
+        {
+          "definition": "tla.fire_nation_cadets",
+          "count": 2
+        },
+        {
+          "definition": "tla.first_time_flyer",
+          "count": 2
+        },
+        {
+          "definition": "tla.forecasting_fortune_teller",
+          "count": 1
+        },
+        {
+          "definition": "tla.dragonfly_swarm",
+          "count": 1
+        },
+        {
+          "definition": "tla.firebending_lesson",
+          "count": 4
+        },
+        {
+          "definition": "stx.igneous_inspiration",
+          "count": 2
+        },
+        {
+          "definition": "stx.pop_quiz",
+          "count": 2
+        },
+        {
+          "definition": "stx.divide_by_zero",
+          "count": 2
+        },
+        {
+          "definition": "tla.itll_quench_ya",
+          "count": 2
+        },
+        {
+          "definition": "tla.accumulate_wisdom",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "key": "gw_allies_jeong",
+      "card_count": 40,
+      "cards": [
+        {
+          "definition": "basic.plains",
+          "count": 9
+        },
+        {
+          "definition": "basic.forest",
+          "count": 8
+        },
+        {
+          "definition": "tla.water_tribe_rallier",
+          "count": 1
+        },
+        {
+          "definition": "tla.jeong_jeongs_deserters",
+          "count": 1
+        },
+        {
+          "definition": "tla.invasion_reinforcements",
+          "count": 2
+        },
+        {
+          "definition": "tla.compassionate_healer",
+          "count": 2
+        },
+        {
+          "definition": "tla.earth_kingdom_jailer",
+          "count": 2
+        },
+        {
+          "definition": "tla.white_lotus_reinforcements",
+          "count": 2
+        },
+        {
+          "definition": "tla.earth_kings_lieutenant",
+          "count": 2
+        },
+        {
+          "definition": "tla.kyoshi_warriors",
+          "count": 2
+        },
+        {
+          "definition": "tla.badgermole_cub",
+          "count": 2
+        },
+        {
+          "definition": "tla.suki_kyoshi_warrior",
+          "count": 1
+        },
+        {
+          "definition": "tla.south_pole_voyager",
+          "count": 1
+        },
+        {
+          "definition": "tla.allies_at_last",
+          "count": 2
+        },
+        {
+          "definition": "tla.yip_yip",
+          "count": 1
+        },
+        {
+          "definition": "tla.fancy_footwork",
+          "count": 2
+        }
+      ]
+    }
+  ],
+  "definitions": [
+    {
+      "key": "basic.island",
+      "registry_name": "Island",
+      "characteristics": {
+        "types": [
+          "land"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "subtypes": [
+          "Island"
+        ]
+      },
+      "programs": [
+        {
+          "key": "mana",
+          "kind": "mana",
+          "ops": [
+            {
+              "op": "add_mana",
+              "mana": "U"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "basic.mountain",
+      "registry_name": "Mountain",
+      "characteristics": {
+        "types": [
+          "land"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "subtypes": [
+          "Mountain"
+        ]
+      },
+      "programs": [
+        {
+          "key": "mana",
+          "kind": "mana",
+          "ops": [
+            {
+              "op": "add_mana",
+              "mana": "R"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "basic.plains",
+      "registry_name": "Plains",
+      "characteristics": {
+        "types": [
+          "land"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "subtypes": [
+          "Plains"
+        ]
+      },
+      "programs": [
+        {
+          "key": "mana",
+          "kind": "mana",
+          "ops": [
+            {
+              "op": "add_mana",
+              "mana": "W"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "basic.forest",
+      "registry_name": "Forest",
+      "characteristics": {
+        "types": [
+          "land"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "subtypes": [
+          "Forest"
+        ]
+      },
+      "programs": [
+        {
+          "key": "mana",
+          "kind": "mana",
+          "ops": [
+            {
+              "op": "add_mana",
+              "mana": "G"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "token.ally",
+      "registry_name": "Ally",
+      "characteristics": {
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Ally"
+        ],
+        "colors": [
+          "W"
+        ],
+        "power": 1,
+        "toughness": 1,
+        "token": true
+      },
+      "programs": []
+    },
+    {
+      "key": "token.clue",
+      "registry_name": "Clue",
+      "characteristics": {
+        "types": [
+          "artifact"
+        ],
+        "subtypes": [
+          "Clue"
+        ],
+        "token": true
+      },
+      "programs": [
+        {
+          "key": "sacrifice_draw",
+          "kind": "activated",
+          "cost": {
+            "mana": "2",
+            "sacrifice_source": true
+          },
+          "ops": [
+            {
+              "op": "draw_cards",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.tiger_seal",
+      "registry_name": "Tiger-Seal",
+      "characteristics": {
+        "mana_cost": "U",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Cat",
+          "Seal"
+        ],
+        "keywords": [
+          "vigilance"
+        ],
+        "power": 3,
+        "toughness": 3
+      },
+      "programs": [
+        {
+          "key": "upkeep_tap",
+          "kind": "triggered",
+          "trigger": {
+            "event": "upkeep_begins",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "tap",
+              "target": "source"
+            }
+          ]
+        },
+        {
+          "key": "second_draw_untap",
+          "kind": "triggered",
+          "trigger": {
+            "event": "draw_nth_card",
+            "n": 2,
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "untap",
+              "target": "source"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.otter_penguin",
+      "registry_name": "Otter-Penguin",
+      "characteristics": {
+        "mana_cost": "1U",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Otter",
+          "Bird"
+        ],
+        "power": 2,
+        "toughness": 1
+      },
+      "programs": [
+        {
+          "key": "second_draw_boost",
+          "kind": "triggered",
+          "trigger": {
+            "event": "draw_nth_card",
+            "n": 2,
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "modify_pt",
+              "target": "source",
+              "power": 1,
+              "toughness": 2,
+              "duration": "end_of_turn"
+            },
+            {
+              "op": "restrict_blocking",
+              "target": "source",
+              "duration": "end_of_turn",
+              "predicate": {
+                "kind": "any"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.fire_nation_cadets",
+      "registry_name": "Fire Nation Cadets",
+      "characteristics": {
+        "mana_cost": "R",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "power": 1,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "conditional_firebending",
+          "kind": "triggered",
+          "trigger": {
+            "event": "attacks",
+            "subject": {
+              "kind": "this"
+            },
+            "if": {
+              "kind": "graveyard_at_least",
+              "count": 1,
+              "predicate": {
+                "kind": "subtype",
+                "value": "Lesson"
+              }
+            }
+          },
+          "ops": [
+            {
+              "op": "add_mana",
+              "mana": "RR",
+              "until": "end_of_combat"
+            }
+          ]
+        },
+        {
+          "key": "pump",
+          "kind": "activated",
+          "cost": {
+            "mana": "2"
+          },
+          "ops": [
+            {
+              "op": "modify_pt",
+              "target": "source",
+              "power": 1,
+              "toughness": 0,
+              "duration": "end_of_turn"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.first_time_flyer",
+      "registry_name": "First-Time Flyer",
+      "characteristics": {
+        "mana_cost": "1U",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Pilot",
+          "Ally"
+        ],
+        "keywords": [
+          "flying"
+        ],
+        "power": 1,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "lesson_boost",
+          "kind": "static",
+          "ops": [
+            {
+              "op": "branch",
+              "condition": {
+                "kind": "graveyard_at_least",
+                "count": 1,
+                "predicate": {
+                  "kind": "subtype",
+                  "value": "Lesson"
+                }
+              },
+              "then": [
+                {
+                  "op": "modify_pt",
+                  "target": "source",
+                  "power": 1,
+                  "toughness": 1,
+                  "duration": "static"
+                }
+              ],
+              "otherwise": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.forecasting_fortune_teller",
+      "registry_name": "Forecasting Fortune Teller",
+      "characteristics": {
+        "mana_cost": "1U",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Advisor",
+          "Ally"
+        ],
+        "power": 1,
+        "toughness": 3
+      },
+      "programs": [
+        {
+          "key": "create_clue",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "create_token",
+              "definition_ref": "token.clue",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.dragonfly_swarm",
+      "registry_name": "Dragonfly Swarm",
+      "characteristics": {
+        "mana_cost": "1UR",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Dragon",
+          "Insect"
+        ],
+        "keywords": [
+          "flying"
+        ],
+        "power": null,
+        "toughness": 3
+      },
+      "programs": [
+        {
+          "key": "graveyard_power",
+          "kind": "static",
+          "ops": [
+            {
+              "op": "set_power_from_count",
+              "predicate": {
+                "kind": "not_card_types",
+                "values": [
+                  "creature",
+                  "land"
+                ]
+              },
+              "zone": "your_graveyard",
+              "controller": "you"
+            }
+          ]
+        },
+        {
+          "key": "ward",
+          "kind": "triggered",
+          "trigger": {
+            "event": "becomes_targeted",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "counter_unless_pays",
+              "target": "triggering_spell",
+              "cost": "1"
+            }
+          ]
+        },
+        {
+          "key": "lesson_death_draw",
+          "kind": "triggered",
+          "trigger": {
+            "event": "dies",
+            "subject": {
+              "kind": "this"
+            },
+            "if": {
+              "kind": "graveyard_at_least",
+              "count": 1,
+              "predicate": {
+                "kind": "subtype",
+                "value": "Lesson"
+              }
+            }
+          },
+          "ops": [
+            {
+              "op": "branch",
+              "condition": {
+                "kind": "graveyard_at_least",
+                "count": 1,
+                "predicate": {
+                  "kind": "subtype",
+                  "value": "Lesson"
+                }
+              },
+              "then": [
+                {
+                  "op": "draw_cards",
+                  "count": 1
+                }
+              ],
+              "otherwise": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.firebending_lesson",
+      "registry_name": "Firebending Lesson",
+      "characteristics": {
+        "mana_cost": "R",
+        "types": [
+          "instant"
+        ],
+        "subtypes": [
+          "Lesson"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "R",
+            "kicker": "4"
+          },
+          "targets": [
+            {
+              "role": "victim",
+              "selector": {
+                "kind": "creature"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "branch",
+              "condition": {
+                "kind": "kicked"
+              },
+              "then": [
+                {
+                  "op": "deal_damage",
+                  "amount": 5,
+                  "target": "victim"
+                }
+              ],
+              "otherwise": [
+                {
+                  "op": "deal_damage",
+                  "amount": 2,
+                  "target": "victim"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "stx.igneous_inspiration",
+      "registry_name": "Igneous Inspiration",
+      "characteristics": {
+        "mana_cost": "2R",
+        "types": [
+          "sorcery"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "2R"
+          },
+          "targets": [
+            {
+              "role": "victim",
+              "selector": {
+                "kind": "creature_or_player"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "deal_damage",
+              "amount": 3,
+              "target": "victim"
+            },
+            {
+              "op": "learn"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "stx.pop_quiz",
+      "registry_name": "Pop Quiz",
+      "characteristics": {
+        "mana_cost": "2U",
+        "types": [
+          "instant"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "2U"
+          },
+          "ops": [
+            {
+              "op": "draw_cards",
+              "count": 1
+            },
+            {
+              "op": "learn"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "stx.divide_by_zero",
+      "registry_name": "Divide by Zero",
+      "characteristics": {
+        "mana_cost": "2U",
+        "types": [
+          "instant"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "2U"
+          },
+          "targets": [
+            {
+              "role": "target",
+              "selector": {
+                "kind": "spell_or_permanent",
+                "min_mana_value": 1
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "return_to_hand",
+              "target": "target"
+            },
+            {
+              "op": "learn"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.itll_quench_ya",
+      "registry_name": "It'll Quench Ya!",
+      "characteristics": {
+        "mana_cost": "1U",
+        "types": [
+          "instant"
+        ],
+        "subtypes": [
+          "Lesson"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "1U"
+          },
+          "targets": [
+            {
+              "role": "target",
+              "selector": {
+                "kind": "spell"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "counter_unless_pays",
+              "target": "target",
+              "cost": "2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.accumulate_wisdom",
+      "registry_name": "Accumulate Wisdom",
+      "characteristics": {
+        "mana_cost": "1U",
+        "types": [
+          "instant"
+        ],
+        "subtypes": [
+          "Lesson"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "1U"
+          },
+          "ops": [
+            {
+              "op": "branch",
+              "condition": {
+                "kind": "graveyard_at_least",
+                "count": 3,
+                "predicate": {
+                  "kind": "subtype",
+                  "value": "Lesson"
+                }
+              },
+              "then": [
+                {
+                  "op": "put_top_cards_in_hand",
+                  "count": 3
+                }
+              ],
+              "otherwise": [
+                {
+                  "op": "look_and_select",
+                  "look": 3,
+                  "min_select": 1,
+                  "max_select": 1,
+                  "predicate": {
+                    "kind": "any"
+                  },
+                  "destination": "hand",
+                  "remainder": "library_bottom",
+                  "remainder_order": "random"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.water_tribe_rallier",
+      "registry_name": "Water Tribe Rallier",
+      "characteristics": {
+        "mana_cost": "1W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Soldier",
+          "Ally"
+        ],
+        "power": 2,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "waterbend",
+          "kind": "activated",
+          "cost": {
+            "mana": "5",
+            "waterbend": true
+          },
+          "ops": [
+            {
+              "op": "look_and_select",
+              "look": 4,
+              "min_select": 0,
+              "max_select": 1,
+              "predicate": {
+                "kind": "all",
+                "predicates": [
+                  {
+                    "kind": "card_type",
+                    "value": "creature"
+                  },
+                  {
+                    "kind": "power_at_most",
+                    "value": 3
+                  }
+                ]
+              },
+              "destination": "hand",
+              "remainder": "library_bottom",
+              "remainder_order": "random"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.invasion_reinforcements",
+      "registry_name": "Invasion Reinforcements",
+      "characteristics": {
+        "mana_cost": "1W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Warrior",
+          "Ally"
+        ],
+        "keywords": [
+          "flash"
+        ],
+        "power": 1,
+        "toughness": 1
+      },
+      "programs": [
+        {
+          "key": "create_ally",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "create_token",
+              "definition_ref": "token.ally",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.compassionate_healer",
+      "registry_name": "Compassionate Healer",
+      "characteristics": {
+        "mana_cost": "1W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Cleric",
+          "Ally"
+        ],
+        "power": 2,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "tap_value",
+          "kind": "triggered",
+          "trigger": {
+            "event": "becomes_tapped",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "gain_life",
+              "amount": 1
+            },
+            {
+              "op": "scry",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.earth_kingdom_jailer",
+      "registry_name": "Earth Kingdom Jailer",
+      "characteristics": {
+        "mana_cost": "2W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Soldier",
+          "Ally"
+        ],
+        "power": 3,
+        "toughness": 3
+      },
+      "programs": [
+        {
+          "key": "temporary_exile",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "targets": [
+            {
+              "role": "prisoner",
+              "selector": {
+                "kind": "permanent_opponent_controls",
+                "types_any": [
+                  "artifact",
+                  "creature",
+                  "enchantment"
+                ],
+                "min_mana_value": 3
+              },
+              "min": 0,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "exile_until_source_leaves",
+              "target": "prisoner"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.white_lotus_reinforcements",
+      "registry_name": "White Lotus Reinforcements",
+      "characteristics": {
+        "mana_cost": "1GW",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Soldier",
+          "Ally"
+        ],
+        "keywords": [
+          "vigilance"
+        ],
+        "power": 2,
+        "toughness": 3
+      },
+      "programs": [
+        {
+          "key": "ally_anthem",
+          "kind": "static",
+          "ops": [
+            {
+              "op": "modify_pt",
+              "target": "each:other_allies_you_control",
+              "power": 1,
+              "toughness": 1,
+              "duration": "static"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.earth_kings_lieutenant",
+      "registry_name": "Earth King's Lieutenant",
+      "characteristics": {
+        "mana_cost": "GW",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Soldier",
+          "Ally"
+        ],
+        "keywords": [
+          "trample"
+        ],
+        "power": 1,
+        "toughness": 1
+      },
+      "programs": [
+        {
+          "key": "arrival_counters",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "put_counters",
+              "target": "each:other_ally_creature_you_control",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "key": "ally_growth",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "another_you_control",
+              "predicate": {
+                "kind": "subtype",
+                "value": "Ally"
+              }
+            }
+          },
+          "ops": [
+            {
+              "op": "put_counters",
+              "target": "source",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.kyoshi_warriors",
+      "registry_name": "Kyoshi Warriors",
+      "characteristics": {
+        "mana_cost": "3W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Warrior",
+          "Ally"
+        ],
+        "power": 3,
+        "toughness": 3
+      },
+      "programs": [
+        {
+          "key": "create_ally",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "create_token",
+              "definition_ref": "token.ally",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.badgermole_cub",
+      "registry_name": "Badgermole Cub",
+      "characteristics": {
+        "mana_cost": "1G",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Badger",
+          "Mole"
+        ],
+        "power": 2,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "earthbend",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "targets": [
+            {
+              "role": "land",
+              "selector": {
+                "kind": "land_you_control"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "earthbend",
+              "target": "land",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "key": "waterbend_bonus",
+          "kind": "triggered_mana",
+          "trigger": {
+            "event": "tapped_for_mana",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            }
+          },
+          "ops": [
+            {
+              "op": "add_mana",
+              "mana": "G"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.suki_kyoshi_warrior",
+      "registry_name": "Suki, Kyoshi Warrior",
+      "characteristics": {
+        "mana_cost": "2GW",
+        "types": [
+          "creature"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "subtypes": [
+          "Human",
+          "Warrior",
+          "Ally"
+        ],
+        "power": null,
+        "toughness": 4
+      },
+      "programs": [
+        {
+          "key": "creature_power",
+          "kind": "static",
+          "ops": [
+            {
+              "op": "set_power_from_count",
+              "predicate": {
+                "kind": "card_type",
+                "value": "creature"
+              },
+              "zone": "battlefield",
+              "controller": "you"
+            }
+          ]
+        },
+        {
+          "key": "attack_ally",
+          "kind": "triggered",
+          "trigger": {
+            "event": "attacks",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "ops": [
+            {
+              "op": "create_token",
+              "definition_ref": "token.ally",
+              "count": 1,
+              "tapped_and_attacking": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.jeong_jeongs_deserters",
+      "registry_name": "Jeong Jeong's Deserters",
+      "characteristics": {
+        "mana_cost": "1W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Rebel",
+          "Ally"
+        ],
+        "power": 1,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "rally_counter",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "this"
+            }
+          },
+          "targets": [
+            {
+              "role": "beneficiary",
+              "selector": {
+                "kind": "creature"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "put_counters",
+              "target": "beneficiary",
+              "count": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.south_pole_voyager",
+      "registry_name": "South Pole Voyager",
+      "characteristics": {
+        "mana_cost": "1W",
+        "types": [
+          "creature"
+        ],
+        "subtypes": [
+          "Human",
+          "Scout",
+          "Ally"
+        ],
+        "power": 2,
+        "toughness": 2
+      },
+      "programs": [
+        {
+          "key": "ally_arrival",
+          "kind": "triggered",
+          "trigger": {
+            "event": "enters_battlefield",
+            "subject": {
+              "kind": "any_you_control",
+              "predicate": {
+                "kind": "subtype",
+                "value": "Ally"
+              }
+            }
+          },
+          "ops": [
+            {
+              "op": "gain_life",
+              "amount": 1
+            },
+            {
+              "op": "branch",
+              "condition": {
+                "kind": "nth_resolution",
+                "n": 2
+              },
+              "then": [
+                {
+                  "op": "draw_cards",
+                  "count": 1
+                }
+              ],
+              "otherwise": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.allies_at_last",
+      "registry_name": "Allies at Last",
+      "characteristics": {
+        "mana_cost": "2G",
+        "types": [
+          "instant"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "2G",
+            "affinity": {
+              "kind": "subtype",
+              "value": "Ally"
+            }
+          },
+          "targets": [
+            {
+              "role": "allies",
+              "selector": {
+                "kind": "creature_you_control"
+              },
+              "min": 0,
+              "max": 2
+            },
+            {
+              "role": "victim",
+              "selector": {
+                "kind": "creature_opponent_controls"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "deal_power_damage",
+              "sources": "allies",
+              "target": "victim"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.yip_yip",
+      "registry_name": "Yip Yip!",
+      "characteristics": {
+        "mana_cost": "W",
+        "types": [
+          "instant"
+        ],
+        "subtypes": [
+          "Lesson"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "W"
+          },
+          "targets": [
+            {
+              "role": "ally",
+              "selector": {
+                "kind": "creature_you_control"
+              },
+              "min": 1,
+              "max": 1
+            }
+          ],
+          "ops": [
+            {
+              "op": "modify_pt",
+              "target": "ally",
+              "power": 2,
+              "toughness": 2,
+              "duration": "end_of_turn"
+            },
+            {
+              "op": "branch",
+              "condition": {
+                "kind": "target_matches",
+                "role": "ally",
+                "predicate": {
+                  "kind": "subtype",
+                  "value": "Ally"
+                }
+              },
+              "then": [
+                {
+                  "op": "grant_keywords",
+                  "target": "ally",
+                  "keywords": [
+                    "flying"
+                  ],
+                  "duration": "end_of_turn"
+                }
+              ],
+              "otherwise": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "tla.fancy_footwork",
+      "registry_name": "Fancy Footwork",
+      "characteristics": {
+        "mana_cost": "2W",
+        "types": [
+          "instant"
+        ],
+        "subtypes": [
+          "Lesson"
+        ]
+      },
+      "programs": [
+        {
+          "key": "spell",
+          "kind": "spell",
+          "cost": {
+            "mana": "2W"
+          },
+          "targets": [
+            {
+              "role": "creatures",
+              "selector": {
+                "kind": "creature"
+              },
+              "min": 1,
+              "max": 2
+            }
+          ],
+          "ops": [
+            {
+              "op": "for_each_target",
+              "role": "creatures",
+              "body": [
+                {
+                  "op": "untap",
+                  "target": "current_target"
+                },
+                {
+                  "op": "modify_pt",
+                  "target": "current_target",
+                  "power": 2,
+                  "toughness": 2,
+                  "duration": "end_of_turn"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

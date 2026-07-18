@@ -1,4 +1,4 @@
-"""Load and validate the installed UR Lessons versus GW Allies asset pack."""
+"""Load and select immutable Etude curated asset packs."""
 
 from __future__ import annotations
 
@@ -16,6 +16,16 @@ PACK_MANIFEST_PATH = (
     / "lib"
     / "packs"
     / "tla-ur-lessons-vs-gw-allies"
+    / "v1"
+    / "manifest.json"
+)
+JEONG_INCREMENT_MANIFEST_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "frontend"
+    / "src"
+    / "lib"
+    / "packs"
+    / "tla-gw-allies-jeong-vs-ur-lessons"
     / "v1"
     / "manifest.json"
 )
@@ -301,3 +311,24 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
 
 
 CURATED_PACK = load_curated_pack()
+JEONG_INCREMENT_PACK = load_curated_pack(JEONG_INCREMENT_MANIFEST_PATH)
+CURATED_PACK_CATALOG = (CURATED_PACK, JEONG_INCREMENT_PACK)
+
+
+def curated_pack_for_matchup(
+    hero_deck_name: str,
+    villain_deck_name: str,
+    catalog: tuple[CuratedPack, ...] = CURATED_PACK_CATALOG,
+) -> CuratedPack | None:
+    """Select one exact oriented immutable pack, failing closed on ambiguity."""
+    matches = [
+        pack
+        for pack in catalog
+        if pack.reference_for(hero_deck_name, villain_deck_name) is not None
+    ]
+    if len(matches) > 1:
+        raise RuntimeError(
+            "Curated pack catalog is ambiguous: "
+            + ", ".join(pack.pack_id for pack in matches)
+        )
+    return matches[0] if matches else None

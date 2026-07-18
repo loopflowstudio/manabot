@@ -1,0 +1,46 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+cargo test --manifest-path managym/Cargo.toml --test authored_match_tests
+cargo test --manifest-path managym/Cargo.toml \
+  semantic::content::catalog_tests::duplicate_exact_catalog_entries_fail_closed
+cargo test --manifest-path managym/Cargo.toml --test rules_tests \
+  jeong_jeongs_deserters_targeted_counter_and_lethal_sba
+
+uv run scripts/compile_semantic_content.py --check
+uv run scripts/compile_semantic_content.py \
+  --check \
+  --source content/semantic/v1/jeong_increment.source.json \
+  --fixtures content/semantic/v1/jeong_increment.fixtures.json \
+  --ir-output content/semantic/v1/generated/jeong_increment.ir.json \
+  --coverage-output content/semantic/v1/generated/jeong_increment.coverage.json
+
+uv run --extra play maturin build --release -i .venv/bin/python \
+  -m managym/Cargo.toml -o managym/target/wheels
+uv run --extra play python - <<'PY'
+from pathlib import Path
+from zipfile import ZipFile
+
+root = Path.cwd()
+wheel = max(
+    (root / "managym/target/wheels").glob("managym-*-cp312-*.whl"),
+    key=lambda path: path.stat().st_mtime_ns,
+)
+with ZipFile(wheel) as archive:
+    member = next(
+        name
+        for name in archive.namelist()
+        if name.startswith("managym/_managym") and name.endswith(".so")
+    )
+    target = root / "managym" / Path(member).name
+    target.write_bytes(archive.read(member))
+PY
+
+uv run --extra dev pytest -q \
+  tests/etude/test_curated_pack.py \
+  tests/etude/test_play_modes.py
+uv run --extra dev experiments/runners/run_rul10_tla_jeong_increment.py --verify

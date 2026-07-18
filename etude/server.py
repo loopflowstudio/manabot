@@ -30,7 +30,11 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
-from .curated_pack import CURATED_PACK
+from .curated_pack import (
+    CURATED_PACK,
+    JEONG_INCREMENT_PACK,
+    curated_pack_for_matchup,
+)
 from .enums import (
     ActionEnum,
     ActionSpaceEnum,
@@ -117,6 +121,7 @@ INTERACTIVE_DECK = {
 }
 UR_LESSONS_DECK = dict(CURATED_PACK.hero_deck)
 GW_ALLIES_DECK = dict(CURATED_PACK.villain_deck)
+GW_ALLIES_JEONG_DECK = dict(JEONG_INCREMENT_PACK.hero_deck)
 
 # Decks selectable by name over the wire (new_game.config hero_deck /
 # villain_deck may be one of these keys instead of a {card: count} object).
@@ -124,11 +129,13 @@ NAMED_DECKS: dict[str, dict[str, int]] = {
     "interactive": INTERACTIVE_DECK,
     CURATED_PACK.hero_deck_id: UR_LESSONS_DECK,
     CURATED_PACK.villain_deck_id: GW_ALLIES_DECK,
+    JEONG_INCREMENT_PACK.hero_deck_id: GW_ALLIES_JEONG_DECK,
 }
 DECK_DISPLAY_NAMES = {
     "interactive": "Interactive",
     CURATED_PACK.hero_deck_id: CURATED_PACK.hero_display_name,
     CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
+    JEONG_INCREMENT_PACK.hero_deck_id: JEONG_INCREMENT_PACK.hero_display_name,
     "custom": "Custom",
 }
 # Default matchup: the Milestone-1 two-deck slice, UR as hero vs GW villain.
@@ -145,6 +152,10 @@ MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
 CONTENT_HASH = "legacy-content-unversioned"
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
+CURATED_SEMANTIC_PACK_KEYS = {
+    CURATED_PACK.pack_id: "ur-lessons-vs-gw-allies",
+    JEONG_INCREMENT_PACK.pack_id: "tla-jeong-increment-v1",
+}
 
 # MTGO-style priority stops. Stop keys are the human-facing step names; they
 # map onto the engine's StepEnum names (serialize_observation reports the same
@@ -855,12 +866,14 @@ def _parse_game_config(config: Any) -> GameConfig:
         data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
     )
 
+    selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
+
     return GameConfig(
         hero_deck=hero_deck,
         villain_deck=villain_deck,
         hero_deck_name=hero_deck_name,
         villain_deck_name=villain_deck_name,
-        asset_pack=CURATED_PACK.reference_for(hero_deck_name, villain_deck_name),
+        asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
         seed=seed,
         villain_sims=villain_sims,
@@ -901,6 +914,8 @@ class GameSession:
         # Display names for the current matchup, echoed on every payload.
         self.deck_names: dict[str, str] | None = None
         self.asset_pack: dict[str, str] | None = None
+        self.content_hash = CONTENT_HASH
+        self.asset_manifest_hash = ASSET_MANIFEST_HASH
         self._trace_saved = False
         self._pending_villain_log: list[str] = []
         # Priority-stop state (see STOP_STEP_TO_ENGINE_STEP / DEFAULT_STOPS).
@@ -964,6 +979,30 @@ class GameSession:
             managym.PlayerConfig("Villain", config.villain_deck),
         ]
         self.obs, _ = self.env.reset(player_configs)
+
+        manifest = self.env.content_pack_manifest()
+        compiled = manifest.get("compiled_semantics")
+        selected_pack = curated_pack_for_matchup(
+            config.hero_deck_name,
+            config.villain_deck_name,
+        )
+        if selected_pack is not None:
+            expected_pack_key = CURATED_SEMANTIC_PACK_KEYS[selected_pack.pack_id]
+            actual_pack_key = None if compiled is None else compiled.get("pack_key")
+            if actual_pack_key != expected_pack_key:
+                raise RuntimeError(
+                    "Curated matchup did not select its compiled semantic pack: "
+                    f"expected {expected_pack_key!r}, got {actual_pack_key!r}"
+                )
+            self.asset_manifest_hash = selected_pack.manifest_sha256
+            self.content_hash = (
+                CONTENT_HASH
+                if selected_pack is CURATED_PACK
+                else str(manifest["content_digest"])
+            )
+        else:
+            self.content_hash = CONTENT_HASH
+            self.asset_manifest_hash = ASSET_MANIFEST_HASH
 
         self.deck_names = {
             "hero": DECK_DISPLAY_NAMES.get(config.hero_deck_name, "Custom"),
@@ -1681,8 +1720,8 @@ class GameSession:
             "protocol": PROTOCOL_VERSION,
             "match_id": self.match_id,
             "revision": self.revision,
-            "content_hash": CONTENT_HASH,
-            "asset_manifest_hash": ASSET_MANIFEST_HASH,
+            "content_hash": self.content_hash,
+            "asset_manifest_hash": self.asset_manifest_hash,
             "status": "game_over" if obs.game_over else "ready",
             "prompt": prompt,
             "projection": viewer_view(obs, viewer),
@@ -1761,8 +1800,8 @@ class GameSession:
         return {
             "protocol": PROTOCOL_VERSION,
             "engine_version": "managym-python-adapter",
-            "content_hash": CONTENT_HASH,
-            "asset_manifest_hash": ASSET_MANIFEST_HASH,
+            "content_hash": self.content_hash,
+            "asset_manifest_hash": self.asset_manifest_hash,
             "reason": reason,
             "frame": frame,
             "presentation_cursor": cursor,
@@ -1861,8 +1900,8 @@ class GameSession:
             version=CANONICAL_REPLAY_VERSION,
             replay_id=f"replay.{self.match_id}",
             match_id=self.match_id,
-            content_hash=CONTENT_HASH,
-            asset_manifest_hash=ASSET_MANIFEST_HASH,
+            content_hash=self.content_hash,
+            asset_manifest_hash=self.asset_manifest_hash,
             decisions=[row.model_copy(deep=True) for row in self.canonical_decisions],
             presentation_tracks=[
                 ViewerPresentationTrack(

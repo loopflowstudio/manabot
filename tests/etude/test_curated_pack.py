@@ -8,7 +8,14 @@ import json
 import pytest
 
 from etude import server
-from etude.curated_pack import CURATED_PACK, PACK_MANIFEST_PATH, load_curated_pack
+from etude.curated_pack import (
+    CURATED_PACK,
+    JEONG_INCREMENT_MANIFEST_PATH,
+    JEONG_INCREMENT_PACK,
+    PACK_MANIFEST_PATH,
+    curated_pack_for_matchup,
+    load_curated_pack,
+)
 
 
 def _contains_remote_value(value) -> bool:
@@ -80,6 +87,36 @@ def test_exact_oriented_matchup_receives_pack_reference():
         {"hero_deck": "gw_allies", "villain_deck": "ur_lessons"}
     )
     assert reversed_config.asset_pack is None
+
+
+def test_jeong_increment_is_a_separate_exact_catalog_entry():
+    assert JEONG_INCREMENT_PACK.pack_id == "tla-gw-allies-jeong-vs-ur-lessons"
+    assert JEONG_INCREMENT_PACK.hero_deck_id == "gw_allies_jeong"
+    assert JEONG_INCREMENT_PACK.villain_deck_id == "ur_lessons"
+    assert sum(JEONG_INCREMENT_PACK.hero_deck.values()) == 40
+    assert sum(JEONG_INCREMENT_PACK.villain_deck.values()) == 41
+    assert JEONG_INCREMENT_PACK.hero_deck["Jeong Jeong's Deserters"] == 1
+    assert JEONG_INCREMENT_PACK.hero_deck["Water Tribe Rallier"] == 1
+    assert (
+        JEONG_INCREMENT_PACK.manifest_sha256
+        == hashlib.sha256(JEONG_INCREMENT_MANIFEST_PATH.read_bytes()).hexdigest()
+    )
+
+    selected = curated_pack_for_matchup("gw_allies_jeong", "ur_lessons")
+    assert selected is JEONG_INCREMENT_PACK
+    config = server._parse_game_config(
+        {"hero_deck": "gw_allies_jeong", "villain_deck": "ur_lessons"}
+    )
+    assert config.asset_pack == JEONG_INCREMENT_PACK.reference
+
+
+def test_curated_pack_catalog_ambiguity_fails_closed():
+    with pytest.raises(RuntimeError, match="catalog is ambiguous"):
+        curated_pack_for_matchup(
+            "gw_allies_jeong",
+            "ur_lessons",
+            (JEONG_INCREMENT_PACK, JEONG_INCREMENT_PACK),
+        )
 
 
 @pytest.mark.parametrize(

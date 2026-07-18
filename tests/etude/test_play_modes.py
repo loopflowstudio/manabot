@@ -407,6 +407,35 @@ def test_named_deck_selection_and_custom_deck_names(isolated_traces):
         server._parse_game_config({"hero_deck": "not_a_deck"})
 
 
+def test_jeong_matchup_uses_session_scoped_pack_identity(isolated_traces):
+    session = server.GameSession(trace_dir=isolated_traces)
+    payload = session.new_game(
+        {
+            "villain_type": "random",
+            "seed": 23,
+            "hero_deck": "gw_allies_jeong",
+            "villain_deck": "ur_lessons",
+            "auto_pass": False,
+        }
+    )
+    assert session.env is not None
+    manifest = session.env.content_pack_manifest()
+    assert manifest["compiled_semantics"]["pack_key"] == "tla-jeong-increment-v1"
+    assert session.content_hash == manifest["content_digest"]
+    assert session.content_hash != server.CONTENT_HASH
+    assert (
+        session.asset_manifest_hash
+        == server.JEONG_INCREMENT_PACK.manifest_sha256
+    )
+    assert payload["frame"]["content_hash"] == session.content_hash
+    assert payload["frame"]["asset_manifest_hash"] == session.asset_manifest_hash
+    assert payload["asset_pack"] == server.JEONG_INCREMENT_PACK.reference
+
+    replay = session.canonical_replay()
+    assert replay.content_hash == session.content_hash
+    assert replay.asset_manifest_hash == session.asset_manifest_hash
+
+
 def _stub_action(
     action_type: int, focus: list[int], declared: bool | None = None
 ) -> SimpleNamespace:

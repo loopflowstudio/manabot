@@ -30,6 +30,12 @@ use crate::state::card::CardDefId;
 /// `--check` mode; this crate only ever reads it.
 const TWO_DECK_IR: &str = include_str!("../../../content/semantic/v1/generated/two_deck.ir.json");
 
+/// Additive Jeong increment. The original two-deck IR remains a separate,
+/// immutable catalog entry so existing match and replay identities do not
+/// acquire "latest pack" semantics.
+const JEONG_INCREMENT_IR: &str =
+    include_str!("../../../content/semantic/v1/generated/jeong_increment.ir.json");
+
 /// Stable numeric opcodes. These mirror `manabot.semantic.compiler.Opcode` and
 /// are the *only* dispatch key the interpreter uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -409,6 +415,11 @@ impl SemanticPack {
     /// Parse the process-wide checked-in two-deck IR.
     pub fn two_deck() -> Result<Self, IrError> {
         Self::from_json(TWO_DECK_IR)
+    }
+
+    /// Parse the checked-in Jeong Jeong's Deserters increment.
+    pub fn jeong_increment() -> Result<Self, IrError> {
+        Self::from_json(JEONG_INCREMENT_IR)
     }
 
     /// Parse an IR document from JSON text.

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "experiment": "rul-10-tla-jeong-increment-v1",
+  "claim": "one Jeong Jeong's Deserters increment reaches terminal through production live, headless, and canonical replay consumers with exact semantic consequences",
+  "classification": "content-only card semantics plus one reusable immutable pack-catalog kernel extension",
+  "measurement": {
+    "matchup": "gw-allies-jeong-vs-ur-lessons",
+    "seeds": [
+      1,
+      3
+    ],
+    "policy": "uniform-server-offer-v1",
+    "surfaces": [
+      "live",
+      "headless",
+      "replay"
+    ],
+    "warmups": 1,
+    "repetitions": 5,
+    "rss_interval_seconds": 0.005
+  },
+  "expected_inputs": {
+    "content/semantic/v1/jeong_increment.source.json": "fe1f45e36a5390c177d3c05078dbc6fea17032e9720e87704bc1c76d09a7eb3d",
+    "content/semantic/v1/jeong_increment.fixtures.json": "13bece67c5b3b28aaade841b77145846c91064e2eb19626bd6a8edb0bcfa9d34",
+    "content/semantic/v1/generated/jeong_increment.ir.json": "ec4bfc4675cc8de1fab407c6dc7cffc1cdefbfa1d9833109147850989e3eb2ff",
+    "content/semantic/v1/generated/jeong_increment.coverage.json": "83cb68da975a1162344f7c7fd940f516c5f4cb12cd7bdd2ff92430ae0c86ce69",
+    "content/semantic/v1/learning_schema.json": "a156c592414d0d4838c5423e2cb471fc49a4450f21d62e5e5c198ba948ae7034",
+    "frontend/src/lib/packs/tla-gw-allies-jeong-vs-ur-lessons/v1/manifest.json": "dc58166e91438f1700b8048045184f9000b1f21a1e1400275f52f6a3c3e4a973"
+  },
+  "frozen_rul9_files": {
+    "experiments/data/rul-9-played-workloads-v1.measurement.json": "9a3933a570772e8d3e04b59526faaf1d51b5fc0e26ba8c02e08eae36599bc951",
+    "experiments/data/rul-9-played-workloads-v1.json": "e42934f26ea590b8dbc3fcb3fe96c723aa244f79a2fab2b9ed6cd52033f83989",
+    "experiments/contracts/rul-9-played-workloads-v1.json": "49ea8b5729ba23418067797974dfadd0bdcf263a03a34bf358b51fe9939db067",
+    "experiments/rul-9-played-workloads-v1.md": "1f36bb6925c2443274b7f116a939c3c1b5a431726755aa5d08925d73e2f1f2d7"
+  },
+  "budgets": {
+    "live_outer_command_p95_ms_max": 100.0,
+    "inner_command_p95_ms_max": 10.0,
+    "engine_steps_per_second_min": 500.0,
+    "live_games_per_second_min": 1.0,
+    "peak_rss_bytes_max": 536870912,
+    "program_catalog_tokens_max": 4096,
+    "program_tokens_max": 160,
+    "visible_references_max": 128
+  },
+  "required_evidence": {
+    "literal_seeds": [
+      1,
+      3
+    ],
+    "linked_semantics": [
+      "cast Jeong Jeong's Deserters",
+      "submit the mandatory target Command",
+      "observe one +1/+1 counter on the chosen creature"
+    ],
+    "exactness": "revision-by-revision states and ordered semantic events match on production WebSocket, direct headless, and persisted canonical replay paths",
+    "fallbacks": "legacy fixed action, card-name dispatch, candidate cap, and client legality remain zero"
+  },
+  "scope": {
+    "in": [
+      "one Jeong card",
+      "one same-slot GW deck variant",
+      "one additive immutable exact-match pack catalog",
+      "two fixed terminal seeds and workload evidence"
+    ],
+    "out": [
+      "new semantic opcode or schema",
+      "frontend interaction changes",
+      "Intelligence changes",
+      "broad TLA completion",
+      "RUL-9 artifact mutation",
+      "live-release optimization"
+    ]
+  },
+  "strongest_confound": "Absolute latency and RSS are single-host evidence; product-budget misses are reported but do not expand this content-admission Task into optimization."
+}

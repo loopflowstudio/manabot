@@ -18,6 +18,20 @@ fn authored_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
     ]
 }
 
+fn jeong_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
+    vec![
+        PlayerConfig::new(
+            "UR Lessons",
+            pack.decklist("ur_lessons").expect("UR deck compiles"),
+        ),
+        PlayerConfig::new(
+            "GW Allies — Jeong",
+            pack.decklist("gw_allies_jeong")
+                .expect("GW Jeong deck compiles"),
+        ),
+    ]
+}
+
 #[test]
 fn exact_authored_match_runs_to_a_winner_on_compiled_semantics() {
     let semantic = SemanticPack::two_deck().expect("checked-in semantic IR parses");
@@ -97,6 +111,54 @@ fn compiled_pack_matches_the_reviewed_reference_behavior() {
             semantic_definition.registry_name
         );
     }
+}
+
+#[test]
+fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
+    let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
+    let configs = jeong_configs(&semantic);
+
+    for player_configs in [configs.clone(), configs.into_iter().rev().collect()] {
+        let game = Game::new(player_configs, 23, true);
+        let provenance = game
+            .state
+            .content
+            .compiled_semantics()
+            .expect("exact Jeong decks select compiled semantics");
+        assert_eq!(provenance.pack_key, "tla-jeong-increment-v1");
+        assert_eq!(provenance.ir_hash, semantic.ir_hash);
+        assert_eq!(provenance.source_hash, semantic.source_hash);
+    }
+}
+
+#[test]
+fn compiled_jeong_definition_matches_the_reviewed_reference_behavior() {
+    let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
+    let compiled = semantic
+        .compile_content_pack()
+        .expect("Jeong IR lowers into live content");
+    let reference = ContentPack::default();
+    let name = "Jeong Jeong's Deserters";
+
+    let compiled_definition = compiled
+        .definition(compiled.definition_id(name).expect("compiled Jeong"))
+        .expect("compiled Jeong definition");
+    let reference_definition = reference
+        .definition(reference.definition_id(name).expect("reference Jeong"))
+        .expect("reference Jeong definition");
+    assert_eq!(compiled_definition, reference_definition);
+}
+
+#[test]
+fn tampered_jeong_deck_does_not_select_a_compiled_pack() {
+    let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
+    let mut configs = jeong_configs(&semantic);
+    let deck = &mut configs[1].decklist;
+    deck.remove("Jeong Jeong's Deserters");
+    *deck.entry("Plains".to_owned()).or_default() += 1;
+
+    let game = Game::new(configs, 23, true);
+    assert!(game.state.content.compiled_semantics().is_none());
 }
 
 #[test]

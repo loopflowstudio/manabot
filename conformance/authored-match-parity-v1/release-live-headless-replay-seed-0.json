@@ -24,7 +24,7 @@
         },
         {
           "path": "etude/curated_pack.py",
-          "sha256": "06bf3355f79557a12dc1db393ff071b919c083049995061bbbb3614ed93bdfee"
+          "sha256": "8105b68a7030edc9e61b0bb264f8ab92549c95bf28f456e4825a1a9d630d9f95"
         },
         {
           "path": "etude/experience_protocol.py",
@@ -44,7 +44,7 @@
         },
         {
           "path": "etude/server.py",
-          "sha256": "16665332db457536b81004042bacdaead3a579a852b8388f167c6d977e6b599a"
+          "sha256": "5928cffc5e7253712a4ec3ccfe43c5e0229481033c9e4e31ab296183ac7de6a7"
         },
         {
           "path": "etude/trace.py",
@@ -312,11 +312,11 @@
         },
         {
           "path": "managym/src/semantic/content.rs",
-          "sha256": "150d5f0fde8a26b9ca3277d3df0d804de1ed1e923b05a903552839eeba9e2925"
+          "sha256": "54248ea22a382194afed9c01261ba6ede3ea49698f0732d6a20da2ee1c6afe63"
         },
         {
           "path": "managym/src/semantic/mod.rs",
-          "sha256": "1818255386e4fb4c6e669f8f0022b2397f15ad7e82cb681abc82c8ec6b5a97fb"
+          "sha256": "8a711be5a4018797cc0268ac1b7b6c0963d65a251864e8bb71a72a62fdd9531f"
         },
         {
           "path": "managym/src/state/ability.rs",
@@ -383,7 +383,7 @@
           "sha256": "cd9f9bdc03e3b97f072cc2ea012b9c421fd7061207daeadda47e0b874fa5c664"
         }
       ],
-      "sha256": "73584ca5d31decd9dc112905cf24ea490eea5fcef27e7824f759a957bfe393b3"
+      "sha256": "7a503494e54fa728790e6e192d2239cd2680e59a5dac8807fd9fde2ee76519a1"
     },
     "seed": 0
   },

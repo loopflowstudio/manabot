@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "targeted Ally counter remains an explicit semantic operation",
+      "program": "tla.jeong_jeongs_deserters.rally_counter",
+      "opcode_trace": [
+        "put_counters"
+      ]
+    }
+  ]
+}
