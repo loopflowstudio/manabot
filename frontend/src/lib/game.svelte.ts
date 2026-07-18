@@ -7,6 +7,12 @@ import {
 import { deriveObservationNotes } from './log';
 export { DECISION_PROMPTS } from './prompt-instructions';
 import { defaultStops, loadStoredStops, saveStoredStops } from './stops';
+import type { RestoredReplayDecision } from './replay-index';
+import type {
+  BranchRetryPayload,
+  TableCapability,
+  TableSnapshot,
+} from './testing-house-protocol';
 import type {
   ActionOption,
   ConnectionState,
@@ -47,6 +53,11 @@ export function buildOpponentConfig(
 }
 
 export class GameStore {
+  table = $state<TableSnapshot | null>(null);
+  restoredDecision = $state<RestoredReplayDecision | null>(null);
+  branchAttemptId = $state<string | null>(null);
+  branchProjection = $state<Observation | null>(null);
+  tableAnnouncement = $state('');
   protocolFrame = $state<ExperienceFrame | null>(null);
   observation = $state<Observation | null>(null);
   actions = $state<ActionOption[]>([]);
@@ -77,11 +88,52 @@ export class GameStore {
   // True while a pass-turn (F6) request is in flight — the server is
   // fast-forwarding priority windows on our behalf.
   fastForwarding = $state(false);
+  commandPending = $state(false);
   // Monotonic count of applied server updates (observation/game_over).
   // Surfaced in the DOM so tests can serialize on server responses.
   updateSeq = $state(0);
 
   private logSequence = 0;
+
+  applyTable(table: TableSnapshot | null | undefined): void {
+    if (!table) return;
+    const previousRole = this.table?.access.role;
+    this.table = table;
+    if (previousRole && previousRole !== table.access.role) {
+      this.tableAnnouncement = `You are now the ${table.access.role}.`;
+    }
+  }
+
+  hasCapability(capability: TableCapability): boolean {
+    return this.table?.access.capabilities.includes(capability) ?? true;
+  }
+
+  restoreDecision(restored: RestoredReplayDecision): void {
+    this.restoredDecision = restored;
+    this.branchAttemptId = null;
+    this.branchProjection = null;
+    this.tableAnnouncement = `Decision ${restored.ordinal + 1} restored for isolated Study.`;
+  }
+
+  applyBranchRetry(payload: BranchRetryPayload): void {
+    this.branchAttemptId = payload.attempt_id;
+    this.branchProjection = payload.retry.projection;
+    this.tableAnnouncement = 'Isolated line updated. The live table was not changed.';
+  }
+
+  returnBranch(restored: RestoredReplayDecision): void {
+    this.restoredDecision = restored;
+    this.branchAttemptId = null;
+    this.branchProjection = null;
+    this.tableAnnouncement = `Returned to recorded decision ${restored.ordinal + 1}.`;
+  }
+
+  returnToLive(): void {
+    this.restoredDecision = null;
+    this.branchAttemptId = null;
+    this.branchProjection = null;
+    this.tableAnnouncement = 'Returned to the live table.';
+  }
 
   setConnection(next: ConnectionState): void {
     this.connection = next;
@@ -159,6 +211,14 @@ export class GameStore {
     this.fastForwarding = true;
   }
 
+  beginCommand(): void {
+    this.commandPending = true;
+  }
+
+  endCommand(): void {
+    this.commandPending = false;
+  }
+
   endFastForward(): void {
     this.fastForwarding = false;
   }
@@ -186,6 +246,7 @@ export class GameStore {
     this.errorMessage = null;
     this.resumeFailed = false;
     this.fastForwarding = false;
+    this.commandPending = false;
     this.clearFocus();
     this.clearSelectedTarget();
     this.applyServerStops(stops);
@@ -347,9 +408,13 @@ export class GameStore {
     this.winner = null;
     this.actionLog = [];
     this.fastForwarding = false;
+    this.commandPending = false;
     this.clearFocus();
     this.clearSelectedTarget();
     this.logSequence = 0;
+    this.restoredDecision = null;
+    this.branchAttemptId = null;
+    this.branchProjection = null;
   }
 
   private appendLogLines(actor: GameLogEntry['actor'], lines: string[]): void {

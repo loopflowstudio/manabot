@@ -456,7 +456,7 @@ export interface StopsConfig {
   auto_pass: boolean;
 }
 
-export type ServerMessage =
+export type ServerMessage = (
   | {
       type: 'observation';
       data: Observation;
@@ -499,24 +499,15 @@ export type ServerMessage =
           recovery?: RecoveryEnvelope;
         }
     ))
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+) & {
+  table?: import('./testing-house-protocol').TableSnapshot;
+  session_id?: string;
+  resume_token?: string;
+  participant_id?: string;
+};
 
-export type ClientMessage =
-  | { type: 'new_game'; config?: Record<string, unknown> }
-  | { type: 'command'; command: Command }
-  | {
-      type: 'set_stops';
-      stops: { my: string[]; opponent: string[] };
-      stop_on_stack: boolean;
-      auto_pass: boolean;
-    }
-  | { type: 'pass_turn' }
-  | {
-      type: 'resume';
-      session_id: string;
-      resume_token: string;
-      presentation_cursor?: number;
-    };
+export type ClientMessage = import('./testing-house-protocol').TestingHouseRequest;
 
 export type ConnectionState =
   | 'disconnected'

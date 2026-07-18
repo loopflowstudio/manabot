@@ -8,6 +8,12 @@ import {
   validatePresentationUpdate,
 } from './presentation';
 import { presentationPlayer } from './presentation.svelte';
+import type { RestoredReplayDecision } from './replay-index';
+import type {
+  BranchRetryPayload,
+  TestingHouseControlEvent,
+  TestingHouseRequest,
+} from './testing-house-protocol';
 import type {
   ClientMessage,
   FrameUpdate,
@@ -16,7 +22,21 @@ import type {
 } from './types';
 
 const RESUME_STORAGE_KEY = 'etude.gui.resume';
-const VALID_SERVER_TYPES = new Set(['observation', 'game_over', 'command_outcome', 'error']);
+const VALID_SERVER_TYPES = new Set([
+  'observation',
+  'game_over',
+  'command_outcome',
+  'error',
+  'table_snapshot',
+  'belief_changed',
+  'role_changed',
+  'decision_restored',
+  'branch_updated',
+  'branch_returned',
+  'control_error',
+]);
+
+type TableServerMessage = ServerMessage | TestingHouseControlEvent;
 
 interface ResumeCredentials {
   session_id: string;
@@ -72,7 +92,7 @@ function clearResumeCredentials(): void {
   window.sessionStorage.removeItem(RESUME_STORAGE_KEY);
 }
 
-export function parseServerMessage(raw: string): ServerMessage | null {
+export function parseServerMessage(raw: string): TableServerMessage | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !('type' in parsed)) {
@@ -83,7 +103,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
     if (typeof messageType !== 'string' || !VALID_SERVER_TYPES.has(messageType)) {
       return null;
     }
-    return parsed as ServerMessage;
+    return parsed as TableServerMessage;
   } catch {
     return null;
   }
@@ -95,7 +115,7 @@ export class GameSocketController {
   private reconnectAttempts = 0;
   private intentionallyClosed = false;
   private pendingResume = false;
-  private outboundQueue: ClientMessage[] = [];
+  private outboundQueue: TestingHouseRequest[] = [];
   private inFlightCommand: string | null = null;
   private presentationCursor: number | null = null;
 
@@ -120,6 +140,17 @@ export class GameSocketController {
     socket.onopen = () => {
       this.reconnectAttempts = 0;
       gameStore.setConnection('connected');
+
+      const watcherInvite = this.takeWatcherInvite();
+      if (watcherInvite) {
+        this.pendingResume = true;
+        this.send({
+          type: 'join_table',
+          table_id: watcherInvite.tableId,
+          invite_token: watcherInvite.token,
+        });
+        return;
+      }
 
       if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
@@ -173,7 +204,12 @@ export class GameSocketController {
     this.presentationCursor = null;
     presentationPlayer.clear();
     gameStore.prepareForNewGame();
-    this.send(config ? { type: 'new_game', config } : { type: 'new_game' });
+    const grantRevision = gameStore.table?.access.grant_revision;
+    this.send({
+      type: 'new_game',
+      ...(grantRevision === undefined ? {} : { grant_revision: grantRevision }),
+      ...(config ? { config } : {}),
+    });
   }
 
   sendAction(offerId: number): boolean {
@@ -190,8 +226,12 @@ export class GameSocketController {
 
     const commandId = crypto.randomUUID();
     this.inFlightCommand = commandId;
+    gameStore.beginCommand();
     this.socket.send(JSON.stringify({
       type: 'command',
+      ...(gameStore.table
+        ? { grant_revision: gameStore.table.access.grant_revision }
+        : {}),
       command: {
         command_id: commandId,
         match_id: frame.match_id,
@@ -208,6 +248,9 @@ export class GameSocketController {
     const stops = gameStore.stops;
     this.send({
       type: 'set_stops',
+      ...(gameStore.table
+        ? { grant_revision: gameStore.table.access.grant_revision }
+        : {}),
       stops: { my: [...stops.my], opponent: [...stops.opponent] },
       stop_on_stack: stops.stop_on_stack,
       auto_pass: stops.auto_pass,
@@ -222,11 +265,82 @@ export class GameSocketController {
       this.connect();
       return false;
     }
-    this.socket.send(JSON.stringify({ type: 'pass_turn' } satisfies ClientMessage));
+    this.socket.send(JSON.stringify({
+      type: 'pass_turn',
+      ...(gameStore.table
+        ? { grant_revision: gameStore.table.access.grant_revision }
+        : {}),
+    } satisfies ClientMessage));
     return true;
   }
 
-  private send(message: ClientMessage): void {
+  sendTransferPilot(targetViewerId: string): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    if (grantRevision === undefined) return;
+    this.send({
+      type: 'transfer_pilot',
+      grant_revision: grantRevision,
+      target_viewer_id: targetViewerId,
+    });
+  }
+
+  sendAuthorBelief(scenarioId: string): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    if (grantRevision === undefined) return;
+    this.send({ type: 'author_belief', grant_revision: grantRevision, scenario_id: scenarioId });
+  }
+
+  sendShareBelief(beliefId: string): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    if (grantRevision === undefined) return;
+    this.send({ type: 'share_belief', grant_revision: grantRevision, belief_id: beliefId });
+  }
+
+  sendRestoreDecision(address: string): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    if (grantRevision === undefined) return;
+    this.send({ type: 'restore_decision', grant_revision: grantRevision, address });
+  }
+
+  sendRetryDecision(offerId: number): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    const restored = gameStore.restoredDecision;
+    const prompt = restored?.frame.prompt;
+    if (grantRevision === undefined || !restored || !prompt) return;
+    this.send({
+      type: 'retry_decision',
+      grant_revision: grantRevision,
+      address: restored.address,
+      command: {
+        command_id: `study.${crypto.randomUUID()}`,
+        match_id: restored.frame.match_id,
+        expected_revision: restored.revision,
+        prompt_id: prompt.id,
+        offer_id: offerId,
+        answers: [],
+      },
+    });
+  }
+
+  sendReturnFromBranch(): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    const attemptId = gameStore.branchAttemptId;
+    if (grantRevision === undefined || !attemptId) return;
+    this.send({
+      type: 'return_from_branch',
+      grant_revision: grantRevision,
+      attempt_id: attemptId,
+    });
+  }
+
+  sendReturnToLive(): void {
+    const grantRevision = gameStore.table?.access.grant_revision;
+    if (grantRevision === undefined) return;
+    gameStore.returnToLive();
+    this.send({ type: 'return_to_live', grant_revision: grantRevision });
+  }
+
+  private send(message: TestingHouseRequest): void {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
       return;
@@ -257,9 +371,55 @@ export class GameSocketController {
       return;
     }
 
+    if ('table' in message && message.table) {
+      gameStore.applyTable(message.table);
+    }
+
+    if (message.type === 'table_snapshot') {
+      this.pendingResume = false;
+      this.persistControlCredentials(message);
+      return;
+    }
+
+    if (message.type === 'belief_changed') {
+      gameStore.tableAnnouncement = message.belief.audience.kind === 'personal'
+        ? 'Your read is private.'
+        : 'A read was shared with the table.';
+      return;
+    }
+
+    if (message.type === 'role_changed') {
+      gameStore.tableAnnouncement = `You are now the ${message.table.access.role}.`;
+      return;
+    }
+
+    if (message.type === 'decision_restored') {
+      gameStore.restoreDecision(message.restored);
+      return;
+    }
+
+    if (message.type === 'branch_updated') {
+      if (message.phase === 'retry') {
+        gameStore.applyBranchRetry(message.payload as BranchRetryPayload);
+      }
+      return;
+    }
+
+    if (message.type === 'branch_returned') {
+      gameStore.returnBranch(message.restored as RestoredReplayDecision);
+      return;
+    }
+
+    if (message.type === 'control_error') {
+      gameStore.endFastForward();
+      gameStore.setError(message.message);
+      return;
+    }
+
     if (message.type === 'observation' || message.type === 'game_over') {
       this.pendingResume = false;
       this.inFlightCommand = null;
+      gameStore.endCommand();
       if (message.recovery) {
         const sessionId = message.type === 'observation' ? message.session_id : undefined;
         const resumeToken = message.type === 'observation' ? message.resume_token : undefined;
@@ -292,7 +452,7 @@ export class GameSocketController {
           message.deck_names,
         );
       }
-      if (message.type === 'observation' && message.session_id && message.resume_token) {
+      if (message.session_id && message.resume_token) {
         this.persistResumeState(message.session_id, message.resume_token);
       }
       this.flushQueue();
@@ -301,6 +461,7 @@ export class GameSocketController {
 
     if (message.type === 'command_outcome') {
       this.inFlightCommand = null;
+      gameStore.endCommand();
       if (message.status === 'accepted') {
         this.applyUpdate(message.update);
       } else if (message.status === 'duplicate') {
@@ -325,6 +486,7 @@ export class GameSocketController {
     }
 
     gameStore.endFastForward();
+    gameStore.endCommand();
     gameStore.setError(message.message);
   }
 
@@ -440,6 +602,30 @@ export class GameSocketController {
     });
   }
 
+  private persistControlCredentials(message: TestingHouseControlEvent): void {
+    const envelope = message as TestingHouseControlEvent & {
+      session_id?: string;
+      resume_token?: string;
+    };
+    if (envelope.session_id && envelope.resume_token) {
+      this.persistResumeState(envelope.session_id, envelope.resume_token);
+    }
+  }
+
+  private takeWatcherInvite(): { tableId: string; token: string } | null {
+    if (!browser || !window.location.hash) return null;
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const tableId = params.get('table');
+    const token = params.get('watch');
+    if (!tableId || !token) return null;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}`,
+    );
+    return { tableId, token };
+  }
+
   private rejectPresentation(prefix: string, error: unknown): void {
     const detail = error instanceof Error ? error.message : 'Unknown presentation error.';
     gameStore.setError(`${prefix}: ${detail}`);
@@ -487,4 +673,32 @@ export function sendSetStops(): void {
 
 export function sendPassTurn(): boolean {
   return controller.sendPassTurn();
+}
+
+export function sendTransferPilot(targetViewerId: string): void {
+  controller.sendTransferPilot(targetViewerId);
+}
+
+export function sendAuthorBelief(scenarioId: string): void {
+  controller.sendAuthorBelief(scenarioId);
+}
+
+export function sendShareBelief(beliefId: string): void {
+  controller.sendShareBelief(beliefId);
+}
+
+export function sendRestoreDecision(address: string): void {
+  controller.sendRestoreDecision(address);
+}
+
+export function sendRetryDecision(offerId: number): void {
+  controller.sendRetryDecision(offerId);
+}
+
+export function sendReturnFromBranch(): void {
+  controller.sendReturnFromBranch();
+}
+
+export function sendReturnToLive(): void {
+  controller.sendReturnToLive();
 }

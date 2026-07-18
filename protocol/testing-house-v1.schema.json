@@ -1,0 +1,1558 @@
+{
+  "$defs": {
+    "ActionMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "type": {
+          "const": "action",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "index"
+      ],
+      "title": "ActionMessage",
+      "type": "object"
+    },
+    "AdviceRequestIdentity": {
+      "additionalProperties": false,
+      "description": "The advisor + compute identity a request claims to incorporate.\n\nThe GAM-4 seam: this is the request contract GAM-4's live decision-address\nand retry/compare controls bind to. Mirrors the fixture's pinned\n``StudyIdentity`` -- the source replay and match must match, the advisor id\nmust match the pinned ``model.id``, and the compute id must match the pinned\n``analysis_budget.id``. When GAM-4 publishes the live ``erd1`` address, the\nsame identity flows through ``POST /api/advice`` unchanged.",
+      "properties": {
+        "advisor_id": {
+          "title": "Advisor Id",
+          "type": "string"
+        },
+        "compute_id": {
+          "title": "Compute Id",
+          "type": "string"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "source_replay_id": {
+          "title": "Source Replay Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_replay_id",
+        "match_id",
+        "advisor_id",
+        "compute_id"
+      ],
+      "title": "AdviceRequestIdentity",
+      "type": "object"
+    },
+    "AssignmentsChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "assignments",
+          "title": "Kind",
+          "type": "string"
+        },
+        "pairs": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Pairs",
+          "type": "array"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "pairs"
+      ],
+      "title": "AssignmentsChoiceAnswer",
+      "type": "object"
+    },
+    "AuthorBeliefMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "scenario_id": {
+          "title": "Scenario Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "author_belief",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "scenario_id"
+      ],
+      "title": "AuthorBeliefMessage",
+      "type": "object"
+    },
+    "BeliefChangedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "belief": {
+          "$ref": "#/$defs/BeliefScenario"
+        },
+        "table": {
+          "$ref": "#/$defs/TableSnapshot"
+        },
+        "type": {
+          "const": "belief_changed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "table",
+        "belief"
+      ],
+      "title": "BeliefChangedEvent",
+      "type": "object"
+    },
+    "BeliefProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at_table_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Created At Table Revision",
+          "type": "integer"
+        },
+        "kind": {
+          "const": "player_authored",
+          "default": "player_authored",
+          "title": "Kind",
+          "type": "string"
+        },
+        "shared_at_table_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shared At Table Revision"
+        }
+      },
+      "required": [
+        "created_at_table_revision"
+      ],
+      "title": "BeliefProvenance",
+      "type": "object"
+    },
+    "BeliefScenario": {
+      "additionalProperties": false,
+      "properties": {
+        "audience": {
+          "discriminator": {
+            "mapping": {
+              "personal": "#/$defs/PersonalAudience",
+              "table": "#/$defs/TableAudience"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PersonalAudience"
+            },
+            {
+              "$ref": "#/$defs/TableAudience"
+            }
+          ],
+          "title": "Audience"
+        },
+        "author_viewer_id": {
+          "title": "Author Viewer Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/BeliefProvenance"
+        },
+        "source": {
+          "$ref": "#/$defs/BeliefSource"
+        }
+      },
+      "required": [
+        "id",
+        "author_viewer_id",
+        "source",
+        "audience",
+        "provenance"
+      ],
+      "title": "BeliefScenario",
+      "type": "object"
+    },
+    "BeliefSource": {
+      "additionalProperties": false,
+      "properties": {
+        "advice_identity": {
+          "$ref": "#/$defs/AdviceRequestIdentity"
+        },
+        "decision_address": {
+          "title": "Decision Address",
+          "type": "string"
+        },
+        "gam6_scenario_id": {
+          "title": "Gam6 Scenario Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_address",
+        "gam6_scenario_id",
+        "advice_identity"
+      ],
+      "title": "BeliefSource",
+      "type": "object"
+    },
+    "BranchPreviewMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "plan": {
+          "enum": [
+            "played",
+            "policy",
+            "search"
+          ],
+          "title": "Plan",
+          "type": "string"
+        },
+        "type": {
+          "const": "branch_preview",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "attempt_id",
+        "plan"
+      ],
+      "title": "BranchPreviewMessage",
+      "type": "object"
+    },
+    "BranchReturnedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "restored": {
+          "additionalProperties": true,
+          "title": "Restored",
+          "type": "object"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "branch_returned",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "restored"
+      ],
+      "title": "BranchReturnedEvent",
+      "type": "object"
+    },
+    "BranchRevealMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "branch_reveal",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "attempt_id"
+      ],
+      "title": "BranchRevealMessage",
+      "type": "object"
+    },
+    "BranchUpdatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "phase": {
+          "enum": [
+            "retry",
+            "revealed",
+            "preview"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "branch_updated",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "attempt_id",
+        "phase",
+        "payload"
+      ],
+      "title": "BranchUpdatedEvent",
+      "type": "object"
+    },
+    "CandidatesChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "kind": {
+          "const": "candidates",
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "candidates"
+      ],
+      "title": "CandidatesChoiceAnswer",
+      "type": "object"
+    },
+    "Command": {
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "assignments": "#/$defs/AssignmentsChoiceAnswer",
+                "candidates": "#/$defs/CandidatesChoiceAnswer",
+                "number": "#/$defs/NumberChoiceAnswer",
+                "order": "#/$defs/OrderChoiceAnswer",
+                "payment": "#/$defs/PaymentChoiceAnswer"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/CandidatesChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/NumberChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/AssignmentsChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/OrderChoiceAnswer"
+              },
+              {
+                "$ref": "#/$defs/PaymentChoiceAnswer"
+              }
+            ]
+          },
+          "title": "Answers",
+          "type": "array"
+        },
+        "command_id": {
+          "title": "Command Id",
+          "type": "string"
+        },
+        "expected_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Expected Revision",
+          "type": "integer"
+        },
+        "match_id": {
+          "title": "Match Id",
+          "type": "string"
+        },
+        "offer_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Offer Id",
+          "type": "integer"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command_id",
+        "match_id",
+        "expected_revision",
+        "prompt_id",
+        "offer_id",
+        "answers"
+      ],
+      "title": "Command",
+      "type": "object"
+    },
+    "CommandMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/Command"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "type": {
+          "const": "command",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command"
+      ],
+      "title": "CommandMessage",
+      "type": "object"
+    },
+    "ControlErrorEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_message",
+            "unsupported_message",
+            "forbidden",
+            "stale_grant",
+            "not_found",
+            "conflict"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "control_error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "code",
+        "message"
+      ],
+      "title": "ControlErrorEvent",
+      "type": "object"
+    },
+    "DecisionRestoredEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "restored": {
+          "additionalProperties": true,
+          "title": "Restored",
+          "type": "object"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "decision_restored",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "address",
+        "restored"
+      ],
+      "title": "DecisionRestoredEvent",
+      "type": "object"
+    },
+    "JoinTableMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "invite_token": {
+          "title": "Invite Token",
+          "type": "string"
+        },
+        "presentation_cursor": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presentation Cursor"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "join_table",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "table_id",
+        "invite_token"
+      ],
+      "title": "JoinTableMessage",
+      "type": "object"
+    },
+    "NewGameMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "type": {
+          "const": "new_game",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "NewGameMessage",
+      "type": "object"
+    },
+    "NumberChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "number",
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        },
+        "value": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "value"
+      ],
+      "title": "NumberChoiceAnswer",
+      "type": "object"
+    },
+    "OrderChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Candidates",
+          "type": "array"
+        },
+        "kind": {
+          "const": "order",
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "candidates"
+      ],
+      "title": "OrderChoiceAnswer",
+      "type": "object"
+    },
+    "ParticipantPresence": {
+      "additionalProperties": false,
+      "properties": {
+        "connected": {
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "role": {
+          "$ref": "#/$defs/ViewerRole"
+        },
+        "viewer_id": {
+          "title": "Viewer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "viewer_id",
+        "role",
+        "connected"
+      ],
+      "title": "ParticipantPresence",
+      "type": "object"
+    },
+    "PassTurnMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "type": {
+          "const": "pass_turn",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "PassTurnMessage",
+      "type": "object"
+    },
+    "PaymentChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "payment",
+          "title": "Kind",
+          "type": "string"
+        },
+        "plan": {
+          "title": "Plan",
+          "type": "string"
+        },
+        "role": {
+          "maximum": 65535,
+          "minimum": 0,
+          "title": "Role",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "role",
+        "plan"
+      ],
+      "title": "PaymentChoiceAnswer",
+      "type": "object"
+    },
+    "PersonalAudience": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "personal",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "PersonalAudience",
+      "type": "object"
+    },
+    "RematchMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "rematch",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision"
+      ],
+      "title": "RematchMessage",
+      "type": "object"
+    },
+    "RestoreDecisionMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "restore_decision",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "address"
+      ],
+      "title": "RestoreDecisionMessage",
+      "type": "object"
+    },
+    "ResumeMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "presentation_cursor": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Presentation Cursor"
+        },
+        "resume_token": {
+          "title": "Resume Token",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "resume",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "session_id",
+        "resume_token"
+      ],
+      "title": "ResumeMessage",
+      "type": "object"
+    },
+    "RetryDecisionMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "command": {
+          "$ref": "#/$defs/Command"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "retry_decision",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "address",
+        "command"
+      ],
+      "title": "RetryDecisionMessage",
+      "type": "object"
+    },
+    "ReturnFromBranchMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "return_from_branch",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "attempt_id"
+      ],
+      "title": "ReturnFromBranchMessage",
+      "type": "object"
+    },
+    "ReturnToLiveMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "return_to_live",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision"
+      ],
+      "title": "ReturnToLiveMessage",
+      "type": "object"
+    },
+    "RoleChangedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "$ref": "#/$defs/TableSnapshot"
+        },
+        "type": {
+          "const": "role_changed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "table"
+      ],
+      "title": "RoleChangedEvent",
+      "type": "object"
+    },
+    "SetStopsMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "auto_pass": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Pass"
+        },
+        "grant_revision": {
+          "anyOf": [
+            {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grant Revision"
+        },
+        "stop_on_stack": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stop On Stack"
+        },
+        "stops": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stops"
+        },
+        "type": {
+          "const": "set_stops",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "SetStopsMessage",
+      "type": "object"
+    },
+    "ShareBeliefMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "belief_id": {
+          "title": "Belief Id",
+          "type": "string"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "type": {
+          "const": "share_belief",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "belief_id"
+      ],
+      "title": "ShareBeliefMessage",
+      "type": "object"
+    },
+    "TableAudience": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "table",
+          "title": "Kind",
+          "type": "string"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "table_id"
+      ],
+      "title": "TableAudience",
+      "type": "object"
+    },
+    "TableCapability": {
+      "enum": [
+        "view_table",
+        "author_belief",
+        "share_belief",
+        "compare_advice",
+        "explore_study",
+        "submit_live_command",
+        "configure_match",
+        "transfer_pilot"
+      ],
+      "title": "TableCapability",
+      "type": "string"
+    },
+    "TableDecisionSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "title": "Address",
+          "type": "string"
+        },
+        "offer_id": {
+          "title": "Offer Id",
+          "type": "integer"
+        },
+        "ordinal": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "prompt_id": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Prompt Id",
+          "type": "integer"
+        },
+        "revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "ordinal",
+        "revision",
+        "prompt_id",
+        "offer_id"
+      ],
+      "title": "TableDecisionSummary",
+      "type": "object"
+    },
+    "TableSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/ViewerAccess"
+        },
+        "beliefs": {
+          "items": {
+            "$ref": "#/$defs/BeliefScenario"
+          },
+          "title": "Beliefs",
+          "type": "array"
+        },
+        "contract": {
+          "const": "testing-house-v1",
+          "default": "testing-house-v1",
+          "title": "Contract",
+          "type": "string"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/TableDecisionSummary"
+          },
+          "title": "Decisions",
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "live",
+            "study"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "opponent_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opponent Label"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/ParticipantPresence"
+          },
+          "title": "Participants",
+          "type": "array"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
+        "table_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Table Revision",
+          "type": "integer"
+        },
+        "watcher_invite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Watcher Invite"
+        }
+      },
+      "required": [
+        "table_id",
+        "table_revision",
+        "mode",
+        "access",
+        "participants",
+        "beliefs",
+        "decisions"
+      ],
+      "title": "TableSnapshot",
+      "type": "object"
+    },
+    "TableSnapshotEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "$ref": "#/$defs/TableSnapshot"
+        },
+        "type": {
+          "const": "table_snapshot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "table"
+      ],
+      "title": "TableSnapshotEvent",
+      "type": "object"
+    },
+    "TransferPilotMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "target_viewer_id": {
+          "title": "Target Viewer Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "transfer_pilot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "grant_revision",
+        "target_viewer_id"
+      ],
+      "title": "TransferPilotMessage",
+      "type": "object"
+    },
+    "ViewerAccess": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "items": {
+            "$ref": "#/$defs/TableCapability"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "grant_revision": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Grant Revision",
+          "type": "integer"
+        },
+        "identity": {
+          "$ref": "#/$defs/ViewerIdentity"
+        },
+        "role": {
+          "$ref": "#/$defs/ViewerRole"
+        }
+      },
+      "required": [
+        "identity",
+        "role",
+        "capabilities",
+        "grant_revision"
+      ],
+      "title": "ViewerAccess",
+      "type": "object"
+    },
+    "ViewerIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "rules_viewer": {
+          "const": 0,
+          "default": 0,
+          "title": "Rules Viewer",
+          "type": "integer"
+        },
+        "table_id": {
+          "title": "Table Id",
+          "type": "string"
+        },
+        "viewer_id": {
+          "title": "Viewer Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "viewer_id",
+        "table_id"
+      ],
+      "title": "ViewerIdentity",
+      "type": "object"
+    },
+    "ViewerRole": {
+      "enum": [
+        "pilot",
+        "watcher"
+      ],
+      "title": "ViewerRole",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "const": "testing-house-v1",
+      "default": "testing-house-v1",
+      "title": "Contract",
+      "type": "string"
+    },
+    "events": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "belief_changed": "#/$defs/BeliefChangedEvent",
+            "branch_returned": "#/$defs/BranchReturnedEvent",
+            "branch_updated": "#/$defs/BranchUpdatedEvent",
+            "control_error": "#/$defs/ControlErrorEvent",
+            "decision_restored": "#/$defs/DecisionRestoredEvent",
+            "role_changed": "#/$defs/RoleChangedEvent",
+            "table_snapshot": "#/$defs/TableSnapshotEvent"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/TableSnapshotEvent"
+          },
+          {
+            "$ref": "#/$defs/BeliefChangedEvent"
+          },
+          {
+            "$ref": "#/$defs/RoleChangedEvent"
+          },
+          {
+            "$ref": "#/$defs/DecisionRestoredEvent"
+          },
+          {
+            "$ref": "#/$defs/BranchUpdatedEvent"
+          },
+          {
+            "$ref": "#/$defs/BranchReturnedEvent"
+          },
+          {
+            "$ref": "#/$defs/ControlErrorEvent"
+          }
+        ]
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "requests": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "action": "#/$defs/ActionMessage",
+            "author_belief": "#/$defs/AuthorBeliefMessage",
+            "branch_preview": "#/$defs/BranchPreviewMessage",
+            "branch_reveal": "#/$defs/BranchRevealMessage",
+            "command": "#/$defs/CommandMessage",
+            "join_table": "#/$defs/JoinTableMessage",
+            "new_game": "#/$defs/NewGameMessage",
+            "pass_turn": "#/$defs/PassTurnMessage",
+            "rematch": "#/$defs/RematchMessage",
+            "restore_decision": "#/$defs/RestoreDecisionMessage",
+            "resume": "#/$defs/ResumeMessage",
+            "retry_decision": "#/$defs/RetryDecisionMessage",
+            "return_from_branch": "#/$defs/ReturnFromBranchMessage",
+            "return_to_live": "#/$defs/ReturnToLiveMessage",
+            "set_stops": "#/$defs/SetStopsMessage",
+            "share_belief": "#/$defs/ShareBeliefMessage",
+            "transfer_pilot": "#/$defs/TransferPilotMessage"
+          },
+          "propertyName": "type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/JoinTableMessage"
+          },
+          {
+            "$ref": "#/$defs/ResumeMessage"
+          },
+          {
+            "$ref": "#/$defs/NewGameMessage"
+          },
+          {
+            "$ref": "#/$defs/RematchMessage"
+          },
+          {
+            "$ref": "#/$defs/CommandMessage"
+          },
+          {
+            "$ref": "#/$defs/ActionMessage"
+          },
+          {
+            "$ref": "#/$defs/PassTurnMessage"
+          },
+          {
+            "$ref": "#/$defs/SetStopsMessage"
+          },
+          {
+            "$ref": "#/$defs/TransferPilotMessage"
+          },
+          {
+            "$ref": "#/$defs/AuthorBeliefMessage"
+          },
+          {
+            "$ref": "#/$defs/ShareBeliefMessage"
+          },
+          {
+            "$ref": "#/$defs/RestoreDecisionMessage"
+          },
+          {
+            "$ref": "#/$defs/RetryDecisionMessage"
+          },
+          {
+            "$ref": "#/$defs/BranchRevealMessage"
+          },
+          {
+            "$ref": "#/$defs/BranchPreviewMessage"
+          },
+          {
+            "$ref": "#/$defs/ReturnFromBranchMessage"
+          },
+          {
+            "$ref": "#/$defs/ReturnToLiveMessage"
+          }
+        ]
+      },
+      "title": "Requests",
+      "type": "array"
+    }
+  },
+  "required": [
+    "requests",
+    "events"
+  ],
+  "title": "TestingHouseV1ConformanceBundle",
+  "type": "object"
+}

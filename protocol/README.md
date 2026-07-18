@@ -46,6 +46,28 @@ represents them as `number`. The certified fixture is far below
 `Number.MAX_SAFE_INTEGER`; the wire contract must gain an explicit safe-integer
 limit or string encoding before long-lived counters can approach that boundary.
 
+## Testing-house control v1
+
+`etude/testing_house_protocol.py` owns the Game control envelope around the
+unchanged match protocol. It closes the one-pilot/one-watcher request
+vocabulary, server-derived roles and capabilities, participant leases,
+personal-until-shared GAM-6 scenario references, and participant-local Study
+events. It never embeds match legality or strategy evidence; both participants
+remain bound server-side to the same player-0 rules projection.
+
+Regenerate the checked schema after changing the Pydantic authority:
+
+```bash
+uv run --python 3.12 --locked python scripts/export_testing_house_protocol.py
+```
+
+`fixtures/testing-house-control-v1.json` contains pilot/watcher access and one
+example of every control request and event. Python validates the fixture,
+schema, and server dispatch as one closed operation set; TypeScript validates
+the same fixture with AJV and compares its union vocabulary to the schema
+discriminator. This fixture contains no credentials or strategy payload and
+does not alter `fixtures/advice-curated-decision.json`.
+
 ## Canonical replay decision index v1
 
 `managym/src/canonical_replay.rs` owns the safe projection contract and address

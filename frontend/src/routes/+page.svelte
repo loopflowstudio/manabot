@@ -10,10 +10,25 @@
   import GameLog from '$lib/components/GameLog.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
+  import TestingHousePanel from '$lib/components/TestingHousePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
   import { gameStore } from '$lib/game.svelte';
   import { presentationPlayer } from '$lib/presentation.svelte';
-  import { connect, disconnect, sendAction, sendNewGame, sendPassTurn, sendSetStops } from '$lib/socket.svelte';
+  import {
+    connect,
+    disconnect,
+    sendAction,
+    sendAuthorBelief,
+    sendNewGame,
+    sendPassTurn,
+    sendRestoreDecision,
+    sendRetryDecision,
+    sendReturnFromBranch,
+    sendReturnToLive,
+    sendSetStops,
+    sendShareBelief,
+    sendTransferPilot,
+  } from '$lib/socket.svelte';
   import type { ActionOption, StopSide } from '$lib/types';
 
   let hoveredTargetId = $state<number | null>(null);
@@ -86,6 +101,10 @@
   }
 
   function startNewGame(): void {
+    if (!gameStore.hasCapability('configure_match')) {
+      gameStore.setError('Only the acting pilot can start or reset the match.');
+      return;
+    }
     const config = gameStore.opponentConfig();
     if (config.villain_type === 'checkpoint' && !config.villain_checkpoint) {
       gameStore.setError('Enter a checkpoint path (.pt) to play against a policy.');
@@ -95,7 +114,16 @@
   }
 
   const gameActive = $derived(gameStore.observation !== null && !gameStore.gameOver);
-  const canPassTurn = $derived(gameActive && gameStore.actions.length > 0);
+  const pilotCanAct = $derived(gameStore.hasCapability('submit_live_command'));
+  const participantStudying = $derived(gameStore.restoredDecision !== null);
+  const canPassTurn = $derived(
+    gameActive && gameStore.actions.length > 0 && pilotCanAct && !participantStudying,
+  );
+  const boardObservation = $derived(
+    gameStore.branchProjection
+      ?? gameStore.restoredDecision?.frame.projection
+      ?? gameStore.observation,
+  );
 
   // The matchup names the players: "You (UR Lessons) vs Search 64 (GW
   // Allies)". Selectors hide while a game runs, so the choice is stable.
@@ -107,10 +135,14 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentLabel = $derived(OPPONENT_LABELS[gameStore.opponentChoice] ?? 'Opponent');
+  const opponentLabel = $derived(
+    gameStore.table?.opponent_label
+      ?? OPPONENT_LABELS[gameStore.opponentChoice]
+      ?? 'Opponent',
+  );
 
   function syncStopsToServer(): void {
-    if (gameActive) {
+    if (gameActive && gameStore.hasCapability('configure_match')) {
       sendSetStops();
     }
   }
@@ -154,7 +186,7 @@
   }
 
   function handleActionSelect(action: ActionOption): void {
-    if (gameStore.gameOver) {
+    if (gameStore.gameOver || !pilotCanAct || participantStudying) {
       return;
     }
 
@@ -200,7 +232,12 @@
   }
 </script>
 
-<main class="mx-auto w-full max-w-[1400px] px-4 py-6" data-update-seq={gameStore.updateSeq}>
+<main
+  class="mx-auto w-full max-w-[1400px] px-4 py-6"
+  data-update-seq={gameStore.updateSeq}
+  data-frame-revision={gameStore.protocolFrame?.revision ?? -1}
+  data-table-revision={gameStore.table?.table_revision ?? -1}
+>
   <h1 class="sr-only">Play</h1>
 
   {#if gameStore.errorMessage}
@@ -211,6 +248,24 @@
 
   <!-- The sheet: one continuous leaf. Regions are ruled, never boxed. -->
   <div class="overflow-hidden rounded-sm border border-line bg-panel shadow-sheet">
+    {#if gameStore.table}
+      <TestingHousePanel
+        table={gameStore.table}
+        scenarios={adviceMetaState?.scenarios ?? []}
+        selectedScenarioId={adviceSelectedScenario}
+        restored={gameStore.restoredDecision}
+        branchAttemptId={gameStore.branchAttemptId}
+        announcement={gameStore.tableAnnouncement}
+        onTransferPilot={sendTransferPilot}
+        onAuthorBelief={sendAuthorBelief}
+        onShareBelief={sendShareBelief}
+        onSelectBelief={(scenarioId) => void loadAdvice(scenarioId)}
+        onRestoreDecision={sendRestoreDecision}
+        onRetryDecision={sendRetryDecision}
+        onReturnFromBranch={sendReturnFromBranch}
+        onReturnToLive={sendReturnToLive}
+      />
+    {/if}
     <div class="px-10 pb-10 pt-6 max-md:px-5 max-md:pb-6">
   <!-- The masthead, in levels: the matchup names the players, fields show
        only while they matter, one red action, and the connection is a
@@ -232,7 +287,7 @@
     </div>
 
     <div class="flex flex-wrap items-end gap-x-5 gap-y-3">
-      {#if !gameStore.observation || gameStore.gameOver}
+      {#if (!gameStore.observation || gameStore.gameOver) && gameStore.hasCapability('configure_match')}
         <DeckSelector
           hero={gameStore.decks.hero}
           villain={gameStore.decks.villain}
@@ -275,17 +330,18 @@
         <button
           class="btn btn-primary"
           onclick={startNewGame}
+          disabled={!gameStore.hasCapability('configure_match')}
         >
-          New Game
+          {gameStore.hasCapability('configure_match') ? 'New Game' : 'Pilot only'}
         </button>
       </div>
     </div>
   </div>
 
-  {#if gameStore.observation}
+  {#if gameStore.observation && boardObservation}
     <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px]">
       <GameBoard
-        observation={gameStore.observation}
+        observation={boardObservation}
         focusedIds={gameStore.focusIds}
         {clickableTargets}
         onSelectTarget={handleBoardTargetSelect}
@@ -309,7 +365,7 @@
           actionSpaceKind={gameStore.actionSpaceKind}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedActionIndexes}
-          disabled={gameStore.gameOver}
+          disabled={gameStore.gameOver || !pilotCanAct || participantStudying || gameStore.commandPending}
           fastForwarding={gameStore.fastForwarding}
           {canPassTurn}
           focusKey={`${gameStore.updateSeq}:${gameStore.selectedTargetId ?? 'all'}`}
@@ -341,13 +397,16 @@
         </div>
 
         <div class="border-t border-line pt-4">
-          <StopsPanel
-            stops={gameStore.stops}
-            onToggleStop={handleToggleStop}
-            onStopOnStackChange={handleStopOnStackChange}
-            onAutoPassChange={handleAutoPassChange}
-            onReset={handleResetStops}
-          />
+          <fieldset disabled={!gameStore.hasCapability('configure_match')}>
+            <legend class="sr-only">Pilot stop controls</legend>
+            <StopsPanel
+              stops={gameStore.stops}
+              onToggleStop={handleToggleStop}
+              onStopOnStackChange={handleStopOnStackChange}
+              onAutoPassChange={handleAutoPassChange}
+              onReset={handleResetStops}
+            />
+          </fieldset>
         </div>
 
         <div class="border-t border-line pt-4">
@@ -362,17 +421,21 @@
       <button
         class="btn btn-primary"
         onclick={startNewGame}
+        disabled={!gameStore.hasCapability('configure_match')}
       >
-        New Game
+        {gameStore.hasCapability('configure_match') ? 'New Game' : 'Pilot only'}
       </button>
       <div class="mx-auto mt-10 max-w-sm border-t border-line pt-4 text-left">
-        <StopsPanel
-          stops={gameStore.stops}
-          onToggleStop={handleToggleStop}
-          onStopOnStackChange={handleStopOnStackChange}
-          onAutoPassChange={handleAutoPassChange}
-          onReset={handleResetStops}
-        />
+        <fieldset disabled={!gameStore.hasCapability('configure_match')}>
+          <legend class="sr-only">Pilot stop controls</legend>
+          <StopsPanel
+            stops={gameStore.stops}
+            onToggleStop={handleToggleStop}
+            onStopOnStackChange={handleStopOnStackChange}
+            onAutoPassChange={handleAutoPassChange}
+            onReset={handleResetStops}
+          />
+        </fieldset>
       </div>
     </div>
   {/if}

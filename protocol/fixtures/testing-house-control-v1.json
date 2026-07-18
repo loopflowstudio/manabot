@@ -1,0 +1,269 @@
+{
+  "contract": "testing-house-v1",
+  "requests": [
+    {
+      "type": "join_table",
+      "table_id": "table.example",
+      "invite_token": "invite-example",
+      "presentation_cursor": 10
+    },
+    {
+      "type": "resume",
+      "session_id": "table.example",
+      "resume_token": "lease-example",
+      "presentation_cursor": 10
+    },
+    {
+      "type": "new_game",
+      "grant_revision": 1,
+      "config": {"seed": 7}
+    },
+    {
+      "type": "rematch",
+      "grant_revision": 1,
+      "config": {"seed": 8}
+    },
+    {
+      "type": "command",
+      "grant_revision": 1,
+      "command": {
+        "command_id": "command.example",
+        "match_id": "match.example",
+        "expected_revision": 12,
+        "prompt_id": 9,
+        "offer_id": 4,
+        "answers": []
+      }
+    },
+    {"type": "action", "grant_revision": 1, "index": 0},
+    {"type": "pass_turn", "grant_revision": 1},
+    {
+      "type": "set_stops",
+      "grant_revision": 1,
+      "stops": {"my": ["main1", "main2"], "opponent": ["end_step"]},
+      "stop_on_stack": true,
+      "auto_pass": true
+    },
+    {
+      "type": "transfer_pilot",
+      "grant_revision": 1,
+      "target_viewer_id": "viewer.watcher"
+    },
+    {"type": "author_belief", "grant_revision": 1, "scenario_id": "scenario.a"},
+    {"type": "share_belief", "grant_revision": 1, "belief_id": "belief.example"},
+    {
+      "type": "restore_decision",
+      "grant_revision": 1,
+      "address": "erd1.example"
+    },
+    {
+      "type": "retry_decision",
+      "grant_revision": 1,
+      "address": "erd1.example",
+      "command": {
+        "command_id": "study.command.example",
+        "match_id": "match.example",
+        "expected_revision": 12,
+        "prompt_id": 9,
+        "offer_id": 4,
+        "answers": []
+      }
+    },
+    {
+      "type": "branch_reveal",
+      "grant_revision": 1,
+      "attempt_id": "attempt.example"
+    },
+    {
+      "type": "branch_preview",
+      "grant_revision": 1,
+      "attempt_id": "attempt.example",
+      "plan": "played"
+    },
+    {
+      "type": "return_from_branch",
+      "grant_revision": 1,
+      "attempt_id": "attempt.example"
+    },
+    {"type": "return_to_live", "grant_revision": 1}
+  ],
+  "events": [
+    {
+      "type": "table_snapshot",
+      "table": {
+        "contract": "testing-house-v1",
+        "table_id": "table.example",
+        "table_revision": 3,
+        "mode": "live",
+        "access": {
+          "identity": {
+            "viewer_id": "viewer.pilot",
+            "table_id": "table.example",
+            "rules_viewer": 0
+          },
+          "role": "pilot",
+          "capabilities": [
+            "view_table",
+            "author_belief",
+            "share_belief",
+            "compare_advice",
+            "explore_study",
+            "submit_live_command",
+            "configure_match",
+            "transfer_pilot"
+          ],
+          "grant_revision": 1
+        },
+        "participants": [
+          {"viewer_id": "viewer.pilot", "role": "pilot", "connected": true},
+          {"viewer_id": "viewer.watcher", "role": "watcher", "connected": true}
+        ],
+        "beliefs": [
+          {
+            "id": "belief.example",
+            "author_viewer_id": "viewer.pilot",
+            "source": {
+              "decision_address": "erd1.example",
+              "gam6_scenario_id": "scenario.a",
+              "advice_identity": {
+                "source_replay_id": "replay.example",
+                "match_id": "match.example",
+                "advisor_id": "advisor.example",
+                "compute_id": "compute.example"
+              }
+            },
+            "audience": {"kind": "personal"},
+            "provenance": {
+              "kind": "player_authored",
+              "created_at_table_revision": 2,
+              "shared_at_table_revision": null
+            }
+          }
+        ],
+        "decisions": [],
+        "opponent_label": "Search 64",
+        "watcher_invite": "#watch=invite-example"
+      }
+    },
+    {
+      "type": "belief_changed",
+      "table": {
+        "contract": "testing-house-v1",
+        "table_id": "table.example",
+        "table_revision": 4,
+        "mode": "live",
+        "access": {
+          "identity": {
+            "viewer_id": "viewer.watcher",
+            "table_id": "table.example",
+            "rules_viewer": 0
+          },
+          "role": "watcher",
+          "capabilities": [
+            "view_table",
+            "author_belief",
+            "share_belief",
+            "compare_advice",
+            "explore_study"
+          ],
+          "grant_revision": 1
+        },
+        "participants": [
+          {"viewer_id": "viewer.pilot", "role": "pilot", "connected": true},
+          {"viewer_id": "viewer.watcher", "role": "watcher", "connected": true}
+        ],
+        "beliefs": [
+          {
+            "id": "belief.example",
+            "author_viewer_id": "viewer.pilot",
+            "source": {
+              "decision_address": "erd1.example",
+              "gam6_scenario_id": "scenario.a",
+              "advice_identity": {
+                "source_replay_id": "replay.example",
+                "match_id": "match.example",
+                "advisor_id": "advisor.example",
+                "compute_id": "compute.example"
+              }
+            },
+            "audience": {"kind": "table", "table_id": "table.example"},
+            "provenance": {
+              "kind": "player_authored",
+              "created_at_table_revision": 2,
+              "shared_at_table_revision": 4
+            }
+          }
+        ],
+        "decisions": [],
+        "opponent_label": "Search 64",
+        "watcher_invite": null
+      },
+      "belief": {
+        "id": "belief.example",
+        "author_viewer_id": "viewer.pilot",
+        "source": {
+          "decision_address": "erd1.example",
+          "gam6_scenario_id": "scenario.a",
+          "advice_identity": {
+            "source_replay_id": "replay.example",
+            "match_id": "match.example",
+            "advisor_id": "advisor.example",
+            "compute_id": "compute.example"
+          }
+        },
+        "audience": {"kind": "table", "table_id": "table.example"},
+        "provenance": {
+          "kind": "player_authored",
+          "created_at_table_revision": 2,
+          "shared_at_table_revision": 4
+        }
+      }
+    },
+    {
+      "type": "role_changed",
+      "table": {
+        "contract": "testing-house-v1",
+        "table_id": "table.example",
+        "table_revision": 5,
+        "mode": "study",
+        "access": {
+          "identity": {
+            "viewer_id": "viewer.watcher",
+            "table_id": "table.example",
+            "rules_viewer": 0
+          },
+          "role": "pilot",
+          "capabilities": [
+            "view_table",
+            "author_belief",
+            "share_belief",
+            "compare_advice",
+            "explore_study",
+            "submit_live_command",
+            "configure_match",
+            "transfer_pilot"
+          ],
+          "grant_revision": 2
+        },
+        "participants": [
+          {"viewer_id": "viewer.pilot", "role": "watcher", "connected": true},
+          {"viewer_id": "viewer.watcher", "role": "pilot", "connected": true}
+        ],
+        "beliefs": [],
+        "decisions": [],
+        "opponent_label": "Search 64",
+        "watcher_invite": null
+      }
+    },
+    {"type": "decision_restored", "address": "erd1.example", "restored": {}, "table": null},
+    {
+      "type": "branch_updated",
+      "attempt_id": "attempt.example",
+      "phase": "retry",
+      "payload": {},
+      "table": null
+    },
+    {"type": "branch_returned", "restored": {}, "table": null},
+    {"type": "control_error", "code": "forbidden", "message": "Pilot capability required.", "table": null}
+  ]
+}
