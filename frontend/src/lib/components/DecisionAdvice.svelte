@@ -144,9 +144,18 @@
         </dl>
       </section>
 
-      <!-- Advice: per-action policy mass, expected match points, uncertainty. -->
-      <section data-testid="advice-advice" aria-label="Advisor evidence">
-        <h3 class="type-rubric mb-1 text-ink-2">Advice</h3>
+      <!-- Advice: the strategy distribution CONDITIONAL on the selected belief.
+           Switching the belief above changes this distribution; it is not an
+           unconditional advisor verdict. No hidden-truth access: the belief is
+           viewer-side, and the evidence comes from the pinned fixture. -->
+      <section
+        data-testid="advice-advice"
+        aria-label="Advisor evidence conditional on the selected belief"
+      >
+        <h3 class="type-rubric mb-1 text-ink-2">Advice given this belief</h3>
+        <p class="type-caption mb-2 text-ink-3">
+          Strategy distribution is conditional on the selected belief — not an unconditional advisor verdict.
+        </p>
         <ul class="m-0 list-none space-y-2 p-0">
           {#each offers as offer}
             {@const alt = alternativeId(offer)}
@@ -204,7 +213,7 @@
     {/if}
 
     <footer data-testid="advice-footer" class="type-caption border-t border-line pt-2 text-ink-3">
-      Advisor {advisorId} · compute {computeId} · advisory only — submit through the ActionPanel.
+      Advisor {advisorId} · compute {computeId} · advisory only — strategy is conditional on the selected belief; submit through the ActionPanel.
     </footer>
   </div>
 </details>

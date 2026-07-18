@@ -67,6 +67,18 @@ describe('DecisionAdvice', () => {
     expect(body).toContain('advisory only');
   });
 
+  it('states the strategy is conditional on the selected belief, not unconditional', () => {
+    const { body } = render(DecisionAdvice, { props: defaultProps() });
+    // Truthful conditional-vs-unconditional wording: the Advice region frames
+    // the distribution as conditional on the belief, and the footer reinforces
+    // it. No hidden-truth access and no parallel rules/search meaning.
+    expect(body).toContain('Advice given this belief');
+    expect(body).toContain('conditional on the selected belief');
+    expect(body).toContain('not an unconditional advisor verdict');
+    // The Advice region's ARIA label also names the conditional framing.
+    expect(body).toContain('aria-label="Advisor evidence conditional on the selected belief"');
+  });
+
   it('exposes study mode and a reduced-motion data attribute', () => {
     const { body } = render(
       DecisionAdvice,

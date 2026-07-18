@@ -53,6 +53,11 @@ test('live page renders the shared decision-advice surface with four regions', a
   await expect(page.getByTestId('advice-advice')).toContainText('Pass priority');
   // The pinned advisor identity is visible.
   await expect(page.getByTestId('advice-footer')).toContainText('flat-mc-search-v1');
+  // Truthful conditional-vs-unconditional wording: the strategy distribution is
+  // framed as conditional on the selected belief, not an unconditional verdict.
+  await expect(page.getByTestId('advice-advice')).toContainText('Advice given this belief');
+  await expect(page.getByTestId('advice-advice')).toContainText('conditional on the selected belief');
+  await expect(page.getByTestId('advice-footer')).toContainText('conditional on the selected belief');
   // Viewer-safety: the opponent hand is hidden, never rendered as identities.
   await expect(page.getByTestId('advice-facts')).toContainText('(hidden)');
 
