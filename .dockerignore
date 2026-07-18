@@ -7,3 +7,27 @@ CMakeUserPresets.json
 __pycache__/
 *.pyc
 
+# Keep the remote-build context small: the play image needs pyproject/uv.lock,
+# etude/, managym/ (Rust sources), frontend/ (sources + lockfile), deploy/play/.
+**/.venv
+**/node_modules
+**/.pytest_cache
+managym/target
+# Locally fetched Scryfall art stays out of the context: the play image
+# fetches it in a layer keyed on script+manifest, so builds are
+# deterministic regardless of which machine deploys.
+frontend/src/lib/card-art
+frontend/test-results
+frontend/playwright-report
+frontend/e2e
+website
+scratch
+paper
+experiments
+docs
+wave
+conformance
+tests
+ops
+.runs
+etude/traces/*

@@ -1,0 +1,82 @@
+# Etude Fantasia website content
+# Edit copy here — no need to touch main.py
+
+homepage:
+  hero:
+    tagline: "The study of a game that improvises."
+    subline: >-
+      Etude Fantasia is a way to study Magic: The Gathering. Play a trained
+      manabot in your browser, replay every decision, and train your own —
+      the whole loop also runs on your laptop from one command.
+    play_url: "https://play.etude.gg"
+    repo_url: "https://github.com/loopflowstudio/etude"
+
+  showcase:
+    image: "/static/board-developed.png"
+    image_alt: "An Etude Fantasia board mid-game: two players' battlefields on a parchment sheet, with the game log and actions in the margin"
+    caption: "The Sheet: one continuous leaf, ruled regions, and the margin holding the apparatus."
+
+  pillars:
+    heading: "Three subsystems, one loop"
+    items:
+      - title: "Etude"
+        register: "island"
+        description: >-
+          The authored play, replay, and study experience. A finished game is
+          study material: the Score restores consequential decisions as you
+          understood them, shows what else was worth considering, and lets
+          you retry a line before the reveal.
+      - title: "manabot"
+        register: "mountain"
+        description: >-
+          The trainable agent — search and learning library, Gymnasium
+          wrappers, and experiment tracking. The default preset trains a
+          small manabot on a laptop CPU in under a minute; serious runs
+          scale to the cloud.
+      - title: "managym"
+        register: "forest"
+        description: >-
+          The deterministic Rust rules engine and vectorized environment the
+          agent lives in, with Python bindings. One rules authority plays
+          the game, replays it, and answers what could have been.
+
+  play:
+    heading: "Play locally"
+    intro: >-
+      You need uv, Node, and a Rust toolchain. One command installs locked
+      dependencies, builds the engine, starts backend and frontend, and opens
+      the curated matchup against a trained manabot in your browser.
+    code: |
+      git clone git@github.com:loopflowstudio/etude.git
+      cd etude
+      ./scripts/play
+
+  train:
+    heading: "Train a manabot"
+    intro: >-
+      No accounts, no GPU. Checkpoints save locally; point the play screen's
+      opponent selector at what you trained and face it. Play, train, play
+      against your own manabot — that loop is the project.
+    code: |
+      uv run manabot train
+
+  research:
+    heading: "The research ledger"
+    body: >-
+      Etude's research program is preregistered and reproducible: every
+      experiment states its prediction, budget, and kill criteria before
+      running, and negative results are recorded alongside positive ones.
+    link_label: "Read the ledger on GitHub"
+    link_url: "https://github.com/loopflowstudio/etude/tree/main/experiments"
+
+colophon:
+  identity: >-
+    An étude in studying Magic: play a manabot, replay every decision, and
+    annotate the score.
+  built_by: "Built by Loopflow Studio."
+  built_by_url: "https://loopflow.studio"
+  fan_content: >-
+    Etude Fantasia is unofficial Fan Content permitted under the Wizards of
+    the Coast Fan Content Policy. Card art and mana symbols are © Wizards of
+    the Coast. Not approved or endorsed by Wizards.
+  fan_content_policy_url: "https://company.wizards.com/en/legal/fancontentpolicy"

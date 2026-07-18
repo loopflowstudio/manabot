@@ -1,0 +1,25 @@
+app = "etude-play"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Game state lives in process memory; keep exactly one machine
+  # (deploy with --ha=false) so /ws and /api always meet the same game.
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/api/traces"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "1gb"
