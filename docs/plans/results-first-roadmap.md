@@ -86,6 +86,12 @@ Two halves, either order:
   challenger, and `ExactRangePlayer` against a uniform-determinization control
   at matched compute — the measured answer to whether beliefs improve play.
   Commit ratings, the payoff matrix, and paired-deal uncertainty.
+  **INT-18 result (2026-07-18):** the frozen anchor/dPUCT cohort completed 720
+  games and retained its complete connected matrix, production ratings, and
+  global-deal-block uncertainty. Exact-range remained a typed evidence wait:
+  the registered likelihood checkpoint is unresolved and no substitute was
+  admitted. The independent arena result is complete; R4 remains open on the
+  belief comparison and the production teacher half.
 - **First production teacher iteration.** Unblock the INT-4 production harness
   (recover or re-freeze the absent Teacher-0 control bytes under a versioned
   contract note — never edit the frozen contract in place) and run one
