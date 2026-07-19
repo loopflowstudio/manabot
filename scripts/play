@@ -36,6 +36,19 @@ command -v cargo >/dev/null 2>&1 || \
 [ -f managym/Cargo.lock ] || error lock.cargo "managym/Cargo.lock is missing"
 [ -f frontend/package-lock.json ] || \
   error lock.frontend "frontend/package-lock.json is missing"
+
+runtime_closure=$(uv export --locked --only-group play-runtime \
+  --no-hashes --no-header 2>&1) || \
+  error lock.python "uv could not export the locked Etude play runtime"
+if printf '%s\n' "$runtime_closure" | \
+    grep -Eq '^(cuda[-_]|nvidia[-_]|triton==)'; then
+  error lock.python "the Etude play runtime contains CUDA dependencies"
+fi
+if ! printf '%s\n' "$runtime_closure" | \
+    grep -Eq "^torch==[^ ;]*\\+cpu ; .*sys_platform (== 'linux'|!= 'darwin')"; then
+  error lock.python "the Etude play runtime has no locked Linux CPU Torch wheel"
+fi
+
 [ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json ] || \
   error pack.missing "the installed curated-pack manifest is missing"
 [ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/NOTICE.md ] || \

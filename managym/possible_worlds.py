@@ -245,6 +245,39 @@ class PossibleWorldSpace:
             total_weight=int(payload["total_weight"]),
         )
 
+    def condition_indexes(
+        self, query: WorldQuery
+    ) -> tuple[tuple[int, ...], SupportReceipt]:
+        """Return Rules-selected row indexes and their identity-bound receipt."""
+
+        try:
+            payload = json.loads(
+                self._engine.possible_world_condition_json(
+                    self.viewer,
+                    self.identity,
+                    json.dumps(query.to_dict(), sort_keys=True, separators=(",", ":")),
+                )
+            )
+        except Exception as error:
+            raise PossibleWorldError(str(error)) from error
+        if payload["space_identity"] != self.identity:
+            raise PossibleWorldError("query receipt changed space identity")
+        indexes = tuple(int(index) for index in payload["world_indexes"])
+        if len(indexes) != int(payload["support_size"]):
+            raise PossibleWorldError("conditioned indexes differ from support receipt")
+        if indexes != tuple(sorted(set(indexes))):
+            raise PossibleWorldError("conditioned indexes are not canonical")
+        for index in indexes:
+            self.world(index)
+        return indexes, SupportReceipt(
+            space_identity=str(payload["space_identity"]),
+            query_digest=str(payload["query_digest"]),
+            canonical_digest=str(payload["canonical_digest"]),
+            canonical_query=payload["canonical_query"],
+            support_size=int(payload["support_size"]),
+            total_weight=int(payload["total_weight"]),
+        )
+
     def flat_mc_scores(
         self,
         indexes: Sequence[int],

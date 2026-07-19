@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import socket
 import subprocess
+import tomllib
 from types import SimpleNamespace
 
 import pytest
@@ -207,6 +209,92 @@ def test_native_import_reports_the_extension_abi_and_path():
     }
 
 
+def test_locked_play_runtime_covers_and_imports_live_advice_dependencies():
+    project = tomllib.loads((play.ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    group = project["dependency-groups"]["play-runtime"]
+    names = {re.split(r"[<>=!~; ]", requirement, maxsplit=1)[0] for requirement in group}
+    assert {"numpy", "torch"} <= names
+
+    uv = project["tool"]["uv"]
+    assert uv["default-groups"] == ["training-runtime"]
+    assert uv["conflicts"] == [
+        [{"group": "training-runtime"}, {"group": "play-runtime"}]
+    ]
+    torch_sources = uv["sources"]["torch"]
+    assert {
+        (source["group"], source["index"], source.get("marker"))
+        for source in torch_sources
+    } == {
+        ("play-runtime", "pytorch-cpu", None),
+        ("training-runtime", "pytorch-cuda", "sys_platform == 'linux'"),
+        ("training-runtime", "pytorch-training", "sys_platform != 'linux'"),
+    }
+
+    observed: list[str] = []
+
+    def runner(argv, **_kwargs):
+        assert argv[: len(play.UV_RUNTIME)] == play.UV_RUNTIME
+        observed.extend(argv[-1].split("; "))
+        return completed(argv)
+
+    play.ensure_runtime_imports(runner=runner)
+    assert observed == [f"import {module}" for module in play.RUNTIME_IMPORTS]
+
+
+def _exported_requirements(group: str) -> tuple[str, set[str]]:
+    result = subprocess.run(
+        [
+            "uv",
+            "export",
+            "--locked",
+            "--only-group",
+            group,
+            "--no-hashes",
+            "--no-header",
+        ],
+        cwd=play.ROOT,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    names = {
+        line.split("==", 1)[0].lower().replace("_", "-")
+        for line in result.stdout.splitlines()
+        if line and not line.startswith((" ", "#", "-e ")) and "==" in line
+    }
+    return result.stdout, names
+
+
+def test_locked_play_closure_is_cpu_only_and_training_retains_cuda():
+    play_export, play_names = _exported_requirements("play-runtime")
+    forbidden = {
+        name
+        for name in play_names
+        if name.startswith(("cuda-", "nvidia-")) or name == "triton"
+    }
+    assert not forbidden
+    assert any(
+        line.startswith("torch==")
+        and "+cpu" in line
+        and (
+            "sys_platform == 'linux'" in line
+            or "sys_platform != 'darwin'" in line
+        )
+        for line in play_export.splitlines()
+    )
+
+    training_export, training_names = _exported_requirements("training-runtime")
+    assert any(
+        line.startswith("torch==")
+        and "+cu128" in line
+        and "sys_platform == 'linux'" in line
+        for line in training_export.splitlines()
+    )
+    assert "triton" in training_names
+    assert any(name.startswith("nvidia-") for name in training_names)
+
+
 def test_occupied_port_fails_deterministically():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
@@ -337,7 +425,16 @@ def test_wrapper_no_frontend_does_not_require_node_or_npm(tmp_path):
     wrapper = Path(__file__).resolve().parents[2] / "scripts" / "play"
     for command in ("uv", "rustc", "cargo"):
         executable = tmp_path / command
-        executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        body = "#!/bin/sh\nexit 0\n"
+        if command == "uv":
+            body = (
+                "#!/bin/sh\n"
+                "if [ \"$1\" = export ]; then\n"
+                "  echo \"torch==2.10.0+cpu ; sys_platform != 'darwin'\"\n"
+                "fi\n"
+                "exit 0\n"
+            )
+        executable.write_text(body, encoding="utf-8")
         executable.chmod(0o755)
     result = subprocess.run(
         ["/bin/sh", str(wrapper), "--no-frontend"],

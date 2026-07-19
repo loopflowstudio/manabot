@@ -314,6 +314,31 @@ impl Env {
         Ok(space.support_projection(query))
     }
 
+    pub fn possible_world_condition(
+        &self,
+        viewer: usize,
+        space_identity: &str,
+        query: crate::possible_worlds::WorldQueryWire,
+    ) -> Result<crate::possible_worlds::ConditioningReceiptProjection, AgentError> {
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError("env.possible_world_condition called before reset".to_string())
+        })?;
+        if viewer >= game.state.players.len() {
+            return Err(AgentError(format!(
+                "possible_world_condition: viewer {viewer} out of range"
+            )));
+        }
+        let space = PossibleWorldSpace::for_viewer(game, PlayerId(viewer));
+        if space.identity() != space_identity {
+            return Err(AgentError(
+                "possible_world_condition: space identity mismatch".to_string(),
+            ));
+        }
+        space
+            .condition_projection(query)
+            .map_err(|error| AgentError(format!("possible_world_condition: {error:?}")))
+    }
+
     /// Materialize one canonical world index into an isolated branch. The
     /// supplied identity must match the current source exactly.
     pub fn materialize_possible_world(

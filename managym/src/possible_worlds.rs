@@ -348,6 +348,17 @@ pub struct SupportReceiptProjection {
     pub total_weight: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ConditioningReceiptProjection {
+    pub space_identity: String,
+    pub query_digest: String,
+    pub canonical_digest: String,
+    pub canonical_query: CanonicalWorldQuery,
+    pub support_size: usize,
+    pub total_weight: String,
+    pub world_indexes: Vec<usize>,
+}
+
 #[derive(serde::Serialize)]
 struct PossibleWorldSpaceIdentity<'a> {
     schema_version: u16,
@@ -463,6 +474,34 @@ impl PossibleWorldSpace {
             support_size: receipt.support_size,
             total_weight: receipt.total_weight.to_string(),
         }
+    }
+
+    /// Return the canonical row indexes selected by one typed query. This is
+    /// the private binding used by belief consumers; membership is evaluated
+    /// here rather than reconstructed from hand projections in Python.
+    pub fn condition_projection(
+        &self,
+        query: WorldQueryWire,
+    ) -> Result<ConditioningReceiptProjection, ConditioningError> {
+        let query: WorldQuery = query.into();
+        let canonical_query = query.canonicalize(self);
+        let conditioned = self.condition(&query)?;
+        let world_indexes = self
+            .worlds
+            .iter()
+            .enumerate()
+            .filter_map(|(index, world)| canonical_query.satisfies(&world.hand).then_some(index))
+            .collect::<Vec<_>>();
+        debug_assert_eq!(world_indexes.len(), conditioned.receipt.support_size);
+        Ok(ConditioningReceiptProjection {
+            space_identity: self.identity(),
+            query_digest: conditioned.receipt.query_digest.hex(),
+            canonical_digest: conditioned.receipt.canonical_digest.hex(),
+            canonical_query,
+            support_size: conditioned.receipt.support_size,
+            total_weight: conditioned.receipt.total_weight.to_string(),
+            world_indexes,
+        })
     }
 
     /// Build the space for `viewer` from a live `Game`. The opponent is the

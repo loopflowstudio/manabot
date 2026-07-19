@@ -119,7 +119,7 @@ class TableDecisionSummary(ProtocolModel):
     ordinal: UInt64
     revision: UInt64
     prompt_id: UInt64
-    offer_id: int
+    offer_id: int | None
 
 
 class TableSnapshot(ProtocolModel):

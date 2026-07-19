@@ -108,6 +108,7 @@ def test_live_decision_summaries_match_full_replay_without_reconstruction(
     monkeypatch.setattr(server, "projection_with_addresses", forbidden)
 
     actual = server._live_decision_summaries(record)
+    assert all(decision["address"].startswith("ed2.") for decision in actual)
     assert _canonical_bytes(actual) == _canonical_bytes(expected)
 
 

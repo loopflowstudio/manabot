@@ -2685,6 +2685,27 @@ impl PyEnv {
         serde_json::to_string(&receipt).map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Select canonical world indexes through Rules' typed query evaluator.
+    fn possible_world_condition_json(
+        &self,
+        viewer: usize,
+        space_identity: &str,
+        query_json: &str,
+    ) -> PyResult<String> {
+        let query: crate::possible_worlds::WorldQueryWire = serde_json::from_str(query_json)
+            .map_err(|error| {
+                PyAgentError::new_err(format!("invalid possible-world query: {error}"))
+            })?;
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let receipt = env
+            .possible_world_condition(viewer, space_identity, query)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&receipt).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Materialize one identity-bound canonical world into an isolated Env.
     #[pyo3(signature = (viewer, space_identity, world_index, seed, refresh_opponent_commitment=false))]
     fn materialize_possible_world(

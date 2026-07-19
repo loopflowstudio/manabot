@@ -16,7 +16,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Any, Literal, TypeAlias
 
 from pydantic import Field, model_validator
 
@@ -32,6 +32,7 @@ from .experience_protocol import (
 
 CANONICAL_REPLAY_VERSION: Literal[1] = 1
 ADDRESS_PREFIX = "erd1."
+DECISION_ADDRESS_PREFIX = "ed2."
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _DECIMAL_PATTERN = re.compile(r"^(0|[1-9][0-9]*)$")
 
@@ -41,7 +42,7 @@ class ReplayIndexError(ValueError):
 
 
 class InvalidAddressError(ReplayIndexError):
-    """The deep-link string is not a canonical erd1 address."""
+    """The deep-link string is not a canonical decision address."""
 
 
 class DecisionNotFoundError(ReplayIndexError):
@@ -362,6 +363,8 @@ class ReplayDecisionAddress(ProtocolModel):
 
     @classmethod
     def parse(cls, value: str) -> "ReplayDecisionAddress":
+        if isinstance(value, str) and value.startswith(DECISION_ADDRESS_PREFIX):
+            return DecisionAddressV2.parse(value)  # type: ignore[return-value]
         try:
             if not isinstance(value, str) or not value.startswith(ADDRESS_PREFIX):
                 raise ValueError("missing erd1 prefix")
@@ -402,6 +405,190 @@ class ReplayDecisionAddress(ProtocolModel):
             if isinstance(exc, InvalidAddressError):
                 raise
             raise InvalidAddressError("invalid replay decision address") from exc
+
+
+class DecisionAddressV2(ProtocolModel):
+    """Prompt-level identity available before an offer is selected."""
+
+    version: Literal[2] = 2
+    replay_id: str
+    match_id: str
+    ordinal: UInt64
+    viewer: UInt8
+    revision: UInt64
+    prompt_id: UInt64
+    presentation_cursor: UInt64
+    frame_hash: str
+    decision_sha256: str
+
+    @model_validator(mode="after")
+    def validate_closed_values(self) -> "DecisionAddressV2":
+        if not self.replay_id or not self.match_id:
+            raise ValueError("decision address identities must be non-empty")
+        if not self.frame_hash:
+            raise ValueError("decision address frame_hash must be non-empty")
+        if not _SHA256_PATTERN.fullmatch(self.decision_sha256):
+            raise ValueError("decision address decision_sha256 is not canonical")
+        return self
+
+    @classmethod
+    def from_frame(
+        cls,
+        *,
+        replay_id: str,
+        match_id: str,
+        ordinal: int,
+        viewer: int,
+        frame: ExperienceFrame,
+        presentation_cursor: int,
+    ) -> "DecisionAddressV2":
+        prompt = frame.prompt
+        if prompt is None or prompt.actor != viewer:
+            raise ValueError("decision address requires the acting viewer prompt")
+        if frame.match_id != match_id:
+            raise ValueError("decision address frame differs from match")
+        core = {
+            "version": 2,
+            "replay_id": replay_id,
+            "match_id": match_id,
+            "ordinal": ordinal,
+            "viewer": viewer,
+            "revision": frame.revision,
+            "prompt_id": prompt.id,
+            "presentation_cursor": presentation_cursor,
+            "frame_hash": frame.frame_hash,
+            "content_hash": frame.content_hash,
+            "asset_manifest_hash": frame.asset_manifest_hash,
+        }
+        return cls(
+            replay_id=replay_id,
+            match_id=match_id,
+            ordinal=ordinal,
+            viewer=viewer,
+            revision=frame.revision,
+            prompt_id=prompt.id,
+            presentation_cursor=presentation_cursor,
+            frame_hash=frame.frame_hash,
+            decision_sha256=hashlib.sha256(_canonical_json(core)).hexdigest(),
+        )
+
+    @classmethod
+    def from_row(
+        cls,
+        *,
+        replay_id: str,
+        match_id: str,
+        row: ReplayDecision,
+    ) -> "DecisionAddressV2":
+        return cls.from_frame(
+            replay_id=replay_id,
+            match_id=match_id,
+            ordinal=row.ordinal,
+            viewer=row.viewer,
+            frame=row.frame,
+            presentation_cursor=row.presentation_cursor,
+        )
+
+    @classmethod
+    def from_decision(
+        cls,
+        replay: CanonicalReplayV1 | CanonicalReplayProjectionV1,
+        row: ReplayDecision,
+    ) -> "DecisionAddressV2":
+        return cls.from_row(
+            replay_id=replay.replay_id,
+            match_id=replay.match_id,
+            row=row,
+        )
+
+    def serialize(self) -> str:
+        payload = [
+            self.version,
+            self.replay_id,
+            self.match_id,
+            str(self.ordinal),
+            str(self.viewer),
+            str(self.revision),
+            str(self.prompt_id),
+            str(self.presentation_cursor),
+            self.frame_hash,
+            self.decision_sha256,
+        ]
+        encoded = base64.urlsafe_b64encode(_canonical_json(payload)).decode("ascii")
+        return DECISION_ADDRESS_PREFIX + encoded.rstrip("=")
+
+    @classmethod
+    def parse(cls, value: str) -> "DecisionAddressV2":
+        try:
+            if not isinstance(value, str) or not value.startswith(
+                DECISION_ADDRESS_PREFIX
+            ):
+                raise ValueError("missing ed2 prefix")
+            encoded = value[len(DECISION_ADDRESS_PREFIX) :]
+            if not encoded or "=" in encoded:
+                raise ValueError("address is not unpadded base64url")
+            padding = "=" * (-len(encoded) % 4)
+            raw = base64.b64decode(
+                encoded + padding,
+                altchars=b"-_",
+                validate=True,
+            )
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, list) or len(payload) != 10:
+                raise ValueError("address payload shape")
+            if any(not isinstance(payload[index], str) for index in range(1, 10)):
+                raise ValueError("address payload types")
+            numeric = [payload[index] for index in (3, 4, 5, 6, 7)]
+            if any(not _DECIMAL_PATTERN.fullmatch(item) for item in numeric):
+                raise ValueError("address numeric encoding")
+            address = cls(
+                version=payload[0],
+                replay_id=payload[1],
+                match_id=payload[2],
+                ordinal=int(payload[3]),
+                viewer=int(payload[4]),
+                revision=int(payload[5]),
+                prompt_id=int(payload[6]),
+                presentation_cursor=int(payload[7]),
+                frame_hash=payload[8],
+                decision_sha256=payload[9],
+            )
+            if address.serialize() != value:
+                raise ValueError("non-canonical address encoding")
+            return address
+        except Exception as exc:
+            if isinstance(exc, InvalidAddressError):
+                raise
+            raise InvalidAddressError("invalid decision address") from exc
+
+
+DecisionAddress: TypeAlias = ReplayDecisionAddress | DecisionAddressV2
+
+
+def parse_decision_address(value: str) -> DecisionAddress:
+    return ReplayDecisionAddress.parse(value)
+
+
+def decision_source_sha256(
+    address: DecisionAddressV2,
+    frame: ExperienceFrame,
+) -> str:
+    """Hash the stable viewer facts available before the played command."""
+
+    if (
+        frame.match_id != address.match_id
+        or frame.revision != address.revision
+        or frame.frame_hash != address.frame_hash
+    ):
+        raise ValueError("decision source differs from its address")
+    return hashlib.sha256(
+        _canonical_json(
+            {
+                "address": address.serialize(),
+                "frame": frame.model_dump(mode="json"),
+            }
+        )
+    ).hexdigest()
 
 
 class RestoredReplayDecision(ProtocolModel):
@@ -463,7 +650,7 @@ def projection_with_addresses(
     for row_payload, row in zip(
         payload["decisions"], projection.decisions, strict=True
     ):
-        row_payload["address"] = ReplayDecisionAddress.from_decision(
+        row_payload["address"] = DecisionAddressV2.from_decision(
             projection, row
         ).serialize()
     return payload
@@ -474,7 +661,7 @@ def restore_decision(
     raw_address: str,
     authorized_viewer: int,
 ) -> RestoredReplayDecision:
-    address = ReplayDecisionAddress.parse(raw_address)
+    address = parse_decision_address(raw_address)
     if address.viewer != authorized_viewer:
         raise DecisionNotFoundError("decision not found")
     if address.replay_id != replay.replay_id or address.match_id != replay.match_id:
@@ -482,7 +669,11 @@ def restore_decision(
     if address.ordinal >= len(replay.decisions):
         raise DecisionNotFoundError("decision not found")
     row = replay.decisions[address.ordinal]
-    expected = ReplayDecisionAddress.from_decision(replay, row)
+    expected: DecisionAddress = (
+        DecisionAddressV2.from_decision(replay, row)
+        if isinstance(address, DecisionAddressV2)
+        else ReplayDecisionAddress.from_decision(replay, row)
+    )
     if address != expected or row.viewer != authorized_viewer:
         raise DecisionNotFoundError("decision not found")
     track = next(

@@ -56,6 +56,7 @@ UV_RUNTIME = [
     "--only-group",
     "play-runtime",
 ]
+RUNTIME_IMPORTS = ("etude.server", "etude.live_advice", "numpy", "torch")
 
 
 @dataclass(frozen=True)
@@ -302,6 +303,22 @@ def install_runtime(
         return native
 
 
+def ensure_runtime_imports(*, runner: Runner = subprocess.run) -> None:
+    """Prove the supported locked group can load the complete backend path."""
+
+    snippet = "; ".join(f"import {module}" for module in RUNTIME_IMPORTS)
+    result = run_text(
+        [*UV_RUNTIME, "python", "-c", snippet],
+        runner=runner,
+    )
+    if result.returncode != 0:
+        raise PlayError(
+            "runtime.import",
+            "the locked play runtime cannot import the Etude server",
+            (result.stderr or result.stdout).strip(),
+        )
+
+
 def assert_port_available(port: int, label: str) -> None:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate:
@@ -503,6 +520,7 @@ def run_launcher(args: argparse.Namespace) -> int:
         npm_version = command_version(npm)
 
     native = install_runtime(npm)
+    ensure_runtime_imports()
 
     assert_port_available(args.port, "backend")
     if npm is not None:

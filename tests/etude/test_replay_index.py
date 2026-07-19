@@ -11,6 +11,7 @@ from etude import server, trace as trace_store
 from etude.replay_index import (
     CanonicalReplayProjectionV1,
     CanonicalReplayV1,
+    DecisionAddressV2,
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecisionAddress,
@@ -118,6 +119,20 @@ def test_row_address_uses_only_replay_identity_and_exact_decision_row():
     assert direct.replay_id == replay.replay_id
     assert direct.match_id == replay.match_id
     assert direct.decision_sha256 == row.sha256()
+
+
+def test_v2_row_address_matches_projection_address_without_reconstruction():
+    replay = _replay()
+    row = replay.decisions[0]
+
+    direct = DecisionAddressV2.from_row(
+        replay_id=replay.replay_id,
+        match_id=replay.match_id,
+        row=row,
+    )
+
+    assert direct == DecisionAddressV2.from_decision(replay, row)
+    assert direct.serialize().startswith("ed2.")
 
 
 @pytest.mark.parametrize("viewer", (0, 1))

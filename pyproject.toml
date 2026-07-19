@@ -8,7 +8,6 @@ version = "0.1.0"
 description = "The trainable Magic: The Gathering agent for Etude Fantasia"
 requires-python = ">=3.10"
 dependencies = [
-    "torch>=2.0.0",
     "numpy>=1.24.0",
     "pandas>=2.0.0",
     "gymnasium>=1.0.0",
@@ -40,10 +39,47 @@ ops = [
 ]
 
 [dependency-groups]
+training-runtime = [
+    "torch==2.10.0+cu128 ; sys_platform == 'linux'",
+    "torch==2.10.0 ; sys_platform != 'linux'",
+]
 play-runtime = [
     "fastapi>=0.116.0",
     "maturin>=1.5,<2.0",
+    "numpy>=1.24.0",
+    "torch==2.10.0",
     "uvicorn[standard]>=0.34.0",
+]
+
+[tool.uv]
+default-groups = ["training-runtime"]
+conflicts = [
+    [
+        { group = "training-runtime" },
+        { group = "play-runtime" },
+    ],
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-training"
+url = "https://pypi.org/simple"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", group = "play-runtime" },
+    { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
 ]
 
 [tool.hatch.build.targets.wheel]
