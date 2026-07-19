@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "experiment": "int-17-belief-calibration-v1",
+  "registration_status": "preregistered_before_generation",
+  "evidence_class": "selected_trace_calibration_only",
+  "world": "w2",
+  "trace": {
+    "status": "locked",
+    "path": "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
+    "sha256": "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147",
+    "command_tape_sha256": "f26862d55368c18137baafb19c36f2943efcedf913917c31e543537ebfd4a127",
+    "matchup": "ur-lessons-vs-gw-allies",
+    "orientation": "ur-lessons-hero-vs-gw-allies-villain",
+    "game_seed": 0
+  },
+  "provider_receipt": {
+    "status": "locked",
+    "path": "conformance/public-commitment-parity-v1/release-live-replay-hypothesis-seed-0.json",
+    "sha256": "4522794188d4a93eb49a9fd6862ddd1d1345dd127a4a1fbb62dae9a5ad2f57da",
+    "rules_provider_gaps": 0,
+    "identity_stream_sha256": "8d9f46fa86742f323f915ba69bc0007e225415e8fc5504792eac4b49ebae66b6"
+  },
+  "likelihood_checkpoint": {
+    "status": "locked",
+    "path": "experiments/data/int-7-value-target-comparison-v1/sha256/3f7a00e179fe49fe111ff8a361501ca8080e501fa7189abeaacb66194a5de5bf/result/checkpoints/visit_policy_only-seed-197.pt",
+    "sha256": "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
+    "artifact_id": "int-7-visit_policy_only-seed-197-1673a237ef2460d0",
+    "arm": "visit_policy_only",
+    "training_seed": 197,
+    "source_manifest": {
+      "status": "locked",
+      "path": "experiments/data/int-7-value-target-comparison-v1/sha256/3f7a00e179fe49fe111ff8a361501ca8080e501fa7189abeaacb66194a5de5bf/result/manifest.json",
+      "sha256": "f209312d6373c5ec2051238dafe0e2090b5173ddec4adf2c85b2eb3c83a7cce8"
+    },
+    "training_content": "w2-interactive-mirror-v1",
+    "selected_matchup_distribution": "out_of_distribution"
+  },
+  "algorithm": {
+    "belief_state": "normalized_probability_over_managym_possible_world_space/v1",
+    "public_commitment": "managym_viewer_visible_commitment/v1",
+    "likelihood": "frozen_policy_grouped_public_commitment/v1",
+    "model_fallback": "forbidden",
+    "epsilon": 0.05,
+    "batch_size": 256,
+    "device": "cpu",
+    "counterfactual_seed": 907,
+    "policy_temperature": 1.0,
+    "truth_access": "post_update_authority_audit_only"
+  },
+  "cohort": {
+    "games": 1,
+    "game_seed": 0,
+    "viewers": [0, 1],
+    "commands": 132,
+    "commitments": 62,
+    "unadmitted_commands": 70,
+    "points_per_viewer": 133,
+    "total_points": 266
+  },
+  "preflight": {
+    "commands": 132,
+    "commitments": 62,
+    "world_rows": 903063,
+    "viewer_world_rows": {
+      "0": 694187,
+      "1": 208876
+    },
+    "viewer_action_updates": {
+      "0": 33,
+      "1": 29
+    },
+    "viewer_max_support": {
+      "0": 121485,
+      "1": 41806
+    },
+    "identity_stream_sha256": "8d9f46fa86742f323f915ba69bc0007e225415e8fc5504792eac4b49ebae66b6"
+  },
+  "metrics": {
+    "primary": [
+      "posterior_true_hand_mass",
+      "prior_true_hand_mass",
+      "posterior_log_loss_nats",
+      "prior_log_loss_nats",
+      "log_loss_improvement_nats",
+      "truth_mass_ratio"
+    ],
+    "calibration": [
+      "per_card_brier",
+      "per_card_ece",
+      "true_hand_rank",
+      "top_hand_mass",
+      "effective_range_size"
+    ],
+    "claim_boundary": "serially_correlated_single_selected_trace_descriptive_only"
+  },
+  "prediction": {
+    "scope": "each_viewer_opponent_commitment_points",
+    "mean_log_loss_improvement_nats_gt": 0.0,
+    "fraction_posterior_mass_above_prior_gt": 0.55,
+    "failure_policy": "retain_refutation_without_checkpoint_substitution"
+  },
+  "caps": {
+    "workers": 1,
+    "counterfactual_world_rows": 1000000,
+    "wall_seconds": 21600,
+    "core_seconds": 21600,
+    "peak_rss_bytes": 2147483648,
+    "artifact_bytes": 67108864
+  },
+  "expected_runtime": {
+    "world": "w2",
+    "content_digest": "2444fc15283068d79f74d49f8297bdbe3cc581a62a1eee976b35a8cecd8a0ef4",
+    "content_manifest_sha256": "6aee89c2584350228252f0591c758daf60ae44c95a2053df5f8887c73ac58c77",
+    "observation_abi_sha256": "d7da94347d956dd492039d55a10291bcdc1b2605e59f67dfe7af66d3fbbbaaa5",
+    "action_abi_sha256": "9f1290e4db495c9a299df0bbf06f19fd02cf1eabc62b435f8b029ddd5f6257b2",
+    "experience_protocol_sha256": "45ee9d0e7e0d7571510fe910ce6ecfa86db42f667efd12c01fea585aec940b3c",
+    "engine_source_sha256": "00377da74147f3ac20f89df5c707ae4a573113300187e8707617196e2cb01eef",
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "8398c3d0746f9550bb4ce376cb79cd202d37dc8e939767f04a7cb8c6ab9d1515",
+    "int17_source_sha256": "efac123799caad46b21b0204743948e6419cf867ebe85c1156f9a2de76d90165",
+    "semantic_decision_version": 4,
+    "possible_world_space_version": 1
+  },
+  "arena_interpretation": {
+    "better_calibration_no_gain": "planner_use_or_matched_cost_ambiguity",
+    "worse_calibration_and_loss": "likelihood_model_first_suspect",
+    "crossed_result": "ambiguous_no_causal_strength_claim"
+  },
+  "exclusions": [
+    "gameplay_generation",
+    "arena_strength",
+    "checkpoint_selection_after_results",
+    "test_only_likelihood",
+    "belief_head_training",
+    "rules_changes",
+    "new_provider_identities",
+    "additional_matchup_seeds"
+  ]
+}

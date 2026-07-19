@@ -7,6 +7,7 @@ import pytest
 from manabot.belief.audit import (
     aggregate_known_truth,
     score_known_truth,
+    score_paired_known_truth,
     viewer_equivalence_audit,
 )
 from manabot.belief.tracker import BeliefTracker
@@ -53,6 +54,28 @@ def test_known_truth_aggregate_reports_per_definition_calibration() -> None:
     assert set(metrics["per_card"]) == {
         name for name, _ in tracker.posterior.space.pool
     }
+
+
+def test_paired_truth_scores_the_same_hand_and_world_space() -> None:
+    env = _fresh_env(157)
+    viewer = int(env._engine.current_agent_index())
+    tracker = BeliefTracker.from_engine(
+        env._engine, viewer=viewer, likelihood=None, epsilon=0.0
+    )
+
+    point = score_paired_known_truth(env._engine, tracker, game_index=4, step=-1)
+
+    assert point.transition_sequence == 0
+    assert point.posterior.space_id == point.prior.space_id == tracker.space.identity
+    assert point.posterior.belief_digest == tracker.posterior.digest
+    assert point.prior.belief_digest == tracker.prior.digest
+    assert point.posterior.true_world_index == point.prior.true_world_index
+    assert point.posterior.true_hand_probability == pytest.approx(
+        point.prior.true_hand_probability
+    )
+    assert point.log_loss_improvement_nats == pytest.approx(0.0)
+    assert point.truth_mass_ratio == pytest.approx(1.0)
+    assert point.to_dict()["true_hand"] == dict(point.true_hand)
 
 
 def test_viewer_equivalent_exact_hands_hide_authority_differences() -> None:

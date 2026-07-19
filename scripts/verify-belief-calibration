@@ -1,0 +1,31 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+contract=experiments/contracts/int-17-belief-calibration-v1.json
+result_dir=${1:-}
+
+uv run --python 3.12 --extra play maturin develop --release \
+  --manifest-path managym/Cargo.toml --features python
+cargo test --manifest-path managym/Cargo.toml public_commitment --no-fail-fast
+uv run --extra dev pytest -q \
+  tests/belief/test_audit.py \
+  tests/belief/test_player.py \
+  tests/belief/test_tracker.py \
+  tests/etude/test_public_commitment_parity.py \
+  tests/sim/test_belief_calibration_runner.py
+uv run --extra dev python -m etude.public_commitment_parity verify
+uv run --extra dev python experiments/runners/run_belief_calibration.py \
+  --contract "$contract" \
+  --out-dir .runs/int-17-belief-calibration-preflight \
+  --preflight-only
+
+if [ -n "$result_dir" ]; then
+  uv run --extra dev python experiments/runners/run_belief_calibration.py \
+    --contract "$contract" \
+    --out-dir "$result_dir" \
+    --verify-only
+fi

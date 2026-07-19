@@ -67,6 +67,73 @@ class KnownTruthPoint:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class BeliefTruthPoint:
+    """One named belief scored against an authority-only hand witness."""
+
+    true_world_index: int | None
+    true_hand_probability: float
+    true_hand_log_loss: float
+    true_hand_rank: int | None
+    top_hand_mass: float
+    effective_range_size: float
+    belief_digest: str
+    space_id: str
+    cards: tuple[CardCalibrationPoint, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "true_world_index": self.true_world_index,
+            "true_hand_probability": self.true_hand_probability,
+            "true_hand_log_loss": self.true_hand_log_loss,
+            "true_hand_rank": self.true_hand_rank,
+            "top_hand_mass": self.top_hand_mass,
+            "effective_range_size": self.effective_range_size,
+            "belief_digest": self.belief_digest,
+            "space_id": self.space_id,
+            "cards": [card.to_dict() for card in self.cards],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PairedKnownTruthPoint:
+    """Posterior and same-state compatible prior scored on one hidden hand."""
+
+    game_index: int
+    step: int
+    viewer: int
+    transition_sequence: int
+    true_hand: tuple[tuple[str, int], ...]
+    posterior: BeliefTruthPoint
+    prior: BeliefTruthPoint
+
+    @property
+    def log_loss_improvement_nats(self) -> float:
+        return self.prior.true_hand_log_loss - self.posterior.true_hand_log_loss
+
+    @property
+    def truth_mass_ratio(self) -> float:
+        prior_mass = self.prior.true_hand_probability
+        return (
+            self.posterior.true_hand_probability / prior_mass
+            if prior_mass > 0.0
+            else math.inf
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "game_index": self.game_index,
+            "step": self.step,
+            "viewer": self.viewer,
+            "transition_sequence": self.transition_sequence,
+            "true_hand": dict(self.true_hand),
+            "posterior": self.posterior.to_dict(),
+            "prior": self.prior.to_dict(),
+            "log_loss_improvement_nats": self.log_loss_improvement_nats,
+            "truth_mass_ratio": self.truth_mass_ratio,
+        }
+
+
 def authority_hand(engine: Any, tracker: BeliefTracker) -> dict[str, int]:
     """Read truth for audit only; player/tracker never receive this value."""
 
@@ -81,6 +148,33 @@ def authority_hand(engine: Any, tracker: BeliefTracker) -> dict[str, int]:
             "authority hand size does not match the canonical public hand size"
         )
     return counts
+
+
+def _score_belief_truth(
+    belief: BeliefState, hand: Mapping[str, int]
+) -> BeliefTruthPoint:
+    world_index = belief.index_for_hand(hand)
+    probability = belief.probability_at(world_index) if world_index is not None else 0.0
+    inclusions = belief.inclusion_probabilities()
+    cards = tuple(
+        CardCalibrationPoint(
+            card=card,
+            predicted_inclusion=inclusion,
+            present=hand.get(card, 0) > 0,
+        )
+        for card, inclusion in inclusions.items()
+    )
+    return BeliefTruthPoint(
+        true_world_index=world_index,
+        true_hand_probability=probability,
+        true_hand_log_loss=(-math.log(probability) if probability > 0.0 else math.inf),
+        true_hand_rank=belief.rank(world_index) if world_index is not None else None,
+        top_hand_mass=float(np.max(belief.probabilities)),
+        effective_range_size=belief.effective_range_size,
+        belief_digest=belief.digest,
+        space_id=belief.space.identity,
+        cards=cards,
+    )
 
 
 def score_known_truth(
@@ -123,6 +217,31 @@ def score_known_truth(
     )
 
 
+def score_paired_known_truth(
+    engine: Any,
+    tracker: BeliefTracker,
+    *,
+    game_index: int,
+    step: int,
+) -> PairedKnownTruthPoint:
+    """Score the tracked posterior and contemporaneous prior outside play."""
+
+    hand = authority_hand(engine, tracker)
+    posterior = _score_belief_truth(tracker.posterior, hand)
+    prior = _score_belief_truth(tracker.prior, hand)
+    if posterior.space_id != prior.space_id:
+        raise BeliefError("posterior and compatible prior use different spaces")
+    return PairedKnownTruthPoint(
+        game_index=game_index,
+        step=step,
+        viewer=tracker.viewer,
+        transition_sequence=len(tracker.records),
+        true_hand=tuple(sorted(hand.items())),
+        posterior=posterior,
+        prior=prior,
+    )
+
+
 def _ece(points: Iterable[CardCalibrationPoint], bins: int) -> float:
     rows = list(points)
     if not rows:
@@ -142,6 +261,67 @@ def _ece(points: Iterable[CardCalibrationPoint], bins: int) -> float:
             observed = float(np.mean([row.present for row in bucket]))
             weighted_error += len(bucket) * abs(predicted - observed)
     return weighted_error / len(rows)
+
+
+def aggregate_belief_truth(
+    points: Iterable[BeliefTruthPoint], *, bins: int = 10
+) -> dict[str, Any]:
+    """Aggregate authority scores for one named belief arm."""
+
+    rows = list(points)
+    if bins < 1:
+        raise ValueError("calibration bins must be positive")
+    if not rows:
+        return {
+            "points": 0,
+            "mean_true_hand_log_loss": None,
+            "mean_per_card_brier": None,
+            "per_card": {},
+        }
+    card_rows = [card for row in rows for card in row.cards]
+    ranks = [row.true_hand_rank for row in rows if row.true_hand_rank is not None]
+    names = sorted({card.card for card in card_rows})
+    per_card: dict[str, Any] = {}
+    for name in names:
+        selected = [card for card in card_rows if card.card == name]
+        per_card[name] = {
+            "points": len(selected),
+            "brier": float(
+                np.mean(
+                    [
+                        (card.predicted_inclusion - float(card.present)) ** 2
+                        for card in selected
+                    ]
+                )
+            ),
+            "ece": _ece(selected, bins),
+            "mean_predicted_inclusion": float(
+                np.mean([card.predicted_inclusion for card in selected])
+            ),
+            "observed_inclusion": float(np.mean([card.present for card in selected])),
+        }
+    return {
+        "points": len(rows),
+        "mean_true_hand_log_loss": float(
+            np.mean([row.true_hand_log_loss for row in rows])
+        ),
+        "mean_per_card_brier": float(
+            np.mean(
+                [
+                    (card.predicted_inclusion - float(card.present)) ** 2
+                    for card in card_rows
+                ]
+            )
+        ),
+        "per_card_ece": _ece(card_rows, bins),
+        "mean_top_hand_mass": float(np.mean([row.top_hand_mass for row in rows])),
+        "median_true_hand_rank": float(np.median(ranks)) if ranks else None,
+        "mean_effective_range_size": float(
+            np.mean([row.effective_range_size for row in rows])
+        ),
+        "true_hand_outside_support": sum(row.true_world_index is None for row in rows),
+        "per_card": per_card,
+    }
 
 
 def aggregate_known_truth(
@@ -240,11 +420,15 @@ def viewer_equivalence_audit(
 
 
 __all__ = [
+    "aggregate_belief_truth",
+    "BeliefTruthPoint",
     "CardCalibrationPoint",
     "KnownTruthPoint",
+    "PairedKnownTruthPoint",
     "aggregate_known_truth",
     "authority_hand",
     "score_belief_for_hand",
     "score_known_truth",
+    "score_paired_known_truth",
     "viewer_equivalence_audit",
 ]
