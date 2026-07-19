@@ -104,6 +104,22 @@ def test_address_round_trip_and_authorized_restore_are_exact():
         restore_decision(replay, address, authorized_viewer=1)
 
 
+def test_row_address_uses_only_replay_identity_and_exact_decision_row():
+    replay = _replay()
+    row = replay.decisions[0]
+
+    direct = ReplayDecisionAddress.from_row(
+        replay_id=replay.replay_id,
+        match_id=replay.match_id,
+        row=row,
+    )
+
+    assert direct == ReplayDecisionAddress.from_decision(replay, row)
+    assert direct.replay_id == replay.replay_id
+    assert direct.match_id == replay.match_id
+    assert direct.decision_sha256 == row.sha256()
+
+
 @pytest.mark.parametrize("viewer", (0, 1))
 def test_shared_viewer_projection_conforms_to_rust_and_python(viewer):
     payload = json.loads(

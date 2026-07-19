@@ -310,15 +310,17 @@ class ReplayDecisionAddress(ProtocolModel):
         return self
 
     @classmethod
-    def from_decision(
+    def from_row(
         cls,
-        replay: CanonicalReplayV1 | CanonicalReplayProjectionV1,
+        *,
+        replay_id: str,
+        match_id: str,
         row: ReplayDecision,
     ) -> "ReplayDecisionAddress":
         return cls(
             version=CANONICAL_REPLAY_VERSION,
-            replay_id=replay.replay_id,
-            match_id=replay.match_id,
+            replay_id=replay_id,
+            match_id=match_id,
             ordinal=row.ordinal,
             viewer=row.viewer,
             revision=row.revision,
@@ -327,6 +329,18 @@ class ReplayDecisionAddress(ProtocolModel):
             command_id=row.command_id,
             presentation_cursor=row.presentation_cursor,
             decision_sha256=row.sha256(),
+        )
+
+    @classmethod
+    def from_decision(
+        cls,
+        replay: CanonicalReplayV1 | CanonicalReplayProjectionV1,
+        row: ReplayDecision,
+    ) -> "ReplayDecisionAddress":
+        return cls.from_row(
+            replay_id=replay.replay_id,
+            match_id=replay.match_id,
+            row=row,
         )
 
     def serialize(self) -> str:

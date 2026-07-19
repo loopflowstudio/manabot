@@ -1,0 +1,28 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels
+uv run python - <<'PY'
+from pathlib import Path
+from zipfile import ZipFile
+
+root = Path.cwd()
+wheel = max(
+    (root / "managym/target/wheels").glob("managym-*-cp312-*.whl"),
+    key=lambda path: path.stat().st_mtime_ns,
+)
+with ZipFile(wheel) as archive:
+    member = next(
+        name
+        for name in archive.namelist()
+        if name.startswith("managym/_managym") and name.endswith(".so")
+    )
+    target = root / "managym" / Path(member).name
+    target.write_bytes(archive.read(member))
+PY
+
+uv run --extra dev experiments/runners/run_rul12_release_stack_budget.py --verify

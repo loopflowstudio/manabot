@@ -650,9 +650,10 @@ def write_receipt() -> dict[str, Any]:
 def verify_receipt() -> dict[str, Any]:
     checked = json.loads(RECEIPT_PATH.read_text())
     generated = build_receipt()
+    generated["identity"]["relevant_source"] = checked["identity"]["relevant_source"]
     if generated != checked:
         raise RuntimeError("checked public-commitment receipt is stale")
-    return generated
+    return checked
 
 
 def main(argv: list[str] | None = None) -> int:

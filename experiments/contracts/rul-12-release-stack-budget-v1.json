@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "experiment": "rul-12-release-stack-budget-v1",
+  "claim": "current_release_stack_and_selected_branchdriver_training_fit_unchanged_product_budgets",
+  "representation_decision": "retain full_clone/current_game_v1",
+  "release": {
+    "matchup": "ur-lessons-vs-gw-allies",
+    "seed": 0,
+    "surfaces": [
+      "live",
+      "headless",
+      "replay"
+    ],
+    "warmups": 1,
+    "repetitions": 10,
+    "commands_per_game": 132,
+    "authority_receipt_sha256": "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147",
+    "parity_receipt_sha256": "2d63cc2433d5643f6d0621b34a1fdbe80a77e6535eb3cba947b451e673db3096",
+    "public_commitment_receipt_sha256": "4522794188d4a93eb49a9fd6862ddd1d1345dd127a4a1fbb62dae9a5ad2f57da",
+    "terminal_state_sha256": "e48de247d72f816cee9de64d596c79504e16564e003f65bf86d65ac887ae2de7",
+    "latency_boundary": "TestClient WebSocket client send through accepted acknowledgment",
+    "summary_cache": false,
+    "terminal_persistence": "synchronous and inside measured game"
+  },
+  "training": {
+    "provider": "rul-2-selected-branchdriver-teacher-v1",
+    "cell": "saturated-4x128-v1",
+    "driver": "full_clone/current_game_v1",
+    "workers": 4,
+    "simulations": 128,
+    "worlds": 4,
+    "deal_seeds": [
+      1197,
+      1419,
+      1887,
+      2197
+    ],
+    "seat_assignment": "alternating-ur-seat-v1",
+    "max_steps": 2000,
+    "max_decisions": 500,
+    "rss_interval_seconds": 0.005
+  },
+  "expected_inputs": {
+    "semantic_ir_file_sha256": "73070b743d938765c0b571374d7fc1c4a3c9efa92cad5795968dd1bc3a445f85",
+    "semantic_source_file_sha256": "8154ebe3277443e45ba91c5ffc8b312eb602900dfd0e2d0d70491362a96a6990",
+    "learning_schema_file_sha256": "a156c592414d0d4838c5423e2cb471fc49a4450f21d62e5e5c198ba948ae7034"
+  },
+  "authority_fallback_counters": [
+    "legacy_fixed_action",
+    "card_name_dispatch",
+    "candidate_cap",
+    "client_legality"
+  ],
+  "training_fallback_counters": [
+    "indexed_fallbacks",
+    "root_cap_hits",
+    "random_playout_cap_hits"
+  ],
+  "budgets": {
+    "release": {
+      "live_command_p95_ms_max": 100.0,
+      "inner_command_p95_ms_max": 10.0,
+      "engine_steps_per_second_min": 500.0,
+      "live_games_per_second_min": 1.0,
+      "peak_rss_bytes_max": 536870912
+    },
+    "training": {
+      "steps_per_second_min": 4.0,
+      "traversals_per_second_min": 512.0,
+      "games_per_second_min": 0.04,
+      "puct_p95_ms_max": 2000.0,
+      "command_p95_ms_max": 10.0,
+      "peak_rss_bytes_max": 2147483648
+    },
+    "semantic": {
+      "catalog_tokens_max": 4096,
+      "definition_tokens_max": 160,
+      "visible_references_max": 128,
+      "overflow_count_max": 0
+    }
+  },
+  "current_proofs": {
+    "authored_match_parity": {
+      "path": "conformance/authored-match-parity-v1/release-live-headless-replay-seed-0.json",
+      "file_sha256": "2d63cc2433d5643f6d0621b34a1fdbe80a77e6535eb3cba947b451e673db3096"
+    },
+    "public_commitment_parity": {
+      "path": "conformance/public-commitment-parity-v1/release-live-replay-hypothesis-seed-0.json",
+      "file_sha256": "4522794188d4a93eb49a9fd6862ddd1d1345dd127a4a1fbb62dae9a5ad2f57da"
+    }
+  },
+  "frozen_inputs": {
+    "rul9_measurement_origin": {
+      "path": "experiments/data/rul-9-played-workloads-v1.measurement.json",
+      "file_sha256": "9a3933a570772e8d3e04b59526faaf1d51b5fc0e26ba8c02e08eae36599bc951",
+      "artifact_sha256": "498df1eda031f1d6ea68f72f792dfd68195bb10eab884b006aa7772b586564da",
+      "rerun": false
+    },
+    "rul9_derivation_receipt": {
+      "path": "experiments/data/rul-9-played-workloads-v1.json",
+      "file_sha256": "e42934f26ea590b8dbc3fcb3fe96c723aa244f79a2fab2b9ed6cd52033f83989",
+      "artifact_sha256": "21fb0d66416ed0f897fb954ced69f71841e136984e2d83869c4806bfc4b707d7",
+      "rerun": false
+    },
+    "rul9_contract": {
+      "path": "experiments/contracts/rul-9-played-workloads-v1.json",
+      "file_sha256": "49ea8b5729ba23418067797974dfadd0bdcf263a03a34bf358b51fe9939db067",
+      "rerun": false
+    },
+    "rul9_report": {
+      "path": "experiments/rul-9-played-workloads-v1.md",
+      "file_sha256": "1f36bb6925c2443274b7f116a939c3c1b5a431726755aa5d08925d73e2f1f2d7",
+      "rerun": false
+    }
+  },
+  "limitations": [
+    "one fixed release seed",
+    "four fixed production training games",
+    "single-host TestClient ASGI transport rather than an external network",
+    "no content, public-commitment, or representation change"
+  ]
+}

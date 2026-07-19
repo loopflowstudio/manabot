@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 
 from fastapi.testclient import TestClient
 
 from etude import server, trace as trace_store
+from etude.authored_match_receipt import play_fixed_authored_match
 from etude.server import app
 
 CONFIG = {
@@ -66,6 +68,47 @@ def _authority_fingerprint(record: server.SessionRecord) -> dict:
         "shared_beliefs": deepcopy(record.shared_beliefs),
         "attempts": tuple(sorted(game._study_attempts)),
     }
+
+
+def _canonical_bytes(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
+def test_live_decision_summaries_match_full_replay_without_reconstruction(
+    monkeypatch,
+):
+    game, _ = play_fixed_authored_match()
+    record = server.SessionRecord(
+        session_id="summary-characterization",
+        resume_token="summary-characterization-token",
+        game=game,
+    )
+    projection = server.project_replay(
+        game.canonical_replay(), server.HERO_PLAYER_INDEX
+    )
+    addressed = server.projection_with_addresses(projection)
+    expected = [
+        {
+            "address": decision["address"],
+            "ordinal": decision["ordinal"],
+            "revision": decision["revision"],
+            "prompt_id": decision["prompt_id"],
+            "offer_id": decision["offer_id"],
+        }
+        for decision in addressed["decisions"]
+    ]
+    assert len(game.canonical_decisions) == 132
+    assert len(expected) == 55
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("table summaries reconstructed a canonical replay")
+
+    monkeypatch.setattr(server.GameSession, "canonical_replay", forbidden)
+    monkeypatch.setattr(server, "project_replay", forbidden)
+    monkeypatch.setattr(server, "projection_with_addresses", forbidden)
+
+    actual = server._live_decision_summaries(record)
+    assert _canonical_bytes(actual) == _canonical_bytes(expected)
 
 
 def _open_table(client: TestClient):

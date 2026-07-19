@@ -57,6 +57,7 @@ from .replay_index import (
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecision,
+    ReplayDecisionAddress,
     RestoredReplayDecision,
     ViewerPresentationTrack,
     canonical_projection_sha256,
@@ -2365,19 +2366,20 @@ def _visible_beliefs(
 
 
 def _live_decision_summaries(record: SessionRecord) -> list[dict[str, Any]]:
-    if not record.game.canonical_decisions:
-        return []
-    projection = project_replay(record.game.canonical_replay(), HERO_PLAYER_INDEX)
-    addressed = projection_with_addresses(projection)
     return [
         {
-            "address": decision["address"],
-            "ordinal": decision["ordinal"],
-            "revision": decision["revision"],
-            "prompt_id": decision["prompt_id"],
-            "offer_id": decision["offer_id"],
+            "address": ReplayDecisionAddress.from_row(
+                replay_id=f"replay.{record.game.match_id}",
+                match_id=record.game.match_id,
+                row=decision,
+            ).serialize(),
+            "ordinal": decision.ordinal,
+            "revision": decision.revision,
+            "prompt_id": decision.prompt_id,
+            "offer_id": decision.offer_id,
         }
-        for decision in addressed["decisions"]
+        for decision in record.game.canonical_decisions
+        if decision.viewer == HERO_PLAYER_INDEX
     ]
 
 

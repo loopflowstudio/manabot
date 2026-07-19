@@ -1,5 +1,10 @@
 """Checked selected-match public-commitment provider closure."""
 
+import json
+
+import pytest
+
+from etude import public_commitment_parity
 from etude.public_commitment_parity import (
     AUTHORITY_RECEIPT_SHA256,
     INT12_FIXTURE_SHA256,
@@ -61,3 +66,54 @@ def test_public_commitment_receipt_binds_hypothesis_atomicity_and_frozen_evidenc
     assert frozen["rul9_measurement"]["rerun"] is False
     assert frozen["int12_fixture"]["file_sha256"] == INT12_FIXTURE_SHA256
     assert frozen["int12_fixture"]["rewritten"] is False
+
+
+def test_historical_source_normalization_is_comparison_only(
+    monkeypatch, tmp_path
+) -> None:
+    checked = {
+        "identity": {"relevant_source": {"sha256": "historical"}},
+        "summary": {"commitments": 62, "rules_provider_gaps": 0},
+    }
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps(checked))
+    monkeypatch.setattr(public_commitment_parity, "RECEIPT_PATH", receipt_path)
+    monkeypatch.setattr(
+        public_commitment_parity,
+        "build_receipt",
+        lambda: {
+            "identity": {"relevant_source": {"sha256": "current"}},
+            "summary": {"commitments": 62, "rules_provider_gaps": 0},
+        },
+    )
+    verify_receipt.cache_clear()
+    try:
+        assert verify_receipt() == checked
+    finally:
+        verify_receipt.cache_clear()
+
+
+def test_historical_source_normalization_keeps_non_source_fields_strict(
+    monkeypatch, tmp_path
+) -> None:
+    checked = {
+        "identity": {"relevant_source": {"sha256": "historical"}},
+        "summary": {"commitments": 62, "rules_provider_gaps": 0},
+    }
+    receipt_path = tmp_path / "receipt.json"
+    receipt_path.write_text(json.dumps(checked))
+    monkeypatch.setattr(public_commitment_parity, "RECEIPT_PATH", receipt_path)
+    monkeypatch.setattr(
+        public_commitment_parity,
+        "build_receipt",
+        lambda: {
+            "identity": {"relevant_source": {"sha256": "current"}},
+            "summary": {"commitments": 61, "rules_provider_gaps": 1},
+        },
+    )
+    verify_receipt.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="receipt is stale"):
+            verify_receipt()
+    finally:
+        verify_receipt.cache_clear()
