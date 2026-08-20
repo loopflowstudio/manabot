@@ -1,12 +1,22 @@
 """Behavioral proof for supervised exact-world belief learning."""
 
-import numpy as np
+import json
 
+import numpy as np
+import pytest
+
+from manabot.belief.demo import _runtime_env
+from manabot.belief.encoding import belief_schema_from_engine
 from manabot.belief.learning import (
     BeliefTrainingExample,
+    capture_materialized_world_supervision,
     pack_belief_examples,
 )
 from manabot.belief.learning_demo import run_demo
+from manabot.belief.range import BeliefError
+from manabot.belief.state import ViewerHistory
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
 
@@ -35,6 +45,37 @@ def test_ragged_training_batch_uses_exact_combinatorial_p0() -> None:
     assert np.allclose(
         packed.log_p0[:support].exp().numpy(), expected, atol=1e-15, rtol=0.0
     )
+
+
+def test_supervision_rejects_an_authority_engine_from_another_revision() -> None:
+    env, _ = _runtime_env()
+    engine = env._engine
+    viewer = int(engine.current_agent_index())
+    observation = Observation.from_json(engine.semantic_observation_json(viewer))
+    history = ViewerHistory.from_observation(observation)
+    space = PossibleWorldSpace.from_engine(engine, viewer)
+    schema = belief_schema_from_engine(
+        engine,
+        space,
+        count_buckets=max(2, max(count for _, count in space.pool) + 1),
+    )
+
+    class MismatchedAuthority:
+        def semantic_observation_json(self, requested_viewer: int) -> str:
+            payload = json.loads(engine.semantic_observation_json(requested_viewer))
+            payload["identity"]["revision"] += 1
+            return json.dumps(payload)
+
+        def observation_for_player(self, player: int):
+            return engine.observation_for_player(player)
+
+    with pytest.raises(BeliefError, match="authority revision"):
+        capture_materialized_world_supervision(
+            MismatchedAuthority(),
+            world_space=space,
+            viewer_history=history,
+            schema=schema,
+        )
 
 
 def test_real_engine_fresh_model_overfits_without_truth_at_inference() -> None:

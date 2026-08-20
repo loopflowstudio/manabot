@@ -24,6 +24,7 @@ from manabot.belief.state import (
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
+from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace
 
 DEFAULT_HISTORY_FEATURES = 64
@@ -107,6 +108,19 @@ def capture_materialized_world_supervision(
     """Capture the authority hand behind an access-controlled training boundary."""
 
     _validate_input(world_space, viewer_history, schema)
+    authority_observation = Observation.from_json(
+        engine.semantic_observation_json(world_space.viewer)
+    )
+    if authority_observation.viewer != world_space.viewer:
+        raise BeliefError("supervision authority changed the world-space viewer")
+    if authority_observation.revision != world_space.source_revision:
+        raise BeliefError(
+            "supervision authority revision does not match the world space"
+        )
+    if authority_observation.viewer_state_hash != world_space.source_viewer_state_hash:
+        raise BeliefError(
+            "supervision authority observation does not match the world space"
+        )
     authority_view = engine.observation_for_player(world_space.opponent)
     true_hand: dict[str, int] = {}
     for card in authority_view.agent_cards:

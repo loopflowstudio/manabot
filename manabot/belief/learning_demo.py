@@ -143,12 +143,15 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
     )
     alternate_engine = space.materialize(alternate_index, seed=seed + 1)
     alternate_observation = alternate_engine.semantic_observation_json(viewer)
-    alternate_space = PossibleWorldSpace.from_engine(alternate_engine, viewer)
-    alternate_belief = trained.model.update(
-        previous=None,
-        world_space=alternate_space,
-        viewer_history=history,
-    ).belief
+    alternate_encoded_observation = env.obs_space.encode(
+        alternate_engine.observation_for_player(viewer)
+    )
+    alternate_decision = viewer_decision_from_engine(
+        alternate_engine,
+        alternate_encoded_observation,
+        history,
+    )
+    alternate = manabot.decide(alternate_decision, AgentMemory())
 
     return {
         "proof": "fresh-model-supervised-exact-world-overfit",
@@ -189,8 +192,10 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
         ),
         "viewer_hidden_swap_identical": (
             engine.semantic_observation_json(viewer) == alternate_observation
-            and alternate_space.identity == space.identity
-            and alternate_belief.digest == learned.digest
+            and alternate_decision.world_space.identity == space.identity
+            and alternate.belief_update.belief.digest == learned.digest
+            and alternate.result.output_bytes == autonomous.result.output_bytes
+            and alternate.command == autonomous.command
         ),
         "model_identity": trained.model.identity,
         "belief_update_receipt": autonomous.belief_update.update_receipt.identity,
