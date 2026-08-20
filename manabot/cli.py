@@ -57,6 +57,23 @@ def belief_demo_command() -> None:
     run_belief_demo()
 
 
+@app.command("belief-learn-demo")
+def belief_learn_demo_command(
+    steps: int = typer.Option(
+        80,
+        min=1,
+        max=256,
+        help="Bounded fresh-model overfit steps",
+    ),
+    seed: int = typer.Option(197, help="Fresh model and materialization seed"),
+) -> None:
+    """Fit a fresh belief model to one authority-only hidden-world label."""
+
+    from manabot.belief.learning_demo import main as run_belief_learn_demo
+
+    run_belief_learn_demo(steps=steps, seed=seed)
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     if argv is None:
         app()
