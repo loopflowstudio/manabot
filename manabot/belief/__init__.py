@@ -26,6 +26,7 @@ _EXPORTS = {
     "PolicyValueResult": "manabot.belief.agent",
     "ViewerDecision": "manabot.belief.agent",
     "ViewerHistory": "manabot.belief.state",
+    "ViewerHistoryEvent": "manabot.belief.state",
     "belief_schema_from_engine": "manabot.belief.encoding",
     "capture_materialized_world_supervision": "manabot.belief.learning",
     "condition_belief": "manabot.belief.state",

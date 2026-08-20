@@ -12,10 +12,17 @@
   the old loader bytes. They are not rewritten or ported; future experiment
   models and frozen evidence are regenerated under the exact schema-bound
   checkpoint ABI.
-- The supervised belief slice uses deterministic hashed features of canonical
-  `ViewerHistory.events`. The current viewer-history contract exposes event
-  digests rather than decoded event semantics, so the bounded overfit proves
-  exact-world NLL, authority isolation, and runtime wiring—not generalization
-  from card/action meaning. A held-out learned-belief continuation should first
-  add a schema-bound semantic history projection and then evaluate by whole
-  match and opponent version.
+- managym has no mulligan or opening-hand `Keep(k)` event. `ScryKeep` is a
+  different in-game action and cannot stand in for that missing rule. The
+  smallest current typed policy-dependent seam is managym's
+  `PublicCommitment`: pass, cast, play-land, discard, or decline-discard with
+  canonical public card names where applicable. Learned belief history now
+  consumes those viewer-relative typed commitments and binds their closed kind
+  set and card vocabulary in its schema; opaque event and command identities
+  remain receipt evidence only.
+- A standalone mid-game semantic `Observation` still carries only event
+  identities, not the decoded earlier `PublicCommitment` sequence. The learned
+  updater therefore generalizes over histories captured from the initial root
+  and advanced through canonical transition receipts. Supporting arbitrary
+  mid-game attachment requires a managym-owned semantic-history replay
+  projection; this slice does not reconstruct meaning from hashes.

@@ -173,14 +173,17 @@ class ManabotPlayer:
     def observe_step(
         self, env: Any, acting: int, transition: SemanticTransition
     ) -> None:
-        del acting
         if self.viewer is None or self.history is None:
             raise RuntimeError("start_game must run before ManabotPlayer.observe_step")
         engine = _engine(env)
         observation = Observation.from_json(
             engine.semantic_observation_json(self.viewer)
         )
-        self.history = self.history.advance(transition.receipt, observation)
+        self.history = self.history.advance(
+            transition.receipt,
+            observation,
+            acting=acting,
+        )
 
 
 __all__ = ["ManabotPlayer", "viewer_decision_from_engine"]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from typing import Any
 
@@ -52,8 +53,12 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
     current_observation = Observation.from_json(
         engine.semantic_observation_json(viewer)
     )
-    history = initial_history.advance(transition.receipt, current_observation)
-    if not history.events:
+    history = initial_history.advance(
+        transition.receipt,
+        current_observation,
+        acting=public_actor,
+    )
+    if not history.semantic_events:
         raise RuntimeError("belief-learning demo needs an informative public event")
     for pass_index in range(64):
         frame = DecisionFrame.from_json(engine.semantic_decision_frame_json())
@@ -77,7 +82,11 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
         current_observation = Observation.from_json(
             engine.semantic_observation_json(viewer)
         )
-        history = history.advance(transition.receipt, current_observation)
+        history = history.advance(
+            transition.receipt,
+            current_observation,
+            acting=frame.actor,
+        )
     else:
         raise RuntimeError("belief-learning demo did not reach the viewer decision")
     space = PossibleWorldSpace.from_engine(engine, viewer)
@@ -102,6 +111,32 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
         viewer_history=history,
     ).belief
     learned_probability = learned.probability_at(example.target_world)
+
+    artifact_variant_history = replace(
+        history,
+        initial_observation_identity="f" * 64,
+        events=tuple(f"{index:064x}" for index, _ in enumerate(history.events, 1)),
+    )
+    artifact_variant = trained.model.update(
+        previous=None,
+        world_space=space,
+        viewer_history=artifact_variant_history,
+    ).belief
+    no_semantic_history = replace(history, semantic_events=())
+    no_semantic_update = trained.model.update(
+        previous=None,
+        world_space=space,
+        viewer_history=no_semantic_history,
+    ).belief
+    reference_current = (
+        CompatibleDealBeliefModel()
+        .update(
+            previous=None,
+            world_space=space,
+            viewer_history=no_semantic_history,
+        )
+        .belief
+    )
 
     reference_initial = (
         CompatibleDealBeliefModel()
@@ -159,7 +194,13 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
         "training_examples": 1,
         "support_size": space.support_size,
         "viewer": viewer,
-        "viewer_history_events": len(history.events),
+        "viewer_history_events": len(history.semantic_events),
+        "viewer_history_event_identities": len(history.events),
+        "semantic_public_history": [
+            event.to_payload() for event in history.semantic_events
+        ],
+        "semantic_history_schema_identity": trained.model.history_schema_identity,
+        "history_representation": "typed-public-commitment-sequence",
         "first_informative_action_by_opponent": public_actor != viewer,
         "inference_inputs": ["possible_world_space", "viewer_history"],
         "supervision_access": "authority-only-materialized-world",
@@ -182,6 +223,24 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
             np.array_equal(
                 reference_initial.probabilities,
                 learned_initial.probabilities,
+            )
+        ),
+        "artifact_identity_invariant": (
+            artifact_variant_history.identity != history.identity
+            and artifact_variant.digest == learned.digest
+            and np.array_equal(
+                artifact_variant.probabilities,
+                learned.probabilities,
+            )
+        ),
+        "semantic_history_changes_distribution": (
+            np.array_equal(
+                no_semantic_update.probabilities,
+                reference_current.probabilities,
+            )
+            and not np.array_equal(
+                no_semantic_update.probabilities,
+                learned.probabilities,
             )
         ),
         "ordinary_agent_used_learned_belief": (

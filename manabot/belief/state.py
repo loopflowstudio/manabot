@@ -10,8 +10,16 @@ from typing import Protocol
 import numpy as np
 
 from manabot.belief.range import BeliefError, BeliefState
-from managym.decision import Observation, TransitionReceipt
+from managym.decision import (
+    Observation,
+    PublicCommitment,
+    SemanticContractError,
+    TransitionReceipt,
+)
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+
+VIEWER_ACTOR_ROLE_ID = 0
+OPPONENT_ACTOR_ROLE_ID = 1
 
 
 def _digest(payload: object) -> str:
@@ -19,6 +27,42 @@ def _digest(payload: object) -> str:
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     ).encode("ascii")
     return hashlib.sha256(encoded).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class ViewerHistoryEvent:
+    """One typed public commitment relative to the observing player."""
+
+    actor_role_id: int
+    commitment: PublicCommitment
+
+    @classmethod
+    def from_transition(
+        cls,
+        *,
+        viewer: int,
+        acting: int,
+        receipt: TransitionReceipt,
+    ) -> "ViewerHistoryEvent | None":
+        if acting == viewer:
+            actor_role_id = VIEWER_ACTOR_ROLE_ID
+        elif acting == (viewer + 1) % 2:
+            actor_role_id = OPPONENT_ACTOR_ROLE_ID
+        else:
+            raise BeliefError("transition actor is outside the viewer-relative game")
+        if receipt.public_commitment is None:
+            return None
+        try:
+            commitment = PublicCommitment.from_payload(receipt.public_commitment)
+        except SemanticContractError as error:
+            raise BeliefError(str(error)) from error
+        return cls(actor_role_id=actor_role_id, commitment=commitment)
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "actor_role_id": self.actor_role_id,
+            "commitment": self.commitment.to_payload(),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +75,7 @@ class ViewerHistory:
     current_revision: int
     current_viewer_state_hash: str
     events: tuple[str, ...]
+    semantic_events: tuple[ViewerHistoryEvent, ...]
 
     @classmethod
     def from_observation(cls, observation: Observation) -> "ViewerHistory":
@@ -49,12 +94,15 @@ class ViewerHistory:
             current_revision=observation.revision,
             current_viewer_state_hash=observation.viewer_state_hash,
             events=observation.events,
+            semantic_events=(),
         )
 
     def advance(
         self,
         receipt: TransitionReceipt,
         observation: Observation,
+        *,
+        acting: int,
     ) -> "ViewerHistory":
         """Append one native transition and bind the resulting Observation."""
 
@@ -68,6 +116,11 @@ class ViewerHistory:
             raise BeliefError("observation changed the viewer-history viewer")
         if observation.revision != receipt.after_revision:
             raise BeliefError("observation does not match the transition revision")
+        semantic_event = ViewerHistoryEvent.from_transition(
+            viewer=self.viewer,
+            acting=acting,
+            receipt=receipt,
+        )
         return ViewerHistory(
             schema_version=self.schema_version,
             viewer=self.viewer,
@@ -75,6 +128,11 @@ class ViewerHistory:
             current_revision=observation.revision,
             current_viewer_state_hash=observation.viewer_state_hash,
             events=(*self.events, *receipt.events),
+            semantic_events=(
+                self.semantic_events
+                if semantic_event is None
+                else (*self.semantic_events, semantic_event)
+            ),
         )
 
     @property
@@ -91,6 +149,9 @@ class ViewerHistory:
                     self.current_viewer_state_hash,
                 ),
                 "events": self.events,
+                "semantic_events": tuple(
+                    event.to_payload() for event in self.semantic_events
+                ),
             }
         )
 
@@ -243,9 +304,7 @@ def condition_belief(
         )
     conditioned = np.zeros_like(probabilities)
     conditioned[selected] = probabilities[selected] / mass
-    return BeliefState.from_probabilities(
-        belief.space, belief.model_id, conditioned
-    )
+    return BeliefState.from_probabilities(belief.space, belief.model_id, conditioned)
 
 
 __all__ = [
@@ -256,7 +315,10 @@ __all__ = [
     "BeliefUpdateReceipt",
     "CompatibleDealBeliefModel",
     "EmptyBeliefSupport",
+    "OPPONENT_ACTOR_ROLE_ID",
+    "VIEWER_ACTOR_ROLE_ID",
     "ViewerHistory",
+    "ViewerHistoryEvent",
     "condition_belief",
     "query_mass",
 ]

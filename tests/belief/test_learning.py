@@ -42,6 +42,9 @@ def test_ragged_training_batch_uses_exact_combinatorial_p0() -> None:
     assert packed.offsets.tolist() == [0, support, 2 * support]
     assert packed.world_batch.tolist() == [0] * support + [1] * support
     assert packed.target_world.tolist() == [1, 3]
+    assert packed.history_actor_role_ids.numel() == 0
+    assert packed.history_kind_ids.numel() == 0
+    assert packed.history_card_indexes.numel() == 0
     assert np.allclose(
         packed.log_p0[:support].exp().numpy(), expected, atol=1e-15, rtol=0.0
     )
@@ -79,17 +82,24 @@ def test_supervision_rejects_an_authority_engine_from_another_revision() -> None
 
 
 def test_real_engine_fresh_model_overfits_without_truth_at_inference() -> None:
-    evidence = run_demo(steps=40, seed=197)
+    evidence = run_demo(steps=48, seed=197)
 
     assert evidence["proof"] == "fresh-model-supervised-exact-world-overfit"
     assert evidence["support_size"] == 4_865
     assert evidence["training_examples"] == 1
     assert evidence["viewer_history_events"] > 0
+    assert evidence["viewer_history_event_identities"] > 0
+    assert evidence["history_representation"] == "typed-public-commitment-sequence"
+    assert evidence["semantic_public_history"][0]["commitment"]["kind"] == ("play_land")
+    assert evidence["semantic_public_history"][0]["actor_role_id"] == 1
+    assert len(evidence["semantic_history_schema_identity"]) == 64
     assert evidence["first_informative_action_by_opponent"] is True
     assert evidence["inference_inputs"] == ["possible_world_space", "viewer_history"]
     assert evidence["supervision_access"] == "authority-only-materialized-world"
     assert evidence["fresh_model_started_at_p0"] is True
     assert evidence["preinformative_exact_p0"] is True
+    assert evidence["artifact_identity_invariant"] is True
+    assert evidence["semantic_history_changes_distribution"] is True
     assert evidence["final_nll"] < 0.02
     assert evidence["initial_nll"] - evidence["final_nll"] > 9.0
     assert evidence["learned_true_world_probability"] > 0.99

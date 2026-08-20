@@ -16,14 +16,14 @@ from manabot.belief import (
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentHypers
 from manabot.model import Agent
-from managym.decision import Command, Observation
+from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
 from managym.possible_worlds import PossibleWorldSpace
 
 
 def fixture_history() -> ViewerHistory:
     return ViewerHistory.from_observation(
         Observation(
-            schema_version=4,
+            schema_version=SEMANTIC_DECISION_VERSION,
             revision=17,
             viewer=0,
             viewer_state_hash="retained-viewer-state-17",

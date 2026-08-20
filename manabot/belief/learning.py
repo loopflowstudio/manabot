@@ -8,7 +8,6 @@ import json
 import math
 from typing import Any, Iterable, Sequence
 
-import numpy as np
 import torch
 from torch import nn
 
@@ -19,15 +18,21 @@ from manabot.belief.encoding import (
 )
 from manabot.belief.range import BeliefError, BeliefState
 from manabot.belief.state import (
+    OPPONENT_ACTOR_ROLE_ID,
+    VIEWER_ACTOR_ROLE_ID,
     BeliefUpdate,
     BeliefUpdateReceipt,
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
-from managym.decision import Observation
+from managym.decision import (
+    PUBLIC_COMMITMENT_KINDS,
+    SEMANTIC_DECISION_VERSION,
+    Observation,
+)
 from managym.possible_worlds import PossibleWorldSpace
 
-DEFAULT_HISTORY_FEATURES = 64
+SEMANTIC_HISTORY_SCHEMA = "manabot.viewer-public-commitment-history/v1"
 
 
 def _digest(payload: object) -> str:
@@ -52,6 +57,8 @@ def _validate_input(
         raise BeliefError("world space does not match the belief-learning schema")
     if space.content_manifest_identity != schema.content_manifest_identity:
         raise BeliefError("world space changed the belief-learning content manifest")
+    if history.schema_version != SEMANTIC_DECISION_VERSION:
+        raise BeliefError("viewer history changed the semantic decision schema")
 
 
 def _card_vocabulary(schema: BeliefEncodingSchema) -> tuple[tuple[int, str], ...]:
@@ -68,24 +75,18 @@ def _card_vocabulary(schema: BeliefEncodingSchema) -> tuple[tuple[int, str], ...
     return rows
 
 
-def _history_features(history: ViewerHistory, *, feature_count: int) -> np.ndarray:
-    if feature_count < 8:
-        raise BeliefError("belief history feature count must be at least eight")
-    features = np.zeros(feature_count, dtype=np.float32)
-    features[0] = 1.0
-    features[1] = float(history.viewer)
-    features[2] = math.log1p(history.current_revision) / 8.0
-    features[3] = math.log1p(len(history.events)) / 4.0
-    if history.events:
-        scale = 1.0 / math.sqrt(len(history.events))
-        for position, event in enumerate(history.events):
-            event_digest = hashlib.sha256(
-                f"{position}:{event}".encode("ascii")
-            ).digest()
-            bucket = 4 + int.from_bytes(event_digest[:2], "big") % (feature_count - 4)
-            sign = 1.0 if event_digest[2] & 1 else -1.0
-            features[bucket] += sign * scale
-    return features
+def semantic_history_schema_identity(schema: BeliefEncodingSchema) -> str:
+    """Bind public-event tokens to managym semantics and the card vocabulary."""
+
+    return _digest(
+        {
+            "schema": SEMANTIC_HISTORY_SCHEMA,
+            "semantic_decision_version": SEMANTIC_DECISION_VERSION,
+            "actor_roles": (VIEWER_ACTOR_ROLE_ID, OPPONENT_ACTOR_ROLE_ID),
+            "commitment_kinds": PUBLIC_COMMITMENT_KINDS,
+            "card_vocabulary": _card_vocabulary(schema),
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,14 +165,16 @@ class PackedBeliefBatch:
     world_batch: torch.Tensor
     offsets: torch.Tensor
     target_world: torch.Tensor
-    history_features: torch.Tensor
+    history_actor_role_ids: torch.Tensor
+    history_kind_ids: torch.Tensor
+    history_card_indexes: torch.Tensor
+    history_batch: torch.Tensor
 
 
 def _pack_inputs(
     inputs: Sequence[tuple[PossibleWorldSpace, ViewerHistory]],
     schema: BeliefEncodingSchema,
     *,
-    feature_count: int,
     targets: Sequence[int] | None,
 ) -> PackedBeliefBatch:
     if not inputs:
@@ -182,7 +185,12 @@ def _pack_inputs(
     log_p0: list[float] = []
     world_batch: list[int] = []
     offsets = [0]
-    histories: list[np.ndarray] = []
+    history_actor_roles: list[int] = []
+    history_kinds: list[int] = []
+    history_cards: list[int] = []
+    history_batch: list[int] = []
+    kind_ids = {kind: index for index, kind in enumerate(PUBLIC_COMMITMENT_KINDS)}
+    card_ids = {name: index + 1 for index, name in enumerate(names)}
     for decision_index, (space, history) in enumerate(inputs):
         _validate_input(space, history, schema)
         for world in space.worlds:
@@ -190,7 +198,24 @@ def _pack_inputs(
             log_p0.append(math.log(world.weight) - math.log(space.total_weight))
             world_batch.append(decision_index)
         offsets.append(len(count_rows))
-        histories.append(_history_features(history, feature_count=feature_count))
+        for event in history.semantic_events:
+            if event.actor_role_id not in {
+                VIEWER_ACTOR_ROLE_ID,
+                OPPONENT_ACTOR_ROLE_ID,
+            }:
+                raise BeliefError("semantic history has an unknown actor role")
+            kind = event.commitment.kind
+            if kind not in kind_ids:
+                raise BeliefError("semantic history has an unknown commitment kind")
+            card_name = event.commitment.card
+            if card_name is not None and card_name not in card_ids:
+                raise BeliefError(
+                    "semantic history card is outside the bound content vocabulary"
+                )
+            history_actor_roles.append(event.actor_role_id)
+            history_kinds.append(kind_ids[kind])
+            history_cards.append(0 if card_name is None else card_ids[card_name])
+            history_batch.append(decision_index)
     target_values = (
         [-1] * len(inputs) if targets is None else [int(target) for target in targets]
     )
@@ -206,15 +231,16 @@ def _pack_inputs(
         world_batch=torch.tensor(world_batch, dtype=torch.int64),
         offsets=torch.tensor(offsets, dtype=torch.int64),
         target_world=torch.tensor(target_values, dtype=torch.int64),
-        history_features=torch.from_numpy(np.stack(histories)),
+        history_actor_role_ids=torch.tensor(history_actor_roles, dtype=torch.int64),
+        history_kind_ids=torch.tensor(history_kinds, dtype=torch.int64),
+        history_card_indexes=torch.tensor(history_cards, dtype=torch.int64),
+        history_batch=torch.tensor(history_batch, dtype=torch.int64),
     )
 
 
 def pack_belief_examples(
     examples: Iterable[BeliefTrainingExample],
     schema: BeliefEncodingSchema,
-    *,
-    feature_count: int = DEFAULT_HISTORY_FEATURES,
 ) -> PackedBeliefBatch:
     """Pack variable-size canonical supports without exposing labels to inference."""
 
@@ -222,7 +248,6 @@ def pack_belief_examples(
     return _pack_inputs(
         tuple((row.world_space, row.viewer_history) for row in rows),
         schema,
-        feature_count=feature_count,
         targets=tuple(row.target_world for row in rows),
     )
 
@@ -245,20 +270,19 @@ def segment_log_softmax(values: torch.Tensor, offsets: torch.Tensor) -> torch.Te
 class ExactWorldBeliefModel(nn.Module):
     """Learned likelihood-ratio correction over each exact managym support."""
 
-    architecture_identity = "manabot.exact-world-belief/v1"
+    architecture_identity = "manabot.exact-world-belief/v2"
 
     def __init__(
         self,
         schema: BeliefEncodingSchema,
         *,
         hidden_dim: int = 32,
-        history_features: int = DEFAULT_HISTORY_FEATURES,
     ) -> None:
         super().__init__()
         if hidden_dim < 2:
             raise BeliefError("exact-world scorer hidden dimension is too small")
         self.schema = schema
-        self.history_feature_count = history_features
+        self.history_schema_identity = semantic_history_schema_identity(schema)
         card_count = len(_card_vocabulary(schema))
         self.candidate_encoder = nn.Sequential(
             nn.Linear(card_count, hidden_dim),
@@ -266,12 +290,21 @@ class ExactWorldBeliefModel(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
         )
-        self.history_encoder = nn.Sequential(
-            nn.Linear(history_features, hidden_dim),
+        self.history_actor_embedding = nn.Embedding(2, hidden_dim)
+        self.history_kind_embedding = nn.Embedding(
+            len(PUBLIC_COMMITMENT_KINDS), hidden_dim
+        )
+        self.history_card_embedding = nn.Embedding(
+            card_count + 1,
+            hidden_dim,
+            padding_idx=0,
+        )
+        self.history_event_encoder = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
             nn.Linear(hidden_dim, hidden_dim),
         )
-        final = self.history_encoder[-1]
+        final = self.history_event_encoder[-1]
         assert isinstance(final, nn.Linear)
         nn.init.zeros_(final.weight)
         nn.init.zeros_(final.bias)
@@ -281,6 +314,7 @@ class ExactWorldBeliefModel(nn.Module):
         digest = hashlib.sha256()
         digest.update(self.architecture_identity.encode("ascii"))
         digest.update(self.schema.identity.encode("ascii"))
+        digest.update(self.history_schema_identity.encode("ascii"))
         for name, value in self.state_dict().items():
             digest.update(name.encode("ascii"))
             digest.update(value.detach().cpu().contiguous().numpy().tobytes())
@@ -289,10 +323,35 @@ class ExactWorldBeliefModel(nn.Module):
     def correction_logits(self, batch: PackedBeliefBatch) -> torch.Tensor:
         device = next(self.parameters()).device
         counts = batch.world_counts.to(device=device, dtype=torch.float32)
-        histories = batch.history_features.to(device=device, dtype=torch.float32)
         world_batch = batch.world_batch.to(device=device)
         candidates = self.candidate_encoder(counts)
-        contexts = self.history_encoder(histories)
+        decision_count = int(batch.offsets.numel() - 1)
+        contexts = torch.zeros(
+            (decision_count, candidates.shape[-1]),
+            dtype=candidates.dtype,
+            device=device,
+        )
+        if batch.history_batch.numel():
+            history_batch = batch.history_batch.to(device=device)
+            events = self.history_actor_embedding(
+                batch.history_actor_role_ids.to(device=device)
+            )
+            events = events + self.history_kind_embedding(
+                batch.history_kind_ids.to(device=device)
+            )
+            events = events + self.history_card_embedding(
+                batch.history_card_indexes.to(device=device)
+            )
+            contexts.index_add_(
+                0,
+                history_batch,
+                self.history_event_encoder(events),
+            )
+            event_counts = torch.bincount(
+                history_batch,
+                minlength=decision_count,
+            ).clamp_min(1)
+            contexts = contexts / event_counts.sqrt().unsqueeze(-1)
         return (candidates * contexts[world_batch]).sum(dim=-1) / math.sqrt(
             candidates.shape[-1]
         )
@@ -325,7 +384,7 @@ class ExactWorldBeliefModel(nn.Module):
         if previous is not None and previous.space.viewer != world_space.viewer:
             raise BeliefError("previous belief crossed a viewer boundary")
         model_identity = self.identity
-        if not viewer_history.events:
+        if not viewer_history.semantic_events:
             reference = CompatibleDealBeliefModel().update(
                 previous=previous,
                 world_space=world_space,
@@ -338,7 +397,6 @@ class ExactWorldBeliefModel(nn.Module):
             batch = _pack_inputs(
                 ((world_space, viewer_history),),
                 self.schema,
-                feature_count=self.history_feature_count,
                 targets=None,
             )
             was_training = self.training
@@ -358,7 +416,7 @@ class ExactWorldBeliefModel(nn.Module):
             model_identity=model_identity,
             previous_belief=previous_identity,
             viewer_history_identity=viewer_history.identity,
-            consumed_history_range=(0, len(viewer_history.events)),
+            consumed_history_range=(0, len(viewer_history.semantic_events)),
             world_space_identity=world_space.identity,
             normalization_error=belief.normalization_error,
             output_digest=belief.digest,
@@ -420,6 +478,7 @@ __all__ = [
     "PackedBeliefBatch",
     "capture_materialized_world_supervision",
     "pack_belief_examples",
+    "semantic_history_schema_identity",
     "segment_log_softmax",
     "train_bounded_overfit",
 ]

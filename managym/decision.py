@@ -19,6 +19,15 @@ from typing import Any, Mapping
 
 SEMANTIC_DECISION_VERSION: int = 4
 
+PUBLIC_COMMITMENT_KINDS: tuple[str, ...] = (
+    "cast",
+    "decline_discard",
+    "discard",
+    "pass_priority",
+    "play_land",
+)
+_CARD_PUBLIC_COMMITMENT_KINDS = frozenset({"cast", "discard", "play_land"})
+
 
 class SemanticContractError(Exception):
     """The shared semantic contract rejected a command or projection."""
@@ -26,6 +35,41 @@ class SemanticContractError(Exception):
     def __init__(self, message: str, *, code: str | None = None) -> None:
         super().__init__(message)
         self.code = code
+
+
+@dataclass(frozen=True, slots=True)
+class PublicCommitment:
+    """Typed Python mirror of managym's viewer-observable commitment."""
+
+    kind: str
+    card: str | None = None
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, Any]) -> "PublicCommitment":
+        kind = payload.get("kind")
+        if kind not in PUBLIC_COMMITMENT_KINDS:
+            raise SemanticContractError(f"unsupported public commitment kind {kind!r}")
+        expected_keys = (
+            {"kind", "card"} if kind in _CARD_PUBLIC_COMMITMENT_KINDS else {"kind"}
+        )
+        if set(payload) != expected_keys:
+            raise SemanticContractError(
+                f"{kind} public commitment has non-canonical fields"
+            )
+        card = payload.get("card")
+        if kind in _CARD_PUBLIC_COMMITMENT_KINDS and (
+            not isinstance(card, str) or not card
+        ):
+            raise SemanticContractError(
+                f"{kind} public commitment needs a canonical card name"
+            )
+        return cls(kind=str(kind), card=card if isinstance(card, str) else None)
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"kind": self.kind}
+        if self.card is not None:
+            payload["card"] = self.card
+        return payload
 
 
 @dataclass(frozen=True)

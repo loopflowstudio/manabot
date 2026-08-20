@@ -18,7 +18,11 @@ from manabot.belief import (
     encode_belief,
     query_mass,
 )
-from managym.decision import Observation, TransitionReceipt
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Observation,
+    TransitionReceipt,
+)
 from managym.possible_worlds import WorldQuery
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
@@ -179,7 +183,7 @@ def test_schema_rejects_only_duplicate_full_row_keys() -> None:
 
 def test_history_identity_is_derived_from_native_observations_and_receipts() -> None:
     initial = Observation(
-        schema_version=4,
+        schema_version=SEMANTIC_DECISION_VERSION,
         revision=9,
         viewer=0,
         viewer_state_hash="viewer-nine",
@@ -191,16 +195,16 @@ def test_history_identity_is_derived_from_native_observations_and_receipts() -> 
     assert same.identity == ViewerHistory.from_observation(initial).identity
 
     receipt = TransitionReceipt(
-        schema_version=4,
+        schema_version=SEMANTIC_DECISION_VERSION,
         before_revision=9,
         after_revision=10,
         command_id="command-nine",
-        public_commitment=None,
+        public_commitment={"kind": "play_land", "card": "Mountain"},
         events=("event-b",),
         next_decision="next",
     )
     current = Observation(
-        schema_version=4,
+        schema_version=SEMANTIC_DECISION_VERSION,
         revision=10,
         viewer=0,
         viewer_state_hash="viewer-ten",
@@ -208,9 +212,15 @@ def test_history_identity_is_derived_from_native_observations_and_receipts() -> 
         events=(),
         decision=None,
     )
-    advanced = same.advance(receipt, current)
+    advanced = same.advance(receipt, current, acting=1)
 
     assert advanced.events == ("event-a", "event-b")
+    assert [event.to_payload() for event in advanced.semantic_events] == [
+        {
+            "actor_role_id": 1,
+            "commitment": {"kind": "play_land", "card": "Mountain"},
+        }
+    ]
     assert advanced.identity != same.identity
     with pytest.raises(BeliefError, match="does not continue"):
-        advanced.advance(receipt, current)
+        advanced.advance(receipt, current, acting=1)
