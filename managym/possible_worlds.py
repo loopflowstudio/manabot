@@ -1,9 +1,9 @@
 """Read-only Python adapter for managym's canonical possible-world space.
 
-Rust remains the production authority for enumeration, ordering, exact
-compatible-deal weights, and query evaluation. The fixture constructor exists
-only for retained decisions and focused contract tests; it applies the same
-typed count-query grammar without consulting an actual hidden world.
+Rust owns enumeration, ordering, exact compatible-deal weights, identity,
+query evaluation, and materialization. This module parses that projection and
+routes canonical world indexes back to the source engine; it never constructs
+a production hand ontology.
 """
 
 from __future__ import annotations
@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
 import json
-from typing import Any, Iterable, Mapping
+import sys
+from typing import Any, Iterable, Mapping, Sequence
 
 POSSIBLE_WORLD_SPACE_VERSION: int = 1
 WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v1"
@@ -107,7 +108,6 @@ class PossibleWorldSpace:
     opponent: int
     source_revision: int
     source_viewer_state_hash: str
-    source_history_identity: str
     hand_size: int
     pool: tuple[tuple[str, int], ...]
     total_weight: int
@@ -115,14 +115,13 @@ class PossibleWorldSpace:
     world_schema_identity: str = WORLD_SCHEMA_IDENTITY
     content_manifest_identity: str = ""
     _engine: Any | None = field(default=None, repr=False, compare=False, hash=False)
-    _authority_identity: str | None = field(
-        default=None, repr=False, compare=False, hash=False
-    )
+    _allocated_bytes: int = field(init=False, repr=False, compare=False, hash=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_allocated_bytes", self._measure_allocated_bytes())
 
     @classmethod
-    def from_engine(
-        cls, engine: Any, viewer: int, *, viewer_history_identity: str
-    ) -> "PossibleWorldSpace":
+    def from_engine(cls, engine: Any, viewer: int) -> "PossibleWorldSpace":
         """Load the production projection emitted by managym's Rust authority."""
 
         try:
@@ -133,21 +132,25 @@ class PossibleWorldSpace:
         if version != POSSIBLE_WORLD_SPACE_VERSION:
             raise PossibleWorldError(f"unsupported PossibleWorldSpace schema {version}")
         source = payload["source_observation"]
-        authority_identity = str(payload["identity"])
+        if int(source["viewer"]) != int(payload["viewer"]):
+            raise PossibleWorldError("source observation changed the space viewer")
         canonical_pool = tuple(
             (str(name), int(count)) for name, count in sorted(payload["pool"].items())
         )
-        content_manifest_identity = str(
-            payload.get("content_manifest_identity", _digest({"pool": canonical_pool}))
-        )
-        bound_identity = _digest(
-            {
-                "authority_identity": authority_identity,
-                "viewer_history_identity": viewer_history_identity,
-                "world_schema_identity": WORLD_SCHEMA_IDENTITY,
-                "content_manifest_identity": content_manifest_identity,
-            }
-        )
+        try:
+            manifest = engine.content_pack_manifest()
+            content_manifest_identity = str(manifest["content_digest"])
+        except Exception as error:
+            raise PossibleWorldError(
+                "possible-world space requires the native content manifest"
+            ) from error
+        manifest_names = {
+            str(row["registry_name"]) for row in manifest.get("definitions", ())
+        }
+        if not {name for name, _ in canonical_pool}.issubset(manifest_names):
+            raise PossibleWorldError(
+                "possible-world pool is outside the native content manifest"
+            )
         rows = tuple(
             PossibleWorld(
                 index=int(row["index"]),
@@ -160,19 +163,17 @@ class PossibleWorldSpace:
             for row in payload["worlds"]
         )
         space = cls(
-            identity=bound_identity,
+            identity=str(payload["identity"]),
             viewer=int(payload["viewer"]),
             opponent=int(payload["opponent"]),
             source_revision=int(source["revision"]),
             source_viewer_state_hash=str(source["viewer_state_hash"]),
-            source_history_identity=viewer_history_identity,
             hand_size=int(payload["hand_size"]),
             pool=canonical_pool,
             total_weight=int(payload["total_weight"]),
             worlds=rows,
             content_manifest_identity=content_manifest_identity,
             _engine=engine,
-            _authority_identity=authority_identity,
         )
         space._validate()
         return space
@@ -184,7 +185,6 @@ class PossibleWorldSpace:
         viewer: int,
         source_revision: int,
         source_viewer_state_hash: str,
-        source_history_identity: str,
         pool: Mapping[str, int],
         hands: Iterable[tuple[Mapping[str, int], int]],
         content_manifest_identity: str | None = None,
@@ -233,7 +233,6 @@ class PossibleWorldSpace:
             "opponent": 1 - int(viewer),
             "source_revision": int(source_revision),
             "source_viewer_state_hash": source_viewer_state_hash,
-            "source_history_identity": source_history_identity,
             "content_manifest_identity": manifest_identity,
             "hand_size": hand_size,
             "pool": canonical_pool,
@@ -247,7 +246,6 @@ class PossibleWorldSpace:
             opponent=1 - int(viewer),
             source_revision=int(source_revision),
             source_viewer_state_hash=source_viewer_state_hash,
-            source_history_identity=source_history_identity,
             hand_size=hand_size,
             pool=canonical_pool,
             total_weight=sum(world.weight for world in worlds),
@@ -289,23 +287,102 @@ class PossibleWorldSpace:
     def support_size(self) -> int:
         return len(self.worlds)
 
+    @property
+    def allocated_bytes(self) -> int:
+        """Owned Python projection memory, excluding the source engine."""
+
+        return self._allocated_bytes
+
+    def _measure_allocated_bytes(self) -> int:
+        total = sys.getsizeof(self)
+        total += sum(
+            sys.getsizeof(value)
+            for value in (
+                self.identity,
+                self.viewer,
+                self.opponent,
+                self.source_revision,
+                self.source_viewer_state_hash,
+                self.hand_size,
+                self.total_weight,
+                self.world_schema_identity,
+                self.content_manifest_identity,
+            )
+        )
+        total += sys.getsizeof(self.pool)
+        for name, count in self.pool:
+            total += sys.getsizeof((name, count))
+            total += sys.getsizeof(name) + sys.getsizeof(count)
+        total += sys.getsizeof(self.worlds)
+        for world in self.worlds:
+            total += sys.getsizeof(world)
+            total += sys.getsizeof(world.index) + sys.getsizeof(world.weight)
+            total += sys.getsizeof(world.hand)
+            for name, count in world.hand:
+                total += sys.getsizeof((name, count))
+                total += sys.getsizeof(name) + sys.getsizeof(count)
+        return total
+
+    @property
+    def library_size(self) -> int:
+        return sum(count for _, count in self.pool) - self.hand_size
+
     def world(self, index: int) -> PossibleWorld:
         if index < 0 or index >= len(self.worlds):
             raise PossibleWorldError(f"world index {index} is outside the space")
         return self.worlds[index]
 
+    def materialize(
+        self,
+        index: int,
+        *,
+        seed: int,
+        refresh_opponent_commitment: bool = False,
+    ) -> Any:
+        self.world(index)
+        if self._engine is None:
+            raise PossibleWorldError("fixture spaces cannot materialize worlds")
+        try:
+            return self._engine.materialize_possible_world(
+                self.viewer,
+                self.identity,
+                index,
+                seed,
+                refresh_opponent_commitment,
+            )
+        except Exception as error:
+            raise PossibleWorldError(str(error)) from error
+
     def support(self, query: WorldQuery) -> SupportReceipt:
-        return self.condition_indexes(query, allow_empty=True)[1]
+        if self._engine is None:
+            return self._condition_fixture(query)[1]
+        try:
+            payload = json.loads(
+                self._engine.possible_world_support_json(
+                    self.viewer,
+                    self.identity,
+                    json.dumps(query.to_dict(), sort_keys=True, separators=(",", ":")),
+                )
+            )
+        except Exception as error:
+            raise PossibleWorldError(str(error)) from error
+        if payload["space_identity"] != self.identity:
+            raise PossibleWorldError("query receipt changed space identity")
+        return self._support_receipt(payload)
 
     def condition_indexes(
         self, query: WorldQuery, *, allow_empty: bool = False
     ) -> tuple[tuple[int, ...], SupportReceipt]:
         """Return Rules-selected row indexes and their identity-bound receipt."""
 
-        if self._engine is not None:
-            indexes, receipt = self._condition_through_authority(query)
-        else:
+        if self._engine is None:
             indexes, receipt = self._condition_fixture(query)
+        else:
+            support = self.support(query)
+            if support.support_size == 0:
+                indexes, receipt = (), support
+            else:
+                indexes, receipt = self._condition_through_authority(query)
         if not indexes and not allow_empty:
             raise PossibleWorldError("query has empty support")
         return indexes, receipt
@@ -313,30 +390,21 @@ class PossibleWorldSpace:
     def _condition_through_authority(
         self, query: WorldQuery
     ) -> tuple[tuple[int, ...], SupportReceipt]:
-        assert self._engine is not None and self._authority_identity is not None
+        assert self._engine is not None
         try:
             encoded_query = json.dumps(
                 query.to_dict(), sort_keys=True, separators=(",", ":")
             )
-            support_payload = json.loads(
-                self._engine.possible_world_support_json(
-                    self.viewer,
-                    self._authority_identity,
-                    encoded_query,
-                )
-            )
-            if int(support_payload["support_size"]) == 0:
-                return (), self._support_receipt(support_payload)
             payload = json.loads(
                 self._engine.possible_world_condition_json(
                     self.viewer,
-                    self._authority_identity,
+                    self.identity,
                     encoded_query,
                 )
             )
         except Exception as error:
             raise PossibleWorldError(str(error)) from error
-        if payload["space_identity"] != self._authority_identity:
+        if payload["space_identity"] != self.identity:
             raise PossibleWorldError("query receipt changed space identity")
         indexes = tuple(int(index) for index in payload["world_indexes"])
         receipt = self._support_receipt(payload)
@@ -427,12 +495,40 @@ class PossibleWorldSpace:
         for index in indexes:
             self.world(index)
 
+    def flat_mc_scores(
+        self,
+        indexes: Sequence[int],
+        seeds: Sequence[int],
+        *,
+        rollouts: int,
+        max_steps: int,
+    ) -> tuple[list[float], int, int]:
+        canonical_indexes = [int(index) for index in indexes]
+        for index in canonical_indexes:
+            self.world(index)
+        if len(canonical_indexes) != len(seeds):
+            raise PossibleWorldError("world indexes and seeds must have equal length")
+        if self._engine is None:
+            raise PossibleWorldError("fixture spaces cannot run native search")
+        try:
+            scores, simulations, cap_hits = self._engine.flat_mc_scores_for_worlds(
+                self.viewer,
+                self.identity,
+                canonical_indexes,
+                [int(seed) for seed in seeds],
+                int(rollouts),
+                int(max_steps),
+            )
+        except Exception as error:
+            raise PossibleWorldError(str(error)) from error
+        return list(scores), int(simulations), int(cap_hits)
+
     def source_identity(self) -> Mapping[str, int | str]:
         return {
             "revision": self.source_revision,
             "viewer": self.viewer,
             "viewer_state_hash": self.source_viewer_state_hash,
-            "viewer_history_identity": self.source_history_identity,
+            "world_schema_identity": self.world_schema_identity,
             "content_manifest_identity": self.content_manifest_identity,
         }
 

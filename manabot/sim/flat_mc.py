@@ -199,6 +199,7 @@ def make_player(
          "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
         {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
+        {"kind": "belief_checkpoint", "path": "/abs/path/step_65536.pt"}
         {"kind": "value_greedy", "checkpoint": "/abs/value.pt", "device": "cpu"}
         {"kind": "value_search", "sims": 64, "checkpoint": "/abs/value.pt",
          "depth": 0, "rollouts_per_world": 1, "device": "cpu"}
@@ -353,6 +354,13 @@ def make_player(
             ),
             obs_space,
         )
+    if kind == "belief_checkpoint":
+        from manabot.belief.runtime import ManabotPlayer
+
+        agent, obs_space = load_checkpoint_agent(spec["path"])
+        if agent.belief_count_buckets < 2:
+            raise ValueError("belief_checkpoint requires a belief-enabled Agent")
+        return ManabotPlayer(agent), obs_space
     raise ValueError(f"unknown player spec kind: {kind}")
 
 
@@ -367,6 +375,8 @@ def spec_name(spec: dict[str, Any]) -> str:
     if kind == "policy_search":
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
+        return spec.get("name", spec["path"])
+    if kind == "belief_checkpoint":
         return spec.get("name", spec["path"])
     if kind == "value_greedy":
         return spec.get("name", "vgreedy")
@@ -497,7 +507,8 @@ def play_games(
                 if prepare_step is not None:
                     prepare_step(env, acting, action)
             semantic_execution = any(
-                getattr(observer, "tracker", None) is not None
+                bool(getattr(observer, "requires_semantic_transitions", False))
+                or getattr(observer, "tracker", None) is not None
                 for observer in (hero_player, villain_player)
             )
             transition = None

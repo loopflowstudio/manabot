@@ -98,6 +98,120 @@ agent's baseline distribution before a query intervention or rollout. It is
 not prior to the game history; all viewer-safe evidence through decision `t`
 has already been incorporated.
 
+## Supervised belief-learning contract
+
+The learned belief model begins from managym's exact, policy-free
+compatible-world measure. Call that state-dependent base measure `p0`. It is
+not a fixed vector and not merely an optional input feature: managym recomputes
+its support and combinatorial weights from the current viewer-visible hard
+facts, including hidden-zone sizes, reveals, known deck contents, and the
+authoritative zone transition rules.
+
+For a known unseen deck with `ci` remaining copies of card definition `i`,
+`N` total unseen cards, and a hidden hand of size `k`, the count-vector form is
+the multivariate hypergeometric distribution:
+
+```text
+p0(h | k) = product_i choose(ci, hi) / choose(N, k)
+```
+
+The current canonical encoding is ragged by decision. `PossibleWorldSpace`
+enumerates `W` compatible opponent-hand name-multisets in deterministic order;
+world `j` stores its sparse positive counts and exact integer physical-deal
+weight. `p0.normalized_distribution` is `float64[W]`, and an exact learned
+scorer produces one correction logit in that same canonical order. `W` is the
+number of bounded count vectors satisfying `sum_i hi == k`, not necessarily
+`choose(N, k)`, because interchangeable copies are collapsed into one world:
+
+```text
+worlds[j] = {card_name: positive_count, ...}
+weight[j] = product_i choose(ci, hi)
+p0[j]     = weight[j] / choose(N, k)
+```
+
+For example, an unseen pool `{A: 2, B: 1, C: 1}` and hidden hand size two has
+four worlds: `{A: 2}`, `{A: 1, B: 1}`, `{A: 1, C: 1}`, and `{B: 1, C: 1}`,
+with weights `1, 2, 2, 1` and probabilities `1/6, 2/6, 2/6, 1/6` in the
+engine's canonical ordering. The current world domain represents opponent hand
+counts; the opponent library multiset is inferred as `pool - hand`. It does not
+yet represent hidden library order or arbitrary additional hidden state.
+
+There is no global world index across decisions. For the current hand-only
+domain, each decision first writes its candidates in the content manifest's
+shared card-definition vocabulary:
+
+```text
+world_counts: int[W, C]   # candidate hand count vectors
+log_p0:       float[W]    # exact combinatorial log probabilities
+```
+
+Across a batch, `W` varies with the compatible world space. Exact-world
+training therefore packs the ragged candidate sets into common tensors:
+
+```text
+world_counts: int[sum_b W_b, C]
+log_p0:       float[sum_b W_b]
+world_batch:  int[sum_b W_b]     # candidate -> decision
+offsets:      int[B + 1]         # decision -> candidate range
+target_world: int[B]             # supervision-only local candidate index
+```
+
+The scorer joins each candidate with its decision's viewer-history embedding,
+emits `s_theta` with shape `[sum_b W_b]`, and applies a segment log-softmax to
+`log_p0 + s_theta` independently within every offset range. A padded
+`[B, W_max, C]` tensor with a world mask is semantically equivalent but is not
+the preferred storage because support sizes can differ sharply. The
+policy-facing `BeliefTensorView[rows, count_buckets]` is a derived marginal
+projection and is not the `p0` representation or the belief-training target.
+
+Thus a seven-card hand and a five-card hand have different world spaces and
+different base distributions. If a future mulligan rule changes the hand from
+seven to five, managym owns the exact redraw, return, or bottoming transition;
+manabot receives the resulting compatible five-card measure rather than
+inventing mulligan semantics.
+
+The deployed updater does not require the acting policy. It learns a normalized
+likelihood-ratio correction from viewer-safe history `x`:
+
+```text
+q_theta(w | x) = p0(w | x_hard) * exp(s_theta(w, x))
+                  / sum_w' p0(w' | x_hard) * exp(s_theta(w', x))
+```
+
+Before the first viewer-visible, policy-dependent event, the learned correction
+is disabled and `q_theta == p0` exactly. For opening hands, the first useful
+update is `Keep(k)`: `p0` already accounts for the publicly known hand size,
+while `s_theta` learns what choosing to keep that many cards implies about the
+kept hand. Hidden intermediate mulligan decisions are not inputs unless they
+are actually present in the viewer-safe history. Mulligans are not implemented
+in the current managym rules surface, so this is a pinned boundary for that
+future engine transition, not a claim about the present demo.
+
+Training trajectories may retain the authoritative materialized world behind
+an access-controlled supervision boundary. Each realized world is one sample
+from the conditional distribution, not a target asserting that all probability
+must collapse onto that world at inference time. The primary loss is whole-
+world negative log likelihood:
+
+```text
+L_belief = -log q_theta(w_materialized | x_viewer_safe)
+```
+
+Independent card marginals may be auxiliary losses or evaluation views, but
+they do not replace the joint-world objective. Start without label smoothing
+or an entropy bonus; a proper scoring rule over many independently
+materialized trajectories supplies the calibration pressure. Acting-policy or
+opponent-checkpoint identity is provenance for population-shift and
+leave-one-opponent-out evaluation, not a required inference input. A
+known-policy Bayesian update may be retained only as a frozen diagnostic.
+
+The first learned-belief continuation gate requires held-out joint NLL better
+than `p0` after policy-dependent events, calibrated query probabilities and
+credible-set coverage, zero mass on incompatible worlds, exact equality to
+`p0` before the first informative event, viewer-equivalent hidden-truth swap
+invariance, and no unacceptable latency. Dataset splits are by whole match and
+opponent version, never by adjacent decisions from the same trajectory.
+
 An ordinary autonomous decision always calls the belief model. A training,
 evaluation, or Study intervention may explicitly supply another valid
 `BeliefState` for the decision core. The supplied belief replaces `b(t)` for
@@ -208,6 +322,23 @@ Belief calibration loss and policy/value loss are separate. In the keystone,
 policy loss does not train a learned belief updater implicitly. Later joint
 gradient flow is an explicit, checkpointed experiment rather than an invisible
 default.
+
+## Belief training contract
+
+The initial distribution is managym's exact pre-mulligan combinatorial prior.
+Where the mulligan policy or opponent policy is known, the belief updater uses
+that policy likelihood in a normalized Bayes update. Learned belief models are
+supervised against materialized hidden hands with whole-world negative log
+likelihood; when exact categorical support is too large, an autoregressive
+factorization may represent the same normalized joint distribution.
+
+Independent card or zone marginals are never the primary belief loss because
+they erase joint correlations. They remain derived diagnostics and cheap
+policy/value tokens. Training examples and checkpoints bind the opponent
+policy/version plus provenance because changing the opponent induces covariate
+shift in action-conditioned belief updates. Actual hidden truth is available
+only to access-controlled supervision and audit code, never the inference
+path.
 
 ## Keystone functions
 

@@ -1,14 +1,21 @@
-"""Runnable retained-decision proof for the belief-forming manabot seam."""
+"""Engine-derived proof for the belief-forming manabot seam."""
 
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping
+from typing import Any
 
+import numpy as np
 import torch
 
-from manabot.belief.agent import AgentMemory, Manabot, ViewerDecision
-from manabot.belief.encoding import BeliefEncodingSchema, BeliefRow, encode_belief
+from manabot.belief.encoding import (
+    HAND_ZONE_ID,
+    LIBRARY_ZONE_ID,
+    BeliefEncodingSchema,
+    belief_schema_from_engine,
+    encode_belief,
+)
+from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import (
     CompatibleDealBeliefModel,
     EmptyBeliefSupport,
@@ -16,124 +23,60 @@ from manabot.belief.state import (
     condition_belief,
     query_mass,
 )
-from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model import Agent
-from managym.decision import Command
+from manabot.verify.util import INTERACTIVE_DECK
+from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
-def _retained_observation() -> dict[str, torch.Tensor]:
-    encoder = ObservationSpace().encoder
-    batch = 1
-    observation = {
-        "agent_player": torch.zeros((batch, 1, encoder.player_dim)),
-        "opponent_player": torch.zeros((batch, 1, encoder.player_dim)),
-        "agent_cards": torch.zeros((batch, encoder.cards_per_player, encoder.card_dim)),
-        "opponent_cards": torch.zeros(
-            (batch, encoder.cards_per_player, encoder.card_dim)
-        ),
-        "agent_permanents": torch.zeros(
-            (batch, encoder.perms_per_player, encoder.permanent_dim)
-        ),
-        "opponent_permanents": torch.zeros(
-            (batch, encoder.perms_per_player, encoder.permanent_dim)
-        ),
-        "actions": torch.zeros((batch, encoder.max_actions, encoder.action_dim)),
-        "action_focus": torch.full(
-            (batch, encoder.max_actions, encoder.max_focus_objects),
-            -1,
-            dtype=torch.long,
-        ),
-        "agent_player_valid": torch.ones((batch, 1)),
-        "opponent_player_valid": torch.ones((batch, 1)),
-        "agent_cards_valid": torch.zeros((batch, encoder.cards_per_player)),
-        "opponent_cards_valid": torch.zeros((batch, encoder.cards_per_player)),
-        "agent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
-        "opponent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
-        "actions_valid": torch.zeros((batch, encoder.max_actions)),
-    }
-    observation["actions"][0, 0, 0] = 1.0
-    observation["actions"][0, 1, 1] = 1.0
-    observation["actions"][0, 2, 2] = 1.0
-    observation["action_focus"][0, :3, 0] = 0
-    observation["actions_valid"][0, :3] = 1.0
-    return observation
-
-
-def retained_history() -> ViewerHistory:
-    return ViewerHistory(
-        schema_identity="managym.viewer-history/v1",
-        viewer=0,
-        events=("turn:4", "opponent:draw", "viewer:priority"),
+def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
+    observation_space = ObservationSpace()
+    match = Match(
+        MatchHypers(
+            hero="belief-demo-hero",
+            villain="belief-demo-villain",
+            hero_deck=dict(INTERACTIVE_DECK),
+            villain_deck=dict(INTERACTIVE_DECK),
+        )
     )
-
-
-def retained_space(history: ViewerHistory) -> PossibleWorldSpace:
-    return PossibleWorldSpace.from_fixture(
-        viewer=history.viewer,
-        source_revision=17,
-        source_viewer_state_hash="retained-viewer-state-17",
-        source_history_identity=history.identity,
-        pool={"Counterspell": 2, "Lightning Bolt": 2, "Mountain": 1},
-        hands=(
-            ({"Counterspell": 2}, 1),
-            ({"Counterspell": 1, "Lightning Bolt": 1}, 4),
-            ({"Counterspell": 1, "Mountain": 1}, 2),
-            ({"Lightning Bolt": 2}, 1),
-            ({"Lightning Bolt": 1, "Mountain": 1}, 2),
-        ),
+    env = Env(
+        match,
+        observation_space,
+        Reward(RewardHypers()),
+        seed=19,
+        auto_reset=False,
+        enable_profiler=False,
+        enable_behavior_tracking=False,
     )
+    observation, _ = env.reset(seed=19)
+    return env, observation
 
 
-def retained_schema(space: PossibleWorldSpace) -> BeliefEncodingSchema:
-    card_ids = {name: index for index, (name, _) in enumerate(space.pool)}
-    return BeliefEncodingSchema(
-        schema_identity="manabot.belief-tensor/count-marginals-v1",
-        world_schema_identity=space.world_schema_identity,
-        content_manifest_identity=space.content_manifest_identity,
-        rows=tuple(
-            sorted(
-                BeliefRow(
-                    owner_role_id=1,
-                    hidden_zone_id=1,
-                    card_def_id=card_ids[name],
-                    card_name=name,
-                )
-                for name, _ in space.pool
-            )
-        ),
-        count_buckets=3,
-    )
-
-
-def retained_decision(
-    source: Mapping[str, Any] | None = None,
-) -> tuple[ViewerDecision, BeliefEncodingSchema]:
-    """Project a retained source through the viewer-safe decision boundary."""
-
-    source = source or {}
-    history = retained_history()
-    space = retained_space(history)
-    observation = source.get("viewer_observation", _retained_observation())
-    commands = (
-        Command("retained-pass", 17, 0),
-        Command("retained-cast", 17, 1),
-        Command("retained-activate", 17, 2),
-    )
-    return (
-        ViewerDecision(
-            observation_identity=space.source_viewer_state_hash,
-            observation=observation,
+def _schema_and_agent(engine: Any, viewer: int) -> tuple[BeliefEncodingSchema, Agent]:
+    semantic = Observation.from_json(engine.semantic_observation_json(viewer))
+    history = ViewerHistory.from_observation(semantic)
+    space = PossibleWorldSpace.from_engine(engine, viewer)
+    belief = (
+        CompatibleDealBeliefModel()
+        .update(
+            previous=None,
             world_space=space,
             viewer_history=history,
-            legal_commands=commands,
-        ),
-        retained_schema(space),
+        )
+        .belief
     )
-
-
-def retained_manabot(schema: BeliefEncodingSchema) -> Manabot:
+    count_buckets = max(2, max(count for _, count in space.pool) + 1)
+    schema = belief_schema_from_engine(
+        engine,
+        belief,
+        count_buckets=count_buckets,
+    )
+    manifest = engine.content_pack_manifest()
+    card_vocab_size = 1 + max(
+        int(row["card_def_id"]) for row in manifest["definitions"]
+    )
     torch.manual_seed(19)
     policy_value = Agent(
         ObservationSpace(),
@@ -141,24 +84,40 @@ def retained_manabot(schema: BeliefEncodingSchema) -> Manabot:
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,
-            belief_card_vocab_size=len(schema.rows),
+            belief_card_vocab_size=card_vocab_size,
         ),
     )
-    return Manabot(
-        policy_value=policy_value,
-        belief_model=CompatibleDealBeliefModel(),
-        belief_schema=schema,
-    )
+    return schema, policy_value
+
+
+def _run_swapped_world(
+    engine: Any,
+    observation: dict[str, np.ndarray],
+    viewer: int,
+    policy_value: Agent,
+    schema: BeliefEncodingSchema,
+) -> ManabotPlayer:
+    player = ManabotPlayer(policy_value, belief_schema=schema)
+    player.start_game(engine, viewer)
+    player.act(engine, observation)
+    return player
 
 
 def run_demo() -> dict[str, Any]:
-    """Run the six keystone checks and return machine-readable evidence."""
+    """Run the keystone checks through one real managym decision."""
 
-    decision, schema = retained_decision()
-    manabot = retained_manabot(schema)
-    autonomous = manabot.decide(decision, AgentMemory())
+    env, observation = _runtime_env()
+    viewer = int(env.last_raw_obs.agent.player_index)
+    schema, policy_value = _schema_and_agent(env._engine, viewer)
+    player = ManabotPlayer(policy_value, belief_schema=schema)
+    player.start_game(env, viewer)
+    player.act(env, observation)
+    if player.last_step is None or player.manabot is None or player.history is None:
+        raise RuntimeError("ordinary ManabotPlayer did not produce an AgentStep")
+    autonomous = player.last_step
     generated = autonomous.belief_update.belief
-    supplied = manabot.evaluate_under_belief(decision, generated)
+    decision = viewer_decision_from_engine(env._engine, observation, player.history)
+    supplied = player.manabot.evaluate_under_belief(decision, generated)
 
     has_query = WorldQuery.has("Lightning Bolt")
     lacks_query = WorldQuery.lacks("Lightning Bolt")
@@ -167,29 +126,35 @@ def run_demo() -> dict[str, Any]:
     if isinstance(has_bolt, EmptyBeliefSupport) or isinstance(
         lacks_bolt, EmptyBeliefSupport
     ):
-        raise RuntimeError("retained Bolt fixture must have both query supports")
-    has_result = manabot.evaluate_under_belief(decision, has_bolt)
-    lacks_result = manabot.evaluate_under_belief(decision, lacks_bolt)
+        raise RuntimeError("engine-derived Bolt root must have both query supports")
+    has_result = player.manabot.evaluate_under_belief(decision, has_bolt)
+    lacks_result = player.manabot.evaluate_under_belief(decision, lacks_bolt)
     has_view = encode_belief(has_bolt, schema)
     lacks_view = encode_belief(lacks_bolt, schema)
-    bolt_row = next(
-        index
-        for index, row in enumerate(schema.rows)
-        if row.card_name == "Lightning Bolt"
-    )
+    bolt_rows = {
+        "library": next(
+            index
+            for index, row in enumerate(schema.rows)
+            if row.card_name == "Lightning Bolt"
+            and row.hidden_zone_id == LIBRARY_ZONE_ID
+        ),
+        "hand": next(
+            index
+            for index, row in enumerate(schema.rows)
+            if row.card_name == "Lightning Bolt" and row.hidden_zone_id == HAND_ZONE_ID
+        ),
+    }
 
-    source_a = {
-        "actual_hidden_hand": ("Lightning Bolt", "Lightning Bolt"),
-        "viewer_observation": _retained_observation(),
-    }
-    source_b = {
-        "actual_hidden_hand": ("Counterspell", "Counterspell"),
-        "viewer_observation": _retained_observation(),
-    }
-    swapped_a, _ = retained_decision(source_a)
-    swapped_b, _ = retained_decision(source_b)
-    swap_a = manabot.decide(swapped_a, AgentMemory())
-    swap_b = manabot.decide(swapped_b, AgentMemory())
+    has_indexes, _ = generated.space.condition_indexes(has_query)
+    lacks_indexes, _ = generated.space.condition_indexes(lacks_query)
+    has_engine = generated.space.materialize(has_indexes[0], seed=101)
+    lacks_engine = generated.space.materialize(lacks_indexes[0], seed=101)
+    has_observation = has_engine.semantic_observation_json(viewer)
+    lacks_observation = lacks_engine.semantic_observation_json(viewer)
+    swap_a = _run_swapped_world(has_engine, observation, viewer, policy_value, schema)
+    swap_b = _run_swapped_world(lacks_engine, observation, viewer, policy_value, schema)
+    if swap_a.last_step is None or swap_b.last_step is None:
+        raise RuntimeError("materialized ManabotPlayer did not produce an AgentStep")
 
     legal_policy = {
         command.command_id: float(autonomous.result.policy[action_index])
@@ -211,6 +176,7 @@ def run_demo() -> dict[str, Any]:
     }
     return {
         "generated_belief_identity": generated.identity,
+        "viewer_history_identity": player.history.identity,
         "p_has_bolt": query_mass(generated, has_query),
         "legal_action_distribution": legal_policy,
         "value": float(autonomous.result.value),
@@ -218,15 +184,22 @@ def run_demo() -> dict[str, Any]:
         "generated_override_byte_identical": (
             autonomous.result.output_bytes == supplied.output_bytes
         ),
-        "bolt_count_token": {
-            "has": has_view.count_probabilities[bolt_row].tolist(),
-            "lacks": lacks_view.count_probabilities[bolt_row].tolist(),
+        "bolt_count_tokens": {
+            zone: {
+                "has": has_view.count_probabilities[index].tolist(),
+                "lacks": lacks_view.count_probabilities[index].tolist(),
+            }
+            for zone, index in bolt_rows.items()
         },
         "policy_delta_has_minus_lacks": delta,
         "viewer_hidden_swap_identical": (
-            swap_a.belief_update.belief.identity == swap_b.belief_update.belief.identity
-            and swap_a.result.output_bytes == swap_b.result.output_bytes
+            has_observation == lacks_observation
+            and swap_a.last_step.belief_update.belief.identity
+            == swap_b.last_step.belief_update.belief.identity
+            and swap_a.last_step.result.output_bytes
+            == swap_b.last_step.result.output_bytes
         ),
+        "viewer_hidden_swap_materialized": True,
         "receipts": {
             "belief_update": autonomous.belief_update.update_receipt.identity,
             "belief_encoding": autonomous.result.belief_encoding_receipt,

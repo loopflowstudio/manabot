@@ -4,22 +4,23 @@ import numpy as np
 import pytest
 
 from manabot.belief import AgentMemory, BeliefError, CompatibleDealBeliefModel, Manabot
-from manabot.belief.demo import (
-    retained_decision,
-    retained_history,
-    retained_manabot,
-    retained_space,
-    run_demo,
-)
+from manabot.belief.demo import run_demo
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentHypers
 from manabot.model import Agent
+from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace
+from tests.belief.support import (
+    fixture_decision,
+    fixture_history,
+    fixture_manabot,
+    fixture_space,
+)
 
 
 def test_autonomous_and_exact_override_share_policy_value_bytes() -> None:
-    decision, schema = retained_decision()
-    manabot = retained_manabot(schema)
+    decision, schema = fixture_decision()
+    manabot = fixture_manabot(schema)
     memory = AgentMemory()
 
     autonomous = manabot.decide(decision, memory)
@@ -31,7 +32,7 @@ def test_autonomous_and_exact_override_share_policy_value_bytes() -> None:
 
 
 def test_belief_enabled_agent_has_no_silent_fallback() -> None:
-    decision, schema = retained_decision()
+    decision, schema = fixture_decision()
     agent = Agent(
         ObservationSpace(),
         AgentHypers(
@@ -47,7 +48,7 @@ def test_belief_enabled_agent_has_no_silent_fallback() -> None:
 
 
 def test_manabot_rejects_the_legacy_positional_condition_channel() -> None:
-    _, schema = retained_decision()
+    _, schema = fixture_decision()
     agent = Agent(
         ObservationSpace(),
         AgentHypers(
@@ -68,21 +69,31 @@ def test_manabot_rejects_the_legacy_positional_condition_channel() -> None:
 
 
 def test_world_space_mismatch_fails_before_inference() -> None:
-    decision, schema = retained_decision()
-    manabot = retained_manabot(schema)
-    history = retained_history()
-    original = retained_space(history)
+    decision, schema = fixture_decision()
+    manabot = fixture_manabot(schema)
+    history = fixture_history()
+    original = fixture_space(history)
+    other_history = type(history).from_observation(
+        Observation(
+            schema_version=history.schema_version,
+            revision=original.source_revision + 1,
+            viewer=history.viewer,
+            viewer_state_hash="another-viewer-state",
+            viewer_state={},
+            events=history.events,
+            decision=None,
+        )
+    )
     other_space = PossibleWorldSpace.from_fixture(
         viewer=history.viewer,
         source_revision=original.source_revision + 1,
         source_viewer_state_hash="another-viewer-state",
-        source_history_identity=history.identity,
         pool=dict(original.pool),
         hands=((dict(world.hand), world.weight) for world in original.worlds),
     )
     other_belief = (
         CompatibleDealBeliefModel()
-        .update(previous=None, world_space=other_space, viewer_history=history)
+        .update(previous=None, world_space=other_space, viewer_history=other_history)
         .belief
     )
 
@@ -95,7 +106,15 @@ def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
 
     assert evidence["generated_override_byte_identical"] is True
     assert evidence["viewer_hidden_swap_identical"] is True
-    assert evidence["bolt_count_token"]["has"] != evidence["bolt_count_token"]["lacks"]
+    assert evidence["viewer_hidden_swap_materialized"] is True
+    assert (
+        evidence["bolt_count_tokens"]["hand"]["has"]
+        != evidence["bolt_count_tokens"]["hand"]["lacks"]
+    )
+    assert (
+        evidence["bolt_count_tokens"]["library"]["has"]
+        != evidence["bolt_count_tokens"]["library"]["lacks"]
+    )
     deltas = np.asarray(
         list(evidence["policy_delta_has_minus_lacks"].values()), dtype=np.float64
     )

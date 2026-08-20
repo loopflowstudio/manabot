@@ -11,6 +11,7 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import NDArray
 
+from managym.decision import Observation, TransitionReceipt
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
@@ -27,21 +28,80 @@ def _digest(payload: object) -> str:
 
 @dataclass(frozen=True, slots=True)
 class ViewerHistory:
-    """Canonical viewer-safe event history consumed by a belief model."""
+    """Identity derived from the canonical viewer Observation stream."""
 
-    schema_identity: str
+    schema_version: int
     viewer: int
+    initial_observation_identity: str
+    current_observation_identity: str
+    current_revision: int
+    current_viewer_state_hash: str
     events: tuple[str, ...]
+
+    @classmethod
+    def from_observation(cls, observation: Observation) -> "ViewerHistory":
+        """Start history at one authoritative viewer Observation."""
+
+        observation_identity = _observation_identity(observation)
+        return cls(
+            schema_version=observation.schema_version,
+            viewer=observation.viewer,
+            initial_observation_identity=observation_identity,
+            current_observation_identity=observation_identity,
+            current_revision=observation.revision,
+            current_viewer_state_hash=observation.viewer_state_hash,
+            events=observation.events,
+        )
+
+    def advance(
+        self,
+        receipt: TransitionReceipt,
+        observation: Observation,
+    ) -> "ViewerHistory":
+        """Append one native transition and bind the resulting Observation."""
+
+        if receipt.schema_version != self.schema_version:
+            raise BeliefError("transition changed the viewer-history schema")
+        if receipt.before_revision != self.current_revision:
+            raise BeliefError("transition does not continue the viewer history")
+        if observation.schema_version != self.schema_version:
+            raise BeliefError("observation changed the viewer-history schema")
+        if observation.viewer != self.viewer:
+            raise BeliefError("observation changed the viewer-history viewer")
+        if observation.revision != receipt.after_revision:
+            raise BeliefError("observation does not match the transition revision")
+        return ViewerHistory(
+            schema_version=self.schema_version,
+            viewer=self.viewer,
+            initial_observation_identity=self.initial_observation_identity,
+            current_observation_identity=_observation_identity(observation),
+            current_revision=observation.revision,
+            current_viewer_state_hash=observation.viewer_state_hash,
+            events=(*self.events, *receipt.events),
+        )
 
     @property
     def identity(self) -> str:
         return _digest(
             {
-                "schema_identity": self.schema_identity,
+                "schema_version": self.schema_version,
                 "viewer": self.viewer,
+                "initial_observation_identity": self.initial_observation_identity,
+                "current_observation_identity": self.current_observation_identity,
                 "events": self.events,
             }
         )
+
+
+def _observation_identity(observation: Observation) -> str:
+    return _digest(
+        {
+            "schema_version": observation.schema_version,
+            "revision": observation.revision,
+            "viewer": observation.viewer,
+            "viewer_state_hash": observation.viewer_state_hash,
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,8 +210,15 @@ class CompatibleDealBeliefModel:
     ) -> BeliefUpdate:
         if viewer_history.viewer != world_space.viewer:
             raise BeliefError("viewer history does not match the world-space viewer")
-        if viewer_history.identity != world_space.source_history_identity:
-            raise BeliefError("viewer history identity does not match the world space")
+        if viewer_history.current_revision != world_space.source_revision:
+            raise BeliefError("viewer history revision does not match the world space")
+        if (
+            viewer_history.current_viewer_state_hash
+            != world_space.source_viewer_state_hash
+        ):
+            raise BeliefError(
+                "viewer history observation does not match the world space"
+            )
         if previous is not None and previous.space.viewer != world_space.viewer:
             raise BeliefError("previous belief crossed a viewer boundary")
         weights = np.asarray(
@@ -191,7 +258,10 @@ class EmptyBeliefSupport:
 def query_mass(belief: BeliefState, query: WorldQuery) -> float:
     """Measure a managym query under the canonical belief distribution."""
 
-    indexes, _ = belief.space.condition_indexes(query, allow_empty=True)
+    support = belief.space.support(query)
+    if support.support_size == 0:
+        return 0.0
+    indexes, _ = belief.space.condition_indexes(query)
     selected = np.asarray(indexes, dtype=np.int64)
     return float(belief.normalized_distribution[selected].sum())
 
@@ -201,7 +271,14 @@ def condition_belief(
 ) -> BeliefState | EmptyBeliefSupport:
     """Restrict and normalize a belief without consulting actual truth."""
 
-    indexes, receipt = belief.space.condition_indexes(query, allow_empty=True)
+    receipt = belief.space.support(query)
+    if receipt.support_size == 0:
+        return EmptyBeliefSupport(
+            belief_identity=belief.identity,
+            query_digest=receipt.query_digest,
+            world_space_identity=belief.space.identity,
+        )
+    indexes, receipt = belief.space.condition_indexes(query)
     selected = np.asarray(indexes, dtype=np.int64)
     mass = float(belief.normalized_distribution[selected].sum())
     if mass <= 0.0:

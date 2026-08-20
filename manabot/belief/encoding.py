@@ -5,12 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
 from manabot.belief.state import BeliefError, BeliefState
+
+OPPONENT_OWNER_ROLE_ID = 1
+LIBRARY_ZONE_ID = 0
+HAND_ZONE_ID = 1
 
 
 def _readonly(values: NDArray) -> NDArray:
@@ -41,8 +46,8 @@ class BeliefEncodingSchema:
     def __post_init__(self) -> None:
         if self.count_buckets < 2:
             raise BeliefError("belief encoding needs at least two count buckets")
-        if not self.rows or len(set(self.rows)) != len(self.rows):
-            raise BeliefError("belief encoding rows must be non-empty and unique")
+        if not self.rows:
+            raise BeliefError("belief encoding rows must be non-empty")
         if tuple(sorted(self.rows)) != self.rows:
             raise BeliefError("belief encoding rows must be canonically ordered")
         if any(
@@ -50,10 +55,27 @@ class BeliefEncodingSchema:
             for row in self.rows
         ):
             raise BeliefError("belief semantic ids must be non-negative")
-        if len({row.card_def_id for row in self.rows}) != len(self.rows):
-            raise BeliefError("card definition ids must be unique")
-        if len({row.card_name for row in self.rows}) != len(self.rows):
-            raise BeliefError("card names must be unique")
+        keys = tuple(
+            (row.owner_role_id, row.hidden_zone_id, row.card_def_id)
+            for row in self.rows
+        )
+        if len(set(keys)) != len(keys):
+            raise BeliefError(
+                "belief rows must be unique by owner, hidden zone, and card definition"
+            )
+        names_by_card_id: dict[int, str] = {}
+        card_ids_by_name: dict[str, int] = {}
+        for row in self.rows:
+            previous = names_by_card_id.setdefault(row.card_def_id, row.card_name)
+            if previous != row.card_name:
+                raise BeliefError(
+                    "one card definition id cannot name multiple card definitions"
+                )
+            previous_id = card_ids_by_name.setdefault(row.card_name, row.card_def_id)
+            if previous_id != row.card_def_id:
+                raise BeliefError(
+                    "one card definition name cannot map to multiple definition ids"
+                )
 
     @property
     def identity(self) -> str:
@@ -124,6 +146,58 @@ class BeliefTensorView:
         }
 
 
+def belief_schema_from_engine(
+    engine: Any,
+    belief: BeliefState,
+    *,
+    count_buckets: int,
+) -> BeliefEncodingSchema:
+    """Build fixed opponent hand/library rows from the native content manifest."""
+
+    try:
+        manifest = engine.content_pack_manifest()
+        content_identity = str(manifest["content_digest"])
+        definitions = tuple(
+            (int(row["card_def_id"]), str(row["registry_name"]))
+            for row in manifest["definitions"]
+        )
+    except Exception as error:
+        raise BeliefError(
+            "native content manifest is unavailable or malformed"
+        ) from error
+    if content_identity != belief.space.content_manifest_identity:
+        raise BeliefError("native content manifest changed from the world space")
+    if not definitions or len(set(definitions)) != len(definitions):
+        raise BeliefError("native content definitions must be non-empty and unique")
+    if len({card_id for card_id, _ in definitions}) != len(definitions):
+        raise BeliefError("native card definition ids must be unique")
+    if len({name for _, name in definitions}) != len(definitions):
+        raise BeliefError("native card definition names must be unique")
+    definition_names = {name for _, name in definitions}
+    if not {name for name, _ in belief.space.pool}.issubset(definition_names):
+        raise BeliefError("world-space pool is outside the native content manifest")
+
+    rows = tuple(
+        sorted(
+            BeliefRow(
+                owner_role_id=OPPONENT_OWNER_ROLE_ID,
+                hidden_zone_id=zone_id,
+                card_def_id=card_id,
+                card_name=name,
+            )
+            for card_id, name in definitions
+            for zone_id in (LIBRARY_ZONE_ID, HAND_ZONE_ID)
+        )
+    )
+    return BeliefEncodingSchema(
+        schema_identity="manabot.belief-tensor/opponent-hidden-counts-v1",
+        world_schema_identity=belief.space.world_schema_identity,
+        content_manifest_identity=content_identity,
+        rows=rows,
+        count_buckets=count_buckets,
+    )
+
+
 def encode_belief(
     belief: BeliefState, schema: BeliefEncodingSchema
 ) -> BeliefTensorView:
@@ -133,9 +207,10 @@ def encode_belief(
         raise BeliefError("belief world schema does not match the encoding schema")
     if belief.space.content_manifest_identity != schema.content_manifest_identity:
         raise BeliefError("belief content manifest does not match the encoding schema")
-    pool_names = tuple(name for name, _ in belief.space.pool)
-    schema_names = tuple(row.card_name for row in schema.rows)
-    if set(schema_names) != set(pool_names):
+    pool = dict(belief.space.pool)
+    pool_names = set(pool)
+    schema_names = {row.card_name for row in schema.rows}
+    if not pool_names.issubset(schema_names):
         raise BeliefError(
             "belief content vocabulary does not match the encoding schema"
         )
@@ -143,8 +218,25 @@ def encode_belief(
     row_count = len(schema.rows)
     probabilities = np.zeros((row_count, schema.count_buckets), dtype=np.float32)
     for row_index, row in enumerate(schema.rows):
+        if row.owner_role_id != OPPONENT_OWNER_ROLE_ID:
+            raise BeliefError(
+                "the canonical world space only projects opponent-owned hidden rows"
+            )
+        if row.hidden_zone_id not in {HAND_ZONE_ID, LIBRARY_ZONE_ID}:
+            raise BeliefError(
+                "the canonical world space only projects hidden hand and library rows"
+            )
         for world in belief.space.worlds:
-            count = world.count(row.card_name)
+            hand_count = world.count(row.card_name)
+            count = (
+                hand_count
+                if row.hidden_zone_id == HAND_ZONE_ID
+                else pool.get(row.card_name, 0) - hand_count
+            )
+            if count < 0:
+                raise BeliefError(
+                    f"world hand count exceeds the unseen pool for {row.card_name!r}"
+                )
             if count >= schema.count_buckets:
                 raise BeliefError(
                     f"count {count} for {row.card_name!r} exceeds the encoding schema"
@@ -193,5 +285,9 @@ __all__ = [
     "BeliefEncodingSchema",
     "BeliefRow",
     "BeliefTensorView",
+    "HAND_ZONE_ID",
+    "LIBRARY_ZONE_ID",
+    "OPPONENT_OWNER_ROLE_ID",
+    "belief_schema_from_engine",
     "encode_belief",
 ]

@@ -526,6 +526,18 @@ the first exact world may use a fixed categorical distribution, while a
 structured hypothesis scorer is the likely scaling seam. Either choice emits
 the same normalized semantic `BeliefState` contract.
 
+Belief training starts from managym's exact pre-mulligan combinatorial prior.
+When the mulligan or opponent policy is known, public action likelihoods update
+that prior by Bayes' rule. A learned model is supervised on materialized hidden
+hands with normalized whole-world negative log likelihood; larger hypothesis
+spaces may factor the same joint distribution autoregressively. Independent
+card-count marginals are diagnostics and policy inputs, not the primary joint
+loss, because they discard correlations between cards and zones. Every belief
+example and checkpoint records the opponent policy/version and its provenance:
+belief targets are policy-conditioned, and an opponent change creates
+covariate shift rather than interchangeable data. Actual hidden hands remain
+access-controlled supervision only and never enter live policy/value inference.
+
 The diagram requires the belief path but does not yet decide that it is the
 only path from history to strategy. A separate recurrent or compressed
 agent-memory input may also reach policy/value if experiments justify it. That
