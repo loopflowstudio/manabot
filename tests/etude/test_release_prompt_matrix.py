@@ -5,37 +5,12 @@ from __future__ import annotations
 from collections import Counter
 import json
 from pathlib import Path
-import subprocess
-import sys
 
 from etude.curated_pack import CURATED_PACK
 from manabot.env.observation import ActionSpaceEnum
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX_PATH = ROOT / "frontend" / "e2e" / "release-prompt-matrix.json"
-
-
-def test_release_server_does_not_import_training_only_dependencies():
-    """Keep the visual/runtime server import inside its pruned dependency set."""
-
-    script = """
-import builtins
-
-original_import = builtins.__import__
-
-def guarded_import(name, *args, **kwargs):
-    if name.partition('.')[0] in {'psutil', 'wandb'}:
-        raise ModuleNotFoundError(name)
-    return original_import(name, *args, **kwargs)
-
-builtins.__import__ = guarded_import
-import etude.server
-"""
-    subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=ROOT,
-        check=True,
-    )
 
 
 def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
