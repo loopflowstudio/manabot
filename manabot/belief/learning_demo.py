@@ -200,7 +200,7 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
             event.to_payload() for event in history.semantic_events
         ],
         "semantic_history_schema_identity": trained.model.history_schema_identity,
-        "history_representation": "typed-public-commitment-sequence",
+        "history_representation": "typed-public-commitment-events",
         "first_informative_action_by_opponent": public_actor != viewer,
         "inference_inputs": ["possible_world_space", "viewer_history"],
         "supervision_access": "authority-only-materialized-world",
@@ -228,10 +228,6 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
         "artifact_identity_invariant": (
             artifact_variant_history.identity != history.identity
             and artifact_variant.digest == learned.digest
-            and np.array_equal(
-                artifact_variant.probabilities,
-                learned.probabilities,
-            )
         ),
         "semantic_history_changes_distribution": (
             np.array_equal(

@@ -89,7 +89,7 @@ def test_real_engine_fresh_model_overfits_without_truth_at_inference() -> None:
     assert evidence["training_examples"] == 1
     assert evidence["viewer_history_events"] > 0
     assert evidence["viewer_history_event_identities"] > 0
-    assert evidence["history_representation"] == "typed-public-commitment-sequence"
+    assert evidence["history_representation"] == "typed-public-commitment-events"
     assert evidence["semantic_public_history"][0]["commitment"]["kind"] == ("play_land")
     assert evidence["semantic_public_history"][0]["actor_role_id"] == 1
     assert len(evidence["semantic_history_schema_identity"]) == 64
