@@ -21,6 +21,8 @@ from manabot.belief import (
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Observation,
+    PublicCommitment,
+    SemanticContractError,
     TransitionReceipt,
 )
 from managym.possible_worlds import WorldQuery
@@ -224,3 +226,49 @@ def test_history_identity_is_derived_from_native_observations_and_receipts() -> 
     assert advanced.identity != same.identity
     with pytest.raises(BeliefError, match="does not continue"):
         advanced.advance(receipt, current, acting=1)
+
+
+@pytest.mark.parametrize(
+    "public_commitment, message",
+    (
+        ({"kind": "declare_attacker"}, "unsupported public commitment"),
+        ({"kind": "cast"}, "non-canonical fields"),
+        (
+            {"kind": "pass_priority", "card": "Mountain"},
+            "non-canonical fields",
+        ),
+    ),
+)
+def test_history_rejects_unsupported_public_commitments(
+    public_commitment: dict[str, str],
+    message: str,
+) -> None:
+    history = fixture_history()
+    receipt = TransitionReceipt(
+        schema_version=SEMANTIC_DECISION_VERSION,
+        before_revision=history.current_revision,
+        after_revision=history.current_revision + 1,
+        command_id="unsupported-commitment",
+        public_commitment=public_commitment,
+        events=(),
+        next_decision="next",
+    )
+    observation = Observation(
+        schema_version=SEMANTIC_DECISION_VERSION,
+        revision=receipt.after_revision,
+        viewer=history.viewer,
+        viewer_state_hash="next-viewer-state",
+        viewer_state={},
+        events=(),
+        decision=None,
+    )
+
+    with pytest.raises(BeliefError, match=message):
+        history.advance(receipt, observation, acting=1)
+
+
+def test_public_commitment_type_cannot_construct_invalid_semantics() -> None:
+    with pytest.raises(SemanticContractError, match="canonical card name"):
+        PublicCommitment(kind="cast")
+    with pytest.raises(SemanticContractError, match="cannot carry a card name"):
+        PublicCommitment(kind="pass_priority", card="Mountain")

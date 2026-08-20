@@ -200,7 +200,7 @@ def run_demo(*, steps: int = 80, seed: int = 197) -> dict[str, Any]:
             event.to_payload() for event in history.semantic_events
         ],
         "semantic_history_schema_identity": trained.model.history_schema_identity,
-        "history_representation": "typed-public-commitment-events",
+        "history_representation": "typed-public-commitment-multiset",
         "first_informative_action_by_opponent": public_actor != viewer,
         "inference_inputs": ["possible_world_space", "viewer_history"],
         "supervision_access": "authority-only-materialized-world",

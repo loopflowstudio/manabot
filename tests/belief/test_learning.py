@@ -1,5 +1,6 @@
 """Behavioral proof for supervised exact-world belief learning."""
 
+from dataclasses import replace
 import json
 
 import numpy as np
@@ -14,8 +15,8 @@ from manabot.belief.learning import (
 )
 from manabot.belief.learning_demo import run_demo
 from manabot.belief.range import BeliefError
-from manabot.belief.state import ViewerHistory
-from managym.decision import Observation
+from manabot.belief.state import ViewerHistory, ViewerHistoryEvent
+from managym.decision import Observation, PublicCommitment
 from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
@@ -48,6 +49,38 @@ def test_ragged_training_batch_uses_exact_combinatorial_p0() -> None:
     assert np.allclose(
         packed.log_p0[:support].exp().numpy(), expected, atol=1e-15, rtol=0.0
     )
+
+
+def test_semantic_history_pooling_is_explicitly_order_invariant() -> None:
+    history = fixture_history()
+    space = fixture_space(history)
+    schema = fixture_schema(space)
+    events = (
+        ViewerHistoryEvent(1, PublicCommitment("play_land", "Mountain")),
+        ViewerHistoryEvent(1, PublicCommitment("pass_priority")),
+        ViewerHistoryEvent(0, PublicCommitment("cast", "Lightning Bolt")),
+    )
+    forward = BeliefTrainingExample(
+        world_space=space,
+        viewer_history=replace(history, semantic_events=events),
+        target_world=0,
+        supervision_receipt="forward",
+    )
+    reverse = replace(
+        forward,
+        viewer_history=replace(history, semantic_events=tuple(reversed(events))),
+        supervision_receipt="reverse",
+    )
+
+    forward_batch = pack_belief_examples((forward,), schema)
+    reverse_batch = pack_belief_examples((reverse,), schema)
+
+    assert forward.viewer_history.identity != reverse.viewer_history.identity
+    assert forward_batch.history_actor_role_ids.equal(
+        reverse_batch.history_actor_role_ids
+    )
+    assert forward_batch.history_kind_ids.equal(reverse_batch.history_kind_ids)
+    assert forward_batch.history_card_indexes.equal(reverse_batch.history_card_indexes)
 
 
 def test_supervision_rejects_an_authority_engine_from_another_revision() -> None:
@@ -89,7 +122,7 @@ def test_real_engine_fresh_model_overfits_without_truth_at_inference() -> None:
     assert evidence["training_examples"] == 1
     assert evidence["viewer_history_events"] > 0
     assert evidence["viewer_history_event_identities"] > 0
-    assert evidence["history_representation"] == "typed-public-commitment-events"
+    assert evidence["history_representation"] == "typed-public-commitment-multiset"
     assert evidence["semantic_public_history"][0]["commitment"]["kind"] == ("play_land")
     assert evidence["semantic_public_history"][0]["actor_role_id"] == 1
     assert len(evidence["semantic_history_schema_identity"]) == 64

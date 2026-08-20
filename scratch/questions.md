@@ -26,3 +26,8 @@
   and advanced through canonical transition receipts. Supporting arbitrary
   mid-game attachment requires a managym-owned semantic-history replay
   projection; this slice does not reconstruct meaning from hashes.
+- The v2 learned updater sum-pools typed public commitments and normalizes by
+  the square root of their count. It can learn from actor, kind, card, and
+  multiplicity, but it is intentionally invariant to event order. This slice
+  proves semantic event sensitivity, not sequence sensitivity; an ordered
+  history encoder remains a later model change.

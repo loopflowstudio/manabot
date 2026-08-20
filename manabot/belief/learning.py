@@ -32,7 +32,7 @@ from managym.decision import (
 )
 from managym.possible_worlds import PossibleWorldSpace
 
-SEMANTIC_HISTORY_SCHEMA = "manabot.viewer-public-commitment-history/v1"
+SEMANTIC_HISTORY_SCHEMA = "manabot.viewer-public-commitment-multiset/v1"
 
 
 def _digest(payload: object) -> str:
@@ -198,6 +198,7 @@ def _pack_inputs(
             log_p0.append(math.log(world.weight) - math.log(space.total_weight))
             world_batch.append(decision_index)
         offsets.append(len(count_rows))
+        encoded_events: list[tuple[int, int, int]] = []
         for event in history.semantic_events:
             if event.actor_role_id not in {
                 VIEWER_ACTOR_ROLE_ID,
@@ -212,9 +213,17 @@ def _pack_inputs(
                 raise BeliefError(
                     "semantic history card is outside the bound content vocabulary"
                 )
-            history_actor_roles.append(event.actor_role_id)
-            history_kinds.append(kind_ids[kind])
-            history_cards.append(0 if card_name is None else card_ids[card_name])
+            encoded_events.append(
+                (
+                    event.actor_role_id,
+                    kind_ids[kind],
+                    0 if card_name is None else card_ids[card_name],
+                )
+            )
+        for actor_role_id, kind_id, card_id in sorted(encoded_events):
+            history_actor_roles.append(actor_role_id)
+            history_kinds.append(kind_id)
+            history_cards.append(card_id)
             history_batch.append(decision_index)
     target_values = (
         [-1] * len(inputs) if targets is None else [int(target) for target in targets]

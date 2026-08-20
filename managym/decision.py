@@ -44,8 +44,25 @@ class PublicCommitment:
     kind: str
     card: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.kind not in PUBLIC_COMMITMENT_KINDS:
+            raise SemanticContractError(
+                f"unsupported public commitment kind {self.kind!r}"
+            )
+        if self.kind in _CARD_PUBLIC_COMMITMENT_KINDS:
+            if not isinstance(self.card, str) or not self.card:
+                raise SemanticContractError(
+                    f"{self.kind} public commitment needs a canonical card name"
+                )
+        elif self.card is not None:
+            raise SemanticContractError(
+                f"{self.kind} public commitment cannot carry a card name"
+            )
+
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> "PublicCommitment":
+        if not isinstance(payload, Mapping):
+            raise SemanticContractError("public commitment must be an object")
         kind = payload.get("kind")
         if kind not in PUBLIC_COMMITMENT_KINDS:
             raise SemanticContractError(f"unsupported public commitment kind {kind!r}")
