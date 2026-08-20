@@ -47,7 +47,6 @@ from manabot.sim.flat_mc import (
 )
 from manabot.sim.rollout import _allocate_buffers
 
-
 # -----------------------------------------------------------------------------
 # Batched value evaluation
 # -----------------------------------------------------------------------------
@@ -572,7 +571,8 @@ def collect_value_assessment(
 
     scorer = load_value_scorer(value_checkpoint, device=device)
     behavior, obs_space = make_player(
-        {"kind": "checkpoint", "path": behavior_checkpoint}, seed=seed * 2 + 1
+        {"kind": "legacy_checkpoint", "path": behavior_checkpoint},
+        seed=seed * 2 + 1,
     )
     obs_space = obs_space or ObservationSpace()
     match = Match(

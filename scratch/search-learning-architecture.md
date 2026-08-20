@@ -118,7 +118,7 @@ p0(h | k) = product_i choose(ci, hi) / choose(N, k)
 The current canonical encoding is ragged by decision. `PossibleWorldSpace`
 enumerates `W` compatible opponent-hand name-multisets in deterministic order;
 world `j` stores its sparse positive counts and exact integer physical-deal
-weight. `p0.normalized_distribution` is `float64[W]`, and an exact learned
+weight. `p0.probabilities` is `float64[W]`, and an exact learned
 scorer produces one correction logit in that same canonical order. `W` is the
 number of bounded count vectors satisfying `sum_i hi == k`, not necessarily
 `choose(N, k)`, because interchangeable copies are collapsed into one world:
@@ -326,11 +326,14 @@ default.
 ## Belief training contract
 
 The initial distribution is managym's exact pre-mulligan combinatorial prior.
-Where the mulligan policy or opponent policy is known, the belief updater uses
-that policy likelihood in a normalized Bayes update. Learned belief models are
-supervised against materialized hidden hands with whole-world negative log
-likelihood; when exact categorical support is too large, an autoregressive
-factorization may represent the same normalized joint distribution.
+The deployed belief updater does not receive or require the acting policy. It
+learns the likelihood-ratio correction implied by viewer-safe actions across a
+training population. A known-policy normalized Bayes update is diagnostic only,
+used to check whether an observed update is explainable when that policy is
+available. Learned belief models are supervised against materialized hidden
+hands with whole-world negative log likelihood; when exact categorical support
+is too large, an autoregressive factorization may represent the same normalized
+joint distribution.
 
 Independent card or zone marginals are never the primary belief loss because
 they erase joint correlations. They remain derived diagnostics and cheap

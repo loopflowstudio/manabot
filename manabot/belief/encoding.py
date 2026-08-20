@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
-from manabot.belief.state import BeliefError, BeliefState
+from manabot.belief.range import BeliefError, BeliefState
 from managym.possible_worlds import PossibleWorldSpace
 
 OPPONENT_OWNER_ROLE_ID = 1
@@ -209,6 +209,7 @@ def encode_belief(
     # worlds, and adding their weights directly into float32 buckets can move
     # an otherwise normalized marginal outside the fail-closed tolerance.
     probabilities64 = np.zeros((row_count, schema.count_buckets), dtype=np.float64)
+    belief_probabilities = belief.probabilities
     for row_index, row in enumerate(schema.rows):
         if row.owner_role_id != OPPONENT_OWNER_ROLE_ID:
             raise BeliefError(
@@ -233,9 +234,7 @@ def encode_belief(
                 raise BeliefError(
                     f"count {count} for {row.card_name!r} exceeds the encoding schema"
                 )
-            probabilities64[row_index, count] += belief.normalized_distribution[
-                world.index
-            ]
+            probabilities64[row_index, count] += belief_probabilities[world.index]
     if not np.allclose(
         probabilities64.sum(axis=1),
         1.0,

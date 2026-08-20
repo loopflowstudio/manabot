@@ -8,11 +8,18 @@ determinization invariants, playout termination) and the Python matchup loop
 import numpy as np
 import pytest
 
+from manabot.belief import ManabotPlayer
+from manabot.env import ObservationSpace
+from manabot.infra.hypers import AgentHypers
+from manabot.model import Agent
+import manabot.sim.flat_mc as flat_mc
 from manabot.sim.flat_mc import (
+    AgentMatchupPlayer,
     FlatMCPlayer,
     GameRecord,
     RandomMatchupPlayer,
     aggregate_records,
+    make_player,
     play_games,
     wilson_interval,
 )
@@ -103,6 +110,45 @@ def test_random_matchup_player_uses_valid_mask():
     obs = {"actions_valid": np.array([0.0, 1.0, 0.0, 1.0])}
     for _ in range(10):
         assert player.act(None, obs) in (1, 3)
+
+
+def test_checkpoint_routes_belief_agents_and_requires_explicit_legacy(
+    monkeypatch,
+):
+    observation_space = ObservationSpace()
+    belief_agent = Agent(
+        observation_space,
+        AgentHypers(
+            hidden_dim=8,
+            num_attention_heads=2,
+            belief_count_buckets=3,
+            belief_card_vocab_size=64,
+        ),
+    )
+    monkeypatch.setattr(
+        flat_mc,
+        "load_checkpoint_agent",
+        lambda _path: (belief_agent, observation_space),
+    )
+
+    player, _ = make_player({"kind": "checkpoint", "path": "belief.pt"}, seed=1)
+    assert isinstance(player, ManabotPlayer)
+
+    legacy_agent = Agent(
+        observation_space,
+        AgentHypers(hidden_dim=8, num_attention_heads=2),
+    )
+    monkeypatch.setattr(
+        flat_mc,
+        "load_checkpoint_agent",
+        lambda _path: (legacy_agent, observation_space),
+    )
+    with pytest.raises(ValueError, match="legacy_checkpoint"):
+        make_player({"kind": "checkpoint", "path": "legacy.pt"}, seed=1)
+    player, _ = make_player(
+        {"kind": "legacy_checkpoint", "path": "legacy.pt"}, seed=1
+    )
+    assert isinstance(player, AgentMatchupPlayer)
 
 
 def test_play_games_seat_balances_and_records():

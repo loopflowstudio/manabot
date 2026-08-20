@@ -12,10 +12,9 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.belief.encoding import BeliefEncodingSchema, encode_belief
+from manabot.belief.range import BeliefError, BeliefState
 from manabot.belief.state import (
-    BeliefError,
     BeliefModel,
-    BeliefState,
     BeliefUpdate,
     ViewerHistory,
 )

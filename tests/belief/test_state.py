@@ -75,15 +75,27 @@ def test_empty_support_and_invalid_distributions_fail_closed() -> None:
     with pytest.raises(BeliefError, match="normalized"):
         BeliefState(
             belief.space,
-            belief.model,
-            np.full(belief.space.support_size, 0.5, dtype=np.float64),
+            belief.model_id,
+            np.zeros(belief.space.support_size, dtype=np.float64),
         )
     with pytest.raises(BeliefError, match="finite"):
-        BeliefState(
+        BeliefState.from_probabilities(
             belief.space,
-            belief.model,
+            belief.model_id,
             np.full(belief.space.support_size, np.nan, dtype=np.float64),
         )
+
+
+def test_lifecycle_and_search_import_one_canonical_belief_type() -> None:
+    from manabot.belief.range import BeliefState as RangeBeliefState
+    from manabot.belief.state import BeliefState as LifecycleBeliefState
+
+    belief = generated_belief()
+
+    assert BeliefState is RangeBeliefState is LifecycleBeliefState
+    assert type(belief) is RangeBeliefState
+    assert belief.identity == belief.digest
+    assert belief.model == belief.model_id
 
 
 def test_encoding_rejects_content_and_count_schema_mismatches() -> None:

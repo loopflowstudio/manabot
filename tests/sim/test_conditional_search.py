@@ -14,6 +14,7 @@ import sys
 
 import pytest
 
+from manabot.belief import CompatibleDealBeliefModel, ViewerHistory
 from manabot.sim.conditional_search import (
     CONDITION_TRUE,
     ConditionalSearchError,
@@ -25,7 +26,9 @@ from manabot.sim.conditional_search import (
     WorldSpec,
     canonical_result_json,
     conditional_determinized_puct,
+    conditional_determinized_puct_beliefs,
     make_prior,
+    make_prior_from_belief,
     make_query_plan,
     result_sha256,
     serialize_result,
@@ -34,6 +37,8 @@ from manabot.sim.conditional_search import (
 from manabot.sim.search_branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.verify.util import INTERACTIVE_DECK
 import managym
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = (
@@ -164,6 +169,40 @@ def _run_search_fast(seed: int = SEED) -> ConditionalStrategyResult:
     )
     validate_result(result)
     return result
+
+
+def test_generated_runtime_belief_passes_directly_to_search() -> None:
+    root = _build_root_env()
+    viewer = int(root.current_agent_index())
+    history = ViewerHistory.from_observation(
+        Observation.from_json(root.semantic_observation_json(viewer))
+    )
+    space = PossibleWorldSpace.from_engine(root, viewer)
+    belief = CompatibleDealBeliefModel().update(
+        previous=None,
+        world_space=space,
+        viewer_history=history,
+    ).belief
+
+    prior = make_prior_from_belief(belief)
+    assert prior.prior_sha256 == belief.digest
+    assert prior.weights.tolist() == pytest.approx(belief.probabilities.tolist())
+
+    result = conditional_determinized_puct_beliefs(
+        root,
+        beliefs={"generated": belief},
+        simulations=1,
+        worlds=1,
+        seed=SEED,
+        max_steps=FAST_MAX_STEPS,
+        branch_driver_id=REFERENCE_BRANCH_DRIVER_ID,
+        branch_audit=False,
+    )
+
+    assert [condition.condition_id for condition in result.conditions] == [
+        "generated"
+    ]
+    assert result.identities["belief_digests"] == {"generated": belief.digest}
 
 
 # ---------------------------------------------------------------------------

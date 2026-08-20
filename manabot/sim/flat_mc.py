@@ -198,8 +198,8 @@ def make_player(
         {"kind": "policy_search", "sims": 16, "checkpoint": "/abs/path.pt",
          "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
-        {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
-        {"kind": "belief_checkpoint", "path": "/abs/path/step_65536.pt"}
+        {"kind": "checkpoint", "path": "/abs/path/belief_step.pt"}
+        {"kind": "legacy_checkpoint", "path": "/abs/path/step_65536.pt"}
         {"kind": "value_greedy", "checkpoint": "/abs/value.pt", "device": "cpu"}
         {"kind": "value_search", "sims": 64, "checkpoint": "/abs/value.pt",
          "depth": 0, "rollouts_per_world": 1, "device": "cpu"}
@@ -347,6 +347,16 @@ def make_player(
     if kind == "random":
         return RandomMatchupPlayer(seed=seed), None
     if kind == "checkpoint":
+        from manabot.belief.runtime import ManabotPlayer
+
+        agent, obs_space = load_checkpoint_agent(spec["path"])
+        if agent.belief_count_buckets < 2:
+            raise ValueError(
+                "checkpoint requires a belief-enabled Agent; use "
+                "legacy_checkpoint for historical artifacts"
+            )
+        return ManabotPlayer(agent), obs_space
+    if kind == "legacy_checkpoint":
         agent, obs_space = load_checkpoint_agent(spec["path"])
         return (
             AgentMatchupPlayer(
@@ -375,6 +385,8 @@ def spec_name(spec: dict[str, Any]) -> str:
     if kind == "policy_search":
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
+        return spec.get("name", spec["path"])
+    if kind == "legacy_checkpoint":
         return spec.get("name", spec["path"])
     if kind == "belief_checkpoint":
         return spec.get("name", spec["path"])

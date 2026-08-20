@@ -5,18 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-import math
 from typing import Protocol
 
 import numpy as np
-from numpy.typing import NDArray
 
+from manabot.belief.range import BeliefError, BeliefState
 from managym.decision import Observation, TransitionReceipt
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
-
-
-class BeliefError(ValueError):
-    """A belief operation violated identity, support, or normalization."""
 
 
 def _digest(payload: object) -> str:
@@ -117,52 +112,6 @@ def _observation_identity(
 
 
 @dataclass(frozen=True, slots=True)
-class BeliefState:
-    """A normalized probability vector bound to one canonical world space."""
-
-    space: PossibleWorldSpace
-    model: str
-    normalized_distribution: NDArray[np.float64]
-
-    def __post_init__(self) -> None:
-        values = np.asarray(self.normalized_distribution, dtype=np.float64).copy()
-        if values.shape != (self.space.support_size,):
-            raise BeliefError("belief must have one weight per canonical world")
-        if np.any(~np.isfinite(values)):
-            raise BeliefError("belief weights must be finite")
-        if np.any(values < 0.0):
-            raise BeliefError("belief weights must be non-negative")
-        total = float(values.sum())
-        if not math.isclose(total, 1.0, rel_tol=0.0, abs_tol=1e-10):
-            raise BeliefError(f"belief is not normalized: total={total}")
-        values.setflags(write=False)
-        object.__setattr__(self, "normalized_distribution", values)
-
-    @property
-    def identity(self) -> str:
-        digest = hashlib.sha256()
-        digest.update(self.space.identity.encode("ascii"))
-        digest.update(b"\0")
-        digest.update(self.model.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(np.asarray(self.normalized_distribution, dtype="<f8").tobytes())
-        return digest.hexdigest()
-
-    @property
-    def normalization_error(self) -> float:
-        return abs(float(self.normalized_distribution.sum()) - 1.0)
-
-    @property
-    def entropy(self) -> float:
-        positive = self.normalized_distribution[self.normalized_distribution > 0.0]
-        return -float(np.sum(positive * np.log(positive)))
-
-    @property
-    def effective_support(self) -> float:
-        return 1.0 / float(np.square(self.normalized_distribution).sum())
-
-
-@dataclass(frozen=True, slots=True)
 class BeliefUpdateReceipt:
     model_identity: str
     previous_belief: str | None
@@ -239,7 +188,9 @@ class CompatibleDealBeliefModel:
         if np.any(weights <= 0.0) or not np.all(np.isfinite(weights)):
             raise BeliefError("compatible-deal weights must be finite and positive")
         distribution = weights / float(weights.sum())
-        belief = BeliefState(world_space, self.identity, distribution)
+        belief = BeliefState.from_probabilities(
+            world_space, self.identity, distribution
+        )
         previous_identity = None if previous is None else previous.identity
         receipt = BeliefUpdateReceipt(
             model_identity=self.identity,
@@ -291,7 +242,9 @@ def condition_belief(
         )
     conditioned = np.zeros_like(belief.normalized_distribution)
     conditioned[selected] = belief.normalized_distribution[selected] / mass
-    return BeliefState(belief.space, belief.model, conditioned)
+    return BeliefState.from_probabilities(
+        belief.space, belief.model_id, conditioned
+    )
 
 
 __all__ = [
