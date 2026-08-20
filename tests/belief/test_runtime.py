@@ -186,3 +186,26 @@ def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
 
     with pytest.raises(BeliefError, match="missing its schema binding"):
         load_checkpoint_agent(str(checkpoint_path))
+
+
+def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
+    agent = Agent(ObservationSpace(), AgentHypers(hidden_dim=8, num_attention_heads=2))
+    checkpoint_path = tmp_path / "removed-agent-field.pt"
+    torch.save(
+        {
+            "hypers": {
+                "observation_hypers": (
+                    agent.observation_space.encoder.hypers.model_dump()
+                ),
+                "agent_hypers": {
+                    **agent.hypers.model_dump(),
+                    "max_conditions": 5,
+                },
+            },
+            "model_state_dict": agent.state_dict(),
+        },
+        checkpoint_path,
+    )
+
+    with pytest.raises(ValueError, match="max_conditions"):
+        load_checkpoint_agent(str(checkpoint_path))

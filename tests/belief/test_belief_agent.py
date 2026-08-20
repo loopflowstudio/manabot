@@ -7,7 +7,6 @@ from manabot.belief import (
     AgentMemory,
     BeliefError,
     CompatibleDealBeliefModel,
-    Manabot,
     ViewerHistory,
     belief_schema_from_engine,
     encode_belief,
@@ -53,27 +52,6 @@ def test_belief_enabled_agent_has_no_silent_fallback() -> None:
 
     with pytest.raises(ValueError, match="missing inputs"):
         agent(dict(decision.observation))
-
-
-def test_manabot_rejects_the_legacy_positional_condition_channel() -> None:
-    _, schema = fixture_decision()
-    agent = Agent(
-        ObservationSpace(),
-        AgentHypers(
-            hidden_dim=8,
-            num_attention_heads=2,
-            max_conditions=5,
-            belief_count_buckets=schema.count_buckets,
-            belief_card_vocab_size=3,
-        ),
-    )
-
-    with pytest.raises(BeliefError, match="legacy positional"):
-        Manabot(
-            policy_value=agent,
-            belief_model=CompatibleDealBeliefModel(),
-            belief_schema=schema,
-        )
 
 
 def test_world_space_mismatch_fails_before_inference() -> None:

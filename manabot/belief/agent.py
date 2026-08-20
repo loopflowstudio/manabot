@@ -100,10 +100,6 @@ class Manabot:
         belief_model: BeliefModel,
         belief_schema: BeliefEncodingSchema,
     ) -> None:
-        if policy_value.max_conditions > 0:
-            raise BeliefError(
-                "Manabot cannot use the legacy positional condition channel"
-            )
         if policy_value.belief_count_buckets != belief_schema.count_buckets:
             raise BeliefError("Agent and belief encoding count buckets differ")
         if policy_value.belief_card_embedding is None:
@@ -208,7 +204,7 @@ class Manabot:
             policy=policy,
             value=scalar_value,
             legal_action_indexes=legal_action_indexes,
-            belief_identity=belief.identity,
+            belief_identity=belief.digest,
             belief_encoding_receipt=view.encoding_receipt,
             inference_receipt=receipt.hexdigest(),
             encoding_seconds=encoding_seconds,

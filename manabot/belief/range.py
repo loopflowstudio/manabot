@@ -101,24 +101,6 @@ class BeliefState:
         return np.exp(self.log_probabilities)
 
     @property
-    def normalized_distribution(self) -> NDArray[np.float64]:
-        """Normalized probabilities exposed for policy-facing projections."""
-
-        return self.probabilities
-
-    @property
-    def model(self) -> str:
-        """Belief-model identity used by lifecycle receipts."""
-
-        return self.model_id
-
-    @property
-    def identity(self) -> str:
-        """Canonical belief identity shared by runtime, search, and receipts."""
-
-        return self.digest
-
-    @property
     def normalization_error(self) -> float:
         return abs(float(self.probabilities.sum()) - 1.0)
 
@@ -126,10 +108,6 @@ class BeliefState:
     def effective_range_size(self) -> float:
         probabilities = self.probabilities
         return 1.0 / float(np.square(probabilities).sum())
-
-    @property
-    def effective_support(self) -> float:
-        return self.effective_range_size
 
     @property
     def entropy(self) -> float:

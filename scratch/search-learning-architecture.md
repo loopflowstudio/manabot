@@ -251,8 +251,8 @@ The canonical source belief remains the architecture's existing contract:
 @dataclass(frozen=True)
 class BeliefState:
     space: PossibleWorldSpaceIdentity
-    model: BeliefModelIdentity
-    normalized_distribution: WorldDistribution
+    model_id: BeliefModelIdentity
+    log_probabilities: WorldLogProbabilityVector
 
 @dataclass(frozen=True)
 class BeliefUpdate:
@@ -314,10 +314,11 @@ both identities before constructing the decision core or running inference;
 matching tensor dimensions are not enough.
 
 There is one `checkpoint` player kind. It dispatches from the serialized
-`Agent` capability rather than inventing distinct agent types. This work does
-not port or retain incompatible historical checkpoint formats: experiments
-regenerate models under the current observation, action, content, and belief
-ABIs.
+`Agent` capability rather than inventing distinct agent types. There is no
+positional-condition model path, neutral condition fallback, legacy agent
+kind, checkpoint alias, or state-dict port. Unknown hyperparameters and missing
+schema bindings fail at load time. Experiments regenerate models under the
+current observation, action, content, and belief ABIs.
 
 ## Shared model structure
 

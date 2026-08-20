@@ -337,7 +337,9 @@ def encode_belief(
     ):
         digest.update(values.tobytes())
     digest.update(
-        np.asarray([belief.entropy, belief.effective_support], dtype="<f8").tobytes()
+        np.asarray(
+            [belief.entropy, belief.effective_range_size], dtype="<f8"
+        ).tobytes()
     )
     return BeliefTensorView(
         schema_identity=schema.identity,
@@ -347,7 +349,7 @@ def encode_belief(
         count_probabilities=_readonly(probabilities),
         validity=_readonly(validity),
         entropy=belief.entropy,
-        effective_support=belief.effective_support,
+        effective_support=belief.effective_range_size,
         encoding_receipt=digest.hexdigest(),
     )
 

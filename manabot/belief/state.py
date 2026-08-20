@@ -191,7 +191,7 @@ class CompatibleDealBeliefModel:
         belief = BeliefState.from_probabilities(
             world_space, self.identity, distribution
         )
-        previous_identity = None if previous is None else previous.identity
+        previous_identity = None if previous is None else previous.digest
         receipt = BeliefUpdateReceipt(
             model_identity=self.identity,
             previous_belief=previous_identity,
@@ -199,7 +199,7 @@ class CompatibleDealBeliefModel:
             consumed_history_range=(0, len(viewer_history.events)),
             world_space_identity=world_space.identity,
             normalization_error=belief.normalization_error,
-            output_digest=belief.identity,
+            output_digest=belief.digest,
         )
         return BeliefUpdate(
             previous_belief=previous_identity,
@@ -223,7 +223,7 @@ def query_mass(belief: BeliefState, query: WorldQuery) -> float:
 
     indexes, _ = belief.space.condition_indexes(query, allow_empty=True)
     selected = np.asarray(indexes, dtype=np.int64)
-    return float(belief.normalized_distribution[selected].sum())
+    return float(belief.probabilities[selected].sum())
 
 
 def condition_belief(
@@ -233,15 +233,16 @@ def condition_belief(
 
     indexes, receipt = belief.space.condition_indexes(query, allow_empty=True)
     selected = np.asarray(indexes, dtype=np.int64)
-    mass = float(belief.normalized_distribution[selected].sum())
+    probabilities = belief.probabilities
+    mass = float(probabilities[selected].sum())
     if mass <= 0.0:
         return EmptyBeliefSupport(
-            belief_identity=belief.identity,
+            belief_identity=belief.digest,
             query_digest=receipt.query_digest,
             world_space_identity=belief.space.identity,
         )
-    conditioned = np.zeros_like(belief.normalized_distribution)
-    conditioned[selected] = belief.normalized_distribution[selected] / mass
+    conditioned = np.zeros_like(probabilities)
+    conditioned[selected] = probabilities[selected] / mass
     return BeliefState.from_probabilities(
         belief.space, belief.model_id, conditioned
     )

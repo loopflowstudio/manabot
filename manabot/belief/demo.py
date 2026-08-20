@@ -170,7 +170,7 @@ def run_demo() -> dict[str, Any]:
         for command, action_index in legal_actions
     }
     return {
-        "generated_belief_identity": generated.identity,
+        "generated_belief_identity": generated.digest,
         "checkpoint_schema_bound": player.checkpoint_binding is not None,
         "viewer_history_identity": player.history.identity,
         "p_has_bolt": query_mass(generated, has_query),
@@ -190,8 +190,8 @@ def run_demo() -> dict[str, Any]:
         "policy_delta_has_minus_lacks": delta,
         "viewer_hidden_swap_identical": (
             has_observation == lacks_observation
-            and swap_a.belief_update.belief.identity
-            == swap_b.belief_update.belief.identity
+            and swap_a.belief_update.belief.digest
+            == swap_b.belief_update.belief.digest
             and swap_a.result.output_bytes == swap_b.result.output_bytes
         ),
         "receipts": {

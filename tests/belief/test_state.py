@@ -58,7 +58,7 @@ def test_equivalent_queries_produce_identical_beliefs_and_encodings() -> None:
 
     assert isinstance(has_bolt, BeliefState)
     assert isinstance(not_zero_bolt, BeliefState)
-    assert has_bolt.identity == not_zero_bolt.identity
+    assert has_bolt.digest == not_zero_bolt.digest
     assert (
         encode_belief(has_bolt, schema).encoding_receipt
         == encode_belief(not_zero_bolt, schema).encoding_receipt
@@ -94,8 +94,6 @@ def test_lifecycle_and_search_import_one_canonical_belief_type() -> None:
 
     assert BeliefState is RangeBeliefState is LifecycleBeliefState
     assert type(belief) is RangeBeliefState
-    assert belief.identity == belief.digest
-    assert belief.model == belief.model_id
 
 
 def test_encoding_rejects_content_and_count_schema_mismatches() -> None:
