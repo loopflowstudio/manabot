@@ -48,6 +48,15 @@ def sim_command(
     _run_sim(preset, set_values or [])
 
 
+@app.command("belief-demo")
+def belief_demo_command() -> None:
+    """Prove generated and supplied beliefs use one decision core."""
+
+    from manabot.belief.demo import main as run_belief_demo
+
+    run_belief_demo()
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     if argv is None:
         app()

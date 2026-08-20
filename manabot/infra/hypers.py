@@ -81,6 +81,13 @@ class AgentHypers(BaseHypersModel):
     # omits the condition keys (arena inference), the Agent defaults to the
     # neutral True/uniform condition (index 0, weight 1.0).
     max_conditions: int = 0
+    # Canonical belief rows are an opt-in checkpoint ABI. A positive bucket
+    # count requires explicit belief tensors on every forward pass; there is
+    # no neutral or positional-condition fallback on this path.
+    belief_count_buckets: int = 0
+    belief_card_vocab_size: int = 0
+    belief_owner_role_vocab_size: int = 2
+    belief_hidden_zone_vocab_size: int = 7
 
 
 class TrainHypers(BaseHypersModel):

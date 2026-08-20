@@ -108,6 +108,37 @@ class Agent(nn.Module):
             self.condition_index_embedding = None
             self.condition_embedding = None
 
+        self.belief_count_buckets = int(hypers.belief_count_buckets)
+        if self.belief_count_buckets > 0:
+            if hypers.belief_card_vocab_size < 1:
+                raise ValueError(
+                    "belief_card_vocab_size must be positive when belief input is enabled"
+                )
+            self.belief_card_embedding = nn.Embedding(
+                hypers.belief_card_vocab_size, embed_dim
+            )
+            self.belief_owner_embedding = nn.Embedding(
+                hypers.belief_owner_role_vocab_size, embed_dim
+            )
+            self.belief_zone_embedding = nn.Embedding(
+                hypers.belief_hidden_zone_vocab_size, embed_dim
+            )
+            self.belief_count_embedding = ProjectionLayer(
+                self.belief_count_buckets, embed_dim
+            )
+            self.belief_global_embedding = ProjectionLayer(2, embed_dim)
+            self.logger.info(
+                "Belief channel: on (%d count buckets, %d card definitions)",
+                self.belief_count_buckets,
+                hypers.belief_card_vocab_size,
+            )
+        else:
+            self.belief_card_embedding = None
+            self.belief_owner_embedding = None
+            self.belief_zone_embedding = None
+            self.belief_count_embedding = None
+            self.belief_global_embedding = None
+
         # Static ownership mask over the concatenated object sequence
         # (agent player, opponent player, agent cards, opponent cards,
         # agent permanents, opponent permanents). When the condition channel
@@ -223,15 +254,121 @@ class Agent(nn.Module):
             batch = object_parts[0].shape[0]
             validity_parts.append(torch.ones((batch, 1), device=object_parts[0].device))
 
+        belief_is_agent = None
+        if self.belief_count_buckets > 0:
+            belief_rows, belief_validity, belief_is_agent, belief_global = (
+                self._belief_rows(obs)
+            )
+            object_parts.extend((belief_rows, belief_global))
+            validity_parts.extend(
+                (
+                    belief_validity,
+                    torch.ones(
+                        (belief_global.shape[0], 1),
+                        device=belief_global.device,
+                    ),
+                )
+            )
+
         objects = torch.cat(object_parts, dim=1)
 
-        # The object layout is static, so the ownership mask is a registered
-        # buffer expanded to the batch instead of six per-call allocations.
+        # The visible object layout is static, so its ownership mask is a
+        # registered buffer. Explicit belief rows extend it below.
         batch = objects.shape[0]
         is_agent = self._is_agent_template.expand(batch, -1)
+        if belief_is_agent is not None:
+            is_agent = torch.cat(
+                (
+                    is_agent,
+                    belief_is_agent,
+                    torch.zeros(
+                        (batch, 1), dtype=torch.bool, device=objects.device
+                    ),
+                ),
+                dim=1,
+            )
 
         validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity
+
+    def _belief_rows(
+        self, obs: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Build explicit semantic belief rows and one global diagnostic row."""
+
+        required = {
+            "belief_card_def_ids",
+            "belief_owner_role_ids",
+            "belief_hidden_zone_ids",
+            "belief_count_probabilities",
+            "belief_validity",
+            "belief_globals",
+        }
+        missing = sorted(required.difference(obs))
+        if missing:
+            raise ValueError(f"belief-enabled Agent is missing inputs: {missing}")
+        if (
+            self.belief_card_embedding is None
+            or self.belief_owner_embedding is None
+            or self.belief_zone_embedding is None
+            or self.belief_count_embedding is None
+            or self.belief_global_embedding is None
+        ):
+            raise RuntimeError("belief channel is not initialized")
+
+        card_ids = obs["belief_card_def_ids"].long()
+        owner_ids = obs["belief_owner_role_ids"].long()
+        zone_ids = obs["belief_hidden_zone_ids"].long()
+        probabilities = obs["belief_count_probabilities"].float()
+        validity = obs["belief_validity"].float()
+        globals_ = obs["belief_globals"].float()
+        if card_ids.ndim != 2:
+            raise ValueError("belief ids must have shape [batch, rows]")
+        expected_ids = card_ids.shape
+        if owner_ids.shape != expected_ids or zone_ids.shape != expected_ids:
+            raise ValueError("belief semantic ids must share shape [batch, rows]")
+        if probabilities.shape != (*expected_ids, self.belief_count_buckets):
+            raise ValueError(
+                "belief count probabilities must have shape [batch, rows, buckets]"
+            )
+        if validity.shape != expected_ids:
+            raise ValueError("belief validity must have shape [batch, rows]")
+        if globals_.shape != (expected_ids[0], 2):
+            raise ValueError("belief globals must have shape [batch, 2]")
+        if not torch.isfinite(probabilities).all() or (probabilities < 0).any():
+            raise ValueError("belief probabilities must be finite and non-negative")
+        if not torch.isfinite(globals_).all():
+            raise ValueError("belief globals must be finite")
+        valid_rows = validity > 0
+        if valid_rows.any() and not torch.allclose(
+            probabilities.sum(dim=-1)[valid_rows],
+            torch.ones_like(probabilities.sum(dim=-1)[valid_rows]),
+            atol=1e-5,
+            rtol=0.0,
+        ):
+            raise ValueError("valid belief rows must be normalized")
+        if (card_ids < 0).any() or (
+            card_ids >= self.belief_card_embedding.num_embeddings
+        ).any():
+            raise ValueError("belief card definition id is outside the model vocabulary")
+        if (owner_ids < 0).any() or (
+            owner_ids >= self.belief_owner_embedding.num_embeddings
+        ).any():
+            raise ValueError("belief owner role id is outside the model vocabulary")
+        if (zone_ids < 0).any() or (
+            zone_ids >= self.belief_zone_embedding.num_embeddings
+        ).any():
+            raise ValueError("belief hidden zone id is outside the model vocabulary")
+
+        rows = (
+            self.belief_card_embedding(card_ids)
+            + self.belief_owner_embedding(owner_ids)
+            + self.belief_zone_embedding(zone_ids)
+            + self.belief_count_embedding(probabilities)
+        )
+        rows = rows * validity.unsqueeze(-1)
+        global_row = self.belief_global_embedding(globals_).unsqueeze(1)
+        return rows, validity, owner_ids == 0, global_row
 
     def _condition_row(self, obs: Dict[str, torch.Tensor]) -> torch.Tensor:
         """Build the one-row belief-conditioning side input.
