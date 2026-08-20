@@ -46,9 +46,7 @@ class BeliefEncodingSchema:
         if tuple(sorted(self.rows)) != self.rows:
             raise BeliefError("belief encoding rows must be canonically ordered")
         if any(
-            row.card_def_id < 0
-            or row.owner_role_id < 0
-            or row.hidden_zone_id < 0
+            row.card_def_id < 0 or row.owner_role_id < 0 or row.hidden_zone_id < 0
             for row in self.rows
         ):
             raise BeliefError("belief semantic ids must be non-negative")
@@ -103,7 +101,9 @@ class BeliefTensorView:
             raise BeliefError("belief batch size must be positive")
 
         def repeated(values: NDArray, dtype: torch.dtype) -> torch.Tensor:
-            tensor = torch.as_tensor(np.asarray(values).copy(), dtype=dtype, device=device)
+            tensor = torch.as_tensor(
+                np.asarray(values).copy(), dtype=dtype, device=device
+            )
             return tensor.unsqueeze(0).expand(batch_size, *tensor.shape)
 
         return {
@@ -135,15 +135,13 @@ def encode_belief(
         raise BeliefError("belief content manifest does not match the encoding schema")
     pool_names = tuple(name for name, _ in belief.space.pool)
     schema_names = tuple(row.card_name for row in schema.rows)
-    if len(set(schema_names)) != len(schema_names) or set(schema_names) != set(
-        pool_names
-    ):
-        raise BeliefError("belief content vocabulary does not match the encoding schema")
+    if set(schema_names) != set(pool_names):
+        raise BeliefError(
+            "belief content vocabulary does not match the encoding schema"
+        )
 
     row_count = len(schema.rows)
-    probabilities = np.zeros(
-        (row_count, schema.count_buckets), dtype=np.float32
-    )
+    probabilities = np.zeros((row_count, schema.count_buckets), dtype=np.float32)
     for row_index, row in enumerate(schema.rows):
         for world in belief.space.worlds:
             count = world.count(row.card_name)
@@ -157,9 +155,7 @@ def encode_belief(
     if not np.allclose(probabilities.sum(axis=1), 1.0, atol=1e-6, rtol=0.0):
         raise BeliefError("belief marginal projection is not normalized")
 
-    card_def_ids = np.asarray(
-        [row.card_def_id for row in schema.rows], dtype=np.int64
-    )
+    card_def_ids = np.asarray([row.card_def_id for row in schema.rows], dtype=np.int64)
     owner_role_ids = np.asarray(
         [row.owner_role_id for row in schema.rows], dtype=np.int64
     )
@@ -177,7 +173,9 @@ def encode_belief(
         validity.astype("<f4", copy=False),
     ):
         digest.update(values.tobytes())
-    digest.update(np.asarray([belief.entropy, belief.effective_support], dtype="<f8").tobytes())
+    digest.update(
+        np.asarray([belief.entropy, belief.effective_support], dtype="<f8").tobytes()
+    )
     return BeliefTensorView(
         schema_identity=schema.identity,
         card_def_ids=_readonly(card_def_ids),

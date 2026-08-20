@@ -24,6 +24,13 @@ from managym.decision import Command
 from managym.possible_worlds import PossibleWorldSpace
 
 
+def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
+    return (
+        policy.astype("<f4", copy=False).tobytes()
+        + np.asarray([value], dtype="<f4").tobytes()
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ViewerDecision:
     """One viewer-safe policy decision and its authoritative belief domain."""
@@ -68,9 +75,7 @@ class PolicyValueResult:
 
     @property
     def output_bytes(self) -> bytes:
-        return self.policy.astype("<f4", copy=False).tobytes() + np.asarray(
-            [self.value], dtype="<f4"
-        ).tobytes()
+        return _output_bytes(self.policy, self.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,8 +103,6 @@ class Manabot:
             )
         if policy_value.belief_count_buckets != belief_schema.count_buckets:
             raise BeliefError("Agent and belief encoding count buckets differ")
-        if policy_value.belief_card_embedding is None:
-            raise BeliefError("Manabot requires a belief-enabled Agent")
         maximum_card_id = max(row.card_def_id for row in belief_schema.rows)
         if maximum_card_id >= policy_value.belief_card_embedding.num_embeddings:
             raise BeliefError("belief schema exceeds the Agent card vocabulary")
@@ -122,7 +125,9 @@ class Manabot:
         try:
             command_position = result.legal_action_indexes.index(action_index)
         except ValueError as error:
-            raise BeliefError("policy selected an action without a legal Command") from error
+            raise BeliefError(
+                "policy selected an action without a legal Command"
+            ) from error
         return AgentStep(
             command=decision.legal_commands[command_position],
             result=result,
@@ -176,9 +181,7 @@ class Manabot:
             .cpu()
             .tolist()
         )
-        output_bytes = policy.astype("<f4", copy=False).tobytes() + np.asarray(
-            [scalar_value], dtype="<f4"
-        ).tobytes()
+        output_bytes = _output_bytes(policy, scalar_value)
         receipt = hashlib.sha256()
         receipt.update(decision.observation_identity.encode("ascii"))
         receipt.update(decision.world_space.identity.encode("ascii"))

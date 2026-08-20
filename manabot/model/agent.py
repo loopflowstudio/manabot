@@ -281,9 +281,7 @@ class Agent(nn.Module):
                 (
                     is_agent,
                     belief_is_agent,
-                    torch.zeros(
-                        (batch, 1), dtype=torch.bool, device=objects.device
-                    ),
+                    torch.zeros((batch, 1), dtype=torch.bool, device=objects.device),
                 ),
                 dim=1,
             )
@@ -307,15 +305,6 @@ class Agent(nn.Module):
         missing = sorted(required.difference(obs))
         if missing:
             raise ValueError(f"belief-enabled Agent is missing inputs: {missing}")
-        if (
-            self.belief_card_embedding is None
-            or self.belief_owner_embedding is None
-            or self.belief_zone_embedding is None
-            or self.belief_count_embedding is None
-            or self.belief_global_embedding is None
-        ):
-            raise RuntimeError("belief channel is not initialized")
-
         card_ids = obs["belief_card_def_ids"].long()
         owner_ids = obs["belief_owner_role_ids"].long()
         zone_ids = obs["belief_hidden_zone_ids"].long()
@@ -340,25 +329,21 @@ class Agent(nn.Module):
         if not torch.isfinite(globals_).all():
             raise ValueError("belief globals must be finite")
         valid_rows = validity > 0
+        probability_totals = probabilities.sum(dim=-1)
         if valid_rows.any() and not torch.allclose(
-            probabilities.sum(dim=-1)[valid_rows],
-            torch.ones_like(probabilities.sum(dim=-1)[valid_rows]),
+            probability_totals[valid_rows],
+            torch.ones_like(probability_totals[valid_rows]),
             atol=1e-5,
             rtol=0.0,
         ):
             raise ValueError("valid belief rows must be normalized")
-        if (card_ids < 0).any() or (
-            card_ids >= self.belief_card_embedding.num_embeddings
-        ).any():
-            raise ValueError("belief card definition id is outside the model vocabulary")
-        if (owner_ids < 0).any() or (
-            owner_ids >= self.belief_owner_embedding.num_embeddings
-        ).any():
-            raise ValueError("belief owner role id is outside the model vocabulary")
-        if (zone_ids < 0).any() or (
-            zone_ids >= self.belief_zone_embedding.num_embeddings
-        ).any():
-            raise ValueError("belief hidden zone id is outside the model vocabulary")
+        for ids, embedding, label in (
+            (card_ids, self.belief_card_embedding, "card definition"),
+            (owner_ids, self.belief_owner_embedding, "owner role"),
+            (zone_ids, self.belief_zone_embedding, "hidden zone"),
+        ):
+            if (ids < 0).any() or (ids >= embedding.num_embeddings).any():
+                raise ValueError(f"belief {label} id is outside the model vocabulary")
 
         rows = (
             self.belief_card_embedding(card_ids)

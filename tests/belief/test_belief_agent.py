@@ -23,9 +23,7 @@ def test_autonomous_and_exact_override_share_policy_value_bytes() -> None:
     memory = AgentMemory()
 
     autonomous = manabot.decide(decision, memory)
-    supplied = manabot.evaluate_under_belief(
-        decision, autonomous.belief_update.belief
-    )
+    supplied = manabot.evaluate_under_belief(decision, autonomous.belief_update.belief)
 
     assert autonomous.result.output_bytes == supplied.output_bytes
     assert memory.belief is None
@@ -82,9 +80,11 @@ def test_world_space_mismatch_fails_before_inference() -> None:
         pool=dict(original.pool),
         hands=((dict(world.hand), world.weight) for world in original.worlds),
     )
-    other_belief = CompatibleDealBeliefModel().update(
-        previous=None, world_space=other_space, viewer_history=history
-    ).belief
+    other_belief = (
+        CompatibleDealBeliefModel()
+        .update(previous=None, world_space=other_space, viewer_history=history)
+        .belief
+    )
 
     with pytest.raises(BeliefError, match="world-space identity"):
         manabot.evaluate_under_belief(decision, other_belief)

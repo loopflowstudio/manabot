@@ -135,13 +135,10 @@ class PossibleWorldSpace:
         source = payload["source_observation"]
         authority_identity = str(payload["identity"])
         canonical_pool = tuple(
-            (str(name), int(count))
-            for name, count in sorted(payload["pool"].items())
+            (str(name), int(count)) for name, count in sorted(payload["pool"].items())
         )
         content_manifest_identity = str(
-            payload.get(
-                "content_manifest_identity", _digest({"pool": canonical_pool})
-            )
+            payload.get("content_manifest_identity", _digest({"pool": canonical_pool}))
         )
         bound_identity = _digest(
             {
@@ -283,7 +280,9 @@ class PossibleWorldSpace:
         for world in self.worlds:
             if sum(count for _, count in world.hand) != self.hand_size:
                 raise PossibleWorldError("a canonical world has the wrong hand size")
-            if any(count < 0 or count > pool.get(name, 0) for name, count in world.hand):
+            if any(
+                count < 0 or count > pool.get(name, 0) for name, count in world.hand
+            ):
                 raise PossibleWorldError("a canonical world is outside the unseen pool")
 
     @property
@@ -296,9 +295,7 @@ class PossibleWorldSpace:
         return self.worlds[index]
 
     def support(self, query: WorldQuery) -> SupportReceipt:
-        indexes, receipt = self.condition_indexes(query, allow_empty=True)
-        del indexes
-        return receipt
+        return self.condition_indexes(query, allow_empty=True)[1]
 
     def condition_indexes(
         self, query: WorldQuery, *, allow_empty: bool = False
@@ -318,28 +315,23 @@ class PossibleWorldSpace:
     ) -> tuple[tuple[int, ...], SupportReceipt]:
         assert self._engine is not None and self._authority_identity is not None
         try:
+            encoded_query = json.dumps(
+                query.to_dict(), sort_keys=True, separators=(",", ":")
+            )
             support_payload = json.loads(
                 self._engine.possible_world_support_json(
                     self.viewer,
                     self._authority_identity,
-                    json.dumps(query.to_dict(), sort_keys=True, separators=(",", ":")),
+                    encoded_query,
                 )
             )
-            support = SupportReceipt(
-                space_identity=self.identity,
-                query_digest=str(support_payload["query_digest"]),
-                canonical_digest=str(support_payload["canonical_digest"]),
-                canonical_query=support_payload["canonical_query"],
-                support_size=int(support_payload["support_size"]),
-                total_weight=int(support_payload["total_weight"]),
-            )
-            if support.support_size == 0:
-                return (), support
+            if int(support_payload["support_size"]) == 0:
+                return (), self._support_receipt(support_payload)
             payload = json.loads(
                 self._engine.possible_world_condition_json(
                     self.viewer,
                     self._authority_identity,
-                    json.dumps(query.to_dict(), sort_keys=True, separators=(",", ":")),
+                    encoded_query,
                 )
             )
         except Exception as error:
@@ -347,7 +339,12 @@ class PossibleWorldSpace:
         if payload["space_identity"] != self._authority_identity:
             raise PossibleWorldError("query receipt changed space identity")
         indexes = tuple(int(index) for index in payload["world_indexes"])
-        receipt = SupportReceipt(
+        receipt = self._support_receipt(payload)
+        self._validate_indexes(indexes, receipt)
+        return indexes, receipt
+
+    def _support_receipt(self, payload: Mapping[str, Any]) -> SupportReceipt:
+        return SupportReceipt(
             space_identity=self.identity,
             query_digest=str(payload["query_digest"]),
             canonical_digest=str(payload["canonical_digest"]),
@@ -355,8 +352,6 @@ class PossibleWorldSpace:
             support_size=int(payload["support_size"]),
             total_weight=int(payload["total_weight"]),
         )
-        self._validate_indexes(indexes, receipt)
-        return indexes, receipt
 
     def _condition_fixture(
         self, query: WorldQuery
@@ -396,7 +391,9 @@ class PossibleWorldSpace:
         if kind == "true":
             return {"kind": "true"}
         card = str(payload["card"])
-        count = int(next(value for key, value in payload.items() if key not in {"kind", "card"}))
+        count = int(
+            next(value for key, value in payload.items() if key not in {"kind", "card"})
+        )
         maximum = min(dict(self.pool).get(card, 0), self.hand_size)
         if kind == "has":
             if count == 0:

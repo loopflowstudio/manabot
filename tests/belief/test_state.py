@@ -6,7 +6,6 @@ import pytest
 from manabot.belief import (
     BeliefEncodingSchema,
     BeliefError,
-    BeliefRow,
     BeliefState,
     CompatibleDealBeliefModel,
     EmptyBeliefSupport,
@@ -21,9 +20,11 @@ from managym.possible_worlds import WorldQuery
 def generated_belief() -> BeliefState:
     history = retained_history()
     space = retained_space(history)
-    return CompatibleDealBeliefModel().update(
-        previous=None, world_space=space, viewer_history=history
-    ).belief
+    return (
+        CompatibleDealBeliefModel()
+        .update(previous=None, world_space=space, viewer_history=history)
+        .belief
+    )
 
 
 def test_reference_model_and_queries_use_full_canonical_support() -> None:
@@ -106,15 +107,7 @@ def test_encoding_rejects_content_and_count_schema_mismatches() -> None:
         schema_identity=schema.schema_identity,
         world_schema_identity=schema.world_schema_identity,
         content_manifest_identity=schema.content_manifest_identity,
-        rows=tuple(
-            BeliefRow(
-                row.owner_role_id,
-                row.hidden_zone_id,
-                row.card_def_id,
-                row.card_name,
-            )
-            for row in schema.rows
-        ),
+        rows=schema.rows,
         count_buckets=2,
     )
     with pytest.raises(BeliefError, match="exceeds"):

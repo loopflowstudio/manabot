@@ -29,9 +29,7 @@ def _retained_observation() -> dict[str, torch.Tensor]:
     observation = {
         "agent_player": torch.zeros((batch, 1, encoder.player_dim)),
         "opponent_player": torch.zeros((batch, 1, encoder.player_dim)),
-        "agent_cards": torch.zeros(
-            (batch, encoder.cards_per_player, encoder.card_dim)
-        ),
+        "agent_cards": torch.zeros((batch, encoder.cards_per_player, encoder.card_dim)),
         "opponent_cards": torch.zeros(
             (batch, encoder.cards_per_player, encoder.card_dim)
         ),
@@ -52,9 +50,7 @@ def _retained_observation() -> dict[str, torch.Tensor]:
         "agent_cards_valid": torch.zeros((batch, encoder.cards_per_player)),
         "opponent_cards_valid": torch.zeros((batch, encoder.cards_per_player)),
         "agent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
-        "opponent_permanents_valid": torch.zeros(
-            (batch, encoder.perms_per_player)
-        ),
+        "opponent_permanents_valid": torch.zeros((batch, encoder.perms_per_player)),
         "actions_valid": torch.zeros((batch, encoder.max_actions)),
     }
     observation["actions"][0, 0, 0] = 1.0
@@ -91,7 +87,7 @@ def retained_space(history: ViewerHistory) -> PossibleWorldSpace:
 
 
 def retained_schema(space: PossibleWorldSpace) -> BeliefEncodingSchema:
-    card_ids = {"Counterspell": 0, "Lightning Bolt": 1, "Mountain": 2}
+    card_ids = {name: index for index, (name, _) in enumerate(space.pool)}
     return BeliefEncodingSchema(
         schema_identity="manabot.belief-tensor/count-marginals-v1",
         world_schema_identity=space.world_schema_identity,
@@ -145,7 +141,7 @@ def retained_manabot(schema: BeliefEncodingSchema) -> Manabot:
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,
-            belief_card_vocab_size=3,
+            belief_card_vocab_size=len(schema.rows),
         ),
     )
     return Manabot(
