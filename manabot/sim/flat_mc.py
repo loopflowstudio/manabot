@@ -21,11 +21,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 import time
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, overload
 
 import numpy as np
 import torch
 
+from manabot.belief.encoding import BeliefCheckpointBinding
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import (
     AgentHypers,
@@ -172,15 +173,35 @@ class AgentMatchupPlayer:
 # -----------------------------------------------------------------------------
 
 
-def load_checkpoint_agent(path: str) -> tuple[Agent, ObservationSpace]:
+@overload
+def load_checkpoint_agent(path: str) -> tuple[Agent, ObservationSpace]: ...
+
+
+@overload
+def load_checkpoint_agent(
+    path: str, *, include_belief_binding: Literal[True]
+) -> tuple[Agent, ObservationSpace, BeliefCheckpointBinding | None]: ...
+
+
+def load_checkpoint_agent(
+    path: str, *, include_belief_binding: bool = False
+) -> (
+    tuple[Agent, ObservationSpace]
+    | tuple[Agent, ObservationSpace, BeliefCheckpointBinding | None]
+):
     """Load an Agent from a training checkpoint, using its saved hypers."""
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     hypers = checkpoint["hypers"]
     obs_space = ObservationSpace(ObservationSpaceHypers(**hypers["observation_hypers"]))
     agent = Agent(obs_space, AgentHypers(**hypers["agent_hypers"]))
+    binding = None
+    if agent.belief_count_buckets > 0:
+        binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
     agent.load_state_dict(checkpoint["model_state_dict"])
     agent.eval()
+    if include_belief_binding:
+        return agent, obs_space, binding
     return agent, obs_space
 
 
@@ -198,8 +219,7 @@ def make_player(
         {"kind": "policy_search", "sims": 16, "checkpoint": "/abs/path.pt",
          "epsilon": 0.1, "rollouts_per_world": 1}
         {"kind": "random"}
-        {"kind": "checkpoint", "path": "/abs/path/belief_step.pt"}
-        {"kind": "legacy_checkpoint", "path": "/abs/path/step_65536.pt"}
+        {"kind": "checkpoint", "path": "/abs/path/step_65536.pt"}
         {"kind": "value_greedy", "checkpoint": "/abs/value.pt", "device": "cpu"}
         {"kind": "value_search", "sims": 64, "checkpoint": "/abs/value.pt",
          "depth": 0, "rollouts_per_world": 1, "device": "cpu"}
@@ -349,28 +369,19 @@ def make_player(
     if kind == "checkpoint":
         from manabot.belief.runtime import ManabotPlayer
 
-        agent, obs_space = load_checkpoint_agent(spec["path"])
-        if agent.belief_count_buckets < 2:
-            raise ValueError(
-                "checkpoint requires a belief-enabled Agent; use "
-                "legacy_checkpoint for historical artifacts"
-            )
-        return ManabotPlayer(agent), obs_space
-    if kind == "legacy_checkpoint":
-        agent, obs_space = load_checkpoint_agent(spec["path"])
+        agent, obs_space, binding = load_checkpoint_agent(
+            spec["path"], include_belief_binding=True
+        )
+        if agent.belief_count_buckets > 0:
+            if binding is None:
+                raise ValueError("belief-enabled checkpoint has no schema binding")
+            return ManabotPlayer(agent, checkpoint_binding=binding), obs_space
         return (
             AgentMatchupPlayer(
                 agent, deterministic=bool(spec.get("deterministic", False))
             ),
             obs_space,
         )
-    if kind == "belief_checkpoint":
-        from manabot.belief.runtime import ManabotPlayer
-
-        agent, obs_space = load_checkpoint_agent(spec["path"])
-        if agent.belief_count_buckets < 2:
-            raise ValueError("belief_checkpoint requires a belief-enabled Agent")
-        return ManabotPlayer(agent), obs_space
     raise ValueError(f"unknown player spec kind: {kind}")
 
 
@@ -385,10 +396,6 @@ def spec_name(spec: dict[str, Any]) -> str:
     if kind == "policy_search":
         return spec.get("name", f"psearch-{spec['sims']}")
     if kind == "checkpoint":
-        return spec.get("name", spec["path"])
-    if kind == "legacy_checkpoint":
-        return spec.get("name", spec["path"])
-    if kind == "belief_checkpoint":
         return spec.get("name", spec["path"])
     if kind == "value_greedy":
         return spec.get("name", "vgreedy")

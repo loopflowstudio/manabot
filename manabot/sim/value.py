@@ -214,9 +214,7 @@ def train_value(
                 label_by_row[batch], dtype=torch.float32, device=dev
             )
             _, value = agent.forward(obs)
-            loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                value, target
-            )
+            loss = torch.nn.functional.binary_cross_entropy_with_logits(value, target)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -571,7 +569,7 @@ def collect_value_assessment(
 
     scorer = load_value_scorer(value_checkpoint, device=device)
     behavior, obs_space = make_player(
-        {"kind": "legacy_checkpoint", "path": behavior_checkpoint},
+        {"kind": "checkpoint", "path": behavior_checkpoint},
         seed=seed * 2 + 1,
     )
     obs_space = obs_space or ObservationSpace()

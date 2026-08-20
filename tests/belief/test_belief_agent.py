@@ -112,6 +112,7 @@ def test_world_space_mismatch_fails_before_inference() -> None:
 def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
     evidence = run_demo()
 
+    assert evidence["checkpoint_schema_bound"] is True
     assert evidence["generated_override_byte_identical"] is True
     assert evidence["viewer_hidden_swap_identical"] is True
     assert (

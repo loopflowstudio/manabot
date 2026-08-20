@@ -27,6 +27,10 @@ from typing import Any
 import numpy as np
 import torch
 
+from manabot.belief.encoding import (
+    BeliefEncodingSchema,
+    belief_checkpoint_fields,
+)
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
@@ -557,6 +561,7 @@ def save_bc_checkpoint(
     path: str | Path,
     *,
     extra: dict[str, Any] | None = None,
+    belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
     """Persist a BC policy in the trainer checkpoint format.
 
@@ -566,16 +571,28 @@ def save_bc_checkpoint(
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "model_state_dict": agent.state_dict(),
-            "global_step": 0,
-            "hypers": {
-                "agent_hypers": agent.hypers.model_dump(),
-                "observation_hypers": obs_space.encoder.hypers.model_dump(),
-                "train_hypers": {},
-            },
-            "bc": extra or {},
+    checkpoint = {
+        "model_state_dict": agent.state_dict(),
+        "global_step": 0,
+        "hypers": {
+            "agent_hypers": agent.hypers.model_dump(),
+            "observation_hypers": obs_space.encoder.hypers.model_dump(),
+            "train_hypers": {},
         },
-        path,
-    )
+        "bc": extra or {},
+    }
+    if agent.belief_count_buckets > 0:
+        if belief_schema is None:
+            raise ValueError(
+                "belief-enabled checkpoints require an exact belief schema"
+            )
+        checkpoint.update(
+            belief_checkpoint_fields(
+                belief_schema,
+                count_buckets=agent.belief_count_buckets,
+                card_vocab_size=agent.hypers.belief_card_vocab_size,
+            )
+        )
+    elif belief_schema is not None:
+        raise ValueError("a belief-free Agent cannot save a belief schema binding")
+    torch.save(checkpoint, path)

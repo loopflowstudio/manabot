@@ -52,10 +52,6 @@ def build_player(
         if checkpoint_path is None:
             raise FileNotFoundError("checkpoint candidate bytes are unavailable")
         spec["path"] = checkpoint_path
-        if spec["kind"] == "checkpoint":
-            # Frozen pre-belief arena registrations retain their evidence
-            # identity while entering the explicitly legacy runtime seam.
-            spec["kind"] = "legacy_checkpoint"
     if spec["kind"] == "scripted_greedy":
         return ScriptedGreedyPlayer(), None
     player, obs_space = make_player(spec, seed=seed)

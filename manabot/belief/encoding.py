@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 from numpy.typing import NDArray
@@ -95,6 +95,80 @@ class BeliefEncodingSchema:
             "ascii"
         )
         return hashlib.sha256(encoded).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class BeliefCheckpointBinding:
+    """Artifact identities that bind belief weights to their runtime schema."""
+
+    schema_identity: str
+    content_manifest_identity: str
+
+    def __post_init__(self) -> None:
+        if not self.schema_identity:
+            raise BeliefError("checkpoint belief schema identity must be non-empty")
+        if not self.content_manifest_identity:
+            raise BeliefError(
+                "checkpoint belief content manifest identity must be non-empty"
+            )
+
+    @classmethod
+    def from_schema(cls, schema: BeliefEncodingSchema) -> BeliefCheckpointBinding:
+        return cls(
+            schema_identity=schema.identity,
+            content_manifest_identity=schema.content_manifest_identity,
+        )
+
+    @classmethod
+    def from_checkpoint(cls, checkpoint: Mapping[str, Any]) -> BeliefCheckpointBinding:
+        try:
+            schema_identity = checkpoint["belief_schema_identity"]
+            content_manifest_identity = checkpoint["belief_content_manifest_identity"]
+        except KeyError as error:
+            raise BeliefError(
+                "belief-enabled checkpoint is missing its schema binding"
+            ) from error
+        if not isinstance(schema_identity, str) or not isinstance(
+            content_manifest_identity, str
+        ):
+            raise BeliefError("checkpoint belief identities must be strings")
+        return cls(schema_identity, content_manifest_identity)
+
+    def checkpoint_fields(self) -> dict[str, str]:
+        return {
+            "belief_schema_identity": self.schema_identity,
+            "belief_content_manifest_identity": self.content_manifest_identity,
+        }
+
+    def validate_schema(self, schema: BeliefEncodingSchema) -> None:
+        if schema.content_manifest_identity != self.content_manifest_identity:
+            raise BeliefError(
+                "checkpoint belief content manifest does not match the runtime"
+            )
+        if schema.identity != self.schema_identity:
+            raise BeliefError("checkpoint belief schema does not match the runtime")
+
+
+def belief_checkpoint_fields(
+    schema: BeliefEncodingSchema,
+    *,
+    count_buckets: int,
+    card_vocab_size: int,
+) -> dict[str, str]:
+    """Validate a model/schema pair and return its serialized artifact binding."""
+
+    if count_buckets != schema.count_buckets:
+        raise BeliefError(
+            "belief checkpoint count buckets do not match the encoding schema"
+        )
+    if (
+        card_vocab_size < 1
+        or max(row.card_def_id for row in schema.rows) >= card_vocab_size
+    ):
+        raise BeliefError(
+            "belief checkpoint card vocabulary does not cover the encoding schema"
+        )
+    return BeliefCheckpointBinding.from_schema(schema).checkpoint_fields()
 
 
 @dataclass(frozen=True, slots=True)

@@ -112,7 +112,7 @@ def test_random_matchup_player_uses_valid_mask():
         assert player.act(None, obs) in (1, 3)
 
 
-def test_checkpoint_routes_belief_agents_and_requires_explicit_legacy(
+def test_checkpoint_routes_by_serialized_agent_capability(
     monkeypatch,
 ):
     observation_space = ObservationSpace()
@@ -125,29 +125,29 @@ def test_checkpoint_routes_belief_agents_and_requires_explicit_legacy(
             belief_card_vocab_size=64,
         ),
     )
-    monkeypatch.setattr(
-        flat_mc,
-        "load_checkpoint_agent",
-        lambda _path: (belief_agent, observation_space),
-    )
+
+    def load_belief_agent(_path, *, include_belief_binding=False):
+        if include_belief_binding:
+            return belief_agent, observation_space, object()
+        return belief_agent, observation_space
+
+    monkeypatch.setattr(flat_mc, "load_checkpoint_agent", load_belief_agent)
 
     player, _ = make_player({"kind": "checkpoint", "path": "belief.pt"}, seed=1)
     assert isinstance(player, ManabotPlayer)
 
-    legacy_agent = Agent(
+    policy_agent = Agent(
         observation_space,
         AgentHypers(hidden_dim=8, num_attention_heads=2),
     )
-    monkeypatch.setattr(
-        flat_mc,
-        "load_checkpoint_agent",
-        lambda _path: (legacy_agent, observation_space),
-    )
-    with pytest.raises(ValueError, match="legacy_checkpoint"):
-        make_player({"kind": "checkpoint", "path": "legacy.pt"}, seed=1)
-    player, _ = make_player(
-        {"kind": "legacy_checkpoint", "path": "legacy.pt"}, seed=1
-    )
+
+    def load_policy_agent(_path, *, include_belief_binding=False):
+        if include_belief_binding:
+            return policy_agent, observation_space, None
+        return policy_agent, observation_space
+
+    monkeypatch.setattr(flat_mc, "load_checkpoint_agent", load_policy_agent)
+    player, _ = make_player({"kind": "checkpoint", "path": "policy.pt"}, seed=1)
     assert isinstance(player, AgentMatchupPlayer)
 
 
@@ -170,7 +170,9 @@ def test_play_games_game_offset_continues_seat_alternation():
 
 def test_aggregate_records_per_seat_and_ci():
     records = [
-        GameRecord(game_index=i, hero_seat=i % 2, hero_won=(i % 2 == 0), winner=0, steps=10)
+        GameRecord(
+            game_index=i, hero_seat=i % 2, hero_won=(i % 2 == 0), winner=0, steps=10
+        )
         for i in range(10)
     ]
     metrics = aggregate_records(records)

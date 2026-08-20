@@ -232,7 +232,7 @@ def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> Non
         "6acc1f17d1dec836fc0f1f2a1dc25cab740c449694d2c375862ba776fb3b6e03"
     )
     assert runtime_identities.pop("engine_source_sha256") == (
-        "fcc0ea344f13353a77f7ce31d682293c18c5bc58abd3bc975b144a4d5889111a"
+        "9eb6205c250bb87edb9348ec489f51a42dc5e94fd82cde3b7097dc9e1554194e"
     )
     assert frozen_identities == runtime_identities
 

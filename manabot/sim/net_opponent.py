@@ -52,72 +52,6 @@ import managym
 
 OPPONENT_MODES = ("random", "frozen", "self")
 
-
-# -----------------------------------------------------------------------------
-# Legacy checkpoint port (pre-conformance-audit observation dims)
-# -----------------------------------------------------------------------------
-
-#: Old-world encoder dims (merge-base a3bfab2, the world exp-07's student_r0
-#: was trained in). The conformance audit widened players 27->28 (combat_mana
-#: appended at the end) and permanents 7->11 (power/toughness/is_animated/
-#: has_exile_link inserted at 6..9, validity moved 6->10).
-LEGACY_PLAYER_DIM = 27
-LEGACY_PERMANENT_DIM = 7
-
-
-def port_legacy_state_dict(
-    state_dict: Dict[str, torch.Tensor],
-    encoder: Any,
-) -> Dict[str, torch.Tensor]:
-    """Map a legacy-dim state dict onto the current observation encoding.
-
-    Old feature columns keep their weights at their new positions; columns
-    for features the net never saw get zero weight (the frozen net ignores
-    them). Raises if the state dict is not the expected legacy shape.
-    """
-
-    player_key = "player_embedding.projection.0.weight"
-    perm_key = "perm_embedding.projection.0.weight"
-    player_w = state_dict[player_key]
-    perm_w = state_dict[perm_key]
-    if player_w.shape[1] != LEGACY_PLAYER_DIM or perm_w.shape[1] != LEGACY_PERMANENT_DIM:
-        raise ValueError(
-            f"not a legacy checkpoint: player in_dim {player_w.shape[1]}, "
-            f"permanent in_dim {perm_w.shape[1]}"
-        )
-
-    ported = dict(state_dict)
-
-    # Player: one column (combat_mana) appended at the end.
-    new_player = torch.zeros(
-        (player_w.shape[0], encoder.player_dim), dtype=player_w.dtype
-    )
-    new_player[:, :LEGACY_PLAYER_DIM] = player_w
-    ported[player_key] = new_player
-
-    # Permanent: features 0..5 keep position, validity moves 6 -> last,
-    # new features 6..9 get zero weight.
-    new_perm = torch.zeros(
-        (perm_w.shape[0], encoder.permanent_dim), dtype=perm_w.dtype
-    )
-    new_perm[:, : LEGACY_PERMANENT_DIM - 1] = perm_w[:, : LEGACY_PERMANENT_DIM - 1]
-    new_perm[:, encoder.permanent_dim - 1] = perm_w[:, LEGACY_PERMANENT_DIM - 1]
-    ported[perm_key] = new_perm
-    return ported
-
-
-def port_legacy_checkpoint(src: str, dst: str) -> None:
-    """Port a legacy training checkpoint file to the current world's dims."""
-
-    checkpoint = torch.load(src, map_location="cpu", weights_only=False)
-    encoder = ObservationSpace().encoder
-    checkpoint["model_state_dict"] = port_legacy_state_dict(
-        checkpoint["model_state_dict"], encoder
-    )
-    checkpoint.setdefault("ported_from", src)
-    torch.save(checkpoint, dst)
-
-
 # -----------------------------------------------------------------------------
 # Seat-routed rollout collection
 # -----------------------------------------------------------------------------
@@ -169,9 +103,7 @@ class CollectorStats:
             "opponent_decisions": self.opponent_decisions,
             "games": self.games,
             "learner_wins": self.learner_wins,
-            "learner_win_rate": (
-                self.learner_wins / self.games if self.games else 0.0
-            ),
+            "learner_win_rate": (self.learner_wins / self.games if self.games else 0.0),
             "truncations": self.truncations,
             "seconds": self.seconds,
             "opponent_action_types": dict(self.opponent_action_types),
@@ -253,17 +185,15 @@ class SeatRoutedCollector:
 
     # -- opponent routing -----------------------------------------------------
 
-    def _opponent_actions(
-        self, agent: Agent, rows: np.ndarray
-    ) -> np.ndarray:
+    def _opponent_actions(self, agent: Agent, rows: np.ndarray) -> np.ndarray:
         if self.opponent_mode == "self":
             obs = self._slice_obs_tensors(rows)
             with torch.inference_mode():
                 logits, _ = agent.forward(obs)
                 probs = torch.softmax(logits, dim=-1)
-                actions = torch.multinomial(
-                    probs, 1, generator=self._self_rng
-                ).squeeze(-1)
+                actions = torch.multinomial(probs, 1, generator=self._self_rng).squeeze(
+                    -1
+                )
             return actions.cpu().numpy().astype(np.int64)
         return self._opponent.select(self._buffers, rows)
 
@@ -284,7 +214,9 @@ class SeatRoutedCollector:
         type_indices = chosen.argmax(axis=1)
         typed = chosen.max(axis=1) > 0
         for idx, has_type in zip(type_indices, typed):
-            name = _ACTION_TYPE_NAMES.get(int(idx), "unknown") if has_type else "unknown"
+            name = (
+                _ACTION_TYPE_NAMES.get(int(idx), "unknown") if has_type else "unknown"
+            )
             counter[name] = counter.get(name, 0) + 1
 
     # -- collection loop ------------------------------------------------------
@@ -496,15 +428,13 @@ class NetOpponentTrainer(Trainer):
                 hypers.gamma,
                 hypers.gae_lambda,
             )
-            obs, logprobs, actions, advantages, returns, values = (
-                self._flatten_rollout(
-                    obs_buf,
-                    actions_buf,
-                    logprobs_buf,
-                    advantages,
-                    returns,
-                    values_buf,
-                )
+            obs, logprobs, actions, advantages, returns, values = self._flatten_rollout(
+                obs_buf,
+                actions_buf,
+                logprobs_buf,
+                advantages,
+                returns,
+                values_buf,
             )
 
             minibatch_plan = self._build_minibatch_plan(logprobs.shape[0])
@@ -564,9 +494,7 @@ class NetOpponentTrainer(Trainer):
         self.logger.info("Training completed.")
 
     @staticmethod
-    def _obs_to_tensors(
-        obs: Dict[str, np.ndarray], device
-    ) -> Dict[str, torch.Tensor]:
+    def _obs_to_tensors(obs: Dict[str, np.ndarray], device) -> Dict[str, torch.Tensor]:
         tensors = {}
         for key, value in obs.items():
             tensor = torch.as_tensor(value, device=device)

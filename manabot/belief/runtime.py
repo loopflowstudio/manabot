@@ -9,7 +9,11 @@ import numpy as np
 import torch
 
 from manabot.belief.agent import AgentMemory, AgentStep, Manabot, ViewerDecision
-from manabot.belief.encoding import BeliefEncodingSchema, belief_schema_from_engine
+from manabot.belief.encoding import (
+    BeliefCheckpointBinding,
+    BeliefEncodingSchema,
+    belief_schema_from_engine,
+)
 from manabot.belief.state import (
     BeliefError,
     BeliefModel,
@@ -100,10 +104,12 @@ class ManabotPlayer:
         *,
         belief_model: BeliefModel | None = None,
         belief_schema: BeliefEncodingSchema | None = None,
+        checkpoint_binding: BeliefCheckpointBinding | None = None,
     ) -> None:
         self.policy_value = policy_value
         self.belief_model = belief_model or CompatibleDealBeliefModel()
         self.belief_schema = belief_schema
+        self.checkpoint_binding = checkpoint_binding
         self.manabot: Manabot | None = None
         self.viewer: int | None = None
         self.history: ViewerHistory | None = None
@@ -112,16 +118,26 @@ class ManabotPlayer:
         self.last_action: int | None = None
 
     def start_game(self, env: Any, seat: int) -> None:
+        self.manabot = None
+        self.viewer = None
+        self.history = None
+        self.memory = AgentMemory()
+        self.last_step = None
+        self.last_action = None
+
         engine = _engine(env)
         observation = Observation.from_json(engine.semantic_observation_json(seat))
         history = ViewerHistory.from_observation(observation)
-        schema = self.belief_schema
-        if schema is None:
-            schema = belief_schema_from_engine(
-                engine,
-                PossibleWorldSpace.from_engine(engine, seat),
-                count_buckets=self.policy_value.belief_count_buckets,
-            )
+        runtime_schema = belief_schema_from_engine(
+            engine,
+            PossibleWorldSpace.from_engine(engine, seat),
+            count_buckets=self.policy_value.belief_count_buckets,
+        )
+        if self.checkpoint_binding is not None:
+            self.checkpoint_binding.validate_schema(runtime_schema)
+        schema = self.belief_schema or runtime_schema
+        if schema.identity != runtime_schema.identity:
+            raise BeliefError("configured belief schema does not match the runtime")
         self.manabot = Manabot(
             policy_value=self.policy_value,
             belief_model=self.belief_model,
@@ -130,9 +146,6 @@ class ManabotPlayer:
         self.belief_schema = schema
         self.viewer = seat
         self.history = history
-        self.memory = AgentMemory()
-        self.last_step = None
-        self.last_action = None
 
     def act(
         self,

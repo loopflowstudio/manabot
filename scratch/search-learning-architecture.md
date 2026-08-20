@@ -294,6 +294,31 @@ cross-row correlation. The exact `BeliefState` remains in trajectories and
 datasets so a later hypothesis-set or correlation-aware encoder does not
 change evidence meaning.
 
+## Checkpoint binding
+
+Every checkpoint whose `Agent` has the belief channel enabled stores two
+required identities alongside its weights:
+
+```text
+belief_schema_identity
+belief_content_manifest_identity
+```
+
+`belief_schema_identity` is the digest of the complete ordered encoding
+contract: tensor schema name, world schema, content manifest, count buckets,
+and every `(owner role, hidden zone, CardDefId, card name)` row. The explicit
+content-manifest identity is retained as a separately diagnosable boundary.
+Loading a belief-enabled checkpoint without both identities fails. At
+`start_game`, the runtime derives the live schema from managym and compares
+both identities before constructing the decision core or running inference;
+matching tensor dimensions are not enough.
+
+There is one `checkpoint` player kind. It dispatches from the serialized
+`Agent` capability rather than inventing distinct agent types. This work does
+not port or retain incompatible historical checkpoint formats: experiments
+regenerate models under the current observation, action, content, and belief
+ABIs.
+
 ## Shared model structure
 
 Belief formation and decision-making should share semantic understanding
@@ -433,6 +458,9 @@ tag, and remains defined only when both endpoint supports are non-empty.
   base belief.
 - An unsupported tensor schema or content vocabulary mismatch fails rather
   than dropping belief rows.
+- A belief-enabled checkpoint missing its exact schema/content binding, or
+  loaded against an equal-shaped but differently mapped schema, fails before
+  inference.
 - An intervention is explicit in provenance and is not committed into agent
   memory unless a separate stateful simulation API requests that behavior.
 - Search cannot reconstruct worlds independently from per-card marginals.

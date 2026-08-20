@@ -2,19 +2,40 @@
 
 import json
 
-from manabot.belief import ManabotPlayer
+import pytest
+import torch
+
+from manabot.belief import (
+    BeliefError,
+    ManabotPlayer,
+    belief_schema_from_engine,
+)
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentHypers
 from manabot.model import Agent
+from manabot.sim.distill import save_bc_checkpoint
+from manabot.sim.flat_mc import load_checkpoint_agent, make_player
+from managym.possible_worlds import PossibleWorldSpace
 from tests.belief.support import fixture_torch_observation
 
 
 class NativeContractEngine:
     """Small current-ABI engine double; the CLI demo remains the native proof."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, remap_card_ids: bool = False) -> None:
         self.revision = 17
         self.viewer_hash = "runtime-viewer-17"
+        definitions = [
+            {"card_def_id": 0, "registry_name": "Counterspell"},
+            {"card_def_id": 1, "registry_name": "Lightning Bolt"},
+            {"card_def_id": 2, "registry_name": "Mountain"},
+        ]
+        if remap_card_ids:
+            definitions[0]["registry_name"], definitions[1]["registry_name"] = (
+                definitions[1]["registry_name"],
+                definitions[0]["registry_name"],
+            )
+        self.definitions = definitions
         self.worlds = (
             ({"Counterspell": 2}, 1),
             ({"Counterspell": 1, "Lightning Bolt": 1}, 4),
@@ -27,11 +48,7 @@ class NativeContractEngine:
         return {
             "schema_version": 1,
             "content_digest": "runtime-content-v1",
-            "definitions": [
-                {"card_def_id": 0, "registry_name": "Counterspell"},
-                {"card_def_id": 1, "registry_name": "Lightning Bolt"},
-                {"card_def_id": 2, "registry_name": "Mountain"},
-            ],
+            "definitions": self.definitions,
         }
 
     def semantic_observation_json(self, viewer: int) -> str:
@@ -86,9 +103,9 @@ class NativeContractEngine:
             }
         )
 
-def test_manabot_player_generates_belief_before_ordinary_action() -> None:
-    engine = NativeContractEngine()
-    agent = Agent(
+
+def _belief_agent() -> Agent:
+    return Agent(
         ObservationSpace(),
         AgentHypers(
             hidden_dim=8,
@@ -97,7 +114,11 @@ def test_manabot_player_generates_belief_before_ordinary_action() -> None:
             belief_card_vocab_size=3,
         ),
     )
-    player = ManabotPlayer(agent)
+
+
+def test_manabot_player_generates_belief_before_ordinary_action() -> None:
+    engine = NativeContractEngine()
+    player = ManabotPlayer(_belief_agent())
 
     player.start_game(engine, 0)
     action = player.act(engine, fixture_torch_observation())
@@ -108,3 +129,60 @@ def test_manabot_player_generates_belief_before_ordinary_action() -> None:
     command = player.command_for_action(engine, action, command_id="runtime-test")
     assert command.command_id == "runtime-test"
     assert command.offer_id == action
+
+
+def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> None:
+    engine = NativeContractEngine()
+    agent = _belief_agent()
+    schema = belief_schema_from_engine(
+        engine,
+        PossibleWorldSpace.from_engine(engine, 0),
+        count_buckets=agent.belief_count_buckets,
+    )
+    checkpoint_path = tmp_path / "belief.pt"
+    save_bc_checkpoint(
+        agent,
+        agent.observation_space,
+        checkpoint_path,
+        belief_schema=schema,
+    )
+
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    assert payload["belief_schema_identity"] == schema.identity
+    assert (
+        payload["belief_content_manifest_identity"] == schema.content_manifest_identity
+    )
+    player, _ = make_player(
+        {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=1
+    )
+    assert isinstance(player, ManabotPlayer)
+    player.start_game(engine, 0)
+    assert player.manabot is not None
+
+    with pytest.raises(BeliefError, match="belief schema"):
+        player.start_game(NativeContractEngine(remap_card_ids=True), 0)
+    assert player.manabot is None
+    assert player.viewer is None
+    assert player.history is None
+    with pytest.raises(RuntimeError, match="start_game"):
+        player.act(engine, fixture_torch_observation())
+
+
+def test_belief_checkpoint_loader_requires_serialized_binding(tmp_path) -> None:
+    agent = _belief_agent()
+    checkpoint_path = tmp_path / "unbound-belief.pt"
+    torch.save(
+        {
+            "hypers": {
+                "observation_hypers": (
+                    agent.observation_space.encoder.hypers.model_dump()
+                ),
+                "agent_hypers": agent.hypers.model_dump(),
+            },
+            "model_state_dict": agent.state_dict(),
+        },
+        checkpoint_path,
+    )
+
+    with pytest.raises(BeliefError, match="missing its schema binding"):
+        load_checkpoint_agent(str(checkpoint_path))

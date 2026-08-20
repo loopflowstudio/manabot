@@ -6,6 +6,7 @@ _EXPORTS = {
     "AgentMemory": "manabot.belief.agent",
     "AgentStep": "manabot.belief.agent",
     "BeliefEncodingSchema": "manabot.belief.encoding",
+    "BeliefCheckpointBinding": "manabot.belief.encoding",
     "BeliefError": "manabot.belief.range",
     "BeliefModel": "manabot.belief.state",
     "BeliefRow": "manabot.belief.encoding",

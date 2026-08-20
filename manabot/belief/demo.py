@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import numpy as np
@@ -21,6 +23,8 @@ from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mas
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model import Agent
+from manabot.sim.distill import save_bc_checkpoint
+from manabot.sim.flat_mc import make_player
 from manabot.verify.util import INTERACTIVE_DECK
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
@@ -91,7 +95,19 @@ def run_demo() -> dict[str, Any]:
     env, observation = _runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
     schema, policy_value = _schema_and_agent(env._engine, viewer)
-    player = ManabotPlayer(policy_value, belief_schema=schema)
+    with TemporaryDirectory(prefix="manabot-belief-demo-") as tmp_dir:
+        checkpoint_path = Path(tmp_dir) / "belief.pt"
+        save_bc_checkpoint(
+            policy_value,
+            policy_value.observation_space,
+            checkpoint_path,
+            belief_schema=schema,
+        )
+        player, _ = make_player(
+            {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=19
+        )
+    if not isinstance(player, ManabotPlayer):
+        raise RuntimeError("belief checkpoint did not load as a ManabotPlayer")
     player.start_game(env, viewer)
     player.act(env, observation)
     if player.last_step is None or player.manabot is None or player.history is None:
@@ -155,6 +171,7 @@ def run_demo() -> dict[str, Any]:
     }
     return {
         "generated_belief_identity": generated.identity,
+        "checkpoint_schema_bound": player.checkpoint_binding is not None,
         "viewer_history_identity": player.history.identity,
         "p_has_bolt": query_mass(generated, has_query),
         "legal_action_distribution": legal_policy,
