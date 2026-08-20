@@ -1,60 +1,50 @@
 """Viewer-safe beliefs over canonical managym possible worlds."""
 
-from manabot.belief.agent import (
-    AgentMemory,
-    AgentStep,
-    Manabot,
-    PolicyValueResult,
-    ViewerDecision,
-)
-from manabot.belief.encoding import (
-    HAND_ZONE_ID,
-    LIBRARY_ZONE_ID,
-    OPPONENT_OWNER_ROLE_ID,
-    BeliefEncodingSchema,
-    BeliefRow,
-    BeliefTensorView,
-    belief_schema_from_engine,
-    encode_belief,
-)
-from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
-from manabot.belief.state import (
-    BeliefError,
-    BeliefModel,
-    BeliefState,
-    BeliefUpdate,
-    BeliefUpdateReceipt,
-    CompatibleDealBeliefModel,
-    EmptyBeliefSupport,
-    ViewerHistory,
-    condition_belief,
-    query_mass,
-)
+from importlib import import_module
 
-__all__ = [
-    "AgentMemory",
-    "AgentStep",
-    "BeliefEncodingSchema",
-    "BeliefError",
-    "BeliefModel",
-    "BeliefRow",
-    "BeliefState",
-    "BeliefTensorView",
-    "BeliefUpdate",
-    "BeliefUpdateReceipt",
-    "CompatibleDealBeliefModel",
-    "EmptyBeliefSupport",
-    "HAND_ZONE_ID",
-    "LIBRARY_ZONE_ID",
-    "Manabot",
-    "ManabotPlayer",
-    "OPPONENT_OWNER_ROLE_ID",
-    "PolicyValueResult",
-    "ViewerDecision",
-    "ViewerHistory",
-    "condition_belief",
-    "belief_schema_from_engine",
-    "encode_belief",
-    "query_mass",
-    "viewer_decision_from_engine",
-]
+_EXPORTS = {
+    "AgentMemory": "manabot.belief.agent",
+    "AgentStep": "manabot.belief.agent",
+    "BeliefEncodingSchema": "manabot.belief.encoding",
+    "BeliefError": "manabot.belief.state",
+    "BeliefModel": "manabot.belief.state",
+    "BeliefRow": "manabot.belief.encoding",
+    "BeliefState": "manabot.belief.state",
+    "BeliefTensorView": "manabot.belief.encoding",
+    "BeliefUpdate": "manabot.belief.state",
+    "BeliefUpdateReceipt": "manabot.belief.state",
+    "CompatibleDealBeliefModel": "manabot.belief.state",
+    "EmptyBeliefSupport": "manabot.belief.state",
+    "HAND_ZONE_ID": "manabot.belief.encoding",
+    "LIBRARY_ZONE_ID": "manabot.belief.encoding",
+    "Manabot": "manabot.belief.agent",
+    "ManabotPlayer": "manabot.belief.runtime",
+    "OPPONENT_OWNER_ROLE_ID": "manabot.belief.encoding",
+    "PolicyValueResult": "manabot.belief.agent",
+    "ViewerDecision": "manabot.belief.agent",
+    "ViewerHistory": "manabot.belief.state",
+    "belief_schema_from_engine": "manabot.belief.encoding",
+    "condition_belief": "manabot.belief.state",
+    "encode_belief": "manabot.belief.encoding",
+    "query_mass": "manabot.belief.state",
+    "viewer_decision_from_engine": "manabot.belief.runtime",
+}
+
+
+def __getattr__(name: str):
+    """Load optional model/runtime dependencies only when requested."""
+
+    try:
+        module_name = _EXPORTS[name]
+    except KeyError as error:
+        raise AttributeError(name) from error
+    value = getattr(import_module(module_name), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted((*globals(), *_EXPORTS))
+
+
+__all__ = sorted(_EXPORTS)
