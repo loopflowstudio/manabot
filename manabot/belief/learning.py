@@ -152,10 +152,6 @@ class PackedBeliefBatch:
     target_world: torch.Tensor
     history_features: torch.Tensor
 
-    @property
-    def decisions(self) -> int:
-        return int(self.target_world.shape[0])
-
 
 def _pack_inputs(
     inputs: Sequence[tuple[PossibleWorldSpace, ViewerHistory]],
@@ -366,7 +362,6 @@ class BoundedOverfitResult:
     model: ExactWorldBeliefModel
     initial_nll: float
     final_nll: float
-    losses: tuple[float, ...]
 
 
 def train_bounded_overfit(
@@ -388,14 +383,12 @@ def train_bounded_overfit(
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     with torch.no_grad():
         initial_nll = float(model.negative_log_likelihood(batch).item())
-    losses: list[float] = []
     model.train()
     for _ in range(steps):
         optimizer.zero_grad(set_to_none=True)
         loss = model.negative_log_likelihood(batch)
         loss.backward()
         optimizer.step()
-        losses.append(float(loss.detach().item()))
     model.eval()
     with torch.no_grad():
         final_nll = float(model.negative_log_likelihood(batch).item())
@@ -403,7 +396,6 @@ def train_bounded_overfit(
         model=model,
         initial_nll=initial_nll,
         final_nll=final_nll,
-        losses=tuple(losses),
     )
 
 
