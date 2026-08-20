@@ -133,13 +133,9 @@ class BeliefTensorView:
                 self.count_probabilities, torch.float32
             ),
             "belief_validity": repeated(self.validity, torch.float32),
-            "belief_globals": torch.tensor(
-                [self.entropy, self.effective_support],
-                dtype=torch.float32,
-                device=device,
-            )
-            .unsqueeze(0)
-            .expand(batch_size, 2),
+            "belief_globals": repeated(
+                np.asarray([self.entropy, self.effective_support]), torch.float32
+            ),
         }
 
 

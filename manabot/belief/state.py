@@ -271,8 +271,6 @@ def query_mass(belief: BeliefState, query: WorldQuery) -> float:
     """Measure a managym query under the canonical belief distribution."""
 
     indexes, _ = belief.space.condition_indexes(query, allow_empty=True)
-    if not indexes:
-        return 0.0
     selected = np.asarray(indexes, dtype=np.int64)
     return float(belief.normalized_distribution[selected].sum())
 
@@ -283,12 +281,6 @@ def condition_belief(
     """Restrict and normalize a belief without consulting actual truth."""
 
     indexes, receipt = belief.space.condition_indexes(query, allow_empty=True)
-    if not indexes:
-        return EmptyBeliefSupport(
-            belief_identity=belief.identity,
-            query_digest=receipt.query_digest,
-            world_space_identity=belief.space.identity,
-        )
     selected = np.asarray(indexes, dtype=np.int64)
     mass = float(belief.normalized_distribution[selected].sum())
     if mass <= 0.0:

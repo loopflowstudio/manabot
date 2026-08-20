@@ -143,20 +143,7 @@ class ManabotPlayer:
             raise RuntimeError("start_game must run before ManabotPlayer.act")
         decision = viewer_decision_from_engine(_engine(env), observation, self.history)
         step = self.manabot.decide(decision, self.memory)
-        action_by_offer = {
-            command.offer_id: action_index
-            for command, action_index in zip(
-                decision.legal_commands,
-                step.result.legal_action_indexes,
-                strict=True,
-            )
-        }
-        try:
-            action = action_by_offer[step.command.offer_id]
-        except KeyError as error:
-            raise BeliefError(
-                "Manabot selected a Command outside the action surface"
-            ) from error
+        action = int(np.argmax(step.result.policy))
         self.memory = step.next_memory
         self.last_step = step
         self.last_action = action
