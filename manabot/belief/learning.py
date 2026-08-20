@@ -31,6 +31,7 @@ from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
     SEMANTIC_DECISION_VERSION,
     Observation,
+    TransitionReceipt,
 )
 from managym.possible_worlds import PossibleWorldSpace
 
@@ -115,6 +116,20 @@ class BeliefTrainingExample:
     target_world: int
     supervision_receipt: str
 
+    @property
+    def identity(self) -> str:
+        """Bind the private label to its canonical support and public history."""
+
+        return _digest(
+            {
+                "schema": "manabot.belief-training-example/v1",
+                "world_space_identity": self.world_space.identity,
+                "viewer_history_identity": self.viewer_history.identity,
+                "target_world": self.target_world,
+                "supervision_receipt": self.supervision_receipt,
+            }
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class BehaviorPopulationProvenance:
@@ -123,17 +138,103 @@ class BehaviorPopulationProvenance:
     policy: str
     version: str
 
+    def __post_init__(self) -> None:
+        if not self.policy or not self.version:
+            raise BeliefError("behavior-population policy and version are required")
+
+    @property
+    def identity(self) -> str:
+        return _digest(
+            {
+                "schema": "manabot.behavior-population/v1",
+                "policy": self.policy,
+                "version": self.version,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BeliefPopulationEpisodeProvenance:
+    """Replay coordinates for one authority-sampled and transitioned deal."""
+
+    source_world_space_identity: str
+    sampled_world_index: int
+    materialization_seed: int
+    transition_receipt_identity: str
+
+    def __post_init__(self) -> None:
+        if not self.source_world_space_identity:
+            raise BeliefError("population episode needs its source world space")
+        if self.sampled_world_index < 0 or self.materialization_seed < 0:
+            raise BeliefError("population replay coordinates cannot be negative")
+        if len(self.transition_receipt_identity) != 64:
+            raise BeliefError("population episode needs a transition receipt digest")
+
+    @classmethod
+    def from_transition(
+        cls,
+        *,
+        source_world_space_identity: str,
+        sampled_world_index: int,
+        materialization_seed: int,
+        transition: TransitionReceipt,
+    ) -> "BeliefPopulationEpisodeProvenance":
+        receipt_identity = _digest(
+            {
+                "schema": "manabot.population-transition/v1",
+                "schema_version": transition.schema_version,
+                "before_revision": transition.before_revision,
+                "after_revision": transition.after_revision,
+                "command_id": transition.command_id,
+                "public_commitment": transition.public_commitment,
+                "events": transition.events,
+                "next_decision": transition.next_decision,
+            }
+        )
+        return cls(
+            source_world_space_identity=source_world_space_identity,
+            sampled_world_index=sampled_world_index,
+            materialization_seed=materialization_seed,
+            transition_receipt_identity=receipt_identity,
+        )
+
+    @property
+    def identity(self) -> str:
+        return _digest(
+            {
+                "schema": "manabot.belief-population-episode-provenance/v1",
+                "source_world_space_identity": self.source_world_space_identity,
+                "sampled_world_index": self.sampled_world_index,
+                "materialization_seed": self.materialization_seed,
+                "transition_receipt_identity": self.transition_receipt_identity,
+            }
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class BeliefPopulationEpisode:
     """One sampled deal and all authority-only labels captured from its rollout."""
 
     episode_id: str
+    provenance: BeliefPopulationEpisodeProvenance
     examples: tuple[BeliefTrainingExample, ...]
 
     def __post_init__(self) -> None:
         if not self.episode_id or not self.examples:
             raise BeliefError("belief population episodes must be named and non-empty")
+
+    @property
+    def identity(self) -> str:
+        return _digest(
+            {
+                "schema": "manabot.belief-population-episode/v1",
+                "episode_id": self.episode_id,
+                "provenance_identity": self.provenance.identity,
+                "example_identities": tuple(
+                    example.identity for example in self.examples
+                ),
+            }
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,14 +250,58 @@ class BeliefPopulationDataset:
         episode_ids = tuple(episode.episode_id for episode in self.episodes)
         if len(episode_ids) < 2 or len(set(episode_ids)) != len(episode_ids):
             raise BeliefError("belief population needs distinct sampled episodes")
+        if not self.source_distribution:
+            raise BeliefError("belief population needs a source distribution")
+
+    @property
+    def identity(self) -> str:
+        return _digest(
+            {
+                "schema": "manabot.belief-population-dataset/v1",
+                "episode_identities": tuple(
+                    episode.identity for episode in self.episodes
+                ),
+                "source_distribution": self.source_distribution,
+                "behavior_population_identity": self.behavior_population.identity,
+                "sampling_seed": self.sampling_seed,
+            }
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class BeliefPopulationSplit:
     """Deal-level split made before a fresh model is constructed."""
 
+    source_dataset_identity: str
+    split_seed: int
     training_episodes: tuple[BeliefPopulationEpisode, ...]
     held_out_episodes: tuple[BeliefPopulationEpisode, ...]
+
+    def __post_init__(self) -> None:
+        if not self.source_dataset_identity:
+            raise BeliefError("belief population split needs its source dataset")
+        if not self.training_episodes or not self.held_out_episodes:
+            raise BeliefError("belief population split needs two non-empty arms")
+        training_ids = {episode.episode_id for episode in self.training_episodes}
+        held_out_ids = {episode.episode_id for episode in self.held_out_episodes}
+        if training_ids & held_out_ids:
+            raise BeliefError("belief population split overlaps deal episodes")
+
+    @property
+    def identity(self) -> str:
+        return _digest(
+            {
+                "schema": "manabot.belief-population-split/v1",
+                "source_dataset_identity": self.source_dataset_identity,
+                "split_seed": self.split_seed,
+                "training_episode_identities": tuple(
+                    episode.identity for episode in self.training_episodes
+                ),
+                "held_out_episode_identities": tuple(
+                    episode.identity for episode in self.held_out_episodes
+                ),
+            }
+        )
 
     @property
     def training_examples(self) -> tuple[BeliefTrainingExample, ...]:
@@ -197,7 +342,12 @@ def split_belief_population(
         for index, episode in enumerate(dataset.episodes)
         if index in held_out_indexes
     )
-    return BeliefPopulationSplit(training, held_out)
+    return BeliefPopulationSplit(
+        source_dataset_identity=dataset.identity,
+        split_seed=seed,
+        training_episodes=training,
+        held_out_episodes=held_out,
+    )
 
 
 def capture_materialized_world_supervision(
@@ -733,6 +883,7 @@ __all__ = [
     "BehaviorPopulationProvenance",
     "BeliefPopulationDataset",
     "BeliefPopulationEpisode",
+    "BeliefPopulationEpisodeProvenance",
     "BeliefPopulationSplit",
     "BeliefTrainingExample",
     "BoundedPopulationTrainingResult",

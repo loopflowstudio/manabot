@@ -1,6 +1,6 @@
 """Behavioral proof for supervised exact-world belief learning."""
 
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 import json
 
 import numpy as np
@@ -12,6 +12,7 @@ from manabot.belief.learning import (
     BehaviorPopulationProvenance,
     BeliefPopulationDataset,
     BeliefPopulationEpisode,
+    BeliefPopulationEpisodeProvenance,
     BeliefTrainingExample,
     capture_materialized_world_supervision,
     pack_belief_examples,
@@ -105,8 +106,8 @@ def test_semantic_history_pooling_is_explicitly_order_invariant() -> None:
     )
     assert forward_batch.history_kind_ids.equal(artifact_batch.history_kind_ids)
     assert forward_batch.history_card_indexes.equal(artifact_batch.history_card_indexes)
-    first = train_bounded_population((forward, reverse), schema, steps=2, seed=197)
-    second = train_bounded_population((forward, reverse), schema, steps=2, seed=197)
+    first = train_bounded_population((forward,), schema, steps=2, seed=197)
+    second = train_bounded_population((artifact_variant,), schema, steps=2, seed=197)
     assert first.model.identity == second.model.identity
     assert first.final_nll == second.final_nll
 
@@ -118,6 +119,12 @@ def test_population_split_is_by_episode_and_provenance_is_not_packed() -> None:
     episodes = tuple(
         BeliefPopulationEpisode(
             episode_id=f"deal-{episode}",
+            provenance=BeliefPopulationEpisodeProvenance(
+                source_world_space_identity=space.identity,
+                sampled_world_index=episode % space.support_size,
+                materialization_seed=episode + 100,
+                transition_receipt_identity=f"{episode + 1:064x}",
+            ),
             examples=(
                 BeliefTrainingExample(
                     world_space=space,
@@ -144,6 +151,17 @@ def test_population_split_is_by_episode_and_provenance_is_not_packed() -> None:
     training_ids = {episode.episode_id for episode in split.training_episodes}
     held_out_ids = {episode.episode_id for episode in split.held_out_episodes}
     packed = pack_belief_examples(split.training_examples, schema)
+    alternate_population = replace(
+        dataset,
+        behavior_population=BehaviorPopulationProvenance("other-policy", "2"),
+    )
+    alternate_split = split_belief_population(
+        alternate_population, held_out_episodes=2, seed=991
+    )
+    trained = train_bounded_population(split.training_examples, schema, steps=1)
+    alternate_trained = train_bounded_population(
+        alternate_split.training_examples, schema, steps=1
+    )
 
     assert training_ids.isdisjoint(held_out_ids)
     assert len(split.training_examples) == 4
@@ -151,6 +169,13 @@ def test_population_split_is_by_episode_and_provenance_is_not_packed() -> None:
     assert not hasattr(packed, "episode_id")
     assert not hasattr(packed, "behavior_population")
     assert not hasattr(packed, "supervision_receipt")
+    assert dataset.identity != alternate_population.identity
+    assert split.identity != alternate_split.identity
+    assert trained.model.identity == alternate_trained.model.identity
+    assert len(dataset.identity) == 64
+    assert len(split.identity) == 64
+    with pytest.raises(FrozenInstanceError):
+        dataset.sampling_seed = 0  # type: ignore[misc]
 
 
 def test_supervision_rejects_an_authority_engine_from_another_revision() -> None:
@@ -191,6 +216,13 @@ def test_real_population_learning_is_held_out_and_beats_p0() -> None:
     assert evidence["population"]["episodes"] == 160
     assert evidence["population"]["distinct_sampled_worlds"] > 100
     assert evidence["population"]["real_managym_transitions"] == 160
+    assert evidence["population"]["source_distribution"] == (
+        "compatible-deal-belief/v1"
+    )
+    assert evidence["population"]["sampling"] == (
+        "authoritative-exact-p0-with-replacement"
+    )
+    assert evidence["population"]["distinct_episode_provenance_identities"] == 160
     assert sum(evidence["population"]["public_commitments"].values()) == 160
     assert evidence["split"] == {
         "unit": "deal-episode",
@@ -206,7 +238,11 @@ def test_real_population_learning_is_held_out_and_beats_p0() -> None:
     )
     assert evidence["model_boundary"]["policy_version_is_provenance_only"] is True
     assert "acting_policy_identity" in evidence["model_boundary"]["excluded_inputs"]
+    assert "episode_provenance_identity" in evidence["model_boundary"][
+        "excluded_inputs"
+    ]
     assert "supervision_receipt" in evidence["model_boundary"]["excluded_inputs"]
+    assert "event_receipt_identity" in evidence["model_boundary"]["excluded_inputs"]
     assert evidence["training"]["fresh_model_started_at_p0"] is True
     assert (
         evidence["training"]["final_joint_nll"] < evidence["training"]["p0_joint_nll"]
@@ -215,6 +251,9 @@ def test_real_population_learning_is_held_out_and_beats_p0() -> None:
     assert evidence["held_out"]["inclusion_brier_improvement"] > 0.0
     assert evidence["held_out"]["inclusion_ece_improvement"] > 0.0
     assert evidence["held_out"]["learned"]["credible_90_coverage"] >= 0.8
+    assert evidence["held_out"]["learned"]["mean_entropy_nats"] > 7.0
+    assert evidence["held_out"]["learned"]["mean_effective_support"] > 1_000
+    assert evidence["held_out"]["learned"]["mean_90_credible_set_size"] > 1_000
     assert evidence["cost"]["training_support_sizes"] == {4_865: 125, 10_832: 3}
     assert evidence["cost"]["held_out_support_sizes"] == {4_865: 32}
     assert evidence["cost"]["training_candidate_world_rows_per_step"] == (
@@ -222,3 +261,7 @@ def test_real_population_learning_is_held_out_and_beats_p0() -> None:
     )
     assert evidence["cost"]["held_out_candidate_world_rows"] == 32 * 4_865
     assert evidence["cost"]["total_seconds"] > 0.0
+    assert len(evidence["population_identity"]) == 64
+    assert len(evidence["split_identity"]) == 64
+    assert len(evidence["model_identity"].rsplit(":", 1)[-1]) == 64
+    assert len(evidence["replay_model_digest"]) == 64

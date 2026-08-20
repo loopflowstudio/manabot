@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import asdict
+import hashlib
 import json
 import time
 from typing import Any, Mapping
@@ -16,6 +17,7 @@ from manabot.belief.learning import (
     BehaviorPopulationProvenance,
     BeliefPopulationDataset,
     BeliefPopulationEpisode,
+    BeliefPopulationEpisodeProvenance,
     BeliefTrainingExample,
     capture_materialized_world_supervision,
     compare_population_to_p0,
@@ -87,9 +89,10 @@ def _capture_population(
     rows: list[BeliefPopulationEpisode] = []
     commitment_counts: Counter[str] = Counter()
     for episode_index, world_index in enumerate(sampled_worlds):
+        materialization_seed = seed * 1_000_003 + episode_index
         branch = root_space.materialize(
             world_index,
-            seed=seed * 1_000_003 + episode_index,
+            seed=materialization_seed,
             refresh_opponent_commitment=True,
         )
         initial = Observation.from_json(branch.semantic_observation_json(viewer))
@@ -126,6 +129,12 @@ def _capture_population(
         rows.append(
             BeliefPopulationEpisode(
                 episode_id=f"deal-{episode_index:04d}",
+                provenance=BeliefPopulationEpisodeProvenance.from_transition(
+                    source_world_space_identity=root_space.identity,
+                    sampled_world_index=world_index,
+                    materialization_seed=materialization_seed,
+                    transition=transition.receipt,
+                ),
                 examples=(example,),
             )
         )
@@ -205,6 +214,24 @@ def run_demo(
     held_out_episode_ids = {episode.episode_id for episode in split.held_out_episodes}
     p0_metrics = asdict(comparison.p0)
     learned_metrics = asdict(comparison.learned)
+    replay_model_digest = hashlib.sha256(
+        json.dumps(
+            {
+                "schema": "manabot.belief-population-replay-model/v1",
+                "population_identity": dataset.identity,
+                "split_identity": split.identity,
+                "model_identity": trained.model.identity,
+                "training_steps": trained.steps,
+                "training_p0_nll": trained.p0_nll,
+                "training_final_nll": trained.final_nll,
+                "held_out_p0": p0_metrics,
+                "held_out_learned": learned_metrics,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("ascii")
+    ).hexdigest()
     return {
         "proof": "frozen-population-supervised-exact-world-belief",
         "claim_boundary": (
@@ -220,6 +247,9 @@ def run_demo(
             "public_commitments": commitment_counts,
             "distinct_sampled_worlds": distinct_sampled_worlds,
             "real_managym_transitions": len(dataset.episodes),
+            "distinct_episode_provenance_identities": len(
+                {episode.provenance.identity for episode in dataset.episodes}
+            ),
         },
         "split": {
             "unit": "deal-episode",
@@ -247,6 +277,7 @@ def run_demo(
             "excluded_inputs": [
                 "acting_policy_identity",
                 "episode_identity",
+                "episode_provenance_identity",
                 "supervision_receipt",
                 "event_receipt_identity",
                 "materialized_hidden_world",
@@ -312,6 +343,9 @@ def run_demo(
             "total_seconds": time.perf_counter() - total_started,
         },
         "model_identity": trained.model.identity,
+        "population_identity": dataset.identity,
+        "split_identity": split.identity,
+        "replay_model_digest": replay_model_digest,
     }
 
 
