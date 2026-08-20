@@ -59,19 +59,36 @@ def belief_demo_command() -> None:
 
 @app.command("belief-learn-demo")
 def belief_learn_demo_command(
-    steps: int = typer.Option(
-        80,
-        min=1,
+    episodes: int = typer.Option(
+        160,
+        min=40,
         max=256,
-        help="Bounded fresh-model overfit steps",
+        help="Exact-p0 deals sampled through the frozen behavior population",
     ),
-    seed: int = typer.Option(197, help="Fresh model and materialization seed"),
+    held_out_episodes: int = typer.Option(
+        32,
+        min=8,
+        max=128,
+        help="Whole deals withheld before fresh-model training",
+    ),
+    steps: int = typer.Option(
+        16,
+        min=1,
+        max=64,
+        help="Bounded fresh-model population training steps",
+    ),
+    seed: int = typer.Option(197, help="Population sampling, split, and model seed"),
 ) -> None:
-    """Fit a fresh belief model to one authority-only hidden-world label."""
+    """Compare population-trained exact-world beliefs with p0 on held-out deals."""
 
     from manabot.belief.learning_demo import main as run_belief_learn_demo
 
-    run_belief_learn_demo(steps=steps, seed=seed)
+    run_belief_learn_demo(
+        episodes=episodes,
+        held_out_episodes=held_out_episodes,
+        steps=steps,
+        seed=seed,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> None:

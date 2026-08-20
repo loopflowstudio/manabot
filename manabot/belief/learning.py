@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 import json
 import math
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -33,6 +35,21 @@ from managym.decision import (
 from managym.possible_worlds import PossibleWorldSpace
 
 SEMANTIC_HISTORY_SCHEMA = "manabot.viewer-public-commitment-multiset/v1"
+
+
+@contextmanager
+def _deterministic_torch_cpu() -> Iterator[None]:
+    """Make bounded CPU evidence replay-stable without leaking global settings."""
+
+    previous_threads = torch.get_num_threads()
+    previous_deterministic = torch.are_deterministic_algorithms_enabled()
+    torch.set_num_threads(1)
+    torch.use_deterministic_algorithms(True)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(previous_deterministic)
+        torch.set_num_threads(previous_threads)
 
 
 def _digest(payload: object) -> str:
@@ -97,6 +114,90 @@ class BeliefTrainingExample:
     viewer_history: ViewerHistory
     target_world: int
     supervision_receipt: str
+
+
+@dataclass(frozen=True, slots=True)
+class BehaviorPopulationProvenance:
+    """Frozen acting-population identity retained outside model inputs."""
+
+    policy: str
+    version: str
+
+
+@dataclass(frozen=True, slots=True)
+class BeliefPopulationEpisode:
+    """One sampled deal and all authority-only labels captured from its rollout."""
+
+    episode_id: str
+    examples: tuple[BeliefTrainingExample, ...]
+
+    def __post_init__(self) -> None:
+        if not self.episode_id or not self.examples:
+            raise BeliefError("belief population episodes must be named and non-empty")
+
+
+@dataclass(frozen=True, slots=True)
+class BeliefPopulationDataset:
+    """Immutable population evidence with provenance separated from examples."""
+
+    episodes: tuple[BeliefPopulationEpisode, ...]
+    source_distribution: str
+    behavior_population: BehaviorPopulationProvenance
+    sampling_seed: int
+
+    def __post_init__(self) -> None:
+        episode_ids = tuple(episode.episode_id for episode in self.episodes)
+        if len(episode_ids) < 2 or len(set(episode_ids)) != len(episode_ids):
+            raise BeliefError("belief population needs distinct sampled episodes")
+
+
+@dataclass(frozen=True, slots=True)
+class BeliefPopulationSplit:
+    """Deal-level split made before a fresh model is constructed."""
+
+    training_episodes: tuple[BeliefPopulationEpisode, ...]
+    held_out_episodes: tuple[BeliefPopulationEpisode, ...]
+
+    @property
+    def training_examples(self) -> tuple[BeliefTrainingExample, ...]:
+        return tuple(
+            example
+            for episode in self.training_episodes
+            for example in episode.examples
+        )
+
+    @property
+    def held_out_examples(self) -> tuple[BeliefTrainingExample, ...]:
+        return tuple(
+            example
+            for episode in self.held_out_episodes
+            for example in episode.examples
+        )
+
+
+def split_belief_population(
+    dataset: BeliefPopulationDataset,
+    *,
+    held_out_episodes: int,
+    seed: int,
+) -> BeliefPopulationSplit:
+    """Split complete deals before training without exposing episode identities."""
+
+    if held_out_episodes < 1 or held_out_episodes >= len(dataset.episodes):
+        raise BeliefError("held-out episode count must leave both split arms non-empty")
+    order = np.random.default_rng(seed).permutation(len(dataset.episodes))
+    held_out_indexes = {int(index) for index in order[:held_out_episodes]}
+    training = tuple(
+        episode
+        for index, episode in enumerate(dataset.episodes)
+        if index not in held_out_indexes
+    )
+    held_out = tuple(
+        episode
+        for index, episode in enumerate(dataset.episodes)
+        if index in held_out_indexes
+    )
+    return BeliefPopulationSplit(training, held_out)
 
 
 def capture_materialized_world_supervision(
@@ -439,55 +540,211 @@ class ExactWorldBeliefModel(nn.Module):
 
 
 @dataclass(frozen=True, slots=True)
-class BoundedOverfitResult:
+class BoundedPopulationTrainingResult:
     model: ExactWorldBeliefModel
+    p0_nll: float
     initial_nll: float
     final_nll: float
+    steps: int
 
 
-def train_bounded_overfit(
+def train_bounded_population(
     examples: Iterable[BeliefTrainingExample],
     schema: BeliefEncodingSchema,
     *,
-    steps: int = 80,
-    learning_rate: float = 0.05,
+    steps: int = 16,
+    learning_rate: float = 0.01,
     seed: int = 197,
-    hidden_dim: int = 32,
-) -> BoundedOverfitResult:
-    """Fit a fresh exact-world scorer under a strict local step cap."""
+    hidden_dim: int = 4,
+) -> BoundedPopulationTrainingResult:
+    """Fit a fresh exact-world scorer to one pre-split population arm."""
 
-    if steps < 1 or steps > 256:
-        raise BeliefError("bounded belief overfit steps must be between 1 and 256")
-    torch.manual_seed(seed)
-    model = ExactWorldBeliefModel(schema, hidden_dim=hidden_dim)
-    batch = pack_belief_examples(examples, schema)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    with torch.no_grad():
-        initial_nll = float(model.negative_log_likelihood(batch).item())
-    model.train()
-    for _ in range(steps):
-        optimizer.zero_grad(set_to_none=True)
-        loss = model.negative_log_likelihood(batch)
-        loss.backward()
-        optimizer.step()
-    model.eval()
-    with torch.no_grad():
-        final_nll = float(model.negative_log_likelihood(batch).item())
-    return BoundedOverfitResult(
+    if steps < 1 or steps > 64:
+        raise BeliefError("bounded population steps must be between 1 and 64")
+    with _deterministic_torch_cpu():
+        torch.manual_seed(seed)
+        model = ExactWorldBeliefModel(schema, hidden_dim=hidden_dim)
+        batch = pack_belief_examples(examples, schema)
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        with torch.no_grad():
+            target_indexes = batch.offsets[:-1] + batch.target_world
+            p0_nll = float((-batch.log_p0[target_indexes]).mean().item())
+            initial_nll = float(model.negative_log_likelihood(batch).item())
+        model.train()
+        for _ in range(steps):
+            optimizer.zero_grad(set_to_none=True)
+            loss = model.negative_log_likelihood(batch)
+            loss.backward()
+            optimizer.step()
+        model.eval()
+        with torch.no_grad():
+            final_nll = float(model.negative_log_likelihood(batch).item())
+    return BoundedPopulationTrainingResult(
         model=model,
+        p0_nll=p0_nll,
         initial_nll=initial_nll,
         final_nll=final_nll,
+        steps=steps,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PopulationBeliefMetrics:
+    """Joint score, marginal calibration, and uncertainty on one held-out arm."""
+
+    examples: int
+    joint_nll: float
+    inclusion_brier: float
+    inclusion_ece: float
+    mean_entropy_nats: float
+    mean_effective_support: float
+    credible_50_coverage: float
+    credible_90_coverage: float
+    mean_90_credible_set_size: float
+
+
+@dataclass(frozen=True, slots=True)
+class PopulationBeliefComparison:
+    """Learned and exact-p0 scores over identical held-out labels."""
+
+    p0: PopulationBeliefMetrics
+    learned: PopulationBeliefMetrics
+    candidate_worlds: int
+
+
+def _population_metrics(
+    examples: Sequence[BeliefTrainingExample],
+    batch: PackedBeliefBatch,
+    log_probabilities: torch.Tensor,
+    schema: BeliefEncodingSchema,
+    *,
+    calibration_bins: int,
+) -> PopulationBeliefMetrics:
+    if calibration_bins < 1:
+        raise BeliefError("population calibration bins must be positive")
+    values = log_probabilities.detach().cpu().to(torch.float64).numpy()
+    names = tuple(name for _, name in _card_vocabulary(schema))
+    predictions: list[float] = []
+    outcomes: list[float] = []
+    nlls: list[float] = []
+    entropies: list[float] = []
+    effective_supports: list[float] = []
+    coverage_50: list[float] = []
+    coverage_90: list[float] = []
+    credible_90_sizes: list[float] = []
+    for index, example in enumerate(examples):
+        lower = int(batch.offsets[index].item())
+        upper = int(batch.offsets[index + 1].item())
+        target = int(batch.target_world[index].item())
+        segment_logs = values[lower:upper]
+        probabilities = np.exp(segment_logs)
+        if not math.isclose(float(probabilities.sum()), 1.0, abs_tol=1e-10):
+            raise BeliefError("population prediction is not normalized")
+        nlls.append(-float(segment_logs[target]))
+        positive = probabilities > 0.0
+        entropies.append(
+            -float(np.sum(probabilities[positive] * segment_logs[positive]))
+        )
+        effective_supports.append(1.0 / float(np.square(probabilities).sum()))
+
+        order = np.argsort(-probabilities, kind="stable")
+        ordered = probabilities[order]
+        cumulative = np.cumsum(ordered)
+
+        def credible_set(level: float) -> np.ndarray:
+            boundary = min(int(np.searchsorted(cumulative, level)), len(order) - 1)
+            return np.flatnonzero(probabilities >= ordered[boundary])
+
+        credible_50 = credible_set(0.50)
+        credible_90 = credible_set(0.90)
+        coverage_50.append(float(target in credible_50))
+        coverage_90.append(float(target in credible_90))
+        credible_90_sizes.append(float(len(credible_90)))
+
+        counts = batch.world_counts[lower:upper].numpy()
+        active_names = {name for name, _ in example.world_space.pool}
+        for card_index, name in enumerate(names):
+            if name not in active_names:
+                continue
+            predictions.append(float(probabilities[counts[:, card_index] > 0].sum()))
+            outcomes.append(float(counts[target, card_index] > 0))
+    predicted = np.asarray(predictions, dtype=np.float64)
+    observed = np.asarray(outcomes, dtype=np.float64)
+    calibration_error = 0.0
+    for bin_index in range(calibration_bins):
+        low = bin_index / calibration_bins
+        high = (bin_index + 1) / calibration_bins
+        selected = (predicted >= low) & (
+            (predicted < high)
+            | ((bin_index == calibration_bins - 1) & (predicted == 1.0))
+        )
+        if np.any(selected):
+            calibration_error += float(np.count_nonzero(selected)) * abs(
+                float(predicted[selected].mean() - observed[selected].mean())
+            )
+    return PopulationBeliefMetrics(
+        examples=len(examples),
+        joint_nll=float(np.mean(nlls)),
+        inclusion_brier=float(np.mean(np.square(predicted - observed))),
+        inclusion_ece=calibration_error / len(predictions),
+        mean_entropy_nats=float(np.mean(entropies)),
+        mean_effective_support=float(np.mean(effective_supports)),
+        credible_50_coverage=float(np.mean(coverage_50)),
+        credible_90_coverage=float(np.mean(coverage_90)),
+        mean_90_credible_set_size=float(np.mean(credible_90_sizes)),
+    )
+
+
+def compare_population_to_p0(
+    examples: Iterable[BeliefTrainingExample],
+    schema: BeliefEncodingSchema,
+    model: ExactWorldBeliefModel,
+    *,
+    calibration_bins: int = 5,
+) -> PopulationBeliefComparison:
+    """Compare a trained scorer with exact p0 on untouched episode labels."""
+
+    rows = tuple(examples)
+    batch = pack_belief_examples(rows, schema)
+    with _deterministic_torch_cpu():
+        model.eval()
+        with torch.inference_mode():
+            learned_log_probabilities = model.log_probabilities(batch)
+    return PopulationBeliefComparison(
+        p0=_population_metrics(
+            rows,
+            batch,
+            batch.log_p0,
+            schema,
+            calibration_bins=calibration_bins,
+        ),
+        learned=_population_metrics(
+            rows,
+            batch,
+            learned_log_probabilities,
+            schema,
+            calibration_bins=calibration_bins,
+        ),
+        candidate_worlds=int(batch.world_counts.shape[0]),
     )
 
 
 __all__ = [
+    "BehaviorPopulationProvenance",
+    "BeliefPopulationDataset",
+    "BeliefPopulationEpisode",
+    "BeliefPopulationSplit",
     "BeliefTrainingExample",
-    "BoundedOverfitResult",
+    "BoundedPopulationTrainingResult",
     "ExactWorldBeliefModel",
     "PackedBeliefBatch",
+    "PopulationBeliefComparison",
+    "PopulationBeliefMetrics",
     "capture_materialized_world_supervision",
+    "compare_population_to_p0",
     "pack_belief_examples",
     "semantic_history_schema_identity",
     "segment_log_softmax",
-    "train_bounded_overfit",
+    "split_belief_population",
+    "train_bounded_population",
 ]

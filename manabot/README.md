@@ -10,7 +10,7 @@ uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
-uv run manabot belief-learn-demo  # fresh-model supervised belief overfit proof
+uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
 The default `local` preset is the certified laptop path: it trains a small

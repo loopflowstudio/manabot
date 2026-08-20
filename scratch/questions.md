@@ -31,3 +31,10 @@
   multiplicity, but it is intentionally invariant to event order. This slice
   proves semantic event sensitivity, not sequence sensitivity; an ordered
   history encoder remains a later model change.
+- The bounded population proof samples 160 opening worlds with replacement
+  from managym's exact physical-deal `p0`, refreshes the sampled opponent's
+  legal commitment offers, and runs one frozen rule: play the most-held land,
+  break ties by canonical card name, otherwise pass. Each deal contributes one
+  post-transition label and is assigned wholly to the 128/32 train/held-out
+  split. This is enough to test population supervision without claiming
+  strength or transfer beyond that scripted population.

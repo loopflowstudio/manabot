@@ -9,6 +9,9 @@ _EXPORTS = {
     "BeliefCheckpointBinding": "manabot.belief.encoding",
     "BeliefError": "manabot.belief.range",
     "BeliefModel": "manabot.belief.state",
+    "BeliefPopulationDataset": "manabot.belief.learning",
+    "BeliefPopulationEpisode": "manabot.belief.learning",
+    "BeliefPopulationSplit": "manabot.belief.learning",
     "BeliefRow": "manabot.belief.encoding",
     "BeliefState": "manabot.belief.range",
     "BeliefTensorView": "manabot.belief.encoding",
@@ -29,10 +32,12 @@ _EXPORTS = {
     "ViewerHistoryEvent": "manabot.belief.state",
     "belief_schema_from_engine": "manabot.belief.encoding",
     "capture_materialized_world_supervision": "manabot.belief.learning",
+    "compare_population_to_p0": "manabot.belief.learning",
     "condition_belief": "manabot.belief.state",
     "encode_belief": "manabot.belief.encoding",
     "query_mass": "manabot.belief.state",
-    "train_bounded_overfit": "manabot.belief.learning",
+    "split_belief_population": "manabot.belief.learning",
+    "train_bounded_population": "manabot.belief.learning",
     "viewer_decision_from_engine": "manabot.belief.runtime",
 }
 
