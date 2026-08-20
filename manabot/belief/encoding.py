@@ -209,7 +209,10 @@ def encode_belief(
         )
 
     row_count = len(schema.rows)
-    probabilities = np.zeros((row_count, schema.count_buckets), dtype=np.float32)
+    # Accumulate in float64. Real engine spaces can contain thousands of
+    # worlds, and adding their weights directly into float32 buckets can move
+    # an otherwise normalized marginal outside the fail-closed tolerance.
+    probabilities64 = np.zeros((row_count, schema.count_buckets), dtype=np.float64)
     for row_index, row in enumerate(schema.rows):
         if row.owner_role_id != OPPONENT_OWNER_ROLE_ID:
             raise BeliefError(
@@ -234,11 +237,17 @@ def encode_belief(
                 raise BeliefError(
                     f"count {count} for {row.card_name!r} exceeds the encoding schema"
                 )
-            probabilities[row_index, count] += np.float32(
-                belief.normalized_distribution[world.index]
-            )
-    if not np.allclose(probabilities.sum(axis=1), 1.0, atol=1e-6, rtol=0.0):
+            probabilities64[row_index, count] += belief.normalized_distribution[
+                world.index
+            ]
+    if not np.allclose(
+        probabilities64.sum(axis=1),
+        1.0,
+        atol=1e-10,
+        rtol=0.0,
+    ):
         raise BeliefError("belief marginal projection is not normalized")
+    probabilities = probabilities64.astype(np.float32)
 
     card_def_ids = np.asarray([row.card_def_id for row in schema.rows], dtype=np.int64)
     owner_role_ids = np.asarray(

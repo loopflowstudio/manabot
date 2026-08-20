@@ -3,8 +3,16 @@
 import numpy as np
 import pytest
 
-from manabot.belief import AgentMemory, BeliefError, CompatibleDealBeliefModel, Manabot
-from manabot.belief.demo import run_demo
+from manabot.belief import (
+    AgentMemory,
+    BeliefError,
+    CompatibleDealBeliefModel,
+    Manabot,
+    ViewerHistory,
+    belief_schema_from_engine,
+    encode_belief,
+)
+from manabot.belief.demo import _runtime_env, run_demo
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentHypers
 from manabot.model import Agent
@@ -123,3 +131,33 @@ def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
         "belief_encoding",
         "policy_inference",
     }
+
+
+def test_real_engine_manifest_rows_preserve_normalized_zero_counts() -> None:
+    env, _ = _runtime_env()
+    viewer = int(env.last_raw_obs.agent.player_index)
+    space = PossibleWorldSpace.from_engine(env._engine, viewer)
+    history = ViewerHistory.from_observation(
+        Observation.from_json(env._engine.semantic_observation_json(viewer))
+    )
+    belief = (
+        CompatibleDealBeliefModel()
+        .update(previous=None, world_space=space, viewer_history=history)
+        .belief
+    )
+    schema = belief_schema_from_engine(
+        env._engine,
+        space,
+        count_buckets=max(2, max(count for _, count in space.pool) + 1),
+    )
+
+    view = encode_belief(belief, schema)
+    pool_names = {name for name, _ in space.pool}
+    absent = np.asarray([row.card_name not in pool_names for row in schema.rows])
+
+    assert space.support_size == 10_832
+    assert absent.any()
+    assert np.all(view.validity == 1.0)
+    assert np.allclose(view.count_probabilities.sum(axis=1), 1.0, atol=1e-6, rtol=0.0)
+    assert np.all(view.count_probabilities[absent, 0] == 1.0)
+    assert np.count_nonzero(view.count_probabilities[absent, 1:]) == 0
