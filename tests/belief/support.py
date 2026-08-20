@@ -6,7 +6,6 @@ from manabot.belief import (
     HAND_ZONE_ID,
     LIBRARY_ZONE_ID,
     OPPONENT_OWNER_ROLE_ID,
-    AgentMemory,
     BeliefEncodingSchema,
     BeliefRow,
     CompatibleDealBeliefModel,
@@ -21,20 +20,18 @@ from managym.decision import Command, Observation
 from managym.possible_worlds import PossibleWorldSpace
 
 
-def fixture_semantic_observation() -> Observation:
-    return Observation(
-        schema_version=4,
-        revision=17,
-        viewer=0,
-        viewer_state_hash="retained-viewer-state-17",
-        viewer_state={},
-        events=("opening-priority",),
-        decision=None,
-    )
-
-
 def fixture_history() -> ViewerHistory:
-    return ViewerHistory.from_observation(fixture_semantic_observation())
+    return ViewerHistory.from_observation(
+        Observation(
+            schema_version=4,
+            revision=17,
+            viewer=0,
+            viewer_state_hash="retained-viewer-state-17",
+            viewer_state={},
+            events=("opening-priority",),
+            decision=None,
+        )
+    )
 
 
 def fixture_space(history: ViewerHistory | None = None) -> PossibleWorldSpace:
@@ -119,7 +116,6 @@ def fixture_decision() -> tuple[ViewerDecision, BeliefEncodingSchema]:
     space = fixture_space(history)
     return (
         ViewerDecision(
-            observation_identity=space.source_viewer_state_hash,
             observation=fixture_torch_observation(),
             world_space=space,
             viewer_history=history,
@@ -149,15 +145,3 @@ def fixture_manabot(schema: BeliefEncodingSchema) -> Manabot:
         belief_model=CompatibleDealBeliefModel(),
         belief_schema=schema,
     )
-
-
-__all__ = [
-    "AgentMemory",
-    "fixture_decision",
-    "fixture_history",
-    "fixture_manabot",
-    "fixture_schema",
-    "fixture_semantic_observation",
-    "fixture_space",
-    "fixture_torch_observation",
-]

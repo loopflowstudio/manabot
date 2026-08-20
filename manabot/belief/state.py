@@ -33,7 +33,6 @@ class ViewerHistory:
     schema_version: int
     viewer: int
     initial_observation_identity: str
-    current_observation_identity: str
     current_revision: int
     current_viewer_state_hash: str
     events: tuple[str, ...]
@@ -42,12 +41,16 @@ class ViewerHistory:
     def from_observation(cls, observation: Observation) -> "ViewerHistory":
         """Start history at one authoritative viewer Observation."""
 
-        observation_identity = _observation_identity(observation)
+        observation_identity = _observation_identity(
+            observation.schema_version,
+            observation.revision,
+            observation.viewer,
+            observation.viewer_state_hash,
+        )
         return cls(
             schema_version=observation.schema_version,
             viewer=observation.viewer,
             initial_observation_identity=observation_identity,
-            current_observation_identity=observation_identity,
             current_revision=observation.revision,
             current_viewer_state_hash=observation.viewer_state_hash,
             events=observation.events,
@@ -74,7 +77,6 @@ class ViewerHistory:
             schema_version=self.schema_version,
             viewer=self.viewer,
             initial_observation_identity=self.initial_observation_identity,
-            current_observation_identity=_observation_identity(observation),
             current_revision=observation.revision,
             current_viewer_state_hash=observation.viewer_state_hash,
             events=(*self.events, *receipt.events),
@@ -87,19 +89,29 @@ class ViewerHistory:
                 "schema_version": self.schema_version,
                 "viewer": self.viewer,
                 "initial_observation_identity": self.initial_observation_identity,
-                "current_observation_identity": self.current_observation_identity,
+                "current_observation_identity": _observation_identity(
+                    self.schema_version,
+                    self.current_revision,
+                    self.viewer,
+                    self.current_viewer_state_hash,
+                ),
                 "events": self.events,
             }
         )
 
 
-def _observation_identity(observation: Observation) -> str:
+def _observation_identity(
+    schema_version: int,
+    revision: int,
+    viewer: int,
+    viewer_state_hash: str,
+) -> str:
     return _digest(
         {
-            "schema_version": observation.schema_version,
-            "revision": observation.revision,
-            "viewer": observation.viewer,
-            "viewer_state_hash": observation.viewer_state_hash,
+            "schema_version": schema_version,
+            "revision": revision,
+            "viewer": viewer,
+            "viewer_state_hash": viewer_state_hash,
         }
     )
 
@@ -258,10 +270,9 @@ class EmptyBeliefSupport:
 def query_mass(belief: BeliefState, query: WorldQuery) -> float:
     """Measure a managym query under the canonical belief distribution."""
 
-    support = belief.space.support(query)
-    if support.support_size == 0:
+    indexes, _ = belief.space.condition_indexes(query, allow_empty=True)
+    if not indexes:
         return 0.0
-    indexes, _ = belief.space.condition_indexes(query)
     selected = np.asarray(indexes, dtype=np.int64)
     return float(belief.normalized_distribution[selected].sum())
 
@@ -271,14 +282,13 @@ def condition_belief(
 ) -> BeliefState | EmptyBeliefSupport:
     """Restrict and normalize a belief without consulting actual truth."""
 
-    receipt = belief.space.support(query)
-    if receipt.support_size == 0:
+    indexes, receipt = belief.space.condition_indexes(query, allow_empty=True)
+    if not indexes:
         return EmptyBeliefSupport(
             belief_identity=belief.identity,
             query_digest=receipt.query_digest,
             world_space_identity=belief.space.identity,
         )
-    indexes, receipt = belief.space.condition_indexes(query)
     selected = np.asarray(indexes, dtype=np.int64)
     mass = float(belief.normalized_distribution[selected].sum())
     if mass <= 0.0:

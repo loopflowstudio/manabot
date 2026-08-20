@@ -35,15 +35,12 @@ def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
 class ViewerDecision:
     """One viewer-safe policy decision and its authoritative belief domain."""
 
-    observation_identity: str
     observation: Mapping[str, torch.Tensor]
     world_space: PossibleWorldSpace
     viewer_history: ViewerHistory
     legal_commands: tuple[Command, ...]
 
     def __post_init__(self) -> None:
-        if self.observation_identity != self.world_space.source_viewer_state_hash:
-            raise BeliefError("decision observation does not match its world space")
         if self.viewer_history.viewer != self.world_space.viewer:
             raise BeliefError("decision history changed viewer")
         if self.viewer_history.current_revision != self.world_space.source_revision:
@@ -202,7 +199,9 @@ class Manabot:
         )
         output_bytes = _output_bytes(policy, scalar_value)
         receipt = hashlib.sha256()
-        receipt.update(decision.observation_identity.encode("ascii"))
+        receipt.update(
+            decision.viewer_history.current_viewer_state_hash.encode("ascii")
+        )
         receipt.update(decision.world_space.identity.encode("ascii"))
         receipt.update(view.encoding_receipt.encode("ascii"))
         receipt.update(output_bytes)

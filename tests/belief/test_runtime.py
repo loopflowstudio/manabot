@@ -1,6 +1,5 @@
 """Focused checks for the ordinary ManabotPlayer runtime boundary."""
 
-import hashlib
 import json
 
 from manabot.belief import ManabotPlayer
@@ -86,58 +85,6 @@ class NativeContractEngine:
                 ],
             }
         )
-
-    def possible_world_support_json(
-        self, viewer: int, space_identity: str, query_json: str
-    ) -> str:
-        del viewer
-        indexes = self._indexes(query_json)
-        return self._query_result(space_identity, query_json, indexes)
-
-    def possible_world_condition_json(
-        self, viewer: int, space_identity: str, query_json: str
-    ) -> str:
-        del viewer
-        indexes = self._indexes(query_json)
-        payload = json.loads(self._query_result(space_identity, query_json, indexes))
-        payload["world_indexes"] = indexes
-        return json.dumps(payload)
-
-    def _indexes(self, query_json: str) -> list[int]:
-        query = json.loads(query_json)
-        if query["kind"] == "true":
-            return list(range(len(self.worlds)))
-        card = query["card"]
-        threshold = int(
-            next(value for key, value in query.items() if key not in {"kind", "card"})
-        )
-        indexes = []
-        for index, (hand, _) in enumerate(self.worlds):
-            count = hand.get(card, 0)
-            selected = {
-                "has": count >= threshold,
-                "lacks": count < threshold,
-                "exactly": count == threshold,
-                "not_exactly": count != threshold,
-            }[query["kind"]]
-            if selected:
-                indexes.append(index)
-        return indexes
-
-    def _query_result(
-        self, space_identity: str, query_json: str, indexes: list[int]
-    ) -> str:
-        return json.dumps(
-            {
-                "space_identity": space_identity,
-                "query_digest": hashlib.sha256(query_json.encode()).hexdigest(),
-                "canonical_digest": hashlib.sha256(query_json.encode()).hexdigest(),
-                "canonical_query": json.loads(query_json),
-                "support_size": len(indexes),
-                "total_weight": str(sum(self.worlds[index][1] for index in indexes)),
-            }
-        )
-
 
 def test_manabot_player_generates_belief_before_ordinary_action() -> None:
     engine = NativeContractEngine()

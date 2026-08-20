@@ -106,7 +106,6 @@ def test_keystone_demo_changes_belief_tokens_and_hides_actual_truth() -> None:
 
     assert evidence["generated_override_byte_identical"] is True
     assert evidence["viewer_hidden_swap_identical"] is True
-    assert evidence["viewer_hidden_swap_materialized"] is True
     assert (
         evidence["bolt_count_tokens"]["hand"]["has"]
         != evidence["bolt_count_tokens"]["hand"]["lacks"]

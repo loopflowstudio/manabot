@@ -12,6 +12,7 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.belief.state import BeliefError, BeliefState
+from managym.possible_worlds import PossibleWorldSpace
 
 OPPONENT_OWNER_ROLE_ID = 1
 LIBRARY_ZONE_ID = 0
@@ -63,19 +64,15 @@ class BeliefEncodingSchema:
             raise BeliefError(
                 "belief rows must be unique by owner, hidden zone, and card definition"
             )
-        names_by_card_id: dict[int, str] = {}
-        card_ids_by_name: dict[str, int] = {}
-        for row in self.rows:
-            previous = names_by_card_id.setdefault(row.card_def_id, row.card_name)
-            if previous != row.card_name:
-                raise BeliefError(
-                    "one card definition id cannot name multiple card definitions"
-                )
-            previous_id = card_ids_by_name.setdefault(row.card_name, row.card_def_id)
-            if previous_id != row.card_def_id:
-                raise BeliefError(
-                    "one card definition name cannot map to multiple definition ids"
-                )
+        definitions = {(row.card_def_id, row.card_name) for row in self.rows}
+        if len({card_id for card_id, _ in definitions}) != len(definitions):
+            raise BeliefError(
+                "one card definition id cannot name multiple card definitions"
+            )
+        if len({name for _, name in definitions}) != len(definitions):
+            raise BeliefError(
+                "one card definition name cannot map to multiple definition ids"
+            )
 
     @property
     def identity(self) -> str:
@@ -148,7 +145,7 @@ class BeliefTensorView:
 
 def belief_schema_from_engine(
     engine: Any,
-    belief: BeliefState,
+    space: PossibleWorldSpace,
     *,
     count_buckets: int,
 ) -> BeliefEncodingSchema:
@@ -165,16 +162,12 @@ def belief_schema_from_engine(
         raise BeliefError(
             "native content manifest is unavailable or malformed"
         ) from error
-    if content_identity != belief.space.content_manifest_identity:
+    if content_identity != space.content_manifest_identity:
         raise BeliefError("native content manifest changed from the world space")
-    if not definitions or len(set(definitions)) != len(definitions):
-        raise BeliefError("native content definitions must be non-empty and unique")
-    if len({card_id for card_id, _ in definitions}) != len(definitions):
-        raise BeliefError("native card definition ids must be unique")
-    if len({name for _, name in definitions}) != len(definitions):
-        raise BeliefError("native card definition names must be unique")
+    if not definitions:
+        raise BeliefError("native content definitions must be non-empty")
     definition_names = {name for _, name in definitions}
-    if not {name for name, _ in belief.space.pool}.issubset(definition_names):
+    if not {name for name, _ in space.pool}.issubset(definition_names):
         raise BeliefError("world-space pool is outside the native content manifest")
 
     rows = tuple(
@@ -191,7 +184,7 @@ def belief_schema_from_engine(
     )
     return BeliefEncodingSchema(
         schema_identity="manabot.belief-tensor/opponent-hidden-counts-v1",
-        world_schema_identity=belief.space.world_schema_identity,
+        world_schema_identity=space.world_schema_identity,
         content_manifest_identity=content_identity,
         rows=rows,
         count_buckets=count_buckets,

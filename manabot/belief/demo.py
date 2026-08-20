@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from manabot.belief.agent import AgentStep
 from manabot.belief.encoding import (
     HAND_ZONE_ID,
     LIBRARY_ZONE_ID,
@@ -16,18 +17,11 @@ from manabot.belief.encoding import (
     encode_belief,
 )
 from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
-from manabot.belief.state import (
-    CompatibleDealBeliefModel,
-    EmptyBeliefSupport,
-    ViewerHistory,
-    condition_belief,
-    query_mass,
-)
+from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model import Agent
 from manabot.verify.util import INTERACTIVE_DECK
-from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
@@ -55,28 +49,14 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
 
 
 def _schema_and_agent(engine: Any, viewer: int) -> tuple[BeliefEncodingSchema, Agent]:
-    semantic = Observation.from_json(engine.semantic_observation_json(viewer))
-    history = ViewerHistory.from_observation(semantic)
     space = PossibleWorldSpace.from_engine(engine, viewer)
-    belief = (
-        CompatibleDealBeliefModel()
-        .update(
-            previous=None,
-            world_space=space,
-            viewer_history=history,
-        )
-        .belief
-    )
     count_buckets = max(2, max(count for _, count in space.pool) + 1)
     schema = belief_schema_from_engine(
         engine,
-        belief,
+        space,
         count_buckets=count_buckets,
     )
-    manifest = engine.content_pack_manifest()
-    card_vocab_size = 1 + max(
-        int(row["card_def_id"]) for row in manifest["definitions"]
-    )
+    card_vocab_size = 1 + max(row.card_def_id for row in schema.rows)
     torch.manual_seed(19)
     policy_value = Agent(
         ObservationSpace(),
@@ -96,11 +76,13 @@ def _run_swapped_world(
     viewer: int,
     policy_value: Agent,
     schema: BeliefEncodingSchema,
-) -> ManabotPlayer:
+) -> AgentStep:
     player = ManabotPlayer(policy_value, belief_schema=schema)
     player.start_game(engine, viewer)
     player.act(engine, observation)
-    return player
+    if player.last_step is None:
+        raise RuntimeError("materialized ManabotPlayer did not produce an AgentStep")
+    return player.last_step
 
 
 def run_demo() -> dict[str, Any]:
@@ -153,26 +135,23 @@ def run_demo() -> dict[str, Any]:
     lacks_observation = lacks_engine.semantic_observation_json(viewer)
     swap_a = _run_swapped_world(has_engine, observation, viewer, policy_value, schema)
     swap_b = _run_swapped_world(lacks_engine, observation, viewer, policy_value, schema)
-    if swap_a.last_step is None or swap_b.last_step is None:
-        raise RuntimeError("materialized ManabotPlayer did not produce an AgentStep")
 
-    legal_policy = {
-        command.command_id: float(autonomous.result.policy[action_index])
-        for command, action_index in zip(
+    legal_actions = tuple(
+        zip(
             decision.legal_commands,
             autonomous.result.legal_action_indexes,
             strict=True,
         )
+    )
+    legal_policy = {
+        command.command_id: float(autonomous.result.policy[action_index])
+        for command, action_index in legal_actions
     }
     delta = {
         command.command_id: float(
             has_result.policy[action_index] - lacks_result.policy[action_index]
         )
-        for command, action_index in zip(
-            decision.legal_commands,
-            has_result.legal_action_indexes,
-            strict=True,
-        )
+        for command, action_index in legal_actions
     }
     return {
         "generated_belief_identity": generated.identity,
@@ -194,12 +173,10 @@ def run_demo() -> dict[str, Any]:
         "policy_delta_has_minus_lacks": delta,
         "viewer_hidden_swap_identical": (
             has_observation == lacks_observation
-            and swap_a.last_step.belief_update.belief.identity
-            == swap_b.last_step.belief_update.belief.identity
-            and swap_a.last_step.result.output_bytes
-            == swap_b.last_step.result.output_bytes
+            and swap_a.belief_update.belief.identity
+            == swap_b.belief_update.belief.identity
+            and swap_a.result.output_bytes == swap_b.result.output_bytes
         ),
-        "viewer_hidden_swap_materialized": True,
         "receipts": {
             "belief_update": autonomous.belief_update.update_receipt.identity,
             "belief_encoding": autonomous.result.belief_encoding_receipt,

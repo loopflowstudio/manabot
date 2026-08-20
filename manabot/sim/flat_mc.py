@@ -507,7 +507,7 @@ def play_games(
                 if prepare_step is not None:
                     prepare_step(env, acting, action)
             semantic_execution = any(
-                bool(getattr(observer, "requires_semantic_transitions", False))
+                getattr(observer, "observe_step", None) is not None
                 or getattr(observer, "tracker", None) is not None
                 for observer in (hero_player, villain_player)
             )
@@ -538,10 +538,6 @@ def play_games(
             for observer in (hero_player, villain_player):
                 observe_step = getattr(observer, "observe_step", None)
                 if observe_step is not None:
-                    if transition is None:
-                        raise RuntimeError(
-                            "belief observer requires a semantic TransitionReceipt"
-                        )
                     observe_step(env, acting, transition)
             for observer, audit_points in (
                 (hero_player, hero_known_truth),

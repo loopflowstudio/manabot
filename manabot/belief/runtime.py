@@ -84,7 +84,6 @@ def viewer_decision_from_engine(
     )
     space = PossibleWorldSpace.from_engine(engine, history.viewer)
     return ViewerDecision(
-        observation_identity=semantic.viewer_state_hash,
         observation=tensors,
         world_space=space,
         viewer_history=history,
@@ -94,8 +93,6 @@ def viewer_decision_from_engine(
 
 class ManabotPlayer:
     """Stateful ordinary player using generated beliefs on every decision."""
-
-    requires_semantic_transitions = True
 
     def __init__(
         self,
@@ -118,17 +115,13 @@ class ManabotPlayer:
         engine = _engine(env)
         observation = Observation.from_json(engine.semantic_observation_json(seat))
         history = ViewerHistory.from_observation(observation)
-        space = PossibleWorldSpace.from_engine(engine, seat)
-        initial = self.belief_model.update(
-            previous=None,
-            world_space=space,
-            viewer_history=history,
-        ).belief
-        schema = self.belief_schema or belief_schema_from_engine(
-            engine,
-            initial,
-            count_buckets=self.policy_value.belief_count_buckets,
-        )
+        schema = self.belief_schema
+        if schema is None:
+            schema = belief_schema_from_engine(
+                engine,
+                PossibleWorldSpace.from_engine(engine, seat),
+                count_buckets=self.policy_value.belief_count_buckets,
+            )
         self.manabot = Manabot(
             policy_value=self.policy_value,
             belief_model=self.belief_model,
