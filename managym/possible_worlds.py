@@ -1,22 +1,32 @@
 """Read-only Python adapter for managym's canonical possible-world space.
 
-Rust owns enumeration, ordering, exact compatible-deal weights, identity, and
-materialization.  This module only parses that projection and routes canonical
-world indexes back to the source engine; it never constructs a hand ontology.
+Rust owns enumeration, ordering, exact compatible-deal weights, identity,
+query evaluation, and materialization. This module parses that projection and
+routes canonical world indexes back to the source engine; it never constructs
+a production hand ontology.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import json
 import sys
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 POSSIBLE_WORLD_SPACE_VERSION: int = 1
+WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v1"
 
 
 class PossibleWorldError(ValueError):
     """The canonical world-space contract rejected a consumer request."""
+
+
+def _digest(payload: object) -> str:
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +72,10 @@ class WorldQuery:
             raise PossibleWorldError(f"unknown query kind {self.kind!r}")
         return {"kind": self.kind, "card": self.card, count_field: self.count}
 
+    @property
+    def digest(self) -> str:
+        return _digest(self.to_dict())
+
 
 @dataclass(frozen=True, slots=True)
 class SupportReceipt:
@@ -98,7 +112,9 @@ class PossibleWorldSpace:
     pool: tuple[tuple[str, int], ...]
     total_weight: int
     worlds: tuple[PossibleWorld, ...]
-    _engine: Any = field(repr=False, compare=False, hash=False)
+    world_schema_identity: str = WORLD_SCHEMA_IDENTITY
+    content_manifest_identity: str = ""
+    _engine: Any | None = field(default=None, repr=False, compare=False, hash=False)
     _allocated_bytes: int = field(init=False, repr=False, compare=False, hash=False)
 
     def __post_init__(self) -> None:
@@ -106,6 +122,8 @@ class PossibleWorldSpace:
 
     @classmethod
     def from_engine(cls, engine: Any, viewer: int) -> "PossibleWorldSpace":
+        """Load the production projection emitted by managym's Rust authority."""
+
         try:
             payload = json.loads(engine.possible_world_space_json(viewer))
         except Exception as error:
@@ -116,6 +134,23 @@ class PossibleWorldSpace:
         source = payload["source_observation"]
         if int(source["viewer"]) != int(payload["viewer"]):
             raise PossibleWorldError("source observation changed the space viewer")
+        canonical_pool = tuple(
+            (str(name), int(count)) for name, count in sorted(payload["pool"].items())
+        )
+        try:
+            manifest = engine.content_pack_manifest()
+            content_manifest_identity = str(manifest["content_digest"])
+        except Exception as error:
+            raise PossibleWorldError(
+                "possible-world space requires the native content manifest"
+            ) from error
+        manifest_names = {
+            str(row["registry_name"]) for row in manifest.get("definitions", ())
+        }
+        if not {name for name, _ in canonical_pool}.issubset(manifest_names):
+            raise PossibleWorldError(
+                "possible-world pool is outside the native content manifest"
+            )
         rows = tuple(
             PossibleWorld(
                 index=int(row["index"]),
@@ -127,35 +162,126 @@ class PossibleWorldSpace:
             )
             for row in payload["worlds"]
         )
-        if not rows or tuple(row.index for row in rows) != tuple(range(len(rows))):
-            raise PossibleWorldError(
-                "world rows must be non-empty and canonically indexed"
-            )
-        if any(
-            sum(count for _, count in row.hand) != int(payload["hand_size"])
-            for row in rows
-        ):
-            raise PossibleWorldError("a canonical world has the wrong hand size")
-        total_weight = int(payload["total_weight"])
-        if total_weight <= 0:
-            raise PossibleWorldError("possible-world space has no compatible deals")
-        if sum(row.weight for row in rows) != total_weight:
-            raise PossibleWorldError("world weights do not sum to total_weight")
-        return cls(
+        space = cls(
             identity=str(payload["identity"]),
             viewer=int(payload["viewer"]),
             opponent=int(payload["opponent"]),
             source_revision=int(source["revision"]),
             source_viewer_state_hash=str(source["viewer_state_hash"]),
             hand_size=int(payload["hand_size"]),
-            pool=tuple(
-                (str(name), int(count))
-                for name, count in sorted(payload["pool"].items())
-            ),
-            total_weight=total_weight,
+            pool=canonical_pool,
+            total_weight=int(payload["total_weight"]),
             worlds=rows,
+            content_manifest_identity=content_manifest_identity,
             _engine=engine,
         )
+        space._validate()
+        return space
+
+    @classmethod
+    def from_fixture(
+        cls,
+        *,
+        viewer: int,
+        source_revision: int,
+        source_viewer_state_hash: str,
+        pool: Mapping[str, int],
+        hands: Iterable[tuple[Mapping[str, int], int]],
+        content_manifest_identity: str | None = None,
+    ) -> "PossibleWorldSpace":
+        """Build a retained, viewer-safe contract fixture.
+
+        This constructor accepts the complete canonical support, never an
+        actual hidden hand. Production callers use :meth:`from_engine`.
+        """
+
+        canonical_pool = tuple(
+            (str(name), int(count)) for name, count in sorted(pool.items())
+        )
+        manifest_identity = content_manifest_identity or _digest(
+            {"pool": canonical_pool}
+        )
+        raw_rows = []
+        for hand, weight in hands:
+            if any(int(count) < 0 for count in hand.values()):
+                raise PossibleWorldError("fixture hand counts must be non-negative")
+            raw_rows.append(
+                (
+                    tuple(
+                        (str(name), int(count))
+                        for name, count in sorted(hand.items())
+                        if int(count) > 0
+                    ),
+                    int(weight),
+                )
+            )
+        raw_rows.sort()
+        worlds = tuple(
+            PossibleWorld(index=index, hand=hand, weight=weight)
+            for index, (hand, weight) in enumerate(raw_rows)
+        )
+        if not worlds:
+            raise PossibleWorldError("fixture worlds must be non-empty")
+        hand_sizes = {sum(count for _, count in world.hand) for world in worlds}
+        if len(hand_sizes) != 1:
+            raise PossibleWorldError("fixture worlds must have one public hand size")
+        hand_size = next(iter(hand_sizes))
+        identity_payload = {
+            "schema_version": POSSIBLE_WORLD_SPACE_VERSION,
+            "world_schema_identity": WORLD_SCHEMA_IDENTITY,
+            "viewer": int(viewer),
+            "opponent": 1 - int(viewer),
+            "source_revision": int(source_revision),
+            "source_viewer_state_hash": source_viewer_state_hash,
+            "content_manifest_identity": manifest_identity,
+            "hand_size": hand_size,
+            "pool": canonical_pool,
+            "worlds": [
+                {"hand": world.hand, "weight": world.weight} for world in worlds
+            ],
+        }
+        space = cls(
+            identity=_digest(identity_payload),
+            viewer=int(viewer),
+            opponent=1 - int(viewer),
+            source_revision=int(source_revision),
+            source_viewer_state_hash=source_viewer_state_hash,
+            hand_size=hand_size,
+            pool=canonical_pool,
+            total_weight=sum(world.weight for world in worlds),
+            worlds=worlds,
+            content_manifest_identity=manifest_identity,
+        )
+        space._validate()
+        return space
+
+    def _validate(self) -> None:
+        if self.viewer == self.opponent:
+            raise PossibleWorldError("viewer and opponent must differ")
+        if not self.worlds:
+            raise PossibleWorldError("world rows must be non-empty")
+        if not self.content_manifest_identity:
+            raise PossibleWorldError("world space needs a content manifest identity")
+        if any(count <= 0 for _, count in self.pool):
+            raise PossibleWorldError("unseen-pool counts must be positive")
+        if tuple(world.index for world in self.worlds) != tuple(
+            range(len(self.worlds))
+        ):
+            raise PossibleWorldError("world rows must be canonically indexed")
+        if self.total_weight <= 0 or any(world.weight <= 0 for world in self.worlds):
+            raise PossibleWorldError("compatible-deal weights must be positive")
+        if sum(world.weight for world in self.worlds) != self.total_weight:
+            raise PossibleWorldError("world weights do not sum to total_weight")
+        if len({world.hand for world in self.worlds}) != len(self.worlds):
+            raise PossibleWorldError("canonical world rows must be unique")
+        pool = dict(self.pool)
+        for world in self.worlds:
+            if sum(count for _, count in world.hand) != self.hand_size:
+                raise PossibleWorldError("a canonical world has the wrong hand size")
+            if any(
+                count < 0 or count > pool.get(name, 0) for name, count in world.hand
+            ):
+                raise PossibleWorldError("a canonical world is outside the unseen pool")
 
     @property
     def support_size(self) -> int:
@@ -179,6 +305,8 @@ class PossibleWorldSpace:
                 self.source_viewer_state_hash,
                 self.hand_size,
                 self.total_weight,
+                self.world_schema_identity,
+                self.content_manifest_identity,
             )
         )
         total += sys.getsizeof(self.pool)
@@ -212,6 +340,8 @@ class PossibleWorldSpace:
         refresh_opponent_commitment: bool = False,
     ) -> Any:
         self.world(index)
+        if self._engine is None:
+            raise PossibleWorldError("fixture spaces cannot materialize worlds")
         try:
             return self._engine.materialize_possible_world(
                 self.viewer,
@@ -224,6 +354,8 @@ class PossibleWorldSpace:
             raise PossibleWorldError(str(error)) from error
 
     def support(self, query: WorldQuery) -> SupportReceipt:
+        if self._engine is None:
+            return self._condition_fixture(query)[1]
         try:
             payload = json.loads(
                 self._engine.possible_world_support_json(
@@ -236,26 +368,38 @@ class PossibleWorldSpace:
             raise PossibleWorldError(str(error)) from error
         if payload["space_identity"] != self.identity:
             raise PossibleWorldError("query receipt changed space identity")
-        return SupportReceipt(
-            space_identity=str(payload["space_identity"]),
-            query_digest=str(payload["query_digest"]),
-            canonical_digest=str(payload["canonical_digest"]),
-            canonical_query=payload["canonical_query"],
-            support_size=int(payload["support_size"]),
-            total_weight=int(payload["total_weight"]),
-        )
+        return self._support_receipt(payload)
 
     def condition_indexes(
-        self, query: WorldQuery
+        self, query: WorldQuery, *, allow_empty: bool = False
     ) -> tuple[tuple[int, ...], SupportReceipt]:
         """Return Rules-selected row indexes and their identity-bound receipt."""
 
+        if self._engine is None:
+            indexes, receipt = self._condition_fixture(query)
+        else:
+            support = self.support(query)
+            if support.support_size == 0:
+                indexes, receipt = (), support
+            else:
+                indexes, receipt = self._condition_through_authority(query)
+        if not indexes and not allow_empty:
+            raise PossibleWorldError("query has empty support")
+        return indexes, receipt
+
+    def _condition_through_authority(
+        self, query: WorldQuery
+    ) -> tuple[tuple[int, ...], SupportReceipt]:
+        assert self._engine is not None
         try:
+            encoded_query = json.dumps(
+                query.to_dict(), sort_keys=True, separators=(",", ":")
+            )
             payload = json.loads(
                 self._engine.possible_world_condition_json(
                     self.viewer,
                     self.identity,
-                    json.dumps(query.to_dict(), sort_keys=True, separators=(",", ":")),
+                    encoded_query,
                 )
             )
         except Exception as error:
@@ -263,20 +407,93 @@ class PossibleWorldSpace:
         if payload["space_identity"] != self.identity:
             raise PossibleWorldError("query receipt changed space identity")
         indexes = tuple(int(index) for index in payload["world_indexes"])
-        if len(indexes) != int(payload["support_size"]):
-            raise PossibleWorldError("conditioned indexes differ from support receipt")
-        if indexes != tuple(sorted(set(indexes))):
-            raise PossibleWorldError("conditioned indexes are not canonical")
-        for index in indexes:
-            self.world(index)
-        return indexes, SupportReceipt(
-            space_identity=str(payload["space_identity"]),
+        receipt = self._support_receipt(payload)
+        self._validate_indexes(indexes, receipt)
+        return indexes, receipt
+
+    def _support_receipt(self, payload: Mapping[str, Any]) -> SupportReceipt:
+        return SupportReceipt(
+            space_identity=self.identity,
             query_digest=str(payload["query_digest"]),
             canonical_digest=str(payload["canonical_digest"]),
             canonical_query=payload["canonical_query"],
             support_size=int(payload["support_size"]),
             total_weight=int(payload["total_weight"]),
         )
+
+    def _condition_fixture(
+        self, query: WorldQuery
+    ) -> tuple[tuple[int, ...], SupportReceipt]:
+        canonical = self._canonical_query(query)
+
+        def selected(world: PossibleWorld) -> bool:
+            kind = canonical["kind"]
+            if kind == "true":
+                return True
+            if kind == "empty":
+                return False
+            count = world.count(str(canonical["card"]))
+            threshold = int(canonical["count"])
+            return {
+                "has": count >= threshold,
+                "lacks": count < threshold,
+                "exactly": count == threshold,
+                "not_exactly": count != threshold,
+            }[kind]
+
+        indexes = tuple(world.index for world in self.worlds if selected(world))
+        receipt = SupportReceipt(
+            space_identity=self.identity,
+            query_digest=query.digest,
+            canonical_digest=_digest(canonical),
+            canonical_query=canonical,
+            support_size=len(indexes),
+            total_weight=sum(self.world(index).weight for index in indexes),
+        )
+        self._validate_indexes(indexes, receipt)
+        return indexes, receipt
+
+    def _canonical_query(self, query: WorldQuery) -> dict[str, str | int]:
+        payload = query.to_dict()
+        kind = str(payload["kind"])
+        if kind == "true":
+            return {"kind": "true"}
+        card = str(payload["card"])
+        count = int(
+            next(value for key, value in payload.items() if key not in {"kind", "card"})
+        )
+        maximum = min(dict(self.pool).get(card, 0), self.hand_size)
+        if kind == "has":
+            if count == 0:
+                return {"kind": "true"}
+            if count > maximum:
+                return {"kind": "empty"}
+        elif kind == "lacks":
+            if count == 0:
+                return {"kind": "empty"}
+            if count > maximum:
+                return {"kind": "true"}
+        elif kind == "exactly":
+            if count > maximum:
+                return {"kind": "empty"}
+            if count == 0:
+                return {"kind": "lacks", "card": card, "count": 1}
+        elif kind == "not_exactly":
+            if count > maximum:
+                return {"kind": "true"}
+            if count == 0:
+                return {"kind": "has", "card": card, "count": 1}
+        return {"kind": kind, "card": card, "count": count}
+
+    def _validate_indexes(
+        self, indexes: tuple[int, ...], receipt: SupportReceipt
+    ) -> None:
+        if len(indexes) != receipt.support_size:
+            raise PossibleWorldError("conditioned indexes differ from support receipt")
+        if indexes != tuple(sorted(set(indexes))):
+            raise PossibleWorldError("conditioned indexes are not canonical")
+        for index in indexes:
+            self.world(index)
 
     def flat_mc_scores(
         self,
@@ -291,6 +508,8 @@ class PossibleWorldSpace:
             self.world(index)
         if len(canonical_indexes) != len(seeds):
             raise PossibleWorldError("world indexes and seeds must have equal length")
+        if self._engine is None:
+            raise PossibleWorldError("fixture spaces cannot run native search")
         try:
             scores, simulations, cap_hits = self._engine.flat_mc_scores_for_worlds(
                 self.viewer,
@@ -309,4 +528,16 @@ class PossibleWorldSpace:
             "revision": self.source_revision,
             "viewer": self.viewer,
             "viewer_state_hash": self.source_viewer_state_hash,
+            "world_schema_identity": self.world_schema_identity,
+            "content_manifest_identity": self.content_manifest_identity,
         }
+
+
+__all__ = [
+    "POSSIBLE_WORLD_SPACE_VERSION",
+    "PossibleWorld",
+    "PossibleWorldError",
+    "PossibleWorldSpace",
+    "SupportReceipt",
+    "WorldQuery",
+]

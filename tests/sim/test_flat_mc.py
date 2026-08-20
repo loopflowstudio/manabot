@@ -8,11 +8,18 @@ determinization invariants, playout termination) and the Python matchup loop
 import numpy as np
 import pytest
 
+from manabot.belief import ManabotPlayer
+from manabot.env import ObservationSpace
+from manabot.infra.hypers import AgentHypers
+from manabot.model import Agent
+import manabot.sim.flat_mc as flat_mc
 from manabot.sim.flat_mc import (
+    AgentMatchupPlayer,
     FlatMCPlayer,
     GameRecord,
     RandomMatchupPlayer,
     aggregate_records,
+    make_player,
     play_games,
     wilson_interval,
 )
@@ -105,6 +112,45 @@ def test_random_matchup_player_uses_valid_mask():
         assert player.act(None, obs) in (1, 3)
 
 
+def test_checkpoint_routes_by_serialized_agent_capability(
+    monkeypatch,
+):
+    observation_space = ObservationSpace()
+    belief_agent = Agent(
+        observation_space,
+        AgentHypers(
+            hidden_dim=8,
+            num_attention_heads=2,
+            belief_count_buckets=3,
+            belief_card_vocab_size=64,
+        ),
+    )
+
+    def load_belief_agent(_path, *, include_belief_binding=False):
+        if include_belief_binding:
+            return belief_agent, observation_space, object()
+        return belief_agent, observation_space
+
+    monkeypatch.setattr(flat_mc, "load_checkpoint_agent", load_belief_agent)
+
+    player, _ = make_player({"kind": "checkpoint", "path": "belief.pt"}, seed=1)
+    assert isinstance(player, ManabotPlayer)
+
+    policy_agent = Agent(
+        observation_space,
+        AgentHypers(hidden_dim=8, num_attention_heads=2),
+    )
+
+    def load_policy_agent(_path, *, include_belief_binding=False):
+        if include_belief_binding:
+            return policy_agent, observation_space, None
+        return policy_agent, observation_space
+
+    monkeypatch.setattr(flat_mc, "load_checkpoint_agent", load_policy_agent)
+    player, _ = make_player({"kind": "checkpoint", "path": "policy.pt"}, seed=1)
+    assert isinstance(player, AgentMatchupPlayer)
+
+
 def test_play_games_seat_balances_and_records():
     result = play_games(SEARCH_4, RANDOM, num_games=4, seed=0)
     assert len(result.records) == 4
@@ -124,7 +170,9 @@ def test_play_games_game_offset_continues_seat_alternation():
 
 def test_aggregate_records_per_seat_and_ci():
     records = [
-        GameRecord(game_index=i, hero_seat=i % 2, hero_won=(i % 2 == 0), winner=0, steps=10)
+        GameRecord(
+            game_index=i, hero_seat=i % 2, hero_won=(i % 2 == 0), winner=0, steps=10
+        )
         for i in range(10)
     ]
     metrics = aggregate_records(records)

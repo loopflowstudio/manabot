@@ -110,6 +110,12 @@ class BeliefState:
         return 1.0 / float(np.square(probabilities).sum())
 
     @property
+    def entropy(self) -> float:
+        probabilities = self.probabilities
+        positive = probabilities[probabilities > 0.0]
+        return -float(np.sum(positive * np.log(positive)))
+
+    @property
     def allocated_bytes(self) -> int:
         return self.probability_bytes + self.space.allocated_bytes
 

@@ -67,9 +67,8 @@ CONDITION_KEYS: tuple[str, ...] = (
     CONDITION_WEIGHT_KEY,
     CONDITION_SCORES_KEY,
 )
-# Per-row obs fields the loader attaches for the conditioned student. These are
-# the side inputs `Agent._condition_row` reads; they are NOT part of the
-# fixed ObservationSpace ABI (the arena path does not produce them).
+# Historical per-row fields retained in frozen INT-14 shard evidence. They are
+# not part of the current ObservationSpace or Agent checkpoint ABI.
 CONDITION_ROW_KEYS: tuple[str, ...] = ("condition_index", "condition_weight")
 
 # The five condition roles of an INT-13 ConditionalQueryPlan, in fixed order:

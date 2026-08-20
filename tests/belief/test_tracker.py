@@ -26,6 +26,17 @@ class FakeEngine:
     def semantic_event_cursor(self) -> int:
         return self.event_cursor
 
+    def content_pack_manifest(self) -> dict[str, Any]:
+        assert self.space is not None
+        return {
+            "schema_version": 1,
+            "content_digest": self.space.content_manifest_identity,
+            "definitions": [
+                {"card_def_id": index, "registry_name": name}
+                for index, (name, _) in enumerate(self.space.pool)
+            ],
+        }
+
     def possible_world_space_json(self, viewer: int) -> str:
         assert self.space is not None and viewer == self.space.viewer
         return json.dumps(
@@ -92,6 +103,7 @@ def _state(
             PossibleWorld(index, tuple(sorted(hand.items())), weight)
             for index, (hand, weight) in enumerate(rows)
         ),
+        content_manifest_identity="test-content-manifest/v1",
         _engine=engine,
     )
     engine.space = space

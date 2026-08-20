@@ -14,7 +14,7 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.belief.range import BeliefState
-from managym.decision import DecisionFrame
+from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 from managym.possible_worlds import PossibleWorldSpace
 
 
@@ -39,18 +39,15 @@ def file_sha256(path: Path) -> str:
 
 
 def public_commitment_key(value: Mapping[str, Any]) -> str:
-    kind = value.get("kind")
-    if kind not in {
-        "pass_priority",
-        "cast",
-        "play_land",
-        "discard",
-        "decline_discard",
-    }:
-        raise RulesProviderGap(f"unsupported public commitment kind {kind!r}")
-    if kind in {"cast", "play_land", "discard"} and not value.get("card"):
-        raise RulesProviderGap(f"{kind} commitment has no canonical card name")
-    return json.dumps(dict(value), sort_keys=True, separators=(",", ":"))
+    try:
+        commitment = PublicCommitment.from_payload(value)
+    except SemanticContractError as error:
+        raise RulesProviderGap(str(error)) from error
+    return json.dumps(
+        commitment.to_payload(),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def _matching_offer_indexes(

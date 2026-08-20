@@ -48,6 +48,49 @@ def sim_command(
     _run_sim(preset, set_values or [])
 
 
+@app.command("belief-demo")
+def belief_demo_command() -> None:
+    """Prove generated and supplied beliefs use one decision core."""
+
+    from manabot.belief.demo import main as run_belief_demo
+
+    run_belief_demo()
+
+
+@app.command("belief-learn-demo")
+def belief_learn_demo_command(
+    episodes: int = typer.Option(
+        160,
+        min=40,
+        max=256,
+        help="Exact-p0 deals sampled through the frozen behavior population",
+    ),
+    held_out_episodes: int = typer.Option(
+        32,
+        min=8,
+        max=128,
+        help="Whole deals withheld before fresh-model training",
+    ),
+    steps: int = typer.Option(
+        16,
+        min=1,
+        max=64,
+        help="Bounded fresh-model population training steps",
+    ),
+    seed: int = typer.Option(197, help="Population sampling, split, and model seed"),
+) -> None:
+    """Compare population-trained exact-world beliefs with p0 on held-out deals."""
+
+    from manabot.belief.learning_demo import main as run_belief_learn_demo
+
+    run_belief_learn_demo(
+        episodes=episodes,
+        held_out_episodes=held_out_episodes,
+        steps=steps,
+        seed=seed,
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     if argv is None:
         app()
