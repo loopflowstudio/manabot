@@ -282,13 +282,30 @@ async def _sitemap_handler(request):
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
         f"<url><loc>{BASE_URL}/</loc></url>\n"
-        "</urlset>\n"
+        + "".join(
+            f"<url><loc>{BASE_URL}/blog/{p.stem}</loc></url>\n"
+            for p in sorted(BLOG_DIR.glob("*.html"))
+        )
+        + "</urlset>\n"
     )
     return Response(body, media_type="application/xml")
 
 
+BLOG_DIR = Path(__file__).parent / "blog"
+
+
+async def _blog_handler(request):
+    """Static essays, one self-contained HTML file per slug."""
+    slug = request.path_params["slug"]
+    f = BLOG_DIR / f"{slug}.html"
+    if "/" in slug or ".." in slug or not f.is_file():
+        return PlainTextResponse("Not found", status_code=404)
+    return Response(f.read_text(), media_type="text/html")
+
+
 # Insert machine-readable routes at the beginning to avoid the static handler
 app.routes.insert(0, Route("/robots.txt", _robots_handler, methods=["GET"]))
+app.routes.insert(0, Route("/blog/{slug}", _blog_handler, methods=["GET"]))
 app.routes.insert(0, Route("/sitemap.xml", _sitemap_handler, methods=["GET"]))
 
 
