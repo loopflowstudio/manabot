@@ -21,6 +21,7 @@ use crate::{
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
     game.action_space()
@@ -94,6 +95,72 @@ pub struct Env {
     pub profiler: Profiler,
     pub hero_tracker: BehaviorTracker,
     pub villain_tracker: BehaviorTracker,
+    possible_world_space_constructions: AtomicU64,
+}
+
+/// One canonical space prepared for bounded materialization against the same
+/// live `Env` root. It retains no source snapshot and never re-enumerates.
+#[derive(Debug)]
+pub struct PreparedPossibleWorldMaterializer {
+    space: PossibleWorldSpace,
+    space_identity: String,
+    expected_space_identity: String,
+    max_batch_size: usize,
+    construction_count: u64,
+}
+
+impl PreparedPossibleWorldMaterializer {
+    pub fn viewer(&self) -> usize {
+        self.space.viewer().0
+    }
+
+    pub fn space_identity(&self) -> &str {
+        &self.space_identity
+    }
+
+    pub fn support_size(&self) -> usize {
+        self.space.worlds().len()
+    }
+
+    pub fn max_batch_size(&self) -> usize {
+        self.max_batch_size
+    }
+
+    pub fn construction_count(&self) -> u64 {
+        self.construction_count
+    }
+
+    pub fn materialize_indexes(
+        &self,
+        source: &Env,
+        world_indexes: &[usize],
+        seeds: &[u64],
+        refresh_opponent_commitment: bool,
+    ) -> Result<Vec<Env>, AgentError> {
+        if self.space_identity != self.expected_space_identity {
+            return Err(AgentError(
+                "prepared possible-world space identity changed".to_string(),
+            ));
+        }
+        let game = source.game.as_ref().ok_or_else(|| {
+            AgentError("prepared materializer source called before reset".to_string())
+        })?;
+        let mode = if refresh_opponent_commitment {
+            MaterializeMode::RefreshOpponentCommitment
+        } else {
+            MaterializeMode::PreserveViewerRoot
+        };
+        let games = self
+            .space
+            .materialize_indexes(game, world_indexes, seeds, mode, self.max_batch_size)
+            .map_err(|error| {
+                AgentError(format!("prepared possible-world materializer: {error}"))
+            })?;
+        Ok(games
+            .into_iter()
+            .map(|game| source.branch_from_game(game))
+            .collect())
+    }
 }
 
 impl Env {
@@ -110,7 +177,31 @@ impl Env {
             profiler: Profiler::new(enable_profiler, 64),
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
             villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
+            possible_world_space_constructions: AtomicU64::new(0),
         }
+    }
+
+    fn construct_possible_world_space(&self, game: &Game, viewer: PlayerId) -> PossibleWorldSpace {
+        self.possible_world_space_constructions
+            .fetch_add(1, Ordering::Relaxed);
+        PossibleWorldSpace::for_viewer(game, viewer)
+    }
+
+    fn branch_from_game(&self, game: Game) -> Env {
+        Env {
+            game: Some(game),
+            skip_trivial: self.skip_trivial,
+            seed: self.seed,
+            profiler: Profiler::new(false, 64),
+            hero_tracker: BehaviorTracker::new(false),
+            villain_tracker: BehaviorTracker::new(false),
+            possible_world_space_constructions: AtomicU64::new(0),
+        }
+    }
+
+    pub fn possible_world_space_construction_count(&self) -> u64 {
+        self.possible_world_space_constructions
+            .load(Ordering::Relaxed)
     }
 
     pub fn reset(
@@ -288,7 +379,9 @@ impl Env {
                 "possible_world_space: viewer {viewer} out of range"
             )));
         }
-        Ok(PossibleWorldSpace::for_viewer(game, PlayerId(viewer)).projection())
+        Ok(self
+            .construct_possible_world_space(game, PlayerId(viewer))
+            .projection())
     }
 
     pub fn possible_world_support(
@@ -305,7 +398,7 @@ impl Env {
                 "possible_world_support: viewer {viewer} out of range"
             )));
         }
-        let space = PossibleWorldSpace::for_viewer(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer));
         if space.identity() != space_identity {
             return Err(AgentError(
                 "possible_world_support: space identity mismatch".to_string(),
@@ -328,7 +421,7 @@ impl Env {
                 "possible_world_condition: viewer {viewer} out of range"
             )));
         }
-        let space = PossibleWorldSpace::for_viewer(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer));
         if space.identity() != space_identity {
             return Err(AgentError(
                 "possible_world_condition: space identity mismatch".to_string(),
@@ -357,7 +450,7 @@ impl Env {
                 "materialize_possible_world: viewer {viewer} out of range"
             )));
         }
-        let space = PossibleWorldSpace::for_viewer(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer));
         if space.identity() != space_identity {
             return Err(AgentError(
                 "materialize_possible_world: space identity mismatch".to_string(),
@@ -371,9 +464,53 @@ impl Env {
         let branch_game = space
             .materialize_index(game, world_index, seed, mode)
             .map_err(|error| AgentError(format!("materialize_possible_world: {error}")))?;
-        let mut branch = self.fork()?;
-        branch.game = Some(branch_game);
-        Ok(branch)
+        Ok(self.branch_from_game(branch_game))
+    }
+
+    /// Enumerate and bind one canonical space to this live source. Later batch
+    /// calls validate the same root and index the retained rows directly.
+    pub fn prepare_possible_world_materializer(
+        &self,
+        viewer: usize,
+        expected_space_identity: &str,
+        max_batch_size: usize,
+    ) -> Result<PreparedPossibleWorldMaterializer, AgentError> {
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError("prepare_possible_world_materializer called before reset".to_string())
+        })?;
+        if viewer >= game.state.players.len() {
+            return Err(AgentError(format!(
+                "prepare_possible_world_materializer: viewer {viewer} out of range"
+            )));
+        }
+        if expected_space_identity.is_empty() {
+            return Err(AgentError(
+                "prepare_possible_world_materializer: expected identity must not be empty"
+                    .to_string(),
+            ));
+        }
+        if max_batch_size == 0 {
+            return Err(AgentError(
+                "prepare_possible_world_materializer: max batch size must be positive".to_string(),
+            ));
+        }
+        let before = self.possible_world_space_construction_count();
+        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space_identity = space.identity();
+        if space_identity != expected_space_identity {
+            return Err(AgentError(
+                "prepare_possible_world_materializer: space identity mismatch".to_string(),
+            ));
+        }
+        let construction_count = self.possible_world_space_construction_count() - before;
+        debug_assert_eq!(construction_count, 1);
+        Ok(PreparedPossibleWorldMaterializer {
+            space,
+            expected_space_identity: expected_space_identity.to_string(),
+            space_identity,
+            max_batch_size,
+            construction_count,
+        })
     }
 
     /// Validate and apply one revision-bound semantic Command atomically,
@@ -529,6 +666,7 @@ impl Env {
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
+            possible_world_space_constructions: AtomicU64::new(0),
         })
     }
 
@@ -546,6 +684,7 @@ impl Env {
             profiler: Profiler::new(false, 64),
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
+            possible_world_space_constructions: AtomicU64::new(0),
         })
     }
 

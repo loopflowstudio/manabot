@@ -290,6 +290,14 @@ pub enum MaterializeError {
     /// prompt. Other hand-dependent prompts do not yet have an authoritative
     /// rebuild.
     UnsupportedActingPrompt,
+    /// Batch requests must contain at least one canonical row.
+    EmptyBatch,
+    /// Every canonical row must have one deterministic materialization seed.
+    BatchLengthMismatch,
+    /// The request exceeded the bound fixed when the materializer was prepared.
+    BatchTooLarge { requested: usize, maximum: usize },
+    /// One requested canonical row does not belong to this space.
+    WorldIndexOutOfRange { index: usize, support_size: usize },
 }
 
 impl std::fmt::Display for MaterializeError {
@@ -300,6 +308,21 @@ impl std::fmt::Display for MaterializeError {
             Self::UnsupportedActingPrompt => {
                 write!(f, "cannot refresh the acting unsupported prompt")
             }
+            Self::EmptyBatch => write!(f, "possible-world batch must not be empty"),
+            Self::BatchLengthMismatch => {
+                write!(f, "possible-world indexes and seeds must have equal length")
+            }
+            Self::BatchTooLarge { requested, maximum } => write!(
+                f,
+                "possible-world batch size {requested} exceeds maximum {maximum}"
+            ),
+            Self::WorldIndexOutOfRange {
+                index,
+                support_size,
+            } => write!(
+                f,
+                "possible-world index {index} is outside support size {support_size}"
+            ),
         }
     }
 }
@@ -659,6 +682,47 @@ impl PossibleWorldSpace {
         self.materialize_with_mode(source, world, seed, mode)
     }
 
+    /// Materialize a bounded list of canonical rows after validating the live
+    /// source exactly once. The caller-declared index/seed order is preserved.
+    pub fn materialize_indexes(
+        &self,
+        source: &Game,
+        world_indexes: &[usize],
+        seeds: &[u64],
+        mode: MaterializeMode,
+        max_batch_size: usize,
+    ) -> Result<Vec<Game>, MaterializeError> {
+        self.validate_source(source)?;
+        if world_indexes.is_empty() {
+            return Err(MaterializeError::EmptyBatch);
+        }
+        if world_indexes.len() != seeds.len() {
+            return Err(MaterializeError::BatchLengthMismatch);
+        }
+        if world_indexes.len() > max_batch_size {
+            return Err(MaterializeError::BatchTooLarge {
+                requested: world_indexes.len(),
+                maximum: max_batch_size,
+            });
+        }
+        for &index in world_indexes {
+            if index >= self.worlds.len() {
+                return Err(MaterializeError::WorldIndexOutOfRange {
+                    index,
+                    support_size: self.worlds.len(),
+                });
+            }
+        }
+
+        world_indexes
+            .iter()
+            .zip(seeds)
+            .map(|(&index, &seed)| {
+                self.materialize_with_mode_validated(source, &self.worlds[index], seed, mode)
+            })
+            .collect()
+    }
+
     fn materialize_with_mode(
         &self,
         source: &Game,
@@ -667,6 +731,16 @@ impl PossibleWorldSpace {
         mode: MaterializeMode,
     ) -> Result<Game, MaterializeError> {
         self.validate_source(source)?;
+        self.materialize_with_mode_validated(source, world, seed, mode)
+    }
+
+    fn materialize_with_mode_validated(
+        &self,
+        source: &Game,
+        world: &PossibleWorld,
+        seed: u64,
+        mode: MaterializeMode,
+    ) -> Result<Game, MaterializeError> {
         let sum_k: u32 = world.hand.values().copied().sum();
         if sum_k != self.hand_size {
             return Err(MaterializeError::InconsistentWorld);

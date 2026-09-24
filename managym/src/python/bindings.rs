@@ -4,7 +4,13 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+};
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -21,7 +27,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
-        env::Env,
+        env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, EventEntityKind,
             EventType, KeywordData, Observation, PermanentData, PlayerData, StackObjectData,
@@ -1872,8 +1878,182 @@ impl PyObservation {
 #[cfg(feature = "python")]
 #[pyclass(name = "Env")]
 pub struct PyEnv {
-    inner: Mutex<Env>,
+    inner: Arc<Mutex<Env>>,
     selected_guard: bool,
+    prepared_lease: Option<PreparedBranchLease>,
+}
+
+#[cfg(feature = "python")]
+#[derive(Debug, Default)]
+struct PreparedBranchLeaseCounters {
+    current: AtomicUsize,
+    maximum: AtomicUsize,
+}
+
+#[cfg(feature = "python")]
+#[derive(Debug)]
+struct PreparedBranchLease {
+    counters: Arc<PreparedBranchLeaseCounters>,
+}
+
+#[cfg(feature = "python")]
+impl PreparedBranchLease {
+    fn acquire(counters: Arc<PreparedBranchLeaseCounters>) -> Self {
+        let current = counters.current.fetch_add(1, Ordering::SeqCst) + 1;
+        counters.maximum.fetch_max(current, Ordering::SeqCst);
+        Self { counters }
+    }
+
+    fn clone_lease(&self) -> Self {
+        Self::acquire(Arc::clone(&self.counters))
+    }
+}
+
+#[cfg(feature = "python")]
+impl Drop for PreparedBranchLease {
+    fn drop(&mut self) {
+        self.counters.current.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+#[cfg(feature = "python")]
+#[derive(Debug, Default, Serialize)]
+struct PreparedMaterializerDiagnostics {
+    space_constructions: u64,
+    batch_calls: u64,
+    requested_rows: u64,
+    materialized_rows: u64,
+    rejected_calls: u64,
+    maximum_returned_batch: usize,
+}
+
+#[cfg(feature = "python")]
+#[pyclass(name = "PreparedPossibleWorldMaterializer")]
+pub struct PyPreparedPossibleWorldMaterializer {
+    inner: PreparedPossibleWorldMaterializer,
+    source: Arc<Mutex<Env>>,
+    diagnostics: Mutex<PreparedMaterializerDiagnostics>,
+    branch_leases: Arc<PreparedBranchLeaseCounters>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPreparedPossibleWorldMaterializer {
+    #[getter]
+    fn viewer(&self) -> usize {
+        self.inner.viewer()
+    }
+
+    #[getter]
+    fn space_identity(&self) -> String {
+        self.inner.space_identity().to_string()
+    }
+
+    #[getter]
+    fn support_size(&self) -> usize {
+        self.inner.support_size()
+    }
+
+    #[getter]
+    fn max_batch_size(&self) -> usize {
+        self.inner.max_batch_size()
+    }
+
+    #[getter]
+    fn construction_count(&self) -> u64 {
+        self.inner.construction_count()
+    }
+
+    fn diagnostics_json(&self) -> PyResult<String> {
+        let diagnostics = self
+            .diagnostics
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("prepared diagnostics lock poisoned"))?;
+        let mut value = serde_json::to_value(&*diagnostics)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        value["current_live_prepared_branches"] =
+            json!(self.branch_leases.current.load(Ordering::SeqCst));
+        value["maximum_live_prepared_branches"] =
+            json!(self.branch_leases.maximum.load(Ordering::SeqCst));
+        serde_json::to_string(&value).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    #[pyo3(signature = (world_indexes, seeds, refresh_opponent_commitment=false))]
+    fn materialize_indexes(
+        &self,
+        world_indexes: Vec<usize>,
+        seeds: Vec<u64>,
+        refresh_opponent_commitment: bool,
+    ) -> PyResult<Vec<PyEnv>> {
+        if self.branch_leases.current.load(Ordering::SeqCst) != 0 {
+            let mut diagnostics = self
+                .diagnostics
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("prepared diagnostics lock poisoned"))?;
+            diagnostics.rejected_calls += 1;
+            return Err(PyAgentError::new_err(
+                "prepared branches from the preceding batch are still live",
+            ));
+        }
+        {
+            let mut diagnostics = self
+                .diagnostics
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("prepared diagnostics lock poisoned"))?;
+            diagnostics.batch_calls += 1;
+        }
+
+        let branches = {
+            let source = self
+                .source
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            let before = source.possible_world_space_construction_count();
+            let result = self.inner.materialize_indexes(
+                &source,
+                &world_indexes,
+                &seeds,
+                refresh_opponent_commitment,
+            );
+            let constructions = source.possible_world_space_construction_count() - before;
+            self.diagnostics
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("prepared diagnostics lock poisoned"))?
+                .space_constructions += constructions;
+            result
+        };
+        let branches = match branches {
+            Ok(branches) => branches,
+            Err(error) => {
+                let mut diagnostics = self
+                    .diagnostics
+                    .lock()
+                    .map_err(|_| PyRuntimeError::new_err("prepared diagnostics lock poisoned"))?;
+                diagnostics.rejected_calls += 1;
+                return Err(map_agent_err(error));
+            }
+        };
+        {
+            let mut diagnostics = self
+                .diagnostics
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("prepared diagnostics lock poisoned"))?;
+            diagnostics.requested_rows += world_indexes.len() as u64;
+            diagnostics.materialized_rows += branches.len() as u64;
+            diagnostics.maximum_returned_batch =
+                diagnostics.maximum_returned_batch.max(branches.len());
+        }
+        Ok(branches
+            .into_iter()
+            .map(|branch| PyEnv {
+                inner: Arc::new(Mutex::new(branch)),
+                selected_guard: false,
+                prepared_lease: Some(PreparedBranchLease::acquire(Arc::clone(
+                    &self.branch_leases,
+                ))),
+            })
+            .collect())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -2073,8 +2253,9 @@ impl PySelectedBranchRuntime {
         let fork = source.selected_fork().map_err(map_agent_err)?;
         runtime.forks.increment(site);
         Ok(PyEnv {
-            inner: Mutex::new(fork),
+            inner: Arc::new(Mutex::new(fork)),
             selected_guard: true,
+            prepared_lease: None,
         })
     }
 
@@ -2346,13 +2527,14 @@ impl PyEnv {
         enable_behavior_tracking: bool,
     ) -> Self {
         Self {
-            inner: Mutex::new(Env::new(
+            inner: Arc::new(Mutex::new(Env::new(
                 seed,
                 skip_trivial,
                 enable_profiler,
                 enable_behavior_tracking,
-            )),
+            ))),
             selected_guard: false,
+            prepared_lease: None,
         }
     }
 
@@ -2604,8 +2786,12 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let fork = env.fork().map_err(map_agent_err)?;
         Ok(PyEnv {
-            inner: Mutex::new(fork),
+            inner: Arc::new(Mutex::new(fork)),
             selected_guard: false,
+            prepared_lease: self
+                .prepared_lease
+                .as_ref()
+                .map(PreparedBranchLease::clone_lease),
         })
     }
 
@@ -2661,6 +2847,34 @@ impl PyEnv {
         let projection = env.possible_world_space(viewer).map_err(map_agent_err)?;
         serde_json::to_string(&projection)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Prepare one canonical space and retain this exact live root for bounded
+    /// indexed materialization across inference batches.
+    fn prepare_possible_world_materializer(
+        &self,
+        viewer: usize,
+        expected_space_identity: &str,
+        max_batch_size: usize,
+    ) -> PyResult<PyPreparedPossibleWorldMaterializer> {
+        let prepared = {
+            let env = self
+                .inner
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+            env.prepare_possible_world_materializer(viewer, expected_space_identity, max_batch_size)
+                .map_err(map_agent_err)?
+        };
+        let diagnostics = PreparedMaterializerDiagnostics {
+            space_constructions: prepared.construction_count(),
+            ..PreparedMaterializerDiagnostics::default()
+        };
+        Ok(PyPreparedPossibleWorldMaterializer {
+            inner: prepared,
+            source: Arc::clone(&self.inner),
+            diagnostics: Mutex::new(diagnostics),
+            branch_leases: Arc::new(PreparedBranchLeaseCounters::default()),
+        })
     }
 
     /// Evaluate one typed WorldQuery against an identity-bound canonical
@@ -2730,8 +2944,9 @@ impl PyEnv {
             )
             .map_err(map_agent_err)?;
         Ok(PyEnv {
-            inner: Mutex::new(branch),
+            inner: Arc::new(Mutex::new(branch)),
             selected_guard: false,
+            prepared_lease: None,
         })
     }
 
@@ -3094,6 +3309,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyStructuredOfferSet>()?;
     m.add_class::<PySelectedBranchRuntime>()?;
+    m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyEnv>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())

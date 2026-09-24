@@ -1,0 +1,35 @@
+#!/bin/sh
+
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+uv run --extra play maturin build --release -i .venv/bin/python \
+  -m managym/Cargo.toml -o managym/target/wheels
+uv run python - <<'PY'
+from pathlib import Path
+from zipfile import ZipFile
+
+root = Path.cwd()
+wheel = max(
+    (root / "managym/target/wheels").glob("managym-*-cp312-*.whl"),
+    key=lambda path: path.stat().st_mtime_ns,
+)
+with ZipFile(wheel) as archive:
+    member = next(
+        name
+        for name in archive.namelist()
+        if name.startswith("managym/_managym") and name.endswith(".so")
+    )
+    (root / "managym" / Path(member).name).write_bytes(archive.read(member))
+PY
+
+cargo test --manifest-path managym/Cargo.toml \
+  --test prepared_possible_worlds_tests --no-fail-fast
+uv run --extra dev pytest -q \
+  tests/belief/test_prepared_likelihood.py \
+  tests/experiments/test_rul13_prepared_materializer.py \
+  tests/sim/test_belief_calibration_runner.py
+uv run --extra dev python experiments/runners/run_rul13_prepared_materializer.py \
+  --verify
