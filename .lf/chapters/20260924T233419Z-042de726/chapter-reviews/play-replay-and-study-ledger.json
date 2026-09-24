@@ -1,0 +1,599 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "game",
+  "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+  "slug": "play-replay-and-study",
+  "project": {
+    "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+    "slug": "play-replay-and-study",
+    "name": "Play, Replay, and Study",
+    "summary": "Make one selected Etude Fantasia match a continuous AI-assisted testing-house loop: pilot or watch on the authoritative semantic table, state explicit viewer-safe beliefs, inspect attributable conditional strategy, play through ordinary Commands, reopen e",
+    "definition": "Make one selected Etude Fantasia match a continuous AI-assisted testing-house loop: pilot or watch on the authoritative semantic table, state explicit viewer-safe beliefs, inspect attributable conditional strategy, play through ordinary Commands, reopen every historical decision, retry an exact line, compare it, and return without client-side rules, hidden-information leakage, or a second live/Study surface. The remaining open work (2026-07-18) is the live seam: an addressable canonical decision for the in-progress match and a player-authored belief input surface, so the same advice identity resolves mid-game against the tracked posterior instead of a pinned completed-match fixture (the Game half of the results-first roadmap in docs/plans/results-first-roadmap.md).",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "Casting, targeting, resolving, combat, damage, death, and turn transitions render as ordered semantic beats with skip or fast-forward behavior and no snapshot-diff inference.",
+        "holds": true
+      },
+      {
+        "text": "A versioned cross-language StudyArtifact and DecisionEvidence contract preserves viewer-safe match, decision, command, model, search-budget, and provenance identities while keeping policy mass, visits, value, robustness, and uncertainty distinct.",
+        "holds": true
+      },
+      {
+        "text": "Every historical player decision in a completed selected match has a stable viewer-safe address that restores the exact canonical frame, offer, played command, and event cursor, with direct play, replay, and Study showing the same facts.",
+        "holds": true
+      },
+      {
+        "text": "At one restored decision, a player can Retry before reveal, then compare separately labelled played, policy, and search plans on the table through one bounded canonical continuation.",
+        "holds": true
+      },
+      {
+        "text": "A player can enter an exact ephemeral branch through ordinary Commands and return in one action to the identical recorded state, event cursor, offer, and viewer projection.",
+        "holds": true
+      },
+      {
+        "text": "At the same canonical decision reached live or through Study, the same unified surface accepts at least two explicit viewer-safe belief scenarios, obtains strategy from one pinned advisor identity and compute class, and shows reproducible action-probability, value, or uncertainty deltas while facts, beliefs, and advice remain distinct.",
+        "holds": true
+      },
+      {
+        "text": "A pilot and one permitted watcher can inhabit the same canonical decision surface under explicit viewer roles, compare or share viewer-safe belief and strategy artifacts, and explore an isolated line without pausing or mutating the authoritative live match; only the pilot can submit its offered Command, and the same table continues into Study.",
+        "holds": true
+      },
+      {
+        "text": "The in-progress match exposes an addressable canonical current decision (closing the GAM-4 deferral in which the canonical replay address exists only at game close), and a player can author a viewer-safe belief mid-game and receive advice whose identity resolves against the live tracked posterior — the same fail-closed identity discipline as the completed-match path, with the fork/Retry/return UI sequenced behind it.",
+        "holds": false
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "29d6f38f-26a3-4a9f-961a-ef3ecfeaa7f1",
+        "identifier": "ETU-74",
+        "name": "Plan the trained-challenger chapter for Allies versus Lessons",
+        "description": "Prepare the next repository chapter through start-chapter, proposal-only until the present human accepts the reconciled plan. This Task is the archival/planning worktree, not permission to implement product features or mutate the existing portfolio.\n\nHuman accepted direction on 2026-09-24: exactly one Project per continuing Wave and three KRs per Project; proposed roster Game, Intelligence, Rules with Study folded into Game. Train bots that can beat the User in the currently demoed GW Allies versus UR Lessons matchup. Getting the User to play full games is equally central. Missing transitions and overwhelming action choices are concrete friction; even one awkward intended action makes them stop. Discover further friction through actual play rather than asking the User to diagnose it in advance. Faithful rules matter: Learn currently resolves only to discard-then-draw; establish and implement expected Lesson-pool semantics in future product work rather than silently simplifying the mechanic.\n\nCarry forward existing dispositions as evidence: ETU-21 abandoned; ETU-31 experiment deferred; ETU-55 provider-only ship distinct from calibration closure; preserve ETU-34/PR179 work. No new decks beyond content/pool support needed for the existing matchup.\n\nTask output: formal baseline review when no chapter archive exists; frozen Project/KR/open-Task ledger; dated draft with the accepted direction and proposed review dates; scoped Wave and Project proposals and challenges; exact carry/rewrite/complete/retire dispositions for every old Project and open Task; a reviewable three-wave/nine-KR plan. Historical 56 KRs remain evidence, not automatic new priorities. Retain all Run ids and report incomplete coverage honestly.\n\nThe human is present in the controlling conversation. Return open questions and the final proposal there; do not use lf ask or create another human session. No live PM edits, Wave retirement, product implementation, push, PR publication, or Task completion before the human's explicit Gate 2 acceptance. The creation of this planning Task itself is only to provide the required Task-bound archive authority.",
+        "rank": 4,
+        "completed": false,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-74/plan-the-trained-challenger-chapter-for-allies-versus-lessons",
+        "workspace": null
+      },
+      "runtime": null,
+      "next_move": {
+        "owner": "project",
+        "reason": "Task is ready to start"
+      },
+      "condition": {
+        "state": "waiting",
+        "reason": "Task is ready to start",
+        "observed_at": "2026-09-24T21:59:39.45211Z",
+        "evidence_age_secs": null,
+        "local_progress": {
+          "state": "not_applicable",
+          "unsettled": false,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": null,
+          "reason": null
+        }
+      },
+      "actions": {
+        "recommended": null,
+        "reason": "Task is ready to start"
+      },
+      "active_pr": null,
+      "section": "available"
+    },
+    {
+      "task": {
+        "id": "b5f8619c-f4ea-4c12-a8a4-abe5bf4ab969",
+        "identifier": "ETU-14",
+        "name": "Replace the advice fixture with the live belief-conditioned advisor",
+        "description": "After the fixture-backed shared decision surface and Intelligence's versioned belief-conditioned advisor both land, connect them without forking or redesigning the UI. The same canonical DecisionAddress plus BeliefScenario and AdvisorIdentity request must serve live play and Study and render the same conditional action distribution, values, uncertainty, and scenario deltas. Preserve the checked fixture as an offline/reference case, but use the live provider for the selected supported world. Fail visibly on missing checkpoints, unsupported beliefs, stale decision identities, viewer mismatch, compute mismatch, or unavailable evidence; never substitute fabricated values. Prove that changing only the belief changes the displayed strategy, reaching the same request through live and Study returns byte-equivalent evidence, and exploratory recomputation cannot mutate or delay the authoritative match. Keep ordinary Commands and exact Study forks as the only state-changing paths.",
+        "rank": 6,
+        "completed": false,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-14/replace-the-advice-fixture-with-the-live-belief-conditioned-advisor",
+        "workspace": {
+          "slug": "replace-the-advice-fixture-with",
+          "branch": "jack-heart/replace-the-advice-fixture-with-2",
+          "worktree": "/Users/jack/src/etude.replace-the-advice-fixture-with"
+        }
+      },
+      "runtime": {
+        "work_id": "task_288752dda591bbd9b6b8c6ed92a63aef",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:48Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-14 worktree /Users/jack/src/etude.replace-the-advice-fixture-with is missing; restore that exact path on branch \"jack-heart/replace-the-advice-fixture-with-2\" before `lf task resume ETU-14`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.453449Z",
+        "evidence_age_secs": 966531,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-14 worktree /Users/jack/src/etude.replace-the-advice-fixture-with is missing; restore that exact path on branch \"jack-heart/replace-the-advice-fixture-with-2\" before `lf task resume ETU-14`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "no_action",
+        "reason": "Task ETU-14 worktree /Users/jack/src/etude.replace-the-advice-fixture-with is missing; restore that exact path on branch \"jack-heart/replace-the-advice-fixture-with-2\" before `lf task resume ETU-14`; Task identity and PR history are unchanged"
+      },
+      "active_pr": {
+        "id": "pr_db86aab785b24286b33fd19d7ef517bc",
+        "sequence": 2,
+        "slug": "2",
+        "branch": "jack-heart/replace-the-advice-fixture-with-2",
+        "base_commit": "e61931e75024e61e90d1d83337e80a9bfcf8e422",
+        "phase": "working",
+        "empty": null,
+        "publication": null,
+        "merge_commit": null,
+        "abandoned_at": null
+      },
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "c7cd99f9-b787-4a76-977a-d0b504a10fbf",
+        "identifier": "ETU-9",
+        "name": "Expose a canonical replay decision index",
+        "description": "Give canonical replay a stable address for every historical player decision in the pinned curated match. Enumerate decisions chronologically from authoritative ExperienceFrame, InteractionOffer and Command, PresentationEvent cursor, viewer, and revision identities; restoring any address must reproduce the exact viewer-safe frame and offer. Preserve automatic semantic events between decisions without exposing them as fake choices. Add deterministic fixtures, duplicate and missing-address rejection, replay-equivalence checks, and a deep-link-ready serialization seam consumed by Study. Game owns the complete index and replay truth; do not rank landmarks, run search, reveal private facts, add client-side legality, or build the Study UI. Run every Python command through uv and use lf pr land -c when verified.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-9/expose-a-canonical-replay-decision-index",
+        "workspace": {
+          "slug": "expose-a-canonical-replay-decision",
+          "branch": "jack-heart/expose-a-canonical-replay-decision",
+          "worktree": "/Users/jack/src/etude.expose-a-canonical-replay-decision"
+        }
+      },
+      "runtime": {
+        "work_id": "task_9b12dd953c8dc9853143f20fec6ee471",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:39Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-9 worktree /Users/jack/src/etude.expose-a-canonical-replay-decision is missing; restore that exact path before `lf task resume ETU-9`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.449885Z",
+        "evidence_age_secs": 966540,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-9 worktree /Users/jack/src/etude.expose-a-canonical-replay-decision is missing; restore that exact path before `lf task resume ETU-9`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "1398b275-1144-494f-b5dc-1635d4806757",
+        "identifier": "ETU-10",
+        "name": "Define viewer-safe Study artifact and evidence contract",
+        "description": "Define the versioned cross-language StudyArtifact/StudyIdentity/StudyLandmark/DecisionEvidence contract that restores an exact historical viewer-safe ExperienceFrame and InteractionOffer and pins pack, engine, model, state, viewer, decision, prompt, offer, and analysis-budget identities. Represent played Command, policy mass, search value, visits, sampled-world robustness, uncertainty, and provenance as distinct typed fields. Add one recorded curated-match fixture shared across Rust, Python, and TypeScript plus negative tests proving opponent-private facts and RNG secrets cannot enter default evidence or shared payloads. Preserve existing Match, Replay, and observation compatibility; do not implement search, UI, branch behavior, or client-side legality. All Python commands must use uv; rebuild the extension after managym/src changes; use lf pr land -c when verified.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-10/define-viewer-safe-study-artifact-and-evidence-contract",
+        "workspace": null
+      },
+      "runtime": null,
+      "next_move": {
+        "owner": "project",
+        "reason": "Linear Task is complete"
+      },
+      "condition": {
+        "state": "waiting",
+        "reason": "Linear Task is complete",
+        "observed_at": "2026-09-24T21:59:39.450708Z",
+        "evidence_age_secs": null,
+        "local_progress": {
+          "state": "not_applicable",
+          "unsettled": false,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": null,
+          "reason": null
+        }
+      },
+      "actions": {
+        "recommended": null,
+        "reason": "Task is ready to start"
+      },
+      "active_pr": null,
+      "section": "later"
+    },
+    {
+      "task": {
+        "id": "3957f51f-8520-4b98-9b8f-3e0fde1498d3",
+        "identifier": "ETU-11",
+        "name": "Render combat and turn transitions from semantic events",
+        "description": "Build on merged W2-184. Extend the authoritative PresentationEvent path through one recorded curated sequence containing declare attackers, blockers where reachable, ordered combat damage, death, and a turn transition. Make live play and replay consume the same ordered semantic beats with skip, fast-forward, and reduced-motion behavior, and expose the same canonical facts to the decision-inspector seam. Add focused pointer and keyboard assertions for the prompts touched. Do not infer semantics from snapshot diffs, move rules authority into the client, or redesign the entire visual system.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-11/render-combat-and-turn-transitions-from-semantic-events",
+        "workspace": {
+          "slug": "render-combat-and-turn-transitions",
+          "branch": "jack-heart/render-combat-and-turn-transitions",
+          "worktree": "/Users/jack/src/manabot.render-combat-and-turn-transitions"
+        }
+      },
+      "runtime": {
+        "work_id": "task_f1e2e1fb1dd122750e65c47cdbaeafab",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:42Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-11 worktree /Users/jack/src/manabot.render-combat-and-turn-transitions is missing; restore that exact path before `lf task resume ETU-11`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.450969Z",
+        "evidence_age_secs": 966537,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-11 worktree /Users/jack/src/manabot.render-combat-and-turn-transitions is missing; restore that exact path before `lf task resume ETU-11`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "cb89ac59-d3ed-47e9-acdf-2b367db9c954",
+        "identifier": "ETU-12",
+        "name": "Render one spell sequence from semantic presentation events",
+        "description": "After protocol v1 lands, drive casting, target selection, resolution, damage, and death for one recorded Lightning Bolt sequence from ordered PresentationEvent values rather than snapshot diffs. Make live play and replay consume the same event sequence, add skip/fast-forward and reduced-motion behavior, and expose the same canonical facts to the decision inspector seam. Preserve current table functionality; do not redesign the whole visual system or add client-side rules.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-12/render-one-spell-sequence-from-semantic-presentation-events",
+        "workspace": {
+          "slug": "render-one-spell-sequence-from",
+          "branch": "jack-heart/render-one-spell-sequence-from-2",
+          "worktree": "/Users/jack/src/manabot.render-one-spell-sequence-from"
+        }
+      },
+      "runtime": {
+        "work_id": "task_8fc4c1f947daceccd649f3ab6694f8bf",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:45Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-12 worktree /Users/jack/src/manabot.render-one-spell-sequence-from is missing; restore that exact path before `lf task resume ETU-12`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.451688Z",
+        "evidence_age_secs": 966534,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-12 worktree /Users/jack/src/manabot.render-one-spell-sequence-from is missing; restore that exact path before `lf task resume ETU-12`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "5d380229-7494-4d42-9020-b390e351d2a5",
+        "identifier": "ETU-13",
+        "name": "Put a pilot and watcher on one testing-house table",
+        "description": "Build the first shared-role testing-house slice after the unified decision-advice surface exists. A pilot and one permitted watcher join the same selected-match table, resolve the same canonical decision addresses, and see only the facts allowed by explicit ViewerIdentity and role capabilities. The watcher can follow the live decision, author a personal belief scenario, explicitly share it with the permitted room, compare strategy, and explore an isolated branch without pausing or mutating the match; only the acting pilot can submit the current offered Command. When the match ends, both continue on the same table and decision identities in Study. Start with personal-until-explicitly-shared belief scenarios so audience and provenance are unambiguous; leave configurable room defaults for later evidence. Prove reconnect, role changes, stale-command rejection, viewer-equivalence safety, branch isolation, and keyboard/mobile participation. Discord remains the communication layer: do not build chat, voice, social feeds, spectator broadcast infrastructure, or tournament permissions.",
+        "rank": 5,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-13/put-a-pilot-and-watcher-on-one-testing-house-table",
+        "workspace": {
+          "slug": "put-a-pilot-and-watcher",
+          "branch": "jack-heart/put-a-pilot-and-watcher",
+          "worktree": "/Users/jack/src/etude.put-a-pilot-and-watcher"
+        }
+      },
+      "runtime": {
+        "work_id": "task_66eb482c965852fb3eb206a279b6ed9e",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:46Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-13 worktree /Users/jack/src/etude.put-a-pilot-and-watcher is missing; restore that exact path before `lf task resume ETU-13`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.452184Z",
+        "evidence_age_secs": 966533,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-13 worktree /Users/jack/src/etude.put-a-pilot-and-watcher is missing; restore that exact path before `lf task resume ETU-13`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "1781cbfe-581e-4ffc-bb0f-c91d603355e7",
+        "identifier": "ETU-15",
+        "name": "Prototype belief-to-strategy comparison on the shared decision surface",
+        "description": "Build the first player-visible AI-assisted play slice after or on top of GAM-4's canonical restored decision. Render one reusable decision-advice component at the same DecisionAddress in live play and Study. Let the viewer edit at least two meaningful hidden-information scenarios for the selected matchup and compare action probabilities, values or uncertainty with explicit deltas. Back the prototype with a checked, versioned fixture produced from real policy/search evidence at a pinned world, viewer, advisor, compute, and seed identity; do not fabricate dynamic claims or wait for the production belief player. Facts, beliefs, inferred starting ranges, and advice must be visually distinct. The live instance may submit only its currently offered Command; Study may fork, Retry, compare, and return; both must use the same component, action vocabulary, and advice request shape. Add focused pointer, keyboard, reduced-motion, mobile, viewer-safety, identity-mismatch, and typed-unavailable tests. Do not build chat, generic range tooling, a second replay, client-side legality, or broad Avatar content.",
+        "rank": 7,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-15/prototype-belief-to-strategy-comparison-on-the-shared-decision-surface",
+        "workspace": {
+          "slug": "prototype-belief-to-strategy-comparison",
+          "branch": "jack-heart/prototype-belief-to-strategy-comparison-3",
+          "worktree": "/Users/jack/src/etude.prototype-belief-to-strategy-comparison"
+        }
+      },
+      "runtime": {
+        "work_id": "task_1adabbe4d70b93e58a8f0a8424c1a0b7",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:48Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-15 worktree /Users/jack/src/etude.prototype-belief-to-strategy-comparison is missing; restore that exact path before `lf task resume ETU-15`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.454811Z",
+        "evidence_age_secs": 966531,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-15 worktree /Users/jack/src/etude.prototype-belief-to-strategy-comparison is missing; restore that exact path before `lf task resume ETU-15`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "a82f46c1-3080-4b74-b54b-20357a7bf0ea",
+        "identifier": "ETU-16",
+        "name": "Rewrite Etude around AI-assisted testing-house play",
+        "description": "Rewrite the root README and the Game, Intelligence, Rules, and folded Study north-star documentation so they tell one product story without removing any existing Avatar Cube Team Sealed, authoritative play, replay, Retry, or Study promise. Etude Fantasia is AI-assisted play with the emotional model of a Pro Tour testing house: piloting, watching, comparing reads, trying lines, and having fun are one activity. The first AI UX is one shared live/Study decision surface where a player states an explicit viewer-safe belief, sees strategy conditioned on it, changes the belief, and sees the delta. State the laws clearly: facts, player-authored beliefs, inferred beliefs, and advice remain distinct; the same decision, belief, advisor, and compute identity produces the same advice live or in Study; only the pilot commits a live Command; viewer exploration never mutates the match; Discord remains the human communication layer. Use the draft in /Users/jack/src/etude.ai-assisted-north-star and scratch/ai-assisted-play-north-star.md as design input, but review it for concise player-facing language rather than landing it mechanically. This is documentation and roadmap alignment only, not UI implementation.\n\nThe root README is the product front door, not only a documentation index. Replace the currently included generic board screenshot with a reproducibly captured, versioned image of the merged shared belief-to-strategy decision surface in its most compelling honest state, preferably showing the same decision with two player-authored belief scenarios and visible strategy deltas. Rework the opening flow, captions, and nearby copy so a new player can immediately feel the Pro Tour testing-house experience: play, watch, state a read, compare strategy, try a line, and continue into Study as one activity. Audit the entire README for whether it manifests that experience rather than merely naming it. Preserve truthful prototype/live boundaries and do not redesign the application in this task; if the merged surface cannot yield an honest hero image, document the precise missing product slice instead of staging a mock.",
+        "rank": 8,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-16/rewrite-etude-around-ai-assisted-testing-house-play",
+        "workspace": {
+          "slug": "rewrite-etude-around-ai-assisted",
+          "branch": "jack-heart/rewrite-etude-around-ai-assisted-2",
+          "worktree": "/Users/jack/src/etude.rewrite-etude-around-ai-assisted"
+        }
+      },
+      "runtime": {
+        "work_id": "task_2c8fdc4b1421f8f860f1fc7c38635a5a",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:49Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-16 worktree /Users/jack/src/etude.rewrite-etude-around-ai-assisted is missing; restore that exact path before `lf task resume ETU-16`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.456443Z",
+        "evidence_age_secs": 966530,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-16 worktree /Users/jack/src/etude.rewrite-etude-around-ai-assisted is missing; restore that exact path before `lf task resume ETU-16`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR abandoned; start the next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "8150f43d-245b-4400-95b9-b3c861af75ac",
+        "identifier": "ETU-17",
+        "name": "Build Retry-before-reveal Study vertical slice",
+        "description": "After GAM-3 exposes the canonical replay decision index, implement one player-visible Study moment for the current selected completed matchup. Open the complete decision timeline, restore one exact viewer-safe decision, keep policy and search judgment sealed while the player retries through the canonical offer, then reveal separately labelled played, policy, and search plans. Selecting a plan highlights authoritative table objects and plays one bounded canonical PresentationEvent continuation. Consume the merged StudyArtifact/DecisionEvidence contract and provider work from Rules and Intelligence; do not add client-side legality, snapshot-diff narration, a generic analysis tree, sharing, chat, team-series orchestration, or Avatar Cube breadth. Cover the focused pointer, keyboard, reduced-motion, and mobile interaction needed for this one moment. Run every Python command through uv and use lf pr land -c when verified.",
+        "rank": 9,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-17/build-retry-before-reveal-study-vertical-slice",
+        "workspace": {
+          "slug": "build-retry-before-reveal-study",
+          "branch": "jack-heart/build-retry-before-reveal-study",
+          "worktree": "/Users/jack/src/etude.build-retry-before-reveal-study"
+        }
+      },
+      "runtime": {
+        "work_id": "task_eb70bf9470da059a2081afb62abc14ea",
+        "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:51Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-17 worktree /Users/jack/src/etude.build-retry-before-reveal-study is missing; restore that exact path before `lf task resume ETU-17`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.457536Z",
+        "evidence_age_secs": 966528,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-17 worktree /Users/jack/src/etude.build-retry-before-reveal-study is missing; restore that exact path before `lf task resume ETU-17`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": [
+    {
+      "work_id": "proj_5f344a2b7e101578c9763ee183ccaaf3",
+      "project_id": "1b93253e-5422-45f1-94df-c019a261e812",
+      "project_slug": "experience-contract-and-recovery",
+      "status": "ready",
+      "owner": "wave",
+      "reason": "Project is absent from the current PM snapshot",
+      "recovery": "lf project abandon experience-contract-and-recovery --reason \"Project is absent from the current PM snapshot\"",
+      "tasks": [
+        {
+          "work_id": "task_a676b8f06437ff76e0d358858bb282d4",
+          "task_id": "f5125ef5-2972-426c-bcdd-1f25af854a90",
+          "task_identifier": "W2-183",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_a676b8f06437ff76e0d358858bb282d4 --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_7225012a52c054c23e1ff1015fc138ee",
+          "task_id": "4d713cf0-ba78-41a9-837f-4496acfd5771",
+          "task_identifier": "W2-194",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_7225012a52c054c23e1ff1015fc138ee --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_add7e9c8ab0f16dd62939e159818ab28",
+          "task_id": "d84c024e-6fe4-496e-8d51-59fb22890feb",
+          "task_identifier": "W2-195",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_add7e9c8ab0f16dd62939e159818ab28 --reason \"Project is absent from the current PM snapshot\""
+        }
+      ]
+    }
+  ]
+}

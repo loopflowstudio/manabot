@@ -1,0 +1,381 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "rules",
+  "id": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+  "slug": "runtime-state-foundation",
+  "project": {
+    "id": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+    "slug": "runtime-state-foundation",
+    "name": "Runtime State Foundation",
+    "summary": "Provide the compact authoritative state foundation used by every playable world and fork: immutable versioned content is shared, mutable match facts have stable identity, and equivalent seeded executions have deterministic state witnesses. Consumer perfor",
+    "definition": "Provide the compact authoritative state foundation used by every playable world and fork: immutable versioned content is shared, mutable match facts have stable identity, and equivalent seeded executions have deterministic state witnesses. Consumer performance now belongs to the running Search and Study Runtime Prototype.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "Every environment and branch shares one versioned ContentPack while mutable-state cloning duplicates no immutable card definitions, with independently reset roots and siblings remaining isolated.",
+        "holds": true
+      },
+      {
+        "text": "Stable CardDefId-based definitions and versioned deterministic state witnesses reproduce equivalent seeded traces without allocation-address, Debug-format, or card-name identity at the state boundary.",
+        "holds": true
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "dd87e11f-e5ef-404f-89c3-b201f125fcf2",
+        "identifier": "ETU-67",
+        "name": "Duplicate of W2-216 — no work",
+        "description": "Closed without implementation: W2-216 was filed concurrently for the same post-PR-84 allocation-receipt provenance correction and is the sole active owner.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-67/duplicate-of-w2-216-no-work",
+        "workspace": null
+      },
+      "runtime": null,
+      "next_move": {
+        "owner": "project",
+        "reason": "Linear Task is complete"
+      },
+      "condition": {
+        "state": "waiting",
+        "reason": "Linear Task is complete",
+        "observed_at": "2026-09-24T21:59:39.782905Z",
+        "evidence_age_secs": null,
+        "local_progress": {
+          "state": "not_applicable",
+          "unsettled": false,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": null,
+          "reason": null
+        }
+      },
+      "actions": {
+        "recommended": null,
+        "reason": "Task is ready to start"
+      },
+      "active_pr": null,
+      "section": "later"
+    },
+    {
+      "task": {
+        "id": "3122e17c-1e32-4985-9bd8-df5b244d902f",
+        "identifier": "ETU-68",
+        "name": "Re-run ContentPack allocation receipt from merged PR #84 revision",
+        "description": "PR #84 / W2-211 merged with its JSON and Markdown receipt still recording measurement_code_revision 4f49ad512f1af93316b82f1a8c3d00e0aa98c1b5 even though the PR had rebased onto 06acd1728ea641751c7905fafd8e78d2de5fb385; the live correction directive was accepted but not incorporated before merge. From canonical main including merge f7d5878b6be4b2276ac5f42f50dc5f390a6982ad, rerun the single-threaded release content_pack_clone_allocations gate and focused ContentPack identity/isolation contracts, rewrite both experiments/data/w2-208-content-pack-clone-allocations.json and experiments/w2-208-content-pack-clone-allocations.md with the exact measured source revision and environment, and rerun after any later rebase that changes measured code. Keep proof strictly Runtime State Foundation KR1: immutable ContentPack sharing and mutable clone allocation isolation only; no latency, step/rollout throughput, RSS, undo, page-COW, or branching-design claims. Use lf pr land -c in headless mode.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-68/re-run-contentpack-allocation-receipt-from-merged-pr-84-revision",
+        "workspace": {
+          "slug": "re-run-contentpack-allocation-receipt",
+          "branch": "jack-heart/re-run-contentpack-allocation-receipt",
+          "worktree": "/Users/jack/src/manabot.re-run-contentpack-allocation-receipt"
+        }
+      },
+      "runtime": {
+        "work_id": "task_83b089afa38e20d490915c0b6f5788f0",
+        "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "routing_project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:19Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-68 worktree /Users/jack/src/manabot.re-run-contentpack-allocation-receipt is missing; restore that exact path before `lf task resume ETU-68`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.782987Z",
+        "evidence_age_secs": 966440,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-68 worktree /Users/jack/src/manabot.re-run-contentpack-allocation-receipt is missing; restore that exact path before `lf task resume ETU-68`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "6a7fd1d7-f6ec-448f-89b6-61f451279dcd",
+        "identifier": "ETU-69",
+        "name": "Refresh W2-208 allocation receipt after landed rebase",
+        "description": "PR #81 landed W2-208 with the checked KR1 allocation report still naming pre-report revision ad79e2e84ee3bb0651a0e5bd52a21e66b254a32b. Rerun the single-threaded release allocation gate on landed revision 72f53c3268d4e2ed17dbaa8d16bb0653bbf429e0 (or current canonical main if it contains that revision), refresh experiments/data/w2-208-content-pack-clone-allocations.json and experiments/w2-208-content-pack-clone-allocations.md so the measurement-code revision and receipt are current, verify focused ContentPack identity/allocation tests, preserve KR1-only scope, and headlessly land the repair. Do not add Runtime KR3 performance claims.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-69/refresh-w2-208-allocation-receipt-after-landed-rebase",
+        "workspace": {
+          "slug": "refresh-w2-208-allocation-receipt",
+          "branch": "jack-heart/refresh-w2-208-allocation-receipt",
+          "worktree": "/Users/jack/src/manabot.refresh-w2-208-allocation-receipt"
+        }
+      },
+      "runtime": {
+        "work_id": "task_ead55cb7ad92541faffd332d537a4c40",
+        "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "routing_project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:22Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-69 worktree /Users/jack/src/manabot.refresh-w2-208-allocation-receipt is missing; restore that exact path before `lf task resume ETU-69`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.783444Z",
+        "evidence_age_secs": 966437,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-69 worktree /Users/jack/src/manabot.refresh-w2-208-allocation-receipt is missing; restore that exact path before `lf task resume ETU-69`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "2fd63db4-07fc-4f15-b8ea-0f2fd99ae6b2",
+        "identifier": "ETU-70",
+        "name": "Prove ContentPack sharing and clone allocation boundary",
+        "description": "Prove Runtime State Foundation KR1 without restoring the withdrawn W2-179 performance claims. Add focused executable Rust coverage showing that independently created environments for the same admitted content version and every exact search/root/sibling clone retain the same immutable Arc<ContentPack> identity/content digest, while mutable MatchState facts remain branch-isolated. Add deterministic allocation measurements that distinguish Arc/reference bookkeeping and mutable-state cloning from immutable ContentPack/CardDefinition storage, including a pack-size variation or equivalent controlled check proving clone allocations do not scale with immutable definition bytes. Record the measurement method, workload, build profile, source revision, hardware, raw counts/bytes, and failure threshold in a checked artifact or test output. Preserve Python and fixed-action ABIs. Do not implement undo/page-COW, select a branching design, duplicate W2-197/W2-207, or claim general step/rollout performance. All Python commands must use uv; rebuild the PyO3 extension after Rust changes. Once W2-196 has landed, rebase immediately before headless lf pr land -c; never use lf pr submit.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-70/prove-contentpack-sharing-and-clone-allocation-boundary",
+        "workspace": {
+          "slug": "prove-contentpack-sharing-and-clone",
+          "branch": "jack-heart/prove-contentpack-sharing-and-clone",
+          "worktree": "/Users/jack/src/manabot.prove-contentpack-sharing-and-clone"
+        }
+      },
+      "runtime": {
+        "work_id": "task_73afc6743ad6279d456dd4720049dd22",
+        "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "routing_project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:23Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-70 worktree /Users/jack/src/manabot.prove-contentpack-sharing-and-clone is missing; restore that exact path before `lf task resume ETU-70`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.783864Z",
+        "evidence_age_secs": 966436,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-70 worktree /Users/jack/src/manabot.prove-contentpack-sharing-and-clone is missing; restore that exact path before `lf task resume ETU-70`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "21d3b9e5-35eb-4603-b76b-990f60d34d06",
+        "identifier": "ETU-71",
+        "name": "Replace W2-179 local diagnostics with contract evidence",
+        "description": "After W2-182's manabot.search-branching.v1 harness is integrated with main, remove the non-contract numeric before/after claims from experiments/w2-179-content-pack-local-diagnostic.md rather than relabeling them. Preserve the shipped ContentPack/CardDefId seam and ABI behavior.\n\nAny replacement W2-179 performance claim may compare only step-v1, clone-v1, and flat-single-64-v1 using the exact contract deck/fixtures, deterministic seeds, warmups/measured counts, reset/termination and timing boundaries, equivalence/canonical-hash gate, fresh-process 5 ms aggregate RSS, hardware/source metadata, and raw result schema. W2-182 remains the harness/raw-summary artifact owner.\n\nCanonical baseline artifact currently verified at experiments/data/w2-182-search-branching-v1.json, artifact SHA-256 3251d5ad45083a69298219c4c162e6cde431977db3430e819873307ff854a1a5, contract SHA-256 e3c9ead46f3d5cf7b53f21bfa47ed4b7f4cae10399256a5a01694c737133587b. It is one baseline, not a before/after pair; any comparison requires two contract-identical raw runs.",
+        "rank": 4,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-71/replace-w2-179-local-diagnostics-with-contract-evidence",
+        "workspace": {
+          "slug": "replace-w2-179-local-diagnostics",
+          "branch": "jack-heart/replace-w2-179-local-diagnostics",
+          "worktree": "/Users/jack/src/manabot.replace-w2-179-local-diagnostics"
+        }
+      },
+      "runtime": {
+        "work_id": "task_f405d4cd3bc579da10c1d0827d5505d4",
+        "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "routing_project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:24Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-71 worktree /Users/jack/src/manabot.replace-w2-179-local-diagnostics is missing; restore that exact path before `lf task resume ETU-71`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.786452Z",
+        "evidence_age_secs": 966435,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-71 worktree /Users/jack/src/manabot.replace-w2-179-local-diagnostics is missing; restore that exact path before `lf task resume ETU-71`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "011ca8c3-86a3-481b-8bbf-fafc4229b5df",
+        "identifier": "ETU-72",
+        "name": "Add deterministic MatchState hash and identity boundary checks",
+        "description": "Implement a versioned deterministic hash contract over mutable MatchState facts plus the shared ContentPack schema/content identity. Hashes must be independent of allocation addresses and Debug formatting, match across independently constructed games following the same seeded fixed-action trace, remain equal across clones, and change for meaningful state mutations. Make CardDefId the typed state-boundary identity and add a source-level or structural guard against card-name dispatch there; card names may remain compatibility projections for the current Python/observation ABI. Add positive and negative Rust tests and document hash versioning/canonical ordering. Preserve Python and fixed-action ABIs. Exclude W2-182's benchmark harness and throughput/RSS scenarios, ObjectRef/incarnation work, clone-plus-undo/page-COW, and unrelated rules or catalog expansion. Follow AGENTS.md: all Python commands through uv and rebuild the PyO3 extension after Rust changes.",
+        "rank": 5,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-72/add-deterministic-matchstate-hash-and-identity-boundary-checks",
+        "workspace": {
+          "slug": "add-deterministic-matchstate-hash-and",
+          "branch": "jack-heart/add-deterministic-matchstate-hash-and",
+          "worktree": "/Users/jack/src/manabot.add-deterministic-matchstate-hash-and"
+        }
+      },
+      "runtime": {
+        "work_id": "task_aa4f22db77f22d5335ceca8051aa8f13",
+        "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "routing_project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:25Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-72 worktree /Users/jack/src/manabot.add-deterministic-matchstate-hash-and is missing; restore that exact path before `lf task resume ETU-72`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.788199Z",
+        "evidence_age_secs": 966434,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-72 worktree /Users/jack/src/manabot.add-deterministic-matchstate-hash-and is missing; restore that exact path before `lf task resume ETU-72`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "e2ddddbc-0207-4bcf-987e-c74b4005d2cb",
+        "identifier": "ETU-73",
+        "name": "Separate ContentPack and measure clone costs",
+        "description": "Implement the smallest behavior-preserving vertical slice that separates immutable card definitions from mutable match facts. Introduce stable CardDefId values and a shared versioned ContentPack where the current architecture permits, preserve the Python and fixed-action ABIs, and add deterministic seeded-trace coverage. Capture before/after step throughput, MatchState clone cost, representative rollout throughput, allocations or peak RSS, and object-size evidence. Do not introduce page-COW, a broad rules rewrite, deckbuilding, or generic catalog infrastructure. Follow AGENTS.md: all Python commands through uv; rebuild the PyO3 extension after Rust changes. Use docs/research/semantic-kernel.md and wave/rules/README.md as design context.",
+        "rank": 6,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-73/separate-contentpack-and-measure-clone-costs",
+        "workspace": {
+          "slug": "separate-contentpack-and-measure-clone",
+          "branch": "jack-heart/separate-contentpack-and-measure-clone",
+          "worktree": "/Users/jack/src/manabot.separate-contentpack-and-measure-clone"
+        }
+      },
+      "runtime": {
+        "work_id": "task_303ee54c3587a63fd8d19cf0db74a7b1",
+        "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "routing_project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:26Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-73 worktree /Users/jack/src/manabot.separate-contentpack-and-measure-clone is missing; restore that exact path before `lf task resume ETU-73`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.794824Z",
+        "evidence_age_secs": 966433,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-73 worktree /Users/jack/src/manabot.separate-contentpack-and-measure-clone is missing; restore that exact path before `lf task resume ETU-73`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

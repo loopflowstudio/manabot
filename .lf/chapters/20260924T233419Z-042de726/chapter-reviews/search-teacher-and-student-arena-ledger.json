@@ -1,0 +1,580 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "intelligence",
+  "id": "73884527-4c81-4682-aa52-25fb586f08f9",
+  "slug": "search-teacher-and-student-arena",
+  "project": {
+    "id": "73884527-4c81-4682-aa52-25fb586f08f9",
+    "slug": "search-teacher-and-student-arena",
+    "name": "Search Teacher and Student Arena",
+    "summary": "Run a real search teacher, dataset, student, and arena loop on the selected matchup. Improve the working system through measured iterations: establish a runnable baseline, replace flat controls with authoritative visit-based search, train practical studen",
+    "definition": "Run a real search teacher, dataset, student, and arena loop on the selected matchup. Improve the working system through measured iterations: establish a runnable baseline, replace flat controls with authoritative visit-based search, train practical students, compare matched compute, and expose honest evidence to Study. As of 2026-07-19 the loop, fail-closed production harness, and world-pinned arena all exist; INT-18 committed the first frozen-cohort production rating, while the exact-range-versus-uniform comparison remains typed evidence_wait and the production visit-teacher iteration remains open. Standing evidence: INT-7 value heads improved calibration while weakening complete players; INT-8 killed one-seed learned priors inside PUCT; learned components re-enter only through arena admission.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "One documented command freezes replayable trajectories from actual managym games, trains matched policy-only and policy/value students, and plays a seat-balanced arena with pinned dataset, engine, model, seed, latency, throughput, and compute identities.",
+        "holds": true
+      },
+      {
+        "text": "An authoritative MCTS or PUCT teacher runs the selected matchup at declared budgets, emits legal root visit distributions and values under the acting viewer boundary, and replays every sampled trajectory exactly.",
+        "holds": true
+      },
+      {
+        "text": "A practical student trains from visit and value targets and then plays the actual matchup; matched-data ablations separate visit-distribution versus chosen-action supervision and policy-only versus policy/value learning.",
+        "holds": true
+      },
+      {
+        "text": "The world-pinned arena commits its first production rating run over the frozen anchors and the dPUCT-32 challenger, with ratings, the full payoff matrix, connectivity, and paired-deal uncertainty retained; development pairwise matches remain explicitly non-admission.",
+        "holds": true
+      },
+      {
+        "text": "The fail-closed production visit-teacher harness runs one complete production iteration with multi-seed students after the absent frozen Teacher-0 control bytes are recovered or re-frozen under a versioned contract note; the iteration either improves the admitted agent on the declared strength and competency gates or records an honest failure that determines the next build.",
+        "holds": false
+      },
+      {
+        "text": "Across multiple seeds, the search teacher is compared with policy-only, scripted, and frozen opponents on legality, competencies, seat-balanced strength, calibration, p50/p95 decision latency, rollout throughput, and label cost, producing an explicit continue, revise, or kill decision.",
+        "holds": false
+      },
+      {
+        "text": "One historical Study position receives viewer-safe DecisionEvidence from the running policy and search systems, with played Command, policy mass, visits, value, sampled-world robustness, uncertainty, and unavailable fields kept distinct.",
+        "holds": true
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "fc8e615b-b98b-4560-8683-f7f44dc3d9bb",
+        "identifier": "ETU-31",
+        "name": "Run the production visit-teacher multi-seed comparison",
+        "description": "Close the two remaining Project KRs with one bounded production experiment, not an infrastructure-only PR. Audit current main and retained artifacts first. The frozen Teacher-0 control digests name absent checkpoint bytes; do not reconstruct, substitute, or mutate the frozen contract in place. Add a versioned contract amendment that trains fresh Teacher-0 controls, freezes exact bytes and identities before comparison, and binds the complete engine, content, ABI, source, seed, and budget closure. Preserve the existing fail-closed INT-4 harness and frozen verification provenance. Run one complete production visit-teacher iteration on the selected matchup with multiple independent training/data seeds, declared teacher budgets, and policy-only, scripted, and frozen controls. Retain exact viewer-safe trajectories, legal offers and semantic Commands, visit distributions, root values or outcomes, opponent identities, manifests, checkpoints, and replay evidence. Report legality, information safety, S1-S5 competencies, seat-balanced strength, calibration, p50/p95 latency, rollout throughput, label cost, sample efficiency, inference latency, total teacher and student compute, matched-compute comparisons, uncertainty across seeds, and an explicit continue, revise, or kill decision. No strength or promotion claim without competency, information-safety, matched-compute, and arena-admission gates. Do not claim the separate exact-range-versus-uniform result, substitute unavailable checkpoints, or relabel INT-7 engineering smoke as production evidence. If the honest production run is infeasible under the hard cap, retain a typed negative result that determines the next build.",
+        "rank": 2,
+        "completed": false,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-31/run-the-production-visit-teacher-multi-seed-comparison",
+        "workspace": {
+          "slug": "run-the-production-visit-teacher",
+          "branch": "jack-heart/run-the-production-visit-teacher",
+          "worktree": "/Users/jack/src/etude.run-the-production-visit-teacher"
+        }
+      },
+      "runtime": {
+        "work_id": "task_74c34327ba21bdb9d7c21d852d07eee5",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:28Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task has uncommitted work",
+        "observed_at": "2026-09-24T21:59:38.641563Z",
+        "evidence_age_secs": 966490,
+        "local_progress": {
+          "state": "observed",
+          "unsettled": true,
+          "dirty": true,
+          "authored_commits": false,
+          "recovery_required": false,
+          "reason": null
+        }
+      },
+      "actions": {
+        "recommended": "resume",
+        "reason": "resume the parked Task"
+      },
+      "active_pr": {
+        "id": "pr_8397360a2c534bb6b54a2446f2233d05",
+        "sequence": 1,
+        "slug": "run-the-production-visit-teacher",
+        "branch": "jack-heart/run-the-production-visit-teacher",
+        "base_commit": "a9ffb45de761e537741fcf6acec7208786547959",
+        "phase": "working",
+        "empty": null,
+        "publication": null,
+        "merge_commit": null,
+        "abandoned_at": null
+      },
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "65a1cb31-d3bd-4bf7-8b72-b9f1496fd7c7",
+        "identifier": "ETU-34",
+        "name": "Map search and learning architecture and laws of physics",
+        "description": "<!-- loopflow-task-start:d677510e48dc1c2a51db92a42b5e6cd4b88ad549cd78140bb37cbd3560ed5c1c -->",
+        "rank": 5,
+        "completed": false,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-34/map-search-and-learning-architecture-and-laws-of-physics",
+        "workspace": {
+          "slug": "search-learning-architecture",
+          "branch": "jack-heart/search-learning-architecture-2",
+          "worktree": "/Users/jack/src/etude.search-learning-architecture"
+        }
+      },
+      "runtime": {
+        "work_id": "task_8b4f67404f55111670c9a92e5b60b9dd",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "done",
+        "reason": "done",
+        "updated_at": "2026-09-13T17:31:32Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "done"
+      },
+      "condition": {
+        "state": "waiting",
+        "reason": "done",
+        "observed_at": "2026-09-24T21:59:38.844484Z",
+        "evidence_age_secs": 966486,
+        "local_progress": {
+          "state": "observed",
+          "unsettled": false,
+          "dirty": false,
+          "authored_commits": false,
+          "recovery_required": false,
+          "reason": null
+        }
+      },
+      "actions": {
+        "recommended": "no_action",
+        "reason": "Task is terminal"
+      },
+      "active_pr": null,
+      "section": "later"
+    },
+    {
+      "task": {
+        "id": "eb3a1d69-ea17-43e1-a37e-e10985e99e14",
+        "identifier": "ETU-29",
+        "name": "Materialize viewer-safe policy and search evidence for Study",
+        "description": "After INT-3 has a replayable teacher trajectory and declared search budget, materialize DecisionEvidence for one historical StudyIdentity through the merged cross-language contract. Bind pack, engine, observation, action, model, state, viewer, decision, prompt, offer, search budget, sampled-world set, and seed identities; emit the played Command, policy mass, root visits and value, robustness across sampled hidden worlds, uncertainty, and unavailable fields as distinct typed evidence. Prove replay, deterministic serialization, legal-command alignment, viewer safety, and that opponent-private facts cannot affect the default payload except through explicitly aggregated historical-information-safe evidence. This is an evidence adapter, not a strength claim: do not add UI, landmark ranking, rules branching, hindsight contamination, ranges, equilibrium labels, or generic prose. Run every Python command through uv and use lf pr land -c when verified.\n\nCapacity audit (2026-07-18): keep the existing Task Session parked. Current main fd53966 checks in INT-11 runtime-policy manifests and checkpoint SHA-256 values, but neither main nor the retained INT-5 worktree contains the actual checkpoint byte files. In addition, Game retains exact authority roots internally, while HistoricalStudyEvidenceRequest exposes only the viewer-safe projection, replay digest, address, and restored row; Intelligence cannot run search from the retained root without private _study_roots access or changes to the RUL-5-owned etude/study_branch.py, etude/study_runtime.py, or etude/server.py authority seam. Resume this same Task Session with repository-default Codex only after (1) one compatible checkpoint file is retained by exact content identity, not represented by a digest alone, and (2) the authority-owned historical-evidence handoff supplies an exact clone/root or PlanningProblem handle to Intelligence without INT-5 modifying RUL-5 or INT-9 shared authority files. The resumed slice must produce one available viewer-safe historical StudyArtifact; unavailable-only output is insufficient.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-29/materialize-viewer-safe-policy-and-search-evidence-for-study",
+        "workspace": {
+          "slug": "materialize-viewer-safe-policy-and",
+          "branch": "jack-heart/materialize-viewer-safe-policy-and",
+          "worktree": "/Users/jack/src/etude.materialize-viewer-safe-policy-and"
+        }
+      },
+      "runtime": {
+        "work_id": "task_4c90983512822e80c68a17209feff91d",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:24Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-29 worktree /Users/jack/src/etude.materialize-viewer-safe-policy-and is missing; restore that exact path before `lf task resume ETU-29`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.640226Z",
+        "evidence_age_secs": 966494,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-29 worktree /Users/jack/src/etude.materialize-viewer-safe-policy-and is missing; restore that exact path before `lf task resume ETU-29`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "c1b1578e-a0ca-43dd-bdb8-3650c0465874",
+        "identifier": "ETU-30",
+        "name": "Teacher0 data, student, and vector-stepping foundation",
+        "description": "Historical foundation shipped across PRs #110, #111, #114, and #115: runnable Teacher0 trajectory generation, policy/value students, arena evaluation, and high-throughput Rust vector stepping. The LF Task Session is terminal after those landed slices, so the actual visit-based MCTS/PUCT iteration proceeds in a fresh successor Task. This Task does not claim the visit-teacher KRs.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-30/teacher0-data-student-and-vector-stepping-foundation",
+        "workspace": {
+          "slug": "run-a-bounded-search-teacher",
+          "branch": "jack-heart/run-a-bounded-search-teacher-4",
+          "worktree": "/Users/jack/src/manabot.run-a-bounded-search-teacher"
+        }
+      },
+      "runtime": {
+        "work_id": "task_8797f4ac1ffa53c30f7b8aa7d7b4c8ae",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:27Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-30 worktree /Users/jack/src/manabot.run-a-bounded-search-teacher is missing; restore that exact path before `lf task resume ETU-30`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.640656Z",
+        "evidence_age_secs": 966491,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-30 worktree /Users/jack/src/manabot.run-a-bounded-search-teacher is missing; restore that exact path before `lf task resume ETU-30`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "68e009d3-ecbd-45a7-9c9c-3fbde7cf0ab2",
+        "identifier": "ETU-32",
+        "name": "Commit the first world-pinned arena rating run",
+        "description": "R4 (arena half) of docs/plans/results-first-roadmap.md. Run INT-6 for real over the frozen anchors and the dPUCT-32 challenger; commit ratings, the full payoff matrix, connectivity, and paired-deal uncertainty. Coordinate with belief-aware-play to include the exact-range player versus a uniform-determinization control at matched compute in the same run — the measured answer to whether beliefs improve play. Development pairwise matches remain non-admission.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-32/commit-the-first-world-pinned-arena-rating-run",
+        "workspace": {
+          "slug": "commit-the-first-world-pinned",
+          "branch": "jack-heart/commit-the-first-world-pinned",
+          "worktree": "/Users/jack/src/etude.commit-the-first-world-pinned"
+        }
+      },
+      "runtime": {
+        "work_id": "task_8a863b3f1d5368763bc5b06f3fe7dbe1",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:29Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-32 worktree /Users/jack/src/etude.commit-the-first-world-pinned is missing; restore that exact path before `lf task resume ETU-32`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.841181Z",
+        "evidence_age_secs": 966489,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-32 worktree /Users/jack/src/etude.commit-the-first-world-pinned is missing; restore that exact path before `lf task resume ETU-32`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "489a0c71-e6cd-4689-9c1a-887ab4fc5afe",
+        "identifier": "ETU-33",
+        "name": "Train the first belief-conditioned policy and value student",
+        "description": "Implement integration step 4 from the accepted INT-10 search-learning architecture after conditional-prior teacher results exist. Version trajectory and shard rows around root Observation/history, query digest, prior identity, normalization receipt, full aligned semantic action distribution, value targets, planner budget, and immutable artifact manifests. Train the first policy and value student conditioned on canonical-prior BeliefState values across a bounded query curriculum, with matched unconditioned and target-type ablations, independent training seeds, zero illegal Commands, and measured validation, inference p50/p95, throughput, and cost. Use actual hidden hypotheses only as separately authorized calibration targets; never train a clairvoyant policy on hidden truth. Do not add a learned BeliefHead until its output representation is decided, substitute missing checkpoint bytes, or claim promotion before the INT-6 arena boundary is admitted. Every Python command must use uv.",
+        "rank": 4,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-33/train-the-first-belief-conditioned-policy-and-value-student",
+        "workspace": {
+          "slug": "train-the-first-belief-conditioned",
+          "branch": "jack-heart/train-the-first-belief-conditioned-3",
+          "worktree": "/Users/jack/src/etude.train-the-first-belief-conditioned"
+        }
+      },
+      "runtime": {
+        "work_id": "task_b1ee82747ee8928fe21db0ef34489725",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:31Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-33 worktree /Users/jack/src/etude.train-the-first-belief-conditioned is missing; restore that exact path before `lf task resume ETU-33`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.843615Z",
+        "evidence_age_secs": 966487,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-33 worktree /Users/jack/src/etude.train-the-first-belief-conditioned is missing; restore that exact path before `lf task resume ETU-33`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR abandoned; start the next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "c8fa5d50-c01f-4ce1-865f-7164fa705d11",
+        "identifier": "ETU-35",
+        "name": "Measure which student signal improves the next PUCT teacher",
+        "description": "Measure whether frozen chosen-action or visit-distribution policy guidance improves bounded PUCT relative to a uniform prior. Hold leaf evaluation, root noise, world sampling, seeds, selected matchup, and declared PUCT budgets fixed. Evaluate through the landed INT-6 arena as the sole authority and report complete matchups, competencies, legality, replay, visit entropy, root-policy shift, label agreement, p50/p95 latency, nodes and decisions per second, label cost, and a next-corpus or kill decision.\n\nCorrected retained-input audit (2026-07-18): the 7.3 MiB identity-bound INT-4 smoke bundle is retained at /Users/jack/src/etude.run-the-first-visit-based/.runs/int-4-visit-teacher-smoke-post-pr132-v1. It binds contract 9c3f0f600b70ca4fef7131086f6d9b350f9612e690cbb9d621e961a5de27d03c, profile 88181734b699253374b9d99c74e278f42c8dff8de5f85ac81fb65ca1fb39a8e4, source 1a993155ea08962a39e0a678743b3aa831016692, 175 replayed decisions with zero mismatches, two verified shards totaling 507 labels, and all four verified chosen/visit policy-only/policy-value checkpoint bytes named by its manifests. The mandatory first step must copy and freeze the exact bundle bytes and manifests into Task-owned content-addressed input, recompute every identity, and verify current-loader compatibility without retraining, conversion, rewriting, or substitution. Stop with exact evidence if any check fails. If it passes, run only uniform versus chosen-policy-only versus visit-policy-only guidance. Preserve engineering_smoke_only_no_admission_claim: this is a bounded decision diagnostic, never promotion or admission evidence. Do not modify INT-9 or shared authority kernels and do not create or alter arena authority.",
+        "rank": 6,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-35/measure-which-student-signal-improves-the-next-puct-teacher",
+        "workspace": {
+          "slug": "measure-which-student-signal-improves",
+          "branch": "jack-heart/measure-which-student-signal-improves",
+          "worktree": "/Users/jack/src/etude.measure-which-student-signal-improves"
+        }
+      },
+      "runtime": {
+        "work_id": "task_50e4f3706d40abcbeb21ff7abb6f9fa7",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:36Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-35 worktree /Users/jack/src/etude.measure-which-student-signal-improves is missing; restore that exact path before `lf task resume ETU-35`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.943882Z",
+        "evidence_age_secs": 966482,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-35 worktree /Users/jack/src/etude.measure-which-student-signal-improves is missing; restore that exact path before `lf task resume ETU-35`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "597a5791-4724-47e4-a46a-76f53a768fef",
+        "identifier": "ETU-36",
+        "name": "Compare value targets inside the visit-trained player",
+        "description": "Compare value targets inside the visit-trained player after INT-4 retains one immutable replayable visit corpus. Train matched policy-only and joint students from the same read-only trajectory rows with terminal-outcome, teacher-root-value, and preregistered blended value targets; hold policy targets, architecture, data volume, optimizer, training seeds, and evaluation cohort fixed. Put each complete player back into PUCT and evaluate through the landed INT-6 arena without changing its authority or touching INT-9 belief/authority kernels. Measure rating, full matchups, competencies, legality, replay, search value per node and wall-clock second, calibration/Brier by phase and target source, p50/p95 latency, throughput, and total label/training cost; choose the strongest complete player at matched compute, not the best calibration metric. Capacity audit 2026-07-18 against canonical main ef26a7e: NOT RUNNABLE. INT-6 provides the frozen code-only arena cohort, but INT-4 production never ran and no replayable corpus/shard/trajectory-audit byte artifact is retained. experiments/data/int-4-visit-teacher-smoke-v1.json is only a 5.2 KB summary; its audit_sha256 ae03c3bda06bdd65b090fefcaf1e23bb717c6f6566cc08731092c7911770f14f names absent bytes, and .runs/int-4-visit-teacher-smoke-post-pr132-v1 is absent. Keep unlaunched until the exact immutable visit shards plus trajectory/search audit bytes are retained and verify independently; a receipt hash or regenerated substitute is insufficient.",
+        "rank": 7,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-36/compare-value-targets-inside-the-visit-trained-player",
+        "workspace": {
+          "slug": "compare-value-targets-inside-the",
+          "branch": "jack-heart/compare-value-targets-inside-the",
+          "worktree": "/Users/jack/src/etude.compare-value-targets-inside-the"
+        }
+      },
+      "runtime": {
+        "work_id": "task_6a7569fe2708b027cdd993dc00d561de",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:37Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-36 worktree /Users/jack/src/etude.compare-value-targets-inside-the is missing; restore that exact path before `lf task resume ETU-36`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.944427Z",
+        "evidence_age_secs": 966481,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-36 worktree /Users/jack/src/etude.compare-value-targets-inside-the is missing; restore that exact path before `lf task resume ETU-36`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "b9cbfcf9-2203-49a8-8f0d-cc1d747eb865",
+        "identifier": "ETU-37",
+        "name": "Establish a world-pinned manabot skill arena",
+        "description": "Build the v1 hill-climbing instrument around one symmetric selected matchup. Register immutable runnable players for random, scripted, fixed flat-search budgets, frozen learned incumbents, and new candidates; run seat-balanced games paired by deal seed; and emit a batch Bradley-Terry rating on an Elo scale with paired-block uncertainty, the complete payoff matrix, model residuals, competencies, legality, replay status, p50/p95 decision latency, throughput, and memory. Every row must pin world, content suite, viewer boundary, compute class, arena version, model, opponent, and seed identities, and every match must retain replayable Commands. Keep the evaluation cohort frozen inside arena v1 and separate it from any adaptive training-opponent scheduler. Preregister a promotion rule requiring rating improvement at fixed compute with no material integrity or competency regression. Do not yet build PFSP, dedicated exploiters, a multi-deck format rating, or a human ladder; make the smallest trustworthy arena that future runnable players can all enter. Run every Python command through uv and debug-test Rust changes.",
+        "rank": 8,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-37/establish-a-world-pinned-manabot-skill-arena",
+        "workspace": {
+          "slug": "establish-a-world-pinned-manabot",
+          "branch": "jack-heart/establish-a-world-pinned-manabot",
+          "worktree": "/Users/jack/src/etude.establish-a-world-pinned-manabot"
+        }
+      },
+      "runtime": {
+        "work_id": "task_8a8e970b54894e3d46bf4f4c2019291d",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:39Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-37 worktree /Users/jack/src/etude.establish-a-world-pinned-manabot is missing; restore that exact path before `lf task resume ETU-37`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.945118Z",
+        "evidence_age_secs": 966479,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-37 worktree /Users/jack/src/etude.establish-a-world-pinned-manabot is missing; restore that exact path before `lf task resume ETU-37`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "f0177e37-ff54-48d6-88f7-6d059c10a90f",
+        "identifier": "ETU-38",
+        "name": "Run the first visit-based teacher and student arena iteration",
+        "description": "Continue from the landed Teacher0 data/student/arena and Rust vector-stepping foundation. Build the smallest actual MCTS/PUCT teacher over real selected-matchup engine states. Record viewer-safe root visit distributions, backed-up values, search budgets, seeds, engine/content/model identities, and replayable positions. A compact full-clone BranchDriver is acceptable for the first running teacher; integrate the selected Rules driver when available instead of waiting on more representation benchmarks. Compare multiple budgets with policy-only and flat-Monte-Carlo controls; report legality, competencies, seat-balanced strength, calibration, latency, throughput, memory, and label cost. Train a student from visit/value targets and run one matched-compute arena iteration. Add a kata or oracle only when a measured result is ambiguous and its result changes the prototype. All Python commands use uv; debug-test Rust changes; land completed PRs with lf pr land -c.",
+        "rank": 9,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-38/run-the-first-visit-based-teacher-and-student-arena-iteration",
+        "workspace": {
+          "slug": "run-the-first-visit-based",
+          "branch": "jack-heart/run-the-first-visit-based-4",
+          "worktree": "/Users/jack/src/etude.run-the-first-visit-based"
+        }
+      },
+      "runtime": {
+        "work_id": "task_d6b5c8ce8308a5e614c309cd3d65f4a1",
+        "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:39Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-38 worktree /Users/jack/src/etude.run-the-first-visit-based is missing; restore that exact path before `lf task resume ETU-38`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.945628Z",
+        "evidence_age_secs": 966479,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-38 worktree /Users/jack/src/etude.run-the-first-visit-based is missing; restore that exact path before `lf task resume ETU-38`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

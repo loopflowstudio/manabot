@@ -1,0 +1,541 @@
+{
+  "game": {
+    "wave": "game",
+    "provider": "linear",
+    "initiative": "21966203-a6bb-4e2c-a902-f43cbe813053",
+    "project": null,
+    "synced_at": 1790293062,
+    "projects": [
+      {
+        "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "slug": "complete-games",
+        "name": "Complete Games",
+        "summary": "Make the existing Allies versus Lessons demo a game the User can follow, express every intended legal play in, finish against an identified trained opponent, and choose to play again.",
+        "definition": "Make the existing Allies versus Lessons demo a game the User can follow, express every intended legal play in, finish against an identified trained opponent, and choose to play again.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "**Understand each change and next decision.** In real human games, the User can follow casting, targeting, resolution, combat, damage, death, and turn changes and identify whose decision is next. Reproduce reported confusion in exact versioned positions, render from authoritative semantic events, retain regression coverage, and validate the fix through human play, including skip/fast-forward and reduced-motion behavior. No known transition blocker remains at closure. Existing event code alone is insufficient proof.",
+            "holds": false
+          },
+          {
+            "text": "**Express every intended legal play without awkward controls.** Maintain an explicit interaction-family and known-friction ledger for the selected matchup, including large and rare choice sets and the full Learn/Lesson interaction. Every reported awkward action blocks closure until reproduced, fixed and confirmed. Preserve complete legal choices and server Command authority; record exercised and untested coverage. Grouping/staged choice is a design candidate, not a mandated solution.",
+            "holds": false
+          },
+          {
+            "text": "**Finish and choose to return.** The User completes games against clearly identified trained checkpoints and voluntarily chooses to play again. Retain all attempted sessions, including abandonment, with match, world, opponent, deck/seat and reproducible Command identities; discover and remove additional stopping friction through those sessions. Agree the concrete human-play cohort before scoring it, revisit repaired interactions across later sessions, and exercise both deck assignments. Automated terminal fixtures do not substitute for this human outcome.",
+            "holds": false
+          }
+        ],
+        "initiative_ids": [
+          "21966203-a6bb-4e2c-a902-f43cbe813053"
+        ],
+        "team_ids": [
+          "d5a8730d-2040-4db1-ba04-569cc054ca96"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "id": "c7cd99f9-b787-4a76-977a-d0b504a10fbf",
+        "identifier": "ETU-9",
+        "url": "https://linear.app/loopflow/issue/ETU-9/expose-a-canonical-replay-decision-index",
+        "name": "Expose a canonical replay decision index",
+        "description": "Give canonical replay a stable address for every historical player decision in the pinned curated match. Enumerate decisions chronologically from authoritative ExperienceFrame, InteractionOffer and Command, PresentationEvent cursor, viewer, and revision identities; restoring any address must reproduce the exact viewer-safe frame and offer. Preserve automatic semantic events between decisions without exposing them as fake choices. Add deterministic fixtures, duplicate and missing-address rejection, replay-equivalence checks, and a deep-link-ready serialization seam consumed by Study. Game owns the complete index and replay truth; do not rank landmarks, run search, reveal private facts, add client-side legality, or build the Study UI. Run every Python command through uv and use lf pr land -c when verified.",
+        "rank": 0,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "1398b275-1144-494f-b5dc-1635d4806757",
+        "identifier": "ETU-10",
+        "url": "https://linear.app/loopflow/issue/ETU-10/define-viewer-safe-study-artifact-and-evidence-contract",
+        "name": "Define viewer-safe Study artifact and evidence contract",
+        "description": "Define the versioned cross-language StudyArtifact/StudyIdentity/StudyLandmark/DecisionEvidence contract that restores an exact historical viewer-safe ExperienceFrame and InteractionOffer and pins pack, engine, model, state, viewer, decision, prompt, offer, and analysis-budget identities. Represent played Command, policy mass, search value, visits, sampled-world robustness, uncertainty, and provenance as distinct typed fields. Add one recorded curated-match fixture shared across Rust, Python, and TypeScript plus negative tests proving opponent-private facts and RNG secrets cannot enter default evidence or shared payloads. Preserve existing Match, Replay, and observation compatibility; do not implement search, UI, branch behavior, or client-side legality. All Python commands must use uv; rebuild the extension after managym/src changes; use lf pr land -c when verified.",
+        "rank": 1,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "3957f51f-8520-4b98-9b8f-3e0fde1498d3",
+        "identifier": "ETU-11",
+        "url": "https://linear.app/loopflow/issue/ETU-11/render-combat-and-turn-transitions-from-semantic-events",
+        "name": "Render combat and turn transitions from semantic events",
+        "description": "Build on merged W2-184. Extend the authoritative PresentationEvent path through one recorded curated sequence containing declare attackers, blockers where reachable, ordered combat damage, death, and a turn transition. Make live play and replay consume the same ordered semantic beats with skip, fast-forward, and reduced-motion behavior, and expose the same canonical facts to the decision-inspector seam. Add focused pointer and keyboard assertions for the prompts touched. Do not infer semantics from snapshot diffs, move rules authority into the client, or redesign the entire visual system.",
+        "rank": 2,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "cb89ac59-d3ed-47e9-acdf-2b367db9c954",
+        "identifier": "ETU-12",
+        "url": "https://linear.app/loopflow/issue/ETU-12/render-one-spell-sequence-from-semantic-presentation-events",
+        "name": "Render one spell sequence from semantic presentation events",
+        "description": "After protocol v1 lands, drive casting, target selection, resolution, damage, and death for one recorded Lightning Bolt sequence from ordered PresentationEvent values rather than snapshot diffs. Make live play and replay consume the same event sequence, add skip/fast-forward and reduced-motion behavior, and expose the same canonical facts to the decision inspector seam. Preserve current table functionality; do not redesign the whole visual system or add client-side rules.",
+        "rank": 3,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "29d6f38f-26a3-4a9f-961a-ef3ecfeaa7f1",
+        "identifier": "ETU-74",
+        "url": "https://linear.app/loopflow/issue/ETU-74/plan-the-trained-challenger-chapter-for-allies-versus-lessons",
+        "name": "Plan the trained-challenger chapter for Allies versus Lessons",
+        "description": "## Chapter disposition — approved 2026-09-24\n\nCARRY THROUGH PUBLICATION. The User explicitly approved the reconciled three-Wave, one-Project-per-Wave, nine-KR plan on 2026-09-24. Baseline reviews and six scoped proposals completed. Apply the accepted plan and preserve dated receipts in .lf/chapters/20260924T233419Z-042de726. Work proceeds in the Loopflow-created chapter-74 checkout via the User-authorized inner-step fallback; it is not registered as this Task's worktree. No product implementation or costly experiment is included. Keep the Task open until accepted application and chapter publication complete. Review date: 2026-10-08.\n\n## Original scope (historical)\n\nPrepare the next repository chapter through start-chapter, proposal-only until the present human accepts the reconciled plan. This Task is the archival/planning worktree, not permission to implement product features or mutate the existing portfolio.\n\nHuman accepted direction on 2026-09-24: exactly one Project per continuing Wave and three KRs per Project; proposed roster Game, Intelligence, Rules with Study folded into Game. Train bots that can beat the User in the currently demoed GW Allies versus UR Lessons matchup. Getting the User to play full games is equally central. Missing transitions and overwhelming action choices are concrete friction; even one awkward intended action makes them stop. Discover further friction through actual play rather than asking the User to diagnose it in advance. Faithful rules matter: Learn currently resolves only to discard-then-draw; establish and implement expected Lesson-pool semantics in future product work rather than silently simplifying the mechanic.\n\nCarry forward existing dispositions as evidence: ETU-21 abandoned; ETU-31 experiment deferred; ETU-55 provider-only ship distinct from calibration closure; preserve ETU-34/PR179 work. No new decks beyond content/pool support needed for the existing matchup.\n\nTask output: formal baseline review when no chapter archive exists; frozen Project/KR/open-Task ledger; dated draft with the accepted direction and proposed review dates; scoped Wave and Project proposals and challenges; exact carry/rewrite/complete/retire dispositions for every old Project and open Task; a reviewable three-wave/nine-KR plan. Historical 56 KRs remain evidence, not automatic new priorities. Retain all Run ids and report incomplete coverage honestly.\n\nThe human is present in the controlling conversation. Return open questions and the final proposal there; do not use lf ask or create another human session. No live PM edits, Wave retirement, product implementation, push, PR publication, or Task completion before the human's explicit Gate 2 acceptance. The creation of this planning Task itself is only to provide the required Task-bound archive authority.",
+        "rank": 4,
+        "completed": false,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "5d380229-7494-4d42-9020-b390e351d2a5",
+        "identifier": "ETU-13",
+        "url": "https://linear.app/loopflow/issue/ETU-13/put-a-pilot-and-watcher-on-one-testing-house-table",
+        "name": "Put a pilot and watcher on one testing-house table",
+        "description": "Build the first shared-role testing-house slice after the unified decision-advice surface exists. A pilot and one permitted watcher join the same selected-match table, resolve the same canonical decision addresses, and see only the facts allowed by explicit ViewerIdentity and role capabilities. The watcher can follow the live decision, author a personal belief scenario, explicitly share it with the permitted room, compare strategy, and explore an isolated branch without pausing or mutating the match; only the acting pilot can submit the current offered Command. When the match ends, both continue on the same table and decision identities in Study. Start with personal-until-explicitly-shared belief scenarios so audience and provenance are unambiguous; leave configurable room defaults for later evidence. Prove reconnect, role changes, stale-command rejection, viewer-equivalence safety, branch isolation, and keyboard/mobile participation. Discord remains the communication layer: do not build chat, voice, social feeds, spectator broadcast infrastructure, or tournament permissions.",
+        "rank": 5,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "b5f8619c-f4ea-4c12-a8a4-abe5bf4ab969",
+        "identifier": "ETU-14",
+        "url": "https://linear.app/loopflow/issue/ETU-14/replace-the-advice-fixture-with-the-live-belief-conditioned-advisor",
+        "name": "Replace the advice fixture with the live belief-conditioned advisor",
+        "description": "## Chapter disposition — approved 2026-09-24\n\nDEFERRED outside the opening trained-challenger chapter. Preserve this unfinished live-advice objective and its identity/history. Do not restore or resume the missing worktree by inertia. The chapter prioritizes human full-game usability and identified trained opponents. This is not a claim that live advice was delivered.\n\n## Original scope (historical)\n\nAfter the fixture-backed shared decision surface and Intelligence's versioned belief-conditioned advisor both land, connect them without forking or redesigning the UI. The same canonical DecisionAddress plus BeliefScenario and AdvisorIdentity request must serve live play and Study and render the same conditional action distribution, values, uncertainty, and scenario deltas. Preserve the checked fixture as an offline/reference case, but use the live provider for the selected supported world. Fail visibly on missing checkpoints, unsupported beliefs, stale decision identities, viewer mismatch, compute mismatch, or unavailable evidence; never substitute fabricated values. Prove that changing only the belief changes the displayed strategy, reaching the same request through live and Study returns byte-equivalent evidence, and exploratory recomputation cannot mutate or delay the authoritative match. Keep ordinary Commands and exact Study forks as the only state-changing paths.",
+        "rank": 6,
+        "completed": false,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "1781cbfe-581e-4ffc-bb0f-c91d603355e7",
+        "identifier": "ETU-15",
+        "url": "https://linear.app/loopflow/issue/ETU-15/prototype-belief-to-strategy-comparison-on-the-shared-decision-surface",
+        "name": "Prototype belief-to-strategy comparison on the shared decision surface",
+        "description": "Build the first player-visible AI-assisted play slice after or on top of GAM-4's canonical restored decision. Render one reusable decision-advice component at the same DecisionAddress in live play and Study. Let the viewer edit at least two meaningful hidden-information scenarios for the selected matchup and compare action probabilities, values or uncertainty with explicit deltas. Back the prototype with a checked, versioned fixture produced from real policy/search evidence at a pinned world, viewer, advisor, compute, and seed identity; do not fabricate dynamic claims or wait for the production belief player. Facts, beliefs, inferred starting ranges, and advice must be visually distinct. The live instance may submit only its currently offered Command; Study may fork, Retry, compare, and return; both must use the same component, action vocabulary, and advice request shape. Add focused pointer, keyboard, reduced-motion, mobile, viewer-safety, identity-mismatch, and typed-unavailable tests. Do not build chat, generic range tooling, a second replay, client-side legality, or broad Avatar content.",
+        "rank": 7,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "a82f46c1-3080-4b74-b54b-20357a7bf0ea",
+        "identifier": "ETU-16",
+        "url": "https://linear.app/loopflow/issue/ETU-16/rewrite-etude-around-ai-assisted-testing-house-play",
+        "name": "Rewrite Etude around AI-assisted testing-house play",
+        "description": "Rewrite the root README and the Game, Intelligence, Rules, and folded Study north-star documentation so they tell one product story without removing any existing Avatar Cube Team Sealed, authoritative play, replay, Retry, or Study promise. Etude Fantasia is AI-assisted play with the emotional model of a Pro Tour testing house: piloting, watching, comparing reads, trying lines, and having fun are one activity. The first AI UX is one shared live/Study decision surface where a player states an explicit viewer-safe belief, sees strategy conditioned on it, changes the belief, and sees the delta. State the laws clearly: facts, player-authored beliefs, inferred beliefs, and advice remain distinct; the same decision, belief, advisor, and compute identity produces the same advice live or in Study; only the pilot commits a live Command; viewer exploration never mutates the match; Discord remains the human communication layer. Use the draft in /Users/jack/src/etude.ai-assisted-north-star and scratch/ai-assisted-play-north-star.md as design input, but review it for concise player-facing language rather than landing it mechanically. This is documentation and roadmap alignment only, not UI implementation.\n\nThe root README is the product front door, not only a documentation index. Replace the currently included generic board screenshot with a reproducibly captured, versioned image of the merged shared belief-to-strategy decision surface in its most compelling honest state, preferably showing the same decision with two player-authored belief scenarios and visible strategy deltas. Rework the opening flow, captions, and nearby copy so a new player can immediately feel the Pro Tour testing-house experience: play, watch, state a read, compare strategy, try a line, and continue into Study as one activity. Audit the entire README for whether it manifests that experience rather than merely naming it. Preserve truthful prototype/live boundaries and do not redesign the application in this task; if the merged surface cannot yield an honest hero image, document the precise missing product slice instead of staging a mock.",
+        "rank": 8,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "8150f43d-245b-4400-95b9-b3c861af75ac",
+        "identifier": "ETU-17",
+        "url": "https://linear.app/loopflow/issue/ETU-17/build-retry-before-reveal-study-vertical-slice",
+        "name": "Build Retry-before-reveal Study vertical slice",
+        "description": "After GAM-3 exposes the canonical replay decision index, implement one player-visible Study moment for the current selected completed matchup. Open the complete decision timeline, restore one exact viewer-safe decision, keep policy and search judgment sealed while the player retries through the canonical offer, then reveal separately labelled played, policy, and search plans. Selecting a plan highlights authoritative table objects and plays one bounded canonical PresentationEvent continuation. Consume the merged StudyArtifact/DecisionEvidence contract and provider work from Rules and Intelligence; do not add client-side legality, snapshot-diff narration, a generic analysis tree, sharing, chat, team-series orchestration, or Avatar Cube breadth. Cover the focused pointer, keyboard, reduced-motion, and mobile interaction needed for this one moment. Run every Python command through uv and use lf pr land -c when verified.",
+        "rank": 9,
+        "completed": true,
+        "project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "project": "complete-games",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      }
+    ]
+  },
+  "intelligence": {
+    "wave": "intelligence",
+    "provider": "linear",
+    "initiative": "427144c1-6896-40e1-a23e-6e7fe9bc9fc4",
+    "project": null,
+    "synced_at": 1790293101,
+    "projects": [
+      {
+        "id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "slug": "trained-challengers",
+        "name": "Trained Challengers",
+        "summary": "Make training reproducible and useful: produce versioned manabots for the selected matchup, establish full-game improvement at declared cost, and demonstrate a repeatable challenge to the User under a protocol fixed before scoring.",
+        "definition": "Make training reproducible and useful: produce versioned manabots for the selected matchup, establish full-game improvement at declared cost, and demonstrate a repeatable challenge to the User under a protocol fixed before scoring.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "**Repeat training through playable checkpoints.** On the corrected frozen world, a documented bounded workflow succeeds across repeated complete executions, exporting checkpoints that load through the real demo and complete games with both deck assignments. Pin code, content/rules, observation/action ABI, configuration, data and seed identities, checkpoint digest and training/inference cost receipts. Declare the reproducibility contract; do not imply byte-identical stochastic training unless promised. Account for every attempt and failure.",
+            "holds": false
+          },
+          {
+            "text": "**Show full-game improvement.** Freeze the corrected world, current demo-opponent baseline, controls, independent training seeds, held-out paired deals, deck/seat assignments, training budgets, matched inference compute, cohort and analysis before evaluation. Compare across complete games, report uncertainty, legality, information safety, competence failures and total cost, and demonstrate improvement against the predeclared criterion. Account for every candidate attempt and exclusion. A cheaper feasibility run or an honest negative result informs the next decision but does not satisfy an improvement claim.",
+            "holds": false
+          },
+          {
+            "text": "**Beat the human repeatably.** Agree and record candidate identity, inference budget, deck/seat assignments, deal handling, session window, assistance policy, sample/stopping rule, uncertainty treatment, interruptions and success criterion before counting results. Then evaluate that frozen candidate across the complete scheduled cohort against the User and meet the criterion. Retain every attempt; candidate/world changes require a new cohort. An isolated win, a cherry-picked checkpoint, a constructed terminal fixture, or a loss caused by awkward controls is insufficient.",
+            "holds": false
+          }
+        ],
+        "initiative_ids": [
+          "427144c1-6896-40e1-a23e-6e7fe9bc9fc4"
+        ],
+        "team_ids": [
+          "d5a8730d-2040-4db1-ba04-569cc054ca96"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "id": "eb3a1d69-ea17-43e1-a37e-e10985e99e14",
+        "identifier": "ETU-29",
+        "url": "https://linear.app/loopflow/issue/ETU-29/materialize-viewer-safe-policy-and-search-evidence-for-study",
+        "name": "Materialize viewer-safe policy and search evidence for Study",
+        "description": "After INT-3 has a replayable teacher trajectory and declared search budget, materialize DecisionEvidence for one historical StudyIdentity through the merged cross-language contract. Bind pack, engine, observation, action, model, state, viewer, decision, prompt, offer, search budget, sampled-world set, and seed identities; emit the played Command, policy mass, root visits and value, robustness across sampled hidden worlds, uncertainty, and unavailable fields as distinct typed evidence. Prove replay, deterministic serialization, legal-command alignment, viewer safety, and that opponent-private facts cannot affect the default payload except through explicitly aggregated historical-information-safe evidence. This is an evidence adapter, not a strength claim: do not add UI, landmark ranking, rules branching, hindsight contamination, ranges, equilibrium labels, or generic prose. Run every Python command through uv and use lf pr land -c when verified.\n\nCapacity audit (2026-07-18): keep the existing Task Session parked. Current main fd53966 checks in INT-11 runtime-policy manifests and checkpoint SHA-256 values, but neither main nor the retained INT-5 worktree contains the actual checkpoint byte files. In addition, Game retains exact authority roots internally, while HistoricalStudyEvidenceRequest exposes only the viewer-safe projection, replay digest, address, and restored row; Intelligence cannot run search from the retained root without private _study_roots access or changes to the RUL-5-owned etude/study_branch.py, etude/study_runtime.py, or etude/server.py authority seam. Resume this same Task Session with repository-default Codex only after (1) one compatible checkpoint file is retained by exact content identity, not represented by a digest alone, and (2) the authority-owned historical-evidence handoff supplies an exact clone/root or PlanningProblem handle to Intelligence without INT-5 modifying RUL-5 or INT-9 shared authority files. The resumed slice must produce one available viewer-safe historical StudyArtifact; unavailable-only output is insufficient.",
+        "rank": 0,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "c1b1578e-a0ca-43dd-bdb8-3650c0465874",
+        "identifier": "ETU-30",
+        "url": "https://linear.app/loopflow/issue/ETU-30/teacher0-data-student-and-vector-stepping-foundation",
+        "name": "Teacher0 data, student, and vector-stepping foundation",
+        "description": "Historical foundation shipped across PRs #110, #111, #114, and #115: runnable Teacher0 trajectory generation, policy/value students, arena evaluation, and high-throughput Rust vector stepping. The LF Task Session is terminal after those landed slices, so the actual visit-based MCTS/PUCT iteration proceeds in a fresh successor Task. This Task does not claim the visit-teacher KRs.",
+        "rank": 1,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "fc8e615b-b98b-4560-8683-f7f44dc3d9bb",
+        "identifier": "ETU-31",
+        "url": "https://linear.app/loopflow/issue/ETU-31/run-the-production-visit-teacher-multi-seed-comparison",
+        "name": "Run the production visit-teacher multi-seed comparison",
+        "description": "## Chapter disposition — approved 2026-09-24\n\nCARRY DEFERRED. Preserve the existing dirty worktree and original 16 wall-hour / 64 core-hour hard cap. No production experiment is authorized by this chapter. Before any restart, reconcile the original question, controls, interfaces and compute with the corrected Learn/Lesson world and trained-challenger bet. Propose a rewrite if needed; do not file replacement work that bypasses this deferral.\n\n## Original scope (historical)\n\nClose the two remaining Project KRs with one bounded production experiment, not an infrastructure-only PR. Audit current main and retained artifacts first. The frozen Teacher-0 control digests name absent checkpoint bytes; do not reconstruct, substitute, or mutate the frozen contract in place. Add a versioned contract amendment that trains fresh Teacher-0 controls, freezes exact bytes and identities before comparison, and binds the complete engine, content, ABI, source, seed, and budget closure. Preserve the existing fail-closed INT-4 harness and frozen verification provenance. Run one complete production visit-teacher iteration on the selected matchup with multiple independent training/data seeds, declared teacher budgets, and policy-only, scripted, and frozen controls. Retain exact viewer-safe trajectories, legal offers and semantic Commands, visit distributions, root values or outcomes, opponent identities, manifests, checkpoints, and replay evidence. Report legality, information safety, S1-S5 competencies, seat-balanced strength, calibration, p50/p95 latency, rollout throughput, label cost, sample efficiency, inference latency, total teacher and student compute, matched-compute comparisons, uncertainty across seeds, and an explicit continue, revise, or kill decision. No strength or promotion claim without competency, information-safety, matched-compute, and arena-admission gates. Do not claim the separate exact-range-versus-uniform result, substitute unavailable checkpoints, or relabel INT-7 engineering smoke as production evidence. If the honest production run is infeasible under the hard cap, retain a typed negative result that determines the next build.",
+        "rank": 2,
+        "completed": false,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "68e009d3-ecbd-45a7-9c9c-3fbde7cf0ab2",
+        "identifier": "ETU-32",
+        "url": "https://linear.app/loopflow/issue/ETU-32/commit-the-first-world-pinned-arena-rating-run",
+        "name": "Commit the first world-pinned arena rating run",
+        "description": "R4 (arena half) of docs/plans/results-first-roadmap.md. Run INT-6 for real over the frozen anchors and the dPUCT-32 challenger; commit ratings, the full payoff matrix, connectivity, and paired-deal uncertainty. Coordinate with belief-aware-play to include the exact-range player versus a uniform-determinization control at matched compute in the same run — the measured answer to whether beliefs improve play. Development pairwise matches remain non-admission.",
+        "rank": 3,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "489a0c71-e6cd-4689-9c1a-887ab4fc5afe",
+        "identifier": "ETU-33",
+        "url": "https://linear.app/loopflow/issue/ETU-33/train-the-first-belief-conditioned-policy-and-value-student",
+        "name": "Train the first belief-conditioned policy and value student",
+        "description": "Implement integration step 4 from the accepted INT-10 search-learning architecture after conditional-prior teacher results exist. Version trajectory and shard rows around root Observation/history, query digest, prior identity, normalization receipt, full aligned semantic action distribution, value targets, planner budget, and immutable artifact manifests. Train the first policy and value student conditioned on canonical-prior BeliefState values across a bounded query curriculum, with matched unconditioned and target-type ablations, independent training seeds, zero illegal Commands, and measured validation, inference p50/p95, throughput, and cost. Use actual hidden hypotheses only as separately authorized calibration targets; never train a clairvoyant policy on hidden truth. Do not add a learned BeliefHead until its output representation is decided, substitute missing checkpoint bytes, or claim promotion before the INT-6 arena boundary is admitted. Every Python command must use uv.",
+        "rank": 4,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "65a1cb31-d3bd-4bf7-8b72-b9f1496fd7c7",
+        "identifier": "ETU-34",
+        "url": "https://linear.app/loopflow/issue/ETU-34/map-search-and-learning-architecture-and-laws-of-physics",
+        "name": "Map search and learning architecture and laws of physics",
+        "description": "<!-- loopflow-task-start:d677510e48dc1c2a51db92a42b5e6cd4b88ad549cd78140bb37cbd3560ed5c1c -->",
+        "rank": 5,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "c8fa5d50-c01f-4ce1-865f-7164fa705d11",
+        "identifier": "ETU-35",
+        "url": "https://linear.app/loopflow/issue/ETU-35/measure-which-student-signal-improves-the-next-puct-teacher",
+        "name": "Measure which student signal improves the next PUCT teacher",
+        "description": "Measure whether frozen chosen-action or visit-distribution policy guidance improves bounded PUCT relative to a uniform prior. Hold leaf evaluation, root noise, world sampling, seeds, selected matchup, and declared PUCT budgets fixed. Evaluate through the landed INT-6 arena as the sole authority and report complete matchups, competencies, legality, replay, visit entropy, root-policy shift, label agreement, p50/p95 latency, nodes and decisions per second, label cost, and a next-corpus or kill decision.\n\nCorrected retained-input audit (2026-07-18): the 7.3 MiB identity-bound INT-4 smoke bundle is retained at /Users/jack/src/etude.run-the-first-visit-based/.runs/int-4-visit-teacher-smoke-post-pr132-v1. It binds contract 9c3f0f600b70ca4fef7131086f6d9b350f9612e690cbb9d621e961a5de27d03c, profile 88181734b699253374b9d99c74e278f42c8dff8de5f85ac81fb65ca1fb39a8e4, source 1a993155ea08962a39e0a678743b3aa831016692, 175 replayed decisions with zero mismatches, two verified shards totaling 507 labels, and all four verified chosen/visit policy-only/policy-value checkpoint bytes named by its manifests. The mandatory first step must copy and freeze the exact bundle bytes and manifests into Task-owned content-addressed input, recompute every identity, and verify current-loader compatibility without retraining, conversion, rewriting, or substitution. Stop with exact evidence if any check fails. If it passes, run only uniform versus chosen-policy-only versus visit-policy-only guidance. Preserve engineering_smoke_only_no_admission_claim: this is a bounded decision diagnostic, never promotion or admission evidence. Do not modify INT-9 or shared authority kernels and do not create or alter arena authority.",
+        "rank": 6,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "597a5791-4724-47e4-a46a-76f53a768fef",
+        "identifier": "ETU-36",
+        "url": "https://linear.app/loopflow/issue/ETU-36/compare-value-targets-inside-the-visit-trained-player",
+        "name": "Compare value targets inside the visit-trained player",
+        "description": "Compare value targets inside the visit-trained player after INT-4 retains one immutable replayable visit corpus. Train matched policy-only and joint students from the same read-only trajectory rows with terminal-outcome, teacher-root-value, and preregistered blended value targets; hold policy targets, architecture, data volume, optimizer, training seeds, and evaluation cohort fixed. Put each complete player back into PUCT and evaluate through the landed INT-6 arena without changing its authority or touching INT-9 belief/authority kernels. Measure rating, full matchups, competencies, legality, replay, search value per node and wall-clock second, calibration/Brier by phase and target source, p50/p95 latency, throughput, and total label/training cost; choose the strongest complete player at matched compute, not the best calibration metric. Capacity audit 2026-07-18 against canonical main ef26a7e: NOT RUNNABLE. INT-6 provides the frozen code-only arena cohort, but INT-4 production never ran and no replayable corpus/shard/trajectory-audit byte artifact is retained. experiments/data/int-4-visit-teacher-smoke-v1.json is only a 5.2 KB summary; its audit_sha256 ae03c3bda06bdd65b090fefcaf1e23bb717c6f6566cc08731092c7911770f14f names absent bytes, and .runs/int-4-visit-teacher-smoke-post-pr132-v1 is absent. Keep unlaunched until the exact immutable visit shards plus trajectory/search audit bytes are retained and verify independently; a receipt hash or regenerated substitute is insufficient.",
+        "rank": 7,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "b9cbfcf9-2203-49a8-8f0d-cc1d747eb865",
+        "identifier": "ETU-37",
+        "url": "https://linear.app/loopflow/issue/ETU-37/establish-a-world-pinned-manabot-skill-arena",
+        "name": "Establish a world-pinned manabot skill arena",
+        "description": "Build the v1 hill-climbing instrument around one symmetric selected matchup. Register immutable runnable players for random, scripted, fixed flat-search budgets, frozen learned incumbents, and new candidates; run seat-balanced games paired by deal seed; and emit a batch Bradley-Terry rating on an Elo scale with paired-block uncertainty, the complete payoff matrix, model residuals, competencies, legality, replay status, p50/p95 decision latency, throughput, and memory. Every row must pin world, content suite, viewer boundary, compute class, arena version, model, opponent, and seed identities, and every match must retain replayable Commands. Keep the evaluation cohort frozen inside arena v1 and separate it from any adaptive training-opponent scheduler. Preregister a promotion rule requiring rating improvement at fixed compute with no material integrity or competency regression. Do not yet build PFSP, dedicated exploiters, a multi-deck format rating, or a human ladder; make the smallest trustworthy arena that future runnable players can all enter. Run every Python command through uv and debug-test Rust changes.",
+        "rank": 8,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "f0177e37-ff54-48d6-88f7-6d059c10a90f",
+        "identifier": "ETU-38",
+        "url": "https://linear.app/loopflow/issue/ETU-38/run-the-first-visit-based-teacher-and-student-arena-iteration",
+        "name": "Run the first visit-based teacher and student arena iteration",
+        "description": "Continue from the landed Teacher0 data/student/arena and Rust vector-stepping foundation. Build the smallest actual MCTS/PUCT teacher over real selected-matchup engine states. Record viewer-safe root visit distributions, backed-up values, search budgets, seeds, engine/content/model identities, and replayable positions. A compact full-clone BranchDriver is acceptable for the first running teacher; integrate the selected Rules driver when available instead of waiting on more representation benchmarks. Compare multiple budgets with policy-only and flat-Monte-Carlo controls; report legality, competencies, seat-balanced strength, calibration, latency, throughput, memory, and label cost. Train a student from visit/value targets and run one matched-compute arena iteration. Add a kata or oracle only when a measured result is ambiguous and its result changes the prototype. All Python commands use uv; debug-test Rust changes; land completed PRs with lf pr land -c.",
+        "rank": 9,
+        "completed": true,
+        "project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "project": "trained-challengers",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      }
+    ]
+  },
+  "rules": {
+    "wave": "rules",
+    "provider": "linear",
+    "initiative": "2b6f3d99-9176-4b77-af42-710f0f30fde9",
+    "project": null,
+    "synced_at": 1790293123,
+    "projects": [
+      {
+        "id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "slug": "faithful-play-and-training",
+        "name": "Faithful Play and Training",
+        "summary": "Give human play and training one faithful, reproducible Allies versus Lessons world, supporting the intended card interactions and actual consumer workloads without divergent rules or hidden-state leakage.",
+        "definition": "Give human play and training one faithful, reproducible Allies versus Lessons world, supporting the intended card interactions and actual consumer workloads without divergent rules or hidden-state leakage.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "**Play the intended rules.** Establish the selected format and eligible Lesson-pool setup and implement the full Learn choice, including the outside-game Lesson path where available, optional discard/draw, and decline. Exercise it through the real human and agent paths with correct visibility and deterministic replay. Reproduce and fix further selected-matchup discrepancies; a deliberately reduced mechanic is not faithful to the agreed world.",
+            "holds": false
+          },
+          {
+            "text": "**Meet real consumer budgets.** Jointly with Intelligence, freeze representative training/play consumers, machine/build profiles, throughput/latency/RSS measures and budgets before accepting performance. Measure current behavior; remove only demonstrated blockers and verify the same workloads and semantics afterward. Adequate existing performance may satisfy a budget without new optimization. Preserve negative results; do not restart deferred calibration or general provider work by inertia.",
+            "holds": false
+          },
+          {
+            "text": "**Keep one exact authority.** Human Commands, bot actions, replay and search forks actually required by the chosen agent use consistent versioned rules and identities. On a prospectively declared complete-game cohort, executing the same recorded Commands from equivalent roots reproduces state witnesses and ordered consequences across consumers; independently acting humans and bots need not choose the same moves. Retain executable witnesses for stale/duplicate rejection, deterministic replay, viewer privacy and fork/root isolation where applicable. Include Lesson-pool state and visibility in the contract. Changed mechanics invalidate old compatible-looking evidence until rebound and checked; no consumer rebuilds its own rules.",
+            "holds": false
+          }
+        ],
+        "initiative_ids": [
+          "2b6f3d99-9176-4b77-af42-710f0f30fde9"
+        ],
+        "team_ids": [
+          "d5a8730d-2040-4db1-ba04-569cc054ca96"
+        ]
+      }
+    ],
+    "items": [
+      {
+        "id": "3f4ad7a5-6df7-435a-b447-3455286de09d",
+        "identifier": "ETU-46",
+        "url": "https://linear.app/loopflow/issue/ETU-46/make-bench-branching-source-sha256-reproducible-across-checkouts",
+        "name": "Make bench_branching source_sha256 reproducible across checkouts",
+        "description": "W2-198 merged at 09ac3405 with both receipts verifying IN ITS WORKTREE, but NEITHER verifies on merged main. Both fail 'source digest mismatch'. This blocks KR2's 'one REPRODUCIBLE harness' clause: the receipts are unverifiable by anyone except the (now-deleted) worktree that produced them.\n\nMEASURED, not inferred (2026-07-16, at merge commit 09ac3405):\n\n* git diff --stat 2f2781e origin/main => EMPTY. Identical git tree. Both checkouts clean (git status --porcelain => 0 lines).\n* Yet source_sha256 differs:\n    canonical main /Users/jack/src/manabot          => 549f6738cd5b610ac7a8ee63eea607c0075d8d2890599af360a432cf1739076f\n    task worktree  ...implement-compact-clone-plus-undo => ba778d315bf1aab095c8eb5adeea7a0161184f1fc8d7a3c1820cc2c78e46c634\n    receipts record ba778d31... (the worktree's), so verify fails on main.\n* File counts entering the walk: main 197,361 vs worktree 510.\n\nTWO ROOT CAUSES in scripts/bench_branching.py source_sha256():\n\n1. '.claude' is not in excluded_parts. The canonical checkout nests agent worktrees under .claude/worktrees/agent-*/**, so ~197k unrelated files (other branches' full source trees) are hashed as 'source'. Any agent activity anywhere changes the digest.\n2. '.git' is excluded only as a DIRECTORY name. excluded_parts filters os.walk's dirnames. In a LINKED git worktree, .git is a regular FILE containing 'gitdir: /abs/path', so it survives into filenames and is hashed -- making the digest depend on the worktree's absolute filesystem path. (Diff of the walk sets shows exactly: only-in-TASK = ['.git']; only-in-MAIN = ['.claude/...'] x197k.)\n\nCONSEQUENCE: source_sha256 binds a receipt to the incidental contents and path of the directory that generated it, not to the source it claims to measure. verify() can never pass on main, in CI, or in a fresh clone. This is the same class of failure that left W2-182's receipt red on main and is why that repair did not stick.\n\nSUGGESTED DIRECTION (implementer decides): bind the receipt to the SOURCE, not the working directory. Options: (a) hash the git tree/commit of the tracked, contract-relevant paths (managym/src, managym/tests, scripts/bench_branching.py, docs/benchmarks/search-branching-contract-v1.md, Cargo.lock) via git rather than an os.walk of the filesystem; or (b) keep the walk but restrict it to an explicit allowlist of contract-relevant paths and exclude .claude plus any .git entry whether file or directory. (a) is strictly more reproducible and makes the receipt verifiable from any clone at that commit; it also removes the whole-tree brittleness where an unrelated wave/ doc edit invalidates every receipt.\n\nACCEPTANCE: at the landing commit, 'uv run scripts/bench_branching.py verify' and 'verify --driver compact_clone_undo/current_game_v1' both pass FROM THE CANONICAL MAIN CHECKOUT (not only from the generating worktree), and re-running them from a second independent checkout of the same commit yields the identical digests. Regenerate both receipts under the corrected scheme. Do NOT change measured workload semantics, fixtures, seeds, or the contract ID; this is a provenance fix, not a re-measurement of the candidates. Keep the serial gate: no page-COW, no representation selected (W2-199 owns those).",
+        "rank": 0,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "b4ef8b70-e4e3-4f26-b03d-6d86c2f670f9",
+        "identifier": "ETU-47",
+        "url": "https://linear.app/loopflow/issue/ETU-47/provide-exact-study-fork-and-return-from-a-historical-decision",
+        "name": "Provide exact Study fork and return from a historical decision",
+        "description": "After RUL-1 selects or explicitly retains the search branching representation, expose the smallest Rules-owned StudyBranch provider over the merged StudyArtifact contract. Resolve a viewer-safe historical StudyIdentity to authoritative state, fork without mutating the recorded source, apply revision-bound structured Commands through normal rules execution, emit canonical PresentationEvents and offers, and return an exact source state hash, event cursor, offer, and viewer projection in one action. Add nested and sibling isolation, stale identity, pack mismatch, source-trace mutation, private-information leakage, and one-action return tests plus fork/apply/return latency and peak-memory evidence. Reuse the executable search-state contract and selected BranchDriver; do not create UI, landmark ranking, replay truth, client-side legality, saved branches, or a second branch representation. Run Rust tests in debug, every Python command through uv, rebuild the extension after managym/src changes, and use lf pr land -c when verified.",
+        "rank": 1,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "8446fa49-a1ac-466e-8a24-e4b6a89a8023",
+        "identifier": "ETU-48",
+        "url": "https://linear.app/loopflow/issue/ETU-48/run-the-selected-branchdriver-in-the-real-search-teacher",
+        "name": "Run the selected BranchDriver in the real search teacher",
+        "description": "After RUL-1 selects or explicitly retains a BranchDriver, integrate that exact implementation into the current Intelligence visit-based teacher rather than adding another benchmark-only regression gate. Run a fixed real selected-matchup search workload through both the existing full-clone reference and selected production path; require identical legal roots, chosen or sampled Commands, outcomes, deterministic witnesses, viewer boundaries, and replayable failure seeds. Measure total search decisions and rollouts per second, p50/p95 decision latency, peak RSS, branch and rollback counters, and label cost at one interactive and one saturated budget. Set regression budgets on this consumer path and report whether the representation should remain, split by workload, or be removed. Preserve the existing benchmark artifacts as diagnostics, but do not regenerate them unless a surprising integration result requires a matched cause-separating cell. Run Rust tests in debug, every Python command through uv, rebuild the extension after managym/src changes, and use lf pr land -c when verified.",
+        "rank": 2,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "8451e6cd-3b75-4442-8f64-8b1f9283d31b",
+        "identifier": "ETU-49",
+        "url": "https://linear.app/loopflow/issue/ETU-49/generate-coverage-gaps-and-kernel-change-ratio-gate",
+        "name": "Generate coverage gaps and kernel-change ratio gate",
+        "description": "Generate a checked artifact mapping curated cards and rule families to supported semantics and tests. Track over a documented rolling window which new-card changes are content-only versus kernel-changing, define the threshold and denominator, and fail or flag the documented IR/kernel redesign response when the threshold is crossed.",
+        "rank": 3,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "bc73d792-b8d2-49ea-8388-f892fd7f7061",
+        "identifier": "ETU-50",
+        "url": "https://linear.app/loopflow/issue/ETU-50/add-semantic-kernel-conformance-oracle-ci",
+        "name": "Add semantic-kernel conformance oracle CI",
+        "description": "Build CI evidence around the curated semantic kernel: readable-reference versus optimized differential traces, property and metamorphic checks, fuzzing with persisted replay seeds, and a Phase overlap matrix pinned to phase-rs commit 553b97bd that records compared cases, mismatches, and explicit exclusions.",
+        "rank": 4,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "8c639b6e-3cd4-46d8-8cc8-79064a48ad9b",
+        "identifier": "ETU-51",
+        "url": "https://linear.app/loopflow/issue/ETU-51/implement-dense-page-cow-driver-and-choose-branching-design",
+        "name": "Implement dense page-COW driver and choose branching design",
+        "description": "Implement the dense page-COW fork-plus-undo BranchDriver under the unchanged benchmark contract, with exact isolation and representation-neutral snapshots. Run matched full-clone, clone-plus-undo, and page-COW evidence on one host/build, then write the decision record using total rollout throughput and peak RSS across flat/retained and single/saturated cells.",
+        "rank": 5,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "c01b01dd-76c2-4c95-ac17-e58c3445108b",
+        "identifier": "ETU-52",
+        "url": "https://linear.app/loopflow/issue/ETU-52/implement-compact-clone-plus-undo-benchmark-driver",
+        "name": "Implement compact clone-plus-undo benchmark driver",
+        "description": "Implement the compact clone-plus-undo BranchDriver under manabot.search-branching.v1. Journal every mutable rules path needed by the curated fixtures, pass the unchanged equivalence and failure gates, and record raw single-worker and saturated whole-rollout throughput/RSS evidence. Do not select a representation before the page-COW comparison exists.",
+        "rank": 6,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "d1db302e-1d09-42d6-be4f-eca70dae5603",
+        "identifier": "ETU-53",
+        "url": "https://linear.app/loopflow/issue/ETU-53/prove-search-state-fork-and-rollback-contract",
+        "name": "Prove search-state fork and rollback contract",
+        "description": "Add executable contract tests for exact fork/root/sibling isolation; nested mark/apply/rollback; representation-neutral snapshot and deterministic hash equivalence over seeded traces; viewer-safe hidden-information projections; and stale ObjectRef/incarnation rejection. Keep this proof independent of any optimized branching representation.",
+        "rank": 7,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "c2c2cb99-e2c8-4e42-accf-5dde4a17277b",
+        "identifier": "ETU-54",
+        "url": "https://linear.app/loopflow/issue/ETU-54/build-whole-rollout-branching-benchmark-harness",
+        "name": "Build whole-rollout branching benchmark harness",
+        "description": "Create a reproducible benchmark harness for the search-state contract using the current engine: compact full clone baseline, deterministic hash/equivalence checks, and realistic worker x actor x rollout scenarios that report total rollout throughput and peak RSS as well as clone latency. Define common driver hooks for later clone-plus-undo and dense page-COW-plus-undo implementations, but do not implement or select either yet. Record hardware, seeds, workload, commands, and raw/summary output in a durable artifact. Every Python command must use uv.",
+        "rank": 8,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "cbe6bfab-efc8-47ad-bc5d-ef3aac7222ac",
+        "identifier": "ETU-55",
+        "url": "https://linear.app/loopflow/issue/ETU-55/materialize-possible-world-batches-without-re-enumerating-support",
+        "name": "Materialize possible-world batches without re-enumerating support",
+        "description": "## Chapter disposition — approved 2026-09-24\n\nREWRITE REMAINING SCOPE. The prepared possible-world provider is shipped in main (e856a90); preserve provider parity, identity, batching and complexity receipts. Scientific calibration remains DEFERRED and is not completed by that provider merge. The prior record-learnings Run run_400f18cda0a34be0843e9c74ab552291 explicitly retained calibration as open and requires a pre-generation preregistration check. Reconcile the old ship/lifecycle record before any lifecycle closure; do not rerun or resume calibration from an automatic recommendation. Revisit only for a demonstrated challenger-training need with a separately frozen protocol and authorization.\n\n## Original scope (historical)\n\nINT-17's frozen v1 calibration run exposed an authoritative provider complexity bug. FrozenPolicyLikelihood loops each row in one PossibleWorldSpace and calls root_space.materialize(row); Env.materialize_possible_world currently rebuilds PossibleWorldSpace::for_viewer and recursively enumerates the entire support for every row, making one likelihood update O(S^2). At the frozen 121,485-row maximum this is about 14.76B row-enumeration operations per update, and the run stopped after 1h38m with only commitments through ordinal 2. Build the narrow Rules-owned, identity-checked prepared materializer that enumerates one canonical space exactly once per immutable likelihood root and materializes many canonical indices without re-enumeration. The prepared provider object must survive across every inference batch for that root: the proof target is exactly one PossibleWorldSpace::for_viewer construction per likelihood update, not one per row or one per batch. Stream bounded materialized batches and release their isolated Env branches before the next batch; do not retain all S branches simultaneously. Preserve exact ordering, physical-deal weights, viewer-safe identity, source revision and viewer-state validation, deterministic seeded isolated branches, materialization mode semantics, and fail-closed stale or mismatched identity behavior. Migrate FrozenPolicyLikelihood to the production prepared/batch surface and make wall, CPU, and RSS caps observable/checkable between inference batches rather than only after a whole decision ordinal. Prove single-index and batch parity against the existing provider, add debug Rust and uv-managed Python regression coverage including the exact construction call-count plus scaling/peak-RSS evidence, and retain measured complexity and throughput receipts. Do not edit or rerun the immutable INT-17 v1 contract or its failure receipt: the repaired provider necessarily changes engine/source/extension fingerprints. Instead publish the repaired provider receipt and complete runtime identities, then preregister experiments/contracts/int-17-belief-calibration-v2.json. The v2 validator must canonically copy v1's trace, likelihood checkpoint, algorithm, cohort, preflight, metrics, prediction, caps, arena interpretation, and exclusions exactly; refresh only provider_receipt and expected_runtime; preserve identity stream 8d9f46fa86742f323f915ba69bc0007e225415e8fc5504792eac4b49ebae66b6 with zero provider gaps; and fail before generation on any scientific drift. Rerun v2 within the existing 6h and 2GiB caps. Do not change the cohort, thresholds, belief semantics, or move possible-world authority into manabot.",
+        "rank": 9,
+        "completed": false,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "3369ea37-ebb1-482a-aca1-dd5f485df019",
+        "identifier": "ETU-56",
+        "url": "https://linear.app/loopflow/issue/ETU-56/add-the-first-viewer-relative-possible-world-and-query-slice",
+        "name": "Add the first viewer-relative possible-world and query slice",
+        "description": "Implement integration step 2 from the accepted INT-10 search-learning architecture on top of the canonical semantic decision and Observation seam. In managym, define a minimal viewer-relative PossibleWorldSpace for the selected exact hand-count hypothesis domain plus a typed WorldQuery grammar covering True, Has, Lacks, Q, and Not(Q). Provide canonical compatible-physical-deal weights, deterministic query digests, conditioning and explicit empty-support failure, support receipts, and deterministic materialization into exact authority branches. Prove equivalent queries normalize identically, hidden truth unavailable to the viewer never enters public values, and materialized worlds preserve the source Observation and legal decision. managym owns the domain and materializer; do not add manabot belief probabilities, learned inference, UI wording, a general query language, or claim information-set-consistent planning. Run Rust tests in debug, every Python command through uv, and rebuild the extension after managym Rust changes.",
+        "rank": 10,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      },
+      {
+        "id": "518c53f8-20ff-4120-b739-64ec649a337d",
+        "identifier": "ETU-57",
+        "url": "https://linear.app/loopflow/issue/ETU-57/measure-and-stress-study-forkapplyreturn",
+        "name": "Measure and stress Study fork/apply/return",
+        "description": "Close Search and Study Runtime Prototype KRs 4 and 5 on the merged RUL-4 compact-full-clone Study provider. Exercise historical viewer-safe StudyIdentity fork, normal revision-bound structured Command application, canonical offer/event emission, and consuming exact return through the production Rules-owned adapter. Measure single-worker and saturated fork/apply/return p50/p95 latency, total operation throughput, and peak RSS on fixed completed-match decisions; record explicit regression budgets and reproducible relevant-source identity. Run focused multi-seed stress covering retained source and sibling isolation, nested branches or the adapter documented equivalent, stale identity, pack mismatch, source-trace/root drift, object incarnation, viewer-private hand/library/choice facts, deterministic replay/failure reproduction, and zero fallback to another branch path. Reuse full_clone/current_game_v1 and the RUL-4 source-digest receipt; do not add UI, landmark ranking, saved branches, replay-as-rules truth, page-COW/undo, a second representation, broad conformance, or unrelated content. Add the smallest reusable fix only when the production workload exposes a defect, then rerun the same receipt. Run Rust tests in debug, every Python command through uv, rebuild the extension after managym/src changes, and use lf pr land -c when verified.",
+        "rank": 11,
+        "completed": true,
+        "project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "project": "faithful-play-and-training",
+        "team_id": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+        "assignee": null
+      }
+    ]
+  }
+}

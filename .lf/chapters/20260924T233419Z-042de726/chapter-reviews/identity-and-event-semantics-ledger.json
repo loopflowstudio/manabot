@@ -1,0 +1,189 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "rules",
+  "id": "1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa",
+  "slug": "identity-and-event-semantics",
+  "project": {
+    "id": "1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa",
+    "slug": "identity-and-event-semantics",
+    "name": "Identity and Event Semantics",
+    "summary": "Make object continuity and mutation exact across zones, replacements, triggers, and state-based actions so curated-card behavior remains correct under replay, search, and presentation.",
+    "definition": "Make object continuity and mutation exact across zones, replacements, triggers, and state-based actions so curated-card behavior remains correct under replay, search, and presentation.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "A leave-and-reenter vertical slice changes object incarnation, rejects stale ObjectRef values, and supplies correct last-known information in positive and negative trace tests.",
+        "holds": true
+      },
+      {
+        "text": "Damage, life change, destruction, counters, and zone movement use a proposed-event to replacement/prevention to commit pipeline for the curated replacement-effects slice.",
+        "holds": true
+      },
+      {
+        "text": "Trigger collection and state-based actions reach a deterministic fixpoint, and public rules boundaries no longer expose ambiguous bare storage IDs where incarnation matters.",
+        "holds": true
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "cdba57f8-966b-4394-8a2f-f80457fdc3dc",
+        "identifier": "ETU-64",
+        "name": "Make trigger and SBA stabilization explicit",
+        "description": "Build on the incarnation/LKI and proposed-event seams to make post-commit trigger collection and state-based actions reach an explicit deterministic fixpoint before priority. Audit the touched public rules boundaries and replace ambiguous bare storage IDs where object incarnation matters. Add rule-cited traces for chained SBA-to-trigger-to-SBA behavior, simultaneous terminal conditions, multiple simultaneous SBAs, stale references, and deterministic seeded replay. Preserve the fixed action, observation, and presentation ABIs; do not broaden into layers, general card registration, or unrelated SBA families.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-64/make-trigger-and-sba-stabilization-explicit",
+        "workspace": {
+          "slug": "make-trigger-and-sba-stabilization",
+          "branch": "jack-heart/make-trigger-and-sba-stabilization",
+          "worktree": "/Users/jack/src/manabot.make-trigger-and-sba-stabilization"
+        }
+      },
+      "runtime": {
+        "work_id": "task_e2c00f6a39824bc38e0dba8e41165e66",
+        "project_id": "proj_095469d212fac9737691358cb80d91ab",
+        "routing_project_id": "proj_095469d212fac9737691358cb80d91ab",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:16Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-64 worktree /Users/jack/src/manabot.make-trigger-and-sba-stabilization is missing; restore that exact path before `lf task resume ETU-64`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.781235Z",
+        "evidence_age_secs": 966443,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-64 worktree /Users/jack/src/manabot.make-trigger-and-sba-stabilization is missing; restore that exact path before `lf task resume ETU-64`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "ef29901a-6d80-4948-ace4-c61b64f738bd",
+        "identifier": "ETU-65",
+        "name": "Route curated mutations through proposed events",
+        "description": "After the ObjectRef/LKI slice is available, introduce a narrow typed proposed-event pipeline for the curated replacement-effects boundary: propose, collect/apply matching replacement or prevention effects deterministically, then commit damage, life change, destruction, counter changes, and zone movement. Route the touched mutation entry points through this pipeline without a flag-day engine rewrite. Prove positive, negative, and ordering behavior with trace tests, including damage prevention and ETB tapped/with-counters cases; preserve deterministic replay and the current training/presentation ABIs. Document unsupported CR 616 breadth and do not expand card coverage beyond driver cases.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-65/route-curated-mutations-through-proposed-events",
+        "workspace": {
+          "slug": "route-curated-mutations-through-proposed",
+          "branch": "jack-heart/route-curated-mutations-through-proposed",
+          "worktree": "/Users/jack/src/manabot.route-curated-mutations-through-proposed"
+        }
+      },
+      "runtime": {
+        "work_id": "task_c86b051d307e660ac984c57ce9990efc",
+        "project_id": "proj_095469d212fac9737691358cb80d91ab",
+        "routing_project_id": "proj_095469d212fac9737691358cb80d91ab",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:17Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-65 worktree /Users/jack/src/manabot.route-curated-mutations-through-proposed is missing; restore that exact path before `lf task resume ETU-65`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.781891Z",
+        "evidence_age_secs": 966442,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-65 worktree /Users/jack/src/manabot.route-curated-mutations-through-proposed is missing; restore that exact path before `lf task resume ETU-65`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "a548da90-895e-4fac-9760-39f2bb0ff3f8",
+        "identifier": "ETU-66",
+        "name": "Implement ObjectRef incarnation and LKI vertical slice",
+        "description": "After the state-foundation seam is available, implement a narrow zone-change vertical slice with ObjectRef {entity, incarnation}, stale-reference rejection, and explicit last-known information. Exercise leave-and-reenter behavior with positive and negative trace tests on existing curated cards. Prohibit bare storage IDs only at the touched rules boundaries; do not attempt the proposed-event pipeline or migrate every mechanic in this Task. Preserve deterministic replay and the existing training ABI.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-66/implement-objectref-incarnation-and-lki-vertical-slice",
+        "workspace": {
+          "slug": "implement-objectref-incarnation-and-lki",
+          "branch": "jack-heart/implement-objectref-incarnation-and-lki",
+          "worktree": "/Users/jack/src/manabot.implement-objectref-incarnation-and-lki"
+        }
+      },
+      "runtime": {
+        "work_id": "task_0e68725ad1ad4af8dbbdb3fd79b823e7",
+        "project_id": "proj_095469d212fac9737691358cb80d91ab",
+        "routing_project_id": "proj_095469d212fac9737691358cb80d91ab",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:18Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-66 worktree /Users/jack/src/manabot.implement-objectref-incarnation-and-lki is missing; restore that exact path before `lf task resume ETU-66`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.782417Z",
+        "evidence_age_secs": 966441,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-66 worktree /Users/jack/src/manabot.implement-objectref-incarnation-and-lki is missing; restore that exact path before `lf task resume ETU-66`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

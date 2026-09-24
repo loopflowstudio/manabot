@@ -1,0 +1,353 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "rules",
+  "id": "ff4fced2-e6f6-45d3-8622-136aba616ecd",
+  "slug": "semantic-programs-and-choice-abi",
+  "project": {
+    "id": "ff4fced2-e6f6-45d3-8622-136aba616ecd",
+    "slug": "semantic-programs-and-choice-abi",
+    "name": "Semantic Programs and Choice ABI",
+    "summary": "Compile creator-selected card semantics into reviewed, checked-in typed programs and expose complete legal decisions through a versioned structured-offer and atomic-command ABI shared by rules, learning, and gameplay. Export a stable viewer-safe semantic ",
+    "definition": "Compile creator-selected card semantics into reviewed, checked-in typed programs and expose complete legal decisions through a versioned structured-offer and atomic-command ABI shared by rules, learning, and gameplay. Export a stable viewer-safe semantic projection as an Intelligence input, but keep learned representation, policy training, and transfer evidence in the Intelligence wave. Prove the rules migration incrementally with differential legacy evidence and reproducible boundary performance, without expanding into general Magic coverage.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "Every card in the two-deck acceptance slice is admitted by an offline compiler into checked-in, versioned typed IR; a generated coverage report is complete for that slice, and source checks plus trace tests demonstrate no card-name dispatch in the interpreter.",
+        "holds": true
+      },
+      {
+        "text": "Priority, Lightning Bolt targeting, and declare attackers emit typed structured offers and accept revision-bound, prompt-bound atomic commands; tests prove the offers legal and complete, including a state with more than 32 legal branches, with no truncation or candidate cap.",
+        "holds": true
+      },
+      {
+        "text": "On the two-deck acceptance suite, differential tests show that the legacy fixed-action adapter and structured command path produce the same legal outcomes and deterministic seeded traces for every action representable by the legacy ABI.",
+        "holds": true
+      },
+      {
+        "text": "A structured policy-decoder prototype completes a fixed seeded evaluation containing states with more than 32 legal choices with zero overflow and zero illegal decodes; a checked-in report compares action agreement on shared states, seat-balanced win rate, p50/p95 decision latency, environment throughput, and peak RSS against the legacy adapter.",
+        "holds": true
+      },
+      {
+        "text": "A versioned, viewer-safe semantic learning projection exposes each visible card and ability as typed program tokens covering opcodes, values, selectors, control flow, costs, and choice roles; tests prove stable ContentPack binding, deterministic ragged batching, hidden-information safety, and an ablated path with no card-name or opaque CardDefId feature.",
+        "holds": true
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "f19ded8a-de45-48c7-b2b3-aeab0f88d6f8",
+        "identifier": "ETU-58",
+        "name": "Complete two-deck typed-IR admission and interpreter proof",
+        "description": "Close Semantic Programs and Choice ABI KR1 on top of W2-187/PR #68. Audit the current checked-in semantic IR against every distinct card in the UR Lessons versus GW Allies acceptance slice; extend reviewed declarative inputs and the offline compiler until every card is admitted into versioned checked-in typed IR. Generate a complete machine-checked coverage report for the exact slice. Make the generic interpreter consume the admitted programs without card-name dispatch, and add source checks plus deterministic happy-path and interaction traces that fail on name-based branches or missing admissions. Preserve runtime behavior, ContentPack binding, and the legacy/structured choice ABIs. Exclude runtime natural-language parsing, general Magic coverage, semantic-token training, and policy experiments. Run every Python command through uv and rebuild the CPython 3.12 extension after Rust changes. Keep this Task dormant while W2-215 is active; do not start it in parallel under the current serial gate.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-58/complete-two-deck-typed-ir-admission-and-interpreter-proof",
+        "workspace": {
+          "slug": "complete-two-deck-typed-ir",
+          "branch": "jack-heart/complete-two-deck-typed-ir",
+          "worktree": "/Users/jack/src/manabot.complete-two-deck-typed-ir"
+        }
+      },
+      "runtime": {
+        "work_id": "task_d103edc84e7a66f60ea2a285956c9a4f",
+        "project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "routing_project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:08Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-58 worktree /Users/jack/src/manabot.complete-two-deck-typed-ir is missing; restore that exact path before `lf task resume ETU-58`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.76363Z",
+        "evidence_age_secs": 966451,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-58 worktree /Users/jack/src/manabot.complete-two-deck-typed-ir is missing; restore that exact path before `lf task resume ETU-58`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "f5cf1a88-3a0c-45a4-a53f-07bbb43eb84b",
+        "identifier": "ETU-59",
+        "name": "Expose viewer-safe semantic program tokens to learning",
+        "description": "Turn the checked-in typed card IR into a versioned learning projection without changing rules execution. Define a deterministic ragged token or graph schema for visible card and ability semantics covering program kind, opcodes, typed values, selectors, control flow, costs, target and choice roles, definition references, and structural boundaries. Bind visible runtime objects to immutable ContentPack programs while keeping mutable MatchState facts separate; do not expose hidden-zone identities or private choices. Provide an explicit ablation mode that removes card names and opaque CardDefId identity features, stable batching and masking for training, schema and pack hashes in datasets/checkpoints, and tests for deterministic encoding, ContentPack binding, hidden-information safety, structural recombination, and rejection of unknown schema/opcodes. Measure token counts, encode latency, batch throughput, and memory on the selected matchup. Do not train the learned decoder in this task. Run every Python command through uv and rebuild the CPython 3.12 extension after Rust changes.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-59/expose-viewer-safe-semantic-program-tokens-to-learning",
+        "workspace": {
+          "slug": "expose-viewer-safe-semantic-program",
+          "branch": "jack-heart/expose-viewer-safe-semantic-program",
+          "worktree": "/Users/jack/src/manabot.expose-viewer-safe-semantic-program"
+        }
+      },
+      "runtime": {
+        "work_id": "task_22a833ead1894b303816da2c51a5d94e",
+        "project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "routing_project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:08Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-59 worktree /Users/jack/src/manabot.expose-viewer-safe-semantic-program is missing; restore that exact path before `lf task resume ETU-59`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.764567Z",
+        "evidence_age_secs": 966451,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-59 worktree /Users/jack/src/manabot.expose-viewer-safe-semantic-program is missing; restore that exact path before `lf task resume ETU-59`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "dc078e31-b9b6-41a1-b505-448d1609ff51",
+        "identifier": "ETU-60",
+        "name": "Prototype structured policy decoder and benchmark legacy ABI",
+        "description": "After the priority, target, and attacker offer families are stable, build a narrow structured policy-decoder prototype that consumes ragged offers and emits atomic commands. Run a fixed seeded evaluation containing states with more than 32 legal choices and require zero overflow and zero illegal decodes. Check in the workload, raw or reproducible results, and a report comparing action agreement on shared states, seat-balanced win rate, p50/p95 decision latency, environment throughput, and peak RSS against the legacy adapter. Do not replace the production policy network or change rules semantics. Follow AGENTS.md: run every Python command through uv.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-60/prototype-structured-policy-decoder-and-benchmark-legacy-abi",
+        "workspace": {
+          "slug": "prototype-structured-policy-decoder-and",
+          "branch": "jack-heart/prototype-structured-policy-decoder-and",
+          "worktree": "/Users/jack/src/manabot.prototype-structured-policy-decoder-and"
+        }
+      },
+      "runtime": {
+        "work_id": "task_67d0cf659bf4273e784427c597cc0b67",
+        "project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "routing_project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:09Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-60 worktree /Users/jack/src/manabot.prototype-structured-policy-decoder-and is missing; restore that exact path before `lf task resume ETU-60`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.772886Z",
+        "evidence_age_secs": 966450,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-60 worktree /Users/jack/src/manabot.prototype-structured-policy-decoder-and is missing; restore that exact path before `lf task resume ETU-60`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "1d4a92a9-0266-48e2-b68e-3b31843bb055",
+        "identifier": "ETU-61",
+        "name": "Add structured attacker offers and acceptance-suite adapter oracle",
+        "description": "Extend the typed structured-offer and atomic-command boundary established by W2-181 to declare attackers. Offers must be legal by construction, revision-bound, prompt-bound, and represent every legal declaration without enumeration truncation; include an executable state with more than 32 legal attack declarations. Add differential tests over the two-deck acceptance suite showing that every action representable by the legacy fixed-action ABI has the same legal outcome and deterministic seeded trace through the structured command path. Preserve the legacy ABI. Exclude blocker/payment/mode redesign and policy-network work. Start from or stack on W2-181 when its offer types are stable.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-61/add-structured-attacker-offers-and-acceptance-suite-adapter-oracle",
+        "workspace": {
+          "slug": "add-structured-attacker-offers-and",
+          "branch": "jack-heart/add-structured-attacker-offers-and",
+          "worktree": "/Users/jack/src/manabot.add-structured-attacker-offers-and"
+        }
+      },
+      "runtime": {
+        "work_id": "task_3df9cb2517f3cd14e98140d0885a5c05",
+        "project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "routing_project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:10Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-61 worktree /Users/jack/src/manabot.add-structured-attacker-offers-and is missing; restore that exact path before `lf task resume ETU-61`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.77939Z",
+        "evidence_age_secs": 966449,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-61 worktree /Users/jack/src/manabot.add-structured-attacker-offers-and is missing; restore that exact path before `lf task resume ETU-61`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "0f4d36d1-ec47-4e90-a824-7cbd130fff75",
+        "identifier": "ETU-62",
+        "name": "Compile two-deck card semantics into checked-in typed IR",
+        "description": "Build the smallest offline compiler and versioned typed IR that admits every card in the UR Lessons versus GW Allies acceptance slice from reviewed declarative inputs. Check generated IR into the repository, generate a complete coverage report, make the generic interpreter consume the IR without card-name dispatch, and add source checks plus deterministic trace tests. Preserve runtime behavior and the fixed-action ABI. Build against the shared ContentPack/CardDefId seam when available without duplicating runtime-state work. Exclude runtime natural-language parsing, a general card catalog, and open-ended Magic coverage. Follow AGENTS.md: run every Python command through uv and rebuild the PyO3 extension after Rust changes.",
+        "rank": 4,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-62/compile-two-deck-card-semantics-into-checked-in-typed-ir",
+        "workspace": {
+          "slug": "compile-two-deck-card-semantics",
+          "branch": "jack-heart/compile-two-deck-card-semantics",
+          "worktree": "/Users/jack/src/manabot.compile-two-deck-card-semantics"
+        }
+      },
+      "runtime": {
+        "work_id": "task_01c50775d6e4f24e0ed6c3f52f290168",
+        "project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "routing_project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:13Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-62 worktree /Users/jack/src/manabot.compile-two-deck-card-semantics is missing; restore that exact path before `lf task resume ETU-62`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.780222Z",
+        "evidence_age_secs": 966446,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-62 worktree /Users/jack/src/manabot.compile-two-deck-card-semantics is missing; restore that exact path before `lf task resume ETU-62`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "44b2a46a-674e-4020-b38c-e3ea3dc68cd1",
+        "identifier": "ETU-63",
+        "name": "Prototype structured offers for priority and Bolt targeting",
+        "description": "Add an experimental, typed legal-offer projection for pass/priority and Lightning Bolt target selection, plus atomic command decoding. The offer must be legal by construction and uncapped; retain the existing fixed action ABI as an adapter and prove behavioral equivalence for the covered flows. Include one exact JSON fixture suitable for the Game wave. Do not redesign every choice family or policy network in this Task. Use docs/architecture/experience-protocol-v1.md and docs/research/semantic-kernel.md.",
+        "rank": 5,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-63/prototype-structured-offers-for-priority-and-bolt-targeting",
+        "workspace": {
+          "slug": "prototype-structured-offers-for-priority",
+          "branch": "jack-heart/prototype-structured-offers-for-priority",
+          "worktree": "/Users/jack/src/manabot.prototype-structured-offers-for-priority"
+        }
+      },
+      "runtime": {
+        "work_id": "task_6e5318320cdd65e5b9110abe9ab23156",
+        "project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "routing_project_id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:32:14Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-63 worktree /Users/jack/src/manabot.prototype-structured-offers-for-priority is missing; restore that exact path before `lf task resume ETU-63`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.780697Z",
+        "evidence_age_secs": 966445,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-63 worktree /Users/jack/src/manabot.prototype-structured-offers-for-priority is missing; restore that exact path before `lf task resume ETU-63`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

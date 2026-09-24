@@ -1,0 +1,199 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "game",
+  "id": "3a1b6b43-f9d7-4d77-95aa-d353854a2b13",
+  "slug": "curated-packs-and-portable-runtime",
+  "project": {
+    "id": "3a1b6b43-f9d7-4d77-95aa-d353854a2b13",
+    "slug": "curated-packs-and-portable-runtime",
+    "name": "Curated Packs and Portable Runtime",
+    "summary": "Prove that Etude Fantasia can ship UR Lessons versus GW Allies as a self-contained, versioned experience pack and can swap local authority transports behind one protocol, making clean-machine and offline play reliable while requiring measured evidence bef",
+    "definition": "Prove that Etude Fantasia can ship UR Lessons versus GW Allies as a self-contained, versioned experience pack and can swap local authority transports behind one protocol, making clean-machine and offline play reliable while requiring measured evidence before any browser or WASM authority investment.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "A versioned manifest pins the UR Lessons and GW Allies deck definitions, every card art treatment and source or license attribution, content hashes, and a deterministic missing-asset fallback; an automated network-denied match proves play makes no runtime asset request outside the installed pack.",
+        "holds": true
+      },
+      {
+        "text": "On a documented clean-machine profile, one command reaches a playable UR Lessons-versus-GW-Allies human-versus-agent match in under 60 seconds; after installation, a network-disabled reload reaches the same playable matchup from local assets.",
+        "holds": false
+      },
+      {
+        "text": "Process and native-worker authority adapters pass the same versioned protocol conformance suite for match start, command handling, recovery, and replay fixtures without client-specific game semantics.",
+        "holds": false
+      },
+      {
+        "text": "A reproducible benchmark records cold and warm startup, p50 and p95 command latency, peak memory, shipped bytes, and deployment constraints for process and native-worker authority plus a browser portability probe, ending with an explicit evidence-backed go or no-go for a WASM authority adapter.",
+        "holds": false
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "6cf30cbc-a7a1-4a63-88c1-6837a43a7f0d",
+        "identifier": "ETU-7",
+        "name": "Prove one-command clean-machine launch and offline reload",
+        "description": "Build on merged W2-185. Define a documented clean-machine profile and one supported command that reaches the pinned UR Lessons versus GW Allies human-versus-agent match in under 60 seconds. Prove that after installation a network-denied reload reaches the same playable matchup using only the installed versioned pack, with deterministic diagnostics for missing prerequisites or assets. Do not add deckbuilding, arbitrary-card fetching, service workers, authority-adapter work, or WASM. Every Python command in implementation and documentation must use uv.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-7/prove-one-command-clean-machine-launch-and-offline-reload",
+        "workspace": {
+          "slug": "prove-one-command-clean-machine",
+          "branch": "jack-heart/prove-one-command-clean-machine",
+          "worktree": "/Users/jack/src/manabot.prove-one-command-clean-machine"
+        }
+      },
+      "runtime": {
+        "work_id": "task_1576a989d1b92a1af022e588bfdc411a",
+        "project_id": "proj_ad88c51c2ddf231b06cee85474989cb7",
+        "routing_project_id": "proj_ad88c51c2ddf231b06cee85474989cb7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:37Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "refresh reviewer-facing PR copy for the current head before settlement"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-7 worktree /Users/jack/src/manabot.prove-one-command-clean-machine is missing; restore that exact path on branch \"jack-heart/prove-one-command-clean-machine\" before `lf task resume ETU-7`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.445631Z",
+        "evidence_age_secs": 966542,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-7 worktree /Users/jack/src/manabot.prove-one-command-clean-machine is missing; restore that exact path on branch \"jack-heart/prove-one-command-clean-machine\" before `lf task resume ETU-7`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "no_action",
+        "reason": "Task ETU-7 worktree /Users/jack/src/manabot.prove-one-command-clean-machine is missing; restore that exact path on branch \"jack-heart/prove-one-command-clean-machine\" before `lf task resume ETU-7`; Task identity and PR history are unchanged"
+      },
+      "active_pr": {
+        "id": "pr_bbc7e6af601b46b3ba937ee58ba2564f",
+        "sequence": 1,
+        "slug": "prove-one-command-clean-machine",
+        "branch": "jack-heart/prove-one-command-clean-machine",
+        "base_commit": "dc6744d8f5d44d3deb63c2cb1d5312b4963e2fc1",
+        "phase": "open",
+        "empty": null,
+        "publication": {
+          "requested_at": "2026-07-16T00:58:29Z",
+          "presentation": null,
+          "github": {
+            "number": 80,
+            "url": "https://github.com/loopflowstudio/manabot/pull/80"
+          },
+          "merge": null
+        },
+        "merge_commit": null,
+        "abandoned_at": null
+      },
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "9c22cd78-a4a8-406e-9ee2-2f677f9b51d9",
+        "identifier": "ETU-8",
+        "name": "Freeze one exact matchup asset pack with offline fallback",
+        "description": "Freeze the authored UR Lessons (hero) versus GW Allies (villain) matchup as the first exact experience pack. Create a versioned manifest that pins both deck definitions, every card art/crop or authored treatment, content hashes, source and license attribution, and a deterministic missing-asset fallback. Make installed assets resolve without runtime Scryfall access and add an automated clean-cache, network-denied play verification. Keep the manifest as the source of truth for this named matchup where practical. Do not add deckbuilding, collection browsing, arbitrary-card fetching, service workers, authority adapters, or WASM in this Task; this is the smallest authored pack seam.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-8/freeze-one-exact-matchup-asset-pack-with-offline-fallback",
+        "workspace": {
+          "slug": "freeze-one-exact-matchup-asset",
+          "branch": "jack-heart/freeze-one-exact-matchup-asset",
+          "worktree": "/Users/jack/src/manabot.freeze-one-exact-matchup-asset"
+        }
+      },
+      "runtime": {
+        "work_id": "task_bdf3f418c4ecb3f78fefcf71a8e185e5",
+        "project_id": "proj_ad88c51c2ddf231b06cee85474989cb7",
+        "routing_project_id": "proj_ad88c51c2ddf231b06cee85474989cb7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:38Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-8 worktree /Users/jack/src/manabot.freeze-one-exact-matchup-asset is missing; restore that exact path before `lf task resume ETU-8`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.44747Z",
+        "evidence_age_secs": 966541,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-8 worktree /Users/jack/src/manabot.freeze-one-exact-matchup-asset is missing; restore that exact path before `lf task resume ETU-8`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": [
+    {
+      "work_id": "proj_5f344a2b7e101578c9763ee183ccaaf3",
+      "project_id": "1b93253e-5422-45f1-94df-c019a261e812",
+      "project_slug": "experience-contract-and-recovery",
+      "status": "ready",
+      "owner": "wave",
+      "reason": "Project is absent from the current PM snapshot",
+      "recovery": "lf project abandon experience-contract-and-recovery --reason \"Project is absent from the current PM snapshot\"",
+      "tasks": [
+        {
+          "work_id": "task_a676b8f06437ff76e0d358858bb282d4",
+          "task_id": "f5125ef5-2972-426c-bcdd-1f25af854a90",
+          "task_identifier": "W2-183",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_a676b8f06437ff76e0d358858bb282d4 --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_7225012a52c054c23e1ff1015fc138ee",
+          "task_id": "4d713cf0-ba78-41a9-837f-4496acfd5771",
+          "task_identifier": "W2-194",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_7225012a52c054c23e1ff1015fc138ee --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_add7e9c8ab0f16dd62939e159818ab28",
+          "task_id": "d84c024e-6fe4-496e-8d51-59fb22890feb",
+          "task_identifier": "W2-195",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_add7e9c8ab0f16dd62939e159818ab28 --reason \"Project is absent from the current PM snapshot\""
+        }
+      ]
+    }
+  ]
+}

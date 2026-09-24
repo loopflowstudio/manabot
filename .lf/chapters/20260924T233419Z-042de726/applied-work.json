@@ -1,0 +1,98 @@
+[
+  {
+    "id": "d97e0563-141d-4053-a174-953642dcfe0e",
+    "name": "game",
+    "status": "ready",
+    "goal": "Build Etude Fantasia as an AI-assisted Pro Tour testing house. Piloting, watching, stating a read, comparing strategy, trying a line, having fun, and continuing into Study are one shared surface over one authoritative match—not separate play, replay, and analysis products.",
+    "repo": "/Users/jack/src/etude",
+    "active_tasks": 16,
+    "active_projects": 1,
+    "live": false,
+    "paused": false,
+    "enabled": false,
+    "endpoint": null,
+    "created_at": "2026-07-15T21:29:33Z",
+    "parent_wave_id": null,
+    "retired_at": null,
+    "superseded_by_wave_id": null,
+    "retirement_reason": null,
+    "home": {
+      "id": "home_39860354aaca640c2ccb50bf6ca609d8",
+      "route": "local",
+      "created_at": "2026-07-19T14:56:05Z",
+      "observed_at": "2026-07-19T14:56:05Z"
+    }
+  },
+  {
+    "id": "54bc9162-c883-4574-bab1-af589526c1ad",
+    "name": "intelligence",
+    "status": "ready",
+    "goal": "Build increasingly strong manabots as pilots, opponents, teammates, sparring partners, and advisors in Etude Fantasia's AI-assisted Pro Tour testing house. Make runnable agents and search systems, play them in authoritative Magic worlds, measure what they actually do, and iterate toward superhuman performance. Typed card programs, structured commands, search, self-play, and Study evidence matter when they improve a working agent—not as prerequisites that must be proven in isolation before one may be built.",
+    "repo": "/Users/jack/src/etude",
+    "active_tasks": 18,
+    "active_projects": 1,
+    "live": false,
+    "paused": false,
+    "enabled": false,
+    "endpoint": null,
+    "created_at": "2026-07-16T13:18:14Z",
+    "parent_wave_id": null,
+    "retired_at": null,
+    "superseded_by_wave_id": null,
+    "retirement_reason": null,
+    "home": {
+      "id": "home_39860354aaca640c2ccb50bf6ca609d8",
+      "route": "local",
+      "created_at": "2026-07-19T14:56:05Z",
+      "observed_at": "2026-07-19T14:56:05Z"
+    }
+  },
+  {
+    "id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "name": "rules",
+    "status": "ready",
+    "goal": "Build small, compiled Magic worlds that are genuinely playable, searchable, replayable, and explorable in Study. Rules advances by making creator-selected matchups run end to end through general semantic machinery, measuring their behavior and cost, and hardening the exact seams that real play exposes. It does not pursue open-ended card or format breadth.",
+    "repo": "/Users/jack/src/etude",
+    "active_tasks": 34,
+    "active_projects": 1,
+    "live": false,
+    "paused": false,
+    "enabled": false,
+    "endpoint": null,
+    "created_at": "2026-07-15T21:28:50Z",
+    "parent_wave_id": null,
+    "retired_at": null,
+    "superseded_by_wave_id": null,
+    "retirement_reason": null,
+    "home": {
+      "id": "home_39860354aaca640c2ccb50bf6ca609d8",
+      "route": "local",
+      "created_at": "2026-07-19T14:56:05Z",
+      "observed_at": "2026-07-19T14:56:05Z"
+    }
+  },
+  {
+    "id": "b1d0fc9d-8ada-4ec8-9a9c-bd5df0142bc6",
+    "name": "study",
+    "status": "abandoned",
+    "goal": "Study is no longer an independent product wave. It is the historical and counterfactual time control of Etude Fantasia's AI-assisted testing house. A completed game remains on the same table: every player decision can be restored, and players can state a viewer-safe read, compare attributable strategy, Retry an exact line, follow a bounded continuation, and return without inventing rules or evidence in the client.",
+    "repo": "/Users/jack/src/etude",
+    "active_tasks": 0,
+    "active_projects": 0,
+    "live": false,
+    "paused": false,
+    "enabled": false,
+    "endpoint": null,
+    "created_at": "2026-07-16T01:46:30Z",
+    "parent_wave_id": null,
+    "retired_at": null,
+    "superseded_by_wave_id": null,
+    "retirement_reason": null,
+    "home": {
+      "id": "home_39860354aaca640c2ccb50bf6ca609d8",
+      "route": "local",
+      "created_at": "2026-07-19T14:56:05Z",
+      "observed_at": "2026-07-19T14:56:05Z"
+    }
+  }
+]

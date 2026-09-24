@@ -1,0 +1,420 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "rules",
+  "id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+  "slug": "playable-curated-world",
+  "project": {
+    "id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+    "slug": "playable-curated-world",
+    "name": "Playable Curated World",
+    "summary": "Make one complete creator-selected Etude Fantasia matchup run through the compiled semantic runtime as the exercised production authority for human play, replay, and agent belief/search. Drive real play, replay, and agent interaction through typed program",
+    "definition": "Make one complete creator-selected Etude Fantasia matchup run through the compiled semantic runtime as the exercised production authority for human play, replay, and agent belief/search. Drive real play, replay, and agent interaction through typed programs, structured offers and Commands, canonical events, and stable viewer-safe public-commitment identities owned by managym; measure the world as played and use focused diagnostics only when its behavior is surprising. Provider closure on the selected matchup remains the admission priority and cannot be substituted or weakened by content work; the already-approved single next-content vertical slice may implement in parallel as a separate proof.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "A deterministic release-stack UR Lessons versus GW Allies match reaches terminal with every encountered card behavior executed from admitted typed programs and every player decision submitted through structured InteractionOffer and Command values, with no card-name dispatch, candidate cap, or client-side legality in the trace.",
+        "holds": true
+      },
+      {
+        "text": "Live play, headless engine play, and canonical replay reproduce the same state witnesses and ordered semantic consequences for fixed terminal seeds, while viewer-private facts and stale ObjectRef values remain inaccessible at their public boundaries.",
+        "holds": true
+      },
+      {
+        "text": "The selected matchup exposes every reachable prompt family needed by its real cards through structured offers, including targeting and combinatorial combat, and records zero legacy fixed-action fallback for the exercised release traces.",
+        "holds": true
+      },
+      {
+        "text": "Across a fixed terminal UR Lessons versus GW Allies trace, every admitted public commitment consumed by exact-range belief tracking carries a stable viewer-safe managym-owned identity that reproduces live, in canonical replay, and on an exact fork; the exercised RulesProviderGap count is zero, unsupported commitments fail closed without match or belief mutation, and no hidden truth enters the public Observation or receipt.",
+        "holds": true
+      },
+      {
+        "text": "A release and training workload records command p50/p95 latency, step and complete-game throughput, peak RSS, semantic-program token counts, and fallback counters; the compiled path stays within explicit product and rollout budgets.",
+        "holds": true
+      },
+      {
+        "text": "One subsequent creator-selected card or mechanic increment is admitted as a playable vertical slice and records whether the change was content-only or required a reusable IR or kernel extension, with terminal play evidence rather than coverage markers alone.",
+        "holds": true
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "16aa96c7-24fd-4f63-9aab-5bdfe0b06da5",
+        "identifier": "ETU-39",
+        "name": "Bring release-stack live play within product budgets",
+        "description": "Advance only the remaining Playable Curated World workload-budget KR using the observed RUL-9 release miss as the diagnostic input. Preserve PR #159 merge d895ac9f2617be11c47353a3cd9ab98601d08b9e and immutable origin artifact 498df1 byte-for-byte; do not reinterpret or overwrite its evidence. After RUL-11 provider closure is merged and settled, isolate the outer release-stack overhead between the 4.291 ms inner semantic p95 and the measured 150.492 ms WebSocket Command p95 / 0.347 complete games per second. Make the smallest reusable production-path change that can bring fixed UR Lessons versus GW Allies live Command p95 to <=100 ms and complete-game throughput to >=1.0 games/s. Then record a new source- and binary-bound measurement receipt over the same semantic Command authority, including p50/p95, step and game throughput, peak RSS, semantic-program token counts/overflow, and all fallback counters. Preserve exact live/headless/persisted-replay witnesses and ordered consequences, privacy/stale-reference rejection, zero legacy/card-name/candidate-cap/client-legality fallback, and the retained full_clone/current_game_v1 training budgets. Out of scope: content breadth, representation replacement, public-commitment ontology, weakening budgets, or editing frozen RUL-9 artifacts. Parent Project Session owns headless review, CI repair, merge, and settlement.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-39/bring-release-stack-live-play-within-product-budgets",
+        "workspace": {
+          "slug": "bring-release-stack-live-play",
+          "branch": "jack-heart/bring-release-stack-live-play",
+          "worktree": "/Users/jack/src/etude.bring-release-stack-live-play"
+        }
+      },
+      "runtime": {
+        "work_id": "task_cf7ba4d3ef4f69d1e37ed9edfd1e89d1",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:43Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-39 worktree /Users/jack/src/etude.bring-release-stack-live-play is missing; restore that exact path before `lf task resume ETU-39`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.551885Z",
+        "evidence_age_secs": 966476,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-39 worktree /Users/jack/src/etude.bring-release-stack-live-play is missing; restore that exact path before `lf task resume ETU-39`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "b1a2a2e4-5918-4f4b-b9e9-a5d9493e140c",
+        "identifier": "ETU-40",
+        "name": "Close selected-match public-commitment identity gaps",
+        "description": "Advance the Playable Curated World provider-closure KR on the fixed terminal UR Lessons versus GW Allies path. First run the exact-range BeliefTracker against the existing fixed production Command/replay source to enumerate actual admitted public commitments and locate each exercised RulesProviderGap. Extend managym-owned PublicCommitment identity only where the observed selected trace and belief conditioning require it; DecisionFrame and TransitionReceipt remain the semantic authority, with no client inference, card-name reconstruction, positional identity, hidden-truth disclosure, or parallel replay authority. Prove the same viewer-safe identities reproduce in Etude live execution, persisted canonical replay, and one exact fork or materialized hypothesis; the complete fixed terminal trace must finish with zero exercised RulesProviderGap. Unsupported or mismatched commitments must fail closed with unchanged match witness, event cursor, belief digest, and belief records. Add focused Rust debug and uv-managed Python tests plus one checked receipt or verifier binding the source trace, identity stream, and zero-gap result. Reuse the immutable RUL-9 source evidence without rerunning its measurements. Out of scope: new cards/content, release-budget optimization, calibration models, arena/UI work, or a broad commitment ontology beyond observed selected-match needs. Parent Project Session owns headless review, CI repair, merge, and settlement.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-40/close-selected-match-public-commitment-identity-gaps",
+        "workspace": {
+          "slug": "close-selected-match-public-commitment",
+          "branch": "jack-heart/close-selected-match-public-commitment",
+          "worktree": "/Users/jack/src/etude.close-selected-match-public-commitment"
+        }
+      },
+      "runtime": {
+        "work_id": "task_d6cfff474ca5f10a75bedfad77bcf455",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:44Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-40 worktree /Users/jack/src/etude.close-selected-match-public-commitment is missing; restore that exact path before `lf task resume ETU-40`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.552443Z",
+        "evidence_age_secs": 966475,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-40 worktree /Users/jack/src/etude.close-selected-match-public-commitment is missing; restore that exact path before `lf task resume ETU-40`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "385571d1-31df-4ccc-8048-a8159f473b06",
+        "identifier": "ETU-41",
+        "name": "Measure played release and training workloads against product budgets",
+        "description": "Advances the Playable Curated World workload KR. Run the fixed UR Lessons versus GW Allies release-stack authority workload and one production training workload through the compiled semantic Command path. Pre-state explicit interactive and rollout budgets, pin workload/source/binary identity, and retain raw evidence for command p50/p95 latency, step throughput, complete-game throughput, peak RSS, semantic-program token counts/overflow, and every fallback counter. Add a fail-closed verifier and focused tests. Diagnose an observed budget miss, but do not change the selected representation without decision-bearing evidence.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-41/measure-played-release-and-training-workloads-against-product-budgets",
+        "workspace": {
+          "slug": "measure-played-release-and-training",
+          "branch": "jack-heart/measure-played-release-and-training",
+          "worktree": "/Users/jack/src/etude.measure-played-release-and-training"
+        }
+      },
+      "runtime": {
+        "work_id": "task_e09c371cacb6f401cef5d2bc5fcaf862",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:45Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-41 worktree /Users/jack/src/etude.measure-played-release-and-training is missing; restore that exact path before `lf task resume ETU-41`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.553075Z",
+        "evidence_age_secs": 966474,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-41 worktree /Users/jack/src/etude.measure-played-release-and-training is missing; restore that exact path before `lf task resume ETU-41`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "f661042f-3485-41db-9db6-afcee2bb627d",
+        "identifier": "ETU-42",
+        "name": "Admit the next TLA increment as a playable vertical slice",
+        "description": "Advances the Playable Curated World subsequent-increment KR. Take the smallest coherent next increment from the established creator-selected TLA/cube roadmap, admit it through checked-in typed IR and the normal structured offer/Command/event path, and play fixed seeds to terminal through production Etude and headless consumers. Record whether admission was content-only or required one reusable IR/kernel extension, plus prompt-family, fallback, replay, latency, throughput, and RSS evidence relevant to the increment. Keep this to one vertical slice; broad TLA completion and coverage-only markers are out of scope.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-42/admit-the-next-tla-increment-as-a-playable-vertical-slice",
+        "workspace": {
+          "slug": "admit-the-next-tla-s96df9a8b",
+          "branch": "jack-heart/admit-the-next-tla-increment",
+          "worktree": "/Users/jack/src/etude.admit-the-next-tla-s96df9a8b"
+        }
+      },
+      "runtime": {
+        "work_id": "task_902e8c5c2595e8ae14cd9ac459619f42",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:47Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-42 worktree /Users/jack/src/etude.admit-the-next-tla-s96df9a8b is missing; restore that exact path on branch \"jack-heart/admit-the-next-tla-increment\" before `lf task resume ETU-42`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.553777Z",
+        "evidence_age_secs": 966472,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-42 worktree /Users/jack/src/etude.admit-the-next-tla-s96df9a8b is missing; restore that exact path on branch \"jack-heart/admit-the-next-tla-increment\" before `lf task resume ETU-42`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": {
+        "id": "pr_6164803d6f9a438e9f5007ade3056eda",
+        "sequence": 1,
+        "slug": "admit-the-next-tla-increment",
+        "branch": "jack-heart/admit-the-next-tla-increment",
+        "base_commit": "d895ac9f2617be11c47353a3cd9ab98601d08b9e",
+        "phase": "working",
+        "empty": null,
+        "publication": null,
+        "merge_commit": null,
+        "abandoned_at": null
+      },
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "583abffd-cbca-467f-bbf6-7266b00587ae",
+        "identifier": "ETU-43",
+        "name": "Unify semantic decisions, commands, observations, and transitions",
+        "description": "Implement integration step 1 from the accepted INT-10 search-learning architecture. Characterize the current native search, Etude server, replay, and teacher paths, then establish the smallest managym-owned semantic DecisionFrame, revision-bound Command, composite viewer-bound Observation, and TransitionReceipt vertical slice. Observation must compose visible state, ordered visible events, and the current complete semantic decision. Migrate exactly one Etude play path and one manabot runner, delete each migrated duplicate meaning constructor, and prove viewer safety, deterministic replay, stale-command rejection, and exact transition identities. Preserve the private offer-to-action authority binding: public semantic action identity can align evidence but can never authorize execution. Do not attempt a flag-day protocol rewrite, broad card expansion, or a permanent compatibility layer. Run Rust tests in debug, every Python command through uv, and rebuild the extension after managym Rust changes.",
+        "rank": 4,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-43/unify-semantic-decisions-commands-observations-and-transitions",
+        "workspace": {
+          "slug": "unify-semantic-decisions-commands-observations",
+          "branch": "jack-heart/unify-semantic-decisions-commands-observations",
+          "worktree": "/Users/jack/src/etude.unify-semantic-decisions-commands-observations"
+        }
+      },
+      "runtime": {
+        "work_id": "task_5b83cb848dd9e5221574293dcacdeb50",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:48Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-43 worktree /Users/jack/src/etude.unify-semantic-decisions-commands-observations is missing; restore that exact path before `lf task resume ETU-43`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.554834Z",
+        "evidence_age_secs": 966471,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-43 worktree /Users/jack/src/etude.unify-semantic-decisions-commands-observations is missing; restore that exact path before `lf task resume ETU-43`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "016860f5-e57c-4f84-9dd5-59e2bec199ec",
+        "identifier": "ETU-44",
+        "name": "Prove authored match parity across live, headless, and replay",
+        "description": "Close Playable Curated World KR2 using the merged PR #136 seed-0 UR Lessons versus GW Allies authored-match receipt as the fixed authority trace. Reuse its exact revision-bound Command sequence; do not regenerate a different policy trace. Execute that sequence through (1) the release-stack live play boundary, (2) direct headless engine play, and (3) canonical replay. At every revision—not only terminal—compare stable state witnesses and the ordered semantic consequences visible at the authoritative boundary, and report the first divergence with revision and source identity. Bind the result to a reproducible relevant-source digest and provide a single checked command that verifies it from another checkout. Exercise public viewer boundaries for both players and any admitted spectator/replay viewer: private hand/library/choice facts must remain inaccessible. Capture a valid ObjectRef, cause its incarnation to become stale, submit it through the normal public Command boundary, and prove typed rejection with unchanged state witness and event cursor. Add focused regression tests only for seams exposed by this real trace. If implementation is missing, make the smallest reusable parity/projection/replay fix and replay immediately. Do not reopen compiled authority or prompt coverage, add workload benchmarking, new cards/content, broad conformance, or a parallel replay engine. Run Rust tests in debug; run every Python command through uv; rebuild the extension after managym/src changes. Done when a checked-in revision-bound receipt proves exact live/headless/replay witness and ordered-consequence parity for the fixed trace, viewer-private facts stay hidden at every public surface, stale ObjectRef submission is rejected atomically, focused tests pass, and the receipt survives verification from another checkout.\n\nControl-plane cleanup (2026-07-18): GitHub draft PR #155 was closed without merge. It was orphaned after PR #153 had already merged at 5416dd610a24eff366cecf703e4536ba640940de; its head replayed already-landed #153 product files plus .lf metrics and scratch-stash residue. Loopflow's internal successor was already abandoned. PR #155 is duplicate control-plane residue and supplies no product or KR evidence.",
+        "rank": 5,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-44/prove-authored-match-parity-across-live-headless-and-replay",
+        "workspace": {
+          "slug": "prove-authored-match-parity-across",
+          "branch": "jack-heart/prove-authored-match-parity-across-2",
+          "worktree": "/Users/jack/src/etude.prove-authored-match-parity-across"
+        }
+      },
+      "runtime": {
+        "work_id": "task_f91d6cff1c47b0e03a5abd500cc56e34",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:52Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-44 worktree /Users/jack/src/etude.prove-authored-match-parity-across is missing; restore that exact path before `lf task resume ETU-44`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.555889Z",
+        "evidence_age_secs": 966467,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-44 worktree /Users/jack/src/etude.prove-authored-match-parity-across is missing; restore that exact path before `lf task resume ETU-44`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR abandoned; start the next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "efc68916-92c2-498e-97a8-1c6bc353bbfa",
+        "identifier": "ETU-45",
+        "name": "Run one complete authored match on the compiled semantic path",
+        "description": "Build and measure the first complete Playable Curated World slice using the existing UR Lessons versus GW Allies matchup. Instrument the authoritative runtime so a fixed set of deterministic terminal matches records which typed programs, offer families, structured Commands, semantic events, and any legacy or card-name fallback were actually exercised. Make the compiled typed-IR interpreter and structured InteractionOffer/Command path the authority for every behavior and player decision encountered in those traces; when a real gap appears, implement the smallest reusable semantic or offer extension and immediately replay the match. Prove live release-stack play, headless play, and canonical replay agree on state witnesses and ordered semantic consequences. Record command p50/p95 latency, step and complete-game throughput, peak RSS, token counts, and fallback counters. Add focused regression or differential cases for failures encountered during the build, but do not start a broad conformance campaign, add unselected cards, deckbuilding, or a new generic rules architecture. Run Rust tests in debug, every Python command through uv, rebuild the extension after managym/src changes, and use lf pr land -c when verified.",
+        "rank": 6,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-45/run-one-complete-authored-match-on-the-compiled-semantic-path",
+        "workspace": {
+          "slug": "run-one-complete-authored-match",
+          "branch": "jack-heart/run-one-complete-authored-match-2",
+          "worktree": "/Users/jack/src/etude.run-one-complete-authored-match"
+        }
+      },
+      "runtime": {
+        "work_id": "task_aa90d88ded5974f6decf81a1886f7f81",
+        "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "routing_project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:53Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-45 worktree /Users/jack/src/etude.run-one-complete-authored-match is missing; restore that exact path before `lf task resume ETU-45`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.557754Z",
+        "evidence_age_secs": 966466,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-45 worktree /Users/jack/src/etude.run-one-complete-authored-match is missing; restore that exact path before `lf task resume ETU-45`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

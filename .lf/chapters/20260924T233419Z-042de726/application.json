@@ -1,0 +1,340 @@
+{
+  "approval": "approve",
+  "observed_at": "2026-09-24T23:34:19Z",
+  "status": "applied; local checkpoint and publication pending",
+  "operations": [
+    {
+      "operation": "repository PM migration",
+      "result": "success",
+      "team": "d5a8730d-2040-4db1-ba04-569cc054ca96",
+      "tasks_moved": 0,
+      "tasks_already_in_team": 74,
+      "commands": [
+        "doppler run -- lf pm init --wave game --team-key ETU --team-name Etude",
+        "doppler run -- lf pm reteam --apply"
+      ]
+    },
+    {
+      "operation": "project update",
+      "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+      "result": "rejected before mutation",
+      "reason": "CLI requires Project slug, not stable id"
+    },
+    {
+      "operation": "project update",
+      "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+      "wave": "game",
+      "title": "Complete Games",
+      "result": "success",
+      "output": "updating Linear Project `Play, Replay, and Study`\ngame: updated project:complete-games (9106931a-3e9a-48ef-881b-30ee3363f929)\n"
+    },
+    {
+      "operation": "project update",
+      "id": "73884527-4c81-4682-aa52-25fb586f08f9",
+      "wave": "intelligence",
+      "title": "Trained Challengers",
+      "result": "success",
+      "output": "updating Linear Project `Search Teacher and Student Arena`\nintelligence: updated project:trained-challengers (73884527-4c81-4682-aa52-25fb586f08f9)\n"
+    },
+    {
+      "operation": "project update",
+      "id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+      "wave": "rules",
+      "title": "Faithful Play and Training",
+      "result": "success",
+      "output": "updating Linear Project `Search and Study Runtime Prototype`\nrules: updated project:faithful-play-and-training (35bbc647-c7e4-450b-9ef7-108628b39335)\n"
+    },
+    {
+      "operation": "task disposition",
+      "task": "ETU-21",
+      "result": "success",
+      "output": "updating linear task cd64bcde-21b1-468a-ba67-fae57c99d2a6\nrefreshing local PM snapshot for wave/intelligence\nintelligence: updated task cd64bcde-21b1-468a-ba67-fae57c99d2a6\n"
+    },
+    {
+      "operation": "work abandon",
+      "task": "ETU-21",
+      "result": "failed",
+      "output": "Error: invalid control authority: task task_ac92409efc33da14002399e174044b88 is not ready\n"
+    },
+    {
+      "operation": "task disposition",
+      "task": "ETU-14",
+      "result": "success",
+      "output": "updating linear task b5f8619c-f4ea-4c12-a8a4-abe5bf4ab969\nrefreshing local PM snapshot for wave/game\ngame: updated task b5f8619c-f4ea-4c12-a8a4-abe5bf4ab969\n"
+    },
+    {
+      "operation": "task disposition",
+      "task": "ETU-31",
+      "result": "success",
+      "output": "updating linear task fc8e615b-b98b-4560-8683-f7f44dc3d9bb\nrefreshing local PM snapshot for wave/intelligence\nintelligence: updated task fc8e615b-b98b-4560-8683-f7f44dc3d9bb\n"
+    },
+    {
+      "operation": "task disposition",
+      "task": "ETU-55",
+      "result": "success",
+      "output": "updating linear task cbe6bfab-efc8-47ad-bc5d-ef3aac7222ac\nrefreshing local PM snapshot for wave/rules\nrules: updated task cbe6bfab-efc8-47ad-bc5d-ef3aac7222ac\n"
+    },
+    {
+      "operation": "task disposition",
+      "task": "ETU-74",
+      "result": "success",
+      "output": "updating linear task 29d6f38f-26a3-4a9f-961a-ef3ecfeaa7f1\nrefreshing local PM snapshot for wave/game\ngame: updated task 29d6f38f-26a3-4a9f-961a-ef3ecfeaa7f1\n"
+    },
+    {
+      "operation": "task complete provider",
+      "task": "ETU-34",
+      "result": "success",
+      "output": "updating linear task 65a1cb31-d3bd-4bf7-8b72-b9f1496fd7c7\nrefreshing local PM snapshot for wave/intelligence\nintelligence: closed task 65a1cb31-d3bd-4bf7-8b72-b9f1496fd7c7\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "1d3658d8-d3c1-42ae-aad4-f2670a6ee987",
+      "slug": "experience-proof-and-polish",
+      "result": "success",
+      "output": "archiving Linear Project `Experience Proof and Polish`\ngame: archived project:experience-proof-and-polish (1d3658d8-d3c1-42ae-aad4-f2670a6ee987)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "3a1b6b43-f9d7-4d77-95aa-d353854a2b13",
+      "slug": "curated-packs-and-portable-runtime",
+      "result": "success",
+      "output": "archiving Linear Project `Curated Packs and Portable Runtime`\ngame: archived project:curated-packs-and-portable-runtime (3a1b6b43-f9d7-4d77-95aa-d353854a2b13)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "8ec95ad5-d084-4fbb-8281-d44ed471b46b",
+      "slug": "belief-aware-play",
+      "result": "pending/failed",
+      "output": "archiving Linear Project `Belief-Aware Play`\nError: The project cannot be deleted as it contains 1 open issue.\n"
+    },
+    {
+      "operation": "provider task close for abandonment",
+      "task": "ETU-21",
+      "result": "success",
+      "reason": "Archiving Project requires closing open provider issue. Explicit Abandoned title and notes preserve failure/retirement semantics; durable Work remains abandoned, objective not achieved.",
+      "output": "updating linear task cd64bcde-21b1-468a-ba67-fae57c99d2a6\nrefreshing local PM snapshot for wave/intelligence\nintelligence: closed task cd64bcde-21b1-468a-ba67-fae57c99d2a6\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "8ec95ad5-d084-4fbb-8281-d44ed471b46b",
+      "slug": "belief-aware-play",
+      "result": "success",
+      "output": "archiving Linear Project `Belief-Aware Play`\nintelligence: archived project:belief-aware-play (8ec95ad5-d084-4fbb-8281-d44ed471b46b)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "3f97924e-1bfe-41e9-8db2-cc27ac2117bb",
+      "slug": "semantic-policy-prototype",
+      "result": "success",
+      "output": "archiving Linear Project `Semantic Policy Prototype`\nintelligence: archived project:semantic-policy-prototype (3f97924e-1bfe-41e9-8db2-cc27ac2117bb)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+      "slug": "playable-curated-world",
+      "result": "success",
+      "output": "archiving Linear Project `Playable Curated World`\nrules: archived project:playable-curated-world (ac34789f-d691-49ed-aea4-a4ba0f1e8e90)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "ff4fced2-e6f6-45d3-8622-136aba616ecd",
+      "slug": "semantic-programs-and-choice-abi",
+      "result": "success",
+      "output": "archiving Linear Project `Semantic Programs and Choice ABI`\nrules: archived project:semantic-programs-and-choice-abi (ff4fced2-e6f6-45d3-8622-136aba616ecd)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa",
+      "slug": "identity-and-event-semantics",
+      "result": "success",
+      "output": "archiving Linear Project `Identity and Event Semantics`\nrules: archived project:identity-and-event-semantics (1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa)\n"
+    },
+    {
+      "operation": "project archive",
+      "id": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+      "slug": "runtime-state-foundation",
+      "result": "success",
+      "output": "archiving Linear Project `Runtime State Foundation`\nrules: archived project:runtime-state-foundation (94a7cb2d-f527-411a-9784-ceceb6617dac)\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+      "project": "1d3658d8-d3c1-42ae-aad4-f2670a6ee987",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_79cbe17721a65d9edd1d611eafe5265a\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:38:56Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_ad88c51c2ddf231b06cee85474989cb7",
+      "project": "3a1b6b43-f9d7-4d77-95aa-d353854a2b13",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_ad88c51c2ddf231b06cee85474989cb7\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:38:57Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+      "project": "8ec95ad5-d084-4fbb-8281-d44ed471b46b",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_8933d00a7fe85dc5a3e7ddeb15e28da9\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:38:58Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_11bfb2260f10113003d52cefc6e34eea",
+      "project": "3f97924e-1bfe-41e9-8db2-cc27ac2117bb",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_11bfb2260f10113003d52cefc6e34eea\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:38:59Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+      "project": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_2163bf6f00f6566c3c6026b12a6785a7\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:39:00Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_a6d2b1f93ec4c3bd6df946685910e293",
+      "project": "ff4fced2-e6f6-45d3-8622-136aba616ecd",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_a6d2b1f93ec4c3bd6df946685910e293\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:39:01Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_095469d212fac9737691358cb80d91ab",
+      "project": "1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_095469d212fac9737691358cb80d91ab\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:39:02Z\"\n}\n"
+    },
+    {
+      "operation": "retire project Work",
+      "id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+      "project": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_e3b8a4d2177633f5d060e410d8e5e414\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter consolidates this Project into the Wave's single retained Project; history and completed evidence remain, independent pursuit ends.\",\n  \"abandoned_at\": \"2026-09-24T23:39:04Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical task Work",
+      "id": "task_a676b8f06437ff76e0d358858bb282d4",
+      "task": "W2-183",
+      "canonical": [],
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_a676b8f06437ff76e0d358858bb282d4\"\n  },\n  \"reason\": \"Approved chapter retirement of obsolete runtime ownership under absent historical Project. Preserve history; historical scientific outcome remains unknown.\",\n  \"abandoned_at\": \"2026-09-24T23:39:05Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical task Work",
+      "id": "task_7225012a52c054c23e1ff1015fc138ee",
+      "task": "W2-194",
+      "canonical": [],
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_7225012a52c054c23e1ff1015fc138ee\"\n  },\n  \"reason\": \"Approved chapter retirement of obsolete runtime ownership under absent historical Project. Preserve history; historical scientific outcome remains unknown.\",\n  \"abandoned_at\": \"2026-09-24T23:39:06Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical task Work",
+      "id": "task_add7e9c8ab0f16dd62939e159818ab28",
+      "task": "W2-195",
+      "canonical": [],
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_add7e9c8ab0f16dd62939e159818ab28\"\n  },\n  \"reason\": \"Approved chapter retirement of obsolete runtime ownership under absent historical Project. Preserve history; historical scientific outcome remains unknown.\",\n  \"abandoned_at\": \"2026-09-24T23:39:07Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical task Work",
+      "id": "task_97694d7425b82362ca6e68e976dd2417",
+      "task": "ETU-10",
+      "canonical": [
+        {
+          "wave": "game",
+          "project": "play-replay-and-study",
+          "identifier": "ETU-10",
+          "completed": true
+        }
+      ],
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_97694d7425b82362ca6e68e976dd2417\"\n  },\n  \"reason\": \"Approved Study consolidation: retire obsolete Study runtime binding for already-completed Game Task ETU-10; do not change canonical provider outcome.\",\n  \"abandoned_at\": \"2026-09-24T23:39:08Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical task Work",
+      "id": "task_5c9ea71ea8ea2e6735d5ad459ba160b7",
+      "task": "STU-1",
+      "canonical": [],
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_5c9ea71ea8ea2e6735d5ad459ba160b7\"\n  },\n  \"reason\": \"Approved chapter retirement of obsolete runtime ownership under absent historical Project. Preserve history; historical scientific outcome remains unknown.\",\n  \"abandoned_at\": \"2026-09-24T23:39:09Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical project Work",
+      "id": "proj_5f344a2b7e101578c9763ee183ccaaf3",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_5f344a2b7e101578c9763ee183ccaaf3\"\n  },\n  \"reason\": \"Approved chapter: retire absent historical Project ownership; preserve unknown claims and history.\",\n  \"abandoned_at\": \"2026-09-24T23:39:19Z\"\n}\n"
+    },
+    {
+      "operation": "retire historical project Work",
+      "id": "proj_b2671d3cb501aa43159a50b687c5c1ee",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"project\",\n    \"id\": \"proj_b2671d3cb501aa43159a50b687c5c1ee\"\n  },\n  \"reason\": \"Approved chapter: retire absent historical Project ownership; preserve unknown claims and history.\",\n  \"abandoned_at\": \"2026-09-24T23:39:21Z\"\n}\n"
+    },
+    {
+      "operation": "retire Study Wave",
+      "id": "b1d0fc9d-8ada-4ec8-9a9c-bd5df0142bc6",
+      "result": "success",
+      "output": "{\n  \"kind\": \"abandoned\",\n  \"work\": {\n    \"kind\": \"wave\",\n    \"id\": \"b1d0fc9d-8ada-4ec8-9a9c-bd5df0142bc6\"\n  },\n  \"reason\": \"Approved 2026-09-24 chapter: Study is a Game capability, no independent Wave or Project. Historical ownership reconciled; retain all evidence.\",\n  \"abandoned_at\": \"2026-09-24T23:39:22Z\"\n}\n"
+    },
+    {
+      "operation": "disable deferred pursuit",
+      "task": "ETU-14",
+      "id": "task_288752dda591bbd9b6b8c6ed92a63aef",
+      "result": "success",
+      "output": "{\n  \"kind\": \"disabled\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_288752dda591bbd9b6b8c6ed92a63aef\"\n  },\n  \"home_id\": \"home_39860354aaca640c2ccb50bf6ca609d8\",\n  \"enabled\": false,\n  \"placed_at\": \"2026-07-18T23:40:12Z\"\n}\n"
+    },
+    {
+      "operation": "disable deferred pursuit",
+      "task": "ETU-31",
+      "id": "task_74c34327ba21bdb9d7c21d852d07eee5",
+      "result": "success",
+      "output": "{\n  \"kind\": \"disabled\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_74c34327ba21bdb9d7c21d852d07eee5\"\n  },\n  \"home_id\": \"home_39860354aaca640c2ccb50bf6ca609d8\",\n  \"enabled\": false,\n  \"placed_at\": \"2026-07-19T00:12:25Z\"\n}\n"
+    },
+    {
+      "operation": "disable deferred pursuit",
+      "task": "ETU-55",
+      "id": "task_3ccd19dd8d9cc2b216f9f0422b1e230c",
+      "result": "success",
+      "output": "{\n  \"kind\": \"disabled\",\n  \"work\": {\n    \"kind\": \"task\",\n    \"id\": \"task_3ccd19dd8d9cc2b216f9f0422b1e230c\"\n  },\n  \"home_id\": \"home_39860354aaca640c2ccb50bf6ca609d8\",\n  \"enabled\": false,\n  \"placed_at\": \"2026-07-19T02:42:17Z\"\n}\n"
+    },
+    {
+      "operation": "verify current PM portfolio",
+      "result": "success",
+      "projects": [
+        {
+          "wave": "game",
+          "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+          "title": "Complete Games",
+          "kr_count": 3,
+          "exact_definition_and_kr_match": true
+        },
+        {
+          "wave": "intelligence",
+          "id": "73884527-4c81-4682-aa52-25fb586f08f9",
+          "title": "Trained Challengers",
+          "kr_count": 3,
+          "exact_definition_and_kr_match": true
+        },
+        {
+          "wave": "rules",
+          "id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+          "title": "Faithful Play and Training",
+          "kr_count": 3,
+          "exact_definition_and_kr_match": true
+        }
+      ]
+    },
+    {
+      "operation": "archive and charter edits",
+      "result": "success",
+      "current_waves": [
+        "game",
+        "intelligence",
+        "rules"
+      ],
+      "study": "history retained; Work abandoned with zero active Projects/Tasks",
+      "unbound_placement_exception": "User-directed inner-step fallback in Loopflow-created chapter-74 worktree; ETU-74 remains open through publication"
+    }
+  ]
+}

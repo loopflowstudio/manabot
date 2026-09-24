@@ -1,0 +1,251 @@
+{
+  "chapter": "2026-09-24-trained-challengers-proposal",
+  "status": "Gate 1 direction accepted; Gate 2 final plan NOT accepted",
+  "wave": "rules",
+  "proposed_review_date": "2026-10-08",
+  "retained_project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+  "accepted_direction_file": "scratch/chapter-direction.md",
+  "candidate_kr_file": "scratch/chapter-krs.md",
+  "disposition_draft": "scratch/chapter-dispositions.md",
+  "constraints": [
+    "Exactly one current Project per Wave, exactly three KRs.",
+    "Existing Allies versus Lessons. The human wants trained bots that can beat them and a UI in which they want to finish games.",
+    "Game friction: lack of transitions, action-space explosion, one awkward action can end a session.",
+    "Rules fidelity: full expected Learn/Lesson, including the intended eligible Lesson pool. Do not silently simplify mechanics.",
+    "Discovery belongs in the Project; don't ask the human to diagnose the UI upfront.",
+    "Keep decisions about ETU-21 abandonment, ETU-31 deferral and ETU-55 scientific deferral. ETU-34 is now merged/done.",
+    "No live PM/Task/Work/charter changes, code implementation, costly training, pushing, or lf ask. Return questions/challenges to present parent.",
+    "Deliberately unbound fallback authorized by the human after PM/Task binding repeatedly failed. Do not repair or retry that machinery as a prerequisite."
+  ],
+  "projects": [
+    {
+      "project": {
+        "id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+        "slug": "playable-curated-world",
+        "name": "Playable Curated World",
+        "summary": "Make one complete creator-selected Etude Fantasia matchup run through the compiled semantic runtime as the exercised production authority for human play, replay, and agent belief/search. Drive real play, replay, and agent interaction through typed program",
+        "definition": "Make one complete creator-selected Etude Fantasia matchup run through the compiled semantic runtime as the exercised production authority for human play, replay, and agent belief/search. Drive real play, replay, and agent interaction through typed programs, structured offers and Commands, canonical events, and stable viewer-safe public-commitment identities owned by managym; measure the world as played and use focused diagnostics only when its behavior is surprising. Provider closure on the selected matchup remains the admission priority and cannot be substituted or weakened by content work; the already-approved single next-content vertical slice may implement in parallel as a separate proof.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "A deterministic release-stack UR Lessons versus GW Allies match reaches terminal with every encountered card behavior executed from admitted typed programs and every player decision submitted through structured InteractionOffer and Command values, with no card-name dispatch, candidate cap, or client-side legality in the trace.",
+            "holds": true
+          },
+          {
+            "text": "Live play, headless engine play, and canonical replay reproduce the same state witnesses and ordered semantic consequences for fixed terminal seeds, while viewer-private facts and stale ObjectRef values remain inaccessible at their public boundaries.",
+            "holds": true
+          },
+          {
+            "text": "The selected matchup exposes every reachable prompt family needed by its real cards through structured offers, including targeting and combinatorial combat, and records zero legacy fixed-action fallback for the exercised release traces.",
+            "holds": true
+          },
+          {
+            "text": "Across a fixed terminal UR Lessons versus GW Allies trace, every admitted public commitment consumed by exact-range belief tracking carries a stable viewer-safe managym-owned identity that reproduces live, in canonical replay, and on an exact fork; the exercised RulesProviderGap count is zero, unsupported commitments fail closed without match or belief mutation, and no hidden truth enters the public Observation or receipt.",
+            "holds": true
+          },
+          {
+            "text": "A release and training workload records command p50/p95 latency, step and complete-game throughput, peak RSS, semantic-program token counts, and fallback counters; the compiled path stays within explicit product and rollout budgets.",
+            "holds": true
+          },
+          {
+            "text": "One subsequent creator-selected card or mechanic increment is admitted as a playable vertical slice and records whether the change was content-only or required a reusable IR or kernel extension, with terminal play evidence rather than coverage markers alone.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/playable-curated-world.md"
+    },
+    {
+      "project": {
+        "id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+        "slug": "search-and-study-runtime-prototype",
+        "name": "Search and Study Runtime Prototype",
+        "summary": "Put one exact branching runtime under real Intelligence search and interactive Study exploration. Select the simplest measured BranchDriver, integrate it into both consumers, and improve it from actual rollout, latency, memory, determinism, and viewer-saf",
+        "definition": "Put one exact branching runtime under real Intelligence search and interactive Study exploration. Select the simplest measured BranchDriver, integrate it into both consumers, and improve it from actual rollout, latency, memory, determinism, and viewer-safety observations rather than benchmark-only representation work.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "One selected BranchDriver runs an actual Intelligence teacher workload on the curated matchup with exact baseline-equivalent outcomes, no source or sibling mutation, and recorded whole-search throughput, p50/p95 decision latency, and peak RSS.",
+            "holds": true
+          },
+          {
+            "text": "From a historical viewer-safe StudyIdentity, the runtime forks authoritative state, executes normal structured Commands, emits canonical events and offers, and returns in one action to an identical source state hash, event cursor, offer, and viewer projection.",
+            "holds": true
+          },
+          {
+            "text": "The same branch representation supports retained search siblings and ephemeral Study branches, or a measured consumer comparison explicitly justifies two implementations and their shared exactness contract.",
+            "holds": true
+          },
+          {
+            "text": "Single-worker and saturated consumer measurements establish regression budgets for rollout throughput, interactive fork/apply/return latency, and peak RSS; the budgets run against the production integrations rather than a benchmark-only surrogate.",
+            "holds": true
+          },
+          {
+            "text": "Search and Study stress runs preserve deterministic replay, object incarnation, nested rollback, viewer-private information, and exact failure reproduction across multiple seeds with zero silent fallbacks to an unmeasured branch path.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [
+        {
+          "task": {
+            "id": "cbe6bfab-efc8-47ad-bc5d-ef3aac7222ac",
+            "identifier": "ETU-55",
+            "name": "Materialize possible-world batches without re-enumerating support",
+            "description": "INT-17's frozen v1 calibration run exposed an authoritative provider complexity bug. FrozenPolicyLikelihood loops each row in one PossibleWorldSpace and calls root_space.materialize(row); Env.materialize_possible_world currently rebuilds PossibleWorldSpace::for_viewer and recursively enumerates the entire support for every row, making one likelihood update O(S^2). At the frozen 121,485-row maximum this is about 14.76B row-enumeration operations per update, and the run stopped after 1h38m with only commitments through ordinal 2. Build the narrow Rules-owned, identity-checked prepared materializer that enumerates one canonical space exactly once per immutable likelihood root and materializes many canonical indices without re-enumeration. The prepared provider object must survive across every inference batch for that root: the proof target is exactly one PossibleWorldSpace::for_viewer construction per likelihood update, not one per row or one per batch. Stream bounded materialized batches and release their isolated Env branches before the next batch; do not retain all S branches simultaneously. Preserve exact ordering, physical-deal weights, viewer-safe identity, source revision and viewer-state validation, deterministic seeded isolated branches, materialization mode semantics, and fail-closed stale or mismatched identity behavior. Migrate FrozenPolicyLikelihood to the production prepared/batch surface and make wall, CPU, and RSS caps observable/checkable between inference batches rather than only after a whole decision ordinal. Prove single-index and batch parity against the existing provider, add debug Rust and uv-managed Python regression coverage including the exact construction call-count plus scaling/peak-RSS evidence, and retain measured complexity and throughput receipts. Do not edit or rerun the immutable INT-17 v1 contract or its failure receipt: the repaired provider necessarily changes engine/source/extension fingerprints. Instead publish the repaired provider receipt and complete runtime identities, then preregister experiments/contracts/int-17-belief-calibration-v2.json. The v2 validator must canonically copy v1's trace, likelihood checkpoint, algorithm, cohort, preflight, metrics, prediction, caps, arena interpretation, and exclusions exactly; refresh only provider_receipt and expected_runtime; preserve identity stream 8d9f46fa86742f323f915ba69bc0007e225415e8fc5504792eac4b49ebae66b6 with zero provider gaps; and fail before generation on any scientific drift. Rerun v2 within the existing 6h and 2GiB caps. Do not change the cohort, thresholds, belief semantics, or move possible-world authority into manabot.",
+            "rank": 9,
+            "completed": false,
+            "assignee": null
+          },
+          "reference": {
+            "issue_url": "https://linear.app/loopflow/issue/ETU-55/materialize-possible-world-batches-without-re-enumerating-support",
+            "workspace": {
+              "slug": "materialize-possible-world-batches-without",
+              "branch": "jack-heart/materialize-possible-world-batches-without",
+              "worktree": "/Users/jack/src/etude.materialize-possible-world-batches-without"
+            }
+          },
+          "runtime": {
+            "work_id": "task_3ccd19dd8d9cc2b216f9f0422b1e230c",
+            "project_id": "proj_2d1578d31903053033f94d60aa647e33",
+            "routing_project_id": "proj_2d1578d31903053033f94d60aa647e33",
+            "status": "ready",
+            "reason": "ready",
+            "updated_at": "2026-09-13T17:32:03Z",
+            "provider": "codex"
+          },
+          "next_move": {
+            "owner": "project",
+            "reason": "ready"
+          },
+          "condition": {
+            "state": "blocked",
+            "reason": "Task has unsettled commits",
+            "observed_at": "2026-09-24T21:59:39.56997Z",
+            "evidence_age_secs": 966456,
+            "local_progress": {
+              "state": "observed",
+              "unsettled": true,
+              "dirty": false,
+              "authored_commits": true,
+              "recovery_required": false,
+              "reason": null
+            }
+          },
+          "actions": {
+            "recommended": "resume",
+            "reason": "resume the parked Task"
+          },
+          "active_pr": {
+            "id": "pr_2e525619d6c841fa89d8c78f24988967",
+            "sequence": 1,
+            "slug": "materialize-possible-world-batches-without",
+            "branch": "jack-heart/materialize-possible-world-batches-without",
+            "base_commit": "f03fd7cb21fc431a343f5eff66d1de0603ccf614",
+            "phase": "working",
+            "empty": null,
+            "publication": null,
+            "merge_commit": null,
+            "abandoned_at": null
+          },
+          "section": "waiting"
+        }
+      ],
+      "review": "scratch/chapter-reviews/search-and-study-runtime-prototype.md"
+    },
+    {
+      "project": {
+        "id": "ff4fced2-e6f6-45d3-8622-136aba616ecd",
+        "slug": "semantic-programs-and-choice-abi",
+        "name": "Semantic Programs and Choice ABI",
+        "summary": "Compile creator-selected card semantics into reviewed, checked-in typed programs and expose complete legal decisions through a versioned structured-offer and atomic-command ABI shared by rules, learning, and gameplay. Export a stable viewer-safe semantic ",
+        "definition": "Compile creator-selected card semantics into reviewed, checked-in typed programs and expose complete legal decisions through a versioned structured-offer and atomic-command ABI shared by rules, learning, and gameplay. Export a stable viewer-safe semantic projection as an Intelligence input, but keep learned representation, policy training, and transfer evidence in the Intelligence wave. Prove the rules migration incrementally with differential legacy evidence and reproducible boundary performance, without expanding into general Magic coverage.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "Every card in the two-deck acceptance slice is admitted by an offline compiler into checked-in, versioned typed IR; a generated coverage report is complete for that slice, and source checks plus trace tests demonstrate no card-name dispatch in the interpreter.",
+            "holds": true
+          },
+          {
+            "text": "Priority, Lightning Bolt targeting, and declare attackers emit typed structured offers and accept revision-bound, prompt-bound atomic commands; tests prove the offers legal and complete, including a state with more than 32 legal branches, with no truncation or candidate cap.",
+            "holds": true
+          },
+          {
+            "text": "On the two-deck acceptance suite, differential tests show that the legacy fixed-action adapter and structured command path produce the same legal outcomes and deterministic seeded traces for every action representable by the legacy ABI.",
+            "holds": true
+          },
+          {
+            "text": "A structured policy-decoder prototype completes a fixed seeded evaluation containing states with more than 32 legal choices with zero overflow and zero illegal decodes; a checked-in report compares action agreement on shared states, seat-balanced win rate, p50/p95 decision latency, environment throughput, and peak RSS against the legacy adapter.",
+            "holds": true
+          },
+          {
+            "text": "A versioned, viewer-safe semantic learning projection exposes each visible card and ability as typed program tokens covering opcodes, values, selectors, control flow, costs, and choice roles; tests prove stable ContentPack binding, deterministic ragged batching, hidden-information safety, and an ablated path with no card-name or opaque CardDefId feature.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/semantic-programs-and-choice-abi.md"
+    },
+    {
+      "project": {
+        "id": "1c0505bc-6f9a-4090-bb6e-ff82eb25c0aa",
+        "slug": "identity-and-event-semantics",
+        "name": "Identity and Event Semantics",
+        "summary": "Make object continuity and mutation exact across zones, replacements, triggers, and state-based actions so curated-card behavior remains correct under replay, search, and presentation.",
+        "definition": "Make object continuity and mutation exact across zones, replacements, triggers, and state-based actions so curated-card behavior remains correct under replay, search, and presentation.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "A leave-and-reenter vertical slice changes object incarnation, rejects stale ObjectRef values, and supplies correct last-known information in positive and negative trace tests.",
+            "holds": true
+          },
+          {
+            "text": "Damage, life change, destruction, counters, and zone movement use a proposed-event to replacement/prevention to commit pipeline for the curated replacement-effects slice.",
+            "holds": true
+          },
+          {
+            "text": "Trigger collection and state-based actions reach a deterministic fixpoint, and public rules boundaries no longer expose ambiguous bare storage IDs where incarnation matters.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/identity-and-event-semantics.md"
+    },
+    {
+      "project": {
+        "id": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+        "slug": "runtime-state-foundation",
+        "name": "Runtime State Foundation",
+        "summary": "Provide the compact authoritative state foundation used by every playable world and fork: immutable versioned content is shared, mutable match facts have stable identity, and equivalent seeded executions have deterministic state witnesses. Consumer perfor",
+        "definition": "Provide the compact authoritative state foundation used by every playable world and fork: immutable versioned content is shared, mutable match facts have stable identity, and equivalent seeded executions have deterministic state witnesses. Consumer performance now belongs to the running Search and Study Runtime Prototype.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "Every environment and branch shares one versioned ContentPack while mutable-state cloning duplicates no immutable card definitions, with independently reset roots and siblings remaining isolated.",
+            "holds": true
+          },
+          {
+            "text": "Stable CardDefId-based definitions and versioned deterministic state witnesses reproduce equivalent seeded traces without allocation-address, Debug-format, or card-name identity at the state boundary.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/runtime-state-foundation.md"
+    }
+  ],
+  "unavailable_projects": []
+}

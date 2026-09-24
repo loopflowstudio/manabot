@@ -1,120 +1,34 @@
 ---
 pm:
-  provider: linear
   linear_initiative: 427144c1-6896-40e1-a23e-6e7fe9bc9fc4
-  linear_team: 49e062b0-1645-42c3-9bed-6c6c785cafcc
 ---
 
 # Intelligence
 
 ## Objective
 
-Build increasingly strong manabots as pilots, opponents, teammates, sparring
-partners, and advisors in Etude Fantasia's AI-assisted Pro Tour testing house.
-Make runnable agents and search systems, play them in authoritative Magic
-worlds, measure what they actually do, and iterate toward superhuman
-performance. Typed card programs, structured commands, search, self-play, and
-Study evidence matter when they improve a working agent—not as prerequisites
-that must be proven in isolation before one may be built.
+Make training reproducible and useful: produce versioned manabots for the selected matchup, establish full-game improvement at declared cost, and demonstrate a repeatable challenge to the User under a protocol fixed before scoring.
 
-The first player-facing AI loop starts from one canonical viewer decision and
-an explicit viewer-safe belief. One pinned advisor and compute class return the
-complete aligned strategy distribution, values, robustness, uncertainty, and
-provenance; changing only the belief makes the delta inspectable. The same
-decision, belief, advisor, compute, and provenance identities yield the same
-advice live or in Study. Intelligence owns policies, priors, model-inferred
-beliefs, search, training, evaluation, and attributable evidence. It does not
-own match facts, player-authored beliefs, rules authority, or Game's surface.
+## Current Project and measures
 
-Belief formation belongs to the ordinary manabot lifecycle. At each decision,
-viewer-safe history produces a normalized belief over managym worlds; policy,
-value, and optional search consume that belief through one explicit boundary.
-Training, evaluation, and Study can replace it for one evaluation without
-changing autonomous memory. Query text and teacher labels are not belief
-features, and private updater activations cannot bypass the supplied belief.
+One current Project: **Trained Challengers** (`73884527-4c81-4682-aa52-25fb586f08f9`). The User approved this chapter on 2026-09-24; review it on **2026-10-08**. Exact accepted scope, baseline evidence and dispositions live in the [chapter record](../../.lf/chapters/20260924T233419Z-042de726/start.md). The date is a review point, not a promised success deadline.
 
-Prioritize the composition that makes a working agent possible, then measure
-conditional teacher signal, policy-only student behavior, belief calibration,
-and full autonomous play. A runnable belief updater may precede product advice
-integration; it does not establish strategic strength or close live-advice and
-calibration evidence gates. Keep those claims separate. Preserve the historical
-results ladder as evidence contracts rather than a blanket prohibition on
-building the missing agent boundary.
+1. **Repeat training through playable checkpoints.** On the corrected frozen world, a documented bounded workflow succeeds across repeated complete executions, exporting checkpoints that load through the real demo and complete games with both deck assignments. Pin code, content/rules, observation/action ABI, configuration, data and seed identities, checkpoint digest and training/inference cost receipts. Declare the reproducibility contract; do not imply byte-identical stochastic training unless promised. Account for every attempt and failure.
 
-The product north star places manabots in Avatar Cube Team Sealed as pilots,
-teammates, and opponents. The first robot team may use fixed authored decks,
-and manabots need not sideboard. Once a manabot can play the selected world,
-constructing three legal decks from a shared sealed pool becomes an important
-later Intelligence capability. A versioned, world-pinned Elo arena measures
-the resulting players at declared compute classes. Drafting is separate and is
-not a prerequisite.
+2. **Show full-game improvement.** Freeze the corrected world, current demo-opponent baseline, controls, independent training seeds, held-out paired deals, deck/seat assignments, training budgets, matched inference compute, cohort and analysis before evaluation. Compare across complete games, report uncertainty, legality, information safety, competence failures and total cost, and demonstrate improvement against the predeclared criterion. Account for every candidate attempt and exclusion. A cheaper feasibility run or an honest negative result informs the next decision but does not satisfy an improvement claim.
 
-Progress is judged by the [evidence contracts](metrics/evidence.md): runnable
-behavior, matched compute, calibrated beliefs, viewer safety, reproducible
-conditional strategy, and attributable arena results. Project KRs and concrete
-work live in Linear; [memory](MEMORY.md) records the evidence and its limits.
+3. **Beat the human repeatably.** Agree and record candidate identity, inference budget, deck/seat assignments, deal handling, session window, assistance policy, sample/stopping rule, uncertainty treatment, interruptions and success criterion before counting results. Then evaluate that frozen candidate across the complete scheduled cohort against the User and meet the criterion. Retain every attempt; candidate/world changes require a new cohort. An isolated win, a cherry-picked checkpoint, a constructed terminal fixture, or a loss caused by awkward controls is insufficient.
 
-## Operating loop
+## Ownership and opening work
 
-Lead with building:
+Intelligence owns reproducible training, candidate provenance, measured improvement and the human-challenger protocol. Rules supplies the faithful shared world and Game supplies comfortable complete human games. Cheap feasibility work may proceed while those dependencies develop; score strength only on the corrected, pinned Learn/Lesson world.
 
-1. make the thinnest end-to-end prototype that can act in the real engine;
-2. place it on the common skill-and-cost scoreboard and measure behavior,
-   learning, strength, and cost;
-3. identify a surprising or confounded result;
-4. run the smallest diagnostic kata or ablation that separates the live
-   explanations;
-5. change the prototype and measure again.
+Start with the smallest current training-to-demo path. Keep existing controls and evaluate complete games with both deck and seat assignments, independent training seeds and held-out paired deals. Separate training and inference costs, retain all failed attempts and negative results, and freeze the evaluation protocol before scoring. A diagnostic fixture or single human win does not establish challenger strength.
 
-Katas are diagnostic instruments, not admission exams. A new kata must name the
-prototype ambiguity it resolves and the decision its result will change. No
-chain of diagnostic work proceeds without returning to an end-to-end agent.
-Pre-registration remains useful for expensive comparisons and for preventing
-post-result threshold changes; it is not a burden of proof charged before a
-first prototype may exist.
+ETU-21 remains abandoned. ETU-31 remains deferred with its original 16-wall-hour / 64-core-hour hard cap and preserved worktree; this chapter does not authorize its run or a replacement that bypasses the deferral. ETU-34 is merged/completed. Advice, learned-belief research, transfer studies and new search architectures are possible means when justified by this bet, not standing outcomes.
 
-Prefer plausible architectures early. A small Transformer, graph Transformer,
-or tree-aware encoder that can represent sequence, hierarchy, field roles, and
-binding is a better prototype than extending an intentionally weak pooling
-architecture through a proof ladder. Keep simple baselines and destructive
-ablations beside it so improvements remain interpretable.
+## Evidence and limits
 
-## Dependencies and bounds
+The existing GW Allies versus UR Lessons demo is the chapter's content boundary. Broader Team Sealed ambitions, portability and unrelated expansion are deferred. Preserve shipped code and frozen evidence without inheriting every historical priority. The baseline covers all 56 current KRs but has incomplete historical lineage; unknown evidence does not mean a broken implementation.
 
-Rules owns typed programs, structured offers and commands, viewer-safe state,
-identity, exact forks, possible-world/query meaning, the reference
-compatible-deal measure, and legal world materialization. Intelligence owns
-memory, priors and learned beliefs, sampling policy, planning, and learning over
-those interfaces. It reports pressure back through real workloads and does not
-delay prototypes until every representation is settled. A proven full-clone
-path and exact small world support are acceptable first backends when they fit
-the measured budget.
-
-Game owns player-authored belief input, Study decision navigation, reveal,
-comparison, explanation, roles, and human research consent. Intelligence emits
-model-inferred beliefs and attributable advice; it does not build a second
-replay, legality, presentation, or hidden-information system. Etude or an LLM
-may construct a typed `WorldQuery`; neither can inspect actual hidden authority
-or introduce arbitrary query semantics.
-
-An external LLM may be a teacher, baseline, or grounded narrator. It is not the
-inner-loop rules oracle or source of legal actions. Open-ended card coverage,
-deck building, format legality, Commander breadth, and runtime natural-language
-card parsing remain out of scope.
-
-## Evidence discipline
-
-Prototype measurements begin with the first runnable version. Promote claims
-only after matched controls and multiple seeds exist. Pin content, engine,
-observation, action, model, opponent, and compute identities; retain raw
-rerunnable results. Win rate alone is insufficient: legality, competencies,
-information safety, calibration, throughput, transfer, and matched cost remain
-separate evidence.
-
-Concrete repository changes begin as Linear Tasks under an Intelligence
-Project. Tasks that change Rules or Game authority stay in their providing
-waves and are represented here as dependencies exercised by a running system.
-
-Do not create a deck-construction Project until the runnable policy and search
-systems can play a meaningful content boundary. Record the Team Sealed goal in
-the portfolio now; earn the Task later from an executable agent.
+Protocol details and numeric budgets must be justified and fixed before scored measurement. Human-play evidence records stopped attempts as well as completed games. Product work begins in scoped Tasks; accepting this chapter alone does not launch costly experiments. Historical Wave context remains in [memory](MEMORY.md), with the dated charter copy retained in the chapter archive.

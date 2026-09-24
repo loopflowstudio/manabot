@@ -1,0 +1,127 @@
+{
+  "counts": {
+    "holds": 4,
+    "does not hold": 9,
+    "unknown": 43
+  },
+  "projects": {
+    "experience-proof-and-polish": {
+      "expected": 4,
+      "verdicts": {
+        "1": "unknown",
+        "2": "does not hold",
+        "3": "unknown",
+        "4": "unknown"
+      }
+    },
+    "curated-packs-and-portable-runtime": {
+      "expected": 4,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "unknown",
+        "4": "unknown"
+      }
+    },
+    "play-replay-and-study": {
+      "expected": 8,
+      "verdicts": {
+        "1": "does not hold",
+        "2": "holds",
+        "3": "unknown",
+        "4": "does not hold",
+        "5": "unknown",
+        "6": "does not hold",
+        "7": "unknown",
+        "8": "does not hold"
+      }
+    },
+    "belief-aware-play": {
+      "expected": 7,
+      "verdicts": {
+        "1": "does not hold",
+        "2": "does not hold",
+        "3": "does not hold",
+        "4": "unknown",
+        "5": "unknown",
+        "6": "unknown",
+        "7": "unknown"
+      }
+    },
+    "semantic-policy-prototype": {
+      "expected": 5,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "unknown",
+        "4": "unknown",
+        "5": "unknown"
+      }
+    },
+    "search-teacher-and-student-arena": {
+      "expected": 7,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "unknown",
+        "4": "holds",
+        "5": "unknown",
+        "6": "unknown",
+        "7": "unknown"
+      }
+    },
+    "playable-curated-world": {
+      "expected": 6,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "unknown",
+        "4": "unknown",
+        "5": "unknown",
+        "6": "holds"
+      }
+    },
+    "search-and-study-runtime-prototype": {
+      "expected": 5,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "holds",
+        "4": "unknown",
+        "5": "unknown"
+      }
+    },
+    "semantic-programs-and-choice-abi": {
+      "expected": 5,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "unknown",
+        "4": "unknown",
+        "5": "unknown"
+      }
+    },
+    "identity-and-event-semantics": {
+      "expected": 3,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown",
+        "3": "does not hold"
+      }
+    },
+    "runtime-state-foundation": {
+      "expected": 2,
+      "verdicts": {
+        "1": "unknown",
+        "2": "unknown"
+      }
+    }
+  },
+  "additionalHistoricalRows": [
+    {
+      "project": "semantic-programs-and-choice-abi",
+      "ordinal": "6",
+      "verdict": "unknown"
+    }
+  ]
+}

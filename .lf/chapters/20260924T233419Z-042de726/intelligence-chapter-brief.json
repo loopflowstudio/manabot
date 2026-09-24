@@ -1,0 +1,327 @@
+{
+  "chapter": "2026-09-24-trained-challengers-proposal",
+  "status": "Gate 1 direction accepted; Gate 2 final plan NOT accepted",
+  "wave": "intelligence",
+  "proposed_review_date": "2026-10-08",
+  "retained_project_id": "73884527-4c81-4682-aa52-25fb586f08f9",
+  "accepted_direction_file": "scratch/chapter-direction.md",
+  "candidate_kr_file": "scratch/chapter-krs.md",
+  "disposition_draft": "scratch/chapter-dispositions.md",
+  "constraints": [
+    "Exactly one current Project per Wave, exactly three KRs.",
+    "Existing Allies versus Lessons. The human wants trained bots that can beat them and a UI in which they want to finish games.",
+    "Game friction: lack of transitions, action-space explosion, one awkward action can end a session.",
+    "Rules fidelity: full expected Learn/Lesson, including the intended eligible Lesson pool. Do not silently simplify mechanics.",
+    "Discovery belongs in the Project; don't ask the human to diagnose the UI upfront.",
+    "Keep decisions about ETU-21 abandonment, ETU-31 deferral and ETU-55 scientific deferral. ETU-34 is now merged/done.",
+    "No live PM/Task/Work/charter changes, code implementation, costly training, pushing, or lf ask. Return questions/challenges to present parent.",
+    "Deliberately unbound fallback authorized by the human after PM/Task binding repeatedly failed. Do not repair or retry that machinery as a prerequisite."
+  ],
+  "projects": [
+    {
+      "project": {
+        "id": "8ec95ad5-d084-4fbb-8281-d44ed471b46b",
+        "slug": "belief-aware-play",
+        "name": "Belief-Aware Play",
+        "summary": "Test whether explicit viewer-safe beliefs make manabot strategy stronger and more legible. The end-to-end conditional substrate landed 2026-07-18 — exact-Bayes range tracking over the managym possible-world kernel, conditional determinized PUCT with paire",
+        "definition": "Test whether explicit viewer-safe beliefs make manabot strategy stronger and more legible. The end-to-end conditional substrate landed 2026-07-18 — exact-Bayes range tracking over the managym possible-world kernel, conditional determinized PUCT with paired inverse-CDF sampling, and the versioned belief-conditioned advice surface. INT-15 then retained the first result: one post-hoc curated, exactly replayable Has(Counterspell) versus Lacks(Counterspell) recommendation flip at a declared offline budget, with no method, strength, prospective-stability, or admission claim. The remaining results-first work (docs/plans/results-first-roadmap.md) is to resolve live advice against the tracked posterior, commit belief-calibration curves through the RUL-13 provider repair under a preregistered science-identical v2 contract, and admit the exact-range player to the arena against a uniform-determinization control. The supervised belief head is deferred until the live-path and calibration KRs hold. Actual hidden worlds remain private calibration targets, determinizations remain honestly named, and diagnostics choose a later planner only after the running system exposes a measured ambiguity.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "Conditional determinized PUCT over paired inverse-CDF belief worlds returns identity-pinned, aligned strategy evidence for True, Has, Lacks, and paired Q/Not(Q) conditions with reproducible nontrivial policy, Q, and value deltas, frozen as replayable fixtures and served viewer-safe through the versioned advice contract (INT-12/INT-13; max policy delta 0.125, no argmax flip yet).",
+            "holds": true
+          },
+          {
+            "text": "A frozen, exactly replayable fixture shows changing only the typed condition (for example Has(Counterspell) versus Lacks(Counterspell)) flipping the advised top action under paired seeds at a declared offline budget, served through the advice-v1 comparison; a measured no-flip at roughly 64x the INT-12 budget with uniform-random leaves also closes this KR with the negative result retained.",
+            "holds": true
+          },
+          {
+            "text": "One full game through ./scripts/play requests advice mid-game whose belief receipt hashes the live exact-Bayes posterior tracked from the compatible-deal prior — no static authored payload on the path, fail-closed identity discipline preserved, a declared compute class, and the same identity resolving reproducibly through Study.",
+            "holds": false
+          },
+          {
+            "text": "A committed repro script emits, for seeded games, posterior mass on the actual hidden opponent hand versus the compatible-deal prior across the decision sequence, with the action-likelihood model byte-locked to a real checkpoint and no RulesProviderGap remaining on the exercised path.",
+            "holds": false
+          },
+          {
+            "text": "A committed world-pinned arena run rates the exact-range player against a uniform-determinization control at matched compute alongside the frozen anchors, with ratings, the full payoff matrix, and paired-deal uncertainty — the measured answer to whether beliefs improve play.",
+            "holds": false
+          },
+          {
+            "text": "Deferred until the flip, live-path, and calibration KRs hold: a supervised belief head maps viewer history to a normalized BeliefState over the same hypothesis domain, supervised only by access-controlled actual worlds, measured on log loss and calibration against the exact-Bayes baseline, with learned non-uniform beliefs mixed into policy/value training so serving is not out of distribution.",
+            "holds": false
+          },
+          {
+            "text": "Background convergence gating no results KR: one running teacher consumes an immutable viewer-rooted PlanningProblem over managym authority with exact forks and semantic Commands, retiring the compatibility adapter.",
+            "holds": false
+          }
+        ]
+      },
+      "open_tasks": [
+        {
+          "task": {
+            "id": "cd64bcde-21b1-468a-ba67-fae57c99d2a6",
+            "identifier": "ETU-21",
+            "name": "Resolve live advice against the tracked exact-Bayes posterior",
+            "description": "R2 of docs/plans/results-first-roadmap.md. BeliefTracker runs during real play from the compatible-deal prior; advice at a live decision resolves the actual tracked posterior instead of a static authored payload, with the same fail-closed identity discipline as the fixture path and a declared compute class (cache where identity permits). Done when one full game through ./scripts/play can request advice mid-game and the response belief receipt hashes the live posterior. Depends on Game supplying the live decision address (the GAM-4 deferral — today the canonical replay address exists only at game close); the Intelligence half is a belief resolver bound to the live match.",
+            "rank": 3,
+            "completed": false,
+            "assignee": null
+          },
+          "reference": {
+            "issue_url": "https://linear.app/loopflow/issue/ETU-21/resolve-live-advice-against-the-tracked-exact-bayes-posterior",
+            "workspace": {
+              "slug": "resolve-live-advice-against-the",
+              "branch": "jack-heart/resolve-live-advice-against-the",
+              "worktree": "/Users/jack/src/etude.resolve-live-advice-against-the"
+            }
+          },
+          "runtime": {
+            "work_id": "task_ac92409efc33da14002399e174044b88",
+            "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+            "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+            "status": "abandoned",
+            "reason": "abandoned",
+            "updated_at": "2026-09-13T17:31:01Z",
+            "provider": "codex"
+          },
+          "next_move": {
+            "owner": "project",
+            "reason": "abandoned"
+          },
+          "condition": {
+            "state": "blocked",
+            "reason": "Task ETU-21 worktree /Users/jack/src/etude.resolve-live-advice-against-the is missing; restore that exact path on branch \"jack-heart/resolve-live-advice-against-the\" before `lf task resume ETU-21`; Task identity and PR history are unchanged",
+            "observed_at": "2026-09-24T21:59:38.633289Z",
+            "evidence_age_secs": 966517,
+            "local_progress": {
+              "state": "missing",
+              "unsettled": true,
+              "dirty": null,
+              "authored_commits": null,
+              "recovery_required": true,
+              "reason": "Task ETU-21 worktree /Users/jack/src/etude.resolve-live-advice-against-the is missing; restore that exact path on branch \"jack-heart/resolve-live-advice-against-the\" before `lf task resume ETU-21`; Task identity and PR history are unchanged"
+            }
+          },
+          "actions": {
+            "recommended": "no_action",
+            "reason": "Task is terminal"
+          },
+          "active_pr": {
+            "id": "pr_618d93f6fb574cc6a5627dffe9f0407e",
+            "sequence": 1,
+            "slug": "resolve-live-advice-against-the",
+            "branch": "jack-heart/resolve-live-advice-against-the",
+            "base_commit": "b359ae0fb6976135905b0c473175c28bcd605940",
+            "phase": "working",
+            "empty": null,
+            "publication": null,
+            "merge_commit": null,
+            "abandoned_at": null
+          },
+          "section": "later"
+        }
+      ],
+      "review": "scratch/chapter-reviews/belief-aware-play.md"
+    },
+    {
+      "project": {
+        "id": "3f97924e-1bfe-41e9-8db2-cc27ac2117bb",
+        "slug": "semantic-policy-prototype",
+        "name": "Semantic Policy Prototype",
+        "summary": "Build the smallest runnable manabot that consumes real viewer-safe game facts, typed ability programs, and structured legal offers and emits atomic Commands in managym. Train and evaluate it on engine-generated positions and a bounded playable world; use ",
+        "definition": "Build the smallest runnable manabot that consumes real viewer-safe game facts, typed ability programs, and structured legal offers and emits atomic Commands in managym. Train and evaluate it on engine-generated positions and a bounded playable world; use ablations and katas only to diagnose observed prototype failures.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "A runnable semantic policy consumes real ExperienceFrame facts, typed program structure, and InteractionOffer values for priority, targeting, and combat, then emits structured Commands with zero illegal decodes on a fixed engine-generated evaluation that includes more than 32 legal choices.",
+            "holds": true
+          },
+          {
+            "text": "The prototype plays a bounded authoritative micro-matchup or selected matchup end to end and is compared across at least three seeds with an identity or fixed-action baseline on legality, competencies, seat-balanced strength, policy loss, p50/p95 latency, and environment throughput.",
+            "holds": true
+          },
+          {
+            "text": "An engine-generated holdout withholds card identities and at least one composition of known semantic operations; semantic, identity-only, and structure-shuffled ablations measure zero-shot or limited-retraining transfer and sample efficiency without admitting unknown primitives.",
+            "holds": true
+          },
+          {
+            "text": "Static program roles bind to actual visible objects, targets, costs, and choice roles in runtime offers, and failures can be replayed as exact engine positions and Commands rather than only classification labels.",
+            "holds": true
+          },
+          {
+            "text": "One documented command regenerates data, trains the bounded prototype, runs the arena and holdout evaluation, and emits versioned artifacts pinned to content, engine, observation, offer, model, and seed identities within an explicit compute budget.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/semantic-policy-prototype.md"
+    },
+    {
+      "project": {
+        "id": "73884527-4c81-4682-aa52-25fb586f08f9",
+        "slug": "search-teacher-and-student-arena",
+        "name": "Search Teacher and Student Arena",
+        "summary": "Run a real search teacher, dataset, student, and arena loop on the selected matchup. Improve the working system through measured iterations: establish a runnable baseline, replace flat controls with authoritative visit-based search, train practical studen",
+        "definition": "Run a real search teacher, dataset, student, and arena loop on the selected matchup. Improve the working system through measured iterations: establish a runnable baseline, replace flat controls with authoritative visit-based search, train practical students, compare matched compute, and expose honest evidence to Study. As of 2026-07-19 the loop, fail-closed production harness, and world-pinned arena all exist; INT-18 committed the first frozen-cohort production rating, while the exact-range-versus-uniform comparison remains typed evidence_wait and the production visit-teacher iteration remains open. Standing evidence: INT-7 value heads improved calibration while weakening complete players; INT-8 killed one-seed learned priors inside PUCT; learned components re-enter only through arena admission.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "One documented command freezes replayable trajectories from actual managym games, trains matched policy-only and policy/value students, and plays a seat-balanced arena with pinned dataset, engine, model, seed, latency, throughput, and compute identities.",
+            "holds": true
+          },
+          {
+            "text": "An authoritative MCTS or PUCT teacher runs the selected matchup at declared budgets, emits legal root visit distributions and values under the acting viewer boundary, and replays every sampled trajectory exactly.",
+            "holds": true
+          },
+          {
+            "text": "A practical student trains from visit and value targets and then plays the actual matchup; matched-data ablations separate visit-distribution versus chosen-action supervision and policy-only versus policy/value learning.",
+            "holds": true
+          },
+          {
+            "text": "The world-pinned arena commits its first production rating run over the frozen anchors and the dPUCT-32 challenger, with ratings, the full payoff matrix, connectivity, and paired-deal uncertainty retained; development pairwise matches remain explicitly non-admission.",
+            "holds": true
+          },
+          {
+            "text": "The fail-closed production visit-teacher harness runs one complete production iteration with multi-seed students after the absent frozen Teacher-0 control bytes are recovered or re-frozen under a versioned contract note; the iteration either improves the admitted agent on the declared strength and competency gates or records an honest failure that determines the next build.",
+            "holds": false
+          },
+          {
+            "text": "Across multiple seeds, the search teacher is compared with policy-only, scripted, and frozen opponents on legality, competencies, seat-balanced strength, calibration, p50/p95 decision latency, rollout throughput, and label cost, producing an explicit continue, revise, or kill decision.",
+            "holds": false
+          },
+          {
+            "text": "One historical Study position receives viewer-safe DecisionEvidence from the running policy and search systems, with played Command, policy mass, visits, value, sampled-world robustness, uncertainty, and unavailable fields kept distinct.",
+            "holds": true
+          }
+        ]
+      },
+      "open_tasks": [
+        {
+          "task": {
+            "id": "fc8e615b-b98b-4560-8683-f7f44dc3d9bb",
+            "identifier": "ETU-31",
+            "name": "Run the production visit-teacher multi-seed comparison",
+            "description": "Close the two remaining Project KRs with one bounded production experiment, not an infrastructure-only PR. Audit current main and retained artifacts first. The frozen Teacher-0 control digests name absent checkpoint bytes; do not reconstruct, substitute, or mutate the frozen contract in place. Add a versioned contract amendment that trains fresh Teacher-0 controls, freezes exact bytes and identities before comparison, and binds the complete engine, content, ABI, source, seed, and budget closure. Preserve the existing fail-closed INT-4 harness and frozen verification provenance. Run one complete production visit-teacher iteration on the selected matchup with multiple independent training/data seeds, declared teacher budgets, and policy-only, scripted, and frozen controls. Retain exact viewer-safe trajectories, legal offers and semantic Commands, visit distributions, root values or outcomes, opponent identities, manifests, checkpoints, and replay evidence. Report legality, information safety, S1-S5 competencies, seat-balanced strength, calibration, p50/p95 latency, rollout throughput, label cost, sample efficiency, inference latency, total teacher and student compute, matched-compute comparisons, uncertainty across seeds, and an explicit continue, revise, or kill decision. No strength or promotion claim without competency, information-safety, matched-compute, and arena-admission gates. Do not claim the separate exact-range-versus-uniform result, substitute unavailable checkpoints, or relabel INT-7 engineering smoke as production evidence. If the honest production run is infeasible under the hard cap, retain a typed negative result that determines the next build.",
+            "rank": 2,
+            "completed": false,
+            "assignee": null
+          },
+          "reference": {
+            "issue_url": "https://linear.app/loopflow/issue/ETU-31/run-the-production-visit-teacher-multi-seed-comparison",
+            "workspace": {
+              "slug": "run-the-production-visit-teacher",
+              "branch": "jack-heart/run-the-production-visit-teacher",
+              "worktree": "/Users/jack/src/etude.run-the-production-visit-teacher"
+            }
+          },
+          "runtime": {
+            "work_id": "task_74c34327ba21bdb9d7c21d852d07eee5",
+            "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+            "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+            "status": "ready",
+            "reason": "ready",
+            "updated_at": "2026-09-13T17:31:28Z",
+            "provider": "codex"
+          },
+          "next_move": {
+            "owner": "project",
+            "reason": "ready"
+          },
+          "condition": {
+            "state": "blocked",
+            "reason": "Task has uncommitted work",
+            "observed_at": "2026-09-24T21:59:38.641563Z",
+            "evidence_age_secs": 966490,
+            "local_progress": {
+              "state": "observed",
+              "unsettled": true,
+              "dirty": true,
+              "authored_commits": false,
+              "recovery_required": false,
+              "reason": null
+            }
+          },
+          "actions": {
+            "recommended": "resume",
+            "reason": "resume the parked Task"
+          },
+          "active_pr": {
+            "id": "pr_8397360a2c534bb6b54a2446f2233d05",
+            "sequence": 1,
+            "slug": "run-the-production-visit-teacher",
+            "branch": "jack-heart/run-the-production-visit-teacher",
+            "base_commit": "a9ffb45de761e537741fcf6acec7208786547959",
+            "phase": "working",
+            "empty": null,
+            "publication": null,
+            "merge_commit": null,
+            "abandoned_at": null
+          },
+          "section": "waiting"
+        },
+        {
+          "task": {
+            "id": "65a1cb31-d3bd-4bf7-8b72-b9f1496fd7c7",
+            "identifier": "ETU-34",
+            "name": "Map search and learning architecture and laws of physics",
+            "description": "<!-- loopflow-task-start:d677510e48dc1c2a51db92a42b5e6cd4b88ad549cd78140bb37cbd3560ed5c1c -->",
+            "rank": 5,
+            "completed": false,
+            "assignee": null
+          },
+          "reference": {
+            "issue_url": "https://linear.app/loopflow/issue/ETU-34/map-search-and-learning-architecture-and-laws-of-physics",
+            "workspace": {
+              "slug": "search-learning-architecture",
+              "branch": "jack-heart/search-learning-architecture-2",
+              "worktree": "/Users/jack/src/etude.search-learning-architecture"
+            }
+          },
+          "runtime": {
+            "work_id": "task_8b4f67404f55111670c9a92e5b60b9dd",
+            "project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+            "routing_project_id": "proj_7f0baf07002e82bae8c23de76733dc5e",
+            "status": "done",
+            "reason": "done",
+            "updated_at": "2026-09-13T17:31:32Z",
+            "provider": "codex"
+          },
+          "next_move": {
+            "owner": "project",
+            "reason": "done"
+          },
+          "condition": {
+            "state": "waiting",
+            "reason": "done",
+            "observed_at": "2026-09-24T21:59:38.844484Z",
+            "evidence_age_secs": 966486,
+            "local_progress": {
+              "state": "observed",
+              "unsettled": false,
+              "dirty": false,
+              "authored_commits": false,
+              "recovery_required": false,
+              "reason": null
+            }
+          },
+          "actions": {
+            "recommended": "no_action",
+            "reason": "Task is terminal"
+          },
+          "active_pr": null,
+          "section": "later"
+        }
+      ],
+      "review": "scratch/chapter-reviews/search-teacher-and-student-arena.md"
+    }
+  ],
+  "unavailable_projects": []
+}

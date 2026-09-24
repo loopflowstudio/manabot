@@ -1,0 +1,278 @@
+{
+  "chapter": "2026-09-24-trained-challengers-proposal",
+  "status": "Gate 1 direction accepted; Gate 2 final plan NOT accepted",
+  "wave": "game",
+  "proposed_review_date": "2026-10-08",
+  "retained_project_id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+  "accepted_direction_file": "scratch/chapter-direction.md",
+  "candidate_kr_file": "scratch/chapter-krs.md",
+  "disposition_draft": "scratch/chapter-dispositions.md",
+  "constraints": [
+    "Exactly one current Project per Wave, exactly three KRs.",
+    "Existing Allies versus Lessons. The human wants trained bots that can beat them and a UI in which they want to finish games.",
+    "Game friction: lack of transitions, action-space explosion, one awkward action can end a session.",
+    "Rules fidelity: full expected Learn/Lesson, including the intended eligible Lesson pool. Do not silently simplify mechanics.",
+    "Discovery belongs in the Project; don't ask the human to diagnose the UI upfront.",
+    "Keep decisions about ETU-21 abandonment, ETU-31 deferral and ETU-55 scientific deferral. ETU-34 is now merged/done.",
+    "No live PM/Task/Work/charter changes, code implementation, costly training, pushing, or lf ask. Return questions/challenges to present parent.",
+    "Deliberately unbound fallback authorized by the human after PM/Task binding repeatedly failed. Do not repair or retry that machinery as a prerequisite."
+  ],
+  "projects": [
+    {
+      "project": {
+        "id": "1d3658d8-d3c1-42ae-aad4-f2670a6ee987",
+        "slug": "experience-proof-and-polish",
+        "name": "Experience Proof and Polish",
+        "summary": "Prove that the shipped UR Lessons (hero) versus GW Allies (villain) experience remains playable, responsive, recoverable, accessible, and visually intact through repeatable gates against the real release stack, so regressions fail evidence checks instead ",
+        "definition": "Prove that the shipped UR Lessons (hero) versus GW Allies (villain) experience remains playable, responsive, recoverable, accessible, and visually intact through repeatable gates against the real release stack, so regressions fail evidence checks instead of becoming subjective cleanup.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "A deterministic release-stack end-to-end suite reaches terminal across scenarios that collectively surface every prompt family reachable in UR Lessons versus GW Allies and proves reconnect/resume, stale-command rejection, duplicate-command idempotency, checkpoint recovery, and replay equivalence.",
+            "holds": false
+          },
+          {
+            "text": "A named reference device, OS, browser, and release-build profile has numeric budgets for cold launch-to-playable, input acknowledgement, authority response, animation frame pacing, and peak memory; repeatable measurements fail documented regression thresholds.",
+            "holds": false
+          },
+          {
+            "text": "The complete selected matchup is operable keyboard-only and under reduced motion, with automated contrast and accessibility checks plus screen-reader assertions for every prompt, status transition, and game result.",
+            "holds": true
+          },
+          {
+            "text": "Versioned visual references cover every prompt family and key board, recovery, and terminal states; a clean release-build playthrough has zero unexpected visual diffs, broken curated assets, runtime console errors, or network-dependent play assets.",
+            "holds": false
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/experience-proof-and-polish.md"
+    },
+    {
+      "project": {
+        "id": "3a1b6b43-f9d7-4d77-95aa-d353854a2b13",
+        "slug": "curated-packs-and-portable-runtime",
+        "name": "Curated Packs and Portable Runtime",
+        "summary": "Prove that Etude Fantasia can ship UR Lessons versus GW Allies as a self-contained, versioned experience pack and can swap local authority transports behind one protocol, making clean-machine and offline play reliable while requiring measured evidence bef",
+        "definition": "Prove that Etude Fantasia can ship UR Lessons versus GW Allies as a self-contained, versioned experience pack and can swap local authority transports behind one protocol, making clean-machine and offline play reliable while requiring measured evidence before any browser or WASM authority investment.",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "A versioned manifest pins the UR Lessons and GW Allies deck definitions, every card art treatment and source or license attribution, content hashes, and a deterministic missing-asset fallback; an automated network-denied match proves play makes no runtime asset request outside the installed pack.",
+            "holds": true
+          },
+          {
+            "text": "On a documented clean-machine profile, one command reaches a playable UR Lessons-versus-GW-Allies human-versus-agent match in under 60 seconds; after installation, a network-disabled reload reaches the same playable matchup from local assets.",
+            "holds": false
+          },
+          {
+            "text": "Process and native-worker authority adapters pass the same versioned protocol conformance suite for match start, command handling, recovery, and replay fixtures without client-specific game semantics.",
+            "holds": false
+          },
+          {
+            "text": "A reproducible benchmark records cold and warm startup, p50 and p95 command latency, peak memory, shipped bytes, and deployment constraints for process and native-worker authority plus a browser portability probe, ending with an explicit evidence-backed go or no-go for a WASM authority adapter.",
+            "holds": false
+          }
+        ]
+      },
+      "open_tasks": [],
+      "review": "scratch/chapter-reviews/curated-packs-and-portable-runtime.md"
+    },
+    {
+      "project": {
+        "id": "9106931a-3e9a-48ef-881b-30ee3363f929",
+        "slug": "play-replay-and-study",
+        "name": "Play, Replay, and Study",
+        "summary": "Make one selected Etude Fantasia match a continuous AI-assisted testing-house loop: pilot or watch on the authoritative semantic table, state explicit viewer-safe beliefs, inspect attributable conditional strategy, play through ordinary Commands, reopen e",
+        "definition": "Make one selected Etude Fantasia match a continuous AI-assisted testing-house loop: pilot or watch on the authoritative semantic table, state explicit viewer-safe beliefs, inspect attributable conditional strategy, play through ordinary Commands, reopen every historical decision, retry an exact line, compare it, and return without client-side rules, hidden-information leakage, or a second live/Study surface. The remaining open work (2026-07-18) is the live seam: an addressable canonical decision for the in-progress match and a player-authored belief input surface, so the same advice identity resolves mid-game against the tracked posterior instead of a pinned completed-match fixture (the Game half of the results-first roadmap in docs/plans/results-first-roadmap.md).",
+        "flows": {
+          "recommended": null
+        },
+        "krs": [
+          {
+            "text": "Casting, targeting, resolving, combat, damage, death, and turn transitions render as ordered semantic beats with skip or fast-forward behavior and no snapshot-diff inference.",
+            "holds": true
+          },
+          {
+            "text": "A versioned cross-language StudyArtifact and DecisionEvidence contract preserves viewer-safe match, decision, command, model, search-budget, and provenance identities while keeping policy mass, visits, value, robustness, and uncertainty distinct.",
+            "holds": true
+          },
+          {
+            "text": "Every historical player decision in a completed selected match has a stable viewer-safe address that restores the exact canonical frame, offer, played command, and event cursor, with direct play, replay, and Study showing the same facts.",
+            "holds": true
+          },
+          {
+            "text": "At one restored decision, a player can Retry before reveal, then compare separately labelled played, policy, and search plans on the table through one bounded canonical continuation.",
+            "holds": true
+          },
+          {
+            "text": "A player can enter an exact ephemeral branch through ordinary Commands and return in one action to the identical recorded state, event cursor, offer, and viewer projection.",
+            "holds": true
+          },
+          {
+            "text": "At the same canonical decision reached live or through Study, the same unified surface accepts at least two explicit viewer-safe belief scenarios, obtains strategy from one pinned advisor identity and compute class, and shows reproducible action-probability, value, or uncertainty deltas while facts, beliefs, and advice remain distinct.",
+            "holds": true
+          },
+          {
+            "text": "A pilot and one permitted watcher can inhabit the same canonical decision surface under explicit viewer roles, compare or share viewer-safe belief and strategy artifacts, and explore an isolated line without pausing or mutating the authoritative live match; only the pilot can submit its offered Command, and the same table continues into Study.",
+            "holds": true
+          },
+          {
+            "text": "The in-progress match exposes an addressable canonical current decision (closing the GAM-4 deferral in which the canonical replay address exists only at game close), and a player can author a viewer-safe belief mid-game and receive advice whose identity resolves against the live tracked posterior — the same fail-closed identity discipline as the completed-match path, with the fork/Retry/return UI sequenced behind it.",
+            "holds": false
+          }
+        ]
+      },
+      "open_tasks": [
+        {
+          "task": {
+            "id": "29d6f38f-26a3-4a9f-961a-ef3ecfeaa7f1",
+            "identifier": "ETU-74",
+            "name": "Plan the trained-challenger chapter for Allies versus Lessons",
+            "description": "Prepare the next repository chapter through start-chapter, proposal-only until the present human accepts the reconciled plan. This Task is the archival/planning worktree, not permission to implement product features or mutate the existing portfolio.\n\nHuman accepted direction on 2026-09-24: exactly one Project per continuing Wave and three KRs per Project; proposed roster Game, Intelligence, Rules with Study folded into Game. Train bots that can beat the User in the currently demoed GW Allies versus UR Lessons matchup. Getting the User to play full games is equally central. Missing transitions and overwhelming action choices are concrete friction; even one awkward intended action makes them stop. Discover further friction through actual play rather than asking the User to diagnose it in advance. Faithful rules matter: Learn currently resolves only to discard-then-draw; establish and implement expected Lesson-pool semantics in future product work rather than silently simplifying the mechanic.\n\nCarry forward existing dispositions as evidence: ETU-21 abandoned; ETU-31 experiment deferred; ETU-55 provider-only ship distinct from calibration closure; preserve ETU-34/PR179 work. No new decks beyond content/pool support needed for the existing matchup.\n\nTask output: formal baseline review when no chapter archive exists; frozen Project/KR/open-Task ledger; dated draft with the accepted direction and proposed review dates; scoped Wave and Project proposals and challenges; exact carry/rewrite/complete/retire dispositions for every old Project and open Task; a reviewable three-wave/nine-KR plan. Historical 56 KRs remain evidence, not automatic new priorities. Retain all Run ids and report incomplete coverage honestly.\n\nThe human is present in the controlling conversation. Return open questions and the final proposal there; do not use lf ask or create another human session. No live PM edits, Wave retirement, product implementation, push, PR publication, or Task completion before the human's explicit Gate 2 acceptance. The creation of this planning Task itself is only to provide the required Task-bound archive authority.",
+            "rank": 4,
+            "completed": false,
+            "assignee": null
+          },
+          "reference": {
+            "issue_url": "https://linear.app/loopflow/issue/ETU-74/plan-the-trained-challenger-chapter-for-allies-versus-lessons",
+            "workspace": null
+          },
+          "runtime": null,
+          "next_move": {
+            "owner": "project",
+            "reason": "Task is ready to start"
+          },
+          "condition": {
+            "state": "waiting",
+            "reason": "Task is ready to start",
+            "observed_at": "2026-09-24T21:59:39.45211Z",
+            "evidence_age_secs": null,
+            "local_progress": {
+              "state": "not_applicable",
+              "unsettled": false,
+              "dirty": null,
+              "authored_commits": null,
+              "recovery_required": null,
+              "reason": null
+            }
+          },
+          "actions": {
+            "recommended": null,
+            "reason": "Task is ready to start"
+          },
+          "active_pr": null,
+          "section": "available"
+        },
+        {
+          "task": {
+            "id": "b5f8619c-f4ea-4c12-a8a4-abe5bf4ab969",
+            "identifier": "ETU-14",
+            "name": "Replace the advice fixture with the live belief-conditioned advisor",
+            "description": "After the fixture-backed shared decision surface and Intelligence's versioned belief-conditioned advisor both land, connect them without forking or redesigning the UI. The same canonical DecisionAddress plus BeliefScenario and AdvisorIdentity request must serve live play and Study and render the same conditional action distribution, values, uncertainty, and scenario deltas. Preserve the checked fixture as an offline/reference case, but use the live provider for the selected supported world. Fail visibly on missing checkpoints, unsupported beliefs, stale decision identities, viewer mismatch, compute mismatch, or unavailable evidence; never substitute fabricated values. Prove that changing only the belief changes the displayed strategy, reaching the same request through live and Study returns byte-equivalent evidence, and exploratory recomputation cannot mutate or delay the authoritative match. Keep ordinary Commands and exact Study forks as the only state-changing paths.",
+            "rank": 6,
+            "completed": false,
+            "assignee": null
+          },
+          "reference": {
+            "issue_url": "https://linear.app/loopflow/issue/ETU-14/replace-the-advice-fixture-with-the-live-belief-conditioned-advisor",
+            "workspace": {
+              "slug": "replace-the-advice-fixture-with",
+              "branch": "jack-heart/replace-the-advice-fixture-with-2",
+              "worktree": "/Users/jack/src/etude.replace-the-advice-fixture-with"
+            }
+          },
+          "runtime": {
+            "work_id": "task_288752dda591bbd9b6b8c6ed92a63aef",
+            "project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+            "routing_project_id": "proj_2ffcf7e6c90ff221dafcb17f39e83004",
+            "status": "ready",
+            "reason": "ready",
+            "updated_at": "2026-09-13T17:30:48Z",
+            "provider": "codex"
+          },
+          "next_move": {
+            "owner": "project",
+            "reason": "ready"
+          },
+          "condition": {
+            "state": "blocked",
+            "reason": "Task ETU-14 worktree /Users/jack/src/etude.replace-the-advice-fixture-with is missing; restore that exact path on branch \"jack-heart/replace-the-advice-fixture-with-2\" before `lf task resume ETU-14`; Task identity and PR history are unchanged",
+            "observed_at": "2026-09-24T21:59:39.453449Z",
+            "evidence_age_secs": 966531,
+            "local_progress": {
+              "state": "missing",
+              "unsettled": true,
+              "dirty": null,
+              "authored_commits": null,
+              "recovery_required": true,
+              "reason": "Task ETU-14 worktree /Users/jack/src/etude.replace-the-advice-fixture-with is missing; restore that exact path on branch \"jack-heart/replace-the-advice-fixture-with-2\" before `lf task resume ETU-14`; Task identity and PR history are unchanged"
+            }
+          },
+          "actions": {
+            "recommended": "no_action",
+            "reason": "Task ETU-14 worktree /Users/jack/src/etude.replace-the-advice-fixture-with is missing; restore that exact path on branch \"jack-heart/replace-the-advice-fixture-with-2\" before `lf task resume ETU-14`; Task identity and PR history are unchanged"
+          },
+          "active_pr": {
+            "id": "pr_db86aab785b24286b33fd19d7ef517bc",
+            "sequence": 2,
+            "slug": "2",
+            "branch": "jack-heart/replace-the-advice-fixture-with-2",
+            "base_commit": "e61931e75024e61e90d1d83337e80a9bfcf8e422",
+            "phase": "working",
+            "empty": null,
+            "publication": null,
+            "merge_commit": null,
+            "abandoned_at": null
+          },
+          "section": "waiting"
+        }
+      ],
+      "review": "scratch/chapter-reviews/play-replay-and-study.md"
+    }
+  ],
+  "unavailable_projects": [
+    {
+      "work_id": "proj_5f344a2b7e101578c9763ee183ccaaf3",
+      "project_id": "1b93253e-5422-45f1-94df-c019a261e812",
+      "project_slug": "experience-contract-and-recovery",
+      "status": "ready",
+      "owner": "wave",
+      "reason": "Project is absent from the current PM snapshot",
+      "recovery": "lf project abandon experience-contract-and-recovery --reason \"Project is absent from the current PM snapshot\"",
+      "tasks": [
+        {
+          "work_id": "task_a676b8f06437ff76e0d358858bb282d4",
+          "task_id": "f5125ef5-2972-426c-bcdd-1f25af854a90",
+          "task_identifier": "W2-183",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_a676b8f06437ff76e0d358858bb282d4 --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_7225012a52c054c23e1ff1015fc138ee",
+          "task_id": "4d713cf0-ba78-41a9-837f-4496acfd5771",
+          "task_identifier": "W2-194",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_7225012a52c054c23e1ff1015fc138ee --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_add7e9c8ab0f16dd62939e159818ab28",
+          "task_id": "d84c024e-6fe4-496e-8d51-59fb22890feb",
+          "task_identifier": "W2-195",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_add7e9c8ab0f16dd62939e159818ab28 --reason \"Project is absent from the current PM snapshot\""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,249 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "intelligence",
+  "id": "3f97924e-1bfe-41e9-8db2-cc27ac2117bb",
+  "slug": "semantic-policy-prototype",
+  "project": {
+    "id": "3f97924e-1bfe-41e9-8db2-cc27ac2117bb",
+    "slug": "semantic-policy-prototype",
+    "name": "Semantic Policy Prototype",
+    "summary": "Build the smallest runnable manabot that consumes real viewer-safe game facts, typed ability programs, and structured legal offers and emits atomic Commands in managym. Train and evaluate it on engine-generated positions and a bounded playable world; use ",
+    "definition": "Build the smallest runnable manabot that consumes real viewer-safe game facts, typed ability programs, and structured legal offers and emits atomic Commands in managym. Train and evaluate it on engine-generated positions and a bounded playable world; use ablations and katas only to diagnose observed prototype failures.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "A runnable semantic policy consumes real ExperienceFrame facts, typed program structure, and InteractionOffer values for priority, targeting, and combat, then emits structured Commands with zero illegal decodes on a fixed engine-generated evaluation that includes more than 32 legal choices.",
+        "holds": true
+      },
+      {
+        "text": "The prototype plays a bounded authoritative micro-matchup or selected matchup end to end and is compared across at least three seeds with an identity or fixed-action baseline on legality, competencies, seat-balanced strength, policy loss, p50/p95 latency, and environment throughput.",
+        "holds": true
+      },
+      {
+        "text": "An engine-generated holdout withholds card identities and at least one composition of known semantic operations; semantic, identity-only, and structure-shuffled ablations measure zero-shot or limited-retraining transfer and sample efficiency without admitting unknown primitives.",
+        "holds": true
+      },
+      {
+        "text": "Static program roles bind to actual visible objects, targets, costs, and choice roles in runtime offers, and failures can be replayed as exact engine positions and Commands rather than only classification labels.",
+        "holds": true
+      },
+      {
+        "text": "One documented command regenerates data, trains the bounded prototype, runs the arena and holdout evaluation, and emits versioned artifacts pinned to content, engine, observation, offer, model, and seed identities within an explicit compute budget.",
+        "holds": true
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "ccf3ca37-fd74-49d7-95f9-5d7321c6559f",
+        "identifier": "ETU-25",
+        "name": "Disambiguate structural encoder optimization, capacity, and CPU cost",
+        "description": "Begin only after W2-214 and PR #112 land. Preserve structural-semantic-katas-v1, its authoritative typed-program labels, content-addressed splits, bag_v1 negative control, five seed identities, and the original success/kill and CPU-cost gates. Before any new run, check in a bounded sequential experiment contract that asks whether relational_semantic_encoder_v1 failed because of optimization, insufficient structural capacity, or Python/projector execution cost. Use diagnostic arms that change one factor at a time: an optimization-only arm at the same architecture and parameter budget; a minimal capacity/architecture arm only if the optimization arm cannot fit the known training signal; and a precomputed or vectorized structural-projection arm that separates projector cost from model cost without changing semantics. Report per-kata train/validation/test accuracy and calibration by seed, parameter count, p50/p95 model and end-to-end latency, batch throughput, wall clock, and which hypothesis survives. Retain at least three seeds, preferably the same five. Do not relax gates post-result, start W2-213, broaden semantics, or begin gameplay integration. End with either one cost-admissible structural encoder nomination for W2-213 or an explicit kill/redesign decision. Run every Python command through uv.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-25/disambiguate-structural-encoder-optimization-capacity-and-cpu-cost",
+        "workspace": {
+          "slug": "disambiguate-structural-encoder-optimization-capacity",
+          "branch": "jack-heart/disambiguate-structural-encoder-optimization-capacity",
+          "worktree": "/Users/jack/src/manabot.disambiguate-structural-encoder-optimization-capacity"
+        }
+      },
+      "runtime": {
+        "work_id": "task_91266939ad8a8f4192262d7bcb074de1",
+        "project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "routing_project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:12Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-25 worktree /Users/jack/src/manabot.disambiguate-structural-encoder-optimization-capacity is missing; restore that exact path before `lf task resume ETU-25`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.637132Z",
+        "evidence_age_secs": 966506,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-25 worktree /Users/jack/src/manabot.disambiguate-structural-encoder-optimization-capacity is missing; restore that exact path before `lf task resume ETU-25`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "no_action",
+        "reason": "Task is being abandoned"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "ed95216f-fecf-420e-a414-84298152462a",
+        "identifier": "ETU-26",
+        "name": "Prove structural semantic representations on diagnostic katas",
+        "description": "Treat the landed order-invariant semantic-token probe as a negative-control result, not a scalable encoder. Before training, check in a bounded experiment contract with predictions, matched capacity and data, at least three training seeds, a wall-clock or compute cap, success and kill thresholds, and next branches. Build a tiny deterministic, content-addressed suite of minimal ability-program pairs whose flattened token multisets match but whose operation order, parent-child hierarchy, field roles, argument binding, or target and choice roles imply different exact labels. Compare the existing bag encoder with at least one structurally informed encoder that preserves positions, hierarchy, types, and links; a small Transformer with structural attention is a candidate, not a foregone conclusion. Report per-kata accuracy, calibration, parameter count, p50 and p95 latency, throughput, and seed uncertainty. Do not start full gameplay integration, broaden card coverage, or hide failure by increasing model size. Keep static program structure distinct from dynamic facts and run every Python command through uv.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-26/prove-structural-semantic-representations-on-diagnostic-katas",
+        "workspace": {
+          "slug": "prove-structural-semantic-representations-on",
+          "branch": "jack-heart/prove-structural-semantic-representations-on",
+          "worktree": "/Users/jack/src/manabot.prove-structural-semantic-representations-on"
+        }
+      },
+      "runtime": {
+        "work_id": "task_2724d3ae9392ae1d2cbce1e81bd6d751",
+        "project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "routing_project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:13Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-26 worktree /Users/jack/src/manabot.prove-structural-semantic-representations-on is missing; restore that exact path before `lf task resume ETU-26`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.638314Z",
+        "evidence_age_secs": 966505,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-26 worktree /Users/jack/src/manabot.prove-structural-semantic-representations-on is missing; restore that exact path before `lf task resume ETU-26`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "806c95eb-d861-4665-acd5-1d4ee6c81876",
+        "identifier": "ETU-27",
+        "name": "Build a semantic policy prototype in the real engine",
+        "description": "Build the smallest end-to-end learned policy that consumes actual viewer-safe managym state, typed ability-program structure, and InteractionOffer values and emits atomic structured Commands. Use a plausible small Transformer, graph Transformer, or tree-aware encoder rather than extending the killed relational-pooling design. Generate supervised positions from authoritative priority, Lightning Bolt targeting, and combat flows, including states with more than 32 legal choices; use search or a deterministic engine oracle for labels. Train the prototype and make it act through normal engine execution in a bounded playable micro-matchup. Compare identity or fixed-action, semantic plus structured-decoder, and structure-shuffled ablations at matched data and approximate capacity. Report legality, per-prompt competency, policy loss and agreement, held-out card/composition transfer, sample efficiency, p50/p95 inference latency, batch throughput, environment SPS, seeds, and compute. Preserve the static katas as regression tests only; add a new kata only if an observed prototype failure is genuinely confounded and name the decision it will change. Unknown primitives fail admission. Run every Python command through uv and use lf pr land -c when verified.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-27/build-a-semantic-policy-prototype-in-the-real-engine",
+        "workspace": {
+          "slug": "build-a-semantic-policy-prototype",
+          "branch": "jack-heart/build-a-semantic-policy-prototype",
+          "worktree": "/Users/jack/src/etude.build-a-semantic-policy-prototype"
+        }
+      },
+      "runtime": {
+        "work_id": "task_e3433009c740497739982a8943818e9b",
+        "project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "routing_project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:15Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-27 worktree /Users/jack/src/etude.build-a-semantic-policy-prototype is missing; restore that exact path before `lf task resume ETU-27`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.638906Z",
+        "evidence_age_secs": 966503,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-27 worktree /Users/jack/src/etude.build-a-semantic-policy-prototype is missing; restore that exact path before `lf task resume ETU-27`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "9f9ba3b3-5f37-4c04-9b9f-43ec35b37fd6",
+        "identifier": "ETU-28",
+        "name": "Train and play the first learned semantic runtime policy",
+        "description": "Continue from landed INT-2 runtime binding rather than adding another static kata. Build the smallest learned manabot that consumes viewer-safe ExperienceFrame facts, typed ability-program structure, and authoritative InteractionOffer values, then emits structured Commands through normal managym execution. Use a plausible small Transformer, graph, or tree-aware encoder; do not revive the killed bag or relational-pooling designs. Generate authoritative priority, targeting, and combat examples including more than 32 legal choices, train at least three seeds, and play a bounded world-pinned matchup end to end. Compare semantic, identity-only or fixed-action, and structure-shuffled controls at matched data and approximate capacity. Include a holdout over card identity and one composition of known operations. Report legality, competencies, seat-balanced strength, policy loss, sample efficiency, p50 and p95 latency, batch throughput, environment SPS, seeds, and compute. One uv-run command must regenerate data, train, evaluate, and emit replayable versioned artifacts pinned to content, engine, observation, offer, model, and seeds. Unknown primitives fail admission. Use the INT-6 arena contract when approved, but do not depend on missing Teacher-0 checkpoint bytes or expand Rules, Study UI, card coverage, or static proof ladders.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-28/train-and-play-the-first-learned-semantic-runtime-policy",
+        "workspace": {
+          "slug": "train-and-play-the-first",
+          "branch": "jack-heart/train-and-play-the-first",
+          "worktree": "/Users/jack/src/etude.train-and-play-the-first"
+        }
+      },
+      "runtime": {
+        "work_id": "task_56e70ee8a9a0334d4f688de9d0a0ba77",
+        "project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "routing_project_id": "proj_11bfb2260f10113003d52cefc6e34eea",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:20Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-28 worktree /Users/jack/src/etude.train-and-play-the-first is missing; restore that exact path before `lf task resume ETU-28`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.639787Z",
+        "evidence_age_secs": 966498,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-28 worktree /Users/jack/src/etude.train-and-play-the-first is missing; restore that exact path before `lf task resume ETU-28`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

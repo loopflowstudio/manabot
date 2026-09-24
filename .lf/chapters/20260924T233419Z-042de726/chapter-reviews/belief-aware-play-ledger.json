@@ -1,0 +1,412 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "intelligence",
+  "id": "8ec95ad5-d084-4fbb-8281-d44ed471b46b",
+  "slug": "belief-aware-play",
+  "project": {
+    "id": "8ec95ad5-d084-4fbb-8281-d44ed471b46b",
+    "slug": "belief-aware-play",
+    "name": "Belief-Aware Play",
+    "summary": "Test whether explicit viewer-safe beliefs make manabot strategy stronger and more legible. The end-to-end conditional substrate landed 2026-07-18 — exact-Bayes range tracking over the managym possible-world kernel, conditional determinized PUCT with paire",
+    "definition": "Test whether explicit viewer-safe beliefs make manabot strategy stronger and more legible. The end-to-end conditional substrate landed 2026-07-18 — exact-Bayes range tracking over the managym possible-world kernel, conditional determinized PUCT with paired inverse-CDF sampling, and the versioned belief-conditioned advice surface. INT-15 then retained the first result: one post-hoc curated, exactly replayable Has(Counterspell) versus Lacks(Counterspell) recommendation flip at a declared offline budget, with no method, strength, prospective-stability, or admission claim. The remaining results-first work (docs/plans/results-first-roadmap.md) is to resolve live advice against the tracked posterior, commit belief-calibration curves through the RUL-13 provider repair under a preregistered science-identical v2 contract, and admit the exact-range player to the arena against a uniform-determinization control. The supervised belief head is deferred until the live-path and calibration KRs hold. Actual hidden worlds remain private calibration targets, determinizations remain honestly named, and diagnostics choose a later planner only after the running system exposes a measured ambiguity.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "Conditional determinized PUCT over paired inverse-CDF belief worlds returns identity-pinned, aligned strategy evidence for True, Has, Lacks, and paired Q/Not(Q) conditions with reproducible nontrivial policy, Q, and value deltas, frozen as replayable fixtures and served viewer-safe through the versioned advice contract (INT-12/INT-13; max policy delta 0.125, no argmax flip yet).",
+        "holds": true
+      },
+      {
+        "text": "A frozen, exactly replayable fixture shows changing only the typed condition (for example Has(Counterspell) versus Lacks(Counterspell)) flipping the advised top action under paired seeds at a declared offline budget, served through the advice-v1 comparison; a measured no-flip at roughly 64x the INT-12 budget with uniform-random leaves also closes this KR with the negative result retained.",
+        "holds": true
+      },
+      {
+        "text": "One full game through ./scripts/play requests advice mid-game whose belief receipt hashes the live exact-Bayes posterior tracked from the compatible-deal prior — no static authored payload on the path, fail-closed identity discipline preserved, a declared compute class, and the same identity resolving reproducibly through Study.",
+        "holds": false
+      },
+      {
+        "text": "A committed repro script emits, for seeded games, posterior mass on the actual hidden opponent hand versus the compatible-deal prior across the decision sequence, with the action-likelihood model byte-locked to a real checkpoint and no RulesProviderGap remaining on the exercised path.",
+        "holds": false
+      },
+      {
+        "text": "A committed world-pinned arena run rates the exact-range player against a uniform-determinization control at matched compute alongside the frozen anchors, with ratings, the full payoff matrix, and paired-deal uncertainty — the measured answer to whether beliefs improve play.",
+        "holds": false
+      },
+      {
+        "text": "Deferred until the flip, live-path, and calibration KRs hold: a supervised belief head maps viewer history to a normalized BeliefState over the same hypothesis domain, supervised only by access-controlled actual worlds, measured on log loss and calibration against the exact-Bayes baseline, with learned non-uniform beliefs mixed into policy/value training so serving is not out of distribution.",
+        "holds": false
+      },
+      {
+        "text": "Background convergence gating no results KR: one running teacher consumes an immutable viewer-rooted PlanningProblem over managym authority with exact forks and semantic Commands, retiring the compatibility adapter.",
+        "holds": false
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "cd64bcde-21b1-468a-ba67-fae57c99d2a6",
+        "identifier": "ETU-21",
+        "name": "Resolve live advice against the tracked exact-Bayes posterior",
+        "description": "R2 of docs/plans/results-first-roadmap.md. BeliefTracker runs during real play from the compatible-deal prior; advice at a live decision resolves the actual tracked posterior instead of a static authored payload, with the same fail-closed identity discipline as the fixture path and a declared compute class (cache where identity permits). Done when one full game through ./scripts/play can request advice mid-game and the response belief receipt hashes the live posterior. Depends on Game supplying the live decision address (the GAM-4 deferral — today the canonical replay address exists only at game close); the Intelligence half is a belief resolver bound to the live match.",
+        "rank": 3,
+        "completed": false,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-21/resolve-live-advice-against-the-tracked-exact-bayes-posterior",
+        "workspace": {
+          "slug": "resolve-live-advice-against-the",
+          "branch": "jack-heart/resolve-live-advice-against-the",
+          "worktree": "/Users/jack/src/etude.resolve-live-advice-against-the"
+        }
+      },
+      "runtime": {
+        "work_id": "task_ac92409efc33da14002399e174044b88",
+        "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "status": "abandoned",
+        "reason": "abandoned",
+        "updated_at": "2026-09-13T17:31:01Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "abandoned"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-21 worktree /Users/jack/src/etude.resolve-live-advice-against-the is missing; restore that exact path on branch \"jack-heart/resolve-live-advice-against-the\" before `lf task resume ETU-21`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.633289Z",
+        "evidence_age_secs": 966517,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-21 worktree /Users/jack/src/etude.resolve-live-advice-against-the is missing; restore that exact path on branch \"jack-heart/resolve-live-advice-against-the\" before `lf task resume ETU-21`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "no_action",
+        "reason": "Task is terminal"
+      },
+      "active_pr": {
+        "id": "pr_618d93f6fb574cc6a5627dffe9f0407e",
+        "sequence": 1,
+        "slug": "resolve-live-advice-against-the",
+        "branch": "jack-heart/resolve-live-advice-against-the",
+        "base_commit": "b359ae0fb6976135905b0c473175c28bcd605940",
+        "phase": "working",
+        "empty": null,
+        "publication": null,
+        "merge_commit": null,
+        "abandoned_at": null
+      },
+      "section": "later"
+    },
+    {
+      "task": {
+        "id": "30eb45f9-9bec-4ab3-9c77-24aec84d6a2c",
+        "identifier": "ETU-18",
+        "name": "Refresh the INT-15 runtime digest verifier after merge",
+        "description": "Superseded without launch by INT-15 serial PR 2 (jack-heart/freeze-the-first-belief-conditioned-2), which Loopflow successfully minted after the original merged Task's Linear completion was reconciled. INT-15 now owns the exact one-line runtime-digest repair, frozen fixture/hash constraint, four validation commands, parent review, CI repair, landing, and settlement. This issue intentionally produced no worker, branch, commit, or PR and is closed to prevent duplicate execution.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-18/refresh-the-int-15-runtime-digest-verifier-after-merge",
+        "workspace": null
+      },
+      "runtime": null,
+      "next_move": {
+        "owner": "project",
+        "reason": "Linear Task is complete"
+      },
+      "condition": {
+        "state": "waiting",
+        "reason": "Linear Task is complete",
+        "observed_at": "2026-09-24T21:59:38.631606Z",
+        "evidence_age_secs": null,
+        "local_progress": {
+          "state": "not_applicable",
+          "unsettled": false,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": null,
+          "reason": null
+        }
+      },
+      "actions": {
+        "recommended": null,
+        "reason": "Task is ready to start"
+      },
+      "active_pr": null,
+      "section": "later"
+    },
+    {
+      "task": {
+        "id": "ea6ca01c-61f6-4896-baa7-44d508beaf2b",
+        "identifier": "ETU-19",
+        "name": "Commit the first belief-calibration curves",
+        "description": "R3 of docs/plans/results-first-roadmap.md. The updates-beliefs-reasonably observable: per seeded game, posterior mass on the actual hidden opponent hand versus the compatible-deal prior across the decision sequence. Requires binding a byte-locked checkpoint as the action-likelihood model (FrozenPolicyLikelihood off its test-only-likelihood/v1 fallback) and depends on Rules closing the RulesProviderGap public-commitment identity cases on the exercised path of the selected matchup. Done when a committed repro script emits the curves with standard receipts. Also the prescribed explanation of the exact-range player arena result per the intelligence ladder research.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-19/commit-the-first-belief-calibration-curves",
+        "workspace": {
+          "slug": "commit-the-first-belief-calibration",
+          "branch": "jack-heart/commit-the-first-belief-calibration",
+          "worktree": "/Users/jack/src/etude.commit-the-first-belief-calibration"
+        }
+      },
+      "runtime": {
+        "work_id": "task_c7a5e1f6798d86c1315e3ff4fc2c11d6",
+        "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:54Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-19 worktree /Users/jack/src/etude.commit-the-first-belief-calibration is missing; restore that exact path before `lf task resume ETU-19`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.631703Z",
+        "evidence_age_secs": 966524,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-19 worktree /Users/jack/src/etude.commit-the-first-belief-calibration is missing; restore that exact path before `lf task resume ETU-19`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "2b32d61f-ff12-48c4-bbf3-e48dd8888922",
+        "identifier": "ETU-20",
+        "name": "Freeze the first belief-conditioned recommendation flip",
+        "description": "R1 of docs/plans/results-first-roadmap.md. Author a small suite of decision positions where a typed condition should flip the argmax — canonical case: casting into open mana under Has(Counterspell) versus Lacks(Counterspell). Run conditional determinized PUCT offline at a real budget (hundreds of traversals, 16+ paired worlds; latency irrelevant to a frozen fixture). Done when one checked fixture with top_action_changed = 1.0 under paired seeds is frozen, replays exactly, and is served through the advice-v1 comparison. A measured no-flip at roughly 64x the INT-12 budget with uniform-random leaves closes the task with the negative result retained — it is the measured case for a stronger leaf evaluator and sharper positions.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-20/freeze-the-first-belief-conditioned-recommendation-flip",
+        "workspace": {
+          "slug": "freeze-the-first-belief-conditioned",
+          "branch": "jack-heart/freeze-the-first-belief-conditioned-2",
+          "worktree": "/Users/jack/src/etude.freeze-the-first-belief-conditioned"
+        }
+      },
+      "runtime": {
+        "work_id": "task_71820f7ac47fc5fb6b9a1550fc19557c",
+        "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:55Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-20 worktree /Users/jack/src/etude.freeze-the-first-belief-conditioned is missing; restore that exact path before `lf task resume ETU-20`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.632509Z",
+        "evidence_age_secs": 966523,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-20 worktree /Users/jack/src/etude.freeze-the-first-belief-conditioned is missing; restore that exact path before `lf task resume ETU-20`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "61e4e174-aeb7-443f-87f5-b76504f67bf4",
+        "identifier": "ETU-22",
+        "name": "Run determinized PUCT over conditional world priors",
+        "description": "Implement integration step 3 from the accepted INT-10 search-learning architecture after the viewer-relative PossibleWorldSpace and WorldQuery slice exists. Extend the existing determinized PUCT teacher to accept an immutable ConditionalWorldPrior and paired query plan and return one aligned ConditionalStrategyResult for True, Has, Lacks, Q, and Not(Q) at the same semantic root. Hold planner, evaluator, budget, and paired seeds fixed; report condition mass and support, legal action distributions, per-action Q, root value, uncertainty, realized compute, identities, and comparison deltas. Keep sampled worlds and hidden truth audit-private, name the planner determinized PUCT, and make no ISMCTS or equilibrium claim. Emit a checked identity-pinned fixture consumable by GAM-6 and the lower-level contract later exposed by INT-12. Fail closed on empty support, identity mismatch, missing artifacts, or action misalignment. Every Python command must use uv.",
+        "rank": 4,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-22/run-determinized-puct-over-conditional-world-priors",
+        "workspace": {
+          "slug": "run-determinized-puct-over-conditional",
+          "branch": "jack-heart/run-determinized-puct-over-conditional",
+          "worktree": "/Users/jack/src/etude.run-determinized-puct-over-conditional"
+        }
+      },
+      "runtime": {
+        "work_id": "task_9d7b2b495ecf15915dec4035d923740c",
+        "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:02Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-22 worktree /Users/jack/src/etude.run-determinized-puct-over-conditional is missing; restore that exact path before `lf task resume ETU-22`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.634019Z",
+        "evidence_age_secs": 966516,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-22 worktree /Users/jack/src/etude.run-determinized-puct-over-conditional is missing; restore that exact path before `lf task resume ETU-22`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "23a8c670-2096-47d6-b772-991290aabf77",
+        "identifier": "ETU-23",
+        "name": "Expose a versioned belief-conditioned strategy advisor",
+        "description": "Build the player-facing provider seam from the exact-range belief player, beginning after INT-9 has a stable viewer-safe range and weighted-search path. Accept a canonical DecisionAddress, ViewerIdentity, explicit BeliefScenario, and pinned AdvisorIdentity including world, content, observation/action, checkpoint or search, compute, and seed identities. Return legal conditional action distributions plus available value and uncertainty evidence; compare two scenarios by holding decision and advisor fixed and emitting attributable deltas. Preserve player-authored versus model-inferred belief provenance, normalize and validate ranges, fail typed-unavailable on missing or incompatible artifacts, and prove no opponent-private truth outside the viewer boundary affects the response. Emit one checked fixture consumable by Game's prototype and show identical deterministic serialization for the same request reached live or through Study. Report p50/p95 latency and the cost of recomputation. This is an advisor/evidence contract, not UI, chat, narration, or a new rules authority.",
+        "rank": 5,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-23/expose-a-versioned-belief-conditioned-strategy-advisor",
+        "workspace": {
+          "slug": "expose-a-versioned-belief-conditioned",
+          "branch": "jack-heart/expose-a-versioned-belief-conditioned",
+          "worktree": "/Users/jack/src/etude.expose-a-versioned-belief-conditioned"
+        }
+      },
+      "runtime": {
+        "work_id": "task_b09d68878cf2e5a15be88da5e5d532e1",
+        "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:08Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-23 worktree /Users/jack/src/etude.expose-a-versioned-belief-conditioned is missing; restore that exact path before `lf task resume ETU-23`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.635874Z",
+        "evidence_age_secs": 966510,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-23 worktree /Users/jack/src/etude.expose-a-versioned-belief-conditioned is missing; restore that exact path before `lf task resume ETU-23`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "07aeef8e-4a20-42dd-819e-dcebfc29bb07",
+        "identifier": "ETU-24",
+        "name": "Build the first exact-range belief-aware player",
+        "description": "Build a complete selected-matchup manabot that maintains an exact normalized opponent hand range from the acting viewer boundary, updates it through canonical public actions and chance events, samples likelihood-weighted viewer-consistent determinizations, and emits legal Commands through normal authoritative managym execution. Pin the action-likelihood model and include a uniform-range control using the same search budget and implementation path. Enter both players in the world-pinned arena against scripted, policy-only, search, and frozen learned opponents with paired deals; report rating, full matchups, range calibration and log loss on replayable known-truth games, effective sample size, competencies, legality, viewer-equivalence leakage checks, p50/p95 latency, rollout throughput, and memory. The primary claim is whether beliefs improve actual play at matched compute. Use posterior diagnostics only to explain that result. If gameplay is ambiguous, preregister the smallest information-by-continuation slice before adding a microgame; do not begin public-belief solving or broad deck generalization in this task. Run every Python command through uv and debug-test Rust changes.",
+        "rank": 6,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-24/build-the-first-exact-range-belief-aware-player",
+        "workspace": {
+          "slug": "build-the-first-exact-range",
+          "branch": "jack-heart/build-the-first-exact-range",
+          "worktree": "/Users/jack/src/etude.build-the-first-exact-range"
+        }
+      },
+      "runtime": {
+        "work_id": "task_5887c86cc9392c0e21b6eae9b5da2009",
+        "project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "routing_project_id": "proj_8933d00a7fe85dc5a3e7ddeb15e28da9",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:31:11Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-24 worktree /Users/jack/src/etude.build-the-first-exact-range is missing; restore that exact path before `lf task resume ETU-24`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:38.636561Z",
+        "evidence_age_secs": 966507,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-24 worktree /Users/jack/src/etude.build-the-first-exact-range is missing; restore that exact path before `lf task resume ETU-24`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": []
+}

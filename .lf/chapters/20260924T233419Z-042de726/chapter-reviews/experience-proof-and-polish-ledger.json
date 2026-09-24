@@ -1,0 +1,407 @@
+{
+  "observed_at": "2026-09-24T21:59:35.585349Z",
+  "wave": "game",
+  "id": "1d3658d8-d3c1-42ae-aad4-f2670a6ee987",
+  "slug": "experience-proof-and-polish",
+  "project": {
+    "id": "1d3658d8-d3c1-42ae-aad4-f2670a6ee987",
+    "slug": "experience-proof-and-polish",
+    "name": "Experience Proof and Polish",
+    "summary": "Prove that the shipped UR Lessons (hero) versus GW Allies (villain) experience remains playable, responsive, recoverable, accessible, and visually intact through repeatable gates against the real release stack, so regressions fail evidence checks instead ",
+    "definition": "Prove that the shipped UR Lessons (hero) versus GW Allies (villain) experience remains playable, responsive, recoverable, accessible, and visually intact through repeatable gates against the real release stack, so regressions fail evidence checks instead of becoming subjective cleanup.",
+    "flows": {
+      "recommended": null
+    },
+    "krs": [
+      {
+        "text": "A deterministic release-stack end-to-end suite reaches terminal across scenarios that collectively surface every prompt family reachable in UR Lessons versus GW Allies and proves reconnect/resume, stale-command rejection, duplicate-command idempotency, checkpoint recovery, and replay equivalence.",
+        "holds": false
+      },
+      {
+        "text": "A named reference device, OS, browser, and release-build profile has numeric budgets for cold launch-to-playable, input acknowledgement, authority response, animation frame pacing, and peak memory; repeatable measurements fail documented regression thresholds.",
+        "holds": false
+      },
+      {
+        "text": "The complete selected matchup is operable keyboard-only and under reduced motion, with automated contrast and accessibility checks plus screen-reader assertions for every prompt, status transition, and game result.",
+        "holds": true
+      },
+      {
+        "text": "Versioned visual references cover every prompt family and key board, recovery, and terminal states; a clean release-build playthrough has zero unexpected visual diffs, broken curated assets, runtime console errors, or network-dependent play assets.",
+        "holds": false
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task": {
+        "id": "bdf019e3-b3d1-441e-b81b-394e340316cb",
+        "identifier": "ETU-1",
+        "name": "Add versioned visual references to the release prompt matrix",
+        "description": "Build on merged W2-209 and its deterministic release-stack prompt matrix. Capture committed, versioned Playwright screenshot references for every reachable UR Lessons versus GW Allies prompt family and key board, reconnect-status, and terminal states across the two fixed scenarios. Use a deterministic viewport, color scheme, fonts, reduced motion or animation settling, and local curated assets; run through the real release preview stack. Fail on unexpected diffs, missing baselines, broken, fallback, or remote assets, public-network play requests, page or console errors, or nonterminal scenario drift. Document the intentional baseline-update workflow and run the gate in CI. Preserve existing product visuals and authority; do not redesign, add decks, add recovery protocol semantics, change performance budgets, or claim real assistive-technology automation. Every Python command must use uv.",
+        "rank": 0,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-1/add-versioned-visual-references-to-the-release-prompt-matrix",
+        "workspace": {
+          "slug": "add-versioned-visual-references-to",
+          "branch": "jack-heart/add-versioned-visual-references-to",
+          "worktree": "/Users/jack/src/manabot.add-versioned-visual-references-to"
+        }
+      },
+      "runtime": {
+        "work_id": "task_6abd8a5c0a51b75209dba220500c7331",
+        "project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "routing_project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:31Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "refresh reviewer-facing PR copy for the current head before settlement"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-1 worktree /Users/jack/src/manabot.add-versioned-visual-references-to is missing; restore that exact path on branch \"jack-heart/add-versioned-visual-references-to\" before `lf task resume ETU-1`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.430418Z",
+        "evidence_age_secs": 966548,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-1 worktree /Users/jack/src/manabot.add-versioned-visual-references-to is missing; restore that exact path on branch \"jack-heart/add-versioned-visual-references-to\" before `lf task resume ETU-1`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "no_action",
+        "reason": "Task ETU-1 worktree /Users/jack/src/manabot.add-versioned-visual-references-to is missing; restore that exact path on branch \"jack-heart/add-versioned-visual-references-to\" before `lf task resume ETU-1`; Task identity and PR history are unchanged"
+      },
+      "active_pr": {
+        "id": "pr_4197495d83c8427e914dfc19c2836d32",
+        "sequence": 1,
+        "slug": "add-versioned-visual-references-to",
+        "branch": "jack-heart/add-versioned-visual-references-to",
+        "base_commit": "df01e1749f7095380bf0a37858be196605081ca5",
+        "phase": "open",
+        "empty": null,
+        "publication": {
+          "requested_at": "2026-07-16T02:00:28Z",
+          "presentation": null,
+          "github": {
+            "number": 93,
+            "url": "https://github.com/loopflowstudio/manabot/pull/93"
+          },
+          "merge": null
+        },
+        "merge_commit": null,
+        "abandoned_at": null
+      },
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "d7ede9ce-3754-4c7e-b585-cf282ceec365",
+        "identifier": "ETU-2",
+        "name": "Prove release-matrix accessibility across the selected matchup",
+        "description": "Build on merged W2-204 and its deterministic release prompt matrix. Make every reachable UR Lessons versus GW Allies prompt, status transition, and terminal result operable keyboard-only and under reduced motion. Add automated contrast and accessibility checks plus explicit screen-reader assertions for prompt instructions, legal choices, focus movement, live status, recovery status where already represented, and game result. Run against the real release stack and fail on inaccessible names, focus traps or loss, illegal keyboard activation, motion that ignores the preference, contrast violations, console errors, or broken local assets. Preserve engine authority and the existing visual design; do not add recovery protocol semantics, broad visual redesign, new decks, or visual screenshot baselines in this Task. Every Python command must use uv.",
+        "rank": 1,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-2/prove-release-matrix-accessibility-across-the-selected-matchup",
+        "workspace": {
+          "slug": "prove-release-matrix-accessibility-across",
+          "branch": "jack-heart/prove-release-matrix-accessibility-across",
+          "worktree": "/Users/jack/src/manabot.prove-release-matrix-accessibility-across"
+        }
+      },
+      "runtime": {
+        "work_id": "task_b5d5b4fa940e30f538efb6fbd8ce6535",
+        "project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "routing_project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:31Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-2 worktree /Users/jack/src/manabot.prove-release-matrix-accessibility-across is missing; restore that exact path before `lf task resume ETU-2`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.431246Z",
+        "evidence_age_secs": 966548,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-2 worktree /Users/jack/src/manabot.prove-release-matrix-accessibility-across is missing; restore that exact path before `lf task resume ETU-2`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "42a06a34-0f2a-4691-8789-00363e841c1b",
+        "identifier": "ETU-3",
+        "name": "Prove terminal release-stack prompt-family matrix",
+        "description": "Build the next bounded proof slice on merged W2-186. Run the real release stack through deterministic UR Lessons versus GW Allies scenarios that collectively reach terminal and enumerate every prompt family currently reachable in the selected matchup. Check in the scenario matrix and repeatable release-build gate; fail on non-terminal runs, unexpected console errors, or uncovered reachable prompt families. Preserve the existing protocol and table; do not duplicate W2-195 recovery semantics, add broad visual redesign, or expand card/deck scope. Every Python command must use uv.",
+        "rank": 2,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-3/prove-terminal-release-stack-prompt-family-matrix",
+        "workspace": {
+          "slug": "prove-terminal-release-stack-prompt",
+          "branch": "jack-heart/prove-terminal-release-stack-prompt",
+          "worktree": "/Users/jack/src/manabot.prove-terminal-release-stack-prompt"
+        }
+      },
+      "runtime": {
+        "work_id": "task_b7f513d69ce46bb4b1e1f569ea938995",
+        "project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "routing_project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:32Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-3 worktree /Users/jack/src/manabot.prove-terminal-release-stack-prompt is missing; restore that exact path before `lf task resume ETU-3`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.431701Z",
+        "evidence_age_secs": 966547,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-3 worktree /Users/jack/src/manabot.prove-terminal-release-stack-prompt is missing; restore that exact path before `lf task resume ETU-3`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "bf166829-b473-4d45-9c25-1a5e10ac2145",
+        "identifier": "ETU-4",
+        "name": "Default manabot Loopflow tasks to Codex",
+        "description": "Add or update the repo-scoped .lf/config.yaml so manabot Loopflow Wave, Project, and Task sessions default to the Codex agent while the preferred Claude primary OAuth account is expired. Preserve any existing repo config and do not modify global provider accounts, credentials, or unrelated Loopflow behavior. Verify the effective repo context/config selects Codex and document the reason tersely enough to remove or revise after Claude routing is repaired. This is execution reliability infrastructure for the active Rules and Game portfolios, not product code.",
+        "rank": 3,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-4/default-manabot-loopflow-tasks-to-codex",
+        "workspace": {
+          "slug": "default-manabot-loopflow-tasks-to",
+          "branch": "jack-heart/default-manabot-loopflow-tasks-to",
+          "worktree": "/Users/jack/src/manabot.default-manabot-loopflow-tasks-to"
+        }
+      },
+      "runtime": {
+        "work_id": "task_c9f9893a7980606d9b2006f71b7f3ec9",
+        "project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "routing_project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:34Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-4 worktree /Users/jack/src/manabot.default-manabot-loopflow-tasks-to is missing; restore that exact path before `lf task resume ETU-4`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.433427Z",
+        "evidence_age_secs": 966545,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-4 worktree /Users/jack/src/manabot.default-manabot-loopflow-tasks-to is missing; restore that exact path before `lf task resume ETU-4`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "b91bd9eb-02a0-44ae-88cd-a2b7fce1db46",
+        "identifier": "ETU-5",
+        "name": "Establish the game experience proof harness and budgets",
+        "description": "Inventory the selected matchup prompt families and existing GUI/server tests, then add the smallest durable proof harness that can grow with the Game wave. Record reference commands and initial launch, input acknowledgement, authority response, frame-pacing, and memory measurements; add at least one reconnect or stale-command fault test and one accessibility/visual check where current tooling permits. Do not claim Phase parity yet or build a broad E2E framework without evidence. All Python commands must use uv.",
+        "rank": 4,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-5/establish-the-game-experience-proof-harness-and-budgets",
+        "workspace": {
+          "slug": "establish-the-game-experience-proof",
+          "branch": "jack-heart/establish-the-game-experience-proof",
+          "worktree": "/Users/jack/src/manabot.establish-the-game-experience-proof"
+        }
+      },
+      "runtime": {
+        "work_id": "task_11f5135a195f8a6bfffcb65fd6edc6a3",
+        "project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "routing_project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:35Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-5 worktree /Users/jack/src/manabot.establish-the-game-experience-proof is missing; restore that exact path before `lf task resume ETU-5`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.434926Z",
+        "evidence_age_secs": 966544,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-5 worktree /Users/jack/src/manabot.establish-the-game-experience-proof is missing; restore that exact path before `lf task resume ETU-5`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    },
+    {
+      "task": {
+        "id": "8a16a975-cc2a-4616-8abe-c3d441d921b5",
+        "identifier": "ETU-6",
+        "name": "Route Etude managed workers to the healthy provider",
+        "description": "Replace the temporary repo-scoped OpenCode default now that it repeatedly stalls before provider handoff and managed Codex has been verified healthy by GAM-5 generation 13. Restore the repo default to Codex through .lf/config.yaml with a terse temporary-routing note, without changing global accounts, credentials, routes for other repositories, or product code. Verify the effective repo config resolves to Codex and launch one bounded Task or Project probe far enough to incorporate its directive and begin useful work. Preserve existing durable Sessions; do not restart every worker at once.",
+        "rank": 5,
+        "completed": true,
+        "assignee": null
+      },
+      "reference": {
+        "issue_url": "https://linear.app/loopflow/issue/ETU-6/route-etude-managed-workers-to-the-healthy-provider",
+        "workspace": {
+          "slug": "route-etude-managed-workers-to",
+          "branch": "jack-heart/route-etude-managed-workers-to",
+          "worktree": "/Users/jack/src/etude.route-etude-managed-workers-to"
+        }
+      },
+      "runtime": {
+        "work_id": "task_be8a87214cd362afc46d5d3a9d7da69d",
+        "project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "routing_project_id": "proj_79cbe17721a65d9edd1d611eafe5265a",
+        "status": "ready",
+        "reason": "ready",
+        "updated_at": "2026-09-13T17:30:36Z",
+        "provider": "codex"
+      },
+      "next_move": {
+        "owner": "project",
+        "reason": "ready"
+      },
+      "condition": {
+        "state": "blocked",
+        "reason": "Task ETU-6 worktree /Users/jack/src/etude.route-etude-managed-workers-to is missing; restore that exact path before `lf task resume ETU-6`; Task identity and PR history are unchanged",
+        "observed_at": "2026-09-24T21:59:39.443744Z",
+        "evidence_age_secs": 966543,
+        "local_progress": {
+          "state": "missing",
+          "unsettled": true,
+          "dirty": null,
+          "authored_commits": null,
+          "recovery_required": true,
+          "reason": "Task ETU-6 worktree /Users/jack/src/etude.route-etude-managed-workers-to is missing; restore that exact path before `lf task resume ETU-6`; Task identity and PR history are unchanged"
+        }
+      },
+      "actions": {
+        "recommended": "start_next_pr",
+        "reason": "PR merged; continue the Task on its next PR"
+      },
+      "active_pr": null,
+      "section": "waiting"
+    }
+  ],
+  "unavailable": [
+    {
+      "work_id": "proj_5f344a2b7e101578c9763ee183ccaaf3",
+      "project_id": "1b93253e-5422-45f1-94df-c019a261e812",
+      "project_slug": "experience-contract-and-recovery",
+      "status": "ready",
+      "owner": "wave",
+      "reason": "Project is absent from the current PM snapshot",
+      "recovery": "lf project abandon experience-contract-and-recovery --reason \"Project is absent from the current PM snapshot\"",
+      "tasks": [
+        {
+          "work_id": "task_a676b8f06437ff76e0d358858bb282d4",
+          "task_id": "f5125ef5-2972-426c-bcdd-1f25af854a90",
+          "task_identifier": "W2-183",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_a676b8f06437ff76e0d358858bb282d4 --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_7225012a52c054c23e1ff1015fc138ee",
+          "task_id": "4d713cf0-ba78-41a9-837f-4496acfd5771",
+          "task_identifier": "W2-194",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_7225012a52c054c23e1ff1015fc138ee --reason \"Project is absent from the current PM snapshot\""
+        },
+        {
+          "work_id": "task_add7e9c8ab0f16dd62939e159818ab28",
+          "task_id": "d84c024e-6fe4-496e-8d51-59fb22890feb",
+          "task_identifier": "W2-195",
+          "status": "ready",
+          "owner": "wave",
+          "reason": "Task's owning Project is absent from the current PM snapshot",
+          "recovery": "lf work abandon task task_add7e9c8ab0f16dd62939e159818ab28 --reason \"Project is absent from the current PM snapshot\""
+        }
+      ]
+    }
+  ]
+}

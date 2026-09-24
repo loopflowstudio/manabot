@@ -1,98 +1,34 @@
 ---
 pm:
-  provider: linear
   linear_initiative: 21966203-a6bb-4e2c-a902-f43cbe813053
-  linear_team: ef9e3b10-0953-4e92-aba7-0f587336f1cd
 ---
 
 # Game
 
 ## Objective
 
-Build Etude Fantasia as an AI-assisted Pro Tour testing house. Piloting,
-watching, stating a read, comparing strategy, trying a line, having fun, and
-continuing into Study are one shared surface over one authoritative match—not
-separate play, replay, and analysis products.
+Make the existing Allies versus Lessons demo a game the User can follow, express every intended legal play in, finish against an identified trained opponent, and choose to play again.
 
-The first AI experience is a decision surface where a player states an
-explicit viewer-safe belief, sees one identified advisor's complete strategy
-conditioned on it, changes the belief, and sees the delta. Match facts,
-player-authored beliefs, model-inferred beliefs, and advice remain separately
-labelled. The same decision, belief, advisor, compute class, and provenance
-identity produces the same advice live or in Study. Only the acting pilot may
-commit the live offered `Command`; watchers and isolated exploration never
-pause or mutate the authoritative match.
+## Current Project and measures
 
-The destination remains the definitive Avatar Cube Team Sealed experience:
-humans construct three decks from a shared pool, choose which seats they pilot,
-play a three-by-three deck matchup matrix with human or manabot teammates and
-opponents, and study every recorded game afterward. The nearest product is
-deliberately smaller: make one creator-selected human-versus-manabot game
-complete, polished, recoverable, replayable, and genuinely useful to Study.
-The north star guides interfaces and sequencing; it does not justify filing the
-entire downstream feature tree before this loop works.
+One current Project: **Complete Games** (`9106931a-3e9a-48ef-881b-30ee3363f929`). The User approved this chapter on 2026-09-24; review it on **2026-10-08**. Exact accepted scope, baseline evidence and dispositions live in the [chapter record](../../.lf/chapters/20260924T233419Z-042de726/start.md). The date is a review point, not a promised success deadline.
 
-## Measures
+1. **Understand each change and next decision.** In real human games, the User can follow casting, targeting, resolution, combat, damage, death, and turn changes and identify whose decision is next. Reproduce reported confusion in exact versioned positions, render from authoritative semantic events, retain regression coverage, and validate the fix through human play, including skip/fast-forward and reduced-motion behavior. No known transition blocker remains at closure. Existing event code alone is insufficient proof.
 
-- One selected matchup launches through the release stack, reaches terminal,
-  recovers safely, and preserves the same authoritative frames, offers,
-  commands, semantic events, and replay identities across direct play and
-  Study.
-- Every historical player decision in a completed game is addressable and
-  restorable; a player can inspect evidence, Retry an exact position, follow a
-  bounded canonical continuation, compare it, and return without client-side
-  rules or replay reconstruction.
-- At the same canonical decision reached live or through Study, at least two
-  explicit viewer-safe belief scenarios use one pinned advisor and compute
-  class and return reproducible, complete aligned action distributions,
-  values, robustness, uncertainty, and deltas. Facts, authored beliefs,
-  inferred beliefs, and advice remain distinct, and empty or mismatched
-  evidence fails closed.
-- A pilot and permitted watcher can inhabit the same canonical decision
-  surface and compare viewer-safe belief and strategy artifacts without
-  pausing or mutating the match. Only the pilot can submit its offered live
-  `Command`; an isolated line returns to the identical recorded decision.
-- The player-facing table is fast, legible, accessible, visually authored, and
-  portable, with repeatable release, recovery, performance, and visual gates.
-- Versioned format and series identities can eventually represent the Avatar
-  defaults without hardcoding them into match execution: a 540-card cube, two
-  135-card team pools, three 40-card-minimum decks per team, unlimited basic
-  lands, deck-specific sideboards, a full three-by-three game matrix, and a
-  five-win clinch.
-- Every played game in a future team series remains an independent canonical
-  match and is recorded under one series identity for replay and Study.
+2. **Express every intended legal play without awkward controls.** Maintain an explicit interaction-family and known-friction ledger for the selected matchup, including large and rare choice sets and the full Learn/Lesson interaction. Every reported awkward action blocks closure until reproduced, fixed and confirmed. Preserve complete legal choices and server Command authority; record exercised and untested coverage. Grouping/staged choice is a design candidate, not a mandated solution.
 
-## Bounds and sequencing
+3. **Finish and choose to return.** The User completes games against clearly identified trained checkpoints and voluntarily chooses to play again. Retain all attempted sessions, including abandonment, with match, world, opponent, deck/seat and reproducible Command identities; discover and remove additional stopping friction through those sessions. Agree the concrete human-play cohort before scoring it, revisit repaired interactions across later sessions, and exercise both deck assignments. Automated terminal fixtures do not substitute for this human outcome.
 
-Study is a named Game mode and a time control over the same testing-house
-surface. Game owns construction UX, player-authored belief and comparison UX,
-viewer roles and capabilities, live play, presentation, replay, recovery,
-series orchestration, isolated-line interaction, and Study navigation. The
-ActionPanel remains the sole live Command path.
+## Ownership and opening work
 
-Rules owns content, pool and deck legality, matches, viewer-safe facts, typed
-possible-world queries, and exact forks and returns. Intelligence owns manabot
-play, priors, model-inferred beliefs, advisor/search identity, compute identity,
-and attributable evidence. Game presents those inputs without inferring hidden
-truth or generating strategy in the client.
+Game owns the human experience: understandable progress, complete usable action selection, checkpoint identity, and attempted-game records. Discover friction through actual play; a single awkward intended action blocks the full-game claim, even when rare. Test candidate interaction designs rather than requiring the User to diagnose the interface.
 
-The first robot team may use fixed authored decks. Manabots initially pilot
-decks without sideboarding. Building three legal decks from a shared sealed
-pool is an important later Intelligence capability; Game owns the construction
-experience. Drafting is not required. Discord is the human communication layer,
-so Etude owns shared decisions and artifacts but does not build chat.
+Rules owns legal choices, Lesson-pool semantics, authoritative consequences and replay. Intelligence owns training, candidate provenance and strength evaluation. Game preserves ordinary revision-bound Commands as the live mutation path. Study remains an existing Game capability; advice and richer Study do not inherit opening priority.
 
-Advance by completing the nearest runnable player loop, then add the next
-smallest behavior that makes the Avatar Team Sealed destination more real. Do
-not create speculative lobby, social, tournament, or generalized cube-platform
-infrastructure ahead of an exercised need.
+Start by reproducing missing transitions and action-selection friction in exact Allies/Lessons positions, then validate focused changes with the User. Coordinate the full Learn/Lesson surface with Rules and expose Intelligence's compatible checkpoints clearly. Preserve launch, recovery, accessibility, asset and replay safeguards; do not claim broad historical certifications from narrow checks.
 
-As of 2026-07-18 the versioned advice surface serves belief-conditioned
-strategy evidence, but only for a pinned completed-match decision from checked
-fixtures. The nearest Game work is the live seam: an addressable canonical
-decision for the in-progress match (the live decision address deferred from
-GAM-4 — today the canonical replay address exists only at game close) and the
-player-authored belief input surface, so the same advice identity resolves
-mid-game against the tracked posterior instead of a fixture. This is the Game
-half of Intelligence's live-belief rung; the fork/Retry/return UI remains
-sequenced behind it.
+## Evidence and limits
+
+The existing GW Allies versus UR Lessons demo is the chapter's content boundary. Broader Team Sealed ambitions, portability and unrelated expansion are deferred. Preserve shipped code and frozen evidence without inheriting every historical priority. The baseline covers all 56 current KRs but has incomplete historical lineage; unknown evidence does not mean a broken implementation.
+
+Protocol details and numeric budgets must be justified and fixed before scored measurement. Human-play evidence records stopped attempts as well as completed games. Product work begins in scoped Tasks; accepting this chapter alone does not launch costly experiments. Historical Wave context remains in [memory](MEMORY.md), with the dated charter copy retained in the chapter archive.
