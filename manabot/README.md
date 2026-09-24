@@ -9,6 +9,8 @@ training, and verification. You train *a* manabot; this package is how.
 uv run manabot train              # --preset local: bounded laptop run
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
+uv run manabot belief-demo        # engine-derived belief/intervention proof
+uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
 The default `local` preset is the certified laptop path: it trains a small
@@ -52,6 +54,17 @@ world. The cross-package contracts and convergence status are in
    run-provenance store
 6. **`manabot.infra`**: experiment tracking (W&B/TensorBoard), `Hypers`
    config models, profiling
+7. **`manabot.belief`**: canonical world distributions, viewer history,
+   supervised exact-world learning, and the `ManabotPlayer` lifecycle
+
+Belief input is opt-in: schema-bound checkpoints load through the ordinary
+`checkpoint` player and update belief before each policy/value decision.
+`belief-demo` uses a freshly initialized policy to prove intervention wiring;
+`belief-learn-demo` trains a belief scorer on one scripted population and holds
+out whole episodes. Neither demonstrates strategic strength or opponent
+transfer. The generic PPO and teacher-shard trainers do not yet produce the
+semantic belief inputs required to train a belief-enabled policy. Historical
+positional-condition checkpoints are rejected rather than reinterpreted.
 
 Experiment-specific driver scripts live in
 [experiments/runners/](../experiments/runners/), not here — `manabot/` keeps

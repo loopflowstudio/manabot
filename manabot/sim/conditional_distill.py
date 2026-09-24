@@ -5,11 +5,11 @@ per-decision condition axis so a policy/value student can be conditioned on a
 provided per-condition strategy label carried by a `ConditionalStrategyResult`
 (INT-13, `manabot/sim/conditional_search.py`).
 
-The condition is a **provided side input**, not a predicted belief. There is no
-learned belief head, range net, or per-hand value vector here; the policy and
-scalar value heads of `Agent` are unchanged. The condition enters the student
-as one neutral object row built from a per-row `condition_index` and
-`condition_weight`.
+This module retains the historical INT-14 shard format and evidence adapters.
+That student consumed positional `condition_index` and `condition_weight`
+side inputs. The current `Agent` requires schema-bound semantic belief tensors
+instead; these retained fields do not condition the current policy/value core.
+Training a conditional student requires an explicit belief-data integration.
 
 Frozen shape contract
 ---------------------
@@ -67,9 +67,8 @@ CONDITION_KEYS: tuple[str, ...] = (
     CONDITION_WEIGHT_KEY,
     CONDITION_SCORES_KEY,
 )
-# Per-row obs fields the loader attaches for the conditioned student. These are
-# the side inputs `Agent._condition_row` reads; they are NOT part of the
-# fixed ObservationSpace ABI (the arena path does not produce them).
+# Historical per-row fields retained in frozen INT-14 shard evidence. They are
+# not part of the current ObservationSpace or Agent checkpoint ABI.
 CONDITION_ROW_KEYS: tuple[str, ...] = ("condition_index", "condition_weight")
 
 # The five condition roles of an INT-13 ConditionalQueryPlan, in fixed order:
@@ -470,8 +469,9 @@ def load_conditional_shards(
     fields are repeated K times; per-row `scores` = `condition_scores[d, k, :]`
     (the per-condition strategy as score-softmax targets); per-row `action` =
     the per-condition argmax over valid actions; per-row `condition_index`/
-    `condition_weight` carry the side input the conditioned `Agent` reads. The
-    train/val split is by game (all K rows of a decision share a game_index).
+    `condition_weight` preserve the historical positional side input. Current
+    `Agent` models do not consume those fields. The train/val split is by game
+    (all K rows of a decision share a game_index).
     """
 
     import json as _json
@@ -551,10 +551,10 @@ def load_conditional_shards(
 def with_neutral_condition(dataset: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     """Return a copy of an expanded conditional dataset with a neutral condition.
 
-    The condition side input is replaced by the neutral True/uniform condition
-    (`condition_index=0, condition_weight=1.0`) on every row. Used for the
-    unconditioned matched-control arms: same rows, same targets, only the
-    condition feature content is masked to the uninformative prior.
+    The historical side input becomes True/uniform
+    (`condition_index=0, condition_weight=1.0`) on every row. This preserves
+    INT-14's matched-control representation; it does not construct a semantic
+    belief for the current `Agent`.
     """
 
     out = dict(dataset)

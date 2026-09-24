@@ -24,6 +24,10 @@ import torch.nn as nn
 import wandb
 
 # Local imports
+from manabot.belief.encoding import (
+    BeliefEncodingSchema,
+    belief_checkpoint_fields,
+)
 from manabot.env import (
     Match,
     ObservationSpace,
@@ -71,11 +75,13 @@ class Trainer:
         experiment: Experiment,
         env: VectorEnv,
         hypers: TrainHypers | None = None,
+        belief_schema: BeliefEncodingSchema | None = None,
     ):
         self.agent = agent.to(experiment.device)
         self.experiment = experiment
         self.env = env
         self.hypers = hypers or TrainHypers()
+        self.belief_schema = belief_schema
         self.global_step = 0
 
         self.optimizer = torch.optim.Adam(
@@ -863,15 +869,20 @@ class Trainer:
         # Always persist locally, independent of wandb (checkpoints are the
         # instrument for the strength ladder — never train without saving).
         path = str(self.experiment.runs_dir / f"step_{self.global_step}.pt")
-        torch.save(
-            {
-                "model_state_dict": self.agent.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "global_step": self.global_step,
-                "hypers": hypers_dict,
-            },
-            path,
+        checkpoint = {
+            "model_state_dict": self.agent.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "global_step": self.global_step,
+            "hypers": hypers_dict,
+        }
+        checkpoint.update(
+            belief_checkpoint_fields(
+                self.belief_schema,
+                count_buckets=self.agent.belief_count_buckets,
+                card_vocab_size=self.agent.hypers.belief_card_vocab_size,
+            )
         )
+        torch.save(checkpoint, path)
 
         if self.wandb is None:
             return

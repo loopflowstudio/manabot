@@ -14,9 +14,10 @@ was dead on arrival in exp-10.)
 | **w2** | rules stage 3–4 + conformance (`cb80331`..`a9f1f91`, max_actions 32 @ `55a0b4b`) | 28 / 38 / 24 / 14 | exp-10 V + BC student; exp-11 arms (incl. ported student_r0, validated 86.5%) | exp-06 PPO 60–77%; exp-10/11 (pending merge) |
 
 **Current world: w2.** Tag = the world column; when in doubt, the dims tuple
-is the tag. Porting across worlds (`port_legacy_state_dict`, exp-11) is legal
-for *components* (opponents) after behavioral validation; *measurements* are
-regenerated, never ported (exp-10's precedent).
+is the tag. Exp-11 historically ported opponent components with
+`port_legacy_state_dict` and behavioral validation; that utility is now retired.
+Current loaders require current-ABI checkpoints. Cross-world *measurements*
+are regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any shape change.
 

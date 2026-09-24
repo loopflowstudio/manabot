@@ -27,6 +27,10 @@ identity assertions intact. Check the receipt's host and cache conditions:
 a local macOS pass does not certify the Ubuntu CI performance profile.
 Proof-runner startup should overlap installation after npm is ready, and both
 launcher failure and timeout must reap the browser runner.
+Frontend service startup and its first HTTP request must overlap a cold native
+build, with cleanup on either service's preparation failure. Run the launcher
+contract tests when changing startup ordering; a warm local launch cannot
+expose serialized installation and frontend compilation.
 
 ## Required checks for Rust managym work
 

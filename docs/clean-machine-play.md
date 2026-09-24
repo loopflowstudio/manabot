@@ -69,6 +69,10 @@ down. CI uploads the receipt and launcher log even if the proof fails.
 
 Once the launcher finishes the locked frontend install, the verifier starts
 Playwright and Chromium while the native build can still be running. The
+launcher also starts Vite and requests its root page during the native build,
+so frontend startup and initial compilation overlap backend preparation.
+Both services must pass readiness before the launcher emits its ready record.
+Any installation or service-start failure tears down the started services. The
 browser waits for `ETUDE_PLAY_READY` before navigating. This overlaps proof
 setup with installation without moving the external start time or relaxing
 the sixty-second playable-state assertion.

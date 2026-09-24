@@ -26,19 +26,20 @@ advice live or in Study. Intelligence owns policies, priors, model-inferred
 beliefs, search, training, evaluation, and attributable evidence. It does not
 own match facts, player-authored beliefs, rules authority, or Game's surface.
 
-The architecture program in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md)
-landed its substrate on 2026-07-18: world enumeration and the typed query
-grammar, the exact-Bayes range tracker and player, conditional determinized
-PUCT with paired sampling, the versioned advice surface, conditional shards,
-the visit teacher, and the world-pinned arena all run — and none has a
-committed production result. The highest-priority Intelligence work is now the
-results ladder in
-[docs/plans/results-first-roadmap.md](../../docs/plans/results-first-roadmap.md):
-freeze the first recommendation flip
-under a typed condition, put the tracked belief on the live play path, commit
-the first belief-calibration curves, and run the first arena admission
-including the exact-range player against a uniform-determinization control.
-The supervised belief head is explicitly deferred until those artifacts exist.
+Belief formation belongs to the ordinary manabot lifecycle. At each decision,
+viewer-safe history produces a normalized belief over managym worlds; policy,
+value, and optional search consume that belief through one explicit boundary.
+Training, evaluation, and Study can replace it for one evaluation without
+changing autonomous memory. Query text and teacher labels are not belief
+features, and private updater activations cannot bypass the supplied belief.
+
+Prioritize the composition that makes a working agent possible, then measure
+conditional teacher signal, policy-only student behavior, belief calibration,
+and full autonomous play. A runnable belief updater may precede product advice
+integration; it does not establish strategic strength or close live-advice and
+calibration evidence gates. Keep those claims separate. Preserve the historical
+results ladder as evidence contracts rather than a blanket prohibition on
+building the missing agent boundary.
 
 The product north star places manabots in Avatar Cube Team Sealed as pilots,
 teammates, and opponents. The first robot team may use fixed authored decks,
@@ -48,73 +49,10 @@ later Intelligence capability. A versioned, world-pinned Elo arena measures
 the resulting players at declared compute classes. Drafting is separate and is
 not a prerequisite.
 
-## Measures
-
-The first four are the 2026-07-18 results ladder
-([docs/plans/results-first-roadmap.md](../../docs/plans/results-first-roadmap.md));
-each closes only with a committed, replayable artifact on an instrument that
-already exists.
-
-- **R1 — the flip.** A frozen, exactly replayable fixture in which changing
-  only the typed condition (e.g. `Has(Counterspell)` vs `Lacks(Counterspell)`)
-  flips the advised top action under paired seeds at a declared offline
-  budget, served through the versioned advice comparison. A measured no-flip
-  at ~64× the fixture budget is an acceptable closure with the negative
-  result retained.
-- **R2 — live beliefs.** One full game through `./scripts/play` can request
-  advice mid-game whose belief receipt hashes the live exact-Bayes posterior
-  tracked from the compatible-deal prior — no static authored payload on the
-  path, same fail-closed identity discipline as the fixture path.
-- **R3 — calibration curves.** A committed repro script emits, for seeded
-  games, posterior mass on the opponent's actual hidden hand versus the
-  prior's mass across the decision sequence, with the action-likelihood model
-  byte-locked to a real checkpoint and no remaining `RulesProviderGap` on the
-  exercised path.
-- **R4 — first strength results.** A committed arena run (ratings, payoff
-  matrix, paired-deal uncertainty) over the frozen anchors, the dPUCT
-  challenger, and the exact-range player versus a uniform-determinization
-  control at matched compute; and one production visit-teacher iteration with
-  multi-seed students through the fail-closed harness.
-
-The standing target-state measures:
-
-- Every primary Project produces a runnable manabot, teacher, search system, or
-  training loop that executes against real `managym` positions and can be
-  exercised with one documented command.
-- Search teachers and students are compared in actual selected matchups at
-  explicit compute budgets, with legality, competencies, seat-balanced
-  strength, calibration, latency, throughput, label cost, and uncertainty.
-- One historical/root Observation can be evaluated under the compatible-deal
-  prior and typed conditions such as `Has(Bolt)` and `NoLands`, returning
-  aligned complete action distributions, values, condition mass, uncertainty,
-  and exact provenance without exposing actual hidden truth.
-- Advice for one decision is identity-pinned to its viewer-safe belief,
-  advisor, planner/evaluator, compute class, seed plan, and evidence bytes. The
-  same identity is reproducible through live play and Study, while a mismatch
-  returns typed unavailability rather than adapted or invented evidence.
-- A supervised belief head maps lossless viewer history to a calibrated
-  normalized distribution over managym's world hypotheses. Both policy and
-  value are conditioned on that `BeliefState`; actual hidden worlds remain
-  calibration targets rather than inference inputs.
-- Conditional teacher trajectories, shards, and checkpoints bind world/query,
-  belief, history, target, source, seed, and exact byte identities and replay
-  through the same semantic Commands as live play.
-- Every admitted candidate enters a versioned, world-pinned skill arena. The
-  primary hill-climbing signal is a population Elo rating at a declared
-  compute class, reported with paired-deal uncertainty and the underlying
-  matchup matrix; ratings never cross world or arena-version boundaries.
-- A semantic policy consumes viewer-safe runtime facts, typed ability programs,
-  and structured legal offers, emits atomic `Command` values, and is evaluated
-  on real play—including held-out cards or compositions of known operations.
-- Ablations remove card identity, semantic structure, structured decoding, or
-  search at the boundary of a working prototype so their effects on learning,
-  transfer, strength, and systems cost are directly measurable.
-- Policy, search, robustness, and uncertainty evidence can be replayed through
-  the versioned Study contract without hidden-information leakage or invented
-  client-side meaning.
-- Any superhuman claim names the matchup and content boundary, information
-  boundary, model and opponent cohort, compute budget, seeds, competencies,
-  exploitability evidence where available, and uncertainty.
+Progress is judged by the [evidence contracts](metrics/evidence.md): runnable
+behavior, matched compute, calibrated beliefs, viewer safety, reproducible
+conditional strategy, and attributable arena results. Project KRs and concrete
+work live in Linear; [memory](MEMORY.md) records the evidence and its limits.
 
 ## Operating loop
 

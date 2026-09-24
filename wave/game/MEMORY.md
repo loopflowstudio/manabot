@@ -51,3 +51,35 @@
   snapshot/action seam incrementally.
 - Treat visual authorship as a product requirement without creating a generic
   content platform.
+
+## Live advice carry-forward (2026-09-24)
+
+The [unfinished live-advice design](../../docs/plans/live-belief-advice.md)
+preserves ETU-14's pending work and release gates. The current checkout has
+`ed2` pre-command decision addresses, immutable pending roots promoted to Study,
+the Rules conditioning-index binding, and a selected tracked-posterior resolver.
+Its focused tests cover address promotion, Counterspell support partitions, and
+unsupported-world failure. The production `/api/advice` route still serves the
+fixture; these seams do not close live advice or fresh live/Study byte parity.
+
+Keep the decision address and viewer projection prefix independent of the
+chosen Command. Authored Has/Lacks conditions and the tracked posterior have
+separate provenance; probabilities remain server-private. Tracking must consume
+all semantic transitions in order, including auto-passes. Snapshot loss makes
+advice unavailable, never stalls Commands. Clone inputs under the table lock,
+then perform likelihood/search in bounded background lanes. Validate participant
+lease, viewer/audience, decision, advisor, compute, and source identities;
+unavailable replies and late-response handling must clear old evidence.
+
+Reuse DecisionAdvice and ActionPanel. The release proof requires fresh isolated
+live/Study computations with identical canonical bytes, belief-only strategy
+deltas, unchanged search roots, and responsive pilot/watcher Commands during
+recomputation. The retained design budgets remain command P95 <=100 ms over 20
+Commands, broadcast lag <=1 update, fresh advice P95 <=2 s / RSS <=512 MiB, and
+cache hit <=50 ms on its declared profile; they were not remeasured here.
+
+The old INT-7 checkpoint pin and quoted serving costs need revalidation under
+the new loader ABI. Never repair drift by changing frozen evidence or substituting
+a compatible prior. The offline Linear snapshot has ETU-14 and Intelligence's
+ETU-21 open, but refresh/mutation is blocked by PRD-44's repository PM migration.
+The Game objective is unchanged; this branch does not claim its advice KR.

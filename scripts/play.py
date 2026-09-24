@@ -288,21 +288,6 @@ def ensure_native(*, runner: Runner = subprocess.run) -> dict[str, str]:
     return imported
 
 
-def install_runtime(
-    npm: str | None,
-    *,
-    runner: Runner = subprocess.run,
-) -> dict[str, str]:
-    if npm is None:
-        return ensure_native(runner=runner)
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        native_future = executor.submit(ensure_native, runner=runner)
-        frontend_future = executor.submit(ensure_frontend, npm, runner=runner)
-        native = native_future.result()
-        frontend_future.result()
-        return native
-
-
 def ensure_runtime_imports(*, runner: Runner = subprocess.run) -> None:
     """Prove the supported locked group can load the complete backend path."""
 
@@ -400,29 +385,42 @@ def start_processes(
     backend_port: int,
     frontend_port: int,
     npm: str | None,
-) -> list[tuple[str, subprocess.Popen[Any]]]:
-    processes: list[tuple[str, subprocess.Popen[Any]]] = []
-    try:
-        backend = subprocess.Popen(
-            [
-                *UV_RUNTIME,
-                "uvicorn",
-                "etude.server:app",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                str(backend_port),
-            ],
-            cwd=ROOT,
-            start_new_session=True,
-        )
-        processes.append(("backend", backend))
-    except OSError as error:
-        raise PlayError(
-            "backend.start", "could not start the local backend", str(error)
-        ) from error
+) -> tuple[dict[str, str], list[tuple[str, subprocess.Popen[Any]]]]:
+    """Prepare each service independently, warming Vite during the native build."""
 
+    processes: list[tuple[str, subprocess.Popen[Any]]] = []
+    assert_port_available(backend_port, "backend")
     if npm is not None:
+        assert_port_available(frontend_port, "frontend")
+
+    def prepare_backend() -> dict[str, str]:
+        native = ensure_native()
+        ensure_runtime_imports()
+        try:
+            backend = subprocess.Popen(
+                [
+                    *UV_RUNTIME,
+                    "uvicorn",
+                    "etude.server:app",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(backend_port),
+                ],
+                cwd=ROOT,
+                start_new_session=True,
+            )
+            processes.append(("backend", backend))
+        except OSError as error:
+            raise PlayError(
+                "backend.start", "could not start the local backend", str(error)
+            ) from error
+        return native
+
+    def prepare_frontend() -> None:
+        if npm is None:
+            return
+        ensure_frontend(npm)
         try:
             environment = dict(os.environ)
             environment["ETUDE_API_PORT"] = str(backend_port)
@@ -444,11 +442,27 @@ def start_processes(
             )
             processes.append(("frontend", frontend))
         except OSError as error:
-            terminate_processes(processes)
             raise PlayError(
                 "frontend.start", "could not start the local frontend", str(error)
             ) from error
-    return processes
+        # A successful HTTP request compiles the application before the browser
+        # navigates, while backend preparation is still independent.
+        wait_for_readiness(
+            [("frontend", frontend)],
+            {"frontend": f"http://127.0.0.1:{frontend_port}/"},
+            DEFAULT_READY_TIMEOUT,
+        )
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            native_future = executor.submit(prepare_backend)
+            frontend_future = executor.submit(prepare_frontend)
+            native = native_future.result()
+            frontend_future.result()
+        return native, processes
+    except BaseException:
+        terminate_processes(processes)
+        raise
 
 
 def build_ready_payload(
@@ -519,14 +533,7 @@ def run_launcher(args: argparse.Namespace) -> int:
         node_version = validate_node_version(node)
         npm_version = command_version(npm)
 
-    native = install_runtime(npm)
-    ensure_runtime_imports()
-
-    assert_port_available(args.port, "backend")
-    if npm is not None:
-        assert_port_available(args.frontend_port, "frontend")
-
-    processes = start_processes(args.port, args.frontend_port, npm)
+    processes: list[tuple[str, subprocess.Popen[Any]]] = []
     stop_requested = False
 
     def request_stop(*_: Any) -> None:
@@ -538,6 +545,9 @@ def run_launcher(args: argparse.Namespace) -> int:
         for signal_number in (signal.SIGINT, signal.SIGTERM)
     }
     try:
+        native, processes = start_processes(args.port, args.frontend_port, npm)
+        if stop_requested:
+            return 0
         endpoints = {"backend": f"http://127.0.0.1:{args.port}/api/traces"}
         if npm is not None:
             endpoints["frontend"] = f"http://127.0.0.1:{args.frontend_port}/"

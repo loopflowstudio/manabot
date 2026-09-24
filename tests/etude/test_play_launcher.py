@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+from threading import Event
 import tomllib
 from types import SimpleNamespace
 
@@ -331,16 +332,17 @@ class FakeProcess:
 
 def test_frontend_spawn_failure_cleans_up_backend(monkeypatch):
     backend = FakeProcess()
-    spawns = 0
     cleaned = []
 
-    def popen(*_args, **_kwargs):
-        nonlocal spawns
-        spawns += 1
-        if spawns == 1:
+    def popen(argv, **_kwargs):
+        if "uvicorn" in argv:
             return backend
         raise OSError("frontend unavailable")
 
+    monkeypatch.setattr(play, "assert_port_available", lambda *_args: None)
+    monkeypatch.setattr(play, "ensure_native", lambda: {"abi": "cp312"})
+    monkeypatch.setattr(play, "ensure_runtime_imports", lambda: None)
+    monkeypatch.setattr(play, "ensure_frontend", lambda _npm: None)
     monkeypatch.setattr(play.subprocess, "Popen", popen)
     monkeypatch.setattr(
         play,
@@ -352,6 +354,103 @@ def test_frontend_spawn_failure_cleans_up_backend(monkeypatch):
         play.start_processes(8000, 5173, "npm")
     assert raised.value.code == "frontend.start"
     assert cleaned == [[("backend", backend)]]
+
+
+@pytest.mark.parametrize(
+    "failure", [None, "native.build", "runtime.import", "ready.timeout"]
+)
+def test_frontend_warms_during_native_build_and_failures_reap_services(
+    monkeypatch, failure
+):
+    frontend_warmed = Event()
+    backend = FakeProcess()
+    frontend = FakeProcess()
+    cleaned = []
+
+    def ensure_native():
+        assert frontend_warmed.wait(2), "frontend waited for native build"
+        if failure == "native.build":
+            raise play.PlayError(failure, "build failed")
+        return {"abi": "cp312"}
+
+    def runtime_imports():
+        if failure == "runtime.import":
+            raise play.PlayError(failure, "import failed")
+
+    def warm_frontend(processes, endpoints, _timeout):
+        assert processes == [("frontend", frontend)]
+        assert endpoints == {"frontend": "http://127.0.0.1:5173/"}
+        frontend_warmed.set()
+        if failure == "ready.timeout":
+            raise play.PlayError(failure, "frontend timed out")
+
+    monkeypatch.setattr(play, "assert_port_available", lambda *_args: None)
+    monkeypatch.setattr(play, "ensure_native", ensure_native)
+    monkeypatch.setattr(play, "ensure_runtime_imports", runtime_imports)
+    monkeypatch.setattr(play, "ensure_frontend", lambda _npm: None)
+    monkeypatch.setattr(play, "wait_for_readiness", warm_frontend)
+    monkeypatch.setattr(
+        play.subprocess,
+        "Popen",
+        lambda argv, **_kwargs: backend if "uvicorn" in argv else frontend,
+    )
+    monkeypatch.setattr(
+        play, "terminate_processes", lambda processes: cleaned.extend(processes)
+    )
+
+    if failure:
+        with pytest.raises(play.PlayError) as raised:
+            play.start_processes(8000, 5173, "npm")
+        assert raised.value.code == failure
+        assert ("frontend", frontend) in cleaned
+        assert (("backend", backend) in cleaned) == (failure == "ready.timeout")
+    else:
+        native, processes = play.start_processes(8000, 5173, "npm")
+        assert native == {"abi": "cp312"}
+        assert set(processes) == {("backend", backend), ("frontend", frontend)}
+        assert not cleaned
+
+
+def test_backend_only_startup_does_not_prepare_frontend(monkeypatch):
+    backend = FakeProcess()
+    monkeypatch.setattr(play, "assert_port_available", lambda *_args: None)
+    monkeypatch.setattr(play, "ensure_native", lambda: {"abi": "cp312"})
+    monkeypatch.setattr(play, "ensure_runtime_imports", lambda: None)
+    monkeypatch.setattr(play.subprocess, "Popen", lambda *_args, **_kwargs: backend)
+
+    def unexpected_frontend(*_args):
+        pytest.fail("backend-only startup attempted frontend work")
+
+    monkeypatch.setattr(play, "ensure_frontend", unexpected_frontend)
+    monkeypatch.setattr(play, "wait_for_readiness", unexpected_frontend)
+    assert play.start_processes(8000, 5173, None) == (
+        {"abi": "cp312"},
+        [("backend", backend)],
+    )
+
+
+def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(monkeypatch):
+    backend = FakeProcess()
+    processes = [("backend", backend)]
+    cleaned = []
+    previous_handler = play.signal.getsignal(play.signal.SIGTERM)
+
+    def prepare(*_args):
+        handler = play.signal.getsignal(play.signal.SIGTERM)
+        handler(play.signal.SIGTERM, None)
+        return {"abi": "cp312"}, processes
+
+    def unexpected_readiness(*_args):
+        pytest.fail("shutdown requested before readiness")
+
+    monkeypatch.setattr(play, "validate_pack", lambda: SimpleNamespace(reference={}))
+    monkeypatch.setattr(play, "start_processes", prepare)
+    monkeypatch.setattr(play, "wait_for_readiness", unexpected_readiness)
+    monkeypatch.setattr(play, "terminate_processes", lambda items: cleaned.extend(items))
+
+    assert play.run_launcher(play.parse_args(["--no-frontend"])) == 0
+    assert cleaned == processes
+    assert play.signal.getsignal(play.signal.SIGTERM) == previous_handler
 
 
 def test_child_exit_and_readiness_timeout_are_distinct(monkeypatch):

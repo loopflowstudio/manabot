@@ -125,14 +125,13 @@ def test_historical_versioned_endpoint_is_explicitly_source_unavailable() -> Non
     not FLIP_VERSIONED_FIXTURE_PATH.is_file(),
     reason="INT-15 fixture is generated only after RUL-11 lands",
 )
-def test_flip_endpoint_returns_checked_positive_canonical_bytes() -> None:
+def test_retained_flip_fixture_preserves_positive_canonical_bytes() -> None:
+    assert hashlib.sha256(FLIP_VERSIONED_FIXTURE_PATH.read_bytes()).hexdigest() == (
+        "eef99429c38e42c7442c840e5b999f891bcc7c49ced46db6d0bb8d632ceb08c1"
+    )
     fixture = load_flip_versioned_advice_fixture()
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/advice", json=fixture.request.model_dump(mode="json")
-        )
-    assert response.status_code == 200
-    actual = parse_advice_response_bytes(response.content)
+    actual = parse_advice_response_bytes(serialize_advice_response(fixture.response))
+    assert actual == fixture.response
     assert actual.status == "ok"
     assert actual.reason is None
     assert actual.strategy is not None
@@ -148,7 +147,25 @@ def test_flip_endpoint_returns_checked_positive_canonical_bytes() -> None:
     labels = {offer.id: offer.label for offer in actual.offers}
     assert labels[top_offer_ids[0]] == "Pass priority"
     assert labels[top_offer_ids[1]] == "Cast Pyroclasm"
-    assert response.content == serialize_advice_response(fixture.response)
+
+
+@pytest.mark.skipif(
+    not FLIP_VERSIONED_FIXTURE_PATH.is_file(),
+    reason="INT-15 fixture is generated only after RUL-11 lands",
+)
+def test_historical_flip_endpoint_is_explicitly_source_unavailable() -> None:
+    fixture = load_flip_versioned_advice_fixture()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/advice", json=fixture.request.model_dump(mode="json")
+        )
+    assert response.status_code == 200
+    actual = parse_advice_response_bytes(response.content)
+    assert actual.status == "unavailable"
+    assert actual.reason == "advisor_artifact_mismatch"
+    assert actual.strategy is None
+    assert actual.evidence is None
+    assert actual.deltas is None
 
 
 @pytest.mark.skipif(

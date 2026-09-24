@@ -521,21 +521,54 @@ of distribution. Equivalent queries inducing the same `BeliefState` must
 produce the same model result; query text is provenance, not an extra strategy
 feature.
 
-The concrete belief-head output representation remains a local model decision:
-the first exact world may use a fixed categorical distribution, while a
-structured hypothesis scorer is the likely scaling seam. Either choice emits
-the same normalized semantic `BeliefState` contract.
+The belief-forming runtime makes this boundary explicit: `Manabot.decide`
+updates belief before policy/value evaluation; `evaluate_under_belief` evaluates
+a supplied belief without changing autonomous memory. Both use the same
+decision core. Search uses the full supplied world distribution; teacher
+policy/value targets are separate labels, not replacements for belief.
 
-The diagram requires the belief path but does not yet decide that it is the
-only path from history to strategy. A separate recurrent or compressed
-agent-memory input may also reach policy/value if experiments justify it. That
-choice remains internal to manabot and is bound to the checkpoint; it never
-moves memory into the match protocol.
+The reference updater recomputes managym's exact compatible-deal measure `p0`
+from current viewer-safe hard facts. The learned exact-world scorer normalizes
+`log_p0 + s_theta(world, viewer_history)` separately over each decision's ragged
+candidate set. Before typed commitments it returns `p0` exactly. There is no
+implemented mulligan/Keep event: future hand-size changes and redraw/return
+semantics belong to managym. Known-policy Bayes is a diagnostic; the deployed
+learned updater does not require the acting policy.
+
+Materialized hidden hands supervise whole-world negative log likelihood;
+larger hypothesis spaces may factor the same normalized joint distribution
+autoregressively. Independent card-count marginals are derived diagnostics and
+policy tokens, never authoritative query answers or the primary joint loss.
+Actual hidden truth and opponent/episode provenance do not enter inference.
+Population identities bind evidence, and splits by match and opponent version
+are needed to measure transfer. The bounded scripted-population demo holds out
+episodes only and makes no cross-opponent claim.
+
+The policy projection is schema-bound by canonical viewer-relative owner,
+hidden zone, CardDefId, and complete count probabilities. Queries condition the
+full `BeliefState`; query strings, condition roles, and artifact paths are not
+features. No private belief-updater activation may bypass a supplied belief.
+Belief and strategy losses remain separate; sharing more semantic parameters
+or enabling joint gradients requires an explicit measured model change.
+
+The current learned history encoder pools typed public commitments and is
+order-invariant. Arbitrary mid-game history attachment and a shared visible-card
+identity vocabulary remain gaps. The precise implementation limits and
+continuation proof are recorded in
+[Intelligence memory](../wave/intelligence/MEMORY.md).
 
 Checkpoints are immutable, content-addressed artifacts. Loading validates the
 world, Observation/action and world-hypothesis schemas, history/memory strategy,
 model architecture, target semantics, and exact bytes before constructing a
 player or leaf evaluator.
+
+Belief-enabled checkpoints additionally require `belief_schema_identity` and
+`belief_content_manifest_identity`; runtime compares the full ordered encoding
+contract before inference. Equal tensor dimensions do not establish vocabulary
+compatibility. The single `checkpoint` player dispatches from serialized
+capability. Removed positional-condition fields, missing bindings, and source
+drift fail closed; frozen experiments are not repaired by weight ports or
+rewriting their evidence.
 
 ### 8. Self-play and opponent selection
 
@@ -601,7 +634,7 @@ and never reveals whether an actual hidden hand satisfies a condition.
 | Permissive shard/checkpoint paths with stronger checks only in runners | Safe provenance is optional and cannot compose through training, arena, and Study. | Move manifest verification into shared loaders; keep runners as orchestration, not identity authorities. |
 | Caller-supplied Study identity strings | Structurally valid evidence can belong to another replay. | Resolve exact context from managym replay authority and fail with typed unavailable fields when artifacts are absent. |
 
-The integration order is dependency-shaped:
+The original integration order was dependency-shaped:
 
 1. managym semantic Command, composite Observation, transition receipt, and
    exact replay authority;
@@ -616,13 +649,16 @@ Each step migrates at least one real Etude or manabot consumer and deletes its
 duplicate constructor. Contract-only substrate that no running path consumes
 does not complete a step.
 
-As of 2026-07-18 the substrate for steps 2–3 and the plumbing of steps 4–5
-exist without a single committed production result, so the binding constraint
-has moved from building to proving: the sequenced work is the results ladder
-in [docs/plans/results-first-roadmap.md](plans/results-first-roadmap.md)
-(first recommendation flip, live tracked beliefs, calibration curves, first
-arena and teacher runs). The learned belief head in step 4 is explicitly
-deferred until the flip, live-path, and calibration artifacts exist.
+The July 18 results-first correction deferred the learned belief head while
+prioritizing the [results ladder](plans/results-first-roadmap.md). It treated
+three separate paths—exact-range play, conditional root search, and a neural
+student's positional tags—as completed belief integration. The belief-forming
+branch closes that composition gap before further conditional teacher/student
+work: generated or supplied belief now feeds one policy/value core. Its bounded
+learned updater does not establish general calibration or strategic strength.
+The results ladder retains its evidence requirements; its blanket head deferral
+is superseded. Next measure teacher sensitivity, held-out policy-only conditional
+behavior, and autonomous learned-belief play as separate claims.
 
 ## Roadmaps and detailed contracts
 
