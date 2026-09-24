@@ -48,6 +48,18 @@ sleep 60 &
 readiness_timer_pid=$!
 ./scripts/play --port "$api_port" --frontend-port "$frontend_port" >"$log" 2>&1 &
 launcher_pid=$!
+proof_pid=
+
+start_browser_proof() {
+  ETUDE_EXTERNAL_SERVERS=1 \
+  ETUDE_API_PORT=$api_port \
+  ETUDE_FRONTEND_PORT=$frontend_port \
+  ETUDE_CLEAN_START_MS=$start_ms \
+  ETUDE_CLEAN_RECEIPT=$receipt \
+  ETUDE_LAUNCH_LOG=$log \
+    npm --prefix frontend run test:e2e -- clean-machine.spec.ts &
+  proof_pid=$!
+}
 
 cleanup() {
   terminate_tree() {
@@ -56,6 +68,12 @@ cleanup() {
     done
     kill -TERM "$1" 2>/dev/null || true
   }
+  if [ -n "$proof_pid" ]; then
+    if kill -0 "$proof_pid" 2>/dev/null; then
+      terminate_tree "$proof_pid"
+    fi
+    wait "$proof_pid" 2>/dev/null || true
+  fi
   if kill -0 "$launcher_pid" 2>/dev/null; then
     terminate_tree "$launcher_pid"
   fi
@@ -76,20 +94,22 @@ while ! grep -q '^ETUDE_PLAY_READY ' "$log" 2>/dev/null; do
     cat "$log" >&2
     proof_error proof.timeout "./scripts/play did not become ready within 60 seconds"
   fi
+  # npm's locked install completes independently of the native build. Prepare
+  # Chromium now; the browser scenario waits for the launcher's ready record.
+  if [ -z "$proof_pid" ] && \
+      [ -f frontend/node_modules/.etude-package-lock.sha256 ]; then
+    start_browser_proof
+  fi
   sleep 0.1
 done
 kill -TERM "$readiness_timer_pid" 2>/dev/null || true
 wait "$readiness_timer_pid" 2>/dev/null || true
 readiness_timer_pid=
 
-ETUDE_EXTERNAL_SERVERS=1 \
-ETUDE_API_PORT=$api_port \
-ETUDE_FRONTEND_PORT=$frontend_port \
-ETUDE_CLEAN_START_MS=$start_ms \
-ETUDE_CLEAN_RECEIPT=$receipt \
-ETUDE_LAUNCH_LOG=$log \
-  npm --prefix frontend run test:e2e -- clean-machine.spec.ts
+[ -n "$proof_pid" ] || start_browser_proof
+wait "$proof_pid"
 status=$?
+proof_pid=
 if [ "$status" -ne 0 ]; then
   cat "$log" >&2
   exit "$status"

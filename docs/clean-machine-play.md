@@ -67,6 +67,12 @@ scenario against those processes, writes `.cache/clean-machine/proof.json`,
 and tears the process group
 down. CI uploads the receipt and launcher log even if the proof fails.
 
+Once the launcher finishes the locked frontend install, the verifier starts
+Playwright and Chromium while the native build can still be running. The
+browser waits for `ETUDE_PLAY_READY` before navigating. This overlaps proof
+setup with installation without moving the external start time or relaxing
+the sixty-second playable-state assertion.
+
 ## Offline reload boundary
 
 Package registry access is allowed while the first command installs locked

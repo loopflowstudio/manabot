@@ -48,7 +48,9 @@ jobs:
         run: uv sync --python 3.12 --extra dev
 
       - name: Run unit tests
-        run: uv run --python 3.12 --extra dev pytest tests/infra/ tests/ops/
+        run: |
+          uv run --python 3.12 --extra dev pytest tests/infra/ tests/ops/ \
+            tests/etude/test_clean_machine_verifier.py
 
   integration:
     name: Integration (${{ matrix.os }})

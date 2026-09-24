@@ -226,6 +226,11 @@ test('clean command reaches pinned play and reloads without public network', asy
     }
   });
 
+  if (LAUNCH_LOG_PATH) {
+    await expect
+      .poll(launcherReadyRecord, { timeout: 60_000, intervals: [100] })
+      .not.toBeNull();
+  }
   await page.goto('/');
   await expect(page.getByTestId('connection-badge')).toHaveText('connected', {
     timeout: 15_000,

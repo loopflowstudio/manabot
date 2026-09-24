@@ -253,22 +253,10 @@ def Colophon(colophon):
 # Routes
 
 
+# The landing page is down for now; the blog is the site.
 @rt("/")
 def get():
-    home = CONTENT["homepage"]
-    return (
-        Title("Etude Fantasia — the study of a game that improvises"),
-        SkipLink(),
-        Masthead(home["hero"]),
-        Main(
-            Hero(home["hero"], home["showcase"]),
-            Pillars(home["pillars"]),
-            Steps(home["play"], home["train"]),
-            Research(home["research"]),
-            id="main-content",
-        ),
-        Colophon(CONTENT["colophon"]),
-    )
+    return RedirectResponse("/blog/lol-cube-kickoff", status_code=302)
 
 
 async def _robots_handler(request):
@@ -281,7 +269,6 @@ async def _sitemap_handler(request):
     body = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"<url><loc>{BASE_URL}/</loc></url>\n"
         + "".join(
             f"<url><loc>{BASE_URL}/blog/{p.stem}</loc></url>\n"
             for p in sorted(BLOG_DIR.glob("*.html"))
@@ -304,6 +291,11 @@ async def _blog_handler(request):
 
 
 # Insert machine-readable routes at the beginning to avoid the static handler
+async def _healthz_handler(request):
+    return PlainTextResponse("ok")
+
+
+app.routes.insert(0, Route("/healthz", _healthz_handler, methods=["GET"]))
 app.routes.insert(0, Route("/robots.txt", _robots_handler, methods=["GET"]))
 app.routes.insert(0, Route("/blog/{slug}", _blog_handler, methods=["GET"]))
 app.routes.insert(0, Route("/sitemap.xml", _sitemap_handler, methods=["GET"]))
