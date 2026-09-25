@@ -1014,6 +1014,12 @@
         "agent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "definition_names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "game_over": {
           "type": "boolean"
         },
@@ -1141,6 +1147,14 @@
         "is_agent": {
           "type": "boolean"
         },
+        "known_hand": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "library_count": {
           "type": "integer",
           "format": "uint32",
@@ -1155,6 +1169,28 @@
           "format": "uint8",
           "maximum": 255,
           "minimum": 0
+        },
+        "remaining_sideboard_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "sideboard": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SideboardCardView"
+          }
+        },
+        "sideboard_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
         },
         "stack": {
           "type": "array",
@@ -1431,6 +1467,36 @@
         "alternative",
         "perspective",
         "expected_match_points"
+      ]
+    },
+    "SideboardCardView": {
+      "type": "object",
+      "properties": {
+        "candidate_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "owner_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "registry_key": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "owner_id",
+        "registry_key",
+        "name"
       ]
     },
     "StopsConfig": {

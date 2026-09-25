@@ -372,7 +372,7 @@ fn flat_mc_survives_stage2_decision_points() {
                 | ActionSpaceKind::LookAndSelect
                 | ActionSpaceKind::PayOrNot
                 | ActionSpaceKind::Modal
-                | ActionSpaceKind::DiscardThenDraw
+                | ActionSpaceKind::Learn
                 | ActionSpaceKind::Waterbend
         )
     };
@@ -452,7 +452,7 @@ fn flat_mc_survives_milestone1_matchup() {
                 | ActionSpaceKind::LookAndSelect
                 | ActionSpaceKind::PayOrNot
                 | ActionSpaceKind::Modal
-                | ActionSpaceKind::DiscardThenDraw
+                | ActionSpaceKind::Learn
                 | ActionSpaceKind::Waterbend
                 | ActionSpaceKind::ChooseTarget
         )

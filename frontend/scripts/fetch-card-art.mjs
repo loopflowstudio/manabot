@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const manifestPath = path.join(
   here,
-  '../src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json',
+  '../src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json',
 );
 const outDir = path.join(here, '../src/lib/card-art');
 

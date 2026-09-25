@@ -8,6 +8,36 @@ Rules leads with playable curated worlds and real search/Study consumers.
 Conformance, fuzzing, benchmarks, and micro-katas are instruments for observed
 ambiguity or safety-critical invariants, not substitute products.
 
+## Learn decisions and current evidence
+
+[Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup)
+remains unfinished. The [durable Learn record](../../docs/rules/learn-lesson.md)
+preserves accepted decisions, dated proof limits and source history.
+
+- The human approved formal open-decklist sideboards on 2026-09-24: UR gets
+  one each Firebending Lesson, It'll Quench Ya! and Accumulate Wisdom; GW gets
+  one each Yip Yip! and Fancy Footwork. Preserve the 41/40-card main decks.
+  Admission of an ordinary sideboard card is separate from Lesson eligibility.
+- Owned outside copies have immutable rosters and zone-derived availability.
+  Retrieve through ordinary movement after a definition reveal; never create
+  copies, invent a zone or duplicate the inventory in consumers. Carry complete
+  compiled setup through seats, reset and replay roots.
+- Known hand facts are definition minima with dedicated undo/hash coverage.
+  Both search samplers must reserve those facts and weight residual deals,
+  without exposing which identical copy was retrieved.
+- Mode-first controls, previews, Back and reconnect have real browser evidence.
+  On 2026-09-25 the human said “works. approved.” This accepts the demonstrated
+  working interaction; it supplies no missing per-attempt tapes and does not
+  authorize publication or completion. Do not request duplicate acceptance.
+- Native/raw projection and bounded Learn kind/focus tests pass, but complete
+  policy semantics/knowledge, w3 ordinary checkpoints, configured Search,
+  reversed-seat demo and registered same-tape parity remain open. Full gates
+  are not green. All remain in ETU-75; no new substrate Tasks are needed.
+- Changed rules invalidate compatible-looking old evidence. Preserve frozen
+  receipts and register all 16 seed/seat attempts before scoring the corrected
+  world. Human interaction acceptance and consumer conformance are separate
+  claims. No strength or numeric runtime-budget result follows from this work.
+
 ## Shipped substrate
 
 - Immutable versioned `ContentPack` definitions are separated from compact

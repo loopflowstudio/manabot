@@ -25,7 +25,7 @@ use crate::{
 
 /// Canonical serialization contract for a viewer-relative possible-world
 /// space. Increment when identity or projection field inclusion changes.
-pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 1;
+pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 2;
 
 /// Stable, viewer-meaningful identity for a canonical query. Equivalent query
 /// constructions share one canonical form and therefore one digest.
@@ -181,18 +181,20 @@ impl WorldQuery {
 
     /// Fold tautologies and impossibilities against `space`'s pool.
     pub fn canonicalize(&self, space: &PossibleWorldSpace) -> CanonicalWorldQuery {
+        let minimum = |name: &str| space.known_hand.get(name).copied().unwrap_or(0);
+        let unknown_slots = space.hand_size - space.known_hand.values().sum::<u32>();
         let maximum = |name: &str| {
             space
                 .pool
                 .get(name)
                 .copied()
                 .unwrap_or(0)
-                .min(space.hand_size)
+                .min(minimum(name) + unknown_slots)
         };
         match self {
             WorldQuery::True => CanonicalWorldQuery::True,
             WorldQuery::Has { card, at_least } => {
-                if *at_least == 0 {
+                if *at_least <= minimum(card) {
                     CanonicalWorldQuery::True
                 } else if *at_least > maximum(card) {
                     CanonicalWorldQuery::Empty
@@ -204,7 +206,7 @@ impl WorldQuery {
                 }
             }
             WorldQuery::Lacks { card, fewer_than } => {
-                if *fewer_than == 0 {
+                if *fewer_than <= minimum(card) {
                     CanonicalWorldQuery::Empty
                 } else if *fewer_than > maximum(card) {
                     CanonicalWorldQuery::True
@@ -216,7 +218,7 @@ impl WorldQuery {
                 }
             }
             WorldQuery::Q(CountQuery::Exactly { card, count }) => {
-                if *count > maximum(card) {
+                if *count < minimum(card) || *count > maximum(card) {
                     CanonicalWorldQuery::Empty
                 } else if *count == 0 {
                     CanonicalWorldQuery::Lacks {
@@ -231,7 +233,7 @@ impl WorldQuery {
                 }
             }
             WorldQuery::Not(CountQuery::Exactly { card, count }) => {
-                if *count > maximum(card) {
+                if *count < minimum(card) || *count > maximum(card) {
                     CanonicalWorldQuery::True
                 } else if *count == 0 {
                     CanonicalWorldQuery::Has {
@@ -357,6 +359,7 @@ pub struct PossibleWorldSpaceProjection {
     pub source_observation: ObservationIdentity,
     pub hand_size: u32,
     pub pool: BTreeMap<String, u32>,
+    pub known_hand: BTreeMap<String, u32>,
     pub total_weight: String,
     pub worlds: Vec<PossibleWorldProjection>,
 }
@@ -390,6 +393,7 @@ struct PossibleWorldSpaceIdentity<'a> {
     source_observation: &'a ObservationIdentity,
     hand_size: u32,
     pool: &'a BTreeMap<String, u32>,
+    known_hand: &'a BTreeMap<String, u32>,
     worlds: &'a [PossibleWorld],
     total_weight: String,
 }
@@ -405,6 +409,7 @@ pub struct PossibleWorldSpace {
     source_observation: ObservationIdentity,
     hand_size: u32,
     pool: BTreeMap<String, u32>,
+    known_hand: BTreeMap<String, u32>,
     worlds: Vec<PossibleWorld>,
     total_weight: u128,
 }
@@ -430,7 +435,7 @@ impl PossibleWorldSpace {
         &self.pool
     }
 
-    /// `C(N, H)`: the total number of physical deals over the pool.
+    /// `C(N - |K|, H - |K|)`: deals over residual copies after known counts K.
     pub fn total_weight(&self) -> u128 {
         self.total_weight
     }
@@ -451,6 +456,7 @@ impl PossibleWorldSpace {
             source_observation: &self.source_observation,
             hand_size: self.hand_size,
             pool: &self.pool,
+            known_hand: &self.known_hand,
             worlds: &self.worlds,
             total_weight: self.total_weight.to_string(),
         };
@@ -469,6 +475,7 @@ impl PossibleWorldSpace {
             source_observation: self.source_observation.clone(),
             hand_size: self.hand_size,
             pool: self.pool.clone(),
+            known_hand: self.known_hand.clone(),
             total_weight: self.total_weight.to_string(),
             worlds: self
                 .worlds
@@ -547,7 +554,21 @@ impl PossibleWorldSpace {
             .semantic_observation(viewer)
             .expect("valid viewer has a semantic observation")
             .identity;
-        Self::from_parts(viewer, opponent, source_observation, hand_size, pool)
+        let (known, _) = game.hidden_hand_partition(opponent);
+        let mut known_hand = BTreeMap::new();
+        for card in known {
+            *known_hand
+                .entry(game.state.cards[card].name.clone())
+                .or_insert(0) += 1;
+        }
+        Self::from_parts(
+            viewer,
+            opponent,
+            source_observation,
+            hand_size,
+            pool,
+            known_hand,
+        )
     }
 
     /// Build the space directly from a pool. Used by weight/canonicalization
@@ -566,7 +587,14 @@ impl PossibleWorldSpace {
             viewer: viewer.0 as u8,
             viewer_state_hash: "fixture".to_string(),
         };
-        Self::from_parts(viewer, opponent, source_observation, hand_size, pool)
+        Self::from_parts(
+            viewer,
+            opponent,
+            source_observation,
+            hand_size,
+            pool,
+            BTreeMap::new(),
+        )
     }
 
     fn from_parts(
@@ -575,18 +603,32 @@ impl PossibleWorldSpace {
         source_observation: ObservationIdentity,
         hand_size: u32,
         pool: BTreeMap<String, u32>,
+        known_hand: BTreeMap<String, u32>,
     ) -> Self {
-        let names: Vec<(String, u32)> = pool.iter().map(|(k, &v)| (k.clone(), v)).collect();
-        let total_weight = binom(pool.values().copied().sum(), hand_size);
+        let mut residual = pool.clone();
+        for (name, count) in &known_hand {
+            *residual
+                .get_mut(name)
+                .expect("known definition belongs to pool") -= count;
+        }
+        let unknown_slots = hand_size - known_hand.values().sum::<u32>();
+        let total_weight = binom(residual.values().copied().sum(), unknown_slots);
+        let names: Vec<_> = residual.into_iter().collect();
         let mut worlds = Vec::new();
         let mut current: BTreeMap<String, u32> = BTreeMap::new();
-        enumerate(&names, 0, hand_size, &mut current, &mut worlds, &pool);
+        enumerate(&names, unknown_slots, 1, &mut current, &mut worlds);
+        for world in &mut worlds {
+            for (name, count) in &known_hand {
+                *world.hand.entry(name.clone()).or_insert(0) += count;
+            }
+        }
         Self {
             viewer,
             opponent,
             source_observation,
             hand_size,
             pool,
+            known_hand,
             worlds,
             total_weight,
         }
@@ -649,7 +691,7 @@ impl PossibleWorldSpace {
     ///
     /// Clones the source, reassigns only the opponent's hand+library split to
     /// match the world (lowest `CardId`s of each name to hand; seeded library
-    /// shuffle), reusing the `resample_hidden` zone-update pattern. The
+    /// shuffle), using ordinary hidden-zone reassignment. The
     /// Public zones and any suspended-decision revealed library cards are
     /// preserved. The viewer's unknown library order is shuffled from the
     /// same seed, as is the opponent's remaining library. Deterministic per
@@ -742,7 +784,12 @@ impl PossibleWorldSpace {
         mode: MaterializeMode,
     ) -> Result<Game, MaterializeError> {
         let sum_k: u32 = world.hand.values().copied().sum();
-        if sum_k != self.hand_size {
+        if sum_k != self.hand_size
+            || self
+                .known_hand
+                .iter()
+                .any(|(name, count)| world.hand.get(name).copied().unwrap_or(0) < *count)
+        {
             return Err(MaterializeError::InconsistentWorld);
         }
         for (name, &k) in &world.hand {
@@ -821,12 +868,11 @@ impl PossibleWorldSpace {
                 .ok_or(MaterializeError::UnsupportedActingPrompt)?;
             match kind {
                 ActionSpaceKind::Priority => branch.refresh_priority_actions(opponent),
-                ActionSpaceKind::DiscardThenDraw => {
+                ActionSpaceKind::Learn => {
                     let refreshed = branch
                         .suspended_decision_action_space()
                         .filter(|space| {
-                            space.player == Some(opponent)
-                                && space.kind == ActionSpaceKind::DiscardThenDraw
+                            space.player == Some(opponent) && space.kind == ActionSpaceKind::Learn
                         })
                         .ok_or(MaterializeError::UnsupportedActingPrompt)?;
                     branch.publish_action_space(refreshed);
@@ -867,34 +913,26 @@ impl PossibleWorldSpace {
     }
 }
 
-fn world_weight(hand: &BTreeMap<String, u32>, pool: &BTreeMap<String, u32>) -> u128 {
-    hand.iter()
-        .map(|(name, &k)| binom(pool.get(name).copied().unwrap_or(0), k))
-        .product()
-}
-
 /// Recursively enumerate every name-multiset of size `remaining` drawn from
-/// `names[idx..]` with per-name caps `n_i`, in deterministic lexicographic
-/// order.
+/// `names` with per-name caps `n_i`, in deterministic lexicographic order.
+/// Accumulate the compatible-deal weight as each definition count is chosen.
 fn enumerate(
     names: &[(String, u32)],
-    idx: usize,
     remaining: u32,
+    weight: u128,
     current: &mut BTreeMap<String, u32>,
     out: &mut Vec<PossibleWorld>,
-    pool: &BTreeMap<String, u32>,
 ) {
     if remaining == 0 {
         out.push(PossibleWorld {
             hand: current.clone(),
-            weight: world_weight(current, pool),
+            weight,
         });
         return;
     }
-    if idx >= names.len() {
+    let Some(((name, n_i), rest)) = names.split_first() else {
         return;
-    }
-    let (name, n_i) = &names[idx];
+    };
     let max_k = (*n_i).min(remaining);
     for k in 0..=max_k {
         if k == 0 {
@@ -902,7 +940,7 @@ fn enumerate(
         } else {
             current.insert(name.clone(), k);
         }
-        enumerate(names, idx + 1, remaining - k, current, out, pool);
+        enumerate(rest, remaining - k, weight * binom(*n_i, k), current, out);
     }
     current.remove(name);
 }

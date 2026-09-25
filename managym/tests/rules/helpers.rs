@@ -157,6 +157,25 @@ impl Scenario {
         }
     }
 
+    pub fn with_sideboards(
+        player0_deck: BTreeMap<String, usize>,
+        player1_deck: BTreeMap<String, usize>,
+        player0_sideboard: BTreeMap<String, usize>,
+        player1_sideboard: BTreeMap<String, usize>,
+        seed: u64,
+    ) -> Self {
+        Self {
+            game: Game::new(
+                vec![
+                    PlayerConfig::new("p0", player0_deck).with_sideboard(player0_sideboard),
+                    PlayerConfig::new("p1", player1_deck).with_sideboard(player1_sideboard),
+                ],
+                seed,
+                false,
+            ),
+        }
+    }
+
     pub fn game(&self) -> &Game {
         &self.game
     }
@@ -280,9 +299,9 @@ impl Scenario {
             // last action is Decline for optional choices); tests that care
             // pick explicitly.
             ActionSpaceKind::Scry => 0,
-            ActionSpaceKind::LookAndSelect
-            | ActionSpaceKind::PayOrNot
-            | ActionSpaceKind::DiscardThenDraw => space.actions.len().saturating_sub(1),
+            ActionSpaceKind::LookAndSelect | ActionSpaceKind::PayOrNot | ActionSpaceKind::Learn => {
+                space.actions.len().saturating_sub(1)
+            }
             ActionSpaceKind::Modal => 0,
             ActionSpaceKind::Waterbend => 0,
         };

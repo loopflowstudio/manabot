@@ -2028,6 +2028,13 @@
         "agent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "definition_names": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Definition Names",
+          "type": "object"
+        },
         "game_over": {
           "title": "Game Over",
           "type": "boolean"
@@ -2227,6 +2234,15 @@
           "title": "Is Agent",
           "type": "boolean"
         },
+        "known_hand": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Known Hand",
+          "type": "object"
+        },
         "library_count": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2244,6 +2260,31 @@
           "minimum": 0,
           "title": "Player Index",
           "type": "integer"
+        },
+        "remaining_sideboard_counts": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Remaining Sideboard Counts",
+          "type": "object"
+        },
+        "sideboard": {
+          "items": {
+            "$ref": "#/$defs/SideboardCardView"
+          },
+          "title": "Sideboard",
+          "type": "array"
+        },
+        "sideboard_counts": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Sideboard Counts",
+          "type": "object"
         },
         "stack": {
           "items": {
@@ -2799,6 +2840,41 @@
         "distinct"
       ],
       "title": "SelectChoiceStep",
+      "type": "object"
+    },
+    "SideboardCardView": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Candidate Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "owner_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Owner Id",
+          "type": "integer"
+        },
+        "registry_key": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Registry Key",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "owner_id",
+        "registry_key",
+        "name"
+      ],
+      "title": "SideboardCardView",
       "type": "object"
     },
     "StackSubject": {

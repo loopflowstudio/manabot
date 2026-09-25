@@ -67,14 +67,17 @@ def source_sha256(paths: Iterable[str] = SOURCE_PATHS) -> str:
 
 
 def _player_configs(ur_seat: int) -> list[managym.PlayerConfig]:
-    decks = [GW_ALLIES_DECK, GW_ALLIES_DECK]
-    decks[ur_seat] = UR_LESSONS_DECK
-    return [
-        managym.PlayerConfig(
-            "ur" if seat == ur_seat else "gw",
-            dict(decks[seat]),
+    configs = [
+        managym.authored_deck_setup(
+            "ur-lessons-vs-gw-allies", "ur_lessons" if seat == ur_seat else "gw_allies"
         )
         for seat in range(2)
+    ]
+    return [
+        managym.PlayerConfig(
+            "ur" if seat == ur_seat else "gw", config.decklist, config.sideboard
+        )
+        for seat, config in enumerate(configs)
     ]
 
 

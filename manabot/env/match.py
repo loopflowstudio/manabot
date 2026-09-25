@@ -25,6 +25,8 @@ class Match:
     villain: str
     hero_deck: Dict[str, int]
     villain_deck: Dict[str, int]
+    hero_sideboard: Dict[str, int]
+    villain_sideboard: Dict[str, int]
     hypers: MatchHypers
 
     def __init__(self, hypers: MatchHypers = MatchHypers()):
@@ -33,12 +35,16 @@ class Match:
         self.villain = hypers.villain
         self.hero_deck = deepcopy(hypers.hero_deck)
         self.villain_deck = deepcopy(hypers.villain_deck)
+        self.hero_sideboard = deepcopy(hypers.hero_sideboard)
+        self.villain_sideboard = deepcopy(hypers.villain_sideboard)
 
     def to_rust_hero(self) -> "managym.PlayerConfig":
-        return managym.PlayerConfig(self.hero, self.hero_deck)
+        return managym.PlayerConfig(self.hero, self.hero_deck, self.hero_sideboard)
 
     def to_rust_villain(self) -> "managym.PlayerConfig":
-        return managym.PlayerConfig(self.villain, self.villain_deck)
+        return managym.PlayerConfig(
+            self.villain, self.villain_deck, self.villain_sideboard
+        )
 
     def to_rust(self) -> "list[managym.PlayerConfig]":
         return [self.to_rust_hero(), self.to_rust_villain()]
@@ -51,10 +57,16 @@ class Match:
         a swapped Match to Env.reset puts the hero on the draw. Used for
         seat-balanced evaluation.
         """
-        other = deepcopy(self)
-        other.hero, other.villain = other.villain, other.hero
-        other.hero_deck, other.villain_deck = other.villain_deck, other.hero_deck
-        return other
+        return Match(
+            MatchHypers(
+                hero=self.villain,
+                villain=self.hero,
+                hero_deck=self.villain_deck,
+                villain_deck=self.hero_deck,
+                hero_sideboard=self.villain_sideboard,
+                villain_sideboard=self.hero_sideboard,
+            )
+        )
 
     def __str__(self) -> str:
         """Return a human-readable string representation of the match."""

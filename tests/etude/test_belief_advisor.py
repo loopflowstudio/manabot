@@ -60,6 +60,8 @@ def _unavailable(request: AdviceRequest) -> str:
 def test_checked_advice_v1_fixture_round_trips_schema_and_models() -> None:
     payload = json.loads(VERSIONED_FIXTURE_PATH.read_text(encoding="utf-8"))
     schema = advice_schema()
+    checked_schema = Path(__file__).parents[2] / "protocol/advice-v1.schema.json"
+    assert json.loads(checked_schema.read_text()) == schema
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(payload)
     fixture = VersionedAdviceFixture.model_validate(payload)

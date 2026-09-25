@@ -14,6 +14,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+import managym
+
 TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 TRACES_DIR = Path(os.getenv("ETUDE_TRACES_DIR", "etude/traces"))
 
@@ -45,6 +47,39 @@ class GameConfig:
     stops: dict[str, list[str]] | None = None
     stop_on_stack: bool = True  # always surface when the stack is non-empty
     auto_pass: bool = True  # master switch; False = surface every window
+    hero_sideboard: dict[str, int] = field(default_factory=dict)
+    villain_sideboard: dict[str, int] = field(default_factory=dict)
+
+    def to_rust(self) -> list[managym.PlayerConfig]:
+        """Rebuild the recorded root with its explicit outside-game copies."""
+        from .curated_pack import curated_pack_for_matchup
+
+        for sideboard in (self.hero_sideboard, self.villain_sideboard):
+            if not isinstance(sideboard, dict) or any(
+                not isinstance(name, str)
+                or not name
+                or type(count) is not int
+                or count <= 0
+                for name, count in sideboard.items()
+            ):
+                raise ValueError("Recorded sideboard requires positive integer counts")
+        pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
+        if pack is not None:
+            if self.asset_pack != pack.reference:
+                raise ValueError("Recorded asset pack differs from the installed setup")
+            for name, deck, sideboard in (
+                (self.hero_deck_name, self.hero_deck, self.hero_sideboard),
+                (self.villain_deck_name, self.villain_deck, self.villain_sideboard),
+            ):
+                expected = pack.player_config(name, name)
+                if deck != expected.decklist or sideboard != expected.sideboard:
+                    raise ValueError(
+                        f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
+                    )
+        return [
+            managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
+            managym.PlayerConfig("Villain", self.villain_deck, self.villain_sideboard),
+        ]
 
 
 @dataclass
@@ -166,6 +201,7 @@ def redact_observation(observation: dict[str, Any]) -> None:
     opponent = observation.get("opponent")
     if isinstance(opponent, dict):
         _redact_hand(opponent)
+        opponent.pop("sideboard", None)
 
 
 def normalize_observation_to_hero(observation: dict[str, Any]) -> None:

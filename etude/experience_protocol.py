@@ -274,6 +274,13 @@ class LegacyPermanentView(ProtocolModel):
     plus1_counters: UInt32
 
 
+class SideboardCardView(ProtocolModel):
+    candidate_id: UInt32
+    owner_id: UInt32
+    registry_key: UInt32
+    name: str
+
+
 class LegacyPlayerView(ProtocolModel):
     player_index: UInt8
     id: UInt32
@@ -282,6 +289,18 @@ class LegacyPlayerView(ProtocolModel):
     life: Int32
     zone_counts: dict[str, UInt32]
     library_count: UInt32
+    known_hand: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    sideboard_counts: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    remaining_sideboard_counts: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    sideboard: list[SideboardCardView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     hand_hidden_count: UInt32 | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
@@ -302,6 +321,9 @@ class LegacyTurnView(ProtocolModel):
 
 
 class LegacyHeroObservation(ProtocolModel):
+    definition_names: dict[str, str] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
     game_over: bool
     won: bool
     turn: LegacyTurnView

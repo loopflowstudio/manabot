@@ -112,6 +112,12 @@ def test_missing_pack_notice_has_stable_diagnostic(monkeypatch, tmp_path):
     assert raised.value.code == "pack.notice"
 
 
+def test_installed_launcher_pack_matches_the_server_setup():
+    from etude.curated_pack import CURATED_PACK
+
+    assert play.validate_pack().reference == CURATED_PACK.reference
+
+
 def test_frontend_install_marker_is_bound_to_lock(monkeypatch, tmp_path):
     lock = tmp_path / "package-lock.json"
     marker = tmp_path / "node_modules" / ".etude-package-lock.sha256"
@@ -451,6 +457,33 @@ def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(mon
     assert play.run_launcher(play.parse_args(["--no-frontend"])) == 0
     assert cleaned == processes
     assert play.signal.getsignal(play.signal.SIGTERM) == previous_handler
+
+
+def test_pack_validation_waits_for_native_preparation_and_failure_reaps_services(
+    monkeypatch,
+):
+    backend = FakeProcess()
+    processes = [("backend", backend)]
+    prepared = False
+    cleaned = []
+
+    def prepare(*_args):
+        nonlocal prepared
+        prepared = True
+        return {"abi": "cp312"}, processes
+
+    def validate_pack():
+        assert prepared, "compiled pack validation ran before the native build"
+        raise play.PlayError("pack.invalid", "compiled setup mismatch")
+
+    monkeypatch.setattr(play, "start_processes", prepare)
+    monkeypatch.setattr(play, "validate_pack", validate_pack)
+    monkeypatch.setattr(play, "terminate_processes", lambda items: cleaned.extend(items))
+
+    with pytest.raises(play.PlayError) as raised:
+        play.run_launcher(play.parse_args(["--no-frontend"]))
+    assert raised.value.code == "pack.invalid"
+    assert cleaned == processes
 
 
 def test_child_exit_and_readiness_timeout_are_distinct(monkeypatch):

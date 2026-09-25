@@ -284,6 +284,7 @@ pub struct SemanticDeck {
     pub key: String,
     pub card_count: usize,
     pub cards: BTreeMap<usize, usize>,
+    pub sideboard: BTreeMap<usize, usize>,
 }
 
 /// The parsed IR document, independent of any content pack.
@@ -431,6 +432,11 @@ impl SemanticPack {
 
     fn from_value(value: &Value) -> Result<Self, IrError> {
         let schema_version = u64_field(value, "schema_version")?;
+        if u64_field(value, "setup_schema_version")? != 1 {
+            return Err(IrError::Malformed(
+                "unsupported compiled setup schema".to_string(),
+            ));
+        }
         let pack_key = str_field(value, "pack_key")?.to_owned();
         let ir_hash = str_field(value, "ir_hash")?.to_owned();
         let source_hash = str_field(value, "source_hash")?.to_owned();
@@ -477,10 +483,32 @@ impl SemanticPack {
                     deck_key
                 )));
             }
+            let mut sideboard = BTreeMap::new();
+            for card in array_field(deck, "sideboard")? {
+                let index = usize_field(card, "definition_index")?;
+                let count = usize_field(card, "count")?;
+                let definition = definitions.get(index).ok_or_else(|| {
+                    IrError::Malformed(format!("sideboard references unknown definition {index}"))
+                })?;
+                if count == 0
+                    || opt_bool_field(&definition.characteristics, "token")?.unwrap_or(false)
+                {
+                    return Err(IrError::Malformed(format!(
+                        "invalid sideboard entry in {deck_key:?}"
+                    )));
+                }
+                if sideboard.insert(index, count).is_some() {
+                    return Err(IrError::Malformed(format!(
+                        "duplicate sideboard entry in {deck_key:?}"
+                    )));
+                }
+                deck_definition_indexes.insert(index);
+            }
             decks.push(SemanticDeck {
                 key: deck_key,
                 card_count,
                 cards,
+                sideboard,
             });
         }
 

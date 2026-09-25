@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TurnData {
@@ -25,7 +26,7 @@ pub struct TurnData {
     pub agent_player_id: i32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayerData {
     pub player_index: i32,
     pub id: i32,
@@ -37,9 +38,12 @@ pub struct PlayerData {
     pub graveyard_lessons: i32,
     /// Total until-end-of-combat mana in this player's pool (firebending).
     pub combat_mana: i32,
+    pub known_hand: BTreeMap<u32, u32>,
+    pub sideboard_counts: BTreeMap<u32, u32>,
+    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct CardTypeData {
     pub is_castable: bool,
     pub is_permanent: bool,
@@ -77,7 +81,17 @@ pub struct CardData {
     pub mana_cost: ManaCost,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// An owned outside-game copy. The candidate is private to this viewer and
+/// binds action focus; it is not an in-game object reference or a zone.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SideboardCardData {
+    pub candidate_id: i32,
+    pub owner_id: i32,
+    pub registry_key: i32,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct KeywordData {
     pub flying: bool,
     pub reach: bool,
@@ -149,7 +163,7 @@ pub struct StackObjectData {
     pub targets: Vec<StackTargetData>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PermanentData {
     pub id: i32,
     pub controller_id: i32,
@@ -187,6 +201,7 @@ pub enum EventType {
     CombatDamageDealt = 9,
     PermanentsDied = 10,
     TurnStarted = 11,
+    CardRevealed = 12,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -197,6 +212,7 @@ pub enum EventEntityKind {
     Permanent = 2,
     Player = 3,
     Object = 4,
+    Definition = 5,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,6 +259,7 @@ pub struct Observation {
     pub action_space: ActionSpaceData,
     pub agent: PlayerData,
     pub agent_cards: Vec<CardData>,
+    pub agent_sideboard: Vec<SideboardCardData>,
     pub agent_permanents: Vec<PermanentData>,
     pub opponent: PlayerData,
     pub opponent_cards: Vec<CardData>,
@@ -350,6 +367,7 @@ impl Observation {
             action_space,
             agent,
             agent_cards: Vec::new(),
+            agent_sideboard: Vec::new(),
             agent_permanents: Vec::new(),
             opponent,
             opponent_cards: Vec::new(),
@@ -377,7 +395,19 @@ impl Observation {
                 .size(Self::zone_from_index(zone_index), player) as i32;
         }
 
+        let mut sideboard_counts = BTreeMap::new();
+        let mut remaining_sideboard_counts = BTreeMap::new();
+        for card in &p.sideboard {
+            let definition = game.state.cards[*card].definition_id.0;
+            *sideboard_counts.entry(definition).or_default() += 1;
+            if game.state.zones.zone_of(*card).is_none() {
+                *remaining_sideboard_counts.entry(definition).or_default() += 1;
+            }
+        }
+
         PlayerData {
+            sideboard_counts,
+            remaining_sideboard_counts,
             player_index: p.index as i32,
             id: p.id.0 as i32,
             is_agent,
@@ -389,10 +419,27 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
+            known_hand: p
+                .known_hand
+                .iter()
+                .map(|(definition, count)| (definition.0, *count))
+                .collect(),
         }
     }
 
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
+        for card in &game.state.players[agent_player.0].sideboard {
+            if game.state.zones.zone_of(*card).is_none() {
+                let card = &game.state.cards[*card];
+                self.agent_sideboard.push(SideboardCardData {
+                    candidate_id: card.id.0 as i32,
+                    owner_id: self.agent.id,
+                    registry_key: card.definition_id.0 as i32,
+                    name: card.name.clone(),
+                });
+            }
+        }
+
         for card in game.state.zones.zone_cards(ZoneType::Hand, agent_player) {
             self.add_card(game, *card, ZoneType::Hand);
         }
@@ -616,6 +663,13 @@ impl Observation {
     pub(crate) fn event_data(event: &GameEvent) -> Vec<EventData> {
         use crate::flow::event::DamageTarget;
         match event {
+            GameEvent::CardRevealed { owner, definition } => {
+                let mut data =
+                    Self::build_event_data(EventType::CardRevealed, None, None, 0, Some(*owner));
+                data.source_kind = EventEntityKind::Definition as i32;
+                data.source_id = definition.0 as i32;
+                vec![data]
+            }
             GameEvent::CardMoved {
                 card,
                 from,
@@ -625,6 +679,10 @@ impl Observation {
                 let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
+                if from.is_none() && *to == ZoneType::Hand {
+                    data.source_kind = EventEntityKind::None as i32;
+                    data.source_id = -1;
+                }
                 vec![data]
             }
             GameEvent::DamageDealt {
@@ -875,7 +933,10 @@ impl Observation {
                     vec![game.state.cards[card_id].id]
                 }
             },
-            Action::ScryCard { card, .. } | Action::SelectCard { card, .. } => {
+            Action::ScryCard { card, .. }
+            | Action::SelectCard { card, .. }
+            | Action::LearnDiscard { card, .. }
+            | Action::LearnTakeLesson { card, .. } => {
                 vec![game.state.cards[card].id]
             }
             Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
@@ -914,6 +975,11 @@ impl Observation {
         if self.agent.is_agent == self.opponent.is_agent {
             return false;
         }
+        for card in &self.agent_sideboard {
+            if card.owner_id != self.agent.id {
+                return false;
+            }
+        }
         for card in &self.agent_cards {
             if card.owner_id != self.agent.id {
                 return false;
@@ -938,37 +1004,6 @@ impl Observation {
     }
 
     pub fn to_json(&self) -> String {
-        fn keywords_json(keywords: &KeywordData) -> Value {
-            json!({
-                "flying": keywords.flying,
-                "reach": keywords.reach,
-                "haste": keywords.haste,
-                "flash": keywords.flash,
-                "vigilance": keywords.vigilance,
-                "trample": keywords.trample,
-                "first_strike": keywords.first_strike,
-                "double_strike": keywords.double_strike,
-                "deathtouch": keywords.deathtouch,
-                "lifelink": keywords.lifelink,
-                "defender": keywords.defender,
-                "menace": keywords.menace,
-                "hexproof": keywords.hexproof,
-            })
-        }
-
-        fn player_json(player: &PlayerData) -> Value {
-            json!({
-                "player_index": player.player_index,
-                "id": player.id,
-                "is_active": player.is_active,
-                "is_agent": player.is_agent,
-                "life": player.life,
-                "zone_counts": player.zone_counts,
-                "graveyard_lessons": player.graveyard_lessons,
-                "combat_mana": player.combat_mana,
-            })
-        }
-
         fn card_json(card: &CardData) -> Value {
             json!({
                 "id": card.id,
@@ -983,21 +1018,8 @@ impl Observation {
                 "is_lesson": card.is_lesson,
                 "ward_cost": card.ward_cost,
                 "kicker_cost": card.kicker_cost,
-                "card_types": {
-                    "is_castable": card.card_types.is_castable,
-                    "is_permanent": card.card_types.is_permanent,
-                    "is_non_land_permanent": card.card_types.is_non_land_permanent,
-                    "is_non_creature_permanent": card.card_types.is_non_creature_permanent,
-                    "is_spell": card.card_types.is_spell,
-                    "is_creature": card.card_types.is_creature,
-                    "is_land": card.card_types.is_land,
-                    "is_planeswalker": card.card_types.is_planeswalker,
-                    "is_enchantment": card.card_types.is_enchantment,
-                    "is_artifact": card.card_types.is_artifact,
-                    "is_kindred": card.card_types.is_kindred,
-                    "is_battle": card.card_types.is_battle,
-                },
-                "keywords": keywords_json(&card.keywords),
+                "card_types": card.card_types,
+                "keywords": card.keywords,
                 "mana_cost": {
                     "cost": card.mana_cost.cost[..6]
                         .iter()
@@ -1005,23 +1027,6 @@ impl Observation {
                         .collect::<Vec<_>>(),
                     "mana_value": i32::from(card.mana_cost.mana_value),
                 }
-            })
-        }
-
-        fn permanent_json(permanent: &PermanentData) -> Value {
-            json!({
-                "id": permanent.id,
-                "controller_id": permanent.controller_id,
-                "tapped": permanent.tapped,
-                "damage": permanent.damage,
-                "is_summoning_sick": permanent.is_summoning_sick,
-                "plus1_counters": permanent.plus1_counters,
-                "cant_be_blocked_this_turn": permanent.cant_be_blocked_this_turn,
-                "power": permanent.power,
-                "toughness": permanent.toughness,
-                "is_animated": permanent.is_animated,
-                "has_exile_link": permanent.has_exile_link,
-                "keywords": keywords_json(&permanent.keywords),
             })
         }
 
@@ -1072,20 +1077,13 @@ impl Observation {
                 "type": self.action_space.action_space_type as i32,
                 "actions": action_json,
             },
-            "agent": player_json(&self.agent),
+            "agent": self.agent,
             "agent_cards": self.agent_cards.iter().map(card_json).collect::<Vec<_>>(),
-            "agent_permanents": self
-                .agent_permanents
-                .iter()
-                .map(permanent_json)
-                .collect::<Vec<_>>(),
-            "opponent": player_json(&self.opponent),
+            "agent_sideboard": self.agent_sideboard,
+            "agent_permanents": self.agent_permanents,
+            "opponent": self.opponent,
             "opponent_cards": self.opponent_cards.iter().map(card_json).collect::<Vec<_>>(),
-            "opponent_permanents": self
-                .opponent_permanents
-                .iter()
-                .map(permanent_json)
-                .collect::<Vec<_>>(),
+            "opponent_permanents": self.opponent_permanents,
             "stack_objects": self
                 .stack_objects
                 .iter()

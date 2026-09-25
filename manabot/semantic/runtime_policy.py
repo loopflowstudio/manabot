@@ -55,7 +55,7 @@ PROMPTS = (
     "look_and_select",
     "pay_or_not",
     "modal",
-    "discard_then_draw",
+    "learn",
     "waterbend",
 )
 ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")

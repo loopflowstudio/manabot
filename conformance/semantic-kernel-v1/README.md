@@ -1,5 +1,9 @@
 # Semantic kernel conformance v1
 
+Historical pre-Learn evidence. Current CI uses the separately recorded
+[v2 corpus](../semantic-kernel-v2/); these receipts require their original
+pre-Learn engine and source, and intentionally fail current digest validation.
+
 This checked evidence covers the curated UR Lessons versus GW Allies boundary
 from `content/semantic/v1/two_deck.source.json`. The source currently resolves
 to 41 UR cards and 40 GW cards; the harness reads it directly rather than

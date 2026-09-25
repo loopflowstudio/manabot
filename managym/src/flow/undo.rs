@@ -21,6 +21,7 @@ use crate::{
         turn::TurnState,
     },
     state::{
+        card::CardDefId,
         game_object::{CardId, Incarnation, ObjectLki, ObjectRef, PermanentId, PlayerId},
         mana::Mana,
         player::Player,
@@ -104,7 +105,7 @@ enum EventQueue {
     Observation,
 }
 
-/// The mutable half of a [`Player`]. `deck` and `name` are fixed at setup and
+/// The scalar mutable facts of a [`Player`]. Known-hand facts are journaled separately. `deck`, `sideboard`, and `name` are fixed at setup and
 /// never change during a match, so journaling them would copy a 60-entry vector
 /// and a string on every life, mana, and damage change. Recording only the
 /// mutable scalars keeps the entry allocation-free.
@@ -140,6 +141,7 @@ impl PlayerVitals {
 #[derive(Debug)]
 enum UndoEntry {
     Player(PlayerId, PlayerVitals),
+    KnownHand(PlayerId, CardDefId, Option<u32>),
     /// Inverse of one card's zone change, including the exact index it held.
     /// The hot zone path: a whole-`ZoneManager` clone here would copy fifteen
     /// vectors for every card that moves.
@@ -231,6 +233,7 @@ impl UndoEntry {
                 .map_or(0, |_| size_of::<SuspendedResolution>()),
             Self::Trackers(_) => size_of::<[BehaviorTracker; 2]>(),
             Self::Player(_, _)
+            | Self::KnownHand(..)
             | Self::ZoneMove { .. }
             | Self::Permanent(_, _)
             | Self::CardToPermanent(_, _)
@@ -248,6 +251,17 @@ impl UndoEntry {
     fn restore(self, game: &mut Game) {
         match self {
             Self::Player(player, old) => old.restore(&mut game.state.players[player.0]),
+            Self::KnownHand(player, definition, old) => {
+                let known = &mut game.state.players[player.0].known_hand;
+                match old {
+                    Some(count) => {
+                        known.insert(definition, count);
+                    }
+                    None => {
+                        known.remove(&definition);
+                    }
+                }
+            }
             Self::ZoneMove {
                 card,
                 owner,
@@ -491,6 +505,25 @@ impl Game {
 
     fn journal_active(&self) -> bool {
         self.undo.as_ref().is_some_and(UndoJournal::active)
+    }
+
+    pub(crate) fn set_known_hand_count(
+        &mut self,
+        player: PlayerId,
+        definition: CardDefId,
+        count: u32,
+    ) {
+        let old = self.state.players[player.0]
+            .known_hand
+            .get(&definition)
+            .copied();
+        self.record_undo(UndoEntry::KnownHand(player, definition, old));
+        let known = &mut self.state.players[player.0].known_hand;
+        if count == 0 {
+            known.remove(&definition);
+        } else {
+            known.insert(definition, count);
+        }
     }
 
     pub(crate) fn journal_player(&mut self, player: PlayerId) {

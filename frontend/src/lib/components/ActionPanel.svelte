@@ -1,11 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import CardImage from './CardImage.svelte';
 
   import { DECISION_PROMPTS } from '$lib/prompt-instructions';
   import type { ActionOption } from '$lib/types';
 
   interface Props {
     actions?: ActionOption[];
+    previewNames?: Record<number, string>;
     actionSpaceKind?: string;
     selectedTargetId?: number | null;
     highlightedActionIndexes?: Set<number>;
@@ -21,6 +23,7 @@
 
   let {
     actions = [],
+    previewNames = {},
     actionSpaceKind = '',
     selectedTargetId = null,
     highlightedActionIndexes = new Set<number>(),
@@ -39,6 +42,18 @@
   );
   let actionList: HTMLDivElement | null = $state(null);
   let lastFocusKey = '';
+  let learnSelection = $state<{ key: string; mode: string } | null>(null);
+  const learnMode = $derived(learnSelection?.key === focusKey ? learnSelection.mode : null);
+  const isLearn = $derived(actionSpaceKind === 'LEARN');
+  const visibleActions = $derived(isLearn ? actions.filter(action => action.type === learnMode) : actions);
+
+  async function chooseMode(mode: string | null): Promise<void> {
+    learnSelection = mode ? { key: focusKey, mode } : null;
+    onHoverAction?.(null);
+    await tick();
+    actionList?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  }
+
 
   $effect(() => {
     const nextFocusKey = focusKey;
@@ -49,7 +64,7 @@
 
     lastFocusKey = nextFocusKey;
     void tick().then(() => {
-      actionList?.querySelector<HTMLButtonElement>('[data-testid="action-option"]')?.focus();
+      actionList?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
     });
   });
 </script>
@@ -114,8 +129,32 @@
   >
     {#if actions.length === 0}
       <p class="type-caption text-ink-3">No actions available.</p>
+    {:else if isLearn && !learnMode}
+      {#each [
+        { type: 'LEARN_TAKE_LESSON', label: 'Take a Lesson', empty: 'No eligible Lessons remaining.' },
+        { type: 'LEARN_DISCARD', label: 'Discard and draw', empty: 'No cards to discard.' },
+      ] as mode}
+        <button
+          data-testid="learn-mode"
+          class="btn btn-secondary w-full disabled:opacity-50"
+          disabled={disabled || !actions.some(action => action.type === mode.type)}
+          onclick={() => chooseMode(mode.type)}
+        >{mode.label}</button>
+        {#if !actions.some(action => action.type === mode.type)}
+          <p class="type-caption text-ink-2">{mode.empty}</p>
+        {/if}
+      {/each}
+      {#each actions.filter(action => action.type === 'DECLINE_CHOICE') as action}
+        <button class="btn btn-secondary w-full" data-testid="action-option"
+          data-action-type={action.type} data-offer-id={action.index}
+          onclick={() => onSelectAction?.(action)} {disabled}>Decline Learn</button>
+      {/each}
     {:else}
-      {#each actions as action}
+      {#if isLearn}
+        <button class="btn btn-secondary" onclick={() => chooseMode(null)} {disabled}>Back</button>
+        <p class="type-caption text-ink-2">{learnMode === 'LEARN_TAKE_LESSON' ? 'Choose a Lesson to take.' : 'Choose a card to discard.'}</p>
+      {/if}
+      {#each visibleActions as action}
         <button
           data-testid="action-option"
           data-offer-id={action.index}
@@ -131,6 +170,11 @@
           onclick={() => onSelectAction?.(action)}
           {disabled}
         >
+          {#if isLearn && previewNames[action.focus[0]]}
+            <div class="relative mx-auto mb-2 w-40 aspect-[5/7]" data-testid="learn-card-preview">
+              <CardImage name={previewNames[action.focus[0]]} className="h-full w-full" />
+            </div>
+          {/if}
           <div class="font-medium">{action.description}</div>
         </button>
       {/each}

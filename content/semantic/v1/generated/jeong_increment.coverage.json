@@ -389,7 +389,7 @@
     }
   ],
   "fixture_count": 1,
-  "ir_hash": "cff5c34b1e7179deb25f7660cf2b54621efa1f171085b9ca66781ad2d55eae93",
+  "ir_hash": "ad797200148f31f80172225423d96076ae8aa1ea8c734dc30be1cf63ea2e122d",
   "no_card_name_dispatch": true,
   "opcode_counts": {
     "add_mana": 6,
@@ -420,5 +420,6 @@
   "program_count": 38,
   "referenced_definition_count": 2,
   "schema_version": 1,
+  "setup_schema_version": 1,
   "source_hash": "3dead13f9409ce8cf5a70261f96a3fa7258a30084997021bbf9c91c3d4d2fe54"
 }

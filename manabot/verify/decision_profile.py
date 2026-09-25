@@ -189,7 +189,7 @@ def play_profile_games(
         hero_seat = game_index % 2 if seat_balanced else 0
         obs, _ = env.reset(
             seed=seed + game_index,
-            options={"match": match_swapped} if hero_seat == 1 else None,
+            options={"match": match_swapped if hero_seat == 1 else match},
         )
         done = False
         aborted = False

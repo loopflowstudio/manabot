@@ -25,6 +25,27 @@ structured offers, proposed events, fork/rollback — is documented in
 [docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
 conformance fixtures under [conformance/](../conformance/).
 
+Authored setups come from `SemanticPack::player_config` (Python:
+`managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
+when swapping seats or rebuilding roots: deck and sideboard together identify
+an authored setup. `PlayerConfig::new` intentionally gives custom setups an
+empty sideboard; it does not infer one from card names or a matching main deck.
+Sideboard rosters are fixed at setup, and remaining copies are derived from
+absence from game zones. They are not part of the library or a new game zone.
+
+Viewer observations carry remaining owner copies in `agent_sideboard`, using
+private `candidate_id` values that join Learn action focus. These are outside-game
+descriptors, not `CardData` with a fabricated zone or in-game `ObjectRef`.
+Both players expose definition-only initial and remaining sideboard counts;
+only the owner gets copy candidates. Python observation JSON and validation
+use the native Rust implementations so new visibility fields cannot drift.
+
+Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
+not a set of revealed physical cards. Its per-definition changes have dedicated
+undo entries; `journal_player` still captures only scalars. Exercise nested
+choice rollback through normal Commands/branch-driver `apply`: transition
+queues are journaled at that boundary, not by direct calls to resolution helpers.
+
 ## Build and test
 
 ```bash
@@ -56,3 +77,11 @@ use crate::state::player::PlayerId;
 
 Prefer explicit types and focused modules. Keep game behavior in enums +
 `match` expressions instead of inheritance-like abstractions.
+
+Bounded observation encoders reserve card rows after the owner's visible cards
+for outside candidates. Their seven zone bits stay zero and the explicit outside
+bit is set; action focus uses the same padded object table as the model. The
+current default has 64 action rows. Card, permanent, action and focus capacity
+excesses raise encoding errors; they must not be treated as a random-policy
+fallback. Complete outside program bindings and public known-hand definition
+counts still require the semantic input path during the Learn migration.

@@ -84,6 +84,7 @@ fn source_admits_every_deck_definition() {
 fn unadmitted_definition_fails_binding_closed() {
     let doc = r#"{
         "schema_version": 1,
+        "setup_schema_version": 1,
         "pack_key": "test",
         "ir_hash": "0",
         "source_hash": "0",
@@ -95,7 +96,7 @@ fn unadmitted_definition_fails_binding_closed() {
             }
         ],
         "programs": [],
-        "decks": [{"cards": [{"definition_index": 0, "count": 1}]}]
+        "decks": [{"sideboard": [], "cards": [{"definition_index": 0, "count": 1}]}]
     }"#;
     let pack = SemanticPack::from_json(doc).expect("document parses");
     let content = ContentPack::default();
@@ -112,6 +113,7 @@ fn name_based_instruction_is_rejected() {
     // An instruction that dispatches on card identity must not parse.
     let doc = r#"{
         "schema_version": 1,
+        "setup_schema_version": 1,
         "pack_key": "test",
         "ir_hash": "0",
         "source_hash": "0",

@@ -70,7 +70,7 @@ pub enum PromptKind {
     LookAndSelect,
     PayOrNot,
     Modal,
-    DiscardThenDraw,
+    Learn,
     Waterbend,
 }
 
@@ -91,6 +91,8 @@ pub enum OfferVerb {
     ScryBottom,
     ScryKeep,
     SelectCard,
+    LearnTakeLesson,
+    LearnDiscard,
     WaterbendTap,
 }
 
@@ -104,7 +106,8 @@ pub enum PublicCommitment {
     Cast { card: String },
     PlayLand { card: String },
     Discard { card: String },
-    DeclineDiscard,
+    LearnTakeLesson { card: String },
+    DeclineLearn,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -515,13 +518,18 @@ impl Game {
                 (_, Action::PlayLand { card, .. }) => Some(PublicCommitment::PlayLand {
                     card: self.state.cards[*card].name.clone(),
                 }),
-                (ActionSpaceKind::DiscardThenDraw, Action::SelectCard { card, .. }) => {
+                (ActionSpaceKind::Learn, Action::LearnDiscard { card, .. }) => {
                     Some(PublicCommitment::Discard {
                         card: self.state.cards[*card].name.clone(),
                     })
                 }
-                (ActionSpaceKind::DiscardThenDraw, Action::Decline { .. }) => {
-                    Some(PublicCommitment::DeclineDiscard)
+                (ActionSpaceKind::Learn, Action::LearnTakeLesson { card, .. }) => {
+                    Some(PublicCommitment::LearnTakeLesson {
+                        card: self.state.cards[*card].name.clone(),
+                    })
+                }
+                (ActionSpaceKind::Learn, Action::Decline { .. }) => {
+                    Some(PublicCommitment::DeclineLearn)
                 }
                 _ => None,
             };
@@ -1410,7 +1418,7 @@ fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOff
         ActionSpaceKind::LookAndSelect => Ok(PromptKind::LookAndSelect),
         ActionSpaceKind::PayOrNot => Ok(PromptKind::PayOrNot),
         ActionSpaceKind::Modal => Ok(PromptKind::Modal),
-        ActionSpaceKind::DiscardThenDraw => Ok(PromptKind::DiscardThenDraw),
+        ActionSpaceKind::Learn => Ok(PromptKind::Learn),
         ActionSpaceKind::Waterbend => Ok(PromptKind::Waterbend),
         ActionSpaceKind::GameOver => Err(StructuredOfferError::GameOver),
     }
@@ -1431,6 +1439,8 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
         Action::ScryCard {
             to_bottom: true, ..
         } => OfferVerb::ScryBottom,
+        Action::LearnTakeLesson { .. } => OfferVerb::LearnTakeLesson,
+        Action::LearnDiscard { .. } => OfferVerb::LearnDiscard,
         Action::SelectCard { .. } => OfferVerb::SelectCard,
         Action::Decline { .. } => OfferVerb::Decline,
         Action::PayCost { .. } => OfferVerb::PayCost,

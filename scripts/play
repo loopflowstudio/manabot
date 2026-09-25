@@ -49,9 +49,9 @@ if ! printf '%s\n' "$runtime_closure" | \
   error lock.python "the Etude play runtime has no locked Linux CPU Torch wheel"
 fi
 
-[ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json ] || \
+[ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json ] || \
   error pack.missing "the installed curated-pack manifest is missing"
-[ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/NOTICE.md ] || \
+[ -f frontend/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/NOTICE.md ] || \
   error pack.notice "the installed curated-pack notice is missing"
 
 marker=$(mktemp "${TMPDIR:-/tmp}/etude-play-error.XXXXXX") || \

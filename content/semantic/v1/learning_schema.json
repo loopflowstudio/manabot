@@ -200,6 +200,7 @@
   "local_role_base": 1000,
   "object_roles": {
     "agent_card": 1,
+    "agent_sideboard": 4,
     "opponent_card": 2,
     "stack_ability": 3
   },
@@ -236,7 +237,7 @@
     "triggered": 3,
     "triggered_mana": 6
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "special_roles": {
     "current_target": 2,
     "each:other_allies_you_control": 4,

@@ -12,6 +12,7 @@
     label: string;
     player: PlayerState;
     deckName?: string | null;
+    definitionNames?: Record<string, string>;
     opponent?: boolean;
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
@@ -26,6 +27,7 @@
     label,
     player,
     deckName = null,
+    definitionNames = {},
     opponent = false,
     focusedIds = new Set<number>(),
     clickableTargets = undefined,
@@ -116,6 +118,22 @@
   {/if}
 
   <div class="staves">
+    {#if Object.keys(player.sideboard_counts ?? {}).length > 0}
+      <details class="type-caption py-2" data-testid="sideboard-summary">
+        <summary>Sideboard ({Object.values(player.remaining_sideboard_counts ?? {}).reduce((a, b) => a + b, 0)} remaining)</summary>
+        {#each Object.entries(player.sideboard_counts ?? {}) as [definition, initial]}
+          <div>{definitionNames[definition] ?? `Card ${definition}`}: {player.remaining_sideboard_counts?.[definition] ?? 0} of {initial}</div>
+        {/each}
+      </details>
+    {/if}
+    {#if Object.keys(player.known_hand ?? {}).length > 0}
+      <div class="type-caption py-2" data-testid="known-hand">
+        Revealed in hand:
+        {#each Object.entries(player.known_hand ?? {}) as [definition, count]}
+          <span>{count} × {definitionNames[definition] ?? `Card ${definition}`}</span>
+        {/each}
+      </div>
+    {/if}
     {#if opponent}
       <div class="staff">
         {@render rubric(`Hand (${hiddenHandCount})`)}

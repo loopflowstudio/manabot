@@ -252,7 +252,7 @@ def test_unsupported_native_surface_is_typed_and_returnable(tmp_path):
     unsupported = next(
         row
         for row in replay.decisions
-        if row.viewer == 0 and row.frame.action_space == "DISCARD_THEN_DRAW"
+        if row.viewer == 0 and row.frame.action_space == "LEARN"
     )
     address = ReplayDecisionAddress.from_decision(replay, unsupported).serialize()
     branch = session.fork_study(address)

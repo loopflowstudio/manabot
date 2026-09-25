@@ -34,7 +34,18 @@ export interface PermanentState {
   plus1_counters: number;
 }
 
+export interface SideboardCard {
+  candidate_id: number;
+  owner_id: number;
+  registry_key: number;
+  name: string;
+}
+
 export interface PlayerState {
+  sideboard?: SideboardCard[];
+  known_hand?: Record<string, number>;
+  sideboard_counts?: Record<string, number>;
+  remaining_sideboard_counts?: Record<string, number>;
   player_index: number;
   id: number;
   is_active: boolean;
@@ -51,6 +62,7 @@ export interface PlayerState {
 }
 
 export interface Observation {
+  definition_names?: Record<string, string>;
   game_over: boolean;
   won: boolean;
   turn: {
@@ -411,6 +423,8 @@ export interface TraceConfig {
   seed?: number | null;
   hero_deck_name?: string;
   villain_deck_name?: string;
+  hero_sideboard?: Record<string, number>;
+  villain_sideboard?: Record<string, number>;
   villain_sims?: number | null;
   villain_checkpoint?: string | null;
   villain_deterministic?: boolean;

@@ -74,6 +74,8 @@ class ActionEnum(IntEnum):
     PAY_COST = 11
     CHOOSE_MODE = 12
     TAP_FOR_COST = 13
+    LEARN_TAKE_LESSON = 14
+    LEARN_DISCARD = 15
 
 
 class ActionSpaceEnum(IntEnum):
@@ -88,7 +90,7 @@ class ActionSpaceEnum(IntEnum):
     LOOK_AND_SELECT = 6
     PAY_OR_NOT = 7
     MODAL = 8
-    DISCARD_THEN_DRAW = 9
+    LEARN = 9
     WATERBEND = 10
 
 
@@ -119,6 +121,7 @@ class EventTypeEnum(IntEnum):
     COMBAT_DAMAGE_DEALT = 9
     PERMANENTS_DIED = 10
     TURN_STARTED = 11
+    CARD_REVEALED = 12
 
 
 class EventEntityKindEnum(IntEnum):
@@ -129,6 +132,7 @@ class EventEntityKindEnum(IntEnum):
     PERMANENT = 2
     PLAYER = 3
     OBJECT = 4
+    DEFINITION = 5
 
 
 # -----------------------------------------------------------------------------
@@ -163,7 +167,7 @@ class ObservationEncoder:
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + hexproof + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 1
+        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 2
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
@@ -268,6 +272,20 @@ class ObservationEncoder:
             ("opponent_cards", obs.opponent_cards, 0.0),
         ):
             out[key] = self._encode_cards(cards, is_mine=is_mine)
+        # Outside copies occupy explicit rows after visible owner cards. They
+        # have no zone bits; the outside marker identifies their location.
+        outside = obs.agent_sideboard
+        start = len(obs.agent_cards)
+        if start + len(outside) > self.cards_per_player:
+            raise ValueError(
+                "observation capacity exceeded: agent_cards plus sideboard"
+            )
+        for offset, card in enumerate(outside):
+            row = start + offset
+            out["agent_cards"][row, 7] = 1.0
+            out["agent_cards"][row, -2] = 1.0
+            out["agent_cards"][row, -1] = 1.0
+            self.object_to_index[card.candidate_id] = 2 + row
         for key, perms, is_mine in (
             ("agent_permanents", obs.agent_permanents, 1.0),
             ("opponent_permanents", obs.opponent_permanents, 0.0),
@@ -333,8 +351,7 @@ class ObservationEncoder:
             items=cards,
             max_items=self.cards_per_player,
             dim=self.card_dim,
-            log_name="encode_cards",
-            truncated_label="Card list",
+            label="Card list",
             encode_item=lambda card: self._encode_card_features(card, is_mine),
         )
 
@@ -418,8 +435,7 @@ class ObservationEncoder:
             items=perms,
             max_items=self.perms_per_player,
             dim=self.permanent_dim,
-            log_name="encode_permanents",
-            truncated_label="Permanent list",
+            label="Permanent list",
             encode_item=lambda perm: self._encode_permanent_features(perm, is_mine),
         )
 
@@ -464,38 +480,31 @@ class ObservationEncoder:
     ) -> Tuple[np.ndarray, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
-        valid_actions = np.zeros(self.max_actions, dtype=bool)
+        action_focus = np.full(
+            (self.max_actions, self.max_focus_objects), -1, dtype=np.int32
+        )
         actions = obs.action_space.actions
-        # We'll accumulate the focus indices for each action here.
-        action_focus_indices = []  # Expected shape: (max_actions, max_focus_objects)
+        if len(actions) > self.max_actions:
+            raise ValueError(
+                f"observation capacity exceeded: actions {len(actions)} > {self.max_actions}"
+            )
         for idx, action in enumerate(actions):
-            valid_actions[idx] = True
+            arr[idx, -1] = 1.0
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0
 
-            focus_ids = action.focus[: self.max_focus_objects]
-            indices = []
-            for fid in focus_ids:
+            if len(action.focus) > self.max_focus_objects:
+                raise ValueError("observation capacity exceeded: action focus")
+            for focus_index, fid in enumerate(action.focus):
                 index = self.object_to_index.get(fid, -1)
                 if index == -1:
                     log.warning(
                         f"Invalid focus object ID {fid} for action {action_type}."
                     )
-                indices.append(index)
-            # Pad the indices to ensure we have exactly self.max_focus_objects entries.
-            if len(indices) < self.max_focus_objects:
-                indices.extend([-1] * (self.max_focus_objects - len(indices)))
-            action_focus_indices.append(indices)
+                action_focus[idx, focus_index] = index
 
-        arr[..., -1] = valid_actions.astype(np.float32)
-        # Pad action_focus_indices so shape is always
-        # (max_actions, max_focus_objects).
-        unused_slots = self.max_actions - len(action_focus_indices)
-        if unused_slots > 0:
-            action_focus_indices.extend([[-1] * self.max_focus_objects] * unused_slots)
-
-        return arr, np.array(action_focus_indices, dtype=np.int32)
+        return arr, action_focus
 
     def _encode_events(
         self, events: List[managym.EventData]
@@ -536,22 +545,21 @@ class ObservationEncoder:
         items: List,
         max_items: int,
         dim: int,
-        log_name: str,
-        truncated_label: str,
+        label: str,
         encode_item,
     ) -> np.ndarray:
-        log = getLogger(__name__).getChild(log_name)
         feat = np.zeros((max_items, dim), dtype=np.float32)
         if len(items) > max_items:
-            log.warning(f"{truncated_label} truncated: {len(items)} -> {max_items}")
+            raise ValueError(
+                f"observation capacity exceeded: {label} {len(items)} > {max_items}"
+            )
 
-        ordered_items = items[:max_items]
-        for i, item in enumerate(ordered_items):
+        for i, item in enumerate(items):
             feat[i] = encode_item(item)
             self.object_to_index[item.id] = self.current_object_index
             self.current_object_index += 1
 
-        self.current_object_index += max_items - len(ordered_items)
+        self.current_object_index += max_items - len(items)
         return feat
 
 

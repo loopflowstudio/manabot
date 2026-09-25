@@ -46,6 +46,8 @@ class ActionEnum(IntEnum):
     PAY_COST = 11
     CHOOSE_MODE = 12
     TAP_FOR_COST = 13
+    LEARN_TAKE_LESSON = 14
+    LEARN_DISCARD = 15
 
 
 class ActionSpaceEnum(IntEnum):
@@ -58,7 +60,7 @@ class ActionSpaceEnum(IntEnum):
     LOOK_AND_SELECT = 6
     PAY_OR_NOT = 7
     MODAL = 8
-    DISCARD_THEN_DRAW = 9
+    LEARN = 9
     WATERBEND = 10
 
 
@@ -85,3 +87,4 @@ class EventTypeEnum(IntEnum):
     COMBAT_DAMAGE_DEALT = 9
     PERMANENTS_DIED = 10
     TURN_STARTED = 11
+    CARD_REVEALED = 12

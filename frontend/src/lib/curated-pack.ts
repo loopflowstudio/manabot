@@ -1,10 +1,11 @@
-import manifestData from './packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json';
+import manifestData from './packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json';
 
 export interface PackDeck {
   deck_id: string;
   display_name: string;
   card_count: number;
   cards: Record<string, number>;
+  sideboard: Record<string, number>;
 }
 
 export interface PackTreatment {
@@ -22,6 +23,8 @@ export interface PackIdentity {
 
 export interface CuratedPackManifest {
   schema_version: 1;
+  setup_schema_version: 1;
+  semantic_pack_key: string;
   pack: { id: string; version: string; title: string };
   matchup: {
     hero: PackDeck;
@@ -96,28 +99,34 @@ function containsRemoteValue(value: unknown): boolean {
   return false;
 }
 
+function validateCardCounts(value: unknown, path: string): Record<string, number> {
+  const cards = requireRecord(value, path);
+  for (const [name, count] of Object.entries(cards)) {
+    requireString(name, `${path} key`);
+    if (!Number.isInteger(count) || (count as number) <= 0) {
+      throw new Error(`${path}.${name} must be a positive integer`);
+    }
+  }
+  return cards as Record<string, number>;
+}
+
 function validateDeck(value: unknown, path: string): PackDeck {
   const deck = requireRecord(value, path);
-  const cards = requireRecord(deck.cards, `${path}.cards`);
-  let total = 0;
-  for (const [name, count] of Object.entries(cards)) {
-    requireString(name, `${path}.cards key`);
-    if (!Number.isInteger(count) || (count as number) <= 0) {
-      throw new Error(`${path}.cards.${name} must be a positive integer`);
-    }
-    total += count as number;
-  }
+  const cards = validateCardCounts(deck.cards, `${path}.cards`);
+  const total = Object.values(cards).reduce((sum, count) => sum + count, 0);
   if (!Number.isInteger(deck.card_count) || (deck.card_count as number) <= 0) {
     throw new Error(`${path}.card_count must be a positive integer`);
   }
   if (total !== deck.card_count) {
     throw new Error(`${path} declares ${deck.card_count} cards but contains ${total}`);
   }
+  const sideboard = validateCardCounts(deck.sideboard, `${path}.sideboard`);
   return {
     deck_id: requireString(deck.deck_id, `${path}.deck_id`),
     display_name: requireString(deck.display_name, `${path}.display_name`),
     card_count: deck.card_count as number,
-    cards: cards as Record<string, number>,
+    cards,
+    sideboard,
   };
 }
 
@@ -126,6 +135,10 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
   if (root.schema_version !== 1) {
     throw new Error('manifest.schema_version must be 1');
   }
+  if (root.setup_schema_version !== 1) {
+    throw new Error('manifest.setup_schema_version must be 1');
+  }
+  const semanticPackKey = requireString(root.semantic_pack_key, 'manifest.semantic_pack_key');
 
   const pack = requireRecord(root.pack, 'manifest.pack');
   const rights = requireRecord(root.rights, 'manifest.rights');
@@ -180,6 +193,8 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
   const expectedNames = new Set([
     ...Object.keys(hero.cards),
     ...Object.keys(villain.cards),
+    ...Object.keys(hero.sideboard),
+    ...Object.keys(villain.sideboard),
     ...reachableTokens,
   ]);
   const actualNames = Object.keys(rawIdentities);
@@ -254,6 +269,8 @@ export function validateCuratedPack(value: unknown): CuratedPackManifest {
 
   return {
     schema_version: 1,
+    setup_schema_version: 1,
+    semantic_pack_key: semanticPackKey,
     pack: {
       id: requireString(pack.id, 'manifest.pack.id'),
       version: requireString(pack.version, 'manifest.pack.version'),

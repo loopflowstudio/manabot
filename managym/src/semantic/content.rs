@@ -34,34 +34,33 @@ use super::{
 struct AuthoredRuntime {
     pack_key: String,
     content: Arc<ContentPack>,
-    decklists: Vec<std::collections::BTreeMap<String, usize>>,
+    setups: Vec<PlayerConfig>,
 }
 
 impl AuthoredRuntime {
     fn compile(semantic: SemanticPack) -> Result<Self, IrError> {
         let content = Arc::new(semantic.compile_content_pack()?);
-        let decklists = semantic
+        let setups = semantic
             .decks
             .iter()
-            .map(|deck| semantic.decklist(&deck.key))
+            .map(|deck| semantic.player_config(&deck.key, &deck.key))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             pack_key: semantic.pack_key,
             content,
-            decklists,
+            setups,
         })
     }
 
     fn matches(&self, player_configs: &[PlayerConfig]) -> bool {
-        if player_configs.len() != self.decklists.len() {
+        if player_configs.len() != self.setups.len() {
             return false;
         }
-        let mut unmatched = self.decklists.iter().collect::<Vec<_>>();
+        let mut unmatched = self.setups.iter().collect::<Vec<_>>();
         for config in player_configs {
-            let Some(index) = unmatched
-                .iter()
-                .position(|decklist| *decklist == &config.decklist)
-            else {
+            let Some(index) = unmatched.iter().position(|setup| {
+                setup.decklist == config.decklist && setup.sideboard == config.sideboard
+            }) else {
                 return false;
             };
             unmatched.remove(index);
@@ -179,25 +178,36 @@ impl SemanticPack {
         ))
     }
 
-    pub fn decklist(
-        &self,
-        key: &str,
-    ) -> Result<std::collections::BTreeMap<String, usize>, IrError> {
+    pub fn player_config(&self, name: &str, key: &str) -> Result<PlayerConfig, IrError> {
         let deck = self
             .decks
             .iter()
             .find(|deck| deck.key == key)
             .ok_or_else(|| IrError::Malformed(format!("unknown semantic deck {key:?}")))?;
-        let mut decklist = std::collections::BTreeMap::new();
-        for (&definition_index, &count) in &deck.cards {
-            let definition = self.definitions.get(definition_index).ok_or_else(|| {
-                IrError::Malformed(format!(
-                    "deck {key:?} references definition index {definition_index}"
-                ))
-            })?;
-            decklist.insert(definition.registry_name.clone(), count);
-        }
-        Ok(decklist)
+        let resolve = |entries: &std::collections::BTreeMap<usize, usize>| {
+            entries
+                .iter()
+                .map(|(&index, &count)| {
+                    let definition = self.definitions.get(index).ok_or_else(|| {
+                        IrError::Malformed(format!(
+                            "deck {key:?} references definition index {index}"
+                        ))
+                    })?;
+                    Ok((definition.registry_name.clone(), count))
+                })
+                .collect::<Result<_, IrError>>()
+        };
+        Ok(
+            PlayerConfig::new(name, resolve(&deck.cards)?)
+                .with_sideboard(resolve(&deck.sideboard)?),
+        )
+    }
+
+    pub fn decklist(
+        &self,
+        key: &str,
+    ) -> Result<std::collections::BTreeMap<String, usize>, IrError> {
+        Ok(self.player_config(key, key)?.decklist)
     }
 }
 

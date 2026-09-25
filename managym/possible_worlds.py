@@ -14,8 +14,10 @@ import json
 import sys
 from typing import Any, Iterable, Mapping, Sequence
 
-POSSIBLE_WORLD_SPACE_VERSION: int = 1
-WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v1"
+from managym.decision import SEMANTIC_DECISION_VERSION
+
+POSSIBLE_WORLD_SPACE_VERSION: int = 2
+WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v2"
 
 
 class PossibleWorldError(ValueError):
@@ -112,6 +114,7 @@ class PossibleWorldSpace:
     pool: tuple[tuple[str, int], ...]
     total_weight: int
     worlds: tuple[PossibleWorld, ...]
+    known_hand: tuple[tuple[str, int], ...] = ()
     world_schema_identity: str = WORLD_SCHEMA_IDENTITY
     content_manifest_identity: str = ""
     _engine: Any | None = field(default=None, repr=False, compare=False, hash=False)
@@ -128,12 +131,28 @@ class PossibleWorldSpace:
             payload = json.loads(engine.possible_world_space_json(viewer))
         except Exception as error:
             raise PossibleWorldError(str(error)) from error
-        version = int(payload["schema_version"])
-        if version != POSSIBLE_WORLD_SPACE_VERSION:
+        version = payload["schema_version"]
+        if type(version) is not int or version != POSSIBLE_WORLD_SPACE_VERSION:
             raise PossibleWorldError(f"unsupported PossibleWorldSpace schema {version}")
         source = payload["source_observation"]
+        if (
+            type(source["schema_version"]) is not int
+            or source["schema_version"] != SEMANTIC_DECISION_VERSION
+        ):
+            raise PossibleWorldError("unsupported source observation schema")
         if int(source["viewer"]) != int(payload["viewer"]):
             raise PossibleWorldError("source observation changed the space viewer")
+        known_hand = payload.get("known_hand")
+        if not isinstance(known_hand, dict) or any(
+            not isinstance(name, str)
+            or not name
+            or type(count) is not int
+            or count <= 0
+            for name, count in known_hand.items()
+        ):
+            raise PossibleWorldError(
+                "known_hand must contain positive definition counts"
+            )
         canonical_pool = tuple(
             (str(name), int(count)) for name, count in sorted(payload["pool"].items())
         )
@@ -172,6 +191,7 @@ class PossibleWorldSpace:
             pool=canonical_pool,
             total_weight=int(payload["total_weight"]),
             worlds=rows,
+            known_hand=tuple(sorted(known_hand.items())),
             content_manifest_identity=content_manifest_identity,
             _engine=engine,
         )
@@ -187,6 +207,7 @@ class PossibleWorldSpace:
         source_viewer_state_hash: str,
         pool: Mapping[str, int],
         hands: Iterable[tuple[Mapping[str, int], int]],
+        known_hand: Mapping[str, int] | None = None,
         content_manifest_identity: str | None = None,
     ) -> "PossibleWorldSpace":
         """Build a retained, viewer-safe contract fixture.
@@ -197,6 +218,10 @@ class PossibleWorldSpace:
 
         canonical_pool = tuple(
             (str(name), int(count)) for name, count in sorted(pool.items())
+        )
+        canonical_known = tuple(
+            (str(name), int(count))
+            for name, count in sorted((known_hand or {}).items())
         )
         manifest_identity = content_manifest_identity or _digest(
             {"pool": canonical_pool}
@@ -236,6 +261,7 @@ class PossibleWorldSpace:
             "content_manifest_identity": manifest_identity,
             "hand_size": hand_size,
             "pool": canonical_pool,
+            "known_hand": canonical_known,
             "worlds": [
                 {"hand": world.hand, "weight": world.weight} for world in worlds
             ],
@@ -250,6 +276,7 @@ class PossibleWorldSpace:
             pool=canonical_pool,
             total_weight=sum(world.weight for world in worlds),
             worlds=worlds,
+            known_hand=canonical_known,
             content_manifest_identity=manifest_identity,
         )
         space._validate()
@@ -275,6 +302,10 @@ class PossibleWorldSpace:
         if len({world.hand for world in self.worlds}) != len(self.worlds):
             raise PossibleWorldError("canonical world rows must be unique")
         pool = dict(self.pool)
+        if sum(count for _, count in self.known_hand) > self.hand_size or any(
+            count <= 0 or count > pool.get(name, 0) for name, count in self.known_hand
+        ):
+            raise PossibleWorldError("known hand is outside the pool or hand size")
         for world in self.worlds:
             if sum(count for _, count in world.hand) != self.hand_size:
                 raise PossibleWorldError("a canonical world has the wrong hand size")
@@ -282,6 +313,9 @@ class PossibleWorldSpace:
                 count < 0 or count > pool.get(name, 0) for name, count in world.hand
             ):
                 raise PossibleWorldError("a canonical world is outside the unseen pool")
+            hand = dict(world.hand)
+            if any(hand.get(name, 0) < count for name, count in self.known_hand):
+                raise PossibleWorldError("a canonical world omits known hand cards")
 
     @property
     def support_size(self) -> int:
@@ -309,10 +343,11 @@ class PossibleWorldSpace:
                 self.content_manifest_identity,
             )
         )
-        total += sys.getsizeof(self.pool)
-        for name, count in self.pool:
-            total += sys.getsizeof((name, count))
-            total += sys.getsizeof(name) + sys.getsizeof(count)
+        for counts in (self.pool, self.known_hand):
+            total += sys.getsizeof(counts)
+            for name, count in counts:
+                total += sys.getsizeof((name, count))
+                total += sys.getsizeof(name) + sys.getsizeof(count)
         total += sys.getsizeof(self.worlds)
         for world in self.worlds:
             total += sys.getsizeof(world)
@@ -462,24 +497,26 @@ class PossibleWorldSpace:
         count = int(
             next(value for key, value in payload.items() if key not in {"kind", "card"})
         )
-        maximum = min(dict(self.pool).get(card, 0), self.hand_size)
+        minimum = dict(self.known_hand).get(card, 0)
+        unknown_slots = self.hand_size - sum(count for _, count in self.known_hand)
+        maximum = min(dict(self.pool).get(card, 0), minimum + unknown_slots)
         if kind == "has":
-            if count == 0:
+            if count <= minimum:
                 return {"kind": "true"}
             if count > maximum:
                 return {"kind": "empty"}
         elif kind == "lacks":
-            if count == 0:
+            if count <= minimum:
                 return {"kind": "empty"}
             if count > maximum:
                 return {"kind": "true"}
         elif kind == "exactly":
-            if count > maximum:
+            if count < minimum or count > maximum:
                 return {"kind": "empty"}
             if count == 0:
                 return {"kind": "lacks", "card": card, "count": 1}
         elif kind == "not_exactly":
-            if count > maximum:
+            if count < minimum or count > maximum:
                 return {"kind": "true"}
             if count == 0:
                 return {"kind": "has", "card": card, "count": 1}

@@ -10,9 +10,9 @@ const traceDir = fileURLToPath(new URL('./test-results/release/traces', import.m
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'release-prompt-matrix.spec.ts',
+  testMatch: ['release-prompt-matrix.spec.ts', 'learn.spec.ts'],
   outputDir,
-  snapshotPathTemplate: '{testDir}/visual-references/v3/{arg}{ext}',
+  snapshotPathTemplate: '{testDir}/visual-references/v4/{arg}{ext}',
   timeout: 600_000,
   fullyParallel: false,
   workers: 1,

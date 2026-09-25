@@ -14,7 +14,12 @@ from etude.replay_index import (
     ReplayDecisionAddress,
     canonical_projection_sha256,
 )
-from etude.study_protocol import KnowledgeScope, StudyArtifact
+from etude.study_protocol import (
+    KnowledgeScope,
+    RecordedDecisionInput,
+    StudyArtifact,
+    StudyDecisionIndex,
+)
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(
@@ -180,6 +185,32 @@ def test_default_study_evidence_rejects_opponent_private_hand_identity():
     RUST_VALIDATOR.validate(invalid)
     with pytest.raises(ValidationError, match="opponent-private hand"):
         StudyArtifact.model_validate(invalid)
+
+
+@pytest.mark.parametrize(
+    "fixture,model,rows",
+    [
+        ("canonical-replay-player-0.json", CanonicalReplayProjectionV1, "decisions"),
+        ("study-curated-decision.json", StudyArtifact, "landmarks"),
+        ("recorded-match-decisions-curated.json", RecordedDecisionInput, "decisions"),
+        ("study-decision-index-curated.json", StudyDecisionIndex, "decisions"),
+    ],
+)
+def test_recorded_boundaries_reject_opponent_sideboard_candidates(fixture, model, rows):
+    payload = json.loads((PROTOCOL_DIR / "fixtures" / fixture).read_text())
+    opponent = payload[rows][0]["frame"]["projection"]["opponent"]
+    model.model_validate(payload)
+    # Open decklists expose definitions, never the owner's copy candidates.
+    opponent["sideboard"] = [
+        {
+            "candidate_id": 83,
+            "owner_id": opponent["id"],
+            "registry_key": 7,
+            "name": "Accumulate Wisdom",
+        }
+    ]
+    with pytest.raises(ValidationError, match="sideboard candidates"):
+        model.model_validate(payload)
 
 
 def test_default_study_evidence_rejects_rng_secrets_and_binding_drift():

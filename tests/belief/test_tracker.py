@@ -10,8 +10,18 @@ import pytest
 
 from manabot.belief.likelihood import LikelihoodResult, RulesProviderGap
 from manabot.belief.tracker import BeliefTracker
-from managym.decision import Observation, SemanticTransition, TransitionReceipt
-from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Observation,
+    SemanticContractError,
+    SemanticTransition,
+    TransitionReceipt,
+)
+from managym.possible_worlds import (
+    POSSIBLE_WORLD_SPACE_VERSION,
+    PossibleWorld,
+    PossibleWorldSpace,
+)
 
 
 @dataclass
@@ -41,18 +51,19 @@ class FakeEngine:
         assert self.space is not None and viewer == self.space.viewer
         return json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": POSSIBLE_WORLD_SPACE_VERSION,
                 "identity": self.space.identity,
                 "viewer": self.space.viewer,
                 "opponent": self.space.opponent,
                 "source_observation": {
-                    "schema_version": 1,
+                    "schema_version": SEMANTIC_DECISION_VERSION,
                     "revision": self.space.source_revision,
                     "viewer": self.space.viewer,
                     "viewer_state_hash": self.space.source_viewer_state_hash,
                 },
                 "hand_size": self.space.hand_size,
                 "pool": dict(self.space.pool),
+                "known_hand": dict(self.space.known_hand),
                 "total_weight": str(self.space.total_weight),
                 "worlds": [
                     {
@@ -70,7 +81,7 @@ class FakeEngine:
         return json.dumps(
             {
                 "identity": {
-                    "schema_version": 1,
+                    "schema_version": SEMANTIC_DECISION_VERSION,
                     "revision": self.space.source_revision,
                     "viewer": viewer,
                     "viewer_state_hash": self.space.source_viewer_state_hash,
@@ -88,6 +99,7 @@ def _state(
     pool: dict[str, int],
     hand_size: int,
     rows: list[tuple[dict[str, int], int]],
+    known_hand: dict[str, int] | None = None,
 ) -> tuple[FakeEngine, PossibleWorldSpace, Observation]:
     engine = FakeEngine()
     space = PossibleWorldSpace(
@@ -98,6 +110,7 @@ def _state(
         source_viewer_state_hash=f"hash-{identity}",
         hand_size=hand_size,
         pool=tuple(sorted(pool.items())),
+        known_hand=tuple(sorted((known_hand or {}).items())),
         total_weight=sum(weight for _, weight in rows),
         worlds=tuple(
             PossibleWorld(index, tuple(sorted(hand.items())), weight)
@@ -108,7 +121,7 @@ def _state(
     )
     engine.space = space
     observation = Observation(
-        schema_version=1,
+        schema_version=SEMANTIC_DECISION_VERSION,
         revision=revision,
         viewer=0,
         viewer_state_hash=f"hash-{identity}",
@@ -127,7 +140,7 @@ def _transition(
 ) -> SemanticTransition:
     return SemanticTransition(
         receipt=TransitionReceipt(
-            schema_version=1,
+            schema_version=SEMANTIC_DECISION_VERSION,
             before_revision=before,
             after_revision=after,
             command_id=f"command-{before}",
@@ -159,6 +172,80 @@ class FixedLikelihood:
             matching_action_counts=np.ones(belief.support_size, dtype=np.int64),
             seconds=0.125,
         )
+
+
+def test_learn_reveal_survives_secret_draw_and_public_duplicate_departure() -> None:
+    _, before, observation = _state(
+        "learn-before",
+        1,
+        {"Lesson": 2, "Island": 2},
+        1,
+        [({"Lesson": 1}, 2), ({"Island": 1}, 2)],
+    )
+    learned_engine, learned, learned_observation = _state(
+        "learn-after",
+        2,
+        {"Lesson": 3, "Island": 2},
+        2,
+        [({"Lesson": 2}, 2), ({"Island": 1, "Lesson": 1}, 2)],
+        known_hand={"Lesson": 1},
+    )
+    model = FixedLikelihood((0.5, 0.5))
+    tracker = BeliefTracker(
+        before, observation, likelihood=model, epsilon=0.0, model_id="test"
+    )
+    tracker.observe(
+        learned_engine,
+        acting=1,
+        transition=_transition(
+            1, 2, {"kind": "learn_take_lesson", "card": "Lesson"}, learned_observation
+        ),
+        likelihood_root="learn-root",
+    )
+    assert tracker.space.known_hand == (("Lesson", 1),)
+    assert tracker.records[-1].known_returns == ("Lesson",)
+    assert tracker.records[-1].hidden_draws == 0
+    assert tracker.posterior.probabilities == pytest.approx([0.5, 0.5])
+
+    drawn_engine, drawn, drawn_observation = _state(
+        "secret-draw",
+        3,
+        dict(learned.pool),
+        3,
+        [
+            ({"Lesson": 3}, 1),
+            ({"Lesson": 2, "Island": 1}, 4),
+            ({"Lesson": 1, "Island": 2}, 1),
+        ],
+        known_hand={"Lesson": 1},
+    )
+    tracker.observe(
+        drawn_engine, acting=0, transition=_transition(2, 3, None, drawn_observation)
+    )
+    assert tracker.space.known_hand == (("Lesson", 1),)
+    assert tracker.records[-1].hidden_draws == 1
+    assert tracker.posterior.probabilities == pytest.approx([1 / 6, 4 / 6, 1 / 6])
+
+    departed_engine, departed, departed_observation = _state(
+        "public-departure",
+        4,
+        {"Lesson": 2, "Island": 2},
+        2,
+        [({"Lesson": 2}, 1), ({"Lesson": 1, "Island": 1}, 4), ({"Island": 2}, 1)],
+    )
+    model.likelihoods = (0.5, 0.5, 0.5)
+    tracker.observe(
+        departed_engine,
+        acting=1,
+        transition=_transition(
+            3, 4, {"kind": "cast", "card": "Lesson"}, departed_observation
+        ),
+        likelihood_root="departure-root",
+    )
+    assert tracker.space.known_hand == ()
+    assert tracker.records[-1].known_exits == ("Lesson",)
+    assert tracker.records[-1].hidden_draws == 0
+    assert tracker.posterior.probabilities == pytest.approx([1 / 6, 4 / 6, 1 / 6])
 
 
 def _tracker_snapshot(tracker: BeliefTracker) -> tuple[Any, ...]:
@@ -336,7 +423,7 @@ def test_discard_conditions_and_transports_one_named_exit_and_hidden_draw() -> N
     assert tracker.records[-1].public_commitment == {"kind": "discard", "card": "A"}
 
 
-def test_decline_discard_is_a_likelihood_only_commitment() -> None:
+def test_decline_learn_is_a_likelihood_only_commitment() -> None:
     _, before, observation = _state(
         "decline-before",
         1,
@@ -362,7 +449,7 @@ def test_decline_discard_is_a_likelihood_only_commitment() -> None:
     tracker.observe(
         after_engine,
         acting=1,
-        transition=_transition(1, 2, {"kind": "decline_discard"}, after_observation),
+        transition=_transition(1, 2, {"kind": "decline_learn"}, after_observation),
         likelihood_root="decline-root",
     )
 
@@ -452,7 +539,7 @@ def test_unsupported_commitment_fails_atomically_before_likelihood() -> None:
     before_witness = after_engine.state_digest()
     before_cursor = after_engine.semantic_event_cursor()
 
-    with pytest.raises(RulesProviderGap, match="unsupported public commitment"):
+    with pytest.raises(SemanticContractError, match="unsupported public commitment"):
         tracker.observe(
             after_engine,
             acting=1,

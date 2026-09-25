@@ -53,6 +53,7 @@ class Env:
     # DecisionFrame / composite Observation / {receipt, observation}.
     def semantic_decision_frame_json(self) -> str: ...
     def semantic_observation_json(self, viewer: int) -> str: ...
+    def observation_for_player(self, player_index: int) -> Observation: ...
     def execute_semantic_command_json(self, command_json: str) -> str: ...
     def possible_world_space_json(self, viewer: int) -> str: ...
     def prepare_possible_world_materializer(
@@ -157,9 +158,17 @@ class VectorEnv:
     def get_last_info(self) -> List[Dict[str, Any]]: ...
 
 class PlayerConfig:
-    def __init__(self, name: str, decklist: Dict[str, int]) -> None: ...
+    def __init__(
+        self,
+        name: str,
+        decklist: Dict[str, int],
+        sideboard: Optional[Dict[str, int]] = None,
+    ) -> None: ...
     name: str
     decklist: Dict[str, int]
+    sideboard: Dict[str, int]
+
+def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 
 class ZoneEnum(IntEnum):
     LIBRARY = 0
@@ -206,6 +215,8 @@ class ActionEnum(IntEnum):
     PAY_COST = 11
     CHOOSE_MODE = 12
     TAP_FOR_COST = 13
+    LEARN_TAKE_LESSON = 14
+    LEARN_DISCARD = 15
 
 class ActionSpaceEnum(IntEnum):
     GAME_OVER = 0
@@ -217,7 +228,7 @@ class ActionSpaceEnum(IntEnum):
     LOOK_AND_SELECT = 6
     PAY_OR_NOT = 7
     MODAL = 8
-    DISCARD_THEN_DRAW = 9
+    LEARN = 9
     WATERBEND = 10
 
 class StackObjectKindEnum(IntEnum):
@@ -238,12 +249,20 @@ class EventTypeEnum(IntEnum):
     SPELL_RESOLVED = 4
     SPELL_COUNTERED = 5
     ABILITY_TRIGGERED = 6
+    COMBAT_ATTACKERS_DECLARED = 7
+    BLOCKERS_DECLARED = 8
+    COMBAT_DAMAGE_DEALT = 9
+    PERMANENTS_DIED = 10
+    TURN_STARTED = 11
+    CARD_REVEALED = 12
 
 class EventEntityKindEnum(IntEnum):
     NONE = 0
     CARD = 1
     PERMANENT = 2
     PLAYER = 3
+    OBJECT = 4
+    DEFINITION = 5
 
 class ManaCost:
     cost: List[int]
@@ -286,6 +305,9 @@ class Player:
     life: int
     zone_counts: List[int]
     graveyard_lessons: int
+    known_hand: Dict[int, int]
+    sideboard_counts: Dict[int, int]
+    remaining_sideboard_counts: Dict[int, int]
     combat_mana: int
 
 class Card:
@@ -304,6 +326,12 @@ class Card:
     card_types: CardTypes
     keywords: Keywords
     mana_cost: ManaCost
+
+class SideboardCard:
+    candidate_id: int
+    owner_id: int
+    registry_key: int
+    name: str
 
 class Permanent:
     id: int
@@ -367,6 +395,7 @@ class Observation:
     action_space: ActionSpace
     agent: Player
     agent_cards: List[Card]
+    agent_sideboard: List[SideboardCard]
     agent_permanents: List[Permanent]
     opponent: Player
     opponent_cards: List[Card]

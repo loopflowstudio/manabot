@@ -14,6 +14,7 @@ from manabot.config.load import deep_merge
 from manabot.env import Env, Match, ObservationSpace, Reward, build_opponent_policy
 from manabot.env.observation import ActionEnum
 from manabot.infra import Hypers
+import managym
 
 TRUNCATION_INFO_KEYS = (
     "action_space_truncated",
@@ -54,42 +55,14 @@ INTERACTIVE_DECK = {
     "Pyroclasm": 3,
 }
 
-# Milestone-1 two-deck slice (wave/rules/01-two-deck-slice.md): the actual
-# 40-card cube decks the engine's TLA slice was built for.
-UR_LESSONS_DECK = {
-    "Island": 9,
-    "Mountain": 8,
-    "Tiger-Seal": 2,
-    "Otter-Penguin": 2,
-    "Fire Nation Cadets": 2,
-    "First-Time Flyer": 2,
-    "Forecasting Fortune Teller": 1,
-    "Dragonfly Swarm": 1,
-    "Firebending Lesson": 4,
-    "Igneous Inspiration": 2,
-    "Pop Quiz": 2,
-    "Divide by Zero": 2,
-    "It'll Quench Ya!": 2,
-    "Accumulate Wisdom": 2,
-}
-
-GW_ALLIES_DECK = {
-    "Plains": 9,
-    "Forest": 8,
-    "Water Tribe Rallier": 2,
-    "Invasion Reinforcements": 2,
-    "Compassionate Healer": 2,
-    "Earth Kingdom Jailer": 2,
-    "White Lotus Reinforcements": 2,
-    "Earth King's Lieutenant": 2,
-    "Kyoshi Warriors": 2,
-    "Badgermole Cub": 2,
-    "Suki, Kyoshi Warrior": 1,
-    "South Pole Voyager": 1,
-    "Allies at Last": 2,
-    "Yip Yip!": 1,
-    "Fancy Footwork": 2,
-}
+# Main-deck projections for callers that inspect the selected matchup. Match
+# construction uses MatchHypers.authored to carry sideboards as well.
+UR_LESSONS_DECK = dict(
+    managym.authored_deck_setup("ur-lessons-vs-gw-allies", "ur_lessons").decklist
+)
+GW_ALLIES_DECK = dict(
+    managym.authored_deck_setup("ur-lessons-vs-gw-allies", "gw_allies").decklist
+)
 
 
 @dataclass(frozen=True)
@@ -435,7 +408,7 @@ def _run_evaluation_internal(
             hero_seat = game_index % 2 if seat_balanced else 0
             obs, _ = env.reset(
                 seed=seed + game_index,
-                options={"match": match_swapped} if hero_seat == 1 else None,
+                options={"match": match_swapped if hero_seat == 1 else match},
             )
             seat_games[hero_seat] += 1
             done = False

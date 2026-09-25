@@ -30,7 +30,7 @@ def _contains_remote_value(value) -> bool:
 
 def test_pack_freezes_current_matchup_and_reachable_inventory():
     assert CURATED_PACK.pack_id == "tla-ur-lessons-vs-gw-allies"
-    assert CURATED_PACK.version == "1.0.0"
+    assert CURATED_PACK.version == "2.0.0"
     assert CURATED_PACK.hero_deck_id == "ur_lessons"
     assert CURATED_PACK.villain_deck_id == "gw_allies"
     assert sum(CURATED_PACK.hero_deck.values()) == 41
@@ -77,7 +77,7 @@ def test_pack_hash_and_backend_deck_views_derive_from_manifest():
     assert GW_ALLIES_DECK == CURATED_PACK.villain_deck
 
 
-def test_exact_oriented_matchup_receives_pack_reference():
+def test_matchup_receives_pack_reference_in_either_seat():
     config = server._parse_game_config(
         {"hero_deck": "ur_lessons", "villain_deck": "gw_allies"}
     )
@@ -86,7 +86,9 @@ def test_exact_oriented_matchup_receives_pack_reference():
     reversed_config = server._parse_game_config(
         {"hero_deck": "gw_allies", "villain_deck": "ur_lessons"}
     )
-    assert reversed_config.asset_pack is None
+    assert reversed_config.asset_pack == CURATED_PACK.reference
+    assert reversed_config.hero_sideboard == config.villain_sideboard
+    assert reversed_config.villain_sideboard == config.hero_sideboard
 
 
 def test_jeong_increment_is_a_separate_exact_catalog_entry():
@@ -135,6 +137,16 @@ def test_curated_pack_catalog_ambiguity_fails_closed():
         (
             lambda manifest: manifest["identities"].pop("Clue"),
             "identity inventory mismatch",
+        ),
+        (
+            lambda manifest: manifest["matchup"]["hero"].__setitem__("sideboard", {}),
+            "differs from compiled deck/sideboard setup",
+        ),
+        (
+            lambda manifest: manifest["matchup"]["hero"]["sideboard"].__setitem__(
+                "Island", True
+            ),
+            "must be a positive integer",
         ),
     ],
 )

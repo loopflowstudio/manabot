@@ -49,8 +49,16 @@ recorded offer and Command.
 
 ```bash
 ./scripts/play          # certified one-command path from fresh checkout
+./scripts/play --demo learn  # checked prefix into Learn, then ordinary play
 ./scripts/verify-clean-machine   # the clean-machine proof
 ```
+
+The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
+draw**, or **Decline Learn**. The first two modes show card previews and a
+Back control; only selecting a card commits the choice. **New Game** repeats
+the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
+its [evidence and remaining integration work](../docs/rules/learn-lesson.md)
+are separate from complete-game replay certification.
 
 Development server without the launcher:
 

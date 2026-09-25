@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::{
+    card::CardDefId,
     game_object::{CardId, ObjectId},
     mana::Mana,
 };
@@ -9,6 +10,7 @@ use super::{
 pub struct PlayerConfig {
     pub name: String,
     pub decklist: BTreeMap<String, usize>,
+    pub sideboard: BTreeMap<String, usize>,
 }
 
 impl PlayerConfig {
@@ -16,7 +18,13 @@ impl PlayerConfig {
         Self {
             name: name.into(),
             decklist,
+            sideboard: BTreeMap::new(),
         }
+    }
+
+    pub fn with_sideboard(mut self, sideboard: BTreeMap<String, usize>) -> Self {
+        self.sideboard = sideboard;
+        self
     }
 
     pub fn deck_list(&self) -> String {
@@ -33,6 +41,10 @@ pub struct Player {
     pub id: ObjectId,
     pub index: usize,
     pub deck: Vec<CardId>,
+    /// Immutable owned outside-game roster; availability is derived from zones.
+    pub sideboard: Vec<CardId>,
+    /// Public minimum counts in hand, without physical-copy or slot identity.
+    pub known_hand: BTreeMap<CardDefId, u32>,
     pub name: String,
     pub life: i32,
     pub drew_when_empty: bool,
@@ -49,6 +61,8 @@ impl Player {
             id,
             index,
             deck: Vec::new(),
+            sideboard: Vec::new(),
+            known_hand: BTreeMap::new(),
             name: name.into(),
             life: 20,
             drew_when_empty: false,

@@ -5,6 +5,11 @@
     {
       "key": "ur_lessons",
       "card_count": 41,
+      "sideboard": [
+        {"definition": "tla.firebending_lesson", "count": 1},
+        {"definition": "tla.itll_quench_ya", "count": 1},
+        {"definition": "tla.accumulate_wisdom", "count": 1}
+      ],
       "cards": [
         {"definition": "basic.island", "count": 9},
         {"definition": "basic.mountain", "count": 8},
@@ -25,6 +30,10 @@
     {
       "key": "gw_allies",
       "card_count": 40,
+      "sideboard": [
+        {"definition": "tla.yip_yip", "count": 1},
+        {"definition": "tla.fancy_footwork", "count": 1}
+      ],
       "cards": [
         {"definition": "basic.plains", "count": 9},
         {"definition": "basic.forest", "count": 8},

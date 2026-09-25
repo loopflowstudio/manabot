@@ -167,7 +167,7 @@ fn combat_damage_reduces_life() {
             | ActionSpaceKind::LookAndSelect
             | ActionSpaceKind::PayOrNot
             | ActionSpaceKind::Modal
-            | ActionSpaceKind::DiscardThenDraw
+            | ActionSpaceKind::Learn
             | ActionSpaceKind::Waterbend => 0,
         };
 

@@ -198,3 +198,61 @@ def test_compiler_rejects_untyped_or_name_dispatched_semantics(mutation, message
 
     with pytest.raises(SemanticCompileError, match=message):
         compile_source(source)
+
+
+def test_sideboard_is_compiled_as_owned_setup_without_changing_main_decks():
+    source = _source()
+    ir, _ = compile_source(source)
+    assert ir["setup_schema_version"] == 1
+    for source_deck in source["decks"]:
+        compiled = next(
+            deck for deck in ir["decks"] if deck["key"] == source_deck["key"]
+        )
+        assert compiled["card_count"] == source_deck["card_count"]
+        assert (
+            sum(card["count"] for card in compiled["cards"])
+            == source_deck["card_count"]
+        )
+        assert sum(card["count"] for card in compiled["sideboard"]) == len(
+            source_deck["sideboard"]
+        )
+
+
+@pytest.mark.parametrize("count", [0, -1, True, 1.5])
+def test_sideboard_rejects_invalid_counts(count):
+    source = _source()
+    source["decks"][0]["sideboard"][0]["count"] = count
+    with pytest.raises(SemanticCompileError, match="sideboard"):
+        compile_source(source)
+
+
+def test_sideboard_rejects_unknown_token_and_duplicate_definitions():
+    source = _source()
+    token = next(
+        definition["key"]
+        for definition in source["definitions"]
+        if definition["characteristics"].get("token")
+    )
+    for entries in [
+        [{"definition": "missing.lesson", "count": 1}],
+        [{"definition": token, "count": 1}],
+        [{"definition": "tla.firebending_lesson", "count": 1}] * 2,
+    ]:
+        changed = deepcopy(source)
+        changed["decks"][0]["sideboard"] = entries
+        with pytest.raises(SemanticCompileError, match="sideboard"):
+            compile_source(changed)
+
+
+def test_sideboard_absent_empty_and_nonlesson_are_valid_setup():
+    for entries in [None, [], [{"definition": "basic.island", "count": 1}]]:
+        source = _source()
+        if entries is None:
+            source["decks"][0].pop("sideboard")
+        else:
+            source["decks"][0]["sideboard"] = entries
+        ir, _ = compile_source(source)
+        deck = next(
+            deck for deck in ir["decks"] if deck["key"] == source["decks"][0]["key"]
+        )
+        assert len(deck["sideboard"]) == (1 if entries else 0)

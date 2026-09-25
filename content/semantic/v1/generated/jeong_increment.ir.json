@@ -68,7 +68,8 @@
           "definition_index": 29
         }
       ],
-      "key": "gw_allies_jeong"
+      "key": "gw_allies_jeong",
+      "sideboard": []
     },
     {
       "card_count": 41,
@@ -130,7 +131,8 @@
           "definition_index": 26
         }
       ],
-      "key": "ur_lessons"
+      "key": "ur_lessons",
+      "sideboard": []
     }
   ],
   "definitions": [
@@ -865,7 +867,7 @@
       "semantic_key": "token.clue"
     }
   ],
-  "ir_hash": "cff5c34b1e7179deb25f7660cf2b54621efa1f171085b9ca66781ad2d55eae93",
+  "ir_hash": "ad797200148f31f80172225423d96076ae8aa1ea8c734dc30be1cf63ea2e122d",
   "pack_key": "tla-jeong-increment-v1",
   "programs": [
     {
@@ -1944,5 +1946,6 @@
     }
   ],
   "schema_version": 1,
+  "setup_schema_version": 1,
   "source_hash": "3dead13f9409ce8cf5a70261f96a3fa7258a30084997021bbf9c91c3d4d2fe54"
 }

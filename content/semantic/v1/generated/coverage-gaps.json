@@ -326,7 +326,7 @@
       "sequence": 25
     }
   ],
-  "artifact_hash": "a0d7d1a877e4e3eb56fa6c6a17dd56df84b0c508f5a6069d2b068719db23e009",
+  "artifact_hash": "2577a389c62712105a049a2368f0ee11b44e492785400bb40b67bded614f9805",
   "artifact_schema_version": 1,
   "cards": [
     {
@@ -1639,7 +1639,7 @@
       ]
     }
   ],
-  "source_hash": "f712ff02334d257b792523297f369e728ca3914524304056b029fb46b1b2c290",
+  "source_hash": "a8a8bdf74177b50afb8275e3a4de29ac1c8f4f96a10cda6cc8d3c1f8f2a65a2c",
   "summary": {
     "deck_definition_count": 29,
     "definition_count": 31,
