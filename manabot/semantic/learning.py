@@ -116,9 +116,9 @@ class LearningSchema:
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
-        if version != 1:
+        if version != 2:
             raise UnknownSchemaError(
-                f"learning_schema.schema_version: expected 1, got {version}"
+                f"learning_schema.schema_version: expected 2, got {version}"
             )
         ir_version = _integer(
             raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
@@ -1008,6 +1008,7 @@ class BoundSemanticPack:
 
         for role_name, cards in (
             ("agent_card", observation.agent_cards),
+            ("agent_sideboard", observation.agent_sideboard),
             ("opponent_card", observation.opponent_cards),
         ):
             role = self.schema.object_roles[role_name]

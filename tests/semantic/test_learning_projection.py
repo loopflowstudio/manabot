@@ -59,6 +59,7 @@ def _write_rehashed_ir(path: Path, ir: dict) -> None:
 def _fake_observation(card_ids: list[int], *, hidden_marker: str = "a"):
     return SimpleNamespace(
         agent_cards=[SimpleNamespace(registry_key=card_ids[0])],
+        agent_sideboard=[],
         opponent_cards=[SimpleNamespace(registry_key=card_ids[1])],
         stack_objects=[
             SimpleNamespace(kind=1, source_card_registry_key=card_ids[0]),
@@ -309,7 +310,9 @@ def test_projection_uses_only_viewer_objects_and_batches_with_stable_masks():
     assert first.object_slots.tobytes() == second.object_slots.tobytes()
 
     empty = pack.project_observation(
-        SimpleNamespace(agent_cards=[], opponent_cards=[], stack_objects=[]),
+        SimpleNamespace(
+            agent_cards=[], agent_sideboard=[], opponent_cards=[], stack_objects=[]
+        ),
         identity_mode="semantic_only",
     )
     batch = pack.batch([first, empty, second])
@@ -372,7 +375,7 @@ def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path):
     schema["schema_version"] = 999
     bad_schema = tmp_path / "schema.json"
     bad_schema.write_text(json.dumps(schema), encoding="utf-8")
-    with pytest.raises(UnknownSchemaError, match="expected 1, got 999"):
+    with pytest.raises(UnknownSchemaError, match="expected 2, got 999"):
         LearningSchema.load(bad_schema)
 
     ir = _json(DEFAULT_IR_PATH)
@@ -413,3 +416,36 @@ def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path):
                 ),
             ]
         )
+
+
+def test_sideboard_program_projection_is_independent_of_definition_ids():
+    manifest = _manifest()
+    permuted = deepcopy(manifest)
+    for row in permuted["definitions"]:
+        row["card_def_id"] += 1000
+    pack = BoundSemanticPack.bind(manifest)
+    reordered = BoundSemanticPack.bind(permuted)
+    ids = sorted(pack.definition_row_by_card_def_id)
+    observation = _fake_observation(ids[:2])
+    observation.agent_sideboard = [SimpleNamespace(registry_key=ids[2])]
+    other = _fake_observation([value + 1000 for value in ids[:2]])
+    other.agent_sideboard = [SimpleNamespace(registry_key=ids[2] + 1000)]
+    first = pack.project_observation(observation)
+    second = reordered.project_observation(other)
+    assert (
+        first.object_definition_rows.tolist() == second.object_definition_rows.tolist()
+    )
+    assert first.object_roles.tolist() == second.object_roles.tolist()
+    assert first.object_slots.tolist() == second.object_slots.tolist()
+    assert not first.opaque_identity_valid.any()
+    assert not second.opaque_identity_valid.any()
+
+
+def test_learning_schema_rejects_the_pre_sideboard_contract(tmp_path):
+    schema = _json(DEFAULT_SCHEMA_PATH)
+    schema["schema_version"] = 1
+    schema["object_roles"].pop("agent_sideboard")
+    path = tmp_path / "old-schema.json"
+    path.write_text(json.dumps(schema), encoding="utf-8")
+    with pytest.raises(UnknownSchemaError, match="expected 2, got 1"):
+        LearningSchema.load(path)

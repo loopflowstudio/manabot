@@ -378,7 +378,7 @@ impl Game {
                 self.invalidate_mana_cache(frame.controller);
                 None
             }
-            Effect::Learn => Some(Decision::DiscardThenDraw {
+            Effect::Learn => Some(Decision::Learn {
                 player: frame.controller,
             }),
             Effect::Modal { modes } => {

@@ -64,7 +64,17 @@
           "definition_index": 28
         }
       ],
-      "key": "gw_allies"
+      "key": "gw_allies",
+      "sideboard": [
+        {
+          "count": 1,
+          "definition_index": 14
+        },
+        {
+          "count": 1,
+          "definition_index": 28
+        }
+      ]
     },
     {
       "card_count": 41,
@@ -126,7 +136,21 @@
           "definition_index": 25
         }
       ],
-      "key": "ur_lessons"
+      "key": "ur_lessons",
+      "sideboard": [
+        {
+          "count": 1,
+          "definition_index": 7
+        },
+        {
+          "count": 1,
+          "definition_index": 16
+        },
+        {
+          "count": 1,
+          "definition_index": 20
+        }
+      ]
     }
   ],
   "definitions": [
@@ -837,7 +861,7 @@
       "semantic_key": "token.clue"
     }
   ],
-  "ir_hash": "c8bfe15eab35e5953c7a55ba69d83753fa8878b86f9f74e371ec66a233606337",
+  "ir_hash": "7a70679a4f4952976a286c4a31ffa90318bd0569745aace26353348fe6ee1edd",
   "pack_key": "ur-lessons-vs-gw-allies",
   "programs": [
     {
@@ -1885,5 +1909,6 @@
     }
   ],
   "schema_version": 1,
-  "source_hash": "f712ff02334d257b792523297f369e728ca3914524304056b029fb46b1b2c290"
+  "setup_schema_version": 1,
+  "source_hash": "a8a8bdf74177b50afb8275e3a4de29ac1c8f4f96a10cda6cc8d3c1f8f2a65a2c"
 }

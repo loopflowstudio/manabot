@@ -471,8 +471,10 @@ function chooseAction(
     }
   } else if (family === 'SCRY') {
     selected = find((action) => action.type === 'SCRY_KEEP');
-  } else if (family === 'LOOK_AND_SELECT' || family === 'DISCARD_THEN_DRAW') {
-    selected = find((action) => action.type === 'SELECT_CARD');
+  } else if (family === 'LOOK_AND_SELECT' || family === 'LEARN') {
+    selected = find(
+      (action) => action.type === (family === 'LEARN' ? 'LEARN_DISCARD' : 'SELECT_CARD'),
+    );
     if (selected < 0) {
       selected = 0;
     }
@@ -893,6 +895,22 @@ async function runScenario(
     ).toBe(scenario.expected.prompt_sequence[commands]);
     promptSequence.push(family);
     const occurrence = (promptCounts[family] ?? 0) + 1;
+
+    if (family === 'LEARN') {
+      const before = await commandCount(page);
+      const take = page.getByRole('button', { name: 'Take a Lesson', exact: true });
+      const discard = page.getByRole('button', { name: 'Discard and draw', exact: true });
+      await expect(take).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(discard).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(actionButtons.first()).toBeFocused();
+      await expect(page.getByTestId('learn-card-preview').first()).toBeVisible();
+      await expect(page.getByTestId('learn-card-preview').first().getByTestId('card-treatment')).toBeVisible();
+      expect(await commandCount(page), 'browsing Learn must not submit a command').toBe(before);
+    }
 
     const actions = await renderedActions(page);
     expect(actions.length, `${scenario.id}: ${family} has no rendered actions`).toBeGreaterThan(0);

@@ -288,9 +288,11 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
-            Action::ScryCard { .. } | Action::SelectCard { .. } | Action::ChooseMode { .. } => {
-                self.execute_decision_action(action)
-            }
+            Action::ScryCard { .. }
+            | Action::SelectCard { .. }
+            | Action::ChooseMode { .. }
+            | Action::LearnDiscard { .. }
+            | Action::LearnTakeLesson { .. } => self.execute_decision_action(action),
             Action::Decline { player } => {
                 if self.state.suspended_decision.is_some() {
                     return self.execute_decision_action(action);

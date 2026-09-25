@@ -97,8 +97,11 @@ def test_live_decision_summaries_match_full_replay_without_reconstruction(
         }
         for decision in addressed["decisions"]
     ]
-    assert len(game.canonical_decisions) == 132
-    assert len(expected) == 55
+    assert game.obs.game_over
+    assert {row.viewer for row in game.canonical_decisions} == {0, 1}
+    assert len(expected) == sum(
+        row.viewer == server.HERO_PLAYER_INDEX for row in game.canonical_decisions
+    )
 
     def forbidden(*_args, **_kwargs):
         raise AssertionError("table summaries reconstructed a canonical replay")

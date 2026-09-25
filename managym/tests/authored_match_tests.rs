@@ -7,28 +7,19 @@ use managym::{
 
 fn authored_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
     vec![
-        PlayerConfig::new(
-            "UR Lessons",
-            pack.decklist("ur_lessons").expect("UR deck compiles"),
-        ),
-        PlayerConfig::new(
-            "GW Allies",
-            pack.decklist("gw_allies").expect("GW deck compiles"),
-        ),
+        pack.player_config("UR Lessons", "ur_lessons")
+            .expect("UR setup"),
+        pack.player_config("GW Allies", "gw_allies")
+            .expect("GW setup"),
     ]
 }
 
 fn jeong_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
     vec![
-        PlayerConfig::new(
-            "UR Lessons",
-            pack.decklist("ur_lessons").expect("UR deck compiles"),
-        ),
-        PlayerConfig::new(
-            "GW Allies — Jeong",
-            pack.decklist("gw_allies_jeong")
-                .expect("GW Jeong deck compiles"),
-        ),
+        pack.player_config("UR Lessons", "ur_lessons")
+            .expect("UR setup"),
+        pack.player_config("GW Allies — Jeong", "gw_allies_jeong")
+            .expect("GW setup"),
     ]
 }
 

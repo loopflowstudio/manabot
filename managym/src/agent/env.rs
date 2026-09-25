@@ -604,7 +604,10 @@ impl Env {
         Ok(game.state.content.manifest())
     }
 
-    pub fn encode_observation(&self, observation: &Observation) -> EncodedObservation {
+    pub fn encode_observation(
+        &self,
+        observation: &Observation,
+    ) -> Result<EncodedObservation, ObservationEncodeError> {
         encode(observation, &ObservationEncoderConfig::default())
     }
 

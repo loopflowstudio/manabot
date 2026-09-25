@@ -650,32 +650,52 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
     for deck_index, raw_deck in enumerate(_array(source["decks"], "source.decks")):
         deck_context = f"source.decks[{deck_index}]"
         deck = _object(raw_deck, deck_context)
-        _keys(deck, deck_context, required={"key", "card_count", "cards"})
+        _keys(
+            deck, deck_context,
+            required={"key", "card_count", "cards"}, optional={"sideboard"},
+        )
         deck_key = _string(deck["key"], f"{deck_context}.key")
         expected_card_count = _integer(
             deck["card_count"], f"{deck_context}.card_count", minimum=1
         )
-        cards: list[dict[str, Any]] = []
-        for card_index, raw_card in enumerate(_array(deck["cards"], f"{deck_context}.cards")):
-            card_context = f"{deck_context}.cards[{card_index}]"
-            card = _object(raw_card, card_context)
-            _keys(card, card_context, required={"definition", "count"})
-            definition_key = _string(card["definition"], f"{card_context}.definition")
-            if definition_key not in definition_indexes:
-                _fail(card_context, f"unknown definition {definition_key!r}")
-            count = _integer(card["count"], f"{card_context}.count", minimum=1)
-            deck_definition_keys.add(definition_key)
-            cards.append(
-                {"count": count, "definition_index": definition_indexes[definition_key]}
-            )
-        cards.sort(key=lambda card: card["definition_index"])
-        card_count = sum(card["count"] for card in cards)
-        if card_count != expected_card_count:
-            _fail(
-                deck_context,
-                f"declares {expected_card_count} cards but entries sum to {card_count}",
-            )
-        decks.append({"card_count": card_count, "cards": cards, "key": deck_key})
+        compiled_deck: dict[str, Any] = {
+            "card_count": expected_card_count,
+            "key": deck_key,
+        }
+        for field in ("cards", "sideboard"):
+            cards: list[dict[str, Any]] = []
+            for card_index, raw_card in enumerate(
+                _array(deck.get(field, []), f"{deck_context}.{field}")
+            ):
+                card_context = f"{deck_context}.{field}[{card_index}]"
+                card = _object(raw_card, card_context)
+                _keys(card, card_context, required={"definition", "count"})
+                definition_key = _string(card["definition"], f"{card_context}.definition")
+                if definition_key not in definition_indexes:
+                    _fail(card_context, f"unknown definition {definition_key!r}")
+                index = definition_indexes[definition_key]
+                if field == "sideboard" and definitions[index]["characteristics"].get(
+                    "token", False
+                ):
+                    _fail(card_context, "token cannot be a sideboard card")
+                count = _integer(card["count"], f"{card_context}.count", minimum=1)
+                deck_definition_keys.add(definition_key)
+                cards.append({"count": count, "definition_index": index})
+            if field == "sideboard":
+                _unique(
+                    [str(card["definition_index"]) for card in cards],
+                    f"{deck_context}.sideboard",
+                )
+            else:
+                card_count = sum(card["count"] for card in cards)
+                if card_count != expected_card_count:
+                    _fail(
+                        deck_context,
+                        f"declares {expected_card_count} cards but entries sum to {card_count}",
+                    )
+            cards.sort(key=lambda card: card["definition_index"])
+            compiled_deck[field] = cards
+        decks.append(compiled_deck)
     _unique([deck["key"] for deck in decks], "source.decks")
     decks.sort(key=lambda deck: deck["key"])
 
@@ -687,6 +707,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         "programs": programs,
         "schema_version": IR_SCHEMA_VERSION,
         "source_hash": source_hash,
+        "setup_schema_version": 1,
     }
     ir["ir_hash"] = _sha256(ir)
 
@@ -741,6 +762,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         "referenced_definition_count": len(referenced_indexes),
         "schema_version": IR_SCHEMA_VERSION,
         "source_hash": source_hash,
+        "setup_schema_version": 1,
     }
     if not coverage["admission_closure_complete"]:
         absent = [

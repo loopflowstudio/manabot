@@ -1,5 +1,7 @@
 """Behavioral checks for canonical belief and query operations."""
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -188,23 +190,54 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     sparse = BeliefState.from_probabilities(
         space, "gate-sparse", weights / weights.sum()
     )
-    # Canonical receipts pin accumulation order for prior, conditioned, and
-    # sparse mass over the same native world support.
+    # Pin current receipts separately from historical v1 receipts. Matching
+    # marginal shapes does not make the old world binding compatible.
     cases = (
-        (prior, "a1eb600dcff770a09068a6c10ac88ad2e1c0defec6bb58d994cd2b23a3637d54"),
+        (
+            prior,
+            "bc3f76b056b3ea407a0f29dc6be016afa71caffa5981676d42da6a06963ef658",
+            "a1eb600dcff770a09068a6c10ac88ad2e1c0defec6bb58d994cd2b23a3637d54",
+        ),
         (
             condition_belief(prior, WorldQuery.has("Lightning Bolt")),
+            "bf3b9c99e099acff2a3dbf378786b043bca3df2512850ac1fdaf0fdb6f9f1c61",
             "9accbfbdd2ec7ab43603174d936eafaf1902987550c596b42d5b3d2d10922b7e",
         ),
         (
             condition_belief(prior, WorldQuery.lacks("Lightning Bolt")),
+            "4315578f9d88cd0d3b5003ac0f003af3099923453e1ad9aec32b44e3c3c08a52",
             "8ca3b0255053ed9374cacbbce43c52671068d067b2148e78c75e8e7d7419cb27",
         ),
-        (sparse, "47a02fa6551b43ad3de4d38ac66042d079e99a4aef2998a348a1c13cb206a723"),
+        (
+            sparse,
+            "eeafd72124a2d263b86db076022efd53020da2bf98c79a4fa456305f9531b125",
+            "47a02fa6551b43ad3de4d38ac66042d079e99a4aef2998a348a1c13cb206a723",
+        ),
     )
-    for belief, receipt in cases:
+    old_schema = replace(
+        schema, world_schema_identity="managym.possible-world-space/v1"
+    )
+    for belief, receipt, historical_receipt in cases:
         assert isinstance(belief, BeliefState)
-        assert encode_belief(belief, schema).encoding_receipt == receipt
+        encoded = encode_belief(belief, schema)
+        assert encoded.encoding_receipt == receipt
+        assert encoded.encoding_receipt != historical_receipt
+        with pytest.raises(BeliefError, match="world schema"):
+            encode_belief(belief, old_schema)
+        # Independent scalar accumulation checks numerical meaning as well as
+        # the newly bound receipt, including conditioned and zero-mass worlds.
+        expected = np.zeros_like(encoded.count_probabilities, dtype=np.float64)
+        pool = dict(space.pool)
+        for world, probability in zip(space.worlds, belief.probabilities, strict=True):
+            hand = dict(world.hand)
+            for index, row in enumerate(schema.rows):
+                count = hand.get(row.card_name, 0)
+                if row.hidden_zone_id == LIBRARY_ZONE_ID:
+                    count = pool.get(row.card_name, 0) - count
+                expected[index, count] += probability
+        np.testing.assert_array_equal(
+            encoded.count_probabilities, expected.astype(np.float32)
+        )
 
 
 def test_schema_rejects_only_duplicate_full_row_keys() -> None:
@@ -281,23 +314,15 @@ def test_history_identity_is_derived_from_native_observations_and_receipts() -> 
         ),
     ),
 )
-def test_history_rejects_unsupported_public_commitments(
+def test_invalid_commitments_are_rejected_before_history_advances(
     public_commitment: dict[str, str],
     message: str,
 ) -> None:
     history = fixture_history()
-    receipt = TransitionReceipt(
-        schema_version=SEMANTIC_DECISION_VERSION,
-        before_revision=history.current_revision,
-        after_revision=history.current_revision + 1,
-        command_id="unsupported-commitment",
-        public_commitment=public_commitment,
-        events=(),
-        next_decision="next",
-    )
+    before = history.identity
     observation = Observation(
         schema_version=SEMANTIC_DECISION_VERSION,
-        revision=receipt.after_revision,
+        revision=history.current_revision + 1,
         viewer=history.viewer,
         viewer_state_hash="next-viewer-state",
         viewer_state={},
@@ -305,8 +330,18 @@ def test_history_rejects_unsupported_public_commitments(
         decision=None,
     )
 
-    with pytest.raises(BeliefError, match=message):
+    with pytest.raises(SemanticContractError, match=message):
+        receipt = TransitionReceipt(
+            schema_version=SEMANTIC_DECISION_VERSION,
+            before_revision=history.current_revision,
+            after_revision=history.current_revision + 1,
+            command_id="unsupported-commitment",
+            public_commitment=public_commitment,
+            events=(),
+            next_decision="next",
+        )
         history.advance(receipt, observation, acting=1)
+    assert history.identity == before
 
 
 def test_public_commitment_type_cannot_construct_invalid_semantics() -> None:

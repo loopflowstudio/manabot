@@ -8,7 +8,7 @@ export const DECISION_PROMPTS: Readonly<Record<string, string>> = {
   LOOK_AND_SELECT: 'Look at the revealed cards — choose what to take.',
   PAY_OR_NOT: 'Optional cost — pay it or decline.',
   MODAL: 'Choose a mode.',
-  DISCARD_THEN_DRAW: 'Learn — discard a card to draw a card, or keep your hand.',
+  LEARN: 'Learn — take a Lesson from your sideboard, discard and draw, or decline.',
   WATERBEND: 'Waterbend — tap permanents to help pay the cost.',
   CHOOSE_TARGET: 'Choose a target.',
 };

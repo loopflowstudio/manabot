@@ -13,7 +13,11 @@ import {
   type StudyArtifact,
   type StudyDecisionIndex,
 } from './study-protocol';
-import { parseReplayDecisionAddress, type CanonicalReplayProjectionV1 } from './replay-index';
+import {
+  assertViewerSafeReplayProjection,
+  parseReplayDecisionAddress,
+  type CanonicalReplayProjectionV1,
+} from './replay-index';
 
 interface SchemaNode {
   $defs?: Record<string, SchemaNode>;
@@ -81,6 +85,27 @@ const validateDecisionIndex = new Ajv2020({ strict: false, validateFormats: fals
 function sorted(values: readonly string[]): string[] {
   return [...values].sort();
 }
+
+it('rejects private sideboard candidates in every recorded boundary', () => {
+  const replay = structuredClone(sourceReplay) as CanonicalReplayProjectionV1;
+  const artifact = structuredClone(fixture) as StudyArtifact;
+  const input = structuredClone(recordedDecisionFixture) as RecordedDecisionInput;
+  const index = structuredClone(decisionIndexFixture) as StudyDecisionIndex;
+  for (const frame of [
+    replay.decisions[0].frame,
+    artifact.landmarks[0].frame,
+    input.decisions[0].frame,
+    index.decisions[0].frame,
+  ]) {
+    frame.projection.opponent.sideboard = [{
+      candidate_id: 83, owner_id: 1, registry_key: 7, name: 'Accumulate Wisdom',
+    }];
+  }
+  expect(() => assertViewerSafeReplayProjection(replay)).toThrow();
+  expect(() => assertViewerSafeStudyArtifact(artifact)).toThrow(/sideboard candidates/);
+  expect(() => assertViewerSafeRecordedDecisionInput(input)).toThrow(/sideboard candidates/);
+  expect(() => assertViewerSafeStudyDecisionIndex(index)).toThrow(/sideboard candidates/);
+});
 
 function interfaceShape(name: string): { fields: string[]; required: string[] } {
   const declaration = source.statements.find(

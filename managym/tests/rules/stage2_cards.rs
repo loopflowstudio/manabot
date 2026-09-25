@@ -360,7 +360,7 @@ fn quench_pay_option_absent_when_controller_cannot_pay() {
 }
 
 // ---------------------------------------------------------------------------
-// Learn (Pop Quiz / Igneous Inspiration) — OPTIONAL_DISCARD_THEN_DRAW.
+// Learn (Pop Quiz / Igneous Inspiration).
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -378,7 +378,7 @@ fn pop_quiz_draws_then_learn_discard_draws() {
 
     // "Draw a card" resolved, then the learn decision surfaces.
     let space = s.action_space();
-    assert_eq!(space.kind, ActionSpaceKind::DiscardThenDraw);
+    assert_eq!(space.kind, ActionSpaceKind::Learn);
     assert_eq!(space.player, Some(PlayerId(0)));
     // One action per hand card plus a decline.
     let hand_size = hand(&s, 0).len();
@@ -388,7 +388,7 @@ fn pop_quiz_draws_then_learn_discard_draws() {
         Some(ActionType::DeclineChoice)
     );
 
-    assert!(s.take_action_by_type(ActionType::SelectCard));
+    assert!(s.take_action_by_type(ActionType::LearnDiscard));
     // Discarded one, drew one: hand size unchanged; graveyard has the
     // discarded card + Pop Quiz.
     assert_eq!(hand(&s, 0).len(), hand_size);
@@ -408,7 +408,7 @@ fn pop_quiz_learn_can_be_declined() {
     s.force_card_in_hand(0, "Pop Quiz");
     s.advance_to_active_step(0, StepKind::Main);
     cast_and_resolve(&mut s);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::DiscardThenDraw);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
     let hand_size = hand(&s, 0).len();
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
     assert_eq!(hand(&s, 0).len(), hand_size, "no discard, no draw");
@@ -451,7 +451,7 @@ fn discard_then_draw_public_commitment_is_viewer_safe_and_authoritative() {
     let decline_id = frame
         .offers
         .iter()
-        .find(|offer| offer.public_commitment == Some(PublicCommitment::DeclineDiscard))
+        .find(|offer| offer.public_commitment == Some(PublicCommitment::DeclineLearn))
         .expect("decline commitment")
         .id
         .0;
@@ -485,7 +485,7 @@ fn discard_then_draw_public_commitment_is_viewer_safe_and_authoritative() {
         .expect("decline command executes");
     assert_eq!(
         decline.receipt.public_commitment,
-        Some(PublicCommitment::DeclineDiscard)
+        Some(PublicCommitment::DeclineLearn)
     );
 }
 
@@ -576,7 +576,7 @@ fn igneous_inspiration_deals_three_then_learns() {
     s.pass_priority();
     s.pass_priority();
     s.assert_life(1, 17);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::DiscardThenDraw);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
 }
 
@@ -610,7 +610,7 @@ fn divide_by_zero_bounces_spell_from_stack() {
     assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Hand));
     assert_eq!(s.zone_size(1, ZoneType::Graveyard), 0);
     // Learn rider.
-    assert_eq!(s.action_space().kind, ActionSpaceKind::DiscardThenDraw);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
     assert_eq!(s.game().state.stack_objects.len(), 0);
 }
@@ -1048,4 +1048,53 @@ fn modal_mode_two_draws_a_card() {
     let hand_before = hand(&s, 0).len();
     s.step_action(1);
     assert_eq!(hand(&s, 0).len(), hand_before + 1);
+}
+
+#[test]
+fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
+    for lesson in [
+        "Firebending Lesson",
+        "It'll Quench Ya!",
+        "Accumulate Wisdom",
+        "Yip Yip!",
+        "Fancy Footwork",
+    ] {
+        let mut s = Scenario::with_sideboards(
+            deck(&[("Island", 24), ("Pop Quiz", 16)]),
+            deck(&[("Plains", 40)]),
+            deck(&[(lesson, 1)]),
+            BTreeMap::new(),
+            51,
+        );
+        force_lands(&mut s, 0, "Island", 3);
+        clear_hand(&mut s, 0);
+        s.force_card_in_hand(0, "Pop Quiz");
+        s.advance_to_active_step(0, StepKind::Main);
+        cast_and_resolve(&mut s);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
+        let card = s.game().state.players[0].sideboard[0];
+        let library_before = library(&s, 0);
+        let hand_before = hand(&s, 0).len();
+        s.drain_events();
+        assert!(s.take_action_by_type(ActionType::LearnTakeLesson));
+        assert!(hand(&s, 0).contains(&card));
+        assert_eq!(hand(&s, 0).len(), hand_before + 1);
+        assert_eq!(library(&s, 0), library_before);
+        assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
+        assert!(s.game().state.stack_objects.is_empty());
+        let events = s.drain_events();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(
+                    event,
+                    managym::flow::event::GameEvent::SpellResolved { .. }
+                ))
+                .count(),
+            1
+        );
+        assert!(!events
+            .iter()
+            .any(|event| matches!(event, managym::flow::event::GameEvent::CardDrawn { .. })));
+    }
 }

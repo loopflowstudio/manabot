@@ -12,7 +12,7 @@ from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_in
 from manabot.belief.range import BeliefState
 from manabot.sim.teacher1_evidence import _fresh_env
 import managym
-from managym.decision import DecisionFrame
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 
 
@@ -93,7 +93,7 @@ class _FakeHypothesis:
     def semantic_decision_frame_json(self) -> str:
         return json.dumps(
             {
-                "schema_version": 4,
+                "schema_version": SEMANTIC_DECISION_VERSION,
                 "revision": 7,
                 "actor": 1,
                 "fingerprint": "prepared-test",

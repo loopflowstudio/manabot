@@ -107,6 +107,7 @@
   </div>
 
   <PlayerArea
+        definitionNames={observation.definition_names ?? {}}
     label={villainLabel}
     player={observation.opponent}
     deckName={deckNames?.villain ?? null}
@@ -153,6 +154,7 @@
 
   <div class="border-t border-line">
     <PlayerArea
+        definitionNames={observation.definition_names ?? {}}
       label={heroLabel}
       player={observation.agent}
       deckName={deckNames?.hero ?? null}

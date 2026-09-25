@@ -13,7 +13,6 @@ This test suite verifies:
 
 from types import SimpleNamespace
 from typing import Set, Tuple
-from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -264,7 +263,7 @@ class TestObservationEncoder:
         # Check cards validity
         agent_cards_valid = encoded["agent_cards_valid"]
         actual_cards = len(observation.agent_cards)
-        expected_valid = min(actual_cards, hypers.max_cards_per_player)
+        expected_valid = actual_cards
         valid_sum = int(agent_cards_valid.sum())  # Convert to Python int for comparison
         assert valid_sum == expected_valid, (
             f"Expected {expected_valid} valid cards, got {valid_sum}"
@@ -316,34 +315,26 @@ class TestObservationEncoder:
     ):
         encoded = observation_space.encode(observation)
 
-        for i, card in enumerate(
-            observation.agent_cards[: hypers.max_cards_per_player]
-        ):
+        for i, card in enumerate(observation.agent_cards):
             vec = encoded["agent_cards"][i]
             assert vec[7] == pytest.approx(1.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
             assert vec[9] == pytest.approx(card.toughness / 10.0)
             assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
 
-        for i, card in enumerate(
-            observation.opponent_cards[: hypers.max_cards_per_player]
-        ):
+        for i, card in enumerate(observation.opponent_cards):
             vec = encoded["opponent_cards"][i]
             assert vec[7] == pytest.approx(0.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
             assert vec[9] == pytest.approx(card.toughness / 10.0)
             assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
 
-        for i, perm in enumerate(
-            observation.agent_permanents[: hypers.max_permanents_per_player]
-        ):
+        for i, perm in enumerate(observation.agent_permanents):
             vec = encoded["agent_permanents"][i]
             assert vec[0] == pytest.approx(1.0)
             assert vec[2] == pytest.approx(perm.damage / 10.0)
 
-        for i, perm in enumerate(
-            observation.opponent_permanents[: hypers.max_permanents_per_player]
-        ):
+        for i, perm in enumerate(observation.opponent_permanents):
             vec = encoded["opponent_permanents"][i]
             assert vec[0] == pytest.approx(0.0)
             assert vec[2] == pytest.approx(perm.damage / 10.0)
@@ -421,47 +412,40 @@ class TestObservationEncoder:
         with pytest.raises(ValueError, match="actions 3 > 2"):
             encoder.encode(obs)
 
-    def test_card_space_truncation_warning(self, monkeypatch):
-        hypers = ObservationSpaceHypers(max_cards_per_player=1)
-        encoder = ObservationEncoder(hypers)
-        fake_cards = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
-        fake_parent_logger = MagicMock()
-        fake_logger = MagicMock()
-        fake_parent_logger.getChild.return_value = fake_logger
-        monkeypatch.setattr(
-            "manabot.env.observation.getLogger", lambda *_: fake_parent_logger
+    def test_action_capacity_rejects_omitted_choices(self):
+        encoder = ObservationEncoder(ObservationSpaceHypers(max_actions=2))
+        obs = SimpleNamespace(
+            action_space=SimpleNamespace(
+                actions=[SimpleNamespace(action_type=i, focus=[]) for i in range(3)]
+            )
         )
-        monkeypatch.setattr(
-            encoder,
-            "_encode_card_features",
-            lambda *_: np.zeros(encoder.card_dim, dtype=np.float32),
+        with pytest.raises(ValueError, match="capacity exceeded: actions 3 > 2"):
+            encoder._encode_actions(obs)
+
+    @pytest.mark.parametrize(
+        "method, capacity, label",
+        [
+            ("_encode_cards", "max_cards_per_player", "Card list"),
+            ("_encode_perms", "max_permanents_per_player", "Permanent list"),
+        ],
+    )
+    def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
+        encoder = ObservationEncoder(ObservationSpaceHypers(**{capacity: 1}))
+        objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+        with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
+            getattr(encoder, method)(objects, is_mine=1.0)
+        assert encoder.object_to_index == {}
+
+    def test_focus_capacity_rejects_partial_action(self):
+        encoder = ObservationEncoder(ObservationSpaceHypers(max_focus_objects=1))
+        encoder.object_to_index = {1: 0, 2: 1}
+        obs = SimpleNamespace(
+            action_space=SimpleNamespace(
+                actions=[SimpleNamespace(action_type=0, focus=[1, 2])]
+            )
         )
-
-        encoded = encoder._encode_cards(fake_cards, is_mine=1.0)
-
-        assert encoded.shape == (1, encoder.card_dim)
-        fake_logger.warning.assert_called_once_with("Card list truncated: 2 -> 1")
-
-    def test_permanent_space_truncation_warning(self, monkeypatch):
-        hypers = ObservationSpaceHypers(max_permanents_per_player=1)
-        encoder = ObservationEncoder(hypers)
-        fake_perms = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
-        fake_parent_logger = MagicMock()
-        fake_logger = MagicMock()
-        fake_parent_logger.getChild.return_value = fake_logger
-        monkeypatch.setattr(
-            "manabot.env.observation.getLogger", lambda *_: fake_parent_logger
-        )
-        monkeypatch.setattr(
-            encoder,
-            "_encode_permanent_features",
-            lambda *_: np.zeros(encoder.permanent_dim, dtype=np.float32),
-        )
-
-        encoded = encoder._encode_perms(fake_perms, is_mine=1.0)
-
-        assert encoded.shape == (1, encoder.permanent_dim)
-        fake_logger.warning.assert_called_once_with("Permanent list truncated: 2 -> 1")
+        with pytest.raises(ValueError, match="capacity exceeded: action focus"):
+            encoder._encode_actions(obs)
 
 
 if __name__ == "__main__":

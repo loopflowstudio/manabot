@@ -30,12 +30,21 @@ existing search-distillation trainer and a server-pinned candidate; players see
 the bot's identity in the ordinary table. The `local` PPO preset above remains
 a separate default-deck training smoke.
 
-## You are in world w2
+Build named curated matches with `MatchHypers.authored(pack_key, hero_deck,
+villain_deck)` so both main decks and sideboards come from managym's compiled
+setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
+require positive integer counts. `Match.swapped()` moves both lists together;
+`Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
+
+## World identity
 
 An observation/action-shape change is a world version, and artifacts are only
-comparable within a world. The current world is **w2**; the live baselines
-and the porting rules are in [WORLDS.md](../WORLDS.md). Before comparing
-against or reusing any checkpoint, check its world tag.
+comparable within a world. The **w2** baselines and porting rules are in
+[WORLDS.md](../WORLDS.md). Full Learn changes that world's rules and inputs;
+the [Learn integration record](../docs/rules/learn-lesson.md) tracks the
+unfinished w3 declaration and ordinary checkpoint binding. Existing w2
+checkpoints do not certify the corrected rules, even if they load or their
+dimensions match.
 
 ## Architecture
 

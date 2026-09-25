@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --python 3.12 --locked --only-group play-runtime
 """Install and launch the human-vs-bot table through the supported wrapper.
 
-    ./scripts/play [--port 8000] [--frontend-port 5173] [--no-frontend]
+    ./scripts/play [--demo learn] [--port 8000] [--frontend-port 5173] [--no-frontend]
 
 The wrapper pins CPython 3.12 and locked Python dependencies. This module
 validates the installed curated pack, builds the native extension when needed,
@@ -38,7 +38,7 @@ FRONTEND_REQUIRED_PATHS = (
     FRONTEND / "node_modules" / ".bin" / "vite",
     FRONTEND / "node_modules" / "@playwright" / "test" / "package.json",
 )
-PACK_DIR = FRONTEND / "src" / "lib" / "packs" / "tla-ur-lessons-vs-gw-allies" / "v1"
+PACK_DIR = FRONTEND / "src" / "lib" / "packs" / "tla-ur-lessons-vs-gw-allies" / "v2"
 PACK_MANIFEST = PACK_DIR / "manifest.json"
 PACK_NOTICE = PACK_DIR / "NOTICE.md"
 ERROR_MARKER_ENV = "ETUDE_PLAY_ERROR_MARKER"
@@ -501,6 +501,9 @@ def build_ready_payload(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--demo", choices=["learn"], help="start at a checked Learn decision"
+    )
     parser.add_argument("--port", type=int, default=8000, help="backend port")
     parser.add_argument("--frontend-port", type=int, default=5173, help="frontend port")
     parser.add_argument(
@@ -518,7 +521,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def run_launcher(args: argparse.Namespace) -> int:
     started_at = time.monotonic()
     python_version = validate_python_version()
-    pack = validate_pack()
 
     npm: str | None = None
     node_version: str | None = None
@@ -548,6 +550,7 @@ def run_launcher(args: argparse.Namespace) -> int:
         native, processes = start_processes(args.port, args.frontend_port, npm)
         if stop_requested:
             return 0
+        pack = validate_pack()
         endpoints = {"backend": f"http://127.0.0.1:{args.port}/api/traces"}
         if npm is not None:
             endpoints["frontend"] = f"http://127.0.0.1:{args.frontend_port}/"
@@ -563,11 +566,13 @@ def run_launcher(args: argparse.Namespace) -> int:
             native=native,
             asset_pack=pack.reference,
         )
+        if args.demo:
+            ready["url"] += f"/?demo={args.demo}"
         play_url = ready["url"]
         print(f"{READY_PREFIX}{json.dumps(ready, sort_keys=True)}", flush=True)
         print(f"\n  play:   {play_url}", flush=True)
         if npm is not None:
-            print(f"  replay: {play_url}/replay", flush=True)
+            print(f"  replay: http://localhost:{args.frontend_port}/replay", flush=True)
         print("  Ctrl-C stops all local processes\n", flush=True)
 
         while not stop_requested:

@@ -31,6 +31,19 @@ Frontend service startup and its first HTTP request must overlap a cold native
 build, with cleanup on either service's preparation failure. Run the launcher
 contract tests when changing startup ordering; a warm local launch cannot
 expose serialized installation and frontend compilation.
+Pack validation imports the compiled engine to compare authored setups. Exercise
+launcher orchestration with native preparation initially unavailable; warm
+extension imports and mocked service startup alone cannot prove cold ordering.
+
+## Required checks for authored rules and setup changes
+
+Run the complete debug Rust suite, including checked conformance receipts, and
+the release prompt matrix contract and browser scenario. Pack versions, prompt
+families and seeded opponent choices can change together. Preserve historical
+receipts and screenshots; create a new corpus version for an accepted rules
+change, document its scope, and reproduce it before switching CI to it. Generate
+and compare visual references on the pinned Linux profile. A digest-only edit
+or a macOS run with ignored screenshots does not certify the release matrix.
 
 ## Required checks for Rust managym work
 

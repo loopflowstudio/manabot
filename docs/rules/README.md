@@ -7,5 +7,7 @@ Store official Magic Comprehensive Rules snapshots here.
   contract, including explicit CR 616 limitations.
 - `stabilization-v1.md` — deterministic post-commit trigger/SBA fixed point,
   exact-identity boundary, and compatibility exclusions.
+- `learn-lesson.md` — accepted sideboards and Learn interaction, information
+  invariants, human approval scope, and outstanding ETU-75 evidence.
 
 When adding new snapshots, keep the date in the filename (`YYYYMMDD`).

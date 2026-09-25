@@ -8,6 +8,7 @@ matchup whose winner is deck-determined must flip player index with the seat).
 """
 
 import numpy as np
+import pytest
 
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.verify.decision_profile import (
@@ -18,6 +19,34 @@ from manabot.verify.decision_profile import (
 from manabot.verify.util import STANDARD_DECK, build_hypers
 
 MOUNTAIN_ONLY = {"Mountain": 40}
+
+
+@pytest.mark.parametrize("probed", [False, True])
+@pytest.mark.parametrize("game_offset", [0, 1])
+def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
+    from manabot.sim.flat_mc import play_games
+    from manabot.verify.competency import play_probed_games
+
+    # The eight-card library loses to the sixteen-card library from either seat.
+    # Cross both reset directions, including a batch starting on the draw.
+    run = play_probed_games if probed else play_games
+    result = run(
+        {"kind": "random"},
+        {"kind": "random"},
+        hero_deck={"Mountain": 8},
+        villain_deck={"Island": 16},
+        num_games=4,
+        seed=0,
+        game_offset=game_offset,
+    )
+    if probed:
+        seats = [row["hero_seat"] for row in result["records"]]
+        winners = [row["winner"] for row in result["records"]]
+    else:
+        seats = [row.hero_seat for row in result.records]
+        winners = [row.winner for row in result.records]
+    assert seats == [(game_offset + index) % 2 for index in range(4)]
+    assert winners == [1 - seat for seat in seats]
 
 
 def _first_obs_signature(env: Env) -> tuple[tuple[str, ...], tuple[str, ...]]:

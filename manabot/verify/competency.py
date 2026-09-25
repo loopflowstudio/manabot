@@ -225,7 +225,7 @@ class ScriptedVillain:
             return len(actions) - 1
         if kind == SPACE_SCRY:
             return 0  # keep
-        # look_and_select / discard_then_draw / modal / waterbend: decline/done
+        # look_and_select / learn / modal / waterbend: decline/done
         return len(actions) - 1
 
 
@@ -1006,7 +1006,7 @@ def play_probed_games(
         hero_seat = game_index % 2
         obs, _ = env.reset(
             seed=seed + game_index,
-            options={"match": match_swapped} if hero_seat == 1 else None,
+            options={"match": match_swapped if hero_seat == 1 else match},
         )
         probe = BehaviorProbe()
         done = False

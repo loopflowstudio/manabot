@@ -57,7 +57,7 @@ ACTION_SPACE_KIND_NAMES = {
     6: "look_and_select",
     7: "pay_or_not",
     8: "modal",
-    9: "discard_then_draw",
+    9: "learn",
     10: "waterbend",
 }
 
@@ -492,7 +492,7 @@ def play_games(
         hero_seat = game_index % 2
         obs, _ = env.reset(
             seed=seed + game_index,
-            options={"match": match_swapped} if hero_seat == 1 else None,
+            options={"match": match_swapped if hero_seat == 1 else match},
         )
         villain_seat = (hero_seat + 1) % 2
         for player, seat in (

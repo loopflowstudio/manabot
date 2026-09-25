@@ -32,6 +32,8 @@
   } from '$lib/socket.svelte';
   import type { ActionOption, StopSide } from '$lib/types';
 
+  let learnDemo = $state(false);
+
   let trainedLabel = $state('Trained opponent unavailable');
   let trainedAvailable = $state(false);
   async function loadOpponent(): Promise<void> {
@@ -43,7 +45,7 @@
       if (data.opponent) {
         trainedLabel = `${data.opponent.name} · ${data.opponent.sha256.slice(0, 10)}`;
         gameStore.opponentSha256 = data.opponent.sha256;
-        if (!gameStore.observation) gameStore.setOpponentChoice('checkpoint');
+        if (!learnDemo && !gameStore.observation) gameStore.setOpponentChoice('checkpoint');
       }
     } catch {
       trainedLabel = 'Trained opponent unavailable';
@@ -53,6 +55,8 @@
   let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
+    learnDemo = new URLSearchParams(window.location.search).get('demo') === 'learn';
+    if (learnDemo) gameStore.setOpponentChoice('random');
     connect();
     void loadAdviceMeta();
     void loadOpponent();
@@ -101,7 +105,8 @@
 
   const clickableTargets = $derived(buildClickableTargets(gameStore.actions));
   const filteredActions = $derived(
-    filterActionsForTarget(gameStore.actions, clickableTargets, gameStore.selectedTargetId),
+    gameStore.actionSpaceKind === 'LEARN' ? gameStore.actions :
+      filterActionsForTarget(gameStore.actions, clickableTargets, gameStore.selectedTargetId),
   );
   const highlightedActionIndexes = $derived(
     new Set(hoveredTargetId === null ? [] : clickableTargets.get(hoveredTargetId) ?? []),
@@ -123,6 +128,10 @@
   function startNewGame(): void {
     if (!gameStore.hasCapability('configure_match')) {
       gameStore.setError('Only the acting pilot can start or reset the match.');
+      return;
+    }
+    if (learnDemo) {
+      sendNewGame({ demo: 'learn' });
       return;
     }
     sendNewGame(gameStore.newGameConfig());
@@ -226,7 +235,7 @@
     const actionIndexes = targetActionIndexes(objectId);
     const matchingActions = gameStore.actions.filter((action) => actionIndexes.includes(action.index));
 
-    if (matchingActions.length === 1) {
+    if (matchingActions.length === 1 && gameStore.actionSpaceKind !== 'LEARN') {
       handleActionSelect(matchingActions[0]);
       return;
     }
@@ -302,7 +311,8 @@
     </div>
 
     <div class="flex flex-wrap items-end gap-x-5 gap-y-3">
-      {#if (!gameStore.observation || gameStore.gameOver) && gameStore.hasCapability('configure_match')}
+      {#if learnDemo}<p class="type-caption">Learn demo · UR Lessons vs Random GW Allies. New Game restarts the choice.</p>{/if}
+      {#if !learnDemo && (!gameStore.observation || gameStore.gameOver) && gameStore.hasCapability('configure_match')}
         <DeckSelector
           hero={gameStore.decks.hero}
           villain={gameStore.decks.villain}
@@ -378,6 +388,10 @@
       >
         <ActionPanel
           actions={filteredActions}
+          previewNames={Object.fromEntries([
+            ...(gameStore.observation?.agent.hand ?? []).map(card => [card.id, card.name]),
+            ...(gameStore.observation?.agent.sideboard ?? []).map(card => [card.candidate_id, card.name]),
+          ])}
           actionSpaceKind={gameStore.actionSpaceKind}
           selectedTargetId={gameStore.selectedTargetId}
           {highlightedActionIndexes}

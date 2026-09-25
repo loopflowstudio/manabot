@@ -17,7 +17,7 @@ pub enum ActionType {
     ScryKeep = 7,
     /// Scry: put this card on the bottom of the library.
     ScryBottom = 8,
-    /// Pick a card (look-and-select to hand, discard for learn).
+    /// Pick a card for look-and-select.
     SelectCard = 9,
     /// Decline / done: finish an optional selection, decline to pay,
     /// stop choosing "up to N" targets.
@@ -29,6 +29,8 @@ pub enum ActionType {
     ChooseMode = 12,
     /// Tap a permanent to pay {1} of a waterbend cost.
     TapForCost = 13,
+    LearnTakeLesson = 14,
+    LearnDiscard = 15,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -69,7 +71,15 @@ pub enum Action {
         card: CardId,
         to_bottom: bool,
     },
-    /// Select a card in a look-and-select or discard decision.
+    LearnTakeLesson {
+        player: PlayerId,
+        card: CardId,
+    },
+    LearnDiscard {
+        player: PlayerId,
+        card: CardId,
+    },
+    /// Select a card in a look-and-select decision.
     SelectCard {
         player: PlayerId,
         card: CardId,
@@ -111,6 +121,8 @@ impl Action {
                     ActionType::ScryKeep
                 }
             }
+            Action::LearnTakeLesson { .. } => ActionType::LearnTakeLesson,
+            Action::LearnDiscard { .. } => ActionType::LearnDiscard,
             Action::SelectCard { .. } => ActionType::SelectCard,
             Action::Decline { .. } => ActionType::DeclineChoice,
             Action::PayCost { .. } => ActionType::PayCost,
@@ -137,8 +149,8 @@ pub enum ActionSpaceKind {
     PayOrNot = 7,
     /// "Choose one —" modal effect.
     Modal = 8,
-    /// Learn without a sideboard: optionally discard, then draw.
-    DiscardThenDraw = 9,
+    /// Retrieve an owned Lesson, discard then draw, or decline.
+    Learn = 9,
     /// Waterbend cost payment: tap permanents / pay the remainder.
     Waterbend = 10,
 }

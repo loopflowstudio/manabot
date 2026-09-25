@@ -95,7 +95,7 @@ class Env(gym.Env):
 
         Args:
             seed: Optional seed for environment’s RNG.
-            options: Must contain `player_configs` (list of player configs) if needed.
+            options: Optional `match` replaces the setup, including future auto-resets.
 
         Returns:
             observation: A dictionary of numpy arrays (encoded from managym.Observation).
@@ -118,6 +118,7 @@ class Env(gym.Env):
 
         # Get the initial managym observation
         raw_obs, raw_info = self._engine.reset(match.to_rust())
+        self.match = match
         self._last_obs = raw_obs
         # Encode to our dictionary-of-numpy format
         py_obs = self.obs_space.encode(raw_obs)

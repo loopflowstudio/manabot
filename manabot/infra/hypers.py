@@ -34,10 +34,9 @@ class ObservationSpaceHypers(BaseHypersModel):
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # 20 -> 32: the real Milestone-1 decks exceed 20 legal actions at some
-    # priority windows (learn hands, wide waterbend boards) — the encoder
-    # truncated and uniform-random-over-encoded policies never saw the tail.
-    max_actions: int = 32
+    # Fits all Learn choices in the selected setup. Larger action sets fail
+    # encoding explicitly; this is not a universal priority/combat bound.
+    max_actions: int = 64
     max_focus_objects: int = 2
     max_events: int = 32
 
@@ -49,6 +48,45 @@ class MatchHypers(BaseHypersModel):
     villain: str = "urza"
     hero_deck: dict[str, int] = Field(default_factory=_default_deck)
     villain_deck: dict[str, int] = Field(default_factory=_default_deck)
+    hero_sideboard: dict[str, int] = Field(default_factory=dict)
+    villain_sideboard: dict[str, int] = Field(default_factory=dict)
+
+    @field_validator("hero_sideboard", "villain_sideboard", mode="before")
+    @classmethod
+    def validate_sideboard_counts(cls, value: Any) -> Any:
+        if not isinstance(value, dict) or any(
+            not isinstance(name, str)
+            or not name
+            or type(count) is not int
+            or count <= 0
+            for name, count in value.items()
+        ):
+            raise ValueError("sideboard must map card names to positive integer counts")
+        return value
+
+    @classmethod
+    def authored(
+        cls,
+        pack_key: str,
+        hero_deck: str,
+        villain_deck: str,
+        *,
+        hero: str = "gaea",
+        villain: str = "urza",
+    ) -> "MatchHypers":
+        """Resolve both complete setups from the compiled rules pack."""
+        import managym
+
+        first = managym.authored_deck_setup(pack_key, hero_deck)
+        second = managym.authored_deck_setup(pack_key, villain_deck)
+        return cls(
+            hero=hero,
+            villain=villain,
+            hero_deck=first.decklist,
+            villain_deck=second.decklist,
+            hero_sideboard=first.sideboard,
+            villain_sideboard=second.sideboard,
+        )
 
 
 class ExperimentHypers(BaseHypersModel):

@@ -271,8 +271,11 @@ export function assertViewerSafeStudyArtifact(artifact: StudyArtifact): void {
     ) {
       fail(`${landmark.id}: frame asset pack identity drifted`);
     }
-    if (frame.projection.opponent.hand.length !== 0) {
-      fail(`${landmark.id}: opponent-private hand identities are forbidden`);
+    if (
+      frame.projection.opponent.hand.length !== 0
+      || (frame.projection.opponent.sideboard?.length ?? 0) !== 0
+    ) {
+      fail(`${landmark.id}: opponent-private hand identities or sideboard candidates are forbidden`);
     }
     if (
       frame.prompt === null
@@ -409,8 +412,11 @@ function assertRecordedBinding(
   ) {
     fail(`${context}: played command identity drifted`);
   }
-  if (frame.projection.opponent.hand.length !== 0) {
-    fail(`${context}: opponent-private hand identities are forbidden`);
+  if (
+    frame.projection.opponent.hand.length !== 0
+    || (frame.projection.opponent.sideboard?.length ?? 0) !== 0
+  ) {
+    fail(`${context}: opponent-private hand identities or sideboard candidates are forbidden`);
   }
 }
 

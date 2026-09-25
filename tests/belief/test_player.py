@@ -80,7 +80,7 @@ def test_provider_commitment_groups_discard_family_without_physical_identity() -
         offers=(
             {"id": 0, "public_commitment": {"kind": "discard", "card": "Island"}},
             {"id": 1, "public_commitment": {"kind": "discard", "card": "Island"}},
-            {"id": 2, "public_commitment": {"kind": "decline_discard"}},
+            {"id": 2, "public_commitment": {"kind": "decline_learn"}},
         ),
         object_candidates=(),
     )
@@ -88,11 +88,45 @@ def test_provider_commitment_groups_discard_family_without_physical_identity() -
     discard, legal_count = _matching_offer_indexes(
         frame, {"kind": "discard", "card": "Island"}
     )
-    decline, _ = _matching_offer_indexes(frame, {"kind": "decline_discard"})
+    decline, _ = _matching_offer_indexes(frame, {"kind": "decline_learn"})
 
     assert discard == [0, 1]
     assert decline == [2]
     assert legal_count == 3
+
+
+def test_provider_groups_repeated_lessons_separately_from_discard() -> None:
+    frame = DecisionFrame(
+        schema_version=SEMANTIC_DECISION_VERSION,
+        revision=29,
+        actor=0,
+        fingerprint="learn-frame",
+        offers=(
+            {
+                "id": 0,
+                "public_commitment": {
+                    "kind": "learn_take_lesson",
+                    "card": "Accumulate Wisdom",
+                },
+            },
+            {
+                "id": 1,
+                "public_commitment": {
+                    "kind": "learn_take_lesson",
+                    "card": "Accumulate Wisdom",
+                },
+            },
+            {
+                "id": 2,
+                "public_commitment": {"kind": "discard", "card": "Accumulate Wisdom"},
+            },
+            {"id": 3, "public_commitment": {"kind": "decline_learn"}},
+        ),
+        object_candidates=(),
+    )
+    assert _matching_offer_indexes(
+        frame, {"kind": "learn_take_lesson", "card": "Accumulate Wisdom"}
+    ) == ([0, 1], 4)
 
 
 def test_frozen_likelihood_fails_closed_on_checkpoint_hash(tmp_path: Path) -> None:

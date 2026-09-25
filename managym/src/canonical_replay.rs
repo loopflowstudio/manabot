@@ -82,8 +82,13 @@ impl ReplayDecision {
         if self.frame.projection.agent.player_index != self.viewer.0 {
             return Err("decision frame is not oriented to its acting viewer".into());
         }
-        if !self.frame.projection.opponent.hand.is_empty() {
-            return Err("decision frame exposes opponent-private hand identities".into());
+        if !self.frame.projection.opponent.hand.is_empty()
+            || !self.frame.projection.opponent.sideboard.is_empty()
+        {
+            return Err(
+                "decision frame exposes opponent-private hand identities or sideboard candidates"
+                    .into(),
+            );
         }
         let selected = self
             .frame

@@ -1,6 +1,7 @@
 use crate::{
     flow::turn::StepKind,
     state::{
+        card::CardDefId,
         game_object::{CardId, Incarnation, ObjectId, PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
@@ -31,6 +32,11 @@ pub enum EventEntity {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
+    /// Public definition reveal; outside/hidden copies have no public object identity.
+    CardRevealed {
+        owner: PlayerId,
+        definition: CardDefId,
+    },
     CardMoved {
         card: CardId,
         from: Option<ZoneType>,

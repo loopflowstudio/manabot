@@ -124,9 +124,8 @@ from .testing_house_protocol import (
 from .trace import GameConfig, Trace, TraceEvent
 from .villain import VillainPolicy, build_villain_policy
 
-# Interactive remains a lightweight mirror of manabot.verify.util. The two
-# curated defaults load from the installed manifest so the server does not
-# import torch at startup and does not carry a competing deck definition.
+# Interactive remains a lightweight mirror of manabot.verify.util. Curated
+# manifests are checked against the compiled rules setup without importing torch.
 INTERACTIVE_DECK = {
     "Island": 12,
     "Mountain": 12,
@@ -172,10 +171,6 @@ MAX_PRESENTATION_EVENTS = 256
 MAX_UINT64 = 2**64 - 1
 CONTENT_HASH = "legacy-content-unversioned"
 ASSET_MANIFEST_HASH = CURATED_PACK.manifest_sha256
-CURATED_SEMANTIC_PACK_KEYS = {
-    CURATED_PACK.pack_id: "ur-lessons-vs-gw-allies",
-    JEONG_INCREMENT_PACK.pack_id: "tla-jeong-increment-v1",
-}
 
 # MTGO-style priority stops. Stop keys are the human-facing step names; they
 # map onto the engine's StepEnum names (serialize_observation reports the same
@@ -461,6 +456,16 @@ def _serialize_player(
         "life": int(player.life),
         "zone_counts": zone_counts,
         "library_count": zone_counts.get("LIBRARY", 0),
+        "known_hand": {
+            str(key): int(count) for key, count in player.known_hand.items()
+        },
+        "sideboard_counts": {
+            str(key): int(count) for key, count in player.sideboard_counts.items()
+        },
+        "remaining_sideboard_counts": {
+            str(key): int(count)
+            for key, count in player.remaining_sideboard_counts.items()
+        },
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
@@ -470,7 +475,7 @@ def _serialize_player(
 
 
 def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
-    return {
+    data = {
         "game_over": bool(obs.game_over),
         "won": bool(obs.won),
         "turn": {
@@ -487,6 +492,17 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
             obs.opponent_permanents,
         ),
     }
+
+    data["agent"]["sideboard"] = [
+        {
+            "candidate_id": int(card.candidate_id),
+            "owner_id": int(card.owner_id),
+            "registry_key": int(card.registry_key),
+            "name": card.name,
+        }
+        for card in obs.agent_sideboard
+    ]
+    return data
 
 
 def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
@@ -516,13 +532,23 @@ def _semantic_event_payload(
     event: managym.EventData,
     definition_ids: dict[int, int],
 ) -> dict[str, Any]:
-    related_definitions = sorted(
-        {
-            definition_ids[identity]
-            for identity in (int(event.source_id), int(event.target_id))
-            if identity in definition_ids
-        }
-    )
+    related_definitions: set[int] = set()
+    for kind, identity in (
+        (event.source_kind, int(event.source_id)),
+        (event.target_kind, int(event.target_id)),
+    ):
+        if kind == managym.EventEntityKindEnum.DEFINITION:
+            related_definitions.add(identity)
+        elif (
+            kind
+            in (
+                managym.EventEntityKindEnum.CARD,
+                managym.EventEntityKindEnum.PERMANENT,
+                managym.EventEntityKindEnum.OBJECT,
+            )
+            and identity in definition_ids
+        ):
+            related_definitions.add(definition_ids[identity])
     return {
         "event_type": _enum_name(EventTypeEnum, event.event_type),
         "source_kind": int(event.source_kind),
@@ -535,7 +561,7 @@ def _semantic_event_payload(
         "controller_id": int(event.controller_id),
         "from_zone": int(event.from_zone),
         "to_zone": int(event.to_zone),
-        "definition_ids": related_definitions,
+        "definition_ids": sorted(related_definitions),
     }
 
 
@@ -626,6 +652,7 @@ def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
     names.update(
         {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
     )
+    names.update({int(card.candidate_id): card.name for card in obs.agent_sideboard})
     names.update(_permanent_names(obs.agent_cards, obs.agent_permanents))
     names.update(_permanent_names(obs.opponent_cards, obs.opponent_permanents))
     return names
@@ -681,13 +708,15 @@ def _format_action(
         return f"Keep {first} on top"
     if action_name == "SCRY_BOTTOM" and first:
         return f"Put {first} on the bottom"
+    if action_name == "LEARN_TAKE_LESSON" and first:
+        return f"Take {first}"
+    if action_name == "LEARN_DISCARD" and first:
+        return f"Discard {first}, then draw a card"
     if action_name == "SELECT_CARD" and first:
-        if space_kind == "DISCARD_THEN_DRAW":
-            return f"Discard {first}, then draw a card"
         return f"Put {first} into your hand"
     if action_name == "DECLINE_CHOICE":
-        if space_kind == "DISCARD_THEN_DRAW":
-            return "Keep your hand (do not discard)"
+        if space_kind == "LEARN":
+            return "Decline Learn"
         return "Decline"
     if action_name == "PAY_COST":
         return f"Pay the cost ({first})" if first else "Pay the cost"
@@ -926,9 +955,36 @@ def _parse_game_config(config: Any) -> GameConfig:
 
     selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
 
+    sideboards = {}
+    for seat, deck_name in (("hero", hero_deck_name), ("villain", villain_deck_name)):
+        pack = selected_pack
+        if pack is None:
+            pack = next(
+                (
+                    candidate
+                    for candidate in (CURATED_PACK, JEONG_INCREMENT_PACK)
+                    if deck_name in (candidate.hero_deck_id, candidate.villain_deck_id)
+                ),
+                None,
+            )
+        sideboard = (
+            {} if pack is None else dict(pack.player_config(deck_name, seat).sideboard)
+        )
+        # Named setup cannot silently change when a persisted config is reused.
+        supplied = data.get(f"{seat}_sideboard", sideboard)
+        if (
+            not isinstance(supplied, dict)
+            or supplied != sideboard
+            or any(type(count) is not int for count in supplied.values())
+        ):
+            raise ValueError(f"{seat}_sideboard must match the named deck setup")
+        sideboards[seat] = sideboard
+
     return GameConfig(
         hero_deck=hero_deck,
         villain_deck=villain_deck,
+        hero_sideboard=sideboards["hero"],
+        villain_sideboard=sideboards["villain"],
         hero_deck_name=hero_deck_name,
         villain_deck_name=villain_deck_name,
         asset_pack=selected_pack.reference if selected_pack is not None else None,
@@ -1039,6 +1095,17 @@ class GameSession:
             raise ValueError("Invalid new-game request id.")
         if request_id in self._new_game_requests:
             return self._wire_message()
+
+        from .learn_demo import load_learn_demo, replay_learn_demo
+
+        demo_name = (raw_config if isinstance(raw_config, dict) else {}).get("demo")
+        demo = None
+        if demo_name is not None:
+            if demo_name != "learn":
+                raise ValueError(f"Unknown play demo: {demo_name}")
+            demo = load_learn_demo()
+            raw_config = {**raw_config, **demo["config"]}
+
         config = _parse_game_config(raw_config)
         seed = config.seed if config.seed is not None else secrets.randbits(32)
         config.seed = seed
@@ -1051,11 +1118,7 @@ class GameSession:
 
         try:
             env = managym.Env(seed=seed)
-            player_configs = [
-                managym.PlayerConfig("Hero", config.hero_deck),
-                managym.PlayerConfig("Villain", config.villain_deck),
-            ]
-            obs, _ = env.reset(player_configs)
+            obs, _ = env.reset(config.to_rust())
         except BaseException as exc:
             # PyO3's PanicException derives directly from BaseException and has
             # no importable Python class. A failed disposable replacement must
@@ -1084,7 +1147,7 @@ class GameSession:
             config.villain_deck_name,
         )
         if selected_pack is not None:
-            expected_pack_key = CURATED_SEMANTIC_PACK_KEYS[selected_pack.pack_id]
+            expected_pack_key = selected_pack.semantic_pack_key
             actual_pack_key = None if compiled is None else compiled.get("pack_key")
             if actual_pack_key != expected_pack_key:
                 raise ValueError(
@@ -1186,9 +1249,13 @@ class GameSession:
         self._persist_attempt()
         self._advance()
         self._last_presentation_cursor = self.presentation.next_seq
+        update = self._wire_message(reason="initial_connect")
+        if demo is not None:
+            replay_learn_demo(self, update, demo)
+            update = self._wire_message(reason="initial_connect")
         if request_id is not None:
             self._new_game_requests.add(request_id)
-        return self._wire_message(reason="initial_connect")
+        return update
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
         if self.env is None or self.obs is None or self.trace is None:
@@ -1936,6 +2003,11 @@ class GameSession:
         offers: list[dict[str, Any]],
         action_space: str,
     ) -> dict[str, Any]:
+        projection = viewer_view(obs, viewer)
+        projection["definition_names"] = {
+            str(row["card_def_id"]): row["registry_name"]
+            for row in self.env.content_pack_manifest()["definitions"]
+        }
         frame_without_hash: dict[str, Any] = {
             "protocol": PROTOCOL_VERSION,
             "match_id": self.match_id,
@@ -1944,7 +2016,7 @@ class GameSession:
             "asset_manifest_hash": self.asset_manifest_hash,
             "status": "game_over" if obs.game_over else "ready",
             "prompt": prompt,
-            "projection": viewer_view(obs, viewer),
+            "projection": projection,
             "offers": offers,
             "winner": _winner_for_hero(obs) if viewer == HERO_PLAYER_INDEX else None,
             "action_space": action_space,

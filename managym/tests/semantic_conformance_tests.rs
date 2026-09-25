@@ -1,5 +1,5 @@
 // semantic_conformance_tests.rs
-// Checked replay, property, metamorphic, and Phase evidence for W2-200.
+// Checked replay, property, metamorphic, and Phase evidence for the current rules.
 
 use std::path::Path;
 
@@ -10,7 +10,7 @@ use managym::conformance::{
 
 const ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../conformance/semantic-kernel-v1"
+    "/../conformance/semantic-kernel-v2"
 );
 
 #[test]

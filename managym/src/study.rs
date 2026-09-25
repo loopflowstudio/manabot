@@ -290,9 +290,11 @@ fn validate_recorded_decision(decision: &RecordedDecision) -> Result<(), String>
     {
         return Err(format!("{context}: played command identity drifted"));
     }
-    if !decision.frame.projection.opponent.hand.is_empty() {
+    if !decision.frame.projection.opponent.hand.is_empty()
+        || !decision.frame.projection.opponent.sideboard.is_empty()
+    {
         return Err(format!(
-            "{context}: opponent-private hand identities are forbidden"
+            "{context}: opponent-private hand identities or sideboard candidates are forbidden"
         ));
     }
     Ok(())
@@ -322,9 +324,10 @@ fn validate_index_decision(
             return Err(format!("{context}: frame asset pack identity drifted"));
         }
     }
-    if !frame.projection.opponent.hand.is_empty() {
+    if !frame.projection.opponent.hand.is_empty() || !frame.projection.opponent.sideboard.is_empty()
+    {
         return Err(format!(
-            "{context}: opponent-private hand identities are forbidden"
+            "{context}: opponent-private hand identities or sideboard candidates are forbidden"
         ));
     }
     let prompt = frame
@@ -495,9 +498,11 @@ impl StudyArtifact {
                 return Err(format!("{context}: frame asset pack identity drifted"));
             }
         }
-        if !frame.projection.opponent.hand.is_empty() {
+        if !frame.projection.opponent.hand.is_empty()
+            || !frame.projection.opponent.sideboard.is_empty()
+        {
             return Err(format!(
-                "{context}: opponent-private hand identities are forbidden"
+                "{context}: opponent-private hand identities or sideboard candidates are forbidden"
             ));
         }
         let prompt = frame

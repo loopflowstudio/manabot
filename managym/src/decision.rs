@@ -29,7 +29,7 @@ use crate::{
 /// Canonical serialization and digest contract for the semantic decision
 /// slice. Increment when DecisionFrame/Observation field inclusion, ordering,
 /// or digest algorithm changes.
-pub const SEMANTIC_DECISION_VERSION: u16 = 4;
+pub const SEMANTIC_DECISION_VERSION: u16 = 5;
 
 /// Stable digest of one complete legal offer set at a revision. Any change to
 /// the legal actions, their order, or their binding revision changes it.
@@ -214,11 +214,10 @@ impl From<&EventData> for CanonicalEventIdentity {
             source_incarnation: event.source_incarnation,
             target_incarnation: event.target_incarnation,
         };
-        let moves_into_hidden_zone = event.from_zone >= 0
-            && matches!(
-                event.to_zone,
-                zone if zone == ZoneType::Hand as i32 || zone == ZoneType::Library as i32
-            );
+        let moves_into_hidden_zone = matches!(
+            event.to_zone,
+            zone if zone == ZoneType::Hand as i32 || zone == ZoneType::Library as i32
+        );
         if moves_into_hidden_zone {
             canonical.source_kind = 0;
             canonical.source_id = -1;
@@ -574,6 +573,12 @@ mod tests {
             event_identity(&hidden_move(17)),
             event_identity(&hidden_move(29)),
         );
+
+        let mut outside_a = hidden_move(17);
+        outside_a.from_zone = -1;
+        let mut outside_b = hidden_move(29);
+        outside_b.from_zone = -1;
+        assert_eq!(event_identity(&outside_a), event_identity(&outside_b));
 
         let mut public_move_a = hidden_move(17);
         public_move_a.to_zone = ZoneType::Graveyard as i32;

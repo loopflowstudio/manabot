@@ -1,7 +1,5 @@
 // strixhaven.rs
-// Strixhaven cards used by the Milestone-1 UR Lessons deck: the learn
-// spells (learn = "you may discard a card; if you do, draw a card" — no
-// sideboard in 1v1 constructed) and a ward proof card.
+// Strixhaven Learn spells in the UR Lessons deck and a ward proof card.
 
 use crate::state::{
     ability::{Effect, TargetRequirement, TargetSpec},
@@ -20,7 +18,7 @@ impl CardRegistry {
             mana_cost: Some(ManaCost::parse("2U")),
             types: CardTypes::new([CardType::Instant]),
             spell_effects: vec![Effect::DrawCards { count: 1 }, Effect::Learn],
-            text_box: "Draw a card.\nLearn. (You may discard a card. If you do, draw a card.)"
+            text_box: "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)"
                 .to_string(),
             ..Default::default()
         });

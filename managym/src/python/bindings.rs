@@ -5,7 +5,7 @@
 
 #[cfg(feature = "python")]
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
@@ -14,7 +14,7 @@ use std::{
 
 #[cfg(feature = "python")]
 use pyo3::{
-    exceptions::PyRuntimeError,
+    exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyList, PyModule},
 };
@@ -30,8 +30,8 @@ use crate::{
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, EventEntityKind,
-            EventType, KeywordData, Observation, PermanentData, PlayerData, StackObjectData,
-            StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            EventType, KeywordData, Observation, PermanentData, PlayerData, SideboardCardData,
+            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{
             ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
@@ -487,6 +487,8 @@ pub enum ActionEnum {
     PayCost = 11,
     ChooseMode = 12,
     TapForCost = 13,
+    LearnTakeLesson = 14,
+    LearnDiscard = 15,
 }
 
 #[cfg(feature = "python")]
@@ -512,6 +514,10 @@ impl ActionEnum {
     const SCRY_BOTTOM: Self = Self::ScryBottom;
     #[classattr]
     const SELECT_CARD: Self = Self::SelectCard;
+    #[classattr]
+    const LEARN_TAKE_LESSON: Self = Self::LearnTakeLesson;
+    #[classattr]
+    const LEARN_DISCARD: Self = Self::LearnDiscard;
     #[classattr]
     const DECLINE_CHOICE: Self = Self::DeclineChoice;
     #[classattr]
@@ -543,6 +549,8 @@ impl From<ActionType> for ActionEnum {
             ActionType::PriorityActivateAbility => Self::PriorityActivateAbility,
             ActionType::ScryKeep => Self::ScryKeep,
             ActionType::ScryBottom => Self::ScryBottom,
+            ActionType::LearnTakeLesson => Self::LearnTakeLesson,
+            ActionType::LearnDiscard => Self::LearnDiscard,
             ActionType::SelectCard => Self::SelectCard,
             ActionType::DeclineChoice => Self::DeclineChoice,
             ActionType::PayCost => Self::PayCost,
@@ -565,6 +573,8 @@ impl From<ActionEnum> for ActionType {
             ActionEnum::PriorityActivateAbility => Self::PriorityActivateAbility,
             ActionEnum::ScryKeep => Self::ScryKeep,
             ActionEnum::ScryBottom => Self::ScryBottom,
+            ActionEnum::LearnTakeLesson => Self::LearnTakeLesson,
+            ActionEnum::LearnDiscard => Self::LearnDiscard,
             ActionEnum::SelectCard => Self::SelectCard,
             ActionEnum::DeclineChoice => Self::DeclineChoice,
             ActionEnum::PayCost => Self::PayCost,
@@ -588,7 +598,7 @@ pub enum ActionSpaceEnum {
     LookAndSelect = 6,
     PayOrNot = 7,
     Modal = 8,
-    DiscardThenDraw = 9,
+    Learn = 9,
     Waterbend = 10,
 }
 
@@ -609,6 +619,7 @@ pub enum EventTypeEnum {
     CombatDamageDealt = EventType::CombatDamageDealt as i32,
     PermanentsDied = EventType::PermanentsDied as i32,
     TurnStarted = EventType::TurnStarted as i32,
+    CardRevealed = EventType::CardRevealed as i32,
 }
 
 #[cfg(feature = "python")]
@@ -638,6 +649,8 @@ impl EventTypeEnum {
     const PERMANENTS_DIED: Self = Self::PermanentsDied;
     #[classattr]
     const TURN_STARTED: Self = Self::TurnStarted;
+    #[classattr]
+    const CARD_REVEALED: Self = Self::CardRevealed;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -658,6 +671,7 @@ pub enum EventEntityKindEnum {
     Permanent = EventEntityKind::Permanent as i32,
     Player = EventEntityKind::Player as i32,
     Object = EventEntityKind::Object as i32,
+    Definition = EventEntityKind::Definition as i32,
 }
 
 #[cfg(feature = "python")]
@@ -673,6 +687,8 @@ impl EventEntityKindEnum {
     const PLAYER: Self = Self::Player;
     #[classattr]
     const OBJECT: Self = Self::Object;
+    #[classattr]
+    const DEFINITION: Self = Self::Definition;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -705,7 +721,7 @@ impl ActionSpaceEnum {
     #[classattr]
     const MODAL: Self = Self::Modal;
     #[classattr]
-    const DISCARD_THEN_DRAW: Self = Self::DiscardThenDraw;
+    const LEARN: Self = Self::Learn;
     #[classattr]
     const WATERBEND: Self = Self::Waterbend;
 
@@ -731,7 +747,7 @@ impl From<ActionSpaceKind> for ActionSpaceEnum {
             ActionSpaceKind::LookAndSelect => Self::LookAndSelect,
             ActionSpaceKind::PayOrNot => Self::PayOrNot,
             ActionSpaceKind::Modal => Self::Modal,
-            ActionSpaceKind::DiscardThenDraw => Self::DiscardThenDraw,
+            ActionSpaceKind::Learn => Self::Learn,
             ActionSpaceKind::Waterbend => Self::Waterbend,
         }
     }
@@ -750,7 +766,7 @@ impl From<ActionSpaceEnum> for ActionSpaceKind {
             ActionSpaceEnum::LookAndSelect => Self::LookAndSelect,
             ActionSpaceEnum::PayOrNot => Self::PayOrNot,
             ActionSpaceEnum::Modal => Self::Modal,
-            ActionSpaceEnum::DiscardThenDraw => Self::DiscardThenDraw,
+            ActionSpaceEnum::Learn => Self::Learn,
             ActionSpaceEnum::Waterbend => Self::Waterbend,
         }
     }
@@ -866,14 +882,25 @@ pub struct PyPlayerConfig {
     pub name: String,
     #[pyo3(get, set)]
     pub decklist: HashMap<String, usize>,
+    #[pyo3(get, set)]
+    pub sideboard: HashMap<String, usize>,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    fn new(name: String, decklist: HashMap<String, usize>) -> Self {
-        Self { name, decklist }
+    #[pyo3(signature = (name, decklist, sideboard=None))]
+    fn new(
+        name: String,
+        decklist: HashMap<String, usize>,
+        sideboard: Option<HashMap<String, usize>>,
+    ) -> Self {
+        Self {
+            name,
+            decklist,
+            sideboard: sideboard.unwrap_or_default(),
+        }
     }
 }
 
@@ -883,6 +910,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
         PlayerConfig {
             name: value.name,
             decklist: value.decklist.into_iter().collect(),
+            sideboard: value.sideboard.into_iter().collect(),
         }
     }
 }
@@ -905,6 +933,12 @@ pub struct PyPlayer {
     pub zone_counts: Vec<i32>,
     #[pyo3(get, set)]
     pub graveyard_lessons: i32,
+    #[pyo3(get)]
+    pub known_hand: BTreeMap<u32, u32>,
+    #[pyo3(get)]
+    pub sideboard_counts: BTreeMap<u32, u32>,
+    #[pyo3(get)]
+    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
     #[pyo3(get, set)]
     pub combat_mana: i32,
 }
@@ -920,6 +954,9 @@ impl From<PlayerData> for PyPlayer {
             life: value.life,
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
+            known_hand: value.known_hand,
+            sideboard_counts: value.sideboard_counts,
+            remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
         }
     }
@@ -941,6 +978,9 @@ impl From<PyPlayer> for PlayerData {
             life: value.life,
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
+            known_hand: value.known_hand,
+            sideboard_counts: value.sideboard_counts,
+            remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
         }
     }
@@ -1378,6 +1418,7 @@ impl From<EventData> for PyEventData {
                 x if x == EventType::BlockersDeclared as i32 => EventTypeEnum::BlockersDeclared,
                 x if x == EventType::CombatDamageDealt as i32 => EventTypeEnum::CombatDamageDealt,
                 x if x == EventType::PermanentsDied as i32 => EventTypeEnum::PermanentsDied,
+                x if x == EventType::CardRevealed as i32 => EventTypeEnum::CardRevealed,
                 _ => EventTypeEnum::TurnStarted,
             },
             source_kind: match value.source_kind {
@@ -1385,6 +1426,7 @@ impl From<EventData> for PyEventData {
                 x if x == EventEntityKind::Permanent as i32 => EventEntityKindEnum::Permanent,
                 x if x == EventEntityKind::Player as i32 => EventEntityKindEnum::Player,
                 x if x == EventEntityKind::Object as i32 => EventEntityKindEnum::Object,
+                x if x == EventEntityKind::Definition as i32 => EventEntityKindEnum::Definition,
                 _ => EventEntityKindEnum::None,
             },
             source_id: value.source_id,
@@ -1393,6 +1435,7 @@ impl From<EventData> for PyEventData {
                 x if x == EventEntityKind::Permanent as i32 => EventEntityKindEnum::Permanent,
                 x if x == EventEntityKind::Player as i32 => EventEntityKindEnum::Player,
                 x if x == EventEntityKind::Object as i32 => EventEntityKindEnum::Object,
+                x if x == EventEntityKind::Definition as i32 => EventEntityKindEnum::Definition,
                 _ => EventEntityKindEnum::None,
             },
             target_id: value.target_id,
@@ -1574,6 +1617,44 @@ impl From<PyStackObject> for StackObjectData {
 }
 
 #[cfg(feature = "python")]
+#[pyclass(name = "SideboardCard")]
+#[derive(Clone)]
+pub struct PySideboardCard {
+    #[pyo3(get)]
+    pub candidate_id: i32,
+    #[pyo3(get)]
+    pub owner_id: i32,
+    #[pyo3(get)]
+    pub registry_key: i32,
+    #[pyo3(get)]
+    pub name: String,
+}
+
+#[cfg(feature = "python")]
+impl From<SideboardCardData> for PySideboardCard {
+    fn from(value: SideboardCardData) -> Self {
+        Self {
+            candidate_id: value.candidate_id,
+            owner_id: value.owner_id,
+            registry_key: value.registry_key,
+            name: value.name,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PySideboardCard> for SideboardCardData {
+    fn from(value: PySideboardCard) -> Self {
+        Self {
+            candidate_id: value.candidate_id,
+            owner_id: value.owner_id,
+            registry_key: value.registry_key,
+            name: value.name,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Observation")]
 #[derive(Clone)]
 pub struct PyObservation {
@@ -1589,6 +1670,8 @@ pub struct PyObservation {
     pub agent: PyPlayer,
     #[pyo3(get, set)]
     pub agent_cards: Vec<PyCard>,
+    #[pyo3(get)]
+    pub agent_sideboard: Vec<PySideboardCard>,
     #[pyo3(get, set)]
     pub agent_permanents: Vec<PyPermanent>,
     #[pyo3(get, set)]
@@ -1613,6 +1696,11 @@ impl From<Observation> for PyObservation {
             action_space: value.action_space.into(),
             agent: value.agent.into(),
             agent_cards: value.agent_cards.into_iter().map(PyCard::from).collect(),
+            agent_sideboard: value
+                .agent_sideboard
+                .into_iter()
+                .map(PySideboardCard::from)
+                .collect(),
             agent_permanents: value
                 .agent_permanents
                 .into_iter()
@@ -1649,6 +1737,11 @@ impl From<PyObservation> for Observation {
             action_space: value.action_space.into(),
             agent: value.agent.into(),
             agent_cards: value.agent_cards.into_iter().map(CardData::from).collect(),
+            agent_sideboard: value
+                .agent_sideboard
+                .into_iter()
+                .map(SideboardCardData::from)
+                .collect(),
             agent_permanents: value
                 .agent_permanents
                 .into_iter()
@@ -1683,195 +1776,12 @@ impl From<PyObservation> for Observation {
 #[pymethods]
 impl PyObservation {
     fn validate(&self) -> bool {
-        if self.agent.id == self.opponent.id {
-            return false;
-        }
-        if self.agent.is_agent == self.opponent.is_agent {
-            return false;
-        }
-
-        for card in &self.agent_cards {
-            if card.owner_id != self.agent.id {
-                return false;
-            }
-        }
-        for card in &self.opponent_cards {
-            if card.owner_id != self.opponent.id {
-                return false;
-            }
-        }
-        for permanent in &self.agent_permanents {
-            if permanent.controller_id != self.agent.id {
-                return false;
-            }
-        }
-        for permanent in &self.opponent_permanents {
-            if permanent.controller_id != self.opponent.id {
-                return false;
-            }
-        }
-
-        true
+        Observation::from(self.clone()).validate()
     }
 
     #[allow(non_snake_case)]
     fn toJSON(&self) -> String {
-        fn player_json(player: &PyPlayer) -> Value {
-            json!({
-                "player_index": player.player_index,
-                "id": player.id,
-                "is_active": player.is_active,
-                "is_agent": player.is_agent,
-                "life": player.life,
-                "zone_counts": player.zone_counts,
-            })
-        }
-
-        fn card_json(card: &PyCard) -> Value {
-            json!({
-                "id": card.id,
-                "registry_key": card.registry_key,
-                "name": card.name,
-                "zone": card.zone as i32,
-                "owner_id": card.owner_id,
-                "power": card.power,
-                "toughness": card.toughness,
-                "card_types": {
-                    "is_castable": card.card_types.is_castable,
-                    "is_permanent": card.card_types.is_permanent,
-                    "is_non_land_permanent": card.card_types.is_non_land_permanent,
-                    "is_non_creature_permanent": card.card_types.is_non_creature_permanent,
-                    "is_spell": card.card_types.is_spell,
-                    "is_creature": card.card_types.is_creature,
-                    "is_land": card.card_types.is_land,
-                    "is_planeswalker": card.card_types.is_planeswalker,
-                    "is_enchantment": card.card_types.is_enchantment,
-                    "is_artifact": card.card_types.is_artifact,
-                    "is_kindred": card.card_types.is_kindred,
-                    "is_battle": card.card_types.is_battle,
-                },
-                "keywords": keywords_json(&card.keywords),
-                "mana_cost": {
-                    "cost": card.mana_cost.cost,
-                    "mana_value": card.mana_cost.mana_value,
-                }
-            })
-        }
-
-        fn keywords_json(keywords: &PyKeywords) -> Value {
-            json!({
-                "flying": keywords.flying,
-                "reach": keywords.reach,
-                "haste": keywords.haste,
-                "flash": keywords.flash,
-                "vigilance": keywords.vigilance,
-                "trample": keywords.trample,
-                "first_strike": keywords.first_strike,
-                "double_strike": keywords.double_strike,
-                "deathtouch": keywords.deathtouch,
-                "lifelink": keywords.lifelink,
-                "defender": keywords.defender,
-                "menace": keywords.menace,
-                "hexproof": keywords.hexproof,
-            })
-        }
-
-        fn permanent_json(permanent: &PyPermanent) -> Value {
-            json!({
-                "id": permanent.id,
-                "controller_id": permanent.controller_id,
-                "tapped": permanent.tapped,
-                "damage": permanent.damage,
-                "is_summoning_sick": permanent.is_summoning_sick,
-                "keywords": keywords_json(&permanent.keywords),
-            })
-        }
-
-        fn stack_target_json(target: &PyStackTarget) -> Value {
-            json!({
-                "kind": target.kind as i32,
-                "player_id": target.player_id,
-                "permanent_id": target.permanent_id,
-                "stack_object_id": target.stack_object_id,
-            })
-        }
-
-        fn stack_object_json(stack_object: &PyStackObject) -> Value {
-            json!({
-                "stack_object_id": stack_object.stack_object_id,
-                "kind": stack_object.kind as i32,
-                "controller_id": stack_object.controller_id,
-                "source_card_registry_key": stack_object.source_card_registry_key,
-                "source_permanent_id": stack_object.source_permanent_id,
-                "ability_index": stack_object.ability_index,
-                "targets": stack_object.targets.iter().map(stack_target_json).collect::<Vec<_>>(),
-            })
-        }
-
-        json!({
-            "game_over": self.game_over,
-            "won": self.won,
-            "turn": {
-                "turn_number": self.turn.turn_number,
-                "phase": self.turn.phase as i32,
-                "step": self.turn.step as i32,
-                "active_player_id": self.turn.active_player_id,
-                "agent_player_id": self.turn.agent_player_id,
-            },
-            "action_space": {
-                "type": self.action_space.action_space_type as i32,
-                "actions": self
-                    .action_space
-                    .actions
-                    .iter()
-                    .map(|action| {
-                        json!({
-                            "type": action.action_type as i32,
-                            "focus": action.focus,
-                        })
-                    })
-                    .collect::<Vec<_>>(),
-            },
-            "agent": player_json(&self.agent),
-            "agent_cards": self.agent_cards.iter().map(card_json).collect::<Vec<_>>(),
-            "agent_permanents": self
-                .agent_permanents
-                .iter()
-                .map(permanent_json)
-                .collect::<Vec<_>>(),
-            "opponent": player_json(&self.opponent),
-            "opponent_cards": self.opponent_cards.iter().map(card_json).collect::<Vec<_>>(),
-            "opponent_permanents": self
-                .opponent_permanents
-                .iter()
-                .map(permanent_json)
-                .collect::<Vec<_>>(),
-            "stack_objects": self
-                .stack_objects
-                .iter()
-                .map(stack_object_json)
-                .collect::<Vec<_>>(),
-            "recent_events": self
-                .recent_events
-                .iter()
-                .map(|event| {
-                    json!({
-                        "event_type": event.event_type as i32,
-                        "source_kind": event.source_kind as i32,
-                        "source_id": event.source_id,
-                        "target_kind": event.target_kind as i32,
-                        "target_id": event.target_id,
-                        "amount": event.amount,
-                        "controller_id": event.controller_id,
-                        "from_zone": event.from_zone,
-                        "to_zone": event.to_zone,
-                        "source_incarnation": event.source_incarnation,
-                        "target_incarnation": event.target_incarnation,
-                    })
-                })
-                .collect::<Vec<_>>(),
-        })
-        .to_string()
+        Observation::from(self.clone()).to_json()
     }
 }
 
@@ -3251,7 +3161,9 @@ impl PyEnv {
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let rust_obs = Observation::from(obs);
         let config = ObservationEncoderConfig::default();
-        let encoded = env.encode_observation(&rust_obs);
+        let encoded = env
+            .encode_observation(&rust_obs)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
         drop(env);
         let out = encoded_to_dict(py, encoded, &config)?;
         Ok(out.into_any().unbind())
@@ -3270,11 +3182,38 @@ impl PyEnv {
 
         let rust_obs = Observation::from(obs);
         let config = ObservationEncoderConfig::default();
-        let encoded = env.encode_observation(&rust_obs);
+        let encoded = env
+            .encode_observation(&rust_obs)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
         drop(env);
 
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfig> {
+    let packs = [
+        crate::semantic::SemanticPack::two_deck(),
+        crate::semantic::SemanticPack::jeong_increment(),
+    ];
+    for pack in packs {
+        let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;
+        if pack.pack_key == pack_key {
+            let config = pack
+                .player_config(deck_key, deck_key)
+                .map_err(|error| PyValueError::new_err(error.to_string()))?;
+            return Ok(PyPlayerConfig {
+                name: config.name,
+                decklist: config.decklist.into_iter().collect(),
+                sideboard: config.sideboard.into_iter().collect(),
+            });
+        }
+    }
+    Err(PyValueError::new_err(format!(
+        "unknown authored pack {pack_key:?}"
+    )))
 }
 
 #[cfg(feature = "python")]
@@ -3293,10 +3232,12 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<EventEntityKindEnum>()?;
 
     m.add_class::<PyPlayerConfig>()?;
+    m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;
     m.add_class::<PyCard>()?;
+    m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;
     m.add_class::<PyKeywords>()?;
     m.add_class::<PyManaCost>()?;

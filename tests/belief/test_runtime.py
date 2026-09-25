@@ -15,7 +15,8 @@ from manabot.infra.hypers import AgentHypers
 from manabot.model import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent, make_player
-from managym.possible_worlds import PossibleWorldSpace
+from managym.decision import SEMANTIC_DECISION_VERSION
+from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
 from tests.belief.support import fixture_torch_observation
 
 
@@ -56,7 +57,7 @@ class NativeContractEngine:
         return json.dumps(
             {
                 "identity": {
-                    "schema_version": 4,
+                    "schema_version": SEMANTIC_DECISION_VERSION,
                     "revision": self.revision,
                     "viewer": viewer,
                     "viewer_state_hash": self.viewer_hash,
@@ -64,7 +65,7 @@ class NativeContractEngine:
                 "viewer_state": {},
                 "events": [],
                 "decision": {
-                    "schema_version": 4,
+                    "schema_version": SEMANTIC_DECISION_VERSION,
                     "revision": self.revision,
                     "actor": 0,
                     "fingerprint": "runtime-frame-17",
@@ -79,17 +80,18 @@ class NativeContractEngine:
     def possible_world_space_json(self, viewer: int) -> str:
         return json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": POSSIBLE_WORLD_SPACE_VERSION,
                 "identity": "runtime-space-17",
                 "viewer": viewer,
                 "opponent": 1 - viewer,
                 "source_observation": {
-                    "schema_version": 4,
+                    "schema_version": SEMANTIC_DECISION_VERSION,
                     "revision": self.revision,
                     "viewer": viewer,
                     "viewer_state_hash": self.viewer_hash,
                 },
                 "hand_size": 2,
+                "known_hand": {},
                 "pool": {
                     "Counterspell": 2,
                     "Lightning Bolt": 2,

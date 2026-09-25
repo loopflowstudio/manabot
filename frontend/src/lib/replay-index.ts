@@ -270,6 +270,7 @@ export function assertViewerSafeReplayProjection(
       || row.frame.revision !== row.revision
       || row.frame.projection.agent.player_index !== row.viewer
       || row.frame.projection.opponent.hand.length !== 0
+      || (row.frame.projection.opponent.sideboard?.length ?? 0) !== 0
       || row.offer.id !== row.offer_id
       || row.offer.actor !== row.viewer
       || selected === undefined

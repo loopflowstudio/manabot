@@ -26,6 +26,41 @@ fn projections() -> (CanonicalReplayProjectionV1, CanonicalReplayProjectionV1) {
 }
 
 #[test]
+fn recorded_boundaries_reject_opponent_sideboard_candidates() {
+    use managym::study::{RecordedDecisionInput, StudyDecisionIndex};
+    fn expose_candidate(payload: &str, rows: &str) -> serde_json::Value {
+        let mut value: serde_json::Value = serde_json::from_str(payload).unwrap();
+        value[rows][0]["frame"]["projection"]["opponent"]["sideboard"] = serde_json::json!([{
+            "candidate_id": 83, "owner_id": 1, "registry_key": 7,
+            "name": "Accumulate Wisdom"
+        }]);
+        value
+    }
+    let replay: CanonicalReplayProjectionV1 =
+        serde_json::from_value(expose_candidate(PLAYER_ZERO, "decisions")).unwrap();
+    let study: StudyArtifact =
+        serde_json::from_value(expose_candidate(STUDY, "landmarks")).unwrap();
+    let input: RecordedDecisionInput = serde_json::from_value(expose_candidate(
+        include_str!("../../protocol/fixtures/recorded-match-decisions-curated.json"),
+        "decisions",
+    ))
+    .unwrap();
+    let index: StudyDecisionIndex = serde_json::from_value(expose_candidate(
+        include_str!("../../protocol/fixtures/study-decision-index-curated.json"),
+        "decisions",
+    ))
+    .unwrap();
+    for result in [
+        replay.validate(),
+        study.validate(),
+        input.validate(),
+        index.validate(),
+    ] {
+        assert!(result.unwrap_err().contains("sideboard candidates"));
+    }
+}
+
+#[test]
 fn safe_projections_interleave_into_one_complete_authority_timeline() {
     let (player_zero, player_one) = projections();
     assert_eq!(player_zero.viewer.0, 0);

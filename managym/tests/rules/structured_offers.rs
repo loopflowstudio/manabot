@@ -4,7 +4,6 @@ use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
         observation::Observation,
-        observation_encoder::ObservationEncoderConfig,
         structured_offer::{
             AtomicCommand, BoundTarget, Candidate, CandidateId, CandidateSource, CandidateSourceId,
             CandidateValue, ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId,
@@ -251,7 +250,7 @@ fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
         .expect("structured priority offers");
     let (_, candidates) = select_step(cast_offer(&set));
     assert_eq!(candidates.len(), 35, "33 creatures plus both players");
-    assert!(candidates.len() > ObservationEncoderConfig::default().max_actions);
+    assert!(candidates.len() > 32);
     assert_eq!(
         candidates
             .iter()

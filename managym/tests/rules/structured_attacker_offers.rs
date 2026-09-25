@@ -4,7 +4,6 @@ use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
         observation::Observation,
-        observation_encoder::ObservationEncoderConfig,
         structured_offer::{
             Candidate, CandidateId, CandidateSource, CandidateSourceId, CandidateValue,
             ChoiceAnswer, ChoiceStep, InteractionOffer, ObjectRenderId, OfferId, OfferSubmission,
@@ -282,7 +281,7 @@ fn structured_attacker_offer_exhausts_two_deck_declarations_past_32() {
         let declaration_count = 1_usize << candidates.len();
         assert_eq!(declaration_count, 64);
         assert!(
-            declaration_count > ObservationEncoderConfig::default().max_actions,
+            declaration_count > 32,
             "fixture must exceed the legacy tensor width"
         );
         assert_eq!(

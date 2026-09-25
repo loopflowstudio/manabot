@@ -257,6 +257,30 @@ impl Game {
     ) -> bool {
         let owner = self.state.cards[card].owner;
 
+        if old_zone == Some(ZoneType::Hand) && to_zone != ZoneType::Hand {
+            let definition = self.state.cards[card].definition_id;
+            let count = self.state.players[owner.0]
+                .known_hand
+                .get(&definition)
+                .copied()
+                .unwrap_or(0);
+            // Public departures remove one known minimum, regardless of which
+            // identical copy left. A secret departure invalidates all facts:
+            // retaining a definition-specific decrement would leak that card.
+            if to_zone == ZoneType::Library {
+                let definitions: Vec<_> = self.state.players[owner.0]
+                    .known_hand
+                    .keys()
+                    .copied()
+                    .collect();
+                for definition in definitions {
+                    self.set_known_hand_count(owner, definition, 0);
+                }
+            } else if count > 0 {
+                self.set_known_hand_count(owner, definition, count - 1);
+            }
+        }
+
         let mut event_controller = owner;
         let departing_lki = if old_zone == Some(ZoneType::Battlefield) {
             self.snapshot_current_permanent(card)

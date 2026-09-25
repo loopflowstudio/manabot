@@ -84,6 +84,28 @@ class TestWilsonBound:
 
 
 class TestRunEvaluation:
+    def test_seat_balance_restores_original_setup_after_swapped_game(self):
+        hypers = build_hypers(
+            match={
+                "hero_deck": {"Mountain": 8},
+                "villain_deck": {"Island": 16},
+                "hero_sideboard": {"Firebending Lesson": 1},
+            }
+        )
+        metrics = run_evaluation(
+            FirstValidAgent(),
+            ObservationSpace(hypers.observation),
+            Match(hypers.match),
+            Reward(hypers.reward),
+            num_games=4,
+            opponent_policy="passive",
+            deterministic=True,
+            seed=0,
+            seat_balanced=True,
+        )
+        assert metrics["num_games"] == 4
+        assert metrics["wins"] == 0
+
     def test_evaluation_returns_expected_keys(self):
         hypers = build_hypers(
             experiment={"seed": 7},

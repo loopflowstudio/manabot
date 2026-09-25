@@ -331,6 +331,15 @@ pub struct LegacyPermanentView {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct SideboardCardView {
+    pub candidate_id: u32,
+    pub owner_id: u32,
+    pub registry_key: u32,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LegacyPlayerView {
     pub player_index: u8,
     pub id: u32,
@@ -339,6 +348,14 @@ pub struct LegacyPlayerView {
     pub life: i32,
     pub zone_counts: BTreeMap<String, u32>,
     pub library_count: u32,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub known_hand: BTreeMap<String, u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sideboard_counts: BTreeMap<String, u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub remaining_sideboard_counts: BTreeMap<String, u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sideboard: Vec<SideboardCardView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_hidden_count: Option<u32>,
     pub hand: Vec<LegacyCardView>,
@@ -361,6 +378,8 @@ pub struct LegacyTurnView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyHeroObservation {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub definition_names: BTreeMap<String, String>,
     pub game_over: bool,
     pub won: bool,
     pub turn: LegacyTurnView,

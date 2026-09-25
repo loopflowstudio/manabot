@@ -5,7 +5,6 @@ import pytest
 
 from manabot.env.observation import ObservationSpace
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
 import managym
 
 
@@ -13,8 +12,8 @@ def _engine() -> managym.Env:
     engine = managym.Env(seed=215, skip_trivial=True)
     engine.reset(
         [
-            managym.PlayerConfig("gw", dict(GW_ALLIES_DECK)),
-            managym.PlayerConfig("ur", dict(UR_LESSONS_DECK)),
+            managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
+            for key in ("gw_allies", "ur_lessons")
         ]
     )
     return engine
@@ -98,3 +97,31 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
         encoded[key].shape == shape for key, shape in ObservationSpace().shapes.items()
     )
     assert np.asarray(encoded["agent_cards_valid"]).sum() >= 1
+
+
+def test_available_sideboard_programs_are_visible_before_learn_in_both_seats():
+    for keys in (("ur_lessons", "gw_allies"), ("gw_allies", "ur_lessons")):
+        engine = managym.Env(seed=0, skip_trivial=False)
+        engine.reset(
+            [
+                managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
+                for key in keys
+            ]
+        )
+        pack = BoundSemanticPack.from_env(engine)
+        for viewer, key in enumerate(keys):
+            observation = engine.observation_for_player(viewer)
+            assert int(observation.action_space.action_space_type) != int(
+                managym.ActionSpaceEnum.LEARN
+            )
+            projection = pack.project_observation(observation)
+            mask = (
+                projection.object_roles == pack.schema.object_roles["agent_sideboard"]
+            )
+            assert mask.sum() == (3 if key == "ur_lessons" else 2)
+            for row in projection.object_definition_rows[mask]:
+                assert pack.program_rows(int(row))
+            assert all(
+                card.owner_id == observation.agent.id
+                for card in observation.agent_sideboard
+            )

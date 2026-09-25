@@ -118,9 +118,9 @@ class RecordedDecisionInput(ProtocolModel):
             or decision.played.offer_id != decision.offer.id
         ):
             raise ValueError(f"{context}: played command identity drifted")
-        if frame.projection.opponent.hand:
+        if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
             raise ValueError(
-                f"{context}: opponent-private hand identities are forbidden"
+                f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
 
 
@@ -228,9 +228,9 @@ class StudyDecisionIndex(ProtocolModel):
             or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
         ):
             raise ValueError(f"{context}: frame asset pack identity drifted")
-        if frame.projection.opponent.hand:
+        if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
             raise ValueError(
-                f"{context}: opponent-private hand identities are forbidden"
+                f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
         prompt = frame.prompt
         if (
@@ -354,9 +354,9 @@ class StudyArtifact(ProtocolModel):
             or frame.asset_pack.manifest_sha256 != pack.asset_manifest_sha256
         ):
             raise ValueError(f"{context}: frame asset pack identity drifted")
-        if frame.projection.opponent.hand:
+        if frame.projection.opponent.hand or frame.projection.opponent.sideboard:
             raise ValueError(
-                f"{context}: opponent-private hand identities are forbidden"
+                f"{context}: opponent-private hand identities or sideboard candidates are forbidden"
             )
         if (
             frame.prompt is None

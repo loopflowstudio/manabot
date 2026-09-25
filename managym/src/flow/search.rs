@@ -4,13 +4,16 @@
 
 use std::collections::BTreeSet;
 
-use rand::{Rng, SeedableRng};
+use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
     flow::game::Game,
-    state::{game_object::PlayerId, zone::ZoneType},
+    state::{
+        game_object::{CardId, PlayerId},
+        zone::ZoneType,
+    },
 };
 
 /// SplitMix64-style mix of two u64s into a stream-independent sub-seed.
@@ -33,27 +36,70 @@ impl Game {
 
     /// Sample one world consistent with `perspective`'s observation.
     ///
-    /// Hidden information in this engine is exactly: the opponent's hand, and
-    /// the order of both libraries (decklists are known to both players; all
-    /// other zones — battlefield, graveyard, stack, exile, command — are
-    /// public). Accordingly:
-    /// - the opponent's hand is replaced by a uniform sample of |hand| cards
-    ///   from their unseen pool (hand ∪ library), with the remainder becoming
-    ///   their shuffled library;
+    /// Resample the opponent's residual unknown hand and both library orders.
+    /// Decklists are public; outside sideboard copies never enter this pool.
+    /// Accordingly:
+    /// - public known-hand definition counts are reserved; unknown slots are
+    ///   sampled uniformly from the residual hand ∪ library pool, with the
+    ///   remainder becoming their shuffled library;
     /// - `perspective`'s own library is reshuffled (its order is unknown to
     ///   them, but its contents are determined by the public zones + hand).
     ///
-    /// All public state — including the current action space — is preserved.
+    /// Public facts and own choices are preserved; opponent Learn choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
         self.journal_zones();
-        self.state.zones.resample_hidden(opponent, &mut rng);
+        let (mut known, mut residual) = self.hidden_hand_partition(opponent);
+        let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
+        residual.shuffle(&mut rng);
+        let library = residual.split_off(unknown_slots);
+        known.extend(residual);
+        self.state.zones.reassign_hidden(opponent, known, library);
         self.state
             .zones
             .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
 
         self.repin_revealed_library_cards();
+        if self.current_action_space.as_ref().is_some_and(|space| {
+            space.player == Some(opponent) && space.kind == ActionSpaceKind::Learn
+        }) {
+            if let Some(space) = self.suspended_decision_action_space() {
+                self.publish_action_space(space);
+            }
+        }
+    }
+
+    /// Canonical physical witnesses for public definition counts, plus the
+    /// residual unseen pool. Never pins the physical copy that was revealed.
+    pub(crate) fn hidden_hand_partition(&self, player: PlayerId) -> (Vec<CardId>, Vec<CardId>) {
+        let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
+            .into_iter()
+            .flat_map(|zone| self.state.zones.zone_cards(zone, player).iter().copied())
+            .collect();
+        pool.sort_unstable_by_key(|card| card.0);
+        let mut counts = self.state.players[player.0].known_hand.clone();
+        let mut known = Vec::new();
+        let mut residual = Vec::new();
+        for card in pool {
+            if let Some(count) = counts.get_mut(&self.state.cards[card].definition_id) {
+                if *count > 0 {
+                    known.push(card);
+                    *count -= 1;
+                    continue;
+                }
+            }
+            residual.push(card);
+        }
+        assert!(
+            counts.values().all(|count| *count == 0),
+            "known hand must be available in unseen pool"
+        );
+        assert!(
+            known.len() <= self.state.zones.size(ZoneType::Hand, player),
+            "known hand exceeds hand size"
+        );
+        (known, residual)
     }
 
     pub(crate) fn refresh_priority_actions(&mut self, player: PlayerId) {

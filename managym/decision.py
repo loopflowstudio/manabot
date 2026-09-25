@@ -17,16 +17,19 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
-SEMANTIC_DECISION_VERSION: int = 4
+SEMANTIC_DECISION_VERSION: int = 5
 
 PUBLIC_COMMITMENT_KINDS: tuple[str, ...] = (
     "cast",
-    "decline_discard",
+    "decline_learn",
     "discard",
+    "learn_take_lesson",
     "pass_priority",
     "play_land",
 )
-_CARD_PUBLIC_COMMITMENT_KINDS = frozenset({"cast", "discard", "play_land"})
+_CARD_PUBLIC_COMMITMENT_KINDS = frozenset(
+    {"cast", "discard", "learn_take_lesson", "play_land"}
+)
 
 
 class SemanticContractError(Exception):
@@ -35,6 +38,15 @@ class SemanticContractError(Exception):
     def __init__(self, message: str, *, code: str | None = None) -> None:
         super().__init__(message)
         self.code = code
+
+
+def _validate_version(version: int) -> None:
+    if type(version) is not int or version != SEMANTIC_DECISION_VERSION:
+        raise SemanticContractError(
+            f"unsupported semantic decision schema {version!r}; "
+            f"expected {SEMANTIC_DECISION_VERSION}",
+            code="unsupported_schema",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,14 +85,7 @@ class PublicCommitment:
             raise SemanticContractError(
                 f"{kind} public commitment has non-canonical fields"
             )
-        card = payload.get("card")
-        if kind in _CARD_PUBLIC_COMMITMENT_KINDS and (
-            not isinstance(card, str) or not card
-        ):
-            raise SemanticContractError(
-                f"{kind} public commitment needs a canonical card name"
-            )
-        return cls(kind=str(kind), card=card if isinstance(card, str) else None)
+        return cls(kind=kind, card=payload.get("card"))
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"kind": self.kind}
@@ -101,11 +106,18 @@ class DecisionFrame:
     offers: tuple[Mapping[str, Any], ...]
     object_candidates: tuple[Mapping[str, Any], ...]
 
+    def __post_init__(self) -> None:
+        _validate_version(self.schema_version)
+        for offer in self.offers:
+            commitment = offer.get("public_commitment")
+            if commitment is not None:
+                PublicCommitment.from_payload(commitment)
+
     @classmethod
     def from_json(cls, text: str) -> "DecisionFrame":
         payload = json.loads(text)
         return cls(
-            schema_version=int(payload["schema_version"]),
+            schema_version=payload["schema_version"],
             revision=int(payload["revision"]),
             actor=int(payload["actor"]),
             fingerprint=str(payload["fingerprint"]),
@@ -164,10 +176,15 @@ class TransitionReceipt:
     events: tuple[str, ...]
     next_decision: str | None
 
+    def __post_init__(self) -> None:
+        _validate_version(self.schema_version)
+        if self.public_commitment is not None:
+            PublicCommitment.from_payload(self.public_commitment)
+
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> "TransitionReceipt":
         return cls(
-            schema_version=int(payload["schema_version"]),
+            schema_version=payload["schema_version"],
             before_revision=int(payload["before_revision"]),
             after_revision=int(payload["after_revision"]),
             command_id=str(payload["command_id"]),
@@ -189,6 +206,9 @@ class Observation:
     events: tuple[str, ...]
     decision: DecisionFrame | None
 
+    def __post_init__(self) -> None:
+        _validate_version(self.schema_version)
+
     @classmethod
     def from_json(cls, text: str) -> "Observation":
         payload = json.loads(text)
@@ -197,7 +217,7 @@ class Observation:
         if payload["decision"] is not None:
             decision = DecisionFrame.from_json(json.dumps(payload["decision"]))
         return cls(
-            schema_version=int(identity["schema_version"]),
+            schema_version=identity["schema_version"],
             revision=int(identity["revision"]),
             viewer=int(identity["viewer"]),
             viewer_state_hash=str(identity["viewer_state_hash"]),

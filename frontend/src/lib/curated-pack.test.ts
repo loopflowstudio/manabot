@@ -12,11 +12,20 @@ describe('curated matchup pack', () => {
   it('freezes the current decks and every reachable identity', () => {
     expect(CURATED_PACK.pack).toEqual({
       id: 'tla-ur-lessons-vs-gw-allies',
-      version: '1.0.0',
+      version: '2.0.0',
       title: 'UR Lessons vs GW Allies',
     });
     expect(CURATED_PACK.matchup.hero.card_count).toBe(41);
     expect(CURATED_PACK.matchup.villain.card_count).toBe(40);
+    expect(CURATED_PACK.matchup.hero.sideboard).toEqual({
+      'Accumulate Wisdom': 1,
+      'Firebending Lesson': 1,
+      "It'll Quench Ya!": 1,
+    });
+    expect(CURATED_PACK.matchup.villain.sideboard).toEqual({
+      'Fancy Footwork': 1,
+      'Yip Yip!': 1,
+    });
     expect(Object.keys(CURATED_PACK.identities)).toHaveLength(31);
     expect(CURATED_PACK.matchup.reachable_tokens).toEqual(['Ally', 'Clue']);
 
@@ -47,5 +56,13 @@ describe('curated matchup pack', () => {
     invalid.identities.Island.treatment.image = 'https://example.test/island.png';
 
     expect(() => validateCuratedPack(invalid)).toThrow(/treatment must be local/);
+  });
+
+  it('requires an explicit sideboard with positive counts', () => {
+    const invalid = structuredClone(CURATED_PACK) as unknown as Record<string, any>;
+    delete invalid.matchup.hero.sideboard;
+    expect(() => validateCuratedPack(invalid)).toThrow(/sideboard must be an object/);
+    invalid.matchup.hero.sideboard = { Island: 0 };
+    expect(() => validateCuratedPack(invalid)).toThrow(/must be a positive integer/);
   });
 });

@@ -206,10 +206,10 @@ jobs:
         run: cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests
 
       - name: Reproduce checked conformance artifacts
-        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-v1
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-v2
 
       - name: Run bounded valid-action fuzzing
-        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-v2 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
 
       - name: Preserve exact fuzz replay seeds
         if: failure()
@@ -276,8 +276,8 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
         uses: actions/upload-artifact@v4
         with:
-          name: visual-references-v3
-          path: frontend/e2e/visual-references/v3
+          name: visual-references-v4
+          path: frontend/e2e/visual-references/v4
           if-no-files-found: error
 
       - name: Upload visual failure evidence

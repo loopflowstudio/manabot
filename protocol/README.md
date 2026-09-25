@@ -15,6 +15,30 @@ cd managym
 cargo run --example export_experience_protocol -- ../protocol/experience-v1.schema.json
 ```
 
+The projection is also embedded in replay, Study, and advice contracts. After
+changing its fields, regenerate these schemas from the repository root too:
+
+```bash
+cargo run --manifest-path managym/Cargo.toml --example export_canonical_replay -- protocol/canonical-replay-v1.schema.json
+cargo run --manifest-path managym/Cargo.toml --example export_study_protocol -- protocol/study-v1.schema.json
+cargo run --manifest-path managym/Cargo.toml --example export_study_index > protocol/study-index-v1.schema.json
+cargo run --manifest-path managym/Cargo.toml --example export_study_recorded_decisions > protocol/study-recorded-decisions-v1.schema.json
+uv run --extra play python - <<'PY'
+import json
+from pathlib import Path
+from etude.advice import advice_schema
+
+Path("protocol/advice-v1.schema.json").write_text(
+    json.dumps(advice_schema(), indent=2, sort_keys=True) + "\n"
+)
+PY
+```
+
+Regenerating schemas does not regenerate historical fixtures or certify their
+compatibility with changed rules. Replay and Study privacy validators reject
+opponent hand identities and private sideboard candidates; public sideboard
+definition counts remain allowed.
+
 The checked-in `fixtures/bolt-target.json` is consumed directly by all three
 languages:
 

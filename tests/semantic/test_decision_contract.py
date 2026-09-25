@@ -9,7 +9,13 @@ from manabot.semantic.decision_contract import (
     SemanticDecisionContract,
 )
 import managym
-from managym.decision import SEMANTIC_DECISION_VERSION
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    DecisionFrame,
+    Observation,
+    PublicCommitment,
+    TransitionReceipt,
+)
 
 
 def _env() -> managym.Env:
@@ -107,3 +113,69 @@ def test_contract_rejects_a_locally_fabricated_offer_id() -> None:
     contract = SemanticDecisionContract.from_env(env)
     with pytest.raises(SemanticContractError, match="absent"):
         contract.command(2**31 - 1)
+
+
+@pytest.mark.parametrize("version", [1, 4, 6, "5", 5.0, True])
+def test_readers_reject_incompatible_semantic_versions(version) -> None:
+    env = _env()
+    frame = json.loads(env.semantic_decision_frame_json())
+    frame["schema_version"] = version
+    observation = json.loads(env.semantic_observation_json(0))
+    observation["identity"]["schema_version"] = version
+    receipt = {
+        "schema_version": version,
+        "before_revision": 1,
+        "after_revision": 2,
+        "command_id": "old-world",
+        "public_commitment": None,
+        "events": [],
+        "next_decision": None,
+    }
+    for read in (
+        lambda: DecisionFrame.from_json(json.dumps(frame)),
+        lambda: Observation.from_json(json.dumps(observation)),
+        lambda: TransitionReceipt.from_payload(receipt),
+    ):
+        with pytest.raises(SemanticContractError, match="unsupported semantic"):
+            read()
+
+
+@pytest.mark.parametrize(
+    "commitment",
+    [
+        {"kind": "decline_discard"},
+        {"kind": "learn_take_lesson"},
+        {"kind": "learn_take_lesson", "card": ""},
+        {"kind": "learn_take_lesson", "card": "Pop Quiz", "candidate": 99},
+        {"kind": "decline_learn", "card": "Pop Quiz"},
+    ],
+)
+def test_frame_and_receipt_validate_public_commitments(commitment) -> None:
+    frame = json.loads(_env().semantic_decision_frame_json())
+    frame["offers"][0]["public_commitment"] = commitment
+    with pytest.raises(SemanticContractError):
+        DecisionFrame.from_json(json.dumps(frame))
+    with pytest.raises(SemanticContractError):
+        TransitionReceipt.from_payload(
+            {
+                "schema_version": SEMANTIC_DECISION_VERSION,
+                "before_revision": 1,
+                "after_revision": 2,
+                "command_id": "bad-commitment",
+                "public_commitment": commitment,
+                "events": [],
+                "next_decision": None,
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "commitment",
+    [
+        {"kind": "learn_take_lesson", "card": "Accumulate Wisdom"},
+        {"kind": "decline_learn"},
+        {"kind": "discard", "card": "Island"},
+    ],
+)
+def test_learn_commitments_round_trip(commitment) -> None:
+    assert PublicCommitment.from_payload(commitment).to_payload() == commitment

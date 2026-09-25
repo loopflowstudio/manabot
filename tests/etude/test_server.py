@@ -101,7 +101,6 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         "protocol",
                         "revision",
                         "content_hash",
-                        "asset_manifest_hash",
                         "status",
                         "prompt",
                         "offers",
@@ -109,6 +108,10 @@ def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
                         "stops",
                     ):
                         assert frame[key] == fixture_frame[key]
+                    # The retained fixture pins historical assets; the live
+                    # custom match uses the installed presentation catalog.
+                    assert frame["asset_manifest_hash"] == server.ASSET_MANIFEST_HASH
+                    assert frame.get("asset_pack") is None
                     command_id = PROTOCOL_V1_BOLT_FIXTURE["command"]["command_id"]
 
                 command = _command(frame, offer, command_id)

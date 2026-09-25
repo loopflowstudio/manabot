@@ -506,7 +506,7 @@ fn action_kind_name(kind: ActionSpaceKind) -> &'static str {
         ActionSpaceKind::LookAndSelect => "look_and_select",
         ActionSpaceKind::PayOrNot => "pay_or_not",
         ActionSpaceKind::Modal => "modal",
-        ActionSpaceKind::DiscardThenDraw => "discard_then_draw",
+        ActionSpaceKind::Learn => "learn",
         ActionSpaceKind::Waterbend => "waterbend",
     }
 }

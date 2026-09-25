@@ -6,9 +6,9 @@ use crate::{
 };
 
 pub const PLAYER_DIM: usize = 28;
-pub const CARD_DIM: usize = 38;
+pub const CARD_DIM: usize = 39;
 pub const PERMANENT_DIM: usize = 24;
-pub const ACTION_TYPE_DIM: usize = 14;
+pub const ACTION_TYPE_DIM: usize = 16;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
@@ -29,7 +29,7 @@ impl Default for ObservationEncoderConfig {
         Self {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
-            max_actions: 32,
+            max_actions: 64,
             max_focus_objects: 2,
             max_events: 32,
         }
@@ -101,6 +101,11 @@ pub struct EncodedObservationMut<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
+    Capacity {
+        field: &'static str,
+        capacity: usize,
+        actual: usize,
+    },
     InvalidLength {
         field: &'static str,
         expected: usize,
@@ -111,6 +116,14 @@ pub enum ObservationEncodeError {
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Capacity {
+                field,
+                capacity,
+                actual,
+            } => write!(
+                f,
+                "observation capacity exceeded: {field} {actual} > {capacity}"
+            ),
             Self::InvalidLength {
                 field,
                 expected,
@@ -125,7 +138,10 @@ impl fmt::Display for ObservationEncodeError {
 
 impl std::error::Error for ObservationEncodeError {}
 
-pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedObservation {
+pub fn encode(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+) -> Result<EncodedObservation, ObservationEncodeError> {
     let mut encoded = EncodedObservation {
         agent_player: vec![0.0; PLAYER_DIM],
         opponent_player: vec![0.0; PLAYER_DIM],
@@ -166,8 +182,8 @@ pub fn encode(obs: &Observation, config: &ObservationEncoderConfig) -> EncodedOb
         events_valid: &mut encoded.events_valid,
     };
 
-    encode_into(obs, config, out).expect("internal encode buffer lengths are always valid");
-    encoded
+    encode_into(obs, config, out)?;
+    Ok(encoded)
 }
 
 pub fn encode_into(
@@ -225,6 +241,50 @@ pub fn encode_into(
     validate_buffer_len("actions_valid", out.actions_valid.len(), config.max_actions)?;
     validate_buffer_len("events_valid", out.events_valid.len(), config.max_events)?;
 
+    for (field, actual, capacity) in [
+        (
+            "agent_cards plus sideboard",
+            obs.agent_cards.len() + obs.agent_sideboard.len(),
+            config.max_cards_per_player,
+        ),
+        (
+            "opponent_cards",
+            obs.opponent_cards.len(),
+            config.max_cards_per_player,
+        ),
+        (
+            "agent_permanents",
+            obs.agent_permanents.len(),
+            config.max_permanents_per_player,
+        ),
+        (
+            "opponent_permanents",
+            obs.opponent_permanents.len(),
+            config.max_permanents_per_player,
+        ),
+        (
+            "actions",
+            obs.action_space.actions.len(),
+            config.max_actions,
+        ),
+    ] {
+        if actual > capacity {
+            return Err(ObservationEncodeError::Capacity {
+                field,
+                capacity,
+                actual,
+            });
+        }
+    }
+    for action in &obs.action_space.actions {
+        if action.focus.len() > config.max_focus_objects {
+            return Err(ObservationEncodeError::Capacity {
+                field: "action focus",
+                capacity: config.max_focus_objects,
+                actual: action.focus.len(),
+            });
+        }
+    }
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
     out.agent_cards.fill(0.0);
@@ -282,6 +342,16 @@ pub fn encode_into(
         &mut object_to_index,
         &mut current_object_index,
     );
+
+    for (offset, card) in obs.agent_sideboard.iter().enumerate() {
+        let index = obs.agent_cards.len() + offset;
+        let row = &mut out.agent_cards[index * CARD_DIM..(index + 1) * CARD_DIM];
+        row[7] = 1.0;
+        row[37] = 1.0; // outside inventory; all seven zone bits remain zero
+        row[38] = 1.0;
+        out.agent_cards_valid[index] = 1.0;
+        object_to_index.insert(card.candidate_id, 2 + index as i32);
+    }
 
     encode_permanents(
         &obs.agent_permanents,
@@ -427,7 +497,7 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[34] = bool_to_f32(card.kicker_cost > 0);
     out[35] = card.kicker_cost as f32 / 10.0;
     out[36] = bool_to_f32(card.keywords.hexproof);
-    out[37] = 1.0; // validity flag
+    out[38] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -591,8 +661,9 @@ mod tests {
     };
 
     use super::{
-        encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
-        EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
+        encode, encode_into, EncodedObservationMut, ObservationEncodeError,
+        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
+        ZONE_DIM,
     };
 
     fn sample_observation() -> Observation {
@@ -635,8 +706,12 @@ mod tests {
                 life: 20,
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
+                known_hand: Default::default(),
+                sideboard_counts: Default::default(),
+                remaining_sideboard_counts: Default::default(),
                 combat_mana: 0,
             },
+            agent_sideboard: Vec::new(),
             agent_cards: vec![
                 make_card(111, ZoneType::Hand, true, 2, 2, 1),
                 make_card(112, ZoneType::Battlefield, true, 3, 3, 2),
@@ -651,6 +726,9 @@ mod tests {
                 life: 18,
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
+                known_hand: Default::default(),
+                sideboard_counts: Default::default(),
+                remaining_sideboard_counts: Default::default(),
                 combat_mana: 0,
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
@@ -770,7 +848,7 @@ mod tests {
             max_events: 2,
         };
 
-        let encoded = encode(&obs, &config);
+        let encoded = encode(&obs, &config).unwrap();
 
         // Agent and opponent player vectors are populated with turn one-hot slices.
         assert_eq!(encoded.agent_player[9 + 2], 1.0);
@@ -811,6 +889,60 @@ mod tests {
         assert_eq!(encoded.events_valid, vec![1.0, 1.0]);
         assert_eq!(encoded.events[0], 3.0);
         assert_eq!(encoded.events[EVENT_DIM], 2.0);
+    }
+
+    #[test]
+    fn learn_outside_focus_is_complete_and_capacity_errors_are_explicit() {
+        use crate::agent::observation::SideboardCardData;
+        let mut obs = sample_observation();
+        obs.agent_sideboard = (0..40)
+            .map(|i| SideboardCardData {
+                candidate_id: 1000 + i,
+                owner_id: obs.agent.id,
+                registry_key: 7,
+                name: "Accumulate Wisdom".into(),
+            })
+            .collect();
+        obs.action_space.actions = obs
+            .agent_sideboard
+            .iter()
+            .map(|card| ActionOption {
+                action_type: ActionType::LearnTakeLesson,
+                focus: vec![card.candidate_id],
+                declared: None,
+            })
+            .collect();
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&obs, &config).unwrap();
+        let last = 39;
+        assert_eq!(encoded.actions[last * ACTION_DIM + 14], 1.0);
+        assert_eq!(
+            encoded.action_focus[last * config.max_focus_objects],
+            2 + obs.agent_cards.len() as i32 + last as i32
+        );
+        let row = (obs.agent_cards.len() + last) * CARD_DIM;
+        assert_eq!(encoded.agent_cards[row..row + ZONE_DIM], [0.0; ZONE_DIM]);
+        assert_eq!(encoded.agent_cards[row + 37], 1.0);
+        assert_eq!(encoded.agent_cards[row + CARD_DIM - 1], 1.0);
+        for undersized in [
+            ObservationEncoderConfig {
+                max_actions: 32,
+                ..config
+            },
+            ObservationEncoderConfig {
+                max_cards_per_player: 40,
+                ..config
+            },
+            ObservationEncoderConfig {
+                max_focus_objects: 0,
+                ..config
+            },
+        ] {
+            assert!(matches!(
+                encode(&obs, &undersized),
+                Err(ObservationEncodeError::Capacity { .. })
+            ));
+        }
     }
 
     #[test]

@@ -65,6 +65,33 @@ impl Game {
             }
         }
 
+        // Allocate outside copies after both main decks so setup preserves deal identity.
+        for (player_index, config) in player_configs.iter().enumerate() {
+            for (name, qty) in &config.sideboard {
+                assert!(*qty > 0, "sideboard count must be positive: {name}");
+                let definition_id = content
+                    .definition_id(name)
+                    .unwrap_or_else(|| panic!("unknown card in sideboard: {name}"));
+                assert!(
+                    !content
+                        .definition(definition_id)
+                        .expect("resolved definition")
+                        .is_token,
+                    "token cannot be a sideboard card: {name}"
+                );
+                for _ in 0..*qty {
+                    let card = content
+                        .instantiate(name, PlayerId(player_index), id_gen.next_id())
+                        .expect("validated sideboard definition");
+                    let card_id = CardId(cards.len());
+                    cards.push(card);
+                    card_to_permanent.push(None);
+                    object_incarnations.push(Incarnation::INITIAL);
+                    players[player_index].sideboard.push(card_id);
+                }
+            }
+        }
+
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
 
         for player in [PlayerId(0), PlayerId(1)] {

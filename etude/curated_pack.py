@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+import managym
+
 PACK_MANIFEST_PATH = (
     Path(__file__).resolve().parents[1]
     / "frontend"
@@ -16,7 +18,7 @@ PACK_MANIFEST_PATH = (
     / "lib"
     / "packs"
     / "tla-ur-lessons-vs-gw-allies"
-    / "v1"
+    / "v2"
     / "manifest.json"
 )
 JEONG_INCREMENT_MANIFEST_PATH = (
@@ -26,7 +28,7 @@ JEONG_INCREMENT_MANIFEST_PATH = (
     / "lib"
     / "packs"
     / "tla-gw-allies-jeong-vs-ur-lessons"
-    / "v1"
+    / "v2"
     / "manifest.json"
 )
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -103,7 +105,18 @@ def _validate_rights(raw_rights: Any) -> dict[str, Any]:
     return rights
 
 
-def _validate_deck(raw_seat: Any, seat: str) -> tuple[str, str, dict[str, int]]:
+def _validate_card_counts(value: Any, path: str) -> dict[str, int]:
+    cards = _record(value, path)
+    for name, count in cards.items():
+        _string(name, f"{path} key")
+        if type(count) is not int or count <= 0:
+            raise ValueError(f"{path}.{name} must be a positive integer")
+    return dict(cards)
+
+
+def _validate_deck(
+    raw_seat: Any, seat: str, pack_key: str
+) -> tuple[str, str, dict[str, int], dict[str, int]]:
     record = _record(raw_seat, f"matchup.{seat}")
     deck_id = _string(record.get("deck_id"), f"matchup.{seat}.deck_id")
     display_name = _string(record.get("display_name"), f"matchup.{seat}.display_name")
@@ -114,21 +127,19 @@ def _validate_deck(raw_seat: Any, seat: str) -> tuple[str, str, dict[str, int]]:
         or card_count <= 0
     ):
         raise ValueError(f"matchup.{seat}.card_count must be a positive integer")
-    raw_cards = _record(record.get("cards"), f"matchup.{seat}.cards")
-    cards: dict[str, int] = {}
-    for card_name, count in raw_cards.items():
-        _string(card_name, f"matchup.{seat}.cards key")
-        if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
-            raise ValueError(
-                f"matchup.{seat}.cards.{card_name} must be a positive integer"
-            )
-        cards[card_name] = count
+    cards = _validate_card_counts(record.get("cards"), f"matchup.{seat}.cards")
     if sum(cards.values()) != card_count:
         raise ValueError(
             f"matchup.{seat} declares {card_count} cards but contains "
             f"{sum(cards.values())}"
         )
-    return deck_id, display_name, cards
+    sideboard = _validate_card_counts(
+        record.get("sideboard"), f"matchup.{seat}.sideboard"
+    )
+    setup = managym.authored_deck_setup(pack_key, deck_id)
+    if cards != setup.decklist or sideboard != setup.sideboard:
+        raise ValueError(f"matchup.{seat} differs from compiled deck/sideboard setup")
+    return deck_id, display_name, cards, sideboard
 
 
 def _validate_palette(raw_palette: Any, path: str) -> tuple[str, str, str]:
@@ -215,6 +226,7 @@ class CuratedPack:
     pack_id: str
     version: str
     title: str
+    semantic_pack_key: str
     hero_deck_id: str
     hero_display_name: str
     hero_deck: dict[str, int]
@@ -232,15 +244,12 @@ class CuratedPack:
             "manifest_sha256": self.manifest_sha256,
         }
 
-    def reference_for(
-        self, hero_deck_name: str, villain_deck_name: str
-    ) -> dict[str, str] | None:
-        if (
-            hero_deck_name == self.hero_deck_id
-            and villain_deck_name == self.villain_deck_id
-        ):
-            return self.reference
-        return None
+    def player_config(self, deck_id: str, name: str) -> managym.PlayerConfig:
+        """Resolve a complete setup from this pack's compiled authority."""
+        if deck_id not in (self.hero_deck_id, self.villain_deck_id):
+            raise ValueError(f"Deck {deck_id!r} is not in pack {self.pack_id!r}")
+        setup = managym.authored_deck_setup(self.semantic_pack_key, deck_id)
+        return managym.PlayerConfig(name, setup.decklist, setup.sideboard)
 
 
 def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
@@ -263,14 +272,20 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
         pack_id = _string(pack.get("id"), "pack.id")
         version = _string(pack.get("version"), "pack.version")
         title = _string(pack.get("title"), "pack.title")
+        if (
+            type(root.get("setup_schema_version")) is not int
+            or root["setup_schema_version"] != 1
+        ):
+            raise ValueError("setup_schema_version must be 1")
+        semantic_pack_key = _string(root.get("semantic_pack_key"), "semantic_pack_key")
         rights = _validate_rights(root.get("rights"))
 
         matchup = _record(root.get("matchup"), "matchup")
-        hero_deck_id, hero_display_name, hero_deck = _validate_deck(
-            matchup.get("hero"), "hero"
+        hero_deck_id, hero_display_name, hero_deck, hero_sideboard = _validate_deck(
+            matchup.get("hero"), "hero", semantic_pack_key
         )
-        villain_deck_id, villain_display_name, villain_deck = _validate_deck(
-            matchup.get("villain"), "villain"
+        villain_deck_id, villain_display_name, villain_deck, villain_sideboard = (
+            _validate_deck(matchup.get("villain"), "villain", semantic_pack_key)
         )
         if hero_deck_id == villain_deck_id:
             raise ValueError("hero and villain deck IDs must differ")
@@ -286,7 +301,13 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
             raise ValueError("matchup.reachable_tokens must not contain duplicates")
 
         _validate_fallback(root.get("fallback"), rights)
-        expected_names = set(hero_deck) | set(villain_deck) | token_names
+        expected_names = (
+            set(hero_deck)
+            | set(villain_deck)
+            | set(hero_sideboard)
+            | set(villain_sideboard)
+            | token_names
+        )
         identities = _validate_identities(
             root.get("identities"), expected_names, token_names, rights
         )
@@ -299,6 +320,7 @@ def load_curated_pack(path: Path = PACK_MANIFEST_PATH) -> CuratedPack:
         pack_id=pack_id,
         version=version,
         title=title,
+        semantic_pack_key=semantic_pack_key,
         hero_deck_id=hero_deck_id,
         hero_display_name=hero_display_name,
         hero_deck=hero_deck,
@@ -320,11 +342,12 @@ def curated_pack_for_matchup(
     villain_deck_name: str,
     catalog: tuple[CuratedPack, ...] = CURATED_PACK_CATALOG,
 ) -> CuratedPack | None:
-    """Select one exact oriented immutable pack, failing closed on ambiguity."""
+    """Select the same immutable pack in either seat, failing on ambiguity."""
     matches = [
         pack
         for pack in catalog
-        if pack.reference_for(hero_deck_name, villain_deck_name) is not None
+        if {hero_deck_name, villain_deck_name}
+        == {pack.hero_deck_id, pack.villain_deck_id}
     ]
     if len(matches) > 1:
         raise RuntimeError(
