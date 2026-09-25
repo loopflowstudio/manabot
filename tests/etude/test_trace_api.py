@@ -106,3 +106,12 @@ def test_trace_api_rejects_invalid_trace_id(monkeypatch, tmp_path):
     with TestClient(app) as client:
         response = client.get("/api/traces/bad$id")
         assert response.status_code == 400
+
+
+def test_trace_listing_ignores_unrelated_json(tmp_path):
+    from etude.trace import list_trace_summaries
+
+    (tmp_path / "summary.json").write_text('[{"id":"not-a-game"}]')
+    (tmp_path / "receipt.json").write_text('{"status":"complete"}')
+    (tmp_path / "malformed.json").write_text("null")
+    assert list_trace_summaries(tmp_path) == []

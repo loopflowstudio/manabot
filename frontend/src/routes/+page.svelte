@@ -7,6 +7,7 @@
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
+  import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
@@ -31,11 +32,30 @@
   } from '$lib/socket.svelte';
   import type { ActionOption, StopSide } from '$lib/types';
 
+  let trainedLabel = $state('Trained opponent unavailable');
+  let trainedAvailable = $state(false);
+  async function loadOpponent(): Promise<void> {
+    try {
+      const response = await fetch('/api/opponent');
+      if (!response.ok) throw new Error('Opponent availability could not be loaded.');
+      const data = await response.json();
+      trainedAvailable = data.available;
+      if (data.opponent) {
+        trainedLabel = `${data.opponent.name} · ${data.opponent.sha256.slice(0, 10)}`;
+        gameStore.opponentSha256 = data.opponent.sha256;
+        if (!gameStore.observation) gameStore.setOpponentChoice('checkpoint');
+      }
+    } catch {
+      trainedLabel = 'Trained opponent unavailable';
+    }
+  }
+
   let hoveredTargetId = $state<number | null>(null);
 
   onMount(() => {
     connect();
     void loadAdviceMeta();
+    void loadOpponent();
     return () => {
       disconnect();
     };
@@ -103,11 +123,6 @@
   function startNewGame(): void {
     if (!gameStore.hasCapability('configure_match')) {
       gameStore.setError('Only the acting pilot can start or reset the match.');
-      return;
-    }
-    const config = gameStore.opponentConfig();
-    if (config.villain_type === 'checkpoint' && !config.villain_checkpoint) {
-      gameStore.setError('Enter a checkpoint path (.pt) to play against a policy.');
       return;
     }
     sendNewGame(gameStore.newGameConfig());
@@ -296,11 +311,9 @@
         />
         <OpponentSelector
           value={gameStore.opponentChoice}
-          checkpointPath={gameStore.checkpointPath}
-          checkpointDeterministic={gameStore.checkpointDeterministic}
+          trainedLabel={trainedLabel}
+          trainedAvailable={trainedAvailable}
           onChange={(value) => gameStore.setOpponentChoice(value)}
-          onCheckpointPathChange={(value) => gameStore.setCheckpointPath(value)}
-          onCheckpointDeterministicChange={(value) => gameStore.setCheckpointDeterministic(value)}
         />
       {/if}
       <div class="flex items-center gap-4">
@@ -338,6 +351,9 @@
     </div>
   </div>
 
+  {#if !gameStore.observation}
+    <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
+  {/if}
   {#if gameStore.observation && boardObservation}
     <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px]">
       <GameBoard
@@ -444,3 +460,8 @@
 </main>
 
 <svelte:window onkeydown={handleKeydown} />
+
+{#if gameStore.table?.attempt_id && gameStore.hasCapability('configure_match')}
+  {#key gameStore.table.attempt_id}<Feedback attemptId={gameStore.table.attempt_id} />{/key}
+{/if}
+

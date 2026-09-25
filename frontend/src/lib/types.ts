@@ -366,6 +366,28 @@ export interface GameLogEntry {
   text: string;
 }
 
+export interface RecordedPlayer {
+  seat: number;
+  player_id: string;
+  kind: 'human' | 'bot';
+  name: string;
+  deck: string;
+  version: string | null;
+  inference: Record<string, unknown> | null;
+}
+
+export interface GameSummary extends TraceSummary {
+  status: 'active' | 'completed' | 'stopped' | 'interrupted';
+  ended_at: string | null;
+  players: RecordedPlayer[];
+  origin: string;
+  record_version: number;
+  revision: number | null;
+  mine: boolean;
+  replay_available: boolean;
+  feedback: { note: string; created_at: string; author_id: string | null; decision_address: string | null }[];
+}
+
 export interface TraceSummary {
   id: string;
   timestamp: string | null;
@@ -379,8 +401,7 @@ export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
 export interface OpponentConfig {
   villain_type: VillainType;
   villain_sims?: number;
-  villain_checkpoint?: string;
-  villain_deterministic?: boolean;
+  opponent_sha256?: string;
 }
 
 export interface TraceConfig {
@@ -421,6 +442,11 @@ export interface TraceEvent {
 }
 
 export interface Trace {
+  can_feedback?: boolean;
+  read_only?: boolean;
+  players?: RecordedPlayer[];
+  record_version?: number;
+  origin?: string;
   id?: string;
   config: TraceConfig;
   events: TraceEvent[];

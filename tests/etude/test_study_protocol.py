@@ -10,6 +10,7 @@ import pytest
 
 from etude.replay_index import (
     CanonicalReplayProjectionV1,
+    DecisionAddressV2,
     ReplayDecisionAddress,
     canonical_projection_sha256,
 )
@@ -116,6 +117,56 @@ def test_python_study_shapes_match_rust_generated_schema():
     assert [
         variant["const"] for variant in RUST_SCHEMA["$defs"]["KnowledgeScope"]["oneOf"]
     ] == [value.value for value in KnowledgeScope]
+
+
+def _precommand_artifact() -> dict:
+    artifact = deepcopy(FIXTURE)
+    projection = CanonicalReplayProjectionV1.model_validate(SOURCE_REPLAY)
+    for landmark in artifact["landmarks"]:
+        previous = ReplayDecisionAddress.parse(landmark["decision_id"])
+        row = next(
+            row for row in projection.decisions if row.ordinal == previous.ordinal
+        )
+        landmark["decision_id"] = DecisionAddressV2.from_decision(
+            projection, row
+        ).serialize()
+    return artifact
+
+
+def test_precommand_study_address_is_independent_of_command_id():
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    address = landmark["decision_id"]
+    landmark["played"]["command_id"] = "another-command-at-the-same-decision"
+
+    validated = StudyArtifact.model_validate(artifact)
+
+    assert validated.landmarks[0].decision_id == address
+    RUST_VALIDATOR.validate(artifact)
+
+
+@pytest.mark.parametrize("field", ["frame_hash", "decision_sha256", "replay_id"])
+def test_precommand_study_rejects_address_drift(field):
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    address = DecisionAddressV2.parse(landmark["decision_id"])
+    landmark["decision_id"] = address.model_copy(update={field: "0" * 64}).serialize()
+
+    with pytest.raises(ValidationError, match="replay decision address drifted"):
+        StudyArtifact.model_validate(artifact)
+
+
+def test_precommand_study_still_binds_played_command_to_selected_offer():
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    landmark["played"]["offer_id"] = next(
+        offer["id"]
+        for offer in landmark["frame"]["offers"]
+        if offer["id"] != landmark["offer_id"]
+    )
+
+    with pytest.raises(ValidationError, match="command identity drifted"):
+        StudyArtifact.model_validate(artifact)
 
 
 def test_default_study_evidence_rejects_opponent_private_hand_identity():

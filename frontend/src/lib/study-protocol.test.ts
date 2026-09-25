@@ -128,6 +128,23 @@ function parsedFixture(): StudyArtifact {
 }
 
 describe('study protocol v1', () => {
+  it('accepts current pre-command landmarks while preserving frame and played-command binding', () => {
+    const artifact = structuredClone(fixture) as StudyArtifact;
+    for (const landmark of artifact.landmarks) {
+      const previous = parseReplayDecisionAddress(landmark.decision_id);
+      const payload = [2, previous.replay_id, previous.match_id, previous.ordinal,
+        previous.viewer, previous.revision, previous.prompt_id, previous.presentation_cursor,
+        landmark.frame.frame_hash, previous.decision_sha256];
+      landmark.decision_id = `ed2.${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+    }
+    expect(() => assertViewerSafeStudyArtifact(artifact)).not.toThrow();
+    const drifted = structuredClone(artifact);
+    drifted.landmarks[0].frame.frame_hash = 'different-frame';
+    expect(() => assertViewerSafeStudyArtifact(drifted)).toThrow(/address drifted/);
+    artifact.landmarks[0].played.offer_id += 1;
+    expect(() => assertViewerSafeStudyArtifact(artifact)).toThrow();
+  });
+
   it('round-trips the shared historical decision with distinct evidence fields', () => {
     const artifact = parsedFixture();
     expect(() => assertViewerSafeStudyArtifact(artifact)).not.toThrow();

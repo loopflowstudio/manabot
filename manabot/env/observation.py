@@ -217,6 +217,28 @@ class ObservationEncoder:
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+        # Fixed training tensors must never turn a complete rules decision into
+        # a smaller, apparently legal policy decision.
+        for label, size, capacity in (
+            ("actions", len(obs.action_space.actions), self.max_actions),
+            ("agent cards", len(obs.agent_cards), self.cards_per_player),
+            ("opponent cards", len(obs.opponent_cards), self.cards_per_player),
+            ("agent permanents", len(obs.agent_permanents), self.perms_per_player),
+            (
+                "opponent permanents",
+                len(obs.opponent_permanents),
+                self.perms_per_player,
+            ),
+        ):
+            if size > capacity:
+                raise ValueError(
+                    f"Observation capacity exceeded: {label} {size} > {capacity}"
+                )
+        if any(
+            len(action.focus) > self.max_focus_objects
+            for action in obs.action_space.actions
+        ):
+            raise ValueError("Observation capacity exceeded: action focus")
         out = {}
 
         ## NOTE: It is very important that we encode in this exact
@@ -446,9 +468,7 @@ class ObservationEncoder:
         actions = obs.action_space.actions
         # We'll accumulate the focus indices for each action here.
         action_focus_indices = []  # Expected shape: (max_actions, max_focus_objects)
-        if len(actions) > self.max_actions:
-            log.warning(f"Action space truncated: {len(actions)} -> {self.max_actions}")
-        for idx, action in enumerate(actions[: self.max_actions]):
+        for idx, action in enumerate(actions):
             valid_actions[idx] = True
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:

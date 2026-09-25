@@ -1038,6 +1038,45 @@
       "title": "NumberChoiceAnswer",
       "type": "object"
     },
+    "OpponentIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "bot_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bot Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "producer": {
+          "title": "Producer",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "producer",
+        "sha256"
+      ],
+      "title": "OpponentIdentity",
+      "type": "object"
+    },
     "OrderChoiceAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -1577,6 +1616,18 @@
         "access": {
           "$ref": "#/$defs/ViewerAccess"
         },
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attempt Id"
+        },
         "beliefs": {
           "items": {
             "$ref": "#/$defs/BeliefScenario"
@@ -1604,6 +1655,17 @@
           ],
           "title": "Mode",
           "type": "string"
+        },
+        "opponent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpponentIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "opponent_label": {
           "anyOf": [

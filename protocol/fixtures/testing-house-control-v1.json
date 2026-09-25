@@ -16,12 +16,16 @@
     {
       "type": "new_game",
       "grant_revision": 1,
-      "config": {"seed": 7}
+      "config": {
+        "seed": 7
+      }
     },
     {
       "type": "rematch",
       "grant_revision": 1,
-      "config": {"seed": 8}
+      "config": {
+        "seed": 8
+      }
     },
     {
       "type": "command",
@@ -35,12 +39,27 @@
         "answers": []
       }
     },
-    {"type": "action", "grant_revision": 1, "index": 0},
-    {"type": "pass_turn", "grant_revision": 1},
+    {
+      "type": "action",
+      "grant_revision": 1,
+      "index": 0
+    },
+    {
+      "type": "pass_turn",
+      "grant_revision": 1
+    },
     {
       "type": "set_stops",
       "grant_revision": 1,
-      "stops": {"my": ["main1", "main2"], "opponent": ["end_step"]},
+      "stops": {
+        "my": [
+          "main1",
+          "main2"
+        ],
+        "opponent": [
+          "end_step"
+        ]
+      },
       "stop_on_stack": true,
       "auto_pass": true
     },
@@ -49,8 +68,16 @@
       "grant_revision": 1,
       "target_viewer_id": "viewer.watcher"
     },
-    {"type": "author_belief", "grant_revision": 1, "scenario_id": "scenario.a"},
-    {"type": "share_belief", "grant_revision": 1, "belief_id": "belief.example"},
+    {
+      "type": "author_belief",
+      "grant_revision": 1,
+      "scenario_id": "scenario.a"
+    },
+    {
+      "type": "share_belief",
+      "grant_revision": 1,
+      "belief_id": "belief.example"
+    },
     {
       "type": "restore_decision",
       "grant_revision": 1,
@@ -85,7 +112,10 @@
       "grant_revision": 1,
       "attempt_id": "attempt.example"
     },
-    {"type": "return_to_live", "grant_revision": 1}
+    {
+      "type": "return_to_live",
+      "grant_revision": 1
+    }
   ],
   "events": [
     {
@@ -115,8 +145,16 @@
           "grant_revision": 1
         },
         "participants": [
-          {"viewer_id": "viewer.pilot", "role": "pilot", "connected": true},
-          {"viewer_id": "viewer.watcher", "role": "watcher", "connected": true}
+          {
+            "viewer_id": "viewer.pilot",
+            "role": "pilot",
+            "connected": true
+          },
+          {
+            "viewer_id": "viewer.watcher",
+            "role": "watcher",
+            "connected": true
+          }
         ],
         "beliefs": [
           {
@@ -132,7 +170,9 @@
                 "compute_id": "compute.example"
               }
             },
-            "audience": {"kind": "personal"},
+            "audience": {
+              "kind": "personal"
+            },
             "provenance": {
               "kind": "player_authored",
               "created_at_table_revision": 2,
@@ -142,6 +182,8 @@
         ],
         "decisions": [],
         "opponent_label": "Search 64",
+        "opponent": null,
+        "attempt_id": null,
         "watcher_invite": "#watch=invite-example"
       }
     },
@@ -169,8 +211,16 @@
           "grant_revision": 1
         },
         "participants": [
-          {"viewer_id": "viewer.pilot", "role": "pilot", "connected": true},
-          {"viewer_id": "viewer.watcher", "role": "watcher", "connected": true}
+          {
+            "viewer_id": "viewer.pilot",
+            "role": "pilot",
+            "connected": true
+          },
+          {
+            "viewer_id": "viewer.watcher",
+            "role": "watcher",
+            "connected": true
+          }
         ],
         "beliefs": [
           {
@@ -186,7 +236,10 @@
                 "compute_id": "compute.example"
               }
             },
-            "audience": {"kind": "table", "table_id": "table.example"},
+            "audience": {
+              "kind": "table",
+              "table_id": "table.example"
+            },
             "provenance": {
               "kind": "player_authored",
               "created_at_table_revision": 2,
@@ -196,6 +249,8 @@
         ],
         "decisions": [],
         "opponent_label": "Search 64",
+        "opponent": null,
+        "attempt_id": null,
         "watcher_invite": null
       },
       "belief": {
@@ -211,7 +266,10 @@
             "compute_id": "compute.example"
           }
         },
-        "audience": {"kind": "table", "table_id": "table.example"},
+        "audience": {
+          "kind": "table",
+          "table_id": "table.example"
+        },
         "provenance": {
           "kind": "player_authored",
           "created_at_table_revision": 2,
@@ -246,16 +304,31 @@
           "grant_revision": 2
         },
         "participants": [
-          {"viewer_id": "viewer.pilot", "role": "watcher", "connected": true},
-          {"viewer_id": "viewer.watcher", "role": "pilot", "connected": true}
+          {
+            "viewer_id": "viewer.pilot",
+            "role": "watcher",
+            "connected": true
+          },
+          {
+            "viewer_id": "viewer.watcher",
+            "role": "pilot",
+            "connected": true
+          }
         ],
         "beliefs": [],
         "decisions": [],
         "opponent_label": "Search 64",
+        "opponent": null,
+        "attempt_id": null,
         "watcher_invite": null
       }
     },
-    {"type": "decision_restored", "address": "erd1.example", "restored": {}, "table": null},
+    {
+      "type": "decision_restored",
+      "address": "erd1.example",
+      "restored": {},
+      "table": null
+    },
     {
       "type": "branch_updated",
       "attempt_id": "attempt.example",
@@ -263,7 +336,16 @@
       "payload": {},
       "table": null
     },
-    {"type": "branch_returned", "restored": {}, "table": null},
-    {"type": "control_error", "code": "forbidden", "message": "Pilot capability required.", "table": null}
+    {
+      "type": "branch_returned",
+      "restored": {},
+      "table": null
+    },
+    {
+      "type": "control_error",
+      "code": "forbidden",
+      "message": "Pilot capability required.",
+      "table": null
+    }
   ]
 }

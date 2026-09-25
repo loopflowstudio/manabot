@@ -8,6 +8,7 @@ integrity of every human-facing payload.
 import json
 from pathlib import Path
 import random
+import sqlite3
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -24,6 +25,16 @@ CURATED_COMBAT_FIXTURE = json.loads(
         / "frontend/src/lib/fixtures/curated-combat-to-turn.json"
     ).read_text(encoding="utf-8")
 )
+
+
+def _recorded_traces(directory):
+    with sqlite3.connect(directory / "play.sqlite") as db:
+        return [
+            (row[0], json.loads(row[1]))
+            for row in db.execute(
+                "SELECT id, trace_json FROM attempts ORDER BY started_at"
+            )
+        ]
 
 
 def _assert_hero_payload_is_clean(payload: dict) -> None:
@@ -98,9 +109,9 @@ def test_full_game_vs_search_villain(isolated_traces):
         )
     assert payload["type"] == "game_over"
 
-    trace_files = sorted(isolated_traces.glob("*.json"))
+    trace_files = _recorded_traces(isolated_traces)
     assert len(trace_files) == 1
-    trace_payload = json.loads(trace_files[0].read_text(encoding="utf-8"))
+    trace_payload = trace_files[0][1]
     assert trace_payload["config"]["villain_type"] == "search"
     assert trace_payload["config"]["villain_sims"] == 8
     assert trace_payload["end_reason"] == "game_over"
@@ -108,16 +119,22 @@ def test_full_game_vs_search_villain(isolated_traces):
 
     # The stored game must be loadable through the replay API: always
     # hero-perspective, villain hand hidden by default, visible on reveal.
-    trace_id = trace_files[0].stem
+    trace_id = trace_files[0][0]
     with TestClient(app) as client:
-        loaded = client.get(f"/api/traces/{trace_id}").json()
+        loaded = client.get(
+            f"/api/traces/{trace_id}",
+            headers={"x-etude-participant-tokens": payload["resume_token"]},
+        ).json()
         observations = [event["observation"] for event in loaded["events"]]
         observations.append(loaded["final_observation"])
         for observation in observations:
             assert observation["agent"]["player_index"] == 0
             assert observation["opponent"]["hand"] == []
 
-        revealed = client.get(f"/api/traces/{trace_id}?reveal_hidden=true").json()
+        revealed = client.get(
+            f"/api/traces/{trace_id}?reveal_hidden=true",
+            headers={"x-etude-participant-tokens": payload["resume_token"]},
+        ).json()
         villain_hands = [
             event["observation"]["opponent"]["hand"]
             for event in revealed["events"]
@@ -138,9 +155,9 @@ def test_full_game_vs_random_villain(isolated_traces):
         )
     assert payload["type"] == "game_over"
 
-    trace_files = sorted(isolated_traces.glob("*.json"))
+    trace_files = _recorded_traces(isolated_traces)
     assert len(trace_files) == 1
-    trace_payload = json.loads(trace_files[0].read_text(encoding="utf-8"))
+    trace_payload = trace_files[0][1]
     assert trace_payload["config"]["villain_type"] == "random"
 
 
@@ -167,9 +184,32 @@ def _write_tiny_checkpoint(path) -> None:
     )
 
 
-def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path):
+def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path, monkeypatch):
     checkpoint_path = tmp_path / "tiny_agent.pt"
     _write_tiny_checkpoint(checkpoint_path)
+    import hashlib
+
+    from etude.opponent import Opponent
+    from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
+    import managym
+
+    env = managym.Env()
+    env.reset(
+        [
+            managym.PlayerConfig("Hero", UR_LESSONS_DECK),
+            managym.PlayerConfig("Villain", GW_ALLIES_DECK),
+        ]
+    )
+    opponent = Opponent(
+        "Synthetic loader test",
+        "test",
+        hashlib.sha256(checkpoint_path.read_bytes()).hexdigest(),
+        checkpoint_path,
+        False,
+        env.content_pack_manifest(),
+        {"ur_lessons": UR_LESSONS_DECK, "gw_allies": GW_ALLIES_DECK},
+    )
+    monkeypatch.setattr(server, "configured_opponent", lambda: opponent)
 
     with TestClient(app) as client:
         payload = _play_full_game(
@@ -184,9 +224,9 @@ def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path):
         )
     assert payload["type"] == "game_over"
 
-    trace_files = sorted(isolated_traces.glob("*.json"))
+    trace_files = _recorded_traces(isolated_traces)
     assert len(trace_files) == 1
-    trace_payload = json.loads(trace_files[0].read_text(encoding="utf-8"))
+    trace_payload = trace_files[0][1]
     assert trace_payload["config"]["villain_type"] == "checkpoint"
     assert trace_payload["config"]["villain_checkpoint"] == str(checkpoint_path)
 
@@ -194,10 +234,10 @@ def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path):
 def test_new_game_rejects_bad_villain_configs(isolated_traces):
     cases = [
         ({"villain_type": "nonsense"}, "villain_type"),
-        ({"villain_type": "checkpoint"}, "villain_checkpoint"),
+        ({"villain_type": "checkpoint"}, "configured"),
         (
             {"villain_type": "checkpoint", "villain_checkpoint": "/no/such/file.pt"},
-            "not found",
+            "configured",
         ),
         ({"villain_type": "search", "villain_sims": 0}, "villain_sims"),
         ({"villain_type": "search", "villain_sims": "many"}, "villain_sims"),
@@ -265,9 +305,9 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
             == server.CURATED_PACK.manifest_sha256
         )
 
-    trace_files = sorted(isolated_traces.glob("*.json"))
+    trace_files = _recorded_traces(isolated_traces)
     assert trace_files
-    trace = json.loads(trace_files[-1].read_text())
+    trace = trace_files[-1][1]
     assert trace["config"]["hero_deck_name"] == "ur_lessons"
     assert trace["config"]["villain_deck_name"] == "gw_allies"
     assert trace["config"]["hero_deck"] == server.UR_LESSONS_DECK
@@ -423,10 +463,7 @@ def test_jeong_matchup_uses_session_scoped_pack_identity(isolated_traces):
     assert manifest["compiled_semantics"]["pack_key"] == "tla-jeong-increment-v1"
     assert session.content_hash == manifest["content_digest"]
     assert session.content_hash != server.CONTENT_HASH
-    assert (
-        session.asset_manifest_hash
-        == server.JEONG_INCREMENT_PACK.manifest_sha256
-    )
+    assert session.asset_manifest_hash == server.JEONG_INCREMENT_PACK.manifest_sha256
     assert payload["frame"]["content_hash"] == session.content_hash
     assert payload["frame"]["asset_manifest_hash"] == session.asset_manifest_hash
     assert payload["asset_pack"] == server.JEONG_INCREMENT_PACK.reference

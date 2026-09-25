@@ -16,7 +16,11 @@ from etude.experience_protocol import (
     UInt32,
     UInt64,
 )
-from etude.replay_index import ReplayDecisionAddress, decision_payload_sha256
+from etude.replay_index import (
+    DecisionAddressV2,
+    decision_payload_sha256,
+    parse_decision_address,
+)
 
 STUDY_VERSION: Literal[1] = 1
 
@@ -331,9 +335,11 @@ class StudyArtifact(ProtocolModel):
         context = f"landmark {landmark.id}"
         frame = landmark.frame
         try:
-            address = ReplayDecisionAddress.parse(landmark.decision_id)
+            address = parse_decision_address(landmark.decision_id)
         except ValueError as exc:
-            raise ValueError(f"{context}: decision_id is not an erd1 address") from exc
+            raise ValueError(
+                f"{context}: decision_id is not a decision address"
+            ) from exc
         pack = self.identity.content_pack
         if frame.match_id != self.identity.match_id:
             raise ValueError(f"{context}: frame match does not match study identity")
@@ -373,7 +379,21 @@ class StudyArtifact(ProtocolModel):
             or address.viewer != landmark.viewer
             or address.revision != frame.revision
             or address.prompt_id != landmark.prompt_id
-            or address.offer_id != landmark.offer_id
+        ):
+            raise ValueError(f"{context}: replay decision address drifted")
+        if isinstance(address, DecisionAddressV2):
+            expected_address = DecisionAddressV2.from_frame(
+                replay_id=self.identity.source_replay_id,
+                match_id=self.identity.match_id,
+                ordinal=address.ordinal,
+                viewer=landmark.viewer,
+                frame=frame,
+                presentation_cursor=address.presentation_cursor,
+            )
+            if address != expected_address:
+                raise ValueError(f"{context}: replay decision address drifted")
+        elif (
+            address.offer_id != landmark.offer_id
             or address.command_id != landmark.played.command_id
             or address.decision_sha256
             != decision_payload_sha256(

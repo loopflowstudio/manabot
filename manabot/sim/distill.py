@@ -32,7 +32,12 @@ from manabot.belief.encoding import (
     belief_checkpoint_fields,
 )
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import (
+    AgentHypers,
+    MatchHypers,
+    ObservationSpaceHypers,
+    RewardHypers,
+)
 from manabot.model.agent import Agent
 from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
@@ -83,6 +88,8 @@ def generate_selfplay_shard(
     max_steps_per_game: int = 5000,
     round_index: int = 0,
     dataset_run_fingerprint: str | None = None,
+    match_hypers: MatchHypers | None = None,
+    observation_hypers: ObservationSpaceHypers | None = None,
 ) -> dict[str, Any]:
     """Play teacher-vs-teacher self-play games, recording every decision.
 
@@ -103,9 +110,10 @@ def generate_selfplay_shard(
         teacher_spec = {"kind": "search", "sims": sims}
     teacher_name = spec_name(teacher_spec)
 
-    obs_space = ObservationSpace()
+    obs_space = ObservationSpace(observation_hypers or ObservationSpaceHypers())
     match = Match(
-        MatchHypers(
+        match_hypers
+        or MatchHypers(
             hero=f"{teacher_name}-a"[:32],
             villain=f"{teacher_name}-b"[:32],
             hero_deck=dict(INTERACTIVE_DECK),
@@ -243,6 +251,9 @@ def generate_selfplay_shard(
         "seed": seed,
         "game_offset": game_offset,
         "num_games": num_games,
+        "match": match.hypers.model_dump(),
+        "observation_hypers": obs_space.encoder.hypers.model_dump(),
+        "content_manifest": env._engine.content_pack_manifest(),
         "dataset_run_fingerprint": dataset_run_fingerprint,
         "policy_target_kind": (
             "visit_distribution" if has_tree_targets else "score_softmax"
@@ -460,6 +471,7 @@ def train_bc(
     seed: int = 0,
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
+    observation_hypers: ObservationSpaceHypers | None = None,
     soft_temperature: float | None = None,
     initial_agent_state: dict[str, Any] | None = None,
     log: bool = False,
@@ -481,7 +493,12 @@ def train_bc(
 
     torch.manual_seed(seed)
     dev = torch.device(device)
-    obs_space = ObservationSpace()
+    obs_space = ObservationSpace(observation_hypers or ObservationSpaceHypers())
+    for key, shape in obs_space.shapes.items():
+        if dataset[key].shape[1:] != shape:
+            raise ValueError(
+                f"Dataset {key} shape differs from observation configuration"
+            )
     agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)

@@ -122,6 +122,13 @@ class TableDecisionSummary(ProtocolModel):
     offer_id: int | None
 
 
+class OpponentIdentity(ProtocolModel):
+    bot_id: str | None = Field(default=None, min_length=1, max_length=128)
+    name: str
+    producer: str
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class TableSnapshot(ProtocolModel):
     contract: Literal["testing-house-v1"] = TESTING_HOUSE_VERSION
     table_id: str
@@ -132,6 +139,8 @@ class TableSnapshot(ProtocolModel):
     beliefs: list[BeliefScenario]
     decisions: list[TableDecisionSummary]
     opponent_label: str | None = None
+    opponent: OpponentIdentity | None = None
+    attempt_id: str | None = None
     watcher_invite: str | None = None
 
 

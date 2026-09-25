@@ -1,3 +1,4 @@
+import { playerToken } from './records';
 import {
   loadStoredDeckSelection,
   saveStoredDeckSelection,
@@ -35,14 +36,12 @@ export type OpponentChoice =
 
 export function buildOpponentConfig(
   choice: OpponentChoice,
-  checkpointPath: string,
-  checkpointDeterministic: boolean,
+  opponentSha256: string,
 ): OpponentConfig {
   if (choice === 'checkpoint') {
     return {
       villain_type: 'checkpoint',
-      villain_checkpoint: checkpointPath.trim(),
-      villain_deterministic: checkpointDeterministic,
+      opponent_sha256: opponentSha256,
     };
   }
   if (choice === 'random' || choice === 'passive') {
@@ -74,8 +73,7 @@ export class GameStore {
   resumeFailed = $state(false);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<OpponentChoice>('search-64');
-  checkpointPath = $state('');
-  checkpointDeterministic = $state(false);
+  opponentSha256 = $state('');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
@@ -98,6 +96,10 @@ export class GameStore {
   applyTable(table: TableSnapshot | null | undefined): void {
     if (!table) return;
     const previousRole = this.table?.access.role;
+    if (table.opponent && table.attempt_id !== this.table?.attempt_id) {
+      this.opponentChoice = 'checkpoint';
+      this.opponentSha256 = table.opponent.sha256;
+    }
     this.table = table;
     if (previousRole && previousRole !== table.access.role) {
       this.tableAnnouncement = `You are now the ${table.access.role}.`;
@@ -147,14 +149,6 @@ export class GameStore {
     this.opponentChoice = next;
   }
 
-  setCheckpointPath(next: string): void {
-    this.checkpointPath = next;
-  }
-
-  setCheckpointDeterministic(next: boolean): void {
-    this.checkpointDeterministic = next;
-  }
-
   setHeroDeck(next: DeckChoice): void {
     this.updateDecks({ ...this.decks, hero: next });
   }
@@ -166,14 +160,15 @@ export class GameStore {
   opponentConfig(): OpponentConfig {
     return buildOpponentConfig(
       this.opponentChoice,
-      this.checkpointPath,
-      this.checkpointDeterministic,
+      this.table?.opponent?.sha256 ?? this.opponentSha256,
     );
   }
 
   newGameConfig(): Record<string, unknown> {
     return {
       ...this.opponentConfig(),
+      request_id: crypto.randomUUID(),
+      player_token: playerToken(),
       hero_deck: this.decks.hero,
       villain_deck: this.decks.villain,
       stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { recordFetch } from '$lib/records';
+  import { page } from '$app/state';
+  import Feedback from '$lib/components/Feedback.svelte';
   import { onMount, tick, untrack } from 'svelte';
 
   import GameBoard from '$lib/components/GameBoard.svelte';
@@ -136,12 +139,14 @@
     replayStore.setError(null);
 
     try {
-      const response = await fetch('/api/traces');
+      const response = await recordFetch('/api/traces');
       if (!response.ok) {
         throw new Error(`Failed to load traces (${response.status})`);
       }
       const payload = (await response.json()) as TraceSummary[];
-      replayStore.setSummaries(payload);
+      replayStore.setSummaries(payload.filter((row) => !('replay_available' in row) || row.replay_available));
+      const selected = new URLSearchParams(window.location.search).get('trace');
+      if (selected) await loadTrace(selected);
     } catch (error) {
       replayStore.setError(error instanceof Error ? error.message : 'Failed to load traces.');
     } finally {
@@ -155,8 +160,8 @@
 
     try {
       const [traceResponse, decisionsResponse] = await Promise.all([
-        fetch(`/api/traces/${traceId}`),
-        fetch(`/api/traces/${traceId}/decisions`),
+        recordFetch(`/api/traces/${traceId}`),
+        recordFetch(`/api/traces/${traceId}/decisions`),
       ]);
       if (!traceResponse.ok) {
         throw new Error(`Failed to load trace ${traceId} (${traceResponse.status})`);
@@ -205,10 +210,14 @@
   ): Promise<void> {
     const traceId = replayStore.trace?.id;
     if (!traceId) return;
+    if (replayStore.trace?.read_only) {
+      resumeReplay(() => replayStore.setFrame(decision.revision));
+      return;
+    }
     studyStore.setBusy(true);
     studyStore.setError(null);
     try {
-      const response = await fetch(
+      const response = await recordFetch(
         `/api/traces/${traceId}/decisions/${encodeURIComponent(decision.address)}`,
       );
       if (!response.ok) throw new Error(await responseError(response, 'Failed to restore decision.'));
@@ -242,7 +251,7 @@
         offer_id: offer.id,
         answers: [],
       };
-      const response = await fetch(
+      const response = await recordFetch(
         `/api/traces/${traceId}/decisions/${encodeURIComponent(restored.address)}/retry`,
         {
           method: 'POST',
@@ -272,7 +281,7 @@
     studyStore.setBusy(true);
     studyStore.setError(null);
     try {
-      const response = await fetch(`/api/study-attempts/${studyStore.attemptId}/reveal`, {
+      const response = await recordFetch(`/api/study-attempts/${studyStore.attemptId}/reveal`, {
         method: 'POST',
       });
       if (!response.ok) throw new Error(await responseError(response, 'Reveal failed.'));
@@ -290,7 +299,7 @@
     studyStore.setBusy(true);
     studyStore.setError(null);
     try {
-      const response = await fetch(`/api/study-attempts/${studyStore.attemptId}/preview`, {
+      const response = await recordFetch(`/api/study-attempts/${studyStore.attemptId}/preview`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ plan }),
@@ -322,7 +331,7 @@
     try {
       let returned = studyStore.restored;
       if (attemptId) {
-        const response = await fetch(`/api/study-attempts/${attemptId}/return`, {
+        const response = await recordFetch(`/api/study-attempts/${attemptId}/return`, {
           method: 'POST',
         });
         if (!response.ok) throw new Error(await responseError(response, 'Return failed.'));
@@ -355,11 +364,12 @@
     action();
   }
 
-  function winnerLabel(winner: number | null): string {
+  function winnerLabel(winner: number | null, ending: string | null): string {
+    if (ending !== 'game_over') return ending === 'active' ? 'In progress' : 'Unfinished';
     if (winner === null) {
       return 'Draw';
     }
-    return winner === 0 ? 'Hero' : 'Opponent';
+    return winner === 0 ? 'Hero wins' : 'Opponent wins';
   }
 
   // ——— The score: register marks, turn rubrics ———
@@ -430,6 +440,7 @@
 
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
   <h1 class="sr-only">Replay</h1>
+  <a class="mb-4 inline-block underline" href={page.url.searchParams.get('from')?.startsWith('/games?') ? page.url.searchParams.get('from')! : '/games'}>Back to games</a>
 
   {#if replayStore.errorMessage}
     <section class="mb-4 rounded border border-mountain/50 bg-mountain/20 px-4 py-3 text-mountain-ink">
@@ -451,7 +462,7 @@
           <h2 class="type-title text-display">The Score</h2>
           {#if replayStore.trace}
             <span class="type-annotation text-ink-2">
-              {winnerLabel(replayStore.trace.winner)} wins · {studyStore.projection?.decisions.length ?? logEntries.length} player decisions
+              {winnerLabel(replayStore.trace.winner, replayStore.trace.end_reason)} · {studyStore.projection?.decisions.length ?? logEntries.length} player decisions
             </span>
           {/if}
         </div>
@@ -471,7 +482,7 @@
                 <option value="" disabled>Select a trace…</option>
                 {#each replayStore.summaries as summary}
                   <option value={summary.id}>
-                    {summary.timestamp ?? summary.id} · {winnerLabel(summary.winner)} · {summary.num_events} events
+                    {summary.timestamp ?? summary.id} · {winnerLabel(summary.winner, summary.end_reason)} · {summary.num_events} events
                   </option>
                 {/each}
               </select>
@@ -488,7 +499,7 @@
 
       {#if replayStore.loadingList && replayStore.summaries.length === 0}
         <p class="type-caption py-10 text-center text-ink-2">Loading traces…</p>
-      {:else if replayStore.summaries.length === 0}
+      {:else if replayStore.summaries.length === 0 && !replayStore.trace}
         <p class="type-annotation py-10 text-center text-ink-3">
           No traces yet. Play a game first.
         </p>
@@ -499,7 +510,11 @@
           <!-- The score column -->
           <section aria-label="Score" class="min-w-0 lg:border-r lg:border-line lg:pr-7">
             <p class="type-caption pb-1 pt-3 text-ink-2">
-              Open any canonical player decision; Policy and Search stay sealed until Retry.
+              {#if replayStore.trace.read_only}
+                Shared replay from Player 1's perspective. Select a decision to view its position.
+              {:else}
+                Open any canonical player decision; Policy and Search stay sealed until Retry.
+              {/if}
             </p>
             <!-- svelte-ignore a11y_no_noninteractive_tabindex (axe requires keyboard access to scrollable regions) -->
             <div
@@ -630,6 +645,8 @@
             <div class="mt-3 border-t border-line">
               {#if boardObservation}
                 <GameBoard
+                  heroLabel={replayStore.trace.players?.find((p) => p.seat === 0)?.name ?? 'Hero'}
+                  villainLabel={replayStore.trace.players?.find((p) => p.seat === 1)?.name ?? 'Opponent'}
                   observation={boardObservation}
                   {focusedIds}
                   winner={boardObservation.game_over ? replayStore.trace.winner : undefined}
@@ -680,6 +697,11 @@
     </div>
   </div>
 </main>
+
+
+{#if replayStore.trace?.id && replayStore.trace.can_feedback}
+  {#key replayStore.trace.id}<Feedback attemptId={replayStore.trace.id} />{/key}
+{/if}
 
 <style>
   .rubric::after {

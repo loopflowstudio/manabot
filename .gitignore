@@ -13,6 +13,7 @@ target/
 .venv/
 .uv-cache/
 etude/traces/*.json
+etude/traces/*.sqlite*
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/

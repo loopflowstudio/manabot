@@ -24,9 +24,11 @@ CPU at small scales.
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.
 
-To face what you trained, launch `./scripts/play`, choose the **Checkpoint**
-opponent, and enter your `.runs/local/step_*.pt` path — the server loads the
-agent behind the same experience protocol as every other villain.
+For an identified Allies/Lessons opponent, use the bounded
+[train/export/play workflow](../docs/local-trained-challenger.md). It uses the
+existing search-distillation trainer and a server-pinned candidate; players see
+the bot's identity in the ordinary table. The `local` PPO preset above remains
+a separate default-deck training smoke.
 
 ## You are in world w2
 

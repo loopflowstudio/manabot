@@ -89,6 +89,8 @@ export interface TableSnapshot {
   beliefs: BeliefScenario[];
   decisions: TableDecisionSummary[];
   opponent_label: string | null;
+  opponent?: { bot_id?: string | null; name: string; producer: string; sha256: string } | null;
+  attempt_id?: string | null;
   watcher_invite: string | null;
 }
 

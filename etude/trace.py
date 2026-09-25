@@ -1,12 +1,12 @@
 """
 trace.py
-Trace dataclasses and JSON persistence helpers for GUI games.
+Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
 """
 
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import os
@@ -24,6 +24,7 @@ class GameConfig:
     villain_deck: dict[str, int]
     villain_type: str
     seed: int | None = None
+    seed_was_requested: bool = False
     # Named-deck identifiers ("interactive" / "ur_lessons" / "gw_allies" /
     # "custom") — recorded so every trace is attributable to an exact matchup.
     hero_deck_name: str = "custom"
@@ -36,6 +37,7 @@ class GameConfig:
     villain_sims: int | None = None  # search: simulations per legal action
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
+    opponent: dict[str, str] | None = None
     # Priority-stop configuration at game start (MTGO-style auto-pass).
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,
@@ -84,46 +86,19 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _normalize_timestamp_for_filename(timestamp: str) -> str:
-    # Replace the UTC offset before stripping ':' so the trace id contains no
-    # '+' (TRACE_ID_PATTERN would reject it and the trace could not be loaded).
-    normalized = (
-        timestamp.replace("+00:00", "Z")
-        .replace("-", "")
-        .replace(":", "")
-        .replace(".", "_")
-    )
-    return normalized
-
-
-def trace_to_dict(trace: Trace) -> dict[str, Any]:
-    return asdict(trace)
-
-
 def _trace_path(trace_id: str, trace_dir: Path) -> Path:
     if not TRACE_ID_PATTERN.fullmatch(trace_id):
         raise ValueError("Invalid trace id")
     return trace_dir / f"{trace_id}.json"
 
 
-def save_trace(trace: Trace, trace_dir: Path | None = None) -> Path:
-    target_dir = trace_dir or TRACES_DIR
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    base_stem = f"{_normalize_timestamp_for_filename(trace.timestamp)}_hero_vs_villain"
-    path = target_dir / f"{base_stem}.json"
-    suffix = 1
-    while path.exists():
-        path = target_dir / f"{base_stem}_{suffix}.json"
-        suffix += 1
-
-    payload = trace_to_dict(trace)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=False), encoding="utf-8")
-    return path
-
-
 def load_trace(trace_id: str, trace_dir: Path | None = None) -> dict[str, Any]:
     target_dir = trace_dir or TRACES_DIR
+    from .attempts import AttemptStore
+
+    recorded = AttemptStore(target_dir / "play.sqlite").load(trace_id)
+    if recorded is not None:
+        return recorded
     path = _trace_path(trace_id, target_dir)
     if not path.exists():
         raise FileNotFoundError(f"Trace not found: {trace_id}")
@@ -145,7 +120,14 @@ def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
         except Exception:
             continue
 
-        events = payload.get("events", [])
+        if (
+            not isinstance(payload, dict)
+            or not isinstance(payload.get("config"), dict)
+            or not isinstance(payload.get("events"), list)
+            or not isinstance(payload.get("final_observation"), dict)
+        ):
+            continue
+        events = payload["events"]
         summaries.append(
             {
                 "id": path.stem,
@@ -186,10 +168,6 @@ def redact_observation(observation: dict[str, Any]) -> None:
         _redact_hand(opponent)
 
 
-# Backwards-compatible alias used by redact_trace_payload.
-_redact_observation = redact_observation
-
-
 def normalize_observation_to_hero(observation: dict[str, Any]) -> None:
     """Present an observation from the hero's (player 0) perspective.
 
@@ -220,11 +198,26 @@ def prepare_trace_payload(
     # ``reveal_hidden`` is a legacy post-game observation aid. It never grants
     # access to the mixed-view canonical authority artifact.
     prepared.pop("canonical_replay", None)
+    config = prepared.get("config", {})
+    config.pop("villain_checkpoint", None)
+    config.pop("seed", None)
+    reveal_hidden = (
+        reveal_hidden
+        and payload.get("end_reason") == "game_over"
+        and bool(payload.get("final_observation", {}).get("game_over"))
+    )
 
     observations = [
         event.get("observation", {}) for event in prepared.get("events", [])
     ]
     observations.append(prepared.get("final_observation", {}))
+
+    if not reveal_hidden:
+        for event in prepared.get("events", []):
+            if event.get("actor") == "villain":
+                event["actions"] = []
+                event["action"] = -1
+                event["action_description"] = "Opponent decision"
 
     for observation in observations:
         normalize_observation_to_hero(observation)

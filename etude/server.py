@@ -8,16 +8,26 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from copy import deepcopy
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
 from pathlib import Path
 import secrets
+import sqlite3
 from typing import Any, Callable
 
-from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
+from fastapi import (
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 import managym
@@ -34,6 +44,7 @@ from .advice import (
     request_advice,
     request_versioned_fixture_advice,
 )
+from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
 from .curated_pack import (
     CURATED_PACK,
     JEONG_INCREMENT_PACK,
@@ -49,6 +60,7 @@ from .enums import (
 )
 from .experience_protocol import PROTOCOL_VERSION, Command, ExperienceFrame
 from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
+from .opponent import configured_opponent, opponent_availability
 from .presentation import PresentationProjector
 from .replay_index import (
     CANONICAL_REPLAY_VERSION,
@@ -59,7 +71,6 @@ from .replay_index import (
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecision,
-    ReplayDecisionAddress,
     RestoredReplayDecision,
     ViewerPresentationTrack,
     canonical_projection_sha256,
@@ -203,6 +214,18 @@ ACTION_LABELS = {
 }
 
 app = FastAPI(title="Etude Fantasia")
+
+# Capture loaded runtime identity at process startup, before later source edits
+# can be mistaken for the code that actually served a retained game.
+PLAY_SOURCE_SHA256 = hashlib.sha256(
+    b"".join(
+        path.name.encode() + b"\0" + path.read_bytes()
+        for path in sorted(Path(__file__).parent.glob("*.py"))
+    )
+).hexdigest()
+RULES_BINARY_SHA256 = hashlib.sha256(
+    Path(managym._managym.__file__).read_bytes()
+).hexdigest()
 SESSION_TTL = timedelta(minutes=15)
 SESSION_EXPIRED_END_REASON = "session_expired"
 
@@ -867,6 +890,8 @@ def _parse_game_config(config: Any) -> GameConfig:
             seed = int(seed_value)
         except Exception as exc:
             raise ValueError("seed must be an integer.") from exc
+        if not 0 <= seed < 2**64:
+            raise ValueError("seed must be an unsigned 64-bit integer.")
 
     villain_sims: int | None = None
     if villain_type == "search":
@@ -883,13 +908,14 @@ def _parse_game_config(config: Any) -> GameConfig:
     villain_checkpoint: str | None = None
     villain_deterministic = False
     if villain_type == "checkpoint":
-        checkpoint_value = data.get("villain_checkpoint")
-        if not isinstance(checkpoint_value, str) or not checkpoint_value:
-            raise ValueError("checkpoint villain requires a 'villain_checkpoint' path.")
-        if not Path(checkpoint_value).is_file():
-            raise ValueError(f"Checkpoint not found: {checkpoint_value}")
-        villain_checkpoint = checkpoint_value
-        villain_deterministic = bool(data.get("villain_deterministic", False))
+        opponent = configured_opponent()
+        if opponent is None:
+            raise ValueError("No trained opponent is configured on this server.")
+        if data.get("opponent_sha256", opponent.sha256) != opponent.sha256:
+            raise ValueError("The selected opponent is no longer available.")
+        opponent.verify()
+        villain_checkpoint = str(opponent.checkpoint)
+        villain_deterministic = opponent.deterministic
 
     hero_deck, hero_deck_name = _normalize_deck(
         data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
@@ -908,9 +934,11 @@ def _parse_game_config(config: Any) -> GameConfig:
         asset_pack=selected_pack.reference if selected_pack is not None else None,
         villain_type=villain_type,
         seed=seed,
+        seed_was_requested=seed_value is not None,
         villain_sims=villain_sims,
         villain_checkpoint=villain_checkpoint,
         villain_deterministic=villain_deterministic,
+        opponent=opponent.identity() if villain_type == "checkpoint" else None,
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
@@ -932,6 +960,11 @@ class GameSession:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
+        self.attempt_owner = participant_id(secrets.token_urlsafe(32))
+        self._new_game_requests: set[str] = set()
+        self.attempt_store = AttemptStore(self.trace_dir / "play.sqlite")
+        self.record_players = None
+        self._record_player_owner = None
         self._villain_offer_policy = villain_offer_policy
         self._capture_authority_evidence = capture_authority_evidence
         self._historical_evidence_provider = (
@@ -997,27 +1030,54 @@ class GameSession:
         self._study_attempt_seq = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
-        if self.trace is not None:
-            self.close(end_reason="new_game")
-
+        request_id = (
+            raw_config.get("request_id") if isinstance(raw_config, dict) else None
+        )
+        if request_id is not None and (
+            not isinstance(request_id, str) or len(request_id) > 128
+        ):
+            raise ValueError("Invalid new-game request id.")
+        if request_id in self._new_game_requests:
+            return self._wire_message()
         config = _parse_game_config(raw_config)
+        seed = config.seed if config.seed is not None else secrets.randbits(32)
+        config.seed = seed
         try:
-            self.villain_policy = build_villain_policy(config)
+            policy = build_villain_policy(config)
         except ValueError:
             raise
         except Exception as exc:
-            raise ValueError(f"Failed to build villain policy: {exc}") from exc
+            raise ValueError("Failed to load the selected opponent.") from exc
 
-        seed = config.seed if config.seed is not None else 0
-        self.env = managym.Env(seed=seed)
-
-        player_configs = [
-            managym.PlayerConfig("Hero", config.hero_deck),
-            managym.PlayerConfig("Villain", config.villain_deck),
-        ]
-        self.obs, _ = self.env.reset(player_configs)
-
-        manifest = self.env.content_pack_manifest()
+        try:
+            env = managym.Env(seed=seed)
+            player_configs = [
+                managym.PlayerConfig("Hero", config.hero_deck),
+                managym.PlayerConfig("Villain", config.villain_deck),
+            ]
+            obs, _ = env.reset(player_configs)
+        except BaseException as exc:
+            # PyO3's PanicException derives directly from BaseException and has
+            # no importable Python class. A failed disposable replacement must
+            # not close the existing authority; process interrupts still escape.
+            if isinstance(exc, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+                raise
+            raise ValueError(
+                "Could not prepare the requested game. The current game is unchanged."
+            ) from exc
+        manifest = env.content_pack_manifest()
+        if config.opponent is not None:
+            opponent = configured_opponent()
+            assert opponent is not None
+            if manifest != opponent.content_manifest:
+                raise ValueError(
+                    "Trained opponent is incompatible with the current world."
+                )
+            if (
+                config.hero_deck not in opponent.decks.values()
+                or config.villain_deck not in opponent.decks.values()
+            ):
+                raise ValueError("Trained opponent does not support these decks.")
         compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
             config.hero_deck_name,
@@ -1027,10 +1087,29 @@ class GameSession:
             expected_pack_key = CURATED_SEMANTIC_PACK_KEYS[selected_pack.pack_id]
             actual_pack_key = None if compiled is None else compiled.get("pack_key")
             if actual_pack_key != expected_pack_key:
-                raise RuntimeError(
+                raise ValueError(
                     "Curated matchup did not select its compiled semantic pack: "
                     f"expected {expected_pack_key!r}, got {actual_pack_key!r}"
                 )
+        player_config = raw_config if isinstance(raw_config, dict) else {}
+        players = self.attempt_store.players_for_game(
+            self.attempt_owner,
+            asdict(config),
+            player_config.get("player_token"),
+            player_config.get("player_name"),
+        )
+        if (
+            not player_config.get("player_token")
+            and self.record_players
+            and self._record_player_owner == self.attempt_owner
+        ):
+            players[0] = replace(self.record_players[0], deck=config.hero_deck_name)
+        if self.trace is not None:
+            self.close(end_reason="new_game")
+        self.record_players = players
+        self._record_player_owner = self.attempt_owner
+        self.env, self.obs, self.villain_policy = env, obs, policy
+        if selected_pack is not None:
             self.asset_manifest_hash = selected_pack.manifest_sha256
             self.content_hash = (
                 CONTENT_HASH
@@ -1051,7 +1130,7 @@ class GameSession:
             events=[],
             final_observation={},
             winner=None,
-            end_reason="disconnect",
+            end_reason="active",
             timestamp=self._clock(),
         )
         self._trace_saved = False
@@ -1103,8 +1182,12 @@ class GameSession:
             to_revision=self.revision,
             caused_by=None,
         )
+        self.trace_id = self.match_id
+        self._persist_attempt()
         self._advance()
         self._last_presentation_cursor = self.presentation.next_seq
+        if request_id is not None:
+            self._new_game_requests.add(request_id)
         return self._wire_message(reason="initial_connect")
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
@@ -1411,18 +1494,22 @@ class GameSession:
             if actor_index == HERO_PLAYER_INDEX:
                 pending = self._pending_decision
                 if pending is None:
-                    raise RuntimeError("Hero command has no pending canonical decision.")
+                    raise RuntimeError(
+                        "Hero command has no pending canonical decision."
+                    )
                 replay = self.canonical_replay()
                 committed_address = DecisionAddressV2.from_decision(replay, row)
                 if committed_address != pending.address:
-                    raise RuntimeError("Committed decision identity drifted from live prompt.")
+                    raise RuntimeError(
+                        "Committed decision identity drifted from live prompt."
+                    )
                 retained_root = pending.root.clone_env()
-                self._decision_source_sha256[
-                    committed_address.serialize()
-                ] = pending.source_sha256
-                self._decision_rules_revision[
-                    committed_address.serialize()
-                ] = pending.rules_revision
+                self._decision_source_sha256[committed_address.serialize()] = (
+                    pending.source_sha256
+                )
+                self._decision_rules_revision[committed_address.serialize()] = (
+                    pending.rules_revision
+                )
             self._study_roots[int(row.ordinal)] = retained_root
             self.canonical_decisions.append(row)
         action_description = actions[action_index]["description"]
@@ -1567,7 +1654,12 @@ class GameSession:
                     )
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
-                action_index = int(self.villain_policy(self.env, self.obs))
+                try:
+                    action_index = int(self.villain_policy(self.env, self.obs))
+                except Exception as exc:
+                    raise RuntimeError(
+                        "The opponent could not continue this game."
+                    ) from exc
                 if action_index < 0 or action_index >= len(context.actions):
                     raise RuntimeError(
                         f"Villain policy selected invalid action index: {action_index}"
@@ -1751,9 +1843,7 @@ class GameSession:
             ordinal=len(self.canonical_decisions),
             viewer=HERO_PLAYER_INDEX,
             frame=frame,
-            presentation_cursor=len(
-                self.canonical_presentation[HERO_PLAYER_INDEX]
-            ),
+            presentation_cursor=len(self.canonical_presentation[HERO_PLAYER_INDEX]),
         )
         self._pending_decision = PendingCanonicalDecision(
             address=address,
@@ -1880,7 +1970,7 @@ class GameSession:
             raise RuntimeError("No observation available.")
 
         if self.obs.game_over:
-            self._finalize_trace(end_reason="game_over")
+            self._persist_attempt(end_reason="game_over")
             return self._build_frame(
                 self.obs,
                 viewer=HERO_PLAYER_INDEX,
@@ -1891,6 +1981,7 @@ class GameSession:
         prompt = self._publish_current_prompt()
         if prompt is None:
             raise RuntimeError("Non-terminal authority has no decision context.")
+        self._persist_attempt()
         return deepcopy(prompt.frame)
 
     def _presentation_recovery_tail(
@@ -1999,26 +2090,44 @@ class GameSession:
             payload["recovery"] = self.current_recovery("stale_command")
         return payload
 
-    def _finalize_trace(self, end_reason: str) -> None:
-        if self.trace is None or self.obs is None:
+    def _persist_attempt(self, *, end_reason: str | None = None) -> None:
+        if self.trace is None or self.obs is None or self.env is None:
             return
-        if self._trace_saved:
+        finished = end_reason is not None
+        if finished and self._trace_saved:
             return
+        if end_reason == "game_over" and not self.obs.game_over:
+            raise ValueError("Only an authoritative terminal game can be completed.")
 
         canonical = self.canonical_replay()
-        study_provider = StudyForkProvider(canonical, self._study_roots)
-        final_trace = replace(
+        study_provider = (
+            StudyForkProvider(canonical, self._study_roots) if finished else None
+        )
+        retained = replace(
             self.trace,
             final_observation=serialize_observation(self.obs),
             winner=_winner_for_hero(self.obs),
-            end_reason=end_reason,
+            end_reason=end_reason if finished else self.trace.end_reason,
             canonical_replay=canonical.model_dump(mode="json"),
         )
-        path = trace_store.save_trace(final_trace, self.trace_dir)
-        self.trace = final_trace
-        self.trace_id = path.stem
-        self._study_provider = study_provider
-        self._trace_saved = True
+        if finished:
+            self.trace = retained
+        self.attempt_store.save(
+            self.match_id,
+            self.attempt_owner,
+            self.revision,
+            {
+                **self.env.content_pack_manifest(),
+                "rules_binary_sha256": RULES_BINARY_SHA256,
+                "experience_source_sha256": PLAY_SOURCE_SHA256,
+            },
+            asdict(retained),
+            finished=finished,
+            players=self.record_players,
+        )
+        if finished:
+            self._study_provider = study_provider
+            self._trace_saved = True
 
     def canonical_replay(self) -> CanonicalReplayV1:
         """Project the canonical decisions committed so far.
@@ -2093,9 +2202,7 @@ class GameSession:
             row = self.canonical_decisions[address.ordinal]
             expected = DecisionAddressV2.from_decision(self.canonical_replay(), row)
             source_sha256 = self._decision_source_sha256.get(address.serialize(), "")
-            rules_revision = self._decision_rules_revision.get(
-                address.serialize(), -1
-            )
+            rules_revision = self._decision_rules_revision.get(address.serialize(), -1)
             retained_root = self._study_roots.get(int(address.ordinal))
             if (
                 address != expected
@@ -2383,8 +2490,7 @@ class GameSession:
 
     def close(self, end_reason: str) -> None:
         self._close_study_attempts()
-        if self.trace is not None and not self._trace_saved:
-            self._finalize_trace(end_reason=end_reason)
+        self._persist_attempt(end_reason=end_reason)
 
         self.env = None
         self.obs = None
@@ -2575,8 +2681,8 @@ def _table_opponent_label(record: SessionRecord) -> str | None:
     config = trace.config
     if config.villain_type == "search":
         return f"Search {config.villain_sims}"
-    if config.villain_type == "checkpoint":
-        return "Checkpoint"
+    if config.opponent is not None:
+        return f"{config.opponent['name']} · {config.opponent['sha256'][:10]}"
     return config.villain_type.capitalize()
 
 
@@ -2617,6 +2723,8 @@ def _table_snapshot(
         beliefs=_visible_beliefs(record, participant),
         decisions=_live_decision_summaries(record),
         opponent_label=_table_opponent_label(record),
+        attempt_id=record.game.trace_id,
+        opponent=record.game.trace.config.opponent if record.game.trace else None,
         watcher_invite=(
             f"#table={record.session_id}&watch={watcher_invite}"
             if watcher_invite is not None and participant.role == ViewerRole.PILOT
@@ -2829,7 +2937,24 @@ def _dispatch_table_request(
     _authorize_table_request(record, participant, request)
 
     if isinstance(request, (NewGameMessage, RematchMessage)):
-        response = record.game.new_game(request.config)
+        config = dict(request.config)
+        if isinstance(request, RematchMessage) and record.game.trace is not None:
+            previous = record.game.trace.config
+            config = {
+                "villain_type": previous.villain_type,
+                "villain_sims": previous.villain_sims,
+                "hero_deck": previous.hero_deck_name,
+                "villain_deck": previous.villain_deck_name,
+                "stops": record.game.stops,
+                "auto_pass": record.game.auto_pass,
+                "stop_on_stack": record.game.stop_on_stack,
+                **({"seed": previous.seed} if previous.seed_was_requested else {}),
+                **config,
+            }
+            if previous.opponent is not None:
+                config["opponent_sha256"] = previous.opponent["sha256"]
+        record.game.attempt_owner = participant_id(participant.resume_token)
+        response = record.game.new_game(config)
         record.accepted_command_submitters.clear()
         record.shared_beliefs.clear()
         for candidate in record.participants.values():
@@ -3098,17 +3223,187 @@ async def play_socket(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     except Exception as exc:
+        message = str(exc)
+        if isinstance(exc, sqlite3.Error):
+            message = "Game recording failed; this game may not have been saved."
         if attached_table_id is not None:
-            _drop_session(attached_table_id, end_reason="error")
+            try:
+                _drop_session(attached_table_id, end_reason="error")
+            except Exception:
+                logging.getLogger(__name__).exception("Failed to retain stopped game")
+                message = "Game recording failed; this game may not have been saved."
         with suppress(Exception):
-            await websocket.send_json(_error_message(str(exc)))
+            await websocket.send_json(_error_message(message))
         with suppress(Exception):
             await websocket.close()
 
 
+@app.get("/api/opponent")
+async def get_opponent() -> dict[str, Any]:
+    return opponent_availability()
+
+
+def _record_owners(tokens: str | None) -> set[str]:
+    return {participant_id(token) for token in (tokens or "").split(",") if token}
+
+
+@app.middleware("http")
+async def authorize_record(request, call_next):
+    parts = request.url.path.split("/")
+    if len(parts) >= 4 and parts[1:3] == ["api", "traces"]:
+        store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+        access = store.access(
+            parts[3],
+            _record_owners(request.headers.get("x-etude-participant-tokens")),
+            request.headers.get("x-etude-player-token"),
+        )
+        request.state.record_access = access
+        # Shared completed replay reads use the established seat-0 projection.
+        # Feedback and every mutation remain participant-only.
+        public_read = request.method == "GET" and (
+            len(parts) == 4 or parts[4] == "decisions"
+        )
+        if access is not None and not (
+            access["mine"] or (public_read and access["replay"])
+        ):
+            return JSONResponse(
+                {"detail": "participant_credential_required"}, status_code=403
+            )
+    return await call_next(request)
+
+
+@app.get("/api/player")
+async def get_player(x_etude_player_token: str = Header()) -> dict:
+    try:
+        return AttemptStore(trace_store.TRACES_DIR / "play.sqlite").profile(
+            x_etude_player_token
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/player")
+async def name_player(
+    payload: dict[str, Any], x_etude_player_token: str = Header()
+) -> dict:
+    try:
+        return AttemptStore(trace_store.TRACES_DIR / "play.sqlite").profile(
+            x_etude_player_token, payload.get("name")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/traces/{trace_id}/feedback")
+async def record_feedback(
+    trace_id: str,
+    payload: dict[str, Any],
+    x_etude_player_token: str | None = Header(default=None),
+) -> dict[str, bool]:
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    if store.owner(trace_id) is None:
+        raise HTTPException(status_code=404, detail="attempt_not_found")
+    try:
+        request_id, note = payload.get("request_id"), payload.get("note")
+        if not isinstance(request_id, str) or not isinstance(note, str):
+            raise ValueError("Feedback requires a request id and note.")
+        address = payload.get("decision_address")
+        if address is not None:
+            if not isinstance(address, str):
+                raise ValueError("Invalid decision address.")
+            restore_decision(_load_trace_replay(trace_id), address, HERO_PLAYER_INDEX)
+        author = (
+            store.profile(x_etude_player_token)["id"] if x_etude_player_token else None
+        )
+        store.feedback(
+            trace_id, request_id, note, author_id=author, decision_address=address
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"saved": True}
+
+
 @app.get("/api/traces")
-async def list_traces() -> list[dict[str, Any]]:
-    return trace_store.list_trace_summaries()
+async def list_traces(
+    response: Response,
+    x_etude_participant_tokens: str | None = Header(default=None),
+    x_etude_player_token: str | None = Header(default=None),
+    scope: str = "all",
+    q: str = "",
+    player: str | None = None,
+    other: str | None = None,
+    pairing: str | None = None,
+    version: str | None = None,
+    deck: str | None = None,
+    status: str | None = None,
+    result: str | None = None,
+    after: str | None = None,
+    before: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
+) -> list[dict[str, Any]]:
+    store = AttemptStore(trace_store.TRACES_DIR / "play.sqlite")
+    try:
+        # One extra row tells the client whether another page exists.
+        rows = store.summaries(
+            _record_owners(x_etude_participant_tokens),
+            token=x_etude_player_token,
+            scope=scope,
+            q=q,
+            player=player,
+            other=other,
+            pairing=pairing,
+            version=version,
+            deck=deck,
+            status=status,
+            result=result,
+            after=after,
+            before=before,
+            cursor=cursor,
+            limit=limit + 1,
+        )
+        position = decode_cursor(cursor)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # Frozen JSON history has no player identity. Keep it readable and label
+    # missing provenance honestly; identity filters cannot match it.
+    if scope == "all" and not any((player, other, pairing, version, deck, result)):
+        for row in trace_store.list_trace_summaries():
+            timestamp = row["timestamp"] or ""
+            legacy_status = (
+                "completed" if row["end_reason"] == "game_over" else "stopped"
+            )
+            if (q and q.casefold() not in row["id"].casefold()) or (
+                status and legacy_status != status
+            ):
+                continue
+            if (after and timestamp[:10] < after) or (
+                before and timestamp[:10] > before
+            ):
+                continue
+            if position and (timestamp, row["id"]) >= position:
+                continue
+            rows.append(
+                {
+                    **row,
+                    "timestamp": timestamp,
+                    "status": legacy_status,
+                    "players": [],
+                    "record_version": 0,
+                    "origin": "unknown",
+                    "mine": False,
+                    "replay_available": True,
+                    "feedback": [],
+                    "revision": None,
+                    "ended_at": None,
+                }
+            )
+    rows.sort(key=lambda row: (row["timestamp"], row["id"]), reverse=True)
+    page = rows[:limit]
+    if len(rows) > limit and page:
+        response.headers["X-Etude-Next-Cursor"] = page_cursor(page[-1])
+    response.headers["Cache-Control"] = "private, no-store"
+    return page
 
 
 def _load_trace_replay(trace_id: str) -> CanonicalReplayV1:
@@ -3157,9 +3452,7 @@ def _rest_study_owner(
     record: SessionRecord,
     participant_token: str | None,
 ) -> str | None:
-    """Authorize legacy single-user Study or one exact shared participant."""
-    if len(record.participants) == 1 and participant_token is None:
-        return None
+    """Authorize one exact participant, including single-player tables."""
     if participant_token is None:
         raise HTTPException(status_code=403, detail="participant_credential_required")
     matches = [
@@ -3276,7 +3569,9 @@ async def return_from_study_attempt(
 
 
 @app.get("/api/traces/{trace_id}")
-async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict[str, Any]:
+async def get_trace(
+    trace_id: str, request: Request, reveal_hidden: bool = False
+) -> dict[str, Any]:
     try:
         payload = trace_store.load_trace(trace_id)
     except ValueError as exc:
@@ -3286,6 +3581,12 @@ async def get_trace(trace_id: str, reveal_hidden: bool = False) -> dict[str, Any
 
     payload = trace_store.prepare_trace_payload(payload, reveal_hidden=reveal_hidden)
     payload["id"] = trace_id
+    access = getattr(request.state, "record_access", None)
+    payload["can_feedback"] = bool(access and access["mine"])
+    payload["read_only"] = bool(access and not access["mine"])
+    payload.update(
+        AttemptStore(trace_store.TRACES_DIR / "play.sqlite").metadata(trace_id)
+    )
     return payload
 
 

@@ -41,6 +41,7 @@
 
 - `docs/research/phase-experience.md`
 - `docs/architecture/experience-protocol-v1.md`
+- [Local challenger and shared-history evidence, 2026-09-25](../../docs/evidence/trained-challenger-2026-09-25.md)
 - Legacy implementation notes in `01-play-interface.md` and `05-polish.md`
 - Previous charter in `legacy-gui-charter.md`
 
@@ -80,6 +81,50 @@ cache hit <=50 ms on its declared profile; they were not remeasured here.
 
 The old INT-7 checkpoint pin and quoted serving costs need revalidation under
 the new loader ABI. Never repair drift by changing frozen evidence or substituting
-a compatible prior. The offline Linear snapshot has ETU-14 and Intelligence's
-ETU-21 open, but refresh/mutation is blocked by PRD-44's repository PM migration.
-The Game objective is unchanged; this branch does not claim its advice KR.
+a compatible prior. The earlier offline snapshot reported ETU-14 and ETU-21 open;
+that is historical evidence, not the current queue. The 2026-09-25 Game status
+describes ETU-14 as retired by the User. The retained advice design does not
+authorize restarting it. Five checkpoint-advice checks still fail in the latest
+affected-suite review; do not claim a passing ship gate.
+
+## Trained opponent and shared history
+
+[Challenge an identified trained bot through complete games · ETU-79](https://linear.app/loopflow/issue/ETU-79/challenge-an-identified-trained-bot-through-complete-games)
+answers the User's practical question: “if right now were like alright lets
+train our best sofar ...what do we do”. It also owns the training/export proof
+formerly assigned to ETU-78. Use the [local operator workflow](../../docs/local-trained-challenger.md)
+and its existing receipts; ETU-80 consumes those measurements. A small search-64
+behavior-cloning run proves the workflow, not current strategic superiority.
+Final proof requires repeated corrected-world executions after ETU-75 with exact
+source capture, both deck assignments and legality/replay witnesses. Nearly zero
+new spend remains the bound; no paid compute or public deployment is implied.
+
+The User explicitly requested a global game log “across everyone,” both players
+identified as Human/Bot, and easy filtering. My games is a filter on shared
+history. Preserve two symmetric seat snapshots with stable public player IDs,
+recorded names/decks and exact bot versions. Names, producer and loading path
+are not identity; group bot versions only with declared lineage. Future graphs
+and training datasets consume these structured records, not scraped UI text.
+
+GameSession writes the existing Trace, attempt metadata and seats in one SQLite
+transaction. Legacy JSON is read-only. Retain incomplete attempts and real ending
+reasons; restart interruption does not invent a winner or human abandonment.
+Resolve a generated deal seed before both policy and environment construction.
+Validate replacements before closing the playable match and pin rematch identity.
+Recorder failures must reach the player even if cleanup also fails.
+
+New attempts have shared listings; completed shared replays use the established
+seat-0 projection. Unfinished prefixes and feedback remain participant-only,
+and historical private SQLite games remain private. Listing never grants Retry,
+feedback or hidden live-state access. Keep public IDs separate from credentials,
+filter permissions in SQL before pagination, and label automated validation by
+origin rather than inferring human play from a Human seat.
+
+The 2026-09-25 review proves built-browser integration, both trained-opponent
+assignments, history/replay permissions and exact replay reconstruction. Human
+feedback says the demo plays fine but Lesson selection and transitions need
+work. Completion, saved in-product human feedback, replay visit and voluntary
+return remain unconfirmed. ETU-75 owns the missing Lesson-pool world; ETU-77 owns
+its usable interaction and ETU-76 transition clarity. Preserve exact reported
+positions; automated play and an Ask session's existence do not prove those
+outcomes. All three chapter KRs remain false in the current status.

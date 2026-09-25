@@ -8,7 +8,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const staticSpaAdapter = () => ({
   name: 'etude-static-spa',
   async adapt(builder) {
-    const out = 'build';
+    const out = process.env.ETUDE_FRONTEND_BUILD ?? 'build';
     builder.rimraf(out);
     builder.writeClient(out);
     await builder.generateFallback(`${out}/index.html`);

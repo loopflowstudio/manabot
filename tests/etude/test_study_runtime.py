@@ -147,6 +147,7 @@ def _completed_session(
         historical_evidence_provider=evidence_provider,
         allow_fixture_study_evidence=allow_fixture,
     )
+    session.attempt_owner = server.participant_id("study-resume")
     session.new_game(
         {
             "villain_type": "passive",
@@ -235,10 +236,15 @@ def test_normal_runtime_seals_evidence_and_returns_exactly(
 ) -> None:
     session, _ = _completed_session(tmp_path)
     _install_live_session(monkeypatch, tmp_path, session)
-    trace_path = tmp_path / f"{session.trace_id}.json"
-    before = trace_path.read_bytes()
+    before = trace_store.load_trace(session.trace_id, tmp_path)
 
-    with TestClient(app) as client:
+    with TestClient(
+        app,
+        headers={
+            "x-etude-participant-tokens": "study-resume",
+            "x-etude-participant-token": "study-resume",
+        },
+    ) as client:
         projection, restored, retry = _first_pass_retry(client, session.trace_id)
         sealed = json.dumps({"projection": projection, "retry": retry})
         for forbidden in (
@@ -263,7 +269,7 @@ def test_normal_runtime_seals_evidence_and_returns_exactly(
             == 404
         )
 
-    assert trace_path.read_bytes() == before
+    assert trace_store.load_trace(session.trace_id, tmp_path) == before
 
 
 def test_injected_exact_fixture_reveals_and_previews_on_fresh_forks(
@@ -276,10 +282,15 @@ def test_injected_exact_fixture_reveals_and_previews_on_fresh_forks(
         allow_fixture=True,
     )
     _install_live_session(monkeypatch, tmp_path, session)
-    trace_path = tmp_path / f"{session.trace_id}.json"
-    before = trace_path.read_bytes()
+    before = trace_store.load_trace(session.trace_id, tmp_path)
 
-    with TestClient(app) as client:
+    with TestClient(
+        app,
+        headers={
+            "x-etude-participant-tokens": "study-resume",
+            "x-etude-participant-token": "study-resume",
+        },
+    ) as client:
         _, restored, retry = _first_pass_retry(client, session.trace_id)
         reveal = client.post(f"/api/study-attempts/{retry['attempt_id']}/reveal")
         assert reveal.status_code == 200, reveal.text
@@ -316,7 +327,7 @@ def test_injected_exact_fixture_reveals_and_previews_on_fresh_forks(
         returned = client.post(f"/api/study-attempts/{retry['attempt_id']}/return")
         assert returned.json() == restored
 
-    assert trace_path.read_bytes() == before
+    assert trace_store.load_trace(session.trace_id, tmp_path) == before
 
 
 def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
@@ -330,7 +341,13 @@ def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
     )
     _install_live_session(monkeypatch, tmp_path, session)
 
-    with TestClient(app) as client:
+    with TestClient(
+        app,
+        headers={
+            "x-etude-participant-tokens": "study-resume",
+            "x-etude-participant-token": "study-resume",
+        },
+    ) as client:
         _, restored, retry = _first_pass_retry(client, session.trace_id)
         reveal = client.post(f"/api/study-attempts/{retry['attempt_id']}/reveal")
         assert reveal.status_code == 409
@@ -346,7 +363,13 @@ def test_drifted_or_runtime_fixture_evidence_fails_closed_but_keeps_return(
         allow_fixture=False,
     )
     _install_live_session(monkeypatch, forbidden_dir, forbidden)
-    with TestClient(app) as client:
+    with TestClient(
+        app,
+        headers={
+            "x-etude-participant-tokens": "study-resume",
+            "x-etude-participant-token": "study-resume",
+        },
+    ) as client:
         _, restored, retry = _first_pass_retry(client, forbidden.trace_id)
         reveal = client.post(f"/api/study-attempts/{retry['attempt_id']}/reveal")
         assert reveal.status_code == 409
@@ -364,7 +387,13 @@ def test_invalid_or_unstructured_retry_never_creates_an_attempt(
     session, _ = _completed_session(tmp_path)
     _install_live_session(monkeypatch, tmp_path, session)
 
-    with TestClient(app) as client:
+    with TestClient(
+        app,
+        headers={
+            "x-etude-participant-tokens": "study-resume",
+            "x-etude-participant-token": "study-resume",
+        },
+    ) as client:
         projection = client.get(f"/api/traces/{session.trace_id}/decisions").json()
         row = projection["decisions"][0]
         restored = client.get(

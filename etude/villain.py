@@ -134,7 +134,21 @@ class CheckpointVillain:
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
         del env
-        encoded = self.obs_space.encode(obs)
+        # Policy weights score each action independently of the padded action
+        # count. At inference preserve the entire rules offer list, including
+        # decisions wider than the training batch's storage capacity.
+        space = self.obs_space
+        if len(obs.action_space.actions) > space.encoder.max_actions:
+            from manabot.env import ObservationSpace
+
+            space = ObservationSpace(
+                space.encoder.hypers.model_copy(
+                    update={
+                        "max_actions": len(obs.action_space.actions),
+                    }
+                )
+            )
+        encoded = space.encode(obs)
         return int(
             self._select_action(self.agent, encoded, deterministic=self.deterministic)
         )

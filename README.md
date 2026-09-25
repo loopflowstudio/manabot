@@ -106,11 +106,17 @@ table. The versioned experience and Study schemas live in
 uv run manabot train
 ```
 
-The default preset trains a small manabot on your laptop's CPU in under a
-minute—no accounts, no GPU—and saves checkpoints to `.runs/local/`. Then face
-what you trained: in the play screen's opponent selector, choose
-**Checkpoint** and point it at your `.runs/local/step_*.pt`. Play, train, play
-against your own manabot: that loop is the project.
+The default preset is a local training smoke with a different matchup. To train
+and play the current Allies versus Lessons challenger, follow the
+[bounded local workflow](docs/local-trained-challenger.md). It uses the existing
+search-distillation recipe, retains failures and provenance, and configures the
+exact output on the server. The browser selects that named opponent by default;
+players do not enter checkpoint paths. Games, replays and optional notes are
+retained in SQLite and browsable from **Games**.
+
+This workflow establishes a playable candidate, not a measured strongest bot.
+The [dated evidence and remaining acceptance](docs/evidence/trained-challenger-2026-09-25.md)
+separate automated integration proof from human play and corrected-world proof.
 
 Serious runs train on Ubuntu machines in AWS and track to Weights & Biases.
 Simulation pulls trained models and can run locally on CPU. See

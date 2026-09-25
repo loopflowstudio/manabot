@@ -73,6 +73,13 @@ export interface ReplayDecisionAddress {
   decision_sha256: string;
 }
 
+export interface PreCommandDecisionAddress extends Omit<ReplayDecisionAddress, 'version' | 'offer_id' | 'command_id'> {
+  version: 2;
+  frame_hash: string;
+}
+
+export type DecisionAddress = ReplayDecisionAddress | PreCommandDecisionAddress;
+
 const DECIMAL = /^(0|[1-9][0-9]*)$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 
@@ -122,25 +129,29 @@ function decodeBase64Url(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-export function serializeReplayDecisionAddress(address: ReplayDecisionAddress): string {
+export function serializeReplayDecisionAddress(address: DecisionAddress): string {
   const numeric = [
     address.ordinal,
     address.viewer,
     address.revision,
     address.prompt_id,
-    address.offer_id,
+    ...(address.version === 1 ? [address.offer_id] : []),
     address.presentation_cursor,
   ];
   if (
     numeric.some((value) => !DECIMAL.test(value))
     || !address.replay_id
     || !address.match_id
-    || !address.command_id
+    || (address.version === 1 ? !address.command_id : !address.frame_hash)
     || !SHA256.test(address.decision_sha256)
   ) {
     throw new Error('invalid replay decision address');
   }
-  const payload = [
+  const payload = address.version === 2 ? [
+    2, address.replay_id, address.match_id, address.ordinal, address.viewer,
+    address.revision, address.prompt_id, address.presentation_cursor,
+    address.frame_hash, address.decision_sha256,
+  ] : [
     1,
     address.replay_id,
     address.match_id,
@@ -153,22 +164,28 @@ export function serializeReplayDecisionAddress(address: ReplayDecisionAddress): 
     address.presentation_cursor,
     address.decision_sha256,
   ];
-  return `erd1.${encodeBase64Url(new TextEncoder().encode(JSON.stringify(payload)))}`;
+  return `${address.version === 2 ? 'ed2' : 'erd1'}.${encodeBase64Url(new TextEncoder().encode(JSON.stringify(payload)))}`;
 }
 
-export function parseReplayDecisionAddress(value: string): ReplayDecisionAddress {
+export function parseReplayDecisionAddress(value: string): DecisionAddress {
   try {
-    if (!value.startsWith('erd1.')) throw new Error('prefix');
+    const preCommand = value.startsWith('ed2.');
+    if (!preCommand && !value.startsWith('erd1.')) throw new Error('prefix');
     const payload = JSON.parse(
-      new TextDecoder('utf-8', { fatal: true }).decode(decodeBase64Url(value.slice(5))),
+      new TextDecoder('utf-8', { fatal: true }).decode(decodeBase64Url(value.slice(preCommand ? 4 : 5))),
     ) as unknown;
-    if (!Array.isArray(payload) || payload.length !== 11 || payload[0] !== 1) {
+    if (!Array.isArray(payload) || payload.length !== (preCommand ? 10 : 11) || payload[0] !== (preCommand ? 2 : 1)) {
       throw new Error('shape');
     }
     if (payload.slice(1).some((item) => typeof item !== 'string')) {
       throw new Error('type');
     }
-    const address: ReplayDecisionAddress = {
+    const address: DecisionAddress = preCommand ? {
+      version: 2,
+      replay_id: payload[1], match_id: payload[2], ordinal: payload[3],
+      viewer: payload[4], revision: payload[5], prompt_id: payload[6],
+      presentation_cursor: payload[7], frame_hash: payload[8], decision_sha256: payload[9],
+    } : {
       version: 1,
       replay_id: payload[1] as string,
       match_id: payload[2] as string,
@@ -189,7 +206,7 @@ export function parseReplayDecisionAddress(value: string): ReplayDecisionAddress
 }
 
 export function assertAddressBindsReplayDecision(
-  address: ReplayDecisionAddress,
+  address: DecisionAddress,
   projection: CanonicalReplayProjectionV1,
   row: ReplayDecision,
 ): void {
@@ -200,8 +217,9 @@ export function assertAddressBindsReplayDecision(
     || address.viewer !== String(row.viewer)
     || address.revision !== String(row.revision)
     || address.prompt_id !== String(row.prompt_id)
-    || address.offer_id !== String(row.offer_id)
-    || address.command_id !== row.command_id
+    || (address.version === 1
+      ? address.offer_id !== String(row.offer_id) || address.command_id !== row.command_id
+      : address.frame_hash !== row.frame.frame_hash)
     || address.presentation_cursor !== String(row.presentation_cursor)
   ) {
     throw new Error('replay decision address identity drifted');

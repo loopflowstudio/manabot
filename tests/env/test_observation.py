@@ -38,9 +38,9 @@ import managym
 def hypers():
     """Create an encoder with minimal dimensions for testing."""
     return ObservationSpaceHypers(
-        max_cards_per_player=3,
+        max_cards_per_player=8,
         max_permanents_per_player=2,
-        max_actions=2,
+        max_actions=8,
         max_focus_objects=2,
     )
 
@@ -409,27 +409,17 @@ class TestObservationEncoder:
                 atol=1e-6,
             )
 
-    def test_action_space_truncation_warning(self, monkeypatch):
-        hypers = ObservationSpaceHypers(max_actions=2, max_focus_objects=2)
-        encoder = ObservationEncoder(hypers)
-        fake_actions = [
-            SimpleNamespace(action_type=0, focus=[]),
-            SimpleNamespace(action_type=1, focus=[]),
-            SimpleNamespace(action_type=2, focus=[]),
-        ]
-        fake_obs = SimpleNamespace(action_space=SimpleNamespace(actions=fake_actions))
-        fake_parent_logger = MagicMock()
-        fake_logger = MagicMock()
-        fake_parent_logger.getChild.return_value = fake_logger
-        monkeypatch.setattr(
-            "manabot.env.observation.getLogger", lambda *_: fake_parent_logger
+    def test_action_space_overflow_rejects_incomplete_policy_input(self):
+        encoder = ObservationEncoder(ObservationSpaceHypers(max_actions=2))
+        obs = SimpleNamespace(
+            action_space=SimpleNamespace(actions=[SimpleNamespace(focus=[])] * 3),
+            agent_cards=[],
+            opponent_cards=[],
+            agent_permanents=[],
+            opponent_permanents=[],
         )
-
-        actions, action_focus = encoder._encode_actions(fake_obs)
-
-        assert actions.shape == (2, encoder.action_dim)
-        assert action_focus.shape == (2, hypers.max_focus_objects)
-        fake_logger.warning.assert_called_once_with("Action space truncated: 3 -> 2")
+        with pytest.raises(ValueError, match="actions 3 > 2"):
+            encoder.encode(obs)
 
     def test_card_space_truncation_warning(self, monkeypatch):
         hypers = ObservationSpaceHypers(max_cards_per_player=1)

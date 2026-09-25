@@ -46,3 +46,23 @@ cargo test
 Notes:
 - `cargo test --all-features` can fail in environments without Python dev/link symbols; treat that as environment setup, not core engine correctness.
 - Record any unavailable tooling (e.g., missing `pytest`) explicitly in the gate summary.
+
+## Local challenger and shared history
+
+For changes to the bounded challenger runner, include
+`uv run pytest tests/sim/test_train_challenger.py -q`. Reject nonfinite wall
+limits before creating output or launching a worker; never run training just
+to test malformed budget arguments.
+
+For history changes, exercise `game-history.spec.ts` against an isolated built
+SPA/ASGI instance using `.lf/directions/e2e-ports.md`. Include empty results,
+visible request errors and retry, alongside shared/private replay and feedback.
+Record local timing separately from production coverage. Preserve failures in
+frozen advice evidence as explicit gate blockers; do not regenerate fixtures
+or relax historical checkpoint validation to make the suite green.
+
+When history permissions or replay projections change, run the release prompt
+matrix too. Match terminal traces by the live table's `attempt_id`; replay
+responses omit the deal seed even for participants.
+On macOS, `--ignore-snapshots` can verify gameplay and trace lookup, but only
+the pinned Linux profile certifies committed visual references.

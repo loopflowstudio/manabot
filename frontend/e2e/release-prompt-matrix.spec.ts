@@ -103,6 +103,7 @@ interface MatrixCommand {
 }
 
 interface MatrixBrowserState {
+  attemptId: string | null;
   commands: MatrixCommand[];
   connectionObserver?: MutationObserver;
   connectionStatuses: string[];
@@ -126,16 +127,11 @@ interface ReconnectGate {
   releaseReplacement: () => void;
 }
 
-interface TraceSummary {
-  id: string;
-}
-
 interface TracePayload {
   config: {
     hero_deck_name: string;
     villain_deck_name: string;
     villain_type: string;
-    seed: number;
   };
   end_reason: string;
   winner: number | null;
@@ -337,6 +333,7 @@ async function installScenarioInstrumentation(page: Page, seed: number): Promise
   await page.addInitScript((scenarioSeed) => {
     const NativeWebSocket = window.WebSocket;
     const state: MatrixBrowserState = {
+      attemptId: null,
       commands: [],
       connectionStatuses: [],
       sockets: [],
@@ -350,6 +347,12 @@ async function installScenarioInstrumentation(page: Page, seed: number): Promise
           super(url, protocols);
         }
         state.sockets.push(this);
+        this.addEventListener('message', (event) => {
+          const message = JSON.parse(event.data) as { table?: { attempt_id?: string | null } };
+          if (typeof message.table?.attempt_id === 'string') {
+            state.attemptId = message.table.attempt_id;
+          }
+        });
       }
 
       send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
@@ -789,43 +792,26 @@ async function findTerminalTrace(
   page: Page,
   scenario: PromptScenario,
 ): Promise<{ id: string; payload: TracePayload }> {
+  const id = await page.evaluate(() => (window as MatrixWindow).__etudeMatrix?.attemptId);
+  expect(typeof id, `${scenario.id}: authority supplied no attempt id`).toBe('string');
   let terminalTrace: { id: string; payload: TracePayload } | undefined;
-  let observed: Array<{
-    id: string;
-    seed: number;
-    hero_deck_name: string;
-    villain_deck_name: string;
-  }> = [];
 
   await expect
     .poll(
       async () => {
-        observed = [];
-        const summariesResponse = await page.request.get('/api/traces');
-        expect(summariesResponse.ok()).toBe(true);
-        const summaries = (await summariesResponse.json()) as TraceSummary[];
-
-        for (const summary of summaries) {
-          const response = await page.request.get(
-            `/api/traces/${encodeURIComponent(summary.id)}`,
-          );
-          expect(response.ok()).toBe(true);
-          const payload = (await response.json()) as TracePayload;
-          observed.push({ id: summary.id, ...payload.config });
-          if (
-            payload.config.seed === scenario.seed &&
-            payload.config.hero_deck_name === scenario.hero_deck &&
-            payload.config.villain_deck_name === scenario.villain_deck
-          ) {
-            terminalTrace = { id: summary.id, payload };
-            return true;
-          }
-        }
-        return false;
+        const response = await page.request.get(`/api/traces/${encodeURIComponent(id!)}`);
+        expect(response.ok()).toBe(true);
+        const payload = (await response.json()) as TracePayload;
+        if (payload.end_reason !== 'game_over') return false;
+        expect(payload.config.hero_deck_name).toBe(scenario.hero_deck);
+        expect(payload.config.villain_deck_name).toBe(scenario.villain_deck);
+        expect(payload.config).not.toHaveProperty('seed');
+        terminalTrace = { id: id!, payload };
+        return true;
       },
       {
         timeout: 10_000,
-        message: `${scenario.id}: terminal trace was not persisted; observed ${JSON.stringify(observed)}`,
+        message: `${scenario.id}: terminal trace ${id} was not persisted`,
       },
     )
     .toBe(true);

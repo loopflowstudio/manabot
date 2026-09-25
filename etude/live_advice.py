@@ -6,16 +6,18 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 import functools
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from manabot.belief.likelihood import FrozenPolicyLikelihood
-from manabot.belief.range import BeliefState
-from manabot.belief.tracker import BeliefTracker
 from manabot.sim.search_runtime import (
     RetainedCheckpointRegistration,
     retained_int7_policy_only_checkpoint,
 )
 from managym.decision import SemanticTransition
+
+if TYPE_CHECKING:
+    from manabot.belief.likelihood import FrozenPolicyLikelihood
+    from manabot.belief.range import BeliefState
+    from manabot.belief.tracker import BeliefTracker
 
 LIVE_ADVICE_TRAINING_SEED = 197
 LIVE_ADVICE_EPSILON = 0.01
@@ -37,6 +39,8 @@ class TrackedPosteriorSnapshot:
 def _likelihood_registration() -> tuple[
     FrozenPolicyLikelihood, RetainedCheckpointRegistration
 ]:
+    from manabot.belief.likelihood import FrozenPolicyLikelihood
+
     registration = retained_int7_policy_only_checkpoint(LIVE_ADVICE_TRAINING_SEED)
     likelihood = FrozenPolicyLikelihood(
         registration.checkpoint_path,
@@ -47,6 +51,8 @@ def _likelihood_registration() -> tuple[
 
 
 def _initialize_tracker(root: Any) -> tuple[BeliefTracker, TrackedPosteriorSnapshot]:
+    from manabot.belief.tracker import BeliefTracker
+
     likelihood, registration = _likelihood_registration()
     tracker = BeliefTracker.from_engine(
         root,
@@ -155,9 +161,7 @@ class LiveBeliefRuntime:
                 max_workers=1,
                 thread_name_prefix="etude-live-belief",
             )
-            self._future = self._executor.submit(
-                self._initialize, self._initial_root
-            )
+            self._future = self._executor.submit(self._initialize, self._initial_root)
 
     @property
     def started(self) -> bool:

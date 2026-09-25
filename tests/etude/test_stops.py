@@ -5,6 +5,7 @@ MTGO-style priority stops: server-side auto-pass, stop configuration
 """
 
 import json
+import sqlite3
 
 from fastapi.testclient import TestClient
 import pytest
@@ -20,6 +21,16 @@ MAX_HERO_MOVES = 3000
 BOLT_DECK = {"Mountain": 12, "Lightning Bolt": 12}
 COUNTER_DECK = {"Island": 14, "Counterspell": 8}
 OGRE_DECK = {"Mountain": 14, "Gray Ogre": 8}
+
+
+def _recorded_traces(directory):
+    with sqlite3.connect(directory / "play.sqlite") as db:
+        return [
+            (row[0], json.loads(row[1]))
+            for row in db.execute(
+                "SELECT id, trace_json FROM attempts ORDER BY started_at"
+            )
+        ]
 
 
 @pytest.fixture()
@@ -46,9 +57,7 @@ def _turn_side(payload: dict) -> str:
 
 def _stack_cards(payload: dict) -> list[str]:
     data = payload["data"]
-    return [
-        card["name"] for card in data["agent"]["stack"] + data["opponent"]["stack"]
-    ]
+    return [card["name"] for card in data["agent"]["stack"] + data["opponent"]["stack"]]
 
 
 def _stop_key(payload: dict) -> str | None:
@@ -89,9 +98,9 @@ def _play_game(websocket, config: dict, policy, on_payload=None) -> dict:
 
 
 def _load_single_trace(trace_dir) -> dict:
-    trace_files = sorted(trace_dir.glob("*.json"))
+    trace_files = _recorded_traces(trace_dir)
     assert len(trace_files) == 1
-    return json.loads(trace_files[0].read_text(encoding="utf-8"))
+    return trace_files[0][1]
 
 
 def test_default_stops_surface_only_configured_windows(isolated_traces):
@@ -108,8 +117,12 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
         with client.websocket_connect("/ws/play") as websocket:
             payload = _play_game(
                 websocket,
-                {"villain_type": "passive", "seed": 3, "hero_deck": BOLT_DECK,
-                 "villain_deck": {"Island": 20}},
+                {
+                    "villain_type": "passive",
+                    "seed": 3,
+                    "hero_deck": BOLT_DECK,
+                    "villain_deck": {"Island": 20},
+                },
                 _lands_then_pass_policy,
                 on_payload=observe,
             )
@@ -125,9 +138,9 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
     auto_events = [e for e in hero_events if e["auto"]]
     clicked_events = [e for e in hero_events if not e["auto"]]
     assert auto_events, "Expected auto-passed hero windows in the trace"
-    assert all(
-        e["action_description"] == "Pass priority" for e in auto_events
-    ), "Auto events must all be passes"
+    assert all(e["action_description"] == "Pass priority" for e in auto_events), (
+        "Auto events must all be passes"
+    )
     assert len(clicked_events) == len(surfaced) + 0, (
         "Every clicked decision corresponds to a surfaced window"
     )
@@ -165,8 +178,7 @@ def test_disabling_auto_pass_surfaces_every_window(isolated_traces):
         return surfaced, _load_single_trace(isolated_traces)
 
     surfaced_default, trace_default = run({})
-    for trace_file in isolated_traces.glob("*.json"):
-        trace_file.unlink()
+    (isolated_traces / "play.sqlite").unlink()
     surfaced_manual, trace_manual = run({"auto_pass": False})
 
     # Identical engine trajectory: the auto-passes in the default run are the
@@ -175,8 +187,7 @@ def test_disabling_auto_pass_surfaces_every_window(isolated_traces):
     assert trace_default["winner"] == trace_manual["winner"]
     assert not any(e["auto"] for e in trace_manual["events"])
     assert surfaced_manual > 2 * surfaced_default, (
-        f"auto-pass should remove most windows: {surfaced_default} vs "
-        f"{surfaced_manual}"
+        f"auto-pass should remove most windows: {surfaced_default} vs {surfaced_manual}"
     )
 
 
@@ -214,11 +225,14 @@ def test_stack_nonempty_forces_surfacing(isolated_traces):
                         ),
                     }
                 )
+
         with TestClient(app) as client:
             with client.websocket_connect("/ws/play") as websocket:
                 _play_game(
-                    websocket, {**config, **extra},
-                    _lands_then_pass_policy, on_payload=observe,
+                    websocket,
+                    {**config, **extra},
+                    _lands_then_pass_policy,
+                    on_payload=observe,
                 )
         return stack_windows, _load_single_trace(isolated_traces)
 
@@ -230,12 +244,9 @@ def test_stack_nonempty_forces_surfacing(isolated_traces):
     assert any(w["can_counter"] for w in stack_windows)
     assert any("Gray Ogre" in w["stack"] for w in stack_windows)
 
-    for trace_file in isolated_traces.glob("*.json"):
-        trace_file.unlink()
+    (isolated_traces / "play.sqlite").unlink()
     no_stack_windows, trace_off = run({"stop_on_stack": False})
-    assert no_stack_windows == [], (
-        "stop_on_stack=false must not surface stack windows"
-    )
+    assert no_stack_windows == [], "stop_on_stack=false must not surface stack windows"
     # Same trajectory either way (the scripted hero passed at those windows).
     assert len(trace_on["events"]) == len(trace_off["events"])
     assert trace_on["winner"] == trace_off["winner"]
@@ -300,16 +311,12 @@ def test_set_stops_mid_game_takes_effect(isolated_traces):
             assert payload["stops"]["stop_on_stack"] is False
 
             # Validation errors leave the session playable.
-            websocket.send_json(
-                {"type": "set_stops", "stops": {"my": ["untap"]}}
-            )
+            websocket.send_json({"type": "set_stops", "stops": {"my": ["untap"]}})
             payload = websocket.receive_json()
             assert payload["type"] == "error"
             assert "Unknown stop step" in payload["message"]
 
-            websocket.send_json(
-                {"type": "set_stops", "stops": {"theirs": []}}
-            )
+            websocket.send_json({"type": "set_stops", "stops": {"theirs": []}})
             payload = websocket.receive_json()
             assert payload["type"] == "error"
             assert "my" in payload["message"]
@@ -364,9 +371,7 @@ def test_pass_turn_yields_until_end_of_turn(isolated_traces):
     hero_events = [e for e in record.game.trace.events if e.actor == "hero"]
     assert any(e.auto for e in hero_events)
     assert all(
-        not e.auto
-        for e in hero_events
-        if e.action_description != "Pass priority"
+        not e.auto for e in hero_events if e.action_description != "Pass priority"
     )
 
 
@@ -392,8 +397,11 @@ def test_non_priority_spaces_always_surface(isolated_traces):
                 {
                     "villain_type": "passive",
                     "seed": 9,
-                    "hero_deck": {"Mountain": 8, "Raging Goblin": 8,
-                                  "Lightning Bolt": 4},
+                    "hero_deck": {
+                        "Mountain": 8,
+                        "Raging Goblin": 8,
+                        "Lightning Bolt": 4,
+                    },
                     "villain_deck": {"Island": 20},
                     # No combat stops at all — the attack declaration must
                     # still surface.

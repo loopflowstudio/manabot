@@ -112,9 +112,8 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     assert refreshed["presentation_tail"] == recovered["presentation_tail"]
 
     session.close(end_reason="disconnect")
-    trace_files = list(tmp_path.glob("*.json"))
-    assert len(trace_files) == 1
-    persisted = trace_store.load_trace(trace_files[0].stem, tmp_path)
+    assert not list(tmp_path.glob("*.json"))
+    persisted = trace_store.load_trace(session.trace_id, tmp_path)
     replay_events = [
         event
         for trace_event in persisted["events"]

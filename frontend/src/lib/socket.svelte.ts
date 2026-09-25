@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 
+import { rememberRecordCredential } from './records';
 import { gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
@@ -83,6 +84,7 @@ function saveResumeCredentials(credentials: ResumeCredentials): void {
     return;
   }
   window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(credentials));
+  rememberRecordCredential(credentials.resume_token);
 }
 
 function clearResumeCredentials(): void {
@@ -200,10 +202,7 @@ export class GameSocketController {
   }
 
   sendNewGame(config?: Record<string, unknown>): void {
-    this.inFlightCommand = null;
-    this.presentationCursor = null;
-    presentationPlayer.clear();
-    gameStore.prepareForNewGame();
+    gameStore.setError(null);
     const grantRevision = gameStore.table?.access.grant_revision;
     this.send({
       type: 'new_game',
@@ -548,6 +547,11 @@ export class GameSocketController {
   ): void {
     const current = gameStore.protocolFrame;
     const next = recovery.frame;
+    if (!current || current.match_id !== next.match_id) {
+      this.presentationCursor = null;
+      presentationPlayer.clear();
+      gameStore.prepareForNewGame();
+    }
     if (
       current
       && current.match_id === next.match_id

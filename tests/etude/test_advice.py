@@ -58,6 +58,18 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
 
 builtins.__import__ = guarded
 import etude.server
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+with TemporaryDirectory() as directory:
+    game = etude.server.GameSession(trace_dir=Path(directory))
+    game.new_game({
+        'hero_deck': 'interactive', 'villain_deck': 'interactive',
+        'villain_type': 'passive', 'seed': 197, 'auto_pass': False,
+    })
+    game.hero_action(0)
+    game.close('test')
+    assert game.attempt_store.load(game.trace_id)['events']
 assert 'manabot.sim.conditional_search' not in sys.modules
 assert 'numpy' not in sys.modules
 """

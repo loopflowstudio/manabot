@@ -9,6 +9,7 @@
 
   const NAV = [
     { href: '/', label: 'Play' },
+    { href: '/games', label: 'Games' },
     { href: '/replay', label: 'Replay' },
   ];
 

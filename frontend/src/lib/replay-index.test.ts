@@ -90,6 +90,22 @@ describe('canonical replay viewer projection', () => {
     );
   });
 
+  it('opens current pre-command addresses and rejects frame drift without binding a later command', () => {
+    const row = playerZero.decisions[0];
+    const payload = [2, playerZero.replay_id, playerZero.match_id, String(row.ordinal),
+      String(row.viewer), String(row.revision), String(row.prompt_id), String(row.presentation_cursor),
+      row.frame.frame_hash, 'a'.repeat(64)];
+    const encoded = `ed2.${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+    const address = parseReplayDecisionAddress(encoded);
+    expect(serializeReplayDecisionAddress(address)).toBe(encoded);
+    expect(() => assertAddressBindsReplayDecision(address, playerZero, row)).not.toThrow();
+    expect(() => assertAddressBindsReplayDecision(address, playerZero, { ...row, command_id: 'different-command' })).not.toThrow();
+    expect(() => assertAddressBindsReplayDecision(address, playerZero, {
+      ...row, frame: { ...row.frame, frame_hash: 'different-frame' },
+    })).toThrow(/identity drifted/);
+    expect(() => parseReplayDecisionAddress(`${encoded}=`)).toThrow(/invalid replay decision address/);
+  });
+
   it('rejects mixed viewers, duplicate ordinals, and private opponent hands', () => {
     const mixed = structuredClone(playerZero);
     mixed.decisions.push(structuredClone(playerOne.decisions[0]));

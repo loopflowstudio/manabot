@@ -249,7 +249,7 @@ export function assertViewerSafeStudyArtifact(artifact: StudyArtifact): void {
     try {
       address = parseReplayDecisionAddress(landmark.decision_id);
     } catch {
-      fail(`${landmark.id}: decision_id is not an erd1 address`);
+      fail(`${landmark.id}: decision_id is not a replay decision address`);
     }
     if (frame.match_id !== artifact.identity.match_id) {
       fail(`${landmark.id}: frame match does not match study identity`);
@@ -295,8 +295,9 @@ export function assertViewerSafeStudyArtifact(artifact: StudyArtifact): void {
       || address.viewer !== String(landmark.viewer)
       || address.revision !== String(frame.revision)
       || address.prompt_id !== String(landmark.prompt_id)
-      || address.offer_id !== String(landmark.offer_id)
-      || address.command_id !== landmark.played.command_id
+      || (address.version === 1
+        ? address.offer_id !== String(landmark.offer_id) || address.command_id !== landmark.played.command_id
+        : address.frame_hash !== frame.frame_hash)
     ) {
       fail(`${landmark.id}: replay decision address drifted`);
     }

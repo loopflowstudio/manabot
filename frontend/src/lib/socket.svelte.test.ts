@@ -122,6 +122,18 @@ describe('parseServerMessage', () => {
 });
 
 describe('GameSocketController offline gameplay', () => {
+  it('retains the playable frame when a replacement is rejected', () => {
+    const controller = new GameSocketController();
+    const recovery = structuredClone(boltProtocolFixture.recovery);
+    deliver(controller, { type: 'observation', data: recovery.frame.projection,
+      actions: [], recovery } as ServerMessage);
+    const before = gameStore.protocolFrame;
+    controller.sendNewGame({ villain_type: 'checkpoint', opponent_sha256: 'missing' });
+    expect(gameStore.protocolFrame).toEqual(before);
+    deliver(controller, { type: 'error', message: 'The selected opponent is unavailable.' });
+    expect(gameStore.protocolFrame).toEqual(before);
+    expect(gameStore.errorMessage).toContain('unavailable');
+  });
   it('does not queue offer commands or F6 against a future recovered frame', () => {
     gameStore.prepareForNewGame();
     gameStore.applyFrame(boltProtocolFixture.recovery.frame);

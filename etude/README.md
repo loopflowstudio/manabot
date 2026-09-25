@@ -26,10 +26,24 @@ offline. Schemas and three-language conformance fixtures live in
 - **`study_protocol.py`**: viewer-safe study artifacts and decision evidence
 - **`study_branch.py`**: source-bound historical forks, native structured
   execution, typed failure, and consuming exact-return receipts
-- **`trace.py`**: trace persistence with hand redaction (traces land in
-  `etude/traces/`; override with `ETUDE_TRACES_DIR`)
+- **`trace.py` / `attempts.py`**: viewer-safe trace projection and SQLite human
+  attempts/feedback (`ETUDE_TRACES_DIR/play.sqlite`, default `etude/traces/`).
+  New records have one SQLite authority; legacy JSON remains readable.
+  `attempt_players` identifies both seats with stable public IDs, types, recorded
+  names, decks and bot versions. Table credentials and browser player credentials
+  remain private authorization values. Shared history applies permissions in SQL
+  before filtering/pagination; only completed shared replays are readable by
+  nonparticipants. `ETUDE_PLAY_RECORD_ORIGIN` distinguishes declared automated
+  validation from human play; absent provenance is unknown.
 - **`villain.py`**: opponent policies for the hero to face
 - **`enums.py`**: wire enums kept separate so the play runtime stays minimal
+
+Keep training and belief dependencies lazy at their execution boundaries.
+Ordinary play must import, advance and record without NumPy or Torch; type-only
+belief imports belong under `TYPE_CHECKING`. Study validates the existing
+`ed2` address against the pre-command frame, and validates the played Command
+against its landmark separately. Retained `erd1` addresses still bind the
+recorded offer and Command.
 
 ## Run it
 
@@ -43,6 +57,16 @@ Development server without the launcher:
 ```bash
 uv run uvicorn etude.server:app --port 8000
 ```
+
+The [local trained-challenger workflow](../docs/local-trained-challenger.md)
+covers training, the built same-origin server, feedback, and read-only SQL.
+Configure `ETUDE_PLAY_CANDIDATE` on the server, never in player input.
+
+Replacement admission must keep the old GameSession authority intact until the
+new environment resets successfully. Invalid native deck setup can raise
+PyO3's `PanicException` (a direct `BaseException`, with no importable Python
+class); contain that failure only at disposable-environment construction, while
+letting process interrupts escape. Do not broaden gameplay error suppression.
 
 Tests: `uv run --extra dev pytest tests/etude`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
