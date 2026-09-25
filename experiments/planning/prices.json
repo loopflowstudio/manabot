@@ -1,0 +1,86 @@
+{
+  "observed_date": "2026-09-24",
+  "currency": "USD",
+  "tax_included": false,
+  "capacity_verified": false,
+  "quotes": [
+    {
+      "provider": "Lambda",
+      "class": "1x RTX A6000, 48 GB VRAM, 14 vCPU, 100 GiB RAM, 512 GiB SSD",
+      "usd_per_instance_hour": 1.09,
+      "source": "https://lambda.ai/pricing"
+    },
+    {
+      "provider": "Lambda",
+      "class": "1x A10, 24 GB VRAM, 30 vCPU, 226 GiB RAM, 1.3 TiB SSD",
+      "usd_per_instance_hour": 1.29,
+      "source": "https://lambda.ai/pricing"
+    },
+    {
+      "provider": "Lambda",
+      "class": "1x A100 PCIe, 40 GB VRAM, 30 vCPU, 225 GiB RAM, 512 GiB SSD",
+      "usd_per_instance_hour": 1.99,
+      "source": "https://lambda.ai/pricing"
+    },
+    {
+      "provider": "Lambda",
+      "class": "1x H100 PCIe, 80 GB VRAM, 26 vCPU, 225 GiB RAM, 1 TiB SSD",
+      "usd_per_instance_hour": 3.29,
+      "source": "https://lambda.ai/pricing"
+    },
+    {
+      "provider": "Runpod",
+      "class": "displayed RTX 4090 Pod, 24 GB VRAM, 6 vCPU, 41 GB RAM; market/region requote required",
+      "usd_per_instance_hour": 0.74,
+      "source": "https://www.runpod.io/pricing",
+      "page_updated": "2026-09-13"
+    },
+    {
+      "provider": "Runpod",
+      "class": "displayed L4 Pod, 24 GB VRAM, 12 vCPU, 50 GB RAM; market/region requote required",
+      "usd_per_instance_hour": 0.49,
+      "source": "https://www.runpod.io/pricing",
+      "page_updated": "2026-09-13"
+    },
+    {
+      "provider": "Hetzner",
+      "class": "CCX33, USA ASH/HIL, excludes IPv4",
+      "usd_per_instance_hour": 0.266,
+      "usd_per_month_cap": 165.99,
+      "source": "https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/",
+      "effective_date": "2026-06-15"
+    }
+  ],
+  "ancillary": {
+    "runpod_network_gb_month_under_1tb": 0.07,
+    "runpod_network_gb_month_over_1tb": 0.05,
+    "runpod_running_volume_gb_month": 0.1,
+    "runpod_stopped_volume_gb_month": 0.2,
+    "source": "https://docs.runpod.io/pods/pricing",
+    "lambda_filesystem_price": null,
+    "lambda_filesystem_note": "Official billing page's $0.20/GiB-month is explicitly an example, not a current quote; do not price from it.",
+    "lambda_billing_source": "https://docs.lambda.ai/public-cloud/billing/"
+  },
+  "billing": {
+    "cpu": {
+      "increment_seconds": 3600,
+      "source": "https://docs.hetzner.com/cloud/billing/faq/"
+    },
+    "gpu": {
+      "increment_seconds": 60,
+      "source": "https://docs.lambda.ai/public-cloud/billing/"
+    }
+  },
+  "planning_hourly_ceilings": {
+    "cpu": 0.3,
+    "gpu": 1.2,
+    "local": 0.06
+  },
+  "notes": [
+    "Ceilings are assumptions above selected quotes, not vendor prices.",
+    "No reserved/spot discount, credit, monthly-cap saving, or availability is assumed.",
+    "All allocated instance time is charged including idle, startup, failed work and export.",
+    "Local hourly amount models electricity only; sunk hardware and opportunity cost are separate.",
+    "Reject a launch quote above its ceiling; replan rather than consume the failure reserve."
+  ]
+}
