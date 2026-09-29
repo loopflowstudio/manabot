@@ -44,7 +44,11 @@ comparable within a world. The **w2** baselines and porting rules are in
 the [Learn integration record](../docs/rules/learn-lesson.md) tracks the
 unfinished w3 declaration and ordinary checkpoint binding. Existing w2
 checkpoints do not certify the corrected rules, even if they load or their
-dimensions match.
+dimensions match. The local challenger workflow records the corrected world's
+rules, content, Lesson-pool and tensor identities with each run.
+
+`train_bc` and `train_search_supervised` take the `observation_hypers` the
+shards were encoded with and reject a dataset of any other shape.
 
 ## Architecture
 
