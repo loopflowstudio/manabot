@@ -126,6 +126,70 @@ training runtime and candidate. The checked Fly deployment has no volume mount;
 this local workflow does not deploy anything.
 
 
+## Evaluate the selected matchup
+
+Use the existing arena's bounded instrument command on the authored Allies
+versus Lessons setup, including both sideboards:
+
+```bash
+uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
+  --out-dir .runs/allies-lessons-arena-1 --deal-seeds 83001
+```
+
+Without a candidate registration this runs Random against the shipped default
+demo Search-64. It calls `etude.villain.SearchVillain` itself: 64 simulations
+per legal action, four rollouts per world, 2,000-step playout cap, deterministic
+first-maximum selection, CPU, one worker and one Torch thread. The baseline
+registration pins the policy source bytes; the protocol additionally pins the
+native extension, rules sources, compiled content, complete setup, observation
+and action ABIs and evaluator sources. It does not substitute a historical
+trained opponent whose runtime no longer matches.
+
+Each deal seed produces **four games**. Legs 0/1 keep UR in starting seat 0 and
+GW in seat 1 while swapping players; legs 2/3 put GW in starting seat 0 and UR
+in seat 1 and swap players again. Thus each player gets both decks and both
+starting seats. The same seed fixes each per-seat deal within its pair. Reversing
+the decks does not promise identical opening hands across those two pairs.
+Bootstrap resampling keeps the entire four-game deal block together.
+
+To evaluate exported bytes, pass `--candidate registration.json` and
+`--candidate-checkpoint candidate.pt`. Use the existing `PlayerRegistration`
+schema: world `w3`, suite `w3-allies-lessons-v1`, exact checkpoint SHA-256/size,
+parameter count, training seed, immutable artifact ID and explicit inference
+spec (`checkpoint`, `deterministic`, `cpu`, batch size 1). Compute the setup and
+ABI fingerprints with `runtime_fingerprints(match_hypers=selected_match(),
+observation_space=loaded_space, world="w3")`; both are existing Python APIs.
+The ordinary checkpoint loader supplies `loaded_space`; the arena retains its
+bounds in every trace. No checkpoint port or loader bypass is performed.
+Stochastic policies are reseeded per player decision, with the exact seed in
+the trace. Treat an untrained fixture as a fixture, never as training evidence.
+
+The default limits are 120 wall seconds per game (including worker startup)
+and 10,000 Commands; change them explicitly with `--game-seconds` and
+`--max-commands` before starting a cohort. Player exceptions and native worker
+crashes attributable to a policy are forfeits. Total-game timeouts, Command
+caps and environment failures are retained as unscored failures and reject the
+cohort's statistical admission. They never earn draw credit or disappear from
+the denominator. Only authoritative terminal draws score 0.5. Any failed game,
+replay mismatch or evaluator source change causes a nonzero exit after writing
+the attempt artifacts. A passing replay of a failed prefix is not a completed
+game. Admission errors before gameplay, such as wrong bytes or ABI, fail before
+creating the output directory.
+
+`protocol.json` is written before play; `players.json`, `matches.jsonl`, the
+existing compressed Command traces, `replay.json`, `rating.json`, the resource
+ledger and digest manifest retain the result. Existing output directories are
+rejected. Replay rebuilds the exact retained setup and observation bounds and
+checks frames, offers, Commands, actors, state digests and terminal results
+without invoking policies. Frozen historical arena contracts keep their
+interactive-mirror interpretation and are not regenerated.
+
+This command builds the instrument. Its four-game default is not a strength
+comparison or useful uncertainty estimate; source-pinned current Learn rules
+are not a declaration that ETU-75's remaining w3 certification passed. A scored
+comparison still needs that gate, independent training seeds, held-out deals,
+a preregistered cohort and matched inference budgets.
+
 ## Shared game history
 
 Open `/games` for games across players, or select **My games**. Search names,

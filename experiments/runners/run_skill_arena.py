@@ -22,6 +22,7 @@ from manabot.arena.guidance import build_arena_player
 from manabot.arena.match import play_cell
 from manabot.arena.models import (
     ArenaContract,
+    ArenaKey,
     MatchRow,
     PlayerRegistration,
     canonical_sha256,
@@ -35,6 +36,7 @@ from manabot.arena.profile import (
 )
 from manabot.arena.rating import bootstrap_population, fit_population, payoff_matrix
 from manabot.arena.replay import read_trace, replay_games
+from manabot.env import ObservationSpace
 from manabot.sim.teacher1_evidence import (
     REPO_ROOT,
     runtime_fingerprints,
@@ -74,11 +76,11 @@ def source_digest(paths: tuple[str, ...] | list[str]) -> str:
     return source_bundle_sha256([REPO_ROOT / path for path in paths])
 
 
-def arena_runtime_fingerprints() -> dict[str, Any]:
+def arena_runtime_fingerprints(**kwargs) -> dict[str, Any]:
     import torch
 
     torch.set_num_threads(1)
-    engine_runtime = runtime_fingerprints()
+    engine_runtime = runtime_fingerprints(**kwargs)
     engine_runtime.pop("matchup")
     engine_runtime.pop("pilot_source_sha256")
     return {
@@ -97,6 +99,8 @@ def arena_runtime_fingerprints() -> dict[str, Any]:
 
 def registration_source_paths(registration: PlayerRegistration) -> list[str]:
     kind = registration.player_spec["kind"]
+    if kind == "demo_search":
+        return ["etude/villain.py", "manabot/arena/players.py"]
     if kind == "scripted_greedy":
         return ["manabot/arena/players.py"]
     if kind == "determinized_puct":
@@ -148,19 +152,24 @@ def preflight_candidate(
     registration = PlayerRegistration.model_validate(load_json(path))
     if registration.role != "challenger":
         raise ArenaError("candidate registration role must be challenger")
-    if (
-        registration.world != contract.key.world
-        or registration.content_suite != contract.key.content_suite
-        or registration.information_boundary != contract.key.viewer_boundary
-        or registration.observation_abi_sha256
-        != contract.runtime["observation_abi_sha256"]
-        or registration.action_abi_sha256 != contract.runtime["action_abi_sha256"]
-        or registration.matchup_sha256 != contract.runtime["matchup_sha256"]
-    ):
-        raise ArenaError("candidate world/content/viewer compatibility mismatch")
+    validate_player_compatibility(registration, contract.key, contract.runtime)
     if registration.evidence_class == "fixture" and profile_name != "smoke":
         raise ArenaError("fixture checkpoint registration is smoke-only")
+    checkpoint_paths, _ = validate_registered_player(
+        registration, checkpoint_path, validate_checkpoint_load=validate_checkpoint_load
+    )
+    return registration, checkpoint_paths
+
+
+def validate_registered_player(
+    registration: PlayerRegistration,
+    checkpoint_path: Path | None,
+    *,
+    validate_checkpoint_load: bool = True,
+) -> tuple[dict[str, str], ObservationSpace | None]:
+    """Validate bytes and inference once, retaining the loaded observation bounds."""
     checkpoint_paths: dict[str, str] = {}
+    observation_space = None
     if registration.runner_kind == "code":
         if checkpoint_path is not None:
             raise ArenaError("code candidate rejects --candidate-checkpoint")
@@ -197,7 +206,26 @@ def preflight_candidate(
             )
             if parameter_count != registration.parameter_count:
                 raise ArenaError("checkpoint candidate parameter-count mismatch")
-    return registration, checkpoint_paths
+    return checkpoint_paths, observation_space
+
+
+def validate_player_compatibility(
+    player: PlayerRegistration, key: ArenaKey, runtime: dict[str, Any]
+) -> None:
+    if (
+        player.world != key.world
+        or player.content_suite != key.content_suite
+        or player.information_boundary != key.viewer_boundary
+        or any(
+            getattr(player, name) != runtime[name]
+            for name in (
+                "observation_abi_sha256",
+                "action_abi_sha256",
+                "matchup_sha256",
+            )
+        )
+    ):
+        raise ArenaError("candidate world/content/viewer compatibility mismatch")
 
 
 def append_ledger(out_dir: Path, stage: str, payload: dict[str, Any]) -> None:
@@ -1916,6 +1944,215 @@ def diagnostic(args: argparse.Namespace) -> None:
     )
 
 
+def evaluate_matchup(args: argparse.Namespace) -> None:
+    """Bounded instrument proof on authored Allies/Lessons, without promotion."""
+    import math
+
+    from etude.villain import (
+        DEFAULT_MAX_PLAYOUT_STEPS,
+        DEFAULT_ROLLOUTS_PER_WORLD,
+        DEFAULT_SEARCH_SIMS,
+    )
+    from manabot.arena.match import SELECTED_SUITE, selected_match
+
+    if (
+        not math.isfinite(args.game_seconds)
+        or args.game_seconds <= 0
+        or args.max_commands < 1
+    ):
+        raise ArenaError("game limits must be finite and positive")
+    if len(set(args.deal_seeds)) != len(args.deal_seeds) or any(
+        not 0 <= seed < 2**64 for seed in args.deal_seeds
+    ):
+        raise ArenaError("deal seeds must be unique unsigned 64-bit integers")
+    if args.candidate_checkpoint and not args.candidate:
+        raise ArenaError("--candidate-checkpoint requires --candidate registration")
+    candidate = (
+        PlayerRegistration.model_validate(load_json(args.candidate))
+        if args.candidate
+        else None
+    )
+    checkpoint_paths = {}
+    space = None
+    if candidate is not None:
+        checkpoint_paths, space = validate_registered_player(
+            candidate,
+            args.candidate_checkpoint.resolve() if args.candidate_checkpoint else None,
+        )
+    space = space or ObservationSpace()
+    match = selected_match()
+    runtime = arena_runtime_fingerprints(
+        match_hypers=match, observation_space=space, world="w3"
+    )
+    common = dict(
+        runner_kind="code",
+        world="w3",
+        content_suite=SELECTED_SUITE,
+        information_boundary="acting-viewer-history-only-v1",
+        observation_abi_sha256=runtime["observation_abi_sha256"],
+        action_abi_sha256=runtime["action_abi_sha256"],
+        matchup_sha256=runtime["matchup_sha256"],
+        player_seed_derivation_id="arena-pair-deal-player-v1",
+    )
+    baseline = PlayerRegistration(
+        **common,
+        player_id="demo-search-64-v1",
+        display_name="Demo Search-64",
+        role="incumbent",
+        compute_class_id="demo-search-cpu-s64-r4-v1",
+        player_spec={
+            "kind": "demo_search",
+            "sims": DEFAULT_SEARCH_SIMS,
+            "rollouts_per_world": DEFAULT_ROLLOUTS_PER_WORLD,
+            "max_steps": DEFAULT_MAX_PLAYOUT_STEPS,
+        },
+        source_sha256=source_digest(["etude/villain.py", "manabot/arena/players.py"]),
+    )
+    candidate = (
+        candidate
+        if candidate is not None
+        else PlayerRegistration(
+            **common,
+            player_id="random-v1",
+            display_name="Random control",
+            role="challenger",
+            compute_class_id="random-cpu-v1",
+            player_spec={"kind": "random"},
+            source_sha256=source_digest(["manabot/sim/flat_mc.py"]),
+        )
+    )
+    # No inherited INT-6 predictions, anchor population, budget or promotion rule.
+    source_paths = sorted(
+        {
+            *[
+                str(path.relative_to(REPO_ROOT))
+                for path in (REPO_ROOT / "manabot").rglob("*.py")
+            ],
+            "etude/villain.py",
+            "etude/server.py",
+            "etude/experience_protocol.py",
+            "experiments/runners/run_skill_arena.py",
+            "uv.lock",
+        }
+    )
+    source_sha256 = source_digest(source_paths)
+    key = ArenaKey(
+        world="w3",
+        content_suite=SELECTED_SUITE,
+        viewer_boundary=common["information_boundary"],
+        arena_version="allies-lessons-"
+        + canonical_sha256({"runtime": runtime, "source": source_sha256})[:16],
+        rating_model_version="seat-aware-gaussian-map-bradley-terry-v1",
+        rating_prior_sha256=canonical_sha256({"prior_elo_std": 400.0}),
+        anchor_cohort_sha256=canonical_sha256([baseline.model_dump()]),
+        evaluation_compute_envelope_id="local-cpu-one-worker-one-thread-v1",
+    )
+    for player in (candidate, baseline):
+        validate_player_compatibility(player, key, runtime)
+    if candidate.role != "challenger":
+        raise ArenaError("candidate must have challenger role")
+    args.out_dir.mkdir(parents=True, exist_ok=False)
+    protocol = {
+        "arena_key": key.model_dump(),
+        "runtime": runtime,
+        "source_paths": source_paths,
+        "source_sha256": source_sha256,
+        "match_hypers": match.model_dump(),
+        "observation": space.encoder.hypers.model_dump(),
+        "deal_seeds": list(args.deal_seeds),
+        "legs_per_block": 4,
+        "game_seconds": args.game_seconds,
+        "max_commands": args.max_commands,
+        "checkpoint_rng": "Torch CPU reseeded by (player_seed + player_decision_ordinal) modulo 2**63",
+        "baseline": baseline.model_dump(),
+        "candidate": candidate.model_dump(),
+        "baseline_selection": "Shipped default Search-64; no configured trained bundle substituted",
+        "failure_rule": "Player crashes forfeit; total-game limits and unattributed failures reject statistics; terminal draws score 0.5",
+        "disposition": "engineering instrument only; no strength or w3 certification claim",
+    }
+    write_json(args.out_dir / "protocol.json", protocol)
+    write_json(
+        args.out_dir / "players.json", [candidate.model_dump(), baseline.model_dump()]
+    )
+    append_ledger(
+        args.out_dir,
+        "start",
+        {"protocol_sha256": file_sha256(args.out_dir / "protocol.json")},
+    )
+    rows, trace, replay = play_cell(
+        key=key,
+        player_a=candidate,
+        player_b=baseline,
+        deal_seeds=tuple(args.deal_seeds),
+        out_dir=args.out_dir,
+        checkpoint_paths=checkpoint_paths,
+        game_seconds=args.game_seconds,
+        max_commands=args.max_commands,
+    )
+    for row in rows:
+        MatchRow.model_validate(row)
+    write_jsonl(args.out_dir / "matches.jsonl", rows)
+    write_json(args.out_dir / "replay.json", replay)
+    failures = sum(row["failure"] is not None for row in rows)
+    source_stable = source_digest(source_paths) == protocol["source_sha256"]
+    # Ratings remain in the existing statistical consumer. An unscored failure
+    # invalidates the cohort instead of disappearing from its denominator.
+    statistics = {"admitted": False, "failures": failures}
+    if source_stable and all(
+        row["score_a"] is not None and row["replay_passed"] for row in rows
+    ):
+        fit = fit_population(rows, anchor=baseline.player_id)
+        statistics.update(
+            admitted=True,
+            scores=[row["score_a"] for row in rows],
+            ratings=fit.ratings,
+            seat0_elo=fit.seat0_elo,
+            bootstrap=bootstrap_population(
+                rows, anchor=baseline.player_id, seed=83, replicates=100
+            ),
+        )
+    write_json(args.out_dir / "rating.json", statistics)
+    append_ledger(args.out_dir, "complete", {"games": len(rows), "failures": failures})
+    manifest = finalize_manifest(
+        args.out_dir,
+        {
+            "schema_version": 1,
+            "kind": "selected-match-instrument",
+            "arena_key": key.model_dump(),
+            "runtime": runtime,
+            "source_stable": source_stable,
+            "promotion_eligible": False,
+            "admission_eligible": False,
+            "traces": portable_trace_receipts([trace]),
+            "artifacts": artifact_receipts(
+                args.out_dir,
+                [
+                    "protocol.json",
+                    "players.json",
+                    "matches.jsonl",
+                    "replay.json",
+                    "rating.json",
+                    "resource-ledger.jsonl",
+                ],
+            ),
+        },
+    )
+    print(
+        json.dumps(
+            {
+                "games": len(rows),
+                "failures": failures,
+                "replay_passed": replay["passed"],
+                "manifest_sha256": manifest["manifest_sha256"],
+            }
+        )
+    )
+    if failures or not replay["passed"] or not source_stable:
+        raise ArenaError(
+            "instrument retained failed attempts; inspect matches and replay"
+        )
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1948,13 +2185,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     diagnostic_parser.add_argument("--out-dir", type=Path, required=True)
     diagnostic_parser.add_argument("--profile", choices=("smoke",), default="smoke")
     diagnostic_parser.add_argument("--verify", action="store_true")
+    selected = subparsers.add_parser("evaluate-matchup")
+    selected.add_argument("--out-dir", type=Path, required=True)
+    selected.add_argument("--candidate", type=Path)
+    selected.add_argument("--candidate-checkpoint", type=Path)
+    selected.add_argument("--deal-seeds", type=int, nargs="+", default=[83001])
+    selected.add_argument("--game-seconds", type=float, default=120.0)
+    selected.add_argument("--max-commands", type=int, default=10000)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        if args.command == "freeze-anchors":
+        if args.command == "evaluate-matchup":
+            evaluate_matchup(args)
+        elif args.command == "freeze-anchors":
             freeze_anchors(args)
         elif args.command == "challenge":
             challenge(args)

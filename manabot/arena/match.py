@@ -1,7 +1,10 @@
-"""Same-deal seat-paired arena matches with retained current Commands."""
+"""Paired arena matches with bounded execution and retained current Commands."""
 
 from __future__ import annotations
 
+from copy import deepcopy
+import math
+import multiprocessing as mp
 from pathlib import Path
 import time
 from typing import Any
@@ -9,14 +12,26 @@ from typing import Any
 import numpy as np
 
 from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
+from manabot.env import Match, ObservationSpace
+from manabot.infra.hypers import MatchHypers
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
-from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
+from manabot.verify.util import INTERACTIVE_DECK
 
 from .guidance import build_arena_player
 from .models import ArenaKey, PlayerRegistration, canonical_sha256
-from .replay import replay_games, write_trace
+from .replay import replay_environment, replay_games, write_trace
+
+SELECTED_SUITE = "w3-allies-lessons-v1"
+
+
+def selected_match() -> MatchHypers:
+    return MatchHypers.authored(
+        "ur-lessons-vs-gw-allies",
+        "ur_lessons",
+        "gw_allies",
+        hero="arena-seat-0",
+        villain="arena-seat-1",
+    )
 
 
 def derive_seed(
@@ -39,12 +54,199 @@ def derive_seed(
     return int(identity[:16], 16)
 
 
-def _cell_id(first: str, second: str) -> str:
-    return "__".join(sorted((first, second)))
+def _failure(game: dict, reason: str, message: str, player_id: str | None) -> None:
+    game.setdefault("integrity", {})["execution_failures"] = 1
+    game.update(
+        termination_reason=reason,
+        failure=message,
+        failed_player_id=player_id,
+        winner=None,
+        terminated=False,
+        truncated=reason == "truncated",
+    )
 
 
-def _trace_name(first: str, second: str) -> str:
-    return f"{_cell_id(first, second)}.commands.jsonl.gz"
+def _execute_game(
+    game: dict,
+    registrations: list[PlayerRegistration],
+    checkpoint_paths: dict[str, str],
+    max_commands: int,
+    send,
+) -> None:
+    import torch
+
+    torch.set_num_threads(1)
+    responsible = None
+    try:
+        built = {}
+        for registration in registrations:
+            responsible = registration.player_id
+            send(("phase", responsible))
+            built[responsible] = build_arena_player(
+                registration,
+                seed=game["player_seeds"][responsible],
+                checkpoint_path=checkpoint_paths.get(responsible),
+            )
+        responsible = None
+        send(("phase", None))
+        spaces = [space for _, space in built.values() if space is not None]
+        if spaces and any(space.shapes != spaces[0].shapes for space in spaces):
+            raise ValueError("players have different observation ABIs")
+        space = spaces[0] if spaces else ObservationSpace()
+        game["observation_hypers"] = space.encoder.hypers.model_dump()
+        send(("observation", game["observation_hypers"]))
+        env, obs = replay_environment(game, space)
+        game["initial_state_digest"] = env._engine.state_digest()
+        send(("initial", game["initial_state_digest"]))
+        decision_counts = dict.fromkeys(built, 0)
+        for revision in range(max_commands):
+            raw = env.last_raw_obs
+            actor = int(raw.agent.player_index)
+            player_id = game["seat_players"][actor]
+            frame = build_viewer_frame(
+                raw,
+                match_id=game["match_id"],
+                revision=revision,
+                content_hash=CONTENT_HASH,
+                asset_manifest_hash=ASSET_MANIFEST_HASH,
+            )
+            if frame["projection"]["opponent"].get("hand"):
+                game["integrity"]["private_exposures"] += 1
+                raise RuntimeError("viewer frame exposes a private hand")
+            pre_digest = env._engine.state_digest()
+            responsible = player_id
+            send(("phase", player_id))
+            ordinal = decision_counts[player_id]
+            policy_seed = (game["player_seeds"][player_id] + ordinal) % (2**63)
+            if registrations[actor].runner_kind == "checkpoint":
+                torch.manual_seed(policy_seed)
+            started = time.perf_counter()
+            action = int(built[player_id][0].act(env, obs))
+            elapsed = time.perf_counter() - started
+            if env._engine.state_digest() != pre_digest:
+                game["integrity"]["root_mutations"] += 1
+                raise RuntimeError("player mutated the authoritative root")
+            offers = {int(offer["id"]): offer for offer in frame["offers"]}
+            if action not in offers:
+                game["integrity"]["illegal_actions"] += 1
+                raise RuntimeError(f"illegal offer {action}")
+            command = build_command(frame, action)
+            responsible = None
+            send(("phase", None))
+            obs, _, terminated, truncated, info = env.step(action)
+            decision = {
+                "revision": revision,
+                "actor": actor,
+                "player_id": player_id,
+                "player_seed": game["player_seeds"][player_id],
+                "player_decision_ordinal": ordinal,
+                "policy_rng_seed": policy_seed,
+                "action_space_kind": frame["action_space"],
+                "frame_sha256": canonical_sha256(frame),
+                "command": command,
+                "command_sha256": canonical_sha256(command),
+                "chosen_offer": offers[action],
+                "pre_state_digest": pre_digest,
+                "post_state_digest": env._engine.state_digest(),
+                "latency_seconds": elapsed,
+            }
+            game["decisions"].append(decision)
+            decision_counts[player_id] += 1
+            send(("decision", decision))
+            if truncated or any(
+                info.get(name)
+                for name in (
+                    "action_space_truncated",
+                    "card_space_truncated",
+                    "permanent_space_truncated",
+                )
+            ):
+                game["integrity"]["truncations"] += 1
+                _failure(
+                    game, "truncated", "environment or observation truncated", None
+                )
+                break
+            if terminated:
+                winner = env._engine.winner_index()
+                game.update(
+                    winner=winner,
+                    terminated=True,
+                    termination_reason="draw" if winner is None else "terminal",
+                )
+                break
+        else:
+            _failure(game, "command_cap", "game exceeded its Command cap", None)
+    except Exception as exc:
+        _failure(game, "crash", f"{type(exc).__name__}: {exc}", responsible)
+    send(("result", game))
+
+
+def _game_worker(connection, game, registrations, checkpoint_paths, max_commands):
+    try:
+        _execute_game(
+            game, registrations, checkpoint_paths, max_commands, connection.send
+        )
+    finally:
+        connection.close()
+
+
+def _bounded_game(
+    game: dict,
+    registrations: list[PlayerRegistration],
+    checkpoint_paths: dict[str, str],
+    max_commands: int,
+    game_seconds: float,
+) -> dict:
+    """Keep completed Commands even if native code hangs or the worker dies."""
+    context = mp.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_game_worker,
+        args=(
+            sender,
+            game,
+            registrations,
+            checkpoint_paths,
+            max_commands,
+        ),
+    )
+    responsible = None
+    started = time.monotonic()
+    process.start()
+    sender.close()
+    try:
+        while True:
+            remaining = game_seconds - (time.monotonic() - started)
+            if remaining <= 0:
+                _failure(game, "timeout", "game wall-clock budget exhausted", None)
+                return game
+            if not receiver.poll(min(remaining, 0.1)):
+                if not process.is_alive():
+                    _failure(
+                        game, "crash", f"worker exited {process.exitcode}", responsible
+                    )
+                    return game
+                continue
+            try:
+                kind, value = receiver.recv()
+            except EOFError:
+                _failure(game, "crash", "worker exited without a result", responsible)
+                return game
+            if kind == "phase":
+                responsible = value
+            elif kind == "initial":
+                game["initial_state_digest"] = value
+            elif kind == "observation":
+                game["observation_hypers"] = value
+            elif kind == "decision":
+                game["decisions"].append(value)
+            elif kind == "result":
+                return value
+    finally:
+        if process.is_alive():
+            process.kill()
+        process.join()
+        receiver.close()
 
 
 def play_cell(
@@ -56,223 +258,182 @@ def play_cell(
     out_dir: Path,
     checkpoint_paths: dict[str, str] | None = None,
     comparison_seed_aliases: dict[str, str] | None = None,
+    game_seconds: float = 120.0,
+    max_commands: int = 10_000,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
-    import torch
-
-    torch.set_num_threads(1)
+    if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
+        raise ValueError("game limits must be finite and positive")
+    if player_a.player_id == player_b.player_id:
+        raise ValueError("arena players must be distinct")
+    selected = key.content_suite == SELECTED_SUITE
+    if not selected and key.content_suite != "w2-interactive-mirror-v1":
+        raise ValueError("unknown arena content suite")
+    if not deal_seeds or len(set(deal_seeds)) != len(deal_seeds):
+        raise ValueError("deal seeds must be nonempty and unique")
     checkpoint_paths = checkpoint_paths or {}
-    deal_seed_set_sha256 = canonical_sha256(list(deal_seeds))
-    games: list[dict[str, Any]] = []
-    rows: list[dict[str, Any]] = []
+    match = (
+        selected_match()
+        if selected
+        else MatchHypers(
+            hero_deck=dict(INTERACTIVE_DECK),
+            villain_deck=dict(INTERACTIVE_DECK),
+        )
+    )
+    if selected:
+        if key.world != "w3":
+            raise ValueError("selected matchup requires corrected-world identity")
+        for player in (player_a, player_b):
+            if (
+                player.world != key.world
+                or player.content_suite != key.content_suite
+                or player.information_boundary != key.viewer_boundary
+                or player.matchup_sha256 != canonical_sha256(match.model_dump())
+            ):
+                raise ValueError("player is not bound to the selected matchup")
+    games, rows = [], []
     pair = (player_a.player_id, player_b.player_id)
+    cell_id = "__".join(sorted(pair))
+    trace_relative_path = str(Path("traces") / f"{cell_id}.commands.jsonl.gz")
+    trace_path = out_dir / trace_relative_path
+    deal_seed_set_sha256 = canonical_sha256(list(deal_seeds))
     for block, deal_seed in enumerate(deal_seeds):
         seeds = {
-            registration.player_id: derive_seed(
+            p.player_id: derive_seed(
                 key,
                 pair,
                 deal_seed,
-                registration.player_id,
+                p.player_id,
                 comparison_seed_aliases=comparison_seed_aliases,
             )
-            for registration in (player_a, player_b)
+            for p in (player_a, player_b)
         }
-        for leg in (0, 1):
-            seat_players = [player_a, player_b] if leg == 0 else [player_b, player_a]
-            built = {
-                registration.player_id: build_arena_player(
-                    registration,
-                    seed=seeds[registration.player_id],
-                    checkpoint_path=checkpoint_paths.get(registration.player_id),
-                )
-                for registration in (player_a, player_b)
-            }
-            obs_space = (
-                built[player_a.player_id][1]
-                or built[player_b.player_id][1]
-                or ObservationSpace()
+        for leg in range(4 if selected else 2):
+            seat_players = (
+                [player_a, player_b] if leg % 2 == 0 else [player_b, player_a]
             )
-            match = Match(
-                MatchHypers(
-                    hero=seat_players[0].player_id,
-                    villain=seat_players[1].player_id,
-                    hero_deck=dict(INTERACTIVE_DECK),
-                    villain_deck=dict(INTERACTIVE_DECK),
-                )
+            # Same per-seat setup/deal within each pair; reverse deck starting seats
+            # for the second pair. Each player gets every deck/seat combination.
+            setup = (
+                Match(match).swapped().hypers
+                if leg >= 2
+                else match.model_copy(deep=True)
             )
-            env = Env(
-                match,
-                obs_space,
-                Reward(RewardHypers()),
-                seed=deal_seed,
-                auto_reset=False,
-            )
-            obs, _ = env.reset(seed=deal_seed)
-            match_id = f"{key.arena_version}:{_cell_id(*pair)}:{deal_seed}:{leg}"
-            decisions: list[dict[str, Any]] = []
-            latencies: dict[str, list[float]] = {
-                player_a.player_id: [],
-                player_b.player_id: [],
-            }
-            player_decision_ordinals = {
-                player_a.player_id: 0,
-                player_b.player_id: 0,
-            }
-            integrity = {
-                "illegal_actions": 0,
-                "truncations": 0,
-                "root_mutations": 0,
-                "private_exposures": 0,
-                "offer_binding_failures": 0,
-                "command_fabrications": 0,
-                "replay_mismatches": 0,
-            }
-            info: dict[str, Any] = {}
-            done = False
-            revision = 0
-            game_started = time.perf_counter()
-            while not done:
-                raw = env.last_raw_obs
-                actor_seat = int(raw.agent.player_index)
-                registration = seat_players[actor_seat]
-                player = built[registration.player_id][0]
-                frame = build_viewer_frame(
-                    raw,
-                    match_id=match_id,
-                    revision=revision,
-                    content_hash=CONTENT_HASH,
-                    asset_manifest_hash=ASSET_MANIFEST_HASH,
-                )
-                if frame["projection"]["opponent"].get("hand"):
-                    integrity["private_exposures"] += 1
-                pre_digest = env._engine.state_digest()
-                started = time.perf_counter()
-                action = int(player.act(env, obs))
-                elapsed = time.perf_counter() - started
-                latencies[registration.player_id].append(elapsed)
-                if env._engine.state_digest() != pre_digest:
-                    integrity["root_mutations"] += 1
-                legal = {int(offer["id"]) for offer in frame["offers"]}
-                if action not in legal:
-                    integrity["illegal_actions"] += 1
-                    raise RuntimeError(
-                        f"{registration.player_id} returned illegal offer {action}"
-                    )
-                command = build_command(frame, action)
-                chosen_offer = next(
-                    offer for offer in frame["offers"] if int(offer["id"]) == action
-                )
-                obs, _, terminated, truncated, info = env.step(action)
-                done = bool(terminated or truncated)
-                integrity["truncations"] += int(
-                    bool(
-                        info.get("action_space_truncated")
-                        or info.get("card_space_truncated")
-                        or info.get("permanent_space_truncated")
-                        or truncated
-                    )
-                )
-                decisions.append(
-                    {
-                        "revision": revision,
-                        "actor": actor_seat,
-                        "player_id": registration.player_id,
-                        "player_seed": seeds[registration.player_id],
-                        "player_decision_ordinal": player_decision_ordinals[
-                            registration.player_id
-                        ],
-                        "action_space_kind": frame["action_space"],
-                        "frame_sha256": canonical_sha256(frame),
-                        "command": command,
-                        "command_sha256": canonical_sha256(command),
-                        "chosen_offer": chosen_offer,
-                        "pre_state_digest": pre_digest,
-                        "post_state_digest": env._engine.state_digest(),
-                        "latency_seconds": elapsed,
-                    }
-                )
-                player_decision_ordinals[registration.player_id] += 1
-                revision += 1
-            game_seconds = time.perf_counter() - game_started
-            winner = winner_from_info_or_obs(info, env.last_raw_obs)
-            termination_reason = (
-                "truncated" if truncated else "draw" if winner is None else "terminal"
-            )
+            seat_decks = ["ur_lessons", "gw_allies"]
+            if leg >= 2:
+                seat_decks.reverse()
+            setup.hero, setup.villain = [p.player_id for p in seat_players]
             game = {
-                "match_id": match_id,
-                "cell_id": _cell_id(*pair),
+                "match_id": f"{key.arena_version}:{cell_id}:{deal_seed}:{leg}",
+                "cell_id": cell_id,
                 "deal_block": block,
                 "deal_seed": deal_seed,
                 "leg": leg,
-                "seat_players": [
-                    registration.player_id for registration in seat_players
-                ],
+                "seat_players": [p.player_id for p in seat_players],
+                "match_hypers": setup.model_dump(),
                 "player_seeds": seeds,
-                "winner": winner,
-                "terminated": bool(terminated),
-                "truncated": bool(truncated),
-                "termination_reason": termination_reason,
-                "decisions": decisions,
-                "integrity": integrity,
+                "winner": None,
+                "terminated": False,
+                "truncated": False,
+                "termination_reason": "crash",
+                "failed_player_id": None,
+                "failure": None,
+                "decisions": [],
+                "integrity": {
+                    name: 0
+                    for name in (
+                        "illegal_actions",
+                        "truncations",
+                        "root_mutations",
+                        "private_exposures",
+                        "offer_binding_failures",
+                        "command_fabrications",
+                        "replay_mismatches",
+                    )
+                },
             }
+            if selected:
+                game["seat_decks"] = seat_decks
+            started = time.perf_counter()
+            game = _bounded_game(
+                game, seat_players, checkpoint_paths, max_commands, game_seconds
+            )
+            seconds = time.perf_counter() - started
             game["game_trace_sha256"] = canonical_sha256(game)
             games.append(game)
-            player_a_seat = 0 if leg == 0 else 1
-            score_a = 0.5 if winner is None else float(winner == player_a_seat)
-            rows.append(
-                {
-                    "arena_key": key.model_dump(),
-                    "cell_id": game["cell_id"],
-                    "deal_block": block,
-                    "deal_seed": deal_seed,
-                    "deal_seed_set_sha256": deal_seed_set_sha256,
-                    "leg": leg,
-                    "player_a": player_a.player_id,
-                    "player_b": player_b.player_id,
-                    "player_a_registration_sha256": player_a.identity_sha256,
-                    "player_b_registration_sha256": player_b.identity_sha256,
-                    "player_a_compute_class": player_a.compute_class_id,
-                    "player_b_compute_class": player_b.compute_class_id,
-                    "player_a_seed": seeds[player_a.player_id],
-                    "player_b_seed": seeds[player_b.player_id],
-                    "player_a_seat": player_a_seat,
-                    "winner": winner,
-                    "score_a": score_a,
-                    "terminated": bool(terminated),
-                    "truncated": bool(truncated),
-                    "termination_reason": termination_reason,
-                    "decisions": len(decisions),
-                    "game_trace_sha256": game["game_trace_sha256"],
-                    "trace_path": str(Path("traces") / _trace_name(*pair)),
-                    "trace_sha256": game["game_trace_sha256"],
-                    "replay_passed": False,
-                    "integrity": integrity,
-                    "latency": {
-                        player_id: {
-                            "count": len(values),
-                            "seconds": float(sum(values)),
-                            "p50": float(np.percentile(values, 50)) if values else None,
-                            "p95": float(np.percentile(values, 95)) if values else None,
-                        }
-                        for player_id, values in latencies.items()
-                    },
-                    "game_seconds": game_seconds,
+            # Durable completed attempts survive failure of a subsequent game.
+            trace_receipt = write_trace(trace_path, games)
+            if game["failure"] is not None:
+                score_a = (
+                    None
+                    if game["failed_player_id"] is None
+                    else float(game["failed_player_id"] == player_b.player_id)
+                )
+            else:
+                score_a = (
+                    0.5 if game["winner"] is None else float(game["winner"] == leg % 2)
+                )
+            row = {
+                "arena_key": key.model_dump(),
+                "cell_id": game["cell_id"],
+                "deal_block": block,
+                "deal_seed": deal_seed,
+                "deal_seed_set_sha256": deal_seed_set_sha256,
+                "leg": leg,
+                "player_a": player_a.player_id,
+                "player_b": player_b.player_id,
+                "player_a_registration_sha256": player_a.identity_sha256,
+                "player_b_registration_sha256": player_b.identity_sha256,
+                "player_a_compute_class": player_a.compute_class_id,
+                "player_b_compute_class": player_b.compute_class_id,
+                "player_a_seed": seeds[player_a.player_id],
+                "player_b_seed": seeds[player_b.player_id],
+                "player_a_seat": leg % 2,
+                "score_a": score_a,
+                **{
+                    name: game[name]
+                    for name in (
+                        "winner",
+                        "terminated",
+                        "truncated",
+                        "termination_reason",
+                        "failed_player_id",
+                        "failure",
+                    )
+                },
+                "decisions": len(game["decisions"]),
+                "game_trace_sha256": game["game_trace_sha256"],
+                "trace_path": trace_relative_path,
+                "trace_sha256": game["game_trace_sha256"],
+                "replay_passed": False,
+                "integrity": deepcopy(game["integrity"]),
+                "latency": {},
+                "game_seconds": seconds,
+            }
+            if selected:
+                row["seat_decks"] = seat_decks
+            for player_id in pair:
+                values = [
+                    d["latency_seconds"]
+                    for d in game["decisions"]
+                    if d["player_id"] == player_id
+                ]
+                row["latency"][player_id] = {
+                    "count": len(values),
+                    "seconds": float(sum(values)),
+                    "p50": float(np.percentile(values, 50)) if values else None,
+                    "p95": float(np.percentile(values, 95)) if values else None,
                 }
-            )
-    trace_path = out_dir / "traces" / _trace_name(*pair)
-    trace_receipt = write_trace(trace_path, games)
-    trace_receipt["artifact_path"] = str(Path("traces") / _trace_name(*pair))
-    replay = replay_games(games)
-    replay_payload = replay.to_dict()
-    mismatch_count = sum(
-        int(value)
-        for key, value in replay_payload.items()
-        if key not in {"games", "decisions", "passed"}
-    )
-    for row in rows:
-        row["replay_passed"] = replay.passed
+            rows.append(row)
+    trace_receipt["artifact_path"] = trace_relative_path
+    receipts = [replay_games([game]).to_dict() for game in games]
+    replay_payload = {
+        name: sum(r[name] for r in receipts) for name in receipts[0] if name != "passed"
+    }
+    replay_payload["passed"] = all(r["passed"] for r in receipts)
+    for row, receipt in zip(rows, receipts, strict=True):
+        row["replay_passed"] = receipt["passed"]
         row["trace_shard_sha256"] = trace_receipt["sha256"]
-        row["integrity"] = {
-            **row["integrity"],
-            "replay_mismatches": mismatch_count,
-        }
+        row["integrity"]["replay_mismatches"] = sum(
+            v for k, v in receipt.items() if k not in {"games", "decisions", "passed"}
+        )
     return rows, trace_receipt, replay_payload

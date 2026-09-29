@@ -11,6 +11,23 @@ from manabot.sim.flat_mc import MatchupPlayer, make_player
 import managym
 
 
+class DemoSearchPlayer:
+    """Run the exact demo policy, including its forced-offer seed behavior."""
+
+    def __init__(self, spec: dict[str, Any], seed: int):
+        from etude.villain import SearchVillain
+
+        self.policy = SearchVillain(
+            sims=spec["sims"],
+            rollouts_per_world=spec["rollouts_per_world"],
+            max_steps=spec["max_steps"],
+            seed=seed,
+        )
+
+    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+        return self.policy(env._engine, env.last_raw_obs)
+
+
 class ScriptedGreedyPlayer:
     """Deterministic viewer-safe baseline over the current offered actions."""
 
@@ -48,6 +65,8 @@ def build_player(
     registration: Any, *, seed: int, checkpoint_path: str | None = None
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     spec = dict(registration.player_spec)
+    if spec["kind"] == "demo_search":
+        return DemoSearchPlayer(spec, seed), None
     if registration.runner_kind == "checkpoint":
         if checkpoint_path is None:
             raise FileNotFoundError("checkpoint candidate bytes are unavailable")

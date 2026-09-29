@@ -84,18 +84,24 @@ def engine_source_paths() -> list[Path]:
     return paths
 
 
-def runtime_fingerprints(seed: int = 197) -> dict[str, Any]:
+def runtime_fingerprints(
+    seed: int = 197,
+    *,
+    match_hypers: MatchHypers | None = None,
+    observation_space: ObservationSpace | None = None,
+    world: str = "w2",
+) -> dict[str, Any]:
     """Return identities that the pre-registration freezes before a run."""
 
-    obs_space = ObservationSpace()
-    matchup = MatchHypers(
+    obs_space = observation_space or ObservationSpace()
+    matchup = match_hypers or MatchHypers(
         hero="teacher-a",
         villain="teacher-b",
         hero_deck=dict(INTERACTIVE_DECK),
         villain_deck=dict(INTERACTIVE_DECK),
-    ).model_dump()
+    )
     env = Env(
-        Match(MatchHypers(**matchup)),
+        Match(matchup),
         obs_space,
         Reward(RewardHypers()),
         seed=seed,
@@ -116,7 +122,7 @@ def runtime_fingerprints(seed: int = 197) -> dict[str, Any]:
     }
     extension_path = Path(managym._managym.__file__)
     return {
-        "world": "w2",
+        "world": world,
         "engine_source_sha256": source_bundle_sha256(engine_source_paths()),
         "pilot_source_sha256": source_bundle_sha256(
             [
@@ -134,8 +140,8 @@ def runtime_fingerprints(seed: int = 197) -> dict[str, Any]:
         "experience_protocol_sha256": file_sha256(PROTOCOL_SCHEMA),
         "experience_content_hash": CONTENT_HASH,
         "asset_manifest_hash": ASSET_MANIFEST_HASH,
-        "matchup_sha256": canonical_sha256(matchup),
-        "matchup": matchup,
+        "matchup_sha256": canonical_sha256(matchup.model_dump()),
+        "matchup": matchup.model_dump(),
     }
 
 

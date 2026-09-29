@@ -11,9 +11,9 @@ from typing import Any
 from etude.experience_protocol import Command
 from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import MatchHypers, RewardHypers
+from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
-from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
+from manabot.verify.util import INTERACTIVE_DECK
 
 from .models import canonical_json, canonical_sha256, file_sha256
 
@@ -70,7 +70,9 @@ def replay_environment(
 ) -> tuple[Env, dict[str, Any]]:
     names = game["seat_players"]
     match = Match(
-        MatchHypers(
+        MatchHypers.model_validate(game["match_hypers"])
+        if "match_hypers" in game
+        else MatchHypers(
             hero=str(names[0]),
             villain=str(names[1]),
             hero_deck=dict(INTERACTIVE_DECK),
@@ -79,7 +81,10 @@ def replay_environment(
     )
     env = Env(
         match,
-        observation_space or ObservationSpace(),
+        observation_space
+        or ObservationSpace(
+            ObservationSpaceHypers(**game.get("observation_hypers", {}))
+        ),
         Reward(RewardHypers()),
         seed=int(game["deal_seed"]),
         auto_reset=False,
@@ -125,7 +130,9 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
         if stored_trace_sha256 != canonical_sha256(unsigned_game):
             counts["trace_mismatches"] += 1
         env, _ = replay_environment(game)
-        info: dict[str, Any] = {}
+        initial_digest = env._engine.state_digest()
+        if game.get("initial_state_digest", initial_digest) != initial_digest:
+            counts["state_mismatches"] += 1
         done = False
         for revision, expected in enumerate(game["decisions"]):
             if done:
@@ -174,16 +181,18 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
                 or frame["action_space"] != expected.get("action_space_kind")
             ):
                 counts["offer_mismatches"] += 1
-            _, _, terminated, truncated, info = env.step(int(command.offer_id))
+            _, _, terminated, truncated, _ = env.step(int(command.offer_id))
             done = bool(terminated or truncated)
             if env._engine.state_digest() != expected["post_state_digest"]:
                 counts["state_mismatches"] += 1
             counts["decisions"] += 1
-        if not done:
+        failed = game.get("failure") is not None
+        if not done and not failed:
             counts["missing_decisions"] += 1
-        winner = winner_from_info_or_obs(info, env.last_raw_obs) if done else None
-        if winner != game["winner"] or bool(game.get("terminated")) != bool(
-            done and not game.get("truncated")
+        winner = env._engine.winner_index() if done else None
+        if not failed and (
+            winner != game["winner"]
+            or bool(game.get("terminated")) != bool(done and not game.get("truncated"))
         ):
             counts["outcome_mismatches"] += 1
     return ArenaReplayReceipt(games=len(games), **counts)

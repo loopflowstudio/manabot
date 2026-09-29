@@ -41,7 +41,7 @@ BASE_ANCHOR_IDS = (
 
 
 class ArenaKey(StrictModel):
-    world: Literal["w2"]
+    world: Literal["w2", "w3"]
     content_suite: str
     viewer_boundary: str
     arena_version: str
@@ -65,7 +65,7 @@ class PlayerRegistration(StrictModel):
     player_spec: dict[str, Any]
     compute_class_id: str
     information_boundary: str
-    world: Literal["w2"]
+    world: Literal["w2", "w3"]
     content_suite: str
     observation_abi_sha256: str = Field(pattern=SHA256_PATTERN)
     action_abi_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -119,11 +119,15 @@ class PlayerRegistration(StrictModel):
             if kind == "checkpoint":
                 expected_checkpoint_spec = {
                     "kind": "checkpoint",
-                    "deterministic": True,
+                    "deterministic": self.player_spec.get("deterministic"),
                     "device": "cpu",
                     "batch_size": 1,
                 }
-                if self.player_spec != expected_checkpoint_spec:
+                if (
+                    self.player_spec != expected_checkpoint_spec
+                    or type(self.player_spec.get("deterministic")) is not bool
+                    or (self.world == "w2" and not self.player_spec["deterministic"])
+                ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "policy_prior_puct":
                 required_keys = {
@@ -216,6 +220,18 @@ class PlayerRegistration(StrictModel):
                     raise ValueError(
                         "arena-v1 PUCT compute and seed identity is frozen"
                     )
+        return self
+
+    @model_validator(mode="after")
+    def validate_demo(self) -> "PlayerRegistration":
+        if self.player_spec.get("kind") == "demo_search":
+            if self.runner_kind != "code" or self.player_spec != {
+                "kind": "demo_search",
+                "sims": 64,
+                "rollouts_per_world": 4,
+                "max_steps": 2000,
+            }:
+                raise ValueError("demo baseline requires exact Search-64 configuration")
         return self
 
     @property
@@ -475,7 +491,8 @@ class MatchRow(StrictModel):
     deal_block: int = Field(ge=0)
     deal_seed: int
     deal_seed_set_sha256: str = Field(pattern=SHA256_PATTERN)
-    leg: Literal[0, 1]
+    leg: Literal[0, 1, 2, 3]
+    seat_decks: tuple[str, str] | None = None
     player_a: str
     player_b: str
     player_a_registration_sha256: str
@@ -486,11 +503,15 @@ class MatchRow(StrictModel):
     player_b_seed: int = Field(ge=0)
     player_a_seat: Literal[0, 1]
     winner: Literal[0, 1] | None
-    score_a: float = Field(ge=0.0, le=1.0)
+    score_a: float | None = Field(ge=0.0, le=1.0)
+    failed_player_id: str | None = None
+    failure: str | None = None
     terminated: bool
     truncated: bool
-    termination_reason: Literal["terminal", "draw", "truncated"]
-    decisions: int = Field(gt=0)
+    termination_reason: Literal[
+        "terminal", "draw", "truncated", "crash", "timeout", "command_cap"
+    ]
+    decisions: int = Field(ge=0)
     game_trace_sha256: str = Field(pattern=SHA256_PATTERN)
     trace_path: str
     trace_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -506,17 +527,48 @@ class MatchRow(StrictModel):
             raise ValueError("arena match players must be distinct")
         if self.cell_id != "__".join(sorted((self.player_a, self.player_b))):
             raise ValueError("match cell identity mismatch")
-        if self.player_a_seat != self.leg:
+        if self.player_a_seat != self.leg % 2:
             raise ValueError("match leg and player-A seat mismatch")
-        expected_score = (
-            0.5 if self.winner is None else float(self.winner == self.player_a_seat)
-        )
+        if self.arena_key.world == "w2" and self.leg > 1:
+            raise ValueError("historical mirror has only two legs")
+        failed = self.termination_reason in {
+            "truncated",
+            "crash",
+            "timeout",
+            "command_cap",
+        }
+        if self.failed_player_id not in {None, self.player_a, self.player_b}:
+            raise ValueError("failed player is outside this match")
+        if self.failed_player_id and not failed:
+            raise ValueError("completed match cannot name a failed player")
+        if failed:
+            expected_score = (
+                None
+                if self.failed_player_id is None
+                else float(self.failed_player_id == self.player_b)
+            )
+        else:
+            expected_score = (
+                0.5 if self.winner is None else float(self.winner == self.player_a_seat)
+            )
         if self.score_a != expected_score:
             raise ValueError("match score does not agree with winner and seat")
         if self.truncated != (self.termination_reason == "truncated"):
             raise ValueError("match truncation reason mismatch")
-        if not self.truncated and not self.terminated:
+        if not failed and not self.terminated:
             raise ValueError("nonterminal match cannot enter arena evidence")
+        if self.seat_decks is not None and self.seat_decks != (
+            ("ur_lessons", "gw_allies") if self.leg < 2 else ("gw_allies", "ur_lessons")
+        ):
+            raise ValueError("deck assignment and leg mismatch")
+        if self.arena_key.world == "w3" and self.seat_decks is None:
+            raise ValueError("selected match must retain its deck assignment")
+        if not failed and self.failure is not None:
+            raise ValueError("completed match cannot carry a failure")
+        if failed and (self.terminated or self.winner is not None or not self.failure):
+            raise ValueError("failed match must retain a failure, not a game winner")
+        if not failed and (self.termination_reason == "draw") != (self.winner is None):
+            raise ValueError("draw requires authoritative termination without a winner")
         if self.trace_sha256 != self.game_trace_sha256:
             raise ValueError("match game-trace digest mismatch")
         trace_path = Path(self.trace_path)
