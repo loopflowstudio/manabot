@@ -24,9 +24,13 @@ def test_recorded_games_round_trip_and_render(tmp_path):
     games = list(record_games(schedule("random", "random", deals=2, seed=20)))
     assert all(game.completed for game in games), [game.error for game in games]
 
-    path = tmp_path / "games.jsonl"
-    assert write_games(path, games) == 4
-    assert read_games(path) == games
+    for name in ("games.jsonl", "games.jsonl.gz"):
+        path = tmp_path / name
+        assert write_games(path, games) == 4
+        assert read_games(path) == games
+    assert (tmp_path / "games.jsonl.gz").stat().st_size < path.with_suffix(
+        ""
+    ).stat().st_size / 5
 
     decisions = [decision for game in games for decision in game.decisions]
     assert all(game.first_player in (0, 1) for game in games)

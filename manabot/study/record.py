@@ -12,6 +12,7 @@ from __future__ import annotations
 
 # Standard library
 from dataclasses import asdict, dataclass, field
+import gzip
 import json
 import multiprocessing as mp
 from pathlib import Path
@@ -39,6 +40,7 @@ class GameSpec:
     decks: tuple[str, str]
     seed: int
     max_commands: int = 10_000
+    keep_decisions: bool = True
 
 
 @dataclass(frozen=True)
@@ -251,7 +253,8 @@ def record_game(spec: GameSpec) -> GameRecord:
                 record.first_player = (
                     decision.active if decision.turn % 2 else 1 - decision.active
                 )
-            record.decisions.append(decision)
+            if spec.keep_decisions:
+                record.decisions.append(decision)
             record.turns = decision.turn
             obs, _, terminated, truncated, _ = env.step(action)
             if truncated:
@@ -290,15 +293,19 @@ def _reported(results, total, progress):
         yield record
 
 
+def _open(path: Path, mode: str):
+    """Text handle for a record; a .gz suffix means gzip."""
+    return gzip.open(path, mode + "t") if path.suffix == ".gz" else path.open(mode)
+
+
 def write_games(path: Path | str, games: Iterable[GameRecord]) -> int:
     """Write one JSON object per game. Returns the number written."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
-    with path.open("w") as handle:
+    with _open(path, "w") as handle:
         for game in games:
             handle.write(json.dumps(asdict(game)) + "\n")
-            handle.flush()
             count += 1
     return count
 
@@ -309,7 +316,9 @@ def _permanent(data: dict[str, Any]) -> Permanent:
 
 def read_games(path: Path | str) -> list[GameRecord]:
     games = []
-    for line in Path(path).read_text().splitlines():
+    with _open(Path(path), "r") as handle:
+        lines = handle.read().splitlines()
+    for line in lines:
         data = json.loads(line)
         decisions = [
             Decision(
