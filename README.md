@@ -97,8 +97,8 @@ and preserves the exact frame, offer, played Command, semantic event cursor,
 and attributable evidence needed to inspect, Retry, compare, and return. The
 guided Retry and comparison experience is still being connected to the shared
 table. The versioned experience and Study schemas live in
-[protocol/](protocol/README.md); the folded roadmap is
-[wave/study/](wave/study/GOAL.md).
+[protocol/](protocol/README.md); Study work is planned within
+[wave/game/](wave/game/GOAL.md).
 
 ## Train a manabot
 

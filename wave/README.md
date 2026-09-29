@@ -14,7 +14,6 @@ provider and consumer work without redefining those contracts.
 |---|---|
 | [rules/](rules/GOAL.md) | managym authority: curated semantic worlds, match/Command/replay, canonical Observations, possible-world queries, and safe high-throughput forks |
 | [game/](game/GOAL.md) | The authored playing experience: instant, legible, recoverable human-vs-manabot play over one versioned experience protocol |
-| [study/](study/GOAL.md) | The engine-study experience: decision landmarks, retry before reveal, viewer-safe evidence |
 | [intelligence/](intelligence/GOAL.md) | manabot beliefs, conditional planning, policy/value learning, self-play, arena evaluation, and Study evidence |
 
 Retired portfolios are preserved under [archive/](archive/README.md) with
