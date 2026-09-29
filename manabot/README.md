@@ -71,6 +71,8 @@ world. The cross-package contracts and convergence status are in
    config models, profiling
 7. **`manabot.belief`**: canonical world distributions, viewer history,
    supervised exact-world learning, and the `ManabotPlayer` lifecycle
+8. **`manabot.study`**: behavioral study of recorded games (`record_games`,
+   `measures`, `report`), with one subpackage per matchup
 
 Belief input is opt-in: schema-bound checkpoints load through the ordinary
 `checkpoint` player and update belief before each policy/value decision.
