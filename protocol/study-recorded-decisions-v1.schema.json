@@ -824,6 +824,9 @@
           "format": "uint32",
           "minimum": 0
         },
+        "text_box": {
+          "type": "string"
+        },
         "toughness": {
           "type": "integer",
           "format": "int32"
@@ -900,6 +903,9 @@
           "type": "integer",
           "format": "int32"
         },
+        "exile_if_dies_this_turn": {
+          "type": "boolean"
+        },
         "id": {
           "type": "integer",
           "format": "uint32",
@@ -921,6 +927,9 @@
         },
         "tapped": {
           "type": "boolean"
+        },
+        "text_box": {
+          "type": "string"
         },
         "toughness": {
           "$ref": "#/$defs/RequiredNullable3"
@@ -1570,6 +1579,9 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "text_box": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

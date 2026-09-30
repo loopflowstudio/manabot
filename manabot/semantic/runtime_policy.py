@@ -57,6 +57,8 @@ PROMPTS = (
     "modal",
     "learn",
     "waterbend",
+    "discard",
+    "legend_rule",
 )
 ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 OBJECT_KINDS = ("card", "permanent", "stack_ability")

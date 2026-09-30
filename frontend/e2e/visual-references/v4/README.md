@@ -1,4 +1,10 @@
-# Learn visual references v4
+# Historical visual references v4
+
+These PNGs and the adjacent release prompt matrix describe the w3 world before
+the cleanup hand-size limit. They remain unchanged as historical evidence.
+Current CI uses v5 and the active `frontend/e2e/release-prompt-matrix.json`.
+
+## Original provenance
 
 Generated and reproduced on 2026-09-25 using Ubuntu 24.04 x86-64, Node 22.16.0,
 Playwright 1.61.1 and Chromium 149.0.7827.55. The local Linux container ran from

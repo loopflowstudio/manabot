@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use managym::{
+    agent::action::ActionSpaceKind,
     agent::observation::Observation,
     benchmark::build_fixture,
     search_state::{
@@ -11,11 +12,30 @@ use managym::{
         game_object::{ObjectLookupError, PermanentId, PlayerId},
         zone::ZoneType,
     },
+    Game,
 };
+
+/// Direct mutation probes need an idle transition queue. Normal branch `apply`
+/// journals that queue; these probes isolate allocation and zone journaling.
+fn settled_heavy_fixture() -> Game {
+    let (mut root, _) = build_fixture("interactive-heavy-80-w4-v1").expect("heavy fixture");
+    for _ in 0..100 {
+        if root
+            .action_space()
+            .is_some_and(|space| space.kind == ActionSpaceKind::Priority)
+            && root.state.pending_events.is_empty()
+        {
+            return root;
+        }
+        assert!(!root.step(0).expect("settle fixture"));
+    }
+    panic!("fixture did not reach settled priority");
+}
 
 #[test]
 fn full_clone_passes_the_representation_neutral_branch_contract() {
-    let (root, _) = build_fixture("interactive-midgame-48-v1").expect("midgame contract fixture");
+    let (root, _) =
+        build_fixture("interactive-midgame-48-w4-v1").expect("midgame contract fixture");
     let viewer = root.agent_player();
     let receipt = verify_branch_contract(&FullCloneDriver, &root, viewer, 0x1975eed, 2_000)
         .expect("full-clone reference must pass the branch contract");
@@ -31,7 +51,7 @@ fn full_clone_passes_the_representation_neutral_branch_contract() {
 /// fields one fixture happens to touch would diverge here.
 #[test]
 fn clone_plus_undo_matches_the_full_clone_reference_receipts() {
-    for fixture in ["interactive-midgame-48-v1", "interactive-heavy-80-v1"] {
+    for fixture in ["interactive-midgame-48-w4-v1", "interactive-heavy-80-w4-v1"] {
         for trace_seed in [0x1975eed_u64, 0x5eed, 0xc10e] {
             let (root, _) = build_fixture(fixture).expect("contract fixture");
             let viewer = root.agent_player();
@@ -64,7 +84,7 @@ fn clone_plus_undo_matches_the_full_clone_reference_receipts() {
 /// full-clone reference on every fixture and seed.
 #[test]
 fn dense_page_cow_plus_undo_matches_the_full_clone_reference_receipts() {
-    for fixture in ["interactive-midgame-48-v1", "interactive-heavy-80-v1"] {
+    for fixture in ["interactive-midgame-48-w4-v1", "interactive-heavy-80-w4-v1"] {
         for trace_seed in [0x1975eed_u64, 0x5eed, 0xc10e] {
             let (mut root, _) = build_fixture(fixture).expect("contract fixture");
             let viewer = root.agent_player();
@@ -136,7 +156,7 @@ fn clone_plus_undo_rolls_back_exactly_at_every_depth_along_a_deep_trace() {
         hash
     }
 
-    for fixture in ["interactive-midgame-48-v1", "interactive-heavy-80-v1"] {
+    for fixture in ["interactive-midgame-48-w4-v1", "interactive-heavy-80-w4-v1"] {
         let (root, _) = build_fixture(fixture).expect("deep trace fixture");
         let driver = ClonePlusUndoDriver::default();
         let reference = FullCloneDriver;
@@ -186,7 +206,7 @@ fn clone_plus_undo_rolls_back_exactly_at_every_depth_along_a_deep_trace() {
 /// the appended slots and the bumped watermark behind and fails here.
 #[test]
 fn clone_plus_undo_rolls_back_token_allocation_and_the_id_watermark() {
-    let (root, _) = build_fixture("interactive-heavy-80-v1").expect("heavy allocation fixture");
+    let root = settled_heavy_fixture();
     let driver = ClonePlusUndoDriver::default();
     let root_witness = driver.witness(&root);
     let mut branch = driver.fork_exact(&root);
@@ -230,7 +250,7 @@ fn clone_plus_undo_rolls_back_token_allocation_and_the_id_watermark() {
 /// zone membership counts. Shuffling and moving cards perturbs both.
 #[test]
 fn clone_plus_undo_rolls_back_zone_order_and_reverse_indices() {
-    let (root, _) = build_fixture("interactive-heavy-80-v1").expect("heavy zone fixture");
+    let root = settled_heavy_fixture();
     let driver = ClonePlusUndoDriver::default();
     let root_witness = driver.witness(&root);
     let mut branch = driver.fork_exact(&root);
@@ -281,7 +301,7 @@ fn clone_plus_undo_rolls_back_zone_order_and_reverse_indices() {
 /// action space must be restored along with the rules state.
 #[test]
 fn clone_plus_undo_isolates_siblings_and_restores_the_action_space() {
-    let (root, _) = build_fixture("interactive-midgame-48-v1").expect("midgame sibling fixture");
+    let (root, _) = build_fixture("interactive-midgame-48-w4-v1").expect("midgame sibling fixture");
     let driver = ClonePlusUndoDriver::default();
     let root_witness = driver.witness(&root);
     let action_count = root_witness.legal_surface.action_count;
@@ -324,8 +344,9 @@ fn clone_plus_undo_isolates_siblings_and_restores_the_action_space() {
 
 #[test]
 fn independently_allocated_roots_have_equal_witnesses_and_seeded_traces() {
-    let (mut first, _) = build_fixture("interactive-heavy-80-v1").expect("first heavy fixture");
-    let (mut second, _) = build_fixture("interactive-heavy-80-v1").expect("second heavy fixture");
+    let (mut first, _) = build_fixture("interactive-heavy-80-w4-v1").expect("first heavy fixture");
+    let (mut second, _) =
+        build_fixture("interactive-heavy-80-w4-v1").expect("second heavy fixture");
     second.state.content = Arc::new((*second.state.content).clone());
     assert!(
         !Arc::ptr_eq(&first.state.content, &second.state.content),
@@ -346,7 +367,8 @@ fn independently_allocated_roots_have_equal_witnesses_and_seeded_traces() {
 
 #[test]
 fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
-    let (root, _) = build_fixture("interactive-midgame-48-v1").expect("midgame visibility fixture");
+    let (root, _) =
+        build_fixture("interactive-midgame-48-w4-v1").expect("midgame visibility fixture");
     let actor = root.agent_player();
     let other = PlayerId((actor.0 + 1) % 2);
 
@@ -378,7 +400,7 @@ fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
 #[test]
 fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
     let (root, _) =
-        build_fixture("interactive-midgame-48-v1").expect("midgame hidden-world fixture");
+        build_fixture("interactive-midgame-48-w4-v1").expect("midgame hidden-world fixture");
     let driver = FullCloneDriver;
     let viewer = PlayerId(0);
     let opponent = PlayerId(1);
@@ -416,7 +438,7 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
 
 #[test]
 fn stale_object_refs_are_rejected_and_identity_rolls_back_exactly() {
-    let (root, _) = build_fixture("interactive-heavy-80-v1").expect("heavy identity fixture");
+    let (root, _) = build_fixture("interactive-heavy-80-w4-v1").expect("heavy identity fixture");
     let driver = FullCloneDriver;
     let root_witness = driver.witness(&root);
     let permanent = PermanentId(
@@ -472,7 +494,7 @@ fn stale_object_refs_are_rejected_and_identity_rolls_back_exactly() {
 
 #[test]
 fn dense_page_cow_rejects_stale_refs_and_restores_identity() {
-    let (mut root, _) = build_fixture("interactive-heavy-80-v1").expect("identity fixture");
+    let mut root = settled_heavy_fixture();
     let driver = DensePageCowUndoDriver::default();
     driver.admit_root(&mut root);
     let root_witness = driver.witness(&root);

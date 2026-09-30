@@ -133,6 +133,7 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
         initial_digest = env._engine.state_digest()
         if game.get("initial_state_digest", initial_digest) != initial_digest:
             counts["state_mismatches"] += 1
+            continue
         done = False
         for revision, expected in enumerate(game["decisions"]):
             if done:
@@ -168,6 +169,7 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
                 or command.offer_id not in offer_ids
             ):
                 counts["command_mismatches"] += 1
+                break
             rebuilt_command = build_command(frame, int(command.offer_id))
             if rebuilt_command != expected["command"]:
                 counts["command_mismatches"] += 1

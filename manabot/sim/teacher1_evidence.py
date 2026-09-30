@@ -89,9 +89,13 @@ def runtime_fingerprints(
     *,
     match_hypers: MatchHypers | None = None,
     observation_space: ObservationSpace | None = None,
-    world: str = "w2",
+    world: str = managym.WORLD_VERSION,
 ) -> dict[str, Any]:
     """Return identities that the pre-registration freezes before a run."""
+    if world != managym.WORLD_VERSION:
+        raise ValueError(
+            f"Runtime is {managym.WORLD_VERSION}; cannot register it as {world}"
+        )
 
     obs_space = observation_space or ObservationSpace()
     matchup = match_hypers or MatchHypers(

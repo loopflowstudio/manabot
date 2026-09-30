@@ -136,13 +136,13 @@ pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
         warmup_seed: WARMUP_SEED,
         measured_seeds: MEASURED_SEEDS.to_vec(),
         fixtures: vec![
-            "interactive-midgame-48-v1".to_string(),
-            "interactive-heavy-80-v1".to_string(),
+            "interactive-midgame-48-w4-v1".to_string(),
+            "interactive-heavy-80-w4-v1".to_string(),
         ],
         workloads: vec![
             WorkloadSpec {
                 id: "step-v1".to_string(),
-                fixture: "interactive-midgame-48-v1".to_string(),
+                fixture: "interactive-midgame-48-w4-v1".to_string(),
                 shape: WorkloadShape::Step,
                 workers: 1,
                 actors_per_worker: 1,
@@ -155,7 +155,7 @@ pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
             },
             WorkloadSpec {
                 id: "clone-v1".to_string(),
-                fixture: "interactive-heavy-80-v1".to_string(),
+                fixture: "interactive-heavy-80-w4-v1".to_string(),
                 shape: WorkloadShape::CloneLatency,
                 workers: 1,
                 actors_per_worker: 1,
@@ -168,7 +168,7 @@ pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
             },
             WorkloadSpec {
                 id: "flat-single-64-v1".to_string(),
-                fixture: "interactive-midgame-48-v1".to_string(),
+                fixture: "interactive-midgame-48-w4-v1".to_string(),
                 shape: WorkloadShape::Sequential,
                 workers: 1,
                 actors_per_worker: 1,
@@ -181,7 +181,7 @@ pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
             },
             WorkloadSpec {
                 id: "flat-saturated-64-v1".to_string(),
-                fixture: "interactive-midgame-48-v1".to_string(),
+                fixture: "interactive-midgame-48-w4-v1".to_string(),
                 shape: WorkloadShape::Sequential,
                 workers: 8,
                 actors_per_worker: 1,
@@ -194,7 +194,7 @@ pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
             },
             WorkloadSpec {
                 id: "retained-single-8-v1".to_string(),
-                fixture: "interactive-heavy-80-v1".to_string(),
+                fixture: "interactive-heavy-80-w4-v1".to_string(),
                 shape: WorkloadShape::Retained,
                 workers: 1,
                 actors_per_worker: 1,
@@ -207,7 +207,7 @@ pub fn manifest_for(driver: DriverKind) -> BenchmarkManifest {
             },
             WorkloadSpec {
                 id: "retained-saturated-16-v1".to_string(),
-                fixture: "interactive-heavy-80-v1".to_string(),
+                fixture: "interactive-heavy-80-w4-v1".to_string(),
                 shape: WorkloadShape::Retained,
                 workers: 1,
                 actors_per_worker: 8,
@@ -400,8 +400,8 @@ fn new_match(seed: u64) -> Game {
 pub fn build_fixture(id: &str) -> Result<(Game, FixtureSummary), String> {
     let mut game = new_match(SETUP_SEED);
     let (count, action_seed, drain_observations) = match id {
-        "interactive-midgame-48-v1" => (48, None, true),
-        "interactive-heavy-80-v1" => {
+        "interactive-midgame-48-w4-v1" => (48, None, true),
+        "interactive-heavy-80-w4-v1" => {
             game.reseed(HEAVY_ACTION_SEED);
             (80, Some(HEAVY_ACTION_SEED), false)
         }
@@ -472,19 +472,19 @@ fn fixture_with_summary(
         snapshot_bytes: state_witness.authority.bytes.len(),
     };
     match id {
-        "interactive-midgame-48-v1" if summary.action_count != 6 => {
+        "interactive-midgame-48-w4-v1" if summary.action_count != 2 => {
             return Err(format!(
-                "midgame fixture drift: expected 6 root actions, got {}",
+                "midgame fixture drift: expected 2 root actions, got {}",
                 summary.action_count
             ));
         }
-        "interactive-heavy-80-v1"
+        "interactive-heavy-80-w4-v1"
             if summary.card_count != 120
-                || summary.allocated_permanent_slots != 28
-                || summary.committed_event_count != 498 =>
+                || summary.allocated_permanent_slots != 24
+                || summary.committed_event_count != 505 =>
         {
             return Err(format!(
-                "heavy fixture drift: expected cards/slots/events 120/28/498, got {}/{}/{}",
+                "heavy fixture drift: expected cards/slots/events 120/24/505, got {}/{}/{}",
                 summary.card_count,
                 summary.allocated_permanent_slots,
                 summary.committed_event_count
@@ -508,6 +508,8 @@ fn action_kind_name(kind: ActionSpaceKind) -> &'static str {
         ActionSpaceKind::Modal => "modal",
         ActionSpaceKind::Learn => "learn",
         ActionSpaceKind::Waterbend => "waterbend",
+        ActionSpaceKind::Discard => "discard",
+        ActionSpaceKind::LegendRule => "legend_rule",
     }
 }
 
@@ -1244,9 +1246,16 @@ mod tests {
     }
 
     #[test]
+    fn historical_fixtures_are_not_reinterpreted_under_current_rules() {
+        for id in ["interactive-midgame-48-v1", "interactive-heavy-80-v1"] {
+            assert!(build_fixture(id).is_err(), "historical fixture {id}");
+        }
+    }
+
+    #[test]
     fn full_clone_is_exact_isolated_and_rollback_safe() {
         let receipt =
-            equivalence_check("interactive-midgame-48-v1", 0x5eed, 16).expect("equivalence");
+            equivalence_check("interactive-midgame-48-w4-v1", 0x5eed, 16).expect("equivalence");
         assert!(receipt.passed);
         assert!(receipt.root_isolated);
         assert!(receipt.sibling_isolated);
@@ -1256,7 +1265,7 @@ mod tests {
 
     #[test]
     fn clone_checksum_excludes_latency_samples() {
-        let (root, _) = build_fixture("interactive-heavy-80-v1").expect("heavy fixture");
+        let (root, _) = build_fixture("interactive-heavy-80-w4-v1").expect("heavy fixture");
         let mut first = RunMetrics::default();
         let mut second = RunMetrics::default();
         measure_clone(&FullCloneDriver, &root, 2, &mut first);

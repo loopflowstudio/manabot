@@ -43,6 +43,7 @@ from manabot.sim.teacher1_evidence import (
     source_bundle_sha256,
 )
 from manabot.verify.competency import SCENARIOS, aggregate_scenario_results
+from managym import WORLD_VERSION
 
 
 class ArenaError(RuntimeError):
@@ -1982,11 +1983,11 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     space = space or ObservationSpace()
     match = selected_match()
     runtime = arena_runtime_fingerprints(
-        match_hypers=match, observation_space=space, world="w3"
+        match_hypers=match, observation_space=space, world=WORLD_VERSION
     )
     common = dict(
         runner_kind="code",
-        world="w3",
+        world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         information_boundary="acting-viewer-history-only-v1",
         observation_abi_sha256=runtime["observation_abi_sha256"],
@@ -2037,7 +2038,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     )
     source_sha256 = source_digest(source_paths)
     key = ArenaKey(
-        world="w3",
+        world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         viewer_boundary=common["information_boundary"],
         arena_version="allies-lessons-"

@@ -109,20 +109,13 @@ fn pyroclasm_kills_small_creatures_on_both_sides() {
 fn counterspell_counters_ancestral_recall() {
     let mut s = Scenario::new(recall_deck(), counterspell_deck(), 1214);
 
-    s.advance_to_active_step(1, StepKind::Main);
-    s.force_cards_in_hand(1, "Island", 2);
-    s.force_card_in_hand(1, "Counterspell");
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-
     s.advance_to_active_step(0, StepKind::Main);
-    s.force_card_in_hand(0, "Island");
+    s.force_permanent_on_battlefield(0, "Island");
+    s.force_permanent_on_battlefield(1, "Island");
+    s.force_permanent_on_battlefield(1, "Island");
     s.force_card_in_hand(0, "Ancestral Recall");
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-
-    s.advance_to_active_step(1, StepKind::Main);
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-
-    s.advance_to_active_step(0, StepKind::Main);
+    s.force_card_in_hand(1, "Counterspell");
+    s.game_mut().scenario_refresh_priority().unwrap();
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
     let hand_before = s.zone_size(0, ZoneType::Hand);
     let library_before = s.zone_size(0, ZoneType::Library);
@@ -148,5 +141,8 @@ fn counterspell_counters_ancestral_recall() {
     s.assert_zone_size(0, ZoneType::Stack, 0);
     s.assert_zone_size(0, ZoneType::Hand, hand_before);
     s.assert_zone_size(0, ZoneType::Library, library_before);
-    s.assert_zone_size(0, ZoneType::Graveyard, 1);
+    assert_eq!(
+        s.game().state.zones.zone_of(recall_card),
+        Some(ZoneType::Graveyard)
+    );
 }

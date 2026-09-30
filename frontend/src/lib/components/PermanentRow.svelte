@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PermanentState } from '$lib/types';
+  import type { CardPreview, PermanentState } from '$lib/types';
 
   import Card from './Card.svelte';
 
@@ -11,9 +11,7 @@
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onHoverTarget?: (objectId: number | null) => void;
-    onPreviewCard?: (
-      card: { name: string | null; power: number | null; toughness: number | null } | null,
-    ) => void;
+    onPreviewCard?: (card: CardPreview | null) => void;
   }
 
   let {
@@ -47,6 +45,7 @@
         onHoverTarget?.(clickableTargets?.has(permanent.id) ? permanent.id : null);
         onPreviewCard?.({
           name: permanent.name,
+          text_box: permanent.text_box,
           power: permanent.power === 0 && permanent.toughness === 0 ? null : permanent.power,
           toughness:
             permanent.power === 0 && permanent.toughness === 0 ? null : permanent.toughness,

@@ -6,6 +6,7 @@
     "auto_pass": false
   },
   "manifest": {
+    "world_version": "w4",
     "schema_version": 1,
     "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
     "compiled_semantics": {
@@ -144,69 +145,69 @@
     {
       "offer_id": 3,
       "label": "Play Island",
-      "before_digest": "c30c244f8c5202afdd9bca3b20572a59d41c08cbf0393b877f66e949f1660786"
+      "before_digest": "6714b27fa8ae03568f68d16fac236430245423386c527271e8aba1242b03bb4f"
     },
     {
       "offer_id": 1,
       "label": "Pass priority",
-      "before_digest": "2ea72cb3a8e1fc3b9bd78379d16cd4200af595fa975ed4d2992c9775d28ca61a"
+      "before_digest": "faf0cc85dcd9d1288f772ff6358bb15a7dbf9e4cf1bb1412795b909aeeba30db"
     },
     {
       "offer_id": 0,
       "label": "Cast Tiger-Seal",
-      "before_digest": "73870b0c8688bee99e3084867ed281386e79da4fbdf7abf911298c48a117baea"
+      "before_digest": "6f3bb46538bd34259aa689ab91c9cda6d4c3fab3f845349ee12e4aac24492c0a"
     },
     {
       "offer_id": 2,
       "label": "Play Island",
-      "before_digest": "1926a4a2836a353305244470d2c81cff94f20aa8b9ef228a4b1d38406859234d"
+      "before_digest": "be3f99cd85a9a3c3da2409fa416e467a999a75e0d5b399d58d5117c51f224af0"
     },
     {
       "offer_id": 3,
       "label": "Pass priority",
-      "before_digest": "9a0b140cae8e167f7417b43653203cc0e3f382af29693ef25657cdc027cc8f6e"
+      "before_digest": "0f41d0f001c5e609741bc15d53b5971ae0dfb8bd80f11da97ad62264cf73e042"
     },
     {
       "offer_id": 3,
       "label": "Pass priority",
-      "before_digest": "091384f215ef76ebcd43918d66679c1cd90e2f861887acdfe662ab0b97399e8d"
+      "before_digest": "af79ce9aa274ea0f1a17c4897f393125b50cfffa2623451285b287dd7cbdfe73"
     },
     {
       "offer_id": 2,
       "label": "Play Mountain",
-      "before_digest": "88f2fd6aa25a28b48dcaa06c7a3997928e08b5774bb64d6aa560df6378c690ee"
+      "before_digest": "4ec74bf960b86ae81f7b697a856cfc9e7056f1e3868d23b30f328dfffa36434d"
     },
     {
       "offer_id": 3,
       "label": "Pass priority",
-      "before_digest": "0d3017f5cfb83f88ba83ee954ba49064601e272583021aad8561feeed5aa185b"
+      "before_digest": "8df63955b1c10a408f42b89a09279a2c5de0d431c69fc5d3fb87b2fa4925f5f3"
     },
     {
       "offer_id": 1,
       "label": "Cast Firebending Lesson",
-      "before_digest": "3395467784539400abc47df7e2261558731f18488fd442d3f589520ee620eccf"
+      "before_digest": "8cf1c6aa8dc136877fe43e557b3e8888be06e9d6655b0995d3dcb4c045bb1adf"
     },
     {
       "offer_id": 2,
       "label": "Target Badgermole Cub",
-      "before_digest": "6aecfe7ce1b69767623e77f4d4268ae12ea0c40ba03a3608bf62111da72a628f"
+      "before_digest": "35da13c58e34435292e1bc904de65034e14d1113ce468b5cb8b29a2cf0f473bb"
     },
     {
       "offer_id": 0,
       "label": "Cast It'll Quench Ya!",
-      "before_digest": "fa3b472c882b46e8a9bd875c942fdb1c6da220419e045bad6316039963252416"
+      "before_digest": "3af17eb92d472bddf9ae99dcd87c56b194129b85760215b1383c38f82cbe0d35"
     },
     {
       "offer_id": 0,
       "label": "Cast Divide by Zero",
-      "before_digest": "65f7ac46191f4109c9c385c0d70edcbb3518bb69fb2025d60b70169d81cf09c0"
+      "before_digest": "b339a9ce41ec7fe7fc2825da50c9ae1c1948ac0e3c14cca6c1851cfca298c9fa"
     },
     {
       "offer_id": 1,
       "label": "Target Badgermole Cub",
-      "before_digest": "3bc7ce88863b0993de2c43368ab8cd549fd2d168dfe65e256cff2f4d3cded286"
+      "before_digest": "c8413906b9d8d6498613e668da2140d0b5e4bd0f3c511a543ade7c4764fd9a5a"
     }
   ],
   "learn_revision": 29,
-  "learn_digest": "2f469db082bc2c701c29859dd3855000713edf0adaeaea514e7989656b375237"
+  "learn_digest": "e96614c5df03f81e3e602a7fc8216bd423e8b1bbfaaeca8f1e0458a1f5b10e07"
 }

@@ -153,6 +153,8 @@ pub enum ActionSpaceKind {
     Learn = 9,
     /// Waterbend cost payment: tap permanents / pay the remainder.
     Waterbend = 10,
+    Discard = 11,
+    LegendRule = 12,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

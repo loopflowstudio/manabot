@@ -20,7 +20,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 2;
+pub const MATCH_STATE_HASH_VERSION: u32 = 3;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -67,6 +67,7 @@ struct CanonicalTurn {
     current_step: usize,
     step_initialized: bool,
     turn_based_actions_complete: bool,
+    cleanup_priority: bool,
 }
 
 impl From<&TurnState> for CanonicalTurn {
@@ -85,6 +86,7 @@ impl From<&TurnState> for CanonicalTurn {
             current_step: turn.current_step,
             step_initialized: turn.step_initialized,
             turn_based_actions_complete: turn.turn_based_actions_complete,
+            cleanup_priority: turn.cleanup_priority,
         }
     }
 }

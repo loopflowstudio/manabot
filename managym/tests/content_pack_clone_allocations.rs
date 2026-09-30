@@ -15,7 +15,7 @@ use managym::{
 };
 use serde::Serialize;
 
-const FIXTURE_ID: &str = "interactive-heavy-80-v1";
+const FIXTURE_ID: &str = "interactive-heavy-80-w4-v1";
 const ARC_REFERENCE_COUNT: usize = 4_096;
 const WARMUP_CLONE_COUNT: usize = 64;
 const MEASURED_CLONE_COUNT: usize = 1_024;

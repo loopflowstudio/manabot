@@ -1994,6 +1994,11 @@
           "title": "Registry Key",
           "type": "integer"
         },
+        "text_box": {
+          "default": "",
+          "title": "Text Box",
+          "type": "string"
+        },
         "toughness": {
           "maximum": 2147483647,
           "minimum": -2147483648,
@@ -2101,6 +2106,11 @@
           "title": "Damage",
           "type": "integer"
         },
+        "exile_if_dies_this_turn": {
+          "default": false,
+          "title": "Exile If Dies This Turn",
+          "type": "boolean"
+        },
         "id": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2144,6 +2154,11 @@
         "tapped": {
           "title": "Tapped",
           "type": "boolean"
+        },
+        "text_box": {
+          "default": "",
+          "title": "Text Box",
+          "type": "string"
         },
         "toughness": {
           "anyOf": [
@@ -2866,6 +2881,11 @@
           "minimum": 0,
           "title": "Registry Key",
           "type": "integer"
+        },
+        "text_box": {
+          "default": "",
+          "title": "Text Box",
+          "type": "string"
         }
       },
       "required": [

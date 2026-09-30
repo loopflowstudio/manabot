@@ -58,6 +58,13 @@ cargo test
 engine guards its invariants with `debug_assert!`, which compiles out of
 release entirely, so a test can pass green in `--release` and still fail CI.
 
+New registered real cards also need their Scryfall shell and Oracle text in
+`tests/fixtures/scryfall_cards.json`; `cargo test --test conformance_tests`
+checks every registration against that snapshot. For an accepted rules-world
+change, record a new versioned conformance corpus and update the CI/test root
+without rewriting earlier receipts. The current corpus is
+[semantic-kernel-w4-v1](../conformance/semantic-kernel-w4-v1/).
+
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
 ```bash

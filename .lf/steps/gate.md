@@ -44,6 +44,10 @@ receipts and screenshots; create a new corpus version for an accepted rules
 change, document its scope, and reproduce it before switching CI to it. Generate
 and compare visual references on the pinned Linux profile. A digest-only edit
 or a macOS run with ignored screenshots does not certify the release matrix.
+Classify a new prompt family as excluded only after the browser scenarios show
+it is unreached; a new turn-based rule can reach it in either seeded game. A
+world or manifest change also requires `tests/etude/test_learn_setup.py`, whose
+checked Learn demo fixture pins the content manifest and state digests.
 
 ## Required checks for Rust managym work
 

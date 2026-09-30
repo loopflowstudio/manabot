@@ -249,6 +249,7 @@ class LegacyCardTypesView(ProtocolModel):
 
 
 class LegacyCardView(ProtocolModel):
+    text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     registry_key: UInt32
     name: str
@@ -261,6 +262,10 @@ class LegacyCardView(ProtocolModel):
 
 
 class LegacyPermanentView(ProtocolModel):
+    exile_if_dies_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     name: str | None
     controller_id: UInt32
@@ -275,6 +280,7 @@ class LegacyPermanentView(ProtocolModel):
 
 
 class SideboardCardView(ProtocolModel):
+    text_box: str = Field(default="", exclude_if=lambda value: not value)
     candidate_id: UInt32
     owner_id: UInt32
     registry_key: UInt32

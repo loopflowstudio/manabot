@@ -62,6 +62,7 @@ pub struct TurnState {
     pub current_step: usize,
     pub step_initialized: bool,
     pub turn_based_actions_complete: bool,
+    pub cleanup_priority: bool,
 }
 
 impl TurnState {
@@ -76,6 +77,7 @@ impl TurnState {
             current_step: 0,
             step_initialized: false,
             turn_based_actions_complete: false,
+            cleanup_priority: false,
         }
     }
 
@@ -108,6 +110,7 @@ impl TurnState {
     }
 
     pub fn advance_step(&mut self) {
+        self.cleanup_priority = false;
         self.step_initialized = false;
         self.turn_based_actions_complete = false;
 

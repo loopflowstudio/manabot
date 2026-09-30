@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CardState, PlayerState } from '$lib/types';
+  import type { CardPreview, CardState, PlayerState } from '$lib/types';
 
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
@@ -18,9 +18,7 @@
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (objectId: number) => void;
     onHoverTarget?: (objectId: number | null) => void;
-    onPreviewCard?: (
-      card: { name: string | null; power: number | null; toughness: number | null } | null,
-    ) => void;
+    onPreviewCard?: (card: CardPreview | null) => void;
   }
 
   let {
@@ -73,6 +71,7 @@
   function preview(card: CardState): void {
     onPreviewCard?.({
       name: card.name,
+      text_box: card.text_box,
       power: card.types.is_creature ? card.power : null,
       toughness: card.types.is_creature ? card.toughness : null,
     });

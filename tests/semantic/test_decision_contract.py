@@ -115,7 +115,7 @@ def test_contract_rejects_a_locally_fabricated_offer_id() -> None:
         contract.command(2**31 - 1)
 
 
-@pytest.mark.parametrize("version", [1, 4, 6, "5", 5.0, True])
+@pytest.mark.parametrize("version", [1, 4, 5, 7, "6", 6.0, True])
 def test_readers_reject_incompatible_semantic_versions(version) -> None:
     env = _env()
     frame = json.loads(env.semantic_decision_frame_json())

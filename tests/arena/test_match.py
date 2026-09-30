@@ -116,12 +116,12 @@ def selected_players():
         )
     )
     key = contract.key.model_copy(
-        update={"world": "w3", "content_suite": SELECTED_SUITE}
+        update={"world": "w4", "content_suite": SELECTED_SUITE}
     )
     players = [
         player.model_copy(
             update={
-                "world": "w3",
+                "world": "w4",
                 "content_suite": SELECTED_SUITE,
                 "matchup_sha256": canonical_sha256(selected_match().model_dump()),
             }
@@ -299,7 +299,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     path = tmp_path / "fixture.pt"
     save_bc_checkpoint(agent, space, path)
     runtime = runtime_fingerprints(
-        match_hypers=selected_match(), observation_space=space, world="w3"
+        match_hypers=selected_match(), observation_space=space, world="w4"
     )
     candidate = PlayerRegistration.model_validate(
         {

@@ -5,6 +5,8 @@ export const DECISION_PROMPTS: Readonly<Record<string, string>> = {
   DECLARE_ATTACKER: 'Declare attackers — choose an attack or finish declaring attackers.',
   DECLARE_BLOCKER: 'Declare blockers — choose a block or finish declaring blockers.',
   SCRY: 'Scry — keep each card on top or put it on the bottom.',
+  DISCARD: 'Choose a card to discard.',
+  LEGEND_RULE: 'Choose which legendary permanent to keep.',
   LOOK_AND_SELECT: 'Look at the revealed cards — choose what to take.',
   PAY_OR_NOT: 'Optional cost — pay it or decline.',
   MODAL: 'Choose a mode.',

@@ -7,7 +7,7 @@ use crate::{
 
 pub const PLAYER_DIM: usize = 28;
 pub const CARD_DIM: usize = 39;
-pub const PERMANENT_DIM: usize = 24;
+pub const PERMANENT_DIM: usize = 25;
 pub const ACTION_TYPE_DIM: usize = 16;
 pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
 pub const EVENT_DIM: usize = 7;
@@ -551,7 +551,8 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[20] = bool_to_f32(permanent.keywords.defender);
     out[21] = bool_to_f32(permanent.keywords.menace);
     out[22] = bool_to_f32(permanent.keywords.hexproof);
-    out[23] = 1.0;
+    out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
+    out[24] = 1.0;
 }
 
 fn encode_actions(
@@ -791,6 +792,7 @@ mod tests {
             id,
             registry_key: id,
             name: format!("Card {id}"),
+            text_box: String::new(),
             power,
             toughness,
             is_token: false,
@@ -833,6 +835,7 @@ mod tests {
             toughness: 2,
             is_animated: false,
             has_exile_link: false,
+            exile_if_dies_this_turn: false,
             keywords: KeywordData::default(),
         }
     }
@@ -901,6 +904,7 @@ mod tests {
                 owner_id: obs.agent.id,
                 registry_key: 7,
                 name: "Accumulate Wisdom".into(),
+                text_box: String::new(),
             })
             .collect();
         obs.action_space.actions = obs

@@ -27,10 +27,10 @@ from zipfile import ZipFile
 
 import psutil
 
+from managym import WORLD_VERSION
+
 PACK_KEY = "ur-lessons-vs-gw-allies"
 DECKS = ("ur_lessons", "gw_allies")
-# Full Learn with sideboards; WORLDS.md has not yet registered this freeze.
-WORLD_VERSION = "w3"
 CAP_HIT_RATE_LIMIT = 0.01
 DEMO_MOVE_LIMIT = 10_000
 

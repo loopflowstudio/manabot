@@ -72,6 +72,8 @@ pub enum PromptKind {
     Modal,
     Learn,
     Waterbend,
+    Discard,
+    LegendRule,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -518,7 +520,8 @@ impl Game {
                 (_, Action::PlayLand { card, .. }) => Some(PublicCommitment::PlayLand {
                     card: self.state.cards[*card].name.clone(),
                 }),
-                (ActionSpaceKind::Learn, Action::LearnDiscard { card, .. }) => {
+                (ActionSpaceKind::Learn, Action::LearnDiscard { card, .. })
+                | (ActionSpaceKind::Discard, Action::SelectCard { card, .. }) => {
                     Some(PublicCommitment::Discard {
                         card: self.state.cards[*card].name.clone(),
                     })
@@ -1420,6 +1423,8 @@ fn search_prompt_kind(kind: ActionSpaceKind) -> Result<PromptKind, StructuredOff
         ActionSpaceKind::Modal => Ok(PromptKind::Modal),
         ActionSpaceKind::Learn => Ok(PromptKind::Learn),
         ActionSpaceKind::Waterbend => Ok(PromptKind::Waterbend),
+        ActionSpaceKind::Discard => Ok(PromptKind::Discard),
+        ActionSpaceKind::LegendRule => Ok(PromptKind::LegendRule),
         ActionSpaceKind::GameOver => Err(StructuredOfferError::GameOver),
     }
 }

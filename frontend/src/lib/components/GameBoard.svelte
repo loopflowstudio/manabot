@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
 
-  import type { Observation } from '$lib/types';
+  import type { CardPreview, Observation } from '$lib/types';
   import type { PresentationPlayer } from '$lib/presentation.svelte';
 
   import HoverPreview from './HoverPreview.svelte';
@@ -41,9 +41,7 @@
     presentationPlayer = undefined,
   }: Props = $props();
 
-  let previewName = $state<string | null>(null);
-  let previewPower = $state<number | null>(null);
-  let previewToughness = $state<number | null>(null);
+  let preview = $state<CardPreview | null>(null);
   let resultDialog: HTMLDivElement | null = $state(null);
   let resultAction: HTMLButtonElement | null = $state(null);
   const stackCards = $derived([...observation.opponent.stack, ...observation.agent.stack]);
@@ -55,12 +53,8 @@
     void tick().then(() => (resultAction ?? resultDialog)?.focus());
   });
 
-  function setPreview(
-    card: { name: string | null; power: number | null; toughness: number | null } | null,
-  ): void {
-    previewName = card?.name ?? null;
-    previewPower = card?.power ?? null;
-    previewToughness = card?.toughness ?? null;
+  function setPreview(card: CardPreview | null): void {
+    preview = card;
   }
 
   function keepResultFocus(event: KeyboardEvent): void {
@@ -134,6 +128,7 @@
               onmouseenter={() => {
                 setPreview({
                   name: card.name,
+                  text_box: card.text_box,
                   power: card.types.is_creature ? card.power : null,
                   toughness: card.types.is_creature ? card.toughness : null,
                 });
@@ -205,7 +200,7 @@
   {/if}
 </section>
 
-<HoverPreview name={previewName} power={previewPower} toughness={previewToughness} />
+<HoverPreview card={preview} />
 
 <style>
   .tempo::before,

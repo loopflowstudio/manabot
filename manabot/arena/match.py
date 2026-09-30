@@ -16,12 +16,13 @@ from manabot.env import Match, ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
 from manabot.verify.util import INTERACTIVE_DECK
+from managym import WORLD_VERSION
 
 from .guidance import build_arena_player
 from .models import ArenaKey, PlayerRegistration, canonical_sha256
 from .replay import replay_environment, replay_games, write_trace
 
-SELECTED_SUITE = "w3-allies-lessons-v1"
+SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"
 
 
 def selected_match() -> MatchHypers:
@@ -280,7 +281,7 @@ def play_cell(
         )
     )
     if selected:
-        if key.world != "w3":
+        if key.world != WORLD_VERSION:
             raise ValueError("selected matchup requires corrected-world identity")
         for player in (player_a, player_b):
             if (

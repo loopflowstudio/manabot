@@ -303,7 +303,9 @@ impl Scenario {
                 space.actions.len().saturating_sub(1)
             }
             ActionSpaceKind::Modal => 0,
-            ActionSpaceKind::Waterbend => 0,
+            ActionSpaceKind::Waterbend | ActionSpaceKind::Discard | ActionSpaceKind::LegendRule => {
+                0
+            }
         };
         self.step_action(index);
     }

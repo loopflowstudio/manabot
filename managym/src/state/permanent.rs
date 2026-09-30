@@ -26,6 +26,8 @@ pub struct Permanent {
     pub animated: bool,
     /// Keywords granted until end of turn — cleared during cleanup.
     pub temp_keywords: Keywords,
+    /// Object-local replacement, removed at cleanup or when this incarnation leaves.
+    pub exile_if_dies_this_turn: bool,
     pub attacking: bool,
 }
 
@@ -45,6 +47,7 @@ impl Permanent {
             cant_be_blocked_this_turn: false,
             animated: false,
             temp_keywords: Keywords::default(),
+            exile_if_dies_this_turn: false,
             attacking: false,
         }
     }
@@ -121,6 +124,7 @@ impl Permanent {
     }
 
     pub fn clear_temporary_modifiers(&mut self) {
+        self.exile_if_dies_this_turn = false;
         self.temp_power = 0;
         self.temp_toughness = 0;
         self.cant_be_blocked_this_turn = false;

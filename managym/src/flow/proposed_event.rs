@@ -73,6 +73,25 @@ impl Game {
             return false;
         }
 
+        // CR 614.1a: replace any death of the exact affected incarnation,
+        // including sacrifice and zero toughness, not only lethal damage.
+        if let ProposedEvent::ZoneMove {
+            object: Some(object),
+            from: Some(ZoneType::Battlefield),
+            to,
+            ..
+        } = &mut event
+        {
+            if *to == ZoneType::Graveyard
+                && self
+                    .lookup_current_permanent(*object)
+                    .ok()
+                    .and_then(|id| self.state.permanents[id].as_ref())
+                    .is_some_and(|permanent| permanent.exile_if_dies_this_turn)
+            {
+                *to = ZoneType::Exile;
+            }
+        }
         let replacements = self.collect_replacements(&event);
         for replacement in replacements {
             Self::apply_replacement(&mut event, &replacement.effect);

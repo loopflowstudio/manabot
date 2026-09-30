@@ -488,6 +488,8 @@ function chooseAction(
     if (selected < 0) {
       selected = find((action) => action.type === 'PAY_COST');
     }
+  } else if (family === 'DISCARD') {
+    selected = find((action) => action.type === 'SELECT_CARD');
   }
 
   if (selected < 0 || selected >= actions.length) {

@@ -600,6 +600,8 @@ pub enum ActionSpaceEnum {
     Modal = 8,
     Learn = 9,
     Waterbend = 10,
+    Discard = 11,
+    LegendRule = 12,
 }
 
 #[cfg(feature = "python")]
@@ -724,6 +726,10 @@ impl ActionSpaceEnum {
     const LEARN: Self = Self::Learn;
     #[classattr]
     const WATERBEND: Self = Self::Waterbend;
+    #[classattr]
+    const DISCARD: Self = Self::Discard;
+    #[classattr]
+    const LEGEND_RULE: Self = Self::LegendRule;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -749,6 +755,8 @@ impl From<ActionSpaceKind> for ActionSpaceEnum {
             ActionSpaceKind::Modal => Self::Modal,
             ActionSpaceKind::Learn => Self::Learn,
             ActionSpaceKind::Waterbend => Self::Waterbend,
+            ActionSpaceKind::Discard => Self::Discard,
+            ActionSpaceKind::LegendRule => Self::LegendRule,
         }
     }
 }
@@ -768,6 +776,8 @@ impl From<ActionSpaceEnum> for ActionSpaceKind {
             ActionSpaceEnum::Modal => Self::Modal,
             ActionSpaceEnum::Learn => Self::Learn,
             ActionSpaceEnum::Waterbend => Self::Waterbend,
+            ActionSpaceEnum::Discard => Self::Discard,
+            ActionSpaceEnum::LegendRule => Self::LegendRule,
         }
     }
 }
@@ -1200,6 +1210,8 @@ pub struct PyCard {
     pub registry_key: i32,
     #[pyo3(get, set)]
     pub name: String,
+    #[pyo3(get)]
+    pub text_box: String,
     #[pyo3(get, set)]
     pub power: i32,
     #[pyo3(get, set)]
@@ -1231,6 +1243,7 @@ impl From<CardData> for PyCard {
             id: value.id,
             registry_key: value.registry_key,
             name: value.name,
+            text_box: value.text_box,
             power: value.power,
             toughness: value.toughness,
             is_token: value.is_token,
@@ -1254,6 +1267,7 @@ impl From<PyCard> for CardData {
             id: value.id,
             registry_key: value.registry_key,
             name: value.name,
+            text_box: value.text_box,
             power: value.power,
             toughness: value.toughness,
             is_token: value.is_token,
@@ -1315,6 +1329,8 @@ pub struct PyPermanent {
     pub is_animated: bool,
     #[pyo3(get, set)]
     pub has_exile_link: bool,
+    #[pyo3(get, set)]
+    pub exile_if_dies_this_turn: bool,
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
@@ -1335,6 +1351,7 @@ impl From<PermanentData> for PyPermanent {
             toughness: value.toughness,
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
+            exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             keywords: value.keywords.into(),
         }
     }
@@ -1355,6 +1372,7 @@ impl From<PyPermanent> for PermanentData {
             toughness: value.toughness,
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
+            exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             keywords: value.keywords.into(),
         }
     }
@@ -1628,6 +1646,8 @@ pub struct PySideboardCard {
     pub registry_key: i32,
     #[pyo3(get)]
     pub name: String,
+    #[pyo3(get)]
+    pub text_box: String,
 }
 
 #[cfg(feature = "python")]
@@ -1638,6 +1658,7 @@ impl From<SideboardCardData> for PySideboardCard {
             owner_id: value.owner_id,
             registry_key: value.registry_key,
             name: value.name,
+            text_box: value.text_box,
         }
     }
 }
@@ -1650,6 +1671,7 @@ impl From<PySideboardCard> for SideboardCardData {
             owner_id: value.owner_id,
             registry_key: value.registry_key,
             name: value.name,
+            text_box: value.text_box,
         }
     }
 }
@@ -2638,6 +2660,7 @@ impl PyEnv {
         let manifest = env.content_pack_manifest().map_err(map_agent_err)?;
 
         let out = PyDict::new_bound(py);
+        out.set_item("world_version", manifest.world_version)?;
         out.set_item("schema_version", manifest.schema_version)?;
         out.set_item("content_digest", manifest.content_digest)?;
         if let Some(compiled) = manifest.compiled_semantics {
@@ -3219,6 +3242,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
 #[cfg(feature = "python")]
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
 
     m.add_class::<ZoneEnum>()?;

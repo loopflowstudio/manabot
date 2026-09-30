@@ -30,6 +30,7 @@ pub struct CompiledSemanticManifest {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackManifest {
+    pub world_version: String,
     pub schema_version: u32,
     pub content_digest: String,
     pub compiled_semantics: Option<CompiledSemanticManifest>,
@@ -74,6 +75,7 @@ impl ContentPack {
     /// facts and learning projections continue to carry typed definition IDs.
     pub fn manifest(&self) -> ContentPackManifest {
         ContentPackManifest {
+            world_version: crate::WORLD_VERSION.into(),
             schema_version: self.schema_version,
             content_digest: self.content_digest(),
             compiled_semantics: self.compiled_semantics.clone(),
@@ -129,6 +131,8 @@ impl ContentPack {
         self.register_visions();
         self.register_strixhaven();
         self.register_tla();
+        self.register_tla_lessons_increment();
+        self.register_mkm();
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {

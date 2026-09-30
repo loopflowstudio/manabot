@@ -177,11 +177,11 @@ Bootstrap resampling keeps the entire four-game deal block together.
 
 To evaluate exported bytes, pass `--candidate registration.json` and
 `--candidate-checkpoint candidate.pt`. Use the existing `PlayerRegistration`
-schema: world `w3`, suite `w3-allies-lessons-v1`, exact checkpoint SHA-256/size,
+schema: world `w4`, suite `w4-allies-lessons-v1`, exact checkpoint SHA-256/size,
 parameter count, training seed, immutable artifact ID and explicit inference
 spec (`checkpoint`, `deterministic`, `cpu`, batch size 1). Compute the setup and
 ABI fingerprints with `runtime_fingerprints(match_hypers=selected_match(),
-observation_space=loaded_space, world="w3")`; both are existing Python APIs.
+observation_space=loaded_space, world="w4")`; both are existing Python APIs.
 The ordinary checkpoint loader supplies `loaded_space`; the arena retains its
 bounds in every trace. No checkpoint port or loader bypass is performed.
 Stochastic policies are reseeded per player decision, with the exact seed in

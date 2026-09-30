@@ -77,6 +77,18 @@
       "R"
     ]
   },
+  "Combustion Technique": {
+    "name": "Combustion Technique",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Combustion Technique deals damage equal to 2 plus the number of Lesson cards in your graveyard to target creature. If that creature would die this turn, exile it instead.",
+    "colors": [
+      "R"
+    ]
+  },
   "Compassionate Healer": {
     "name": "Compassionate Healer",
     "mana_cost": "{1}{W}",
@@ -301,6 +313,18 @@
       "W"
     ]
   },
+  "Gran-Gran": {
+    "name": "Gran-Gran",
+    "mana_cost": "{U}",
+    "type_line": "Legendary Creature — Human Peasant Ally",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever Gran-Gran becomes tapped, draw a card, then discard a card.\nNoncreature spells you cast cost {1} less to cast as long as there are three or more Lesson cards in your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
   "Gray Ogre": {
     "name": "Gray Ogre",
     "mana_cost": "{2}{R}",
@@ -480,6 +504,18 @@
       "Learn"
     ],
     "oracle_text": "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Proft's Eidetic Memory": {
+    "name": "Proft's Eidetic Memory",
+    "mana_cost": "{1}{U}",
+    "type_line": "Legendary Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When Proft's Eidetic Memory enters, draw a card.\nYou have no maximum hand size.\nAt the beginning of combat on your turn, if you've drawn more than one card this turn, put X +1/+1 counters on target creature you control, where X is the number of cards you've drawn this turn minus one.",
     "colors": [
       "U"
     ]

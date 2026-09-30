@@ -297,6 +297,8 @@ pub struct LegacyCardTypesView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyCardView {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text_box: String,
     pub id: u32,
     pub registry_key: u32,
     pub name: String,
@@ -311,6 +313,10 @@ pub struct LegacyCardView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exile_if_dies_this_turn: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text_box: String,
     pub id: u32,
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub name: RequiredNullable<String>,
@@ -332,6 +338,8 @@ pub struct LegacyPermanentView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SideboardCardView {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text_box: String,
     pub candidate_id: u32,
     pub owner_id: u32,
     pub registry_key: u32,
