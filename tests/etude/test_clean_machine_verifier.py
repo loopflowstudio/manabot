@@ -28,7 +28,7 @@ def test_browser_prepares_before_readiness_and_is_reaped(tmp_path, outcome):
     executable(binaries / "uv", "echo 123456789\n")
     executable(
         binaries / "sleep",
-        'if [ "$1" = 60 ]; then exec /bin/sleep 1; fi\n'
+        'if [ "$1" = 90 ]; then exec /bin/sleep 1; fi\n'
         'exec /bin/sleep "$@"\n',
     )
     executable(

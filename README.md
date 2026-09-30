@@ -85,7 +85,7 @@ cd etude
 One command installs locked dependencies, builds the engine, starts the
 backend and frontend, and opens the curated matchup in your browser. Ctrl-C
 stops both services. The path from a fresh checkout to play is itself under
-test: `./scripts/verify-clean-machine` proves launch within 60 seconds, offline
+test: `./scripts/verify-clean-machine` proves launch within 90 seconds, offline
 reload, and session recovery, and CI records the receipt (see
 [docs/clean-machine-play.md](docs/clean-machine-play.md)).
 

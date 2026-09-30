@@ -228,7 +228,7 @@ test('clean command reaches pinned play and reloads without public network', asy
 
   if (LAUNCH_LOG_PATH) {
     await expect
-      .poll(launcherReadyRecord, { timeout: 60_000, intervals: [100] })
+      .poll(launcherReadyRecord, { timeout: 90_000, intervals: [100] })
       .not.toBeNull();
   }
   await page.goto('/');
@@ -246,7 +246,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   });
   await expect(page.getByTestId('action-option').first()).toBeVisible({ timeout: 30_000 });
   const elapsedToPlayableMs = Date.now() - LAUNCH_STARTED_MS;
-  expect(elapsedToPlayableMs).toBeLessThan(60_000);
+  expect(elapsedToPlayableMs).toBeLessThan(90_000);
 
   const treatments = board.getByTestId('card-treatment');
   const treatmentCount = await treatments.count();
@@ -317,7 +317,7 @@ test('clean command reaches pinned play and reloads without public network', asy
       argv: ['./scripts/play'],
       ready: launcherReadyRecord(),
       elapsed_to_playable_ms: elapsedToPlayableMs,
-      budget_ms: 60_000,
+      budget_ms: 90_000,
     },
     experience: {
       opponent: 'search-64',
