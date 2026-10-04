@@ -300,14 +300,20 @@ world and exact ABI identities; ETU-75 owns the shared checkpoint/setup binding.
 
 ## Training regime reconciliation (2026-10-04)
 
-Jack Heart approved separate ownership for ETU-89 training infrastructure,
-ETU-90 RL correctness/treatments and ETU-91 comparison/ablation studies, followed
-by three dedicated workers. The current chapter remains Trained Challengers;
-older conditional-teacher priorities are research background, not authorization
-for a new costly cycle. The proposed 168-hour comparison and separate 15-hour
-screen remain unfrozen. Jack Heart subsequently authorized a scientific pilot
-after landing; ETU-91 coordinates its bounded allocation with the root. This
-infrastructure worker runs only bounded proof; no paid compute is authorized.
+Jack Heart split training work into ETU-89 (regime/run infrastructure), ETU-90
+(RL correctness/treatments), and ETU-91 (studies and analysis), then requested
+three dedicated workers. The study recipes and proposed scientific allocations
+are in [the comparison protocol](../../experiments/training-regimes.md) and
+[the ablation protocol](../../experiments/ataraxos-mtg-ablations.md).
+Jack Heart subsequently authorized scientific execution after integration and
+landing within 168 active laptop hours total, including calibration and the
+ablation screen. The root session owns the single launch; workers must not
+start competing training. Counts and allocations must be frozen from measured
+integrated CPU calibration before scoring; smoke does not freeze them.
+
+The current chapter remains Trained Challengers; older conditional-teacher
+priorities are research background, not authorization for a new costly cycle.
+Infrastructure workers run only bounded proof; no paid compute is authorized.
 
 `TrainingRegime` and `TrainingRun` now execute the existing search-supervised
 and self-play trainers through `manabot train --regime`. VerifyStore owns status;
@@ -328,8 +334,7 @@ ETU-89 now integrates ETU-75's mandatory checkpoint world/setup contract,
 semantic tensor propagation and ETU-90's complete-state EMA helper. A retained
 two-stage execution completed 13 games and 1,024 learner transitions with four
 ordinary raw/EMA reloads on the semantic ABI. ETU-90 owns EMA complete-state
-correctness; ETU-91 owns final
-replayed arena/notebook evidence after integration. Study smoke success cannot
+correctness; ETU-91 owns final replayed arena/notebook evidence after integration. Study smoke success cannot
 close infrastructure, RL correctness, strength or human-play acceptance for
 another Task. The implementation contract is in
 [training regimes](../../docs/training-regimes.md); scientific proposals and
@@ -340,6 +345,31 @@ checkpoint available at each cutoff. Search generation remains on the cost axis;
 no overlap means equal-cost comparison is unavailable. One seed and a four-leg
 deal block prove workflow, not method-level uncertainty. ETU-91 owns final
 replayed study and offline-regeneration evidence on the integrated code.
+
+ETU-91 now has integrated semantic study proof: final learning-speed and
+five-arm smokes completed in 91 and 204 seconds with 24 and 72 exact-replayed
+games, two checkpoints per arm, and unchanged offline-regenerated metrics and
+reports. Both use the executor's cumulative checkpoint clock and have observed
+cost overlap. Earlier inherited-ABI evidence remains preliminary. A later
+five-arm attempt failed when a merge exposed conflict markers to a child
+process; that attempt remains retained separately. Never edit imported source
+while a multiprocessing measurement is running.
+
+Scientific plan generation scales measured updates and teacher games, retains
+cumulative fitting, reserves 168 hours across calibration, both three-seed
+studies, evaluation and recovery, and checks projected storage against a 4 GiB
+reserve. The three fixed anchors, untouched endpoint deals and full nine-cell
+main comparison remain explicit. Count extrapolation is not long-run timing
+proof. No scientific study ran here; root owns calibration and the unique launch.
+Post-training evaluation resume retains failed cells without replacement, uses
+remaining original time and cannot turn an incomplete cohort into a strength
+claim. Training checkpoints do not support process resume.
+
+Jack Heart requested keeping ETU-91 and its checkout open to preserve ignored
+`.runs` evidence. Detailed attempts, commands and evidence limits live in the
+[study protocol](../../experiments/training-regimes.md). This evidence does not
+satisfy ETU-82's demo-run contract, ETU-85's improvement comparison, S1–S5
+competence, or the chapter's human-challenger outcome.
 
 ## Direct self-play treatment contracts (2026-10-04)
 

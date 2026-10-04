@@ -7,28 +7,92 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class EvaluationProtocol(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     study: Literal["learning-speed", "ataraxos-ablations"]
-    purpose: Literal["workflow-smoke"] = "workflow-smoke"
+    purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
     regime_digests: tuple[str, ...]
-    training_seed: Literal[197] = 197
+    training_seeds: tuple[int, ...] = (197,)
     paired_deals: tuple[int, ...] = (910001,)
     anchor_deals: tuple[int, ...] = (920001,)
-    checkpoint_count: Literal[2] = 2
-    anchor: Literal["random-smoke-anchor"] = "random-smoke-anchor"
+    checkpoint_count: int = Field(default=2, ge=2)
+    cost_cutoffs_seconds: tuple[float, ...] = ()
+    anchors: tuple[Literal["random", "scripted-greedy", "puct-64"], ...] = ("random",)
+    endpoint_paired_deals: tuple[int, ...] = ()
+    endpoint_anchor_deals: tuple[int, ...] = ()
+    endpoint_seed_pairs: tuple[tuple[int, int], ...] = ()
     seat_deck_legs: Literal[4] = 4
     inference: Literal["stochastic-policy-cpu-one-thread"] = (
         "stochastic-policy-cpu-one-thread"
     )
     game_seconds: float = Field(default=120, gt=0, le=120)
     max_commands: int = Field(default=10000, gt=0, le=10000)
-    process_seconds: float = Field(default=900, gt=0, le=900)
+    process_seconds: float = Field(default=900, gt=0, le=168 * 3600)
     selection: Literal["all-completed-cutoffs-raw"] = "all-completed-cutoffs-raw"
-    uncertainty: Literal["cross-seed-unavailable"] = "cross-seed-unavailable"
+    uncertainty: Literal["cross-seed-unavailable", "paired-seed-descriptive"] = (
+        "cross-seed-unavailable"
+    )
     incomplete: Literal["fail-retain-all-attempts"] = "fail-retain-all-attempts"
 
     @model_validator(mode="after")
     def disjoint(self):
+        if (
+            any(c <= 0 for c in self.cost_cutoffs_seconds)
+            or tuple(sorted(set(self.cost_cutoffs_seconds)))
+            != self.cost_cutoffs_seconds
+        ):
+            raise ValueError("cost cutoffs must be positive and strictly increasing")
+        if self.purpose == "scientific" and not self.cost_cutoffs_seconds:
+            raise ValueError("scientific profiles require declared cost cutoffs")
+        if not self.training_seeds or len(set(self.training_seeds)) != len(
+            self.training_seeds
+        ):
+            raise ValueError("training seeds must be nonempty and unique")
+        if any(seed < 0 or seed >= 100000 for seed in self.training_seeds):
+            raise ValueError("training seeds must be in [0, 100000)")
+        if self.purpose == "workflow-smoke" and (
+            self.process_seconds > 900 or len(self.training_seeds) != 1
+        ):
+            raise ValueError("smoke is limited to 900 seconds and one seed")
+        if self.purpose == "scientific" and (
+            len(self.training_seeds) < 3
+            or self.uncertainty != "paired-seed-descriptive"
+        ):
+            raise ValueError(
+                "scientific profiles require at least three seeds and declared uncertainty"
+            )
+        if not self.anchors or len(set(self.anchors)) != len(self.anchors):
+            raise ValueError("anchors must be nonempty and unique")
+        if self.purpose == "scientific":
+            if not self.endpoint_paired_deals or not self.endpoint_anchor_deals:
+                raise ValueError("scientific profiles require untouched endpoint deals")
+            if set(self.anchors) != {"random", "scripted-greedy", "puct-64"}:
+                raise ValueError(
+                    "scientific profiles require all three fixed baselines"
+                )
+            expected_pairs = (
+                {(a, b) for a in self.training_seeds for b in self.training_seeds}
+                if self.study == "learning-speed"
+                else {(s, s) for s in self.training_seeds}
+            )
+            if set(self.endpoint_seed_pairs) != expected_pairs or len(
+                self.endpoint_seed_pairs
+            ) != len(expected_pairs):
+                raise ValueError(
+                    "endpoint seed schedule must cover the declared cross-seed comparison"
+                )
+        families = (
+            self.paired_deals,
+            self.anchor_deals,
+            self.endpoint_paired_deals,
+            self.endpoint_anchor_deals,
+        )
+        flat = [s for family in families for s in family]
+        if len(flat) != len(set(flat)):
+            raise ValueError(
+                "development and endpoint deal families must be disjoint and unique"
+            )
+        if any(s < 900000 for s in flat):
+            raise ValueError("evaluation deals must use reserved family >=900000")
         expected = 2 if self.study == "learning-speed" else 5
         if len(self.regime_digests) != expected or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
@@ -48,4 +112,55 @@ class EvaluationProtocol(BaseModel):
             for values in (self.paired_deals, self.anchor_deals)
         ):
             raise ValueError("duplicate evaluation deal")
+        return self
+
+
+class ResolvedStudy(BaseModel):
+    """Explicit recipes and allocation; the runner never scales smoke implicitly."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    protocol: EvaluationProtocol
+    recipes: tuple[dict, ...]
+    allocation_seconds: float = Field(gt=0, le=168 * 3600)
+    prior_campaign_seconds: float = Field(ge=0)
+    runtime_identities: dict[str, str] = Field(default_factory=dict)
+    projected_disk_bytes: int = Field(default=0, ge=0)
+    disk_reserve_bytes: int = Field(default=4 * 1024**3, ge=0)
+    calibration_evidence: str
+
+    @model_validator(mode="after")
+    def allocation(self):
+        from manabot.arena.models import canonical_sha256
+        from manabot.training.models import TrainingRegime
+
+        recipes = [TrainingRegime.model_validate(r) for r in self.recipes]
+        if (
+            tuple(canonical_sha256(r.model_dump(mode="json")) for r in recipes)
+            != self.protocol.regime_digests
+        ):
+            raise ValueError("resolved plan recipe digests do not match")
+        if len({r.id for r in recipes}) != len(recipes):
+            raise ValueError("recipe IDs must be unique")
+        if any(
+            sum(s.operation != "collect_search" for s in r.stages)
+            != self.protocol.checkpoint_count
+            for r in recipes
+        ):
+            raise ValueError("every recipe must export the declared checkpoint count")
+        if self.protocol.process_seconds > self.allocation_seconds:
+            raise ValueError("process deadline exceeds study allocation")
+        if self.prior_campaign_seconds + self.allocation_seconds > 168 * 3600:
+            raise ValueError(
+                "campaign exceeds 168 laptop hours including prior attempts"
+            )
+        if (
+            sum(r.wall_seconds for r in recipes) * len(self.protocol.training_seeds)
+            >= self.allocation_seconds
+        ):
+            raise ValueError("allocation must leave time for evaluation and reports")
+        if (
+            self.protocol.purpose == "scientific"
+            and not self.calibration_evidence.strip()
+        ):
+            raise ValueError("scientific execution requires calibration evidence")
         return self

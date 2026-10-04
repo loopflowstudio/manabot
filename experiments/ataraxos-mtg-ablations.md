@@ -1,7 +1,9 @@
 # Ataraxos-inspired Magic ablations
 
 2026-10-04. Jack Heart requested these experiments. ETU-90 owns treatment
-correctness; ETU-91 owns this study. The proposals below are not funded runs.
+correctness; ETU-91 owns this study. Jack Heart authorized local execution after integration and landing. Freeze
+counts after calibration under the inclusive campaign ceiling in
+[the learning-speed protocol](training-regimes.md#resumed-scientific-execution-2026-10-04); root owns the single launch.
 
 ```bash
 uv run --extra notebook experiments/runners/run_training_regimes.py --study ataraxos-ablations --profile smoke --out .runs/ablations
