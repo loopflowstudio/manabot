@@ -130,17 +130,36 @@ class TrainSupervised(Stage):
     learning_rate: float = Field(default=0.001, gt=0)
 
 
+class FrozenOpponent(Strict):
+    """Exact admitted policy bytes used only for opponent-seat inference."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+    path: str = Field(min_length=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class TrainSelfPlay(Stage):
     operation: Literal["train_self_play"]
     trainer: Literal["net_opponent"] = "net_opponent"
     optimizer: Literal["adam"] = "adam"
     trainable: Literal["policy_value"] = "policy_value"
-    behavior: Literal["current-self"] = "current-self"
+    behavior: Literal["current-self", "frozen"] = "current-self"
+    opponent: FrozenOpponent | None = None
     initial: str | None = None
     updates: int = Field(default=2, ge=1)
     streams: int = Field(default=4, ge=2)
     transitions: int = Field(default=256, ge=1)
     learning: Learning | AtaraxosMoveLearning = Learning()
+
+    @model_validator(mode="after")
+    def frozen_opponent(self) -> "TrainSelfPlay":
+        if (self.behavior == "frozen") != (self.opponent is not None):
+            raise ValueError("frozen behavior requires exactly one frozen opponent")
+        if self.behavior == "frozen" and self.streams % 2:
+            raise ValueError(
+                "frozen opponent training requires even streams for both decks"
+            )
+        return self
 
 
 class CollectBelief(Stage):
@@ -277,10 +296,12 @@ class TrainingRegime(Strict):
                 if (
                     parent.streams != stage.streams
                     or parent.learning.ema != stage.learning.ema
+                    or parent.behavior != stage.behavior
+                    or parent.opponent != stage.opponent
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, gradient and EMA clock"
+                        "live self-play continuation must preserve streams, gradient, EMA clock and opponent"
                     )
             if isinstance(stage, TrainCompound):
                 if initial and parent is not latest_compound:

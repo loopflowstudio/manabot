@@ -33,6 +33,7 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra import Experiment
 from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
 from manabot.model.agent import Agent
+from manabot.model.world import validate_agent_setup
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
@@ -522,19 +523,70 @@ def _execute_regime(
                 record.artifacts["sampler"] = candidate
                 record.export_seconds = time.perf_counter() - tick
             elif isinstance(stage, TrainSelfPlay):
+                opponent_agent = None
+                if stage.opponent is not None:
+                    # Validate before every stage, even when retaining the live
+                    # collector. Changed disk bytes cannot silently change a run.
+                    opponent_path = Path(stage.opponent.path).resolve()
+                    if file_sha256(opponent_path) != stage.opponent.sha256:
+                        raise ValueError("frozen opponent checkpoint digest differs")
+                    record.inputs["frozen_opponent"] = artifact(opponent_path)
+                    if not stage.initial:
+                        opponent_agent, opponent_space = load_checkpoint_agent(
+                            str(opponent_path)
+                        )
+                        validate_agent_setup(
+                            opponent_agent, Match(regime.match).to_rust()
+                        )
+                        if opponent_space.encoder.hypers != space.encoder.hypers:
+                            raise ValueError("frozen opponent observation ABI differs")
+                        if opponent_agent.hypers.compound_decisions:
+                            raise ValueError(
+                                "frozen collector does not support compound opponent submissions"
+                            )
+                        if opponent_agent.belief_count_buckets:
+                            raise ValueError(
+                                "frozen collector does not supply belief inputs"
+                            )
+                        opponent_agent.requires_grad_(False)
                 if stage.initial:
                     # Validation permits only the latest live collector to continue.
                     trainer, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
                     agent = Agent(space, regime.agent)
+                    if stage.opponent is not None:
+                        phase = "export_seconds"
+                        tick = time.perf_counter()
+                        target = out / f"{stage.id}-initial-raw.pt"
+                        temporary = target.with_suffix(".tmp")
+                        save_bc_checkpoint(
+                            agent,
+                            space,
+                            temporary,
+                            player_configs=Match(regime.match).to_rust(),
+                            extra={
+                                "run_id": run.id,
+                                "stage_id": stage.id,
+                                "weights": "initial_raw",
+                                "regime_digest": run.regime_digest,
+                            },
+                        )
+                        os.replace(temporary, target)
+                        load_checkpoint_agent(str(target))
+                        record.artifacts["initial_raw"] = artifact(target)
+                        record.export_seconds += time.perf_counter() - tick
+                        persist()
                     collector = SeatRoutedCollector(
                         space,
                         Match(regime.match),
                         Reward(RewardHypers()),
                         num_envs=stage.streams,
                         seed=seeds["collection"],
-                        opponent_mode="self",
+                        opponent_mode="frozen"
+                        if stage.opponent is not None
+                        else "self",
+                        opponent_agent=opponent_agent,
                         recovery_max_microsteps=regime.recovery_max_microsteps,
                     )
                     experiment = Experiment(
