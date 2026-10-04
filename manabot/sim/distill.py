@@ -202,11 +202,13 @@ def generate_selfplay_shard(
             num_legals.append(len(raw_obs.action_space.actions))
             decision_kinds.append(int(raw_obs.action_space.action_space_type))
             action = players[acting].act(env, obs)
+            receipt = players[acting].last_receipt if is_local else None
             if is_local:
                 # Frozen-policy histories make its action-likelihood posterior
                 # the matched model. Search targets label, but do not generate,
                 # this trajectory; arena play samples the improved distribution.
-                receipt = players[acting].last_receipt
+                if receipt is None:
+                    raise RuntimeError("local teacher did not retain its update")
                 action = int(behavior_rng.choice(len(receipt.base), p=receipt.base))
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
@@ -237,14 +239,12 @@ def generate_selfplay_shard(
                 visit_row[: len(raw_visits)] = raw_visits
                 visit_rows.append(visit_row)
                 root_values.append(float(root_value))
-            if is_local:
-                receipt = players[acting].last_receipt
-                if receipt is None:
-                    raise RuntimeError("local teacher did not retain its update")
+            if receipt is not None:
                 target = np.zeros(max_actions, dtype=np.float32)
                 target[: len(receipt.target)] = receipt.target
                 local_targets.append(target)
-                local_receipts.append(receipt.to_json())
+                encoded_receipt = receipt.to_json()
+                local_receipts.append(encoded_receipt)
                 mixing_rows.append(receipt.mixing_diagnostics())
                 if journal is not None:
                     with journal.open("a") as output:
@@ -254,7 +254,7 @@ def generate_selfplay_shard(
                                     "game_index": game_index,
                                     "step": steps,
                                     "action": action,
-                                    "receipt": json.loads(receipt.to_json()),
+                                    "receipt": json.loads(encoded_receipt),
                                 }
                             )
                             + "\n"
@@ -333,8 +333,7 @@ def generate_selfplay_shard(
 
     # Provenance tag (expert-iteration staleness accounting, exp-07): who
     # generated these labels, with what rollout policy, at which round, from
-    # which code. Self-play mirror, so the generating opponent is the teacher.
-    import json as _json
+    # which code. Local teachers label frozen-policy trajectories.
 
     provenance = {
         "round": round_index,
@@ -359,7 +358,7 @@ def generate_selfplay_shard(
         ),
         "value_target_kind": "root_value" if has_tree_targets else "terminal_outcome",
     }
-    arrays["provenance"] = np.array(_json.dumps(provenance))
+    arrays["provenance"] = np.array(json.dumps(provenance))
 
     if out_path is not None:
         out_path = Path(out_path)
@@ -436,7 +435,6 @@ def load_shards(
     each shard's embedded provenance tag, else -1 for legacy shards.
     """
 
-    import json as _json
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)
@@ -458,7 +456,7 @@ def load_shards(
         if rounds is not None:
             shard_round = int(rounds[i])
         elif "provenance" in shard:
-            shard_round = int(_json.loads(str(shard["provenance"])).get("round", -1))
+            shard_round = int(json.loads(str(shard["provenance"])).get("round", -1))
         else:
             shard_round = -1
         round_cols.append(np.full(len(shard["action"]), shard_round, dtype=np.int16))

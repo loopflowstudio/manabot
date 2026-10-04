@@ -131,6 +131,7 @@ class CollectLocalUpdate(Stage):
     games: int = Field(ge=2)
     max_steps: int = Field(default=2000, ge=1)
     search: LocalSearchConfig = LocalSearchConfig()
+    sampler: str | None = None
 
 
 class TrainSupervised(Stage):
@@ -304,6 +305,23 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         "belief EMA dependency requires an EMA policy artifact"
                     )
+            if isinstance(stage, CollectLocalUpdate):
+                if (stage.search.sampling == "learned") != (stage.sampler is not None):
+                    raise ValueError("learned local search requires a sampler stage")
+                if stage.sampler is not None:
+                    sampler = previous.get(stage.sampler)
+                    if not isinstance(sampler, TrainBelief):
+                        raise ValueError(
+                            "local sampler must refer to an earlier train_belief stage"
+                        )
+                    data = previous.get(sampler.dataset)
+                    if not isinstance(data, CollectBelief) or (
+                        data.policy,
+                        data.weights,
+                    ) != (stage.policy, stage.weights):
+                        raise ValueError(
+                            "local sampler must use the same frozen policy and weights"
+                        )
             if isinstance(stage, TrainBelief) and not isinstance(
                 previous.get(stage.dataset), CollectBelief
             ):
@@ -336,15 +354,7 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         "local distillation requires an earlier signed-value policy"
                     )
-            if (
-                initial
-                and type(parent) is not type(stage)
-                and not (
-                    isinstance(stage, TrainSupervised)
-                    and stage.target.startswith("local_")
-                    and isinstance(parent, TrainSelfPlay)
-                )
-            ):
+            elif initial and type(parent) is not type(stage):
                 raise ValueError(
                     "continuation requires an earlier stage of the same operation"
                 )

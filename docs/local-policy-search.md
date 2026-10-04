@@ -2,6 +2,7 @@
 
 ETU-95 supplies a frozen-policy rollout teacher, retained local-update targets,
 TrainingRegime collection/distillation, arena lifecycle and an advice projection.
+Learned joint-hand sampling now feeds the teacher without enumerating support.
 The complete-history exact-posterior comparison remains blocked by Rules
 capabilities; no strength, bluffing or human-play result is established.
 
@@ -83,9 +84,10 @@ Decision deadlines charge prior construction/history filtering since the previou
 decision as well as search. Stage/run budgets also charge setup, export and failed
 work. Native enumeration and individual forwards are cooperative operations:
 a call can overrun, after which the target is unavailable, never silently accepted
-or replaced with policy-only play. The support cap is checked **after enumeration**;
-this path is restricted to tractable pools. It is not a bounded-memory sampler
-for the full selected matchup. Arena's existing subprocess game deadline supplies
+or replaced with policy-only play. In `belief` and `compatible_prior` modes the support cap is checked **after
+enumeration**; those paths remain restricted to tractable pools. Learned mode
+uses direct count materialization and never constructs that support; its cost
+scales with sampled hands and vocabulary, not all compatible hands. Arena's existing subprocess game deadline supplies
 an outer execution bound. Equal nominal milliseconds do not prove equal realized
 cost; retain overruns and unavailable cells.
 
@@ -128,9 +130,10 @@ materializer cannot refresh. The existing tracker only supplies supported
 hand-multiset/chance transport; it is not an exact posterior over every history
 or hidden library order. This discovered Rules dependency prevents the requested
 full-game exact-versus-prior acceptance today. Reference tracker behavior elsewhere
-is unchanged. Compound-policy checkpoints and belief-enabled policy rollout memory, learned ETU-96 sampler
-consumption, arbitrary archived-root relabeling and new arena suites are also
-unsupported. No automatic fallback or unmeasured replacement is provided.
+is unchanged. Compound-policy checkpoints, belief-enabled policy rollout memory,
+arbitrary archived-root relabeling and new arena suites remain unsupported.
+A sampler trained on a compound checkpoint cannot enter sequential local search;
+this fails at policy admission even if sampler collection supports it. No automatic fallback or unmeasured replacement is provided.
 
 The staged recipe makes repeated teacher/student rounds executable; whether they
 compound, whether immutable replay helps, and whether stronger-teacher relabeling
@@ -143,3 +146,77 @@ tests passed before upstream sync. After rebuilding the merged native extension,
 eight local-search/compound integration tests and nine native debug world tests
 passed. Ruff passed. Evidence includes complete tiny-pool arena Command replay
 and retained failure on unsupported exact history.
+
+## Learned joint-hand search
+
+```bash
+uv run manabot train --regime experiments/regimes/learned-belief-local-search.json \
+  --seed 718 --out .runs/etu95-learned-search
+```
+
+The separate 180-second, one-thread proof trains a policy, collects three complete
+belief-supervision games, fits a sampler, labels eight complete frozen-policy
+games and fits a soft-target student. Eight label games ensure the existing
+immutable `game_index % 10 == 0` validation partition is populated after belief
+collection advances the run's game counter. A retained initial two-label-game
+attempt failed explicitly at that split check after successful search collection;
+no failed attempt or partition was replaced.
+
+`collect_local_update.sampler` references an earlier `train_belief` stage and
+requires `search.sampling = learned`. Its source dataset must use exactly the
+same policy stage and raw/EMA choice as the rollout teacher. Admission checks
+sampler bytes, dataset, schema, world binding and generating-policy digest.
+The policy, rollout and signed-value identities remain the frozen policy's;
+only the separate sampler was fitted on hidden labels.
+
+managym's `HiddenHandConstraints.materialize_hand` and Python
+`Env.materialize_sampled_hand` accept counts directly against a complete native
+constraint snapshot. They validate source viewer/revision/observation identity,
+public pool, known minima and hand size, preserve root viewer identity and
+semantic offers, and use the same seeded hidden-card placement as indexed
+materialization. They do not enumerate, map counts to support indexes, or
+refresh an opponent's acting prompt. Reproducible seeds determine hidden library
+order; sampled hand counts do not model a posterior over library order.
+
+`LocalUpdatePlayer` retains each seat's canonical viewer history from game start.
+Collection and search share `public_sampler_input`, including the same lossy,
+order-invariant public-commitment features. Missing combat/target commitment
+semantics remain missing features, not inferred meanings or an exact posterior.
+Private labels and sampled hands never enter the acting policy's observation.
+Foreign arena opponents are explicitly model-mismatched populations.
+
+Learned receipts identify `approximate-learned-hand`, with public input/history
+identity, exact sampler bindings, native constraint snapshot, sampling seed,
+counts and joint log probabilities per draw. Rollouts use `world_index = null`
+and retain the sampled counts and seeded branch audit. Empty
+`sampling_probabilities` means full support was not enumerated; it does not mean
+uniform mass. Values average sampled rollouts without importance weighting.
+Cheap/full allocations share a deterministic sample prefix. Normalized learned
+sampling supports only `True`; other queries fail because calibrated conditional
+mass and conditional sampling are not implemented. `max_support` applies only
+to the enumerated modes. Sampling, feature projection and materialization count
+toward the cooperative decision deadline; artifact loading counts at stage setup.
+
+Native debug checks cover direct/indexed parity, impossible and stale snapshots,
+public known minima, and hidden-hand swap invariance. Python proofs cover zero
+native support constructions, full pipeline execution with enumeration disabled,
+receipt replay and two-seat complete arena games with exact actual-Command replay.
+These are mechanism proofs, not posterior calibration, stronger play, exact-history
+completion or authorization for scientific scoring.
+
+Integrated proof after PR 212 on 2026-10-04: the recipe completed in 31.43 s,
+with three sampler-data games, eight label games (753 search decisions), 32
+sampler optimizer exposures and 661 student exposures. The exported student
+passed ordinary checkpoint admission. The exact trained policy/sampler pair
+then played both arena seats against a random fixture: two complete games,
+183 actual Commands, zero replay mismatches. Private evidence is retained under
+`.runs/etu95-learned-search-integrated`. The first arena export failed after
+successful replay because the proof script treated a dataclass as a Pydantic
+model; its failure marker is retained beside the successful second export.
+The earlier split failure remains in `.runs/etu95-learned-search-proof`.
+The custom arena registrations are workflow fixtures, not production admission.
+
+Checks: 57 affected Python tests passed before final upstream integration;
+11 native debug world/materializer tests and Clippy passed. The integrated CLI
+proof and 12 passing PR 212 sampler collection/regime checks cover the subsequent
+merge.

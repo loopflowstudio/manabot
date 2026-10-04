@@ -80,8 +80,11 @@ seeds, exact frozen policy/world identities, whole-game partitions, held-out
 foreign/adversarial histories, dropout arms, total cost cap and untouched
 complete-game evaluation deals. Compare exact, physical-prior and learned
 search at equal elapsed inference time, including sampling. Calibration alone
-cannot establish search strength. Coordinate this consumer with the post-RL
-search Task; the sampler does not replace its planner or admission protocol.
+cannot establish search strength. The post-RL search consumer is now connected through
+`collect_local_update.sampler` and direct native count materialization; see
+[local-search contracts](local-policy-search.md#learned-joint-hand-search).
+It preserves separate sampler/policy admission and labels learned beliefs as
+approximate. This does not replace the exact reference or establish calibration.
 
 Larger pools need a newly pinned world and measured complete-loop cost. The
 INT-17 failure motivates avoiding enumeration, but neither a large synthetic

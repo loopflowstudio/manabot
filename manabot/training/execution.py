@@ -300,6 +300,8 @@ def _execute_regime(
                 references.append(stage.policy)
             if isinstance(stage, TrainBelief):
                 references.append(stage.dataset)
+            if isinstance(stage, CollectLocalUpdate) and stage.sampler is not None:
+                references.append(stage.sampler)
             if getattr(stage, "initial", None):
                 references.append(stage.initial)
             for reference in references:
@@ -322,6 +324,34 @@ def _execute_regime(
                         "checkpoint_sha256": frozen["sha256"],
                         "config": stage.search.model_dump(),
                     }
+                    if stage.sampler is not None:
+                        sampler_record = next(
+                            item for item in run.stages if item.id == stage.sampler
+                        )
+                        sampler_stage = next(
+                            item for item in regime.stages if item.id == stage.sampler
+                        )
+                        assert isinstance(sampler_stage, TrainBelief)
+                        data_record = next(
+                            item
+                            for item in run.stages
+                            if item.id == sampler_stage.dataset
+                        )
+                        dataset_artifact = data_record.artifacts["dataset"]
+                        if (
+                            file_sha256(dataset_artifact["path"])
+                            != dataset_artifact["sha256"]
+                        ):
+                            raise ValueError("sampler source dataset changed")
+                        dataset = read_dataset(Path(dataset_artifact["path"]))
+                        teacher_spec["sampler"] = {
+                            "path": sampler_record.artifacts["sampler"]["path"],
+                            "sha256": sampler_record.artifacts["sampler"]["sha256"],
+                            "dataset_identity": dataset.identity,
+                            "schema_identity": dataset.schema.identity,
+                            "policy_identity": dataset.policy_identity,
+                            "world_identity": dataset.world_identity,
+                        }
                 else:
                     teacher_spec = {
                         "kind": "determinized_puct",

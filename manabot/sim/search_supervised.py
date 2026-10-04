@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 
 from manabot.env import ObservationSpace
@@ -110,7 +111,8 @@ def _validate_dataset(
     *,
     policy_target_kind: str,
     value_target_kind: str,
-) -> None:
+) -> NDArray[np.float32] | None:
+    """Admit the dataset and derive local labels once from its private receipts."""
     required = set(OBS_KEYS) | {
         "action",
         "game_index",
@@ -177,8 +179,10 @@ def _validate_dataset(
             raise ValueError("visit_counts must be zero outside the legal mask")
         if (visits.sum(axis=1) <= 0).any():
             raise ValueError("every decision must have a positive visit count")
+    local_targets = None
     if policy_target_kind.startswith("local_"):
         targets = dataset[LOCAL_TARGET_KEY]
+        local_targets = np.zeros_like(targets, dtype=np.float32)
         if targets.shape != valid_actions.shape or not np.isfinite(targets).all():
             raise ValueError("local targets must align with legal actions")
         if np.any(targets < 0) or np.any(targets[~valid_actions] != 0):
@@ -191,7 +195,16 @@ def _validate_dataset(
                 targets[row, valid_actions[row]], receipt.target, atol=1e-7
             ):
                 raise ValueError("local target differs from retained update")
+            if policy_target_kind == "local_soft":
+                local_targets[row] = targets[row]
+            elif policy_target_kind == "local_argmax":
+                legal = np.flatnonzero(valid_actions[row])
+                local_targets[row, legal[int(np.argmax(receipt.values))]] = 1
+            else:
+                counts = np.asarray(receipt.allocation_counts)
+                local_targets[row, valid_actions[row]] = counts / counts.sum()
     value_targets_from_dataset(dataset, value_target_kind)
+    return local_targets
 
 
 def _batch_observations(
@@ -209,22 +222,13 @@ def _policy_targets(
     target_kind: str,
     temperature: float,
     device: torch.device,
+    local_targets: NDArray[np.float32] | None,
 ) -> torch.Tensor:
-    if target_kind.startswith("local_"):
-        targets = np.array(dataset[LOCAL_TARGET_KEY][indices], copy=True)
-        if target_kind != "local_soft":
-            targets.fill(0)
-            for row, index in enumerate(indices):
-                receipt = LocalUpdateReceipt.from_json(
-                    str(dataset[LOCAL_RECEIPT_KEY][index])
-                )
-                if target_kind == "local_argmax":
-                    targets[row, int(np.argmax(receipt.values))] = 1
-                else:
-                    counts = np.asarray(receipt.allocation_counts)
-                    targets[row, : len(counts)] = counts / counts.sum()
+    if local_targets is not None:
         # Fixed labels: only student logits receive policy gradients.
-        return torch.as_tensor(targets, dtype=torch.float32, device=device)
+        return torch.as_tensor(
+            local_targets[indices], dtype=torch.float32, device=device
+        )
     if target_kind == SCORE_SOFTMAX_TARGET:
         scores = torch.as_tensor(
             dataset[SCORE_KEY][indices], dtype=torch.float32, device=device
@@ -260,11 +264,38 @@ def evaluate_search_supervised(
 ) -> SearchSupervisedMetrics:
     """Evaluate the declared policy and value targets on fixed decision rows."""
 
-    _validate_dataset(
+    local_targets = _validate_dataset(
         dataset,
         policy_target_kind=policy_target_kind,
         value_target_kind=value_target_kind,
     )
+    return _evaluate_search_supervised(
+        agent,
+        dataset,
+        indices,
+        policy_temperature=policy_temperature,
+        policy_target_kind=policy_target_kind,
+        value_target_kind=value_target_kind,
+        batch_size=batch_size,
+        device=device,
+        local_targets=local_targets,
+    )
+
+
+@torch.no_grad()
+def _evaluate_search_supervised(
+    agent: Agent,
+    dataset: dict[str, np.ndarray],
+    indices: np.ndarray,
+    *,
+    policy_temperature: float,
+    policy_target_kind: str,
+    value_target_kind: str,
+    batch_size: int,
+    device: torch.device | str,
+    local_targets: NDArray[np.float32] | None,
+) -> SearchSupervisedMetrics:
+    """Evaluate admitted data; reuse fixed labels across training epochs."""
     dev = torch.device(device)
     agent.eval()
     value_usable, value_targets = value_targets_from_dataset(dataset, value_target_kind)
@@ -284,7 +315,7 @@ def evaluate_search_supervised(
         obs = _batch_observations(dataset, batch, dev)
         logits, value_logits = agent.forward(obs)
         policy_target = _policy_targets(
-            dataset, batch, policy_target_kind, policy_temperature, dev
+            dataset, batch, policy_target_kind, policy_temperature, dev, local_targets
         )
         log_probs = torch.log_softmax(logits, dim=-1)
         row_loss = -(policy_target * log_probs).sum(dim=-1)
@@ -387,7 +418,7 @@ def train_search_supervised(
     under another observation shape is rejected instead of reinterpreted.
     """
 
-    _validate_dataset(
+    local_targets = _validate_dataset(
         dataset,
         policy_target_kind=policy_target_kind,
         value_target_kind=value_target_kind,
@@ -425,7 +456,7 @@ def train_search_supervised(
                 "whole-game training and validation partitions must be nonempty"
             )
     value_usable, value_targets = value_targets_from_dataset(dataset, value_target_kind)
-    initial_validation = evaluate_search_supervised(
+    initial_validation = _evaluate_search_supervised(
         agent,
         dataset,
         val_idx,
@@ -434,6 +465,7 @@ def train_search_supervised(
         value_target_kind=value_target_kind,
         batch_size=batch_size,
         device=dev,
+        local_targets=local_targets,
     )
     rng = np.random.default_rng(seed if minibatch_seed is None else minibatch_seed)
     history: list[SearchSupervisedEpochStats] = []
@@ -460,7 +492,12 @@ def train_search_supervised(
             obs = _batch_observations(dataset, batch, dev)
             logits, value_logits = agent.forward(obs)
             policy_target = _policy_targets(
-                dataset, batch, policy_target_kind, policy_temperature, dev
+                dataset,
+                batch,
+                policy_target_kind,
+                policy_temperature,
+                dev,
+                local_targets,
             )
             policy_loss = torch.nn.functional.cross_entropy(logits, policy_target)
 
@@ -491,7 +528,7 @@ def train_search_supervised(
             value_rows += batch_value_rows
             total_loss_sum += float(total_loss.item()) * len(batch)
 
-        validation = evaluate_search_supervised(
+        validation = _evaluate_search_supervised(
             agent,
             dataset,
             val_idx,
@@ -500,6 +537,7 @@ def train_search_supervised(
             value_target_kind=value_target_kind,
             batch_size=batch_size,
             device=dev,
+            local_targets=local_targets,
         )
         stats = SearchSupervisedEpochStats(
             epoch=epoch,

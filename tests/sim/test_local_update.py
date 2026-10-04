@@ -1,7 +1,9 @@
 """Analytic mixing, exact branch replay and current-world collection proofs."""
 
+from dataclasses import replace
 from pathlib import Path
 
+from managym._managym import AgentError
 import numpy as np
 import pytest
 import torch
@@ -16,6 +18,9 @@ from manabot.arena.models import (
 )
 from manabot.arena.replay import replay_games
 from manabot.belief.likelihood import file_sha256
+from manabot.belief.sampling_data import collect_frozen_policy
+from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
+from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
@@ -24,10 +29,13 @@ from manabot.sim import local_update
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.local_update import (
     LocalSearchConfig,
+    LocalUpdateReceipt,
     LocalUpdateTeacher,
+    SamplerArtifact,
     regularized_update,
 )
-from managym.possible_worlds import WorldQuery
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
 def small_match() -> MatchHypers:
@@ -153,12 +161,17 @@ def test_advice_projection_is_schema_compatible_and_private(tmp_path: Path) -> N
     assert scenario.root_uncertainty.status == "unavailable"
 
 
-def test_arena_uses_exact_range_lifecycle_and_replays(tmp_path: Path) -> None:
+@pytest.mark.parametrize("learned", [False, True])
+def test_arena_uses_exact_range_lifecycle_and_replays(
+    tmp_path: Path, learned: bool
+) -> None:
 
     teacher, _ = make_teacher(tmp_path)
     teacher.config = teacher.config.model_copy(
         update={"sampling": "compatible_prior", "worlds": 1, "depth": 1}
     )
+    if learned:
+        teacher = attach_learned_sampler(teacher, tmp_path)
     identity = "0" * 64
     common = dict(
         role="challenger",
@@ -185,6 +198,11 @@ def test_arena_uses_exact_range_lifecycle_and_replays(tmp_path: Path) -> None:
         player_spec={
             "kind": "local_update",
             "config": teacher.config.model_dump(),
+            **(
+                {"sampler": teacher.sampler_artifact.model_dump(mode="json")}
+                if teacher.sampler_artifact is not None
+                else {}
+            ),
             "implementation_source_sha256": file_sha256(Path(local_update.__file__)),
         },
         search_call_seed_derivation_id="local-policy-seed-times-1000003-plus-call-mod-2pow63/v1",
@@ -230,3 +248,85 @@ def test_arena_uses_exact_range_lifecycle_and_replays(tmp_path: Path) -> None:
         game["game_trace_sha256"] = canonical_sha256(game)
         games.append(game)
     assert replay_games(games).passed
+
+
+def attach_learned_sampler(
+    teacher: LocalUpdateTeacher, tmp_path: Path
+) -> LocalUpdateTeacher:
+
+    dataset = collect_frozen_policy(
+        checkpoint=teacher.likelihood.checkpoint,
+        match_hypers=small_match(),
+        games=3,
+        seed=719,
+        max_steps=1000,
+    )
+    result = fit_belief_sampler(
+        dataset, steps=1, batch_size=4, hidden_size=8, evaluation_samples=2, seed=18
+    )
+    path = tmp_path / "sampler.pt"
+    digest = save_belief_sampler(path, result, dataset)
+    return LocalUpdateTeacher(
+        teacher.likelihood.checkpoint,
+        teacher.likelihood.checkpoint_sha256,
+        teacher.config.model_copy(update={"sampling": "learned"}),
+        sampler=SamplerArtifact(
+            path=path,
+            sha256=digest,
+            dataset_identity=dataset.identity,
+            schema_identity=dataset.schema.identity,
+            policy_identity=dataset.policy_identity,
+            world_identity=dataset.world_identity,
+        ),
+    )
+
+
+def test_learned_search_direct_worlds_replay_and_rejection(tmp_path: Path) -> None:
+
+    original, env = make_teacher(tmp_path)
+    teacher = attach_learned_sampler(original, tmp_path)
+    viewer = env._engine.current_agent_index()
+    history = ViewerHistory.from_observation(
+        Observation.from_json(env._engine.semantic_observation_json(viewer))
+    )
+    count_before = env._engine.possible_world_space_construction_count()
+    receipt = teacher.search(env._engine, history, seed=17)
+    teacher.verify_replay(env._engine, history, receipt)
+    assert env._engine.possible_world_space_construction_count() == count_before
+    assert receipt.learned_belief is not None
+    assert not receipt.sampling_probabilities
+    assert all(
+        row.world_index is None and row.sampled_hand is not None
+        for row in receipt.rollouts
+    )
+    assert (
+        LocalUpdateReceipt.from_json(receipt.to_json()).replay_identity()
+        == receipt.replay_identity()
+    )
+    # Enumeration is used only by this oracle comparison, never learned search.
+    space = PossibleWorldSpace.from_engine(env._engine, viewer)
+    swapped = space.materialize(space.support_size - 1, seed=55)
+    changed = teacher.search(swapped, history, seed=17)
+    assert changed.replay_identity() == receipt.replay_identity()
+    with pytest.raises(ValueError, match="history"):
+        teacher.search(
+            env._engine,
+            replace(history, current_revision=history.current_revision + 1),
+            seed=17,
+        )
+    with pytest.raises(ValueError, match="query mass"):
+        teacher.search(env._engine, history, seed=17, query=WorldQuery.has("Mountain"))
+    constraints = receipt.learned_belief.constraints_json
+    with pytest.raises(AgentError):
+        env._engine.materialize_sampled_hand(viewer, constraints, {"Mountain": 999}, 1)
+    with pytest.raises(AgentError, match="stale"):
+        env._engine.materialize_sampled_hand(viewer, "{}", {}, 1)
+    artifact = teacher.sampler_artifact
+    assert artifact is not None
+    with pytest.raises(ValueError, match="generating policy"):
+        LocalUpdateTeacher(
+            original.likelihood.checkpoint,
+            original.likelihood.checkpoint_sha256,
+            teacher.config,
+            sampler=artifact.model_copy(update={"policy_identity": "wrong"}),
+        )

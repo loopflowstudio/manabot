@@ -357,3 +357,78 @@ fn equivalent_queries_share_canonical_digest_and_support() {
         space.condition(&has1).unwrap().worlds,
     );
 }
+
+#[test]
+fn direct_sampled_hands_match_indexed_materialization_and_reject_invalid_roots() {
+    use managym::possible_worlds::HiddenHandConstraints;
+    let game = gwallies_decision_with_lesson();
+    let constraints = HiddenHandConstraints::for_viewer(&game, VIEWER);
+    let space = PossibleWorldSpace::for_viewer(&game, VIEWER);
+    for world in space.worlds().iter().take(8) {
+        let direct = constraints
+            .materialize_hand(&game, &world.hand, 71)
+            .unwrap();
+        let indexed = space.materialize(&game, world, 71).unwrap();
+        assert_eq!(
+            serde_json::to_value(direct.semantic_observation(VIEWER).unwrap()).unwrap(),
+            serde_json::to_value(indexed.semantic_observation(VIEWER).unwrap()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(direct.semantic_observation(OPPONENT).unwrap()).unwrap(),
+            serde_json::to_value(indexed.semantic_observation(OPPONENT).unwrap()).unwrap()
+        );
+        let swapped = constraints
+            .materialize_hand(&game, &space.worlds().last().unwrap().hand, 9)
+            .unwrap();
+        let repeated = constraints
+            .materialize_hand(&swapped, &world.hand, 71)
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(direct.semantic_observation(OPPONENT).unwrap()).unwrap(),
+            serde_json::to_value(repeated.semantic_observation(OPPONENT).unwrap()).unwrap()
+        );
+    }
+    assert!(constraints
+        .materialize_hand(&game, &Default::default(), 1)
+        .is_err());
+    let mut impossible = space.worlds()[0].hand.clone();
+    impossible.insert("nonexistent".into(), 1);
+    assert!(constraints.materialize_hand(&game, &impossible, 1).is_err());
+    let mut stale = constraints.clone();
+    stale.source_observation.revision += 1;
+    assert!(stale
+        .materialize_hand(&game, &space.worlds()[0].hand, 1)
+        .is_err());
+    stale = constraints.clone();
+    stale.known_hand.insert("nonexistent".into(), 1);
+    assert!(stale
+        .materialize_hand(&game, &space.worlds()[0].hand, 1)
+        .is_err());
+}
+
+#[test]
+fn direct_sampled_hand_preserves_public_known_minima() {
+    use managym::possible_worlds::HiddenHandConstraints;
+    let mut game = gwallies_decision_with_lesson();
+    let card = game.state.zones.zone_cards(ZoneType::Hand, OPPONENT)[0];
+    let name = game.state.cards[card].name.clone();
+    let definition = game.state.cards[card].definition_id;
+    game.state.players[OPPONENT.0]
+        .known_hand
+        .insert(definition, 1);
+    let constraints = HiddenHandConstraints::for_viewer(&game, VIEWER);
+    assert_eq!(constraints.known_hand.get(&name), Some(&1));
+    let space = PossibleWorldSpace::for_viewer(&game, VIEWER);
+    let valid = &space.worlds()[0].hand;
+    assert!(constraints.materialize_hand(&game, valid, 1).is_ok());
+    let mut impossible = valid.clone();
+    let removed = impossible.remove(&name).unwrap();
+    let replacement = constraints
+        .pool
+        .keys()
+        .find(|key| **key != name)
+        .unwrap()
+        .clone();
+    *impossible.entry(replacement).or_insert(0) += removed;
+    assert!(constraints.materialize_hand(&game, &impossible, 1).is_err());
+}

@@ -396,6 +396,167 @@ impl HiddenHandConstraints {
     }
 }
 
+impl HiddenHandConstraints {
+    /// Realize one sampled count vector without constructing the support.
+    /// The snapshot must match the live viewer root, including public minima.
+    /// Only acting-viewer roots are supported; opponent prompt refresh belongs
+    /// to the exact likelihood provider, not this sampling API.
+    pub fn materialize_hand(
+        &self,
+        source: &Game,
+        hand: &BTreeMap<String, u32>,
+        seed: u64,
+    ) -> Result<Game, MaterializeError> {
+        if self.viewer.0 >= source.state.players.len()
+            || *self != Self::for_viewer(source, self.viewer)
+        {
+            return Err(MaterializeError::StaleSource);
+        }
+        if source
+            .current_action_space
+            .as_ref()
+            .and_then(|space| space.player)
+            != Some(self.viewer)
+        {
+            return Err(MaterializeError::UnsupportedActingPrompt);
+        }
+        let world = PossibleWorld {
+            hand: hand.clone(),
+            weight: 1,
+        };
+        let branch =
+            self.materialize_validated(source, &world, seed, MaterializeMode::PreserveViewerRoot)?;
+        let observation = branch
+            .semantic_observation(self.viewer)
+            .map_err(|_| MaterializeError::StaleSource)?;
+        let source_frame = source
+            .semantic_decision_frame()
+            .map_err(|_| MaterializeError::UnsupportedActingPrompt)?;
+        let branch_frame = branch
+            .semantic_decision_frame()
+            .map_err(|_| MaterializeError::UnsupportedActingPrompt)?;
+        if observation.identity != self.source_observation
+            || serde_json::to_value(source_frame).expect("serializable frame")
+                != serde_json::to_value(branch_frame).expect("serializable frame")
+        {
+            return Err(MaterializeError::InconsistentWorld);
+        }
+        Ok(branch)
+    }
+
+    fn materialize_validated(
+        &self,
+        source: &Game,
+        world: &PossibleWorld,
+        seed: u64,
+        mode: MaterializeMode,
+    ) -> Result<Game, MaterializeError> {
+        let sum_k = world
+            .hand
+            .values()
+            .try_fold(0u32, |sum, count| sum.checked_add(*count))
+            .ok_or(MaterializeError::InconsistentWorld)?;
+        if sum_k != self.hand_size
+            || self
+                .known_hand
+                .iter()
+                .any(|(name, count)| world.hand.get(name).copied().unwrap_or(0) < *count)
+        {
+            return Err(MaterializeError::InconsistentWorld);
+        }
+        for (name, &k) in &world.hand {
+            if k > self.pool.get(name).copied().unwrap_or(0) {
+                return Err(MaterializeError::InconsistentWorld);
+            }
+        }
+
+        let mut branch = source.clone();
+        let opponent = self.opponent;
+
+        // Group the opponent's Hand ∪ Library CardIds by name, sorted ascending
+        // so the lowest CardIds of each name go to the hand deterministically.
+        let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
+        for zone in [ZoneType::Hand, ZoneType::Library] {
+            for &card in branch.state.zones.zone_cards(zone, opponent) {
+                by_name
+                    .entry(branch.state.cards[card].name.clone())
+                    .or_default()
+                    .push(card);
+            }
+        }
+        for cards in by_name.values_mut() {
+            cards.sort_unstable_by_key(|c| c.0);
+        }
+
+        let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
+        let mut new_library: Vec<CardId> = Vec::new();
+        for (name, cards) in &by_name {
+            let k = world.hand.get(name).copied().unwrap_or(0) as usize;
+            if k > cards.len() {
+                return Err(MaterializeError::InconsistentWorld);
+            }
+            new_hand.extend_from_slice(&cards[..k]);
+            new_library.extend_from_slice(&cards[k..]);
+        }
+        if new_hand.len() as u32 != self.hand_size {
+            return Err(MaterializeError::InconsistentWorld);
+        }
+
+        new_hand.sort_unstable_by_key(|c| c.0);
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        new_library.shuffle(&mut rng);
+
+        branch
+            .state
+            .zones
+            .reassign_hidden(opponent, new_hand, new_library);
+        branch
+            .state
+            .zones
+            .shuffle_canonical(ZoneType::Library, self.viewer, &mut rng);
+        branch.repin_revealed_library_cards();
+
+        // Fail closed: the realized hand name-multiset must equal the world.
+        let mut realized: BTreeMap<String, u32> = BTreeMap::new();
+        for &card in branch.state.zones.zone_cards(ZoneType::Hand, opponent) {
+            *realized
+                .entry(branch.state.cards[card].name.clone())
+                .or_insert(0) += 1;
+        }
+        if realized != world.hand {
+            return Err(MaterializeError::InconsistentWorld);
+        }
+
+        if mode == MaterializeMode::RefreshOpponentCommitment
+            && branch
+                .current_action_space
+                .as_ref()
+                .is_some_and(|space| space.player == Some(opponent))
+        {
+            let kind = branch
+                .current_action_space
+                .as_ref()
+                .map(|space| space.kind)
+                .ok_or(MaterializeError::UnsupportedActingPrompt)?;
+            match kind {
+                ActionSpaceKind::Priority => branch.refresh_priority_actions(opponent),
+                ActionSpaceKind::Learn => {
+                    let refreshed = branch
+                        .suspended_decision_action_space()
+                        .filter(|space| {
+                            space.player == Some(opponent) && space.kind == ActionSpaceKind::Learn
+                        })
+                        .ok_or(MaterializeError::UnsupportedActingPrompt)?;
+                    branch.publish_action_space(refreshed);
+                }
+                _ => return Err(MaterializeError::UnsupportedActingPrompt),
+            }
+        }
+
+        Ok(branch)
+    }
+}
+
 /// Read-only, identity-bound projection consumed by manabot. It contains no
 /// physical card IDs and does not grant mutation authority.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -809,105 +970,15 @@ impl PossibleWorldSpace {
         seed: u64,
         mode: MaterializeMode,
     ) -> Result<Game, MaterializeError> {
-        let sum_k: u32 = world.hand.values().copied().sum();
-        if sum_k != self.hand_size
-            || self
-                .known_hand
-                .iter()
-                .any(|(name, count)| world.hand.get(name).copied().unwrap_or(0) < *count)
-        {
-            return Err(MaterializeError::InconsistentWorld);
+        HiddenHandConstraints {
+            viewer: self.viewer,
+            opponent: self.opponent,
+            source_observation: self.source_observation.clone(),
+            hand_size: self.hand_size,
+            pool: self.pool.clone(),
+            known_hand: self.known_hand.clone(),
         }
-        for (name, &k) in &world.hand {
-            if k > self.pool.get(name).copied().unwrap_or(0) {
-                return Err(MaterializeError::InconsistentWorld);
-            }
-        }
-
-        let mut branch = source.clone();
-        let opponent = self.opponent;
-
-        // Group the opponent's Hand ∪ Library CardIds by name, sorted ascending
-        // so the lowest CardIds of each name go to the hand deterministically.
-        let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
-        for zone in [ZoneType::Hand, ZoneType::Library] {
-            for &card in branch.state.zones.zone_cards(zone, opponent) {
-                by_name
-                    .entry(branch.state.cards[card].name.clone())
-                    .or_default()
-                    .push(card);
-            }
-        }
-        for cards in by_name.values_mut() {
-            cards.sort_unstable_by_key(|c| c.0);
-        }
-
-        let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
-        let mut new_library: Vec<CardId> = Vec::new();
-        for (name, cards) in &by_name {
-            let k = world.hand.get(name).copied().unwrap_or(0) as usize;
-            if k > cards.len() {
-                return Err(MaterializeError::InconsistentWorld);
-            }
-            new_hand.extend_from_slice(&cards[..k]);
-            new_library.extend_from_slice(&cards[k..]);
-        }
-        if new_hand.len() as u32 != self.hand_size {
-            return Err(MaterializeError::InconsistentWorld);
-        }
-
-        new_hand.sort_unstable_by_key(|c| c.0);
-        let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        new_library.shuffle(&mut rng);
-
-        branch
-            .state
-            .zones
-            .reassign_hidden(opponent, new_hand, new_library);
-        branch
-            .state
-            .zones
-            .shuffle_canonical(ZoneType::Library, self.viewer, &mut rng);
-        branch.repin_revealed_library_cards();
-
-        // Fail closed: the realized hand name-multiset must equal the world.
-        let mut realized: BTreeMap<String, u32> = BTreeMap::new();
-        for &card in branch.state.zones.zone_cards(ZoneType::Hand, opponent) {
-            *realized
-                .entry(branch.state.cards[card].name.clone())
-                .or_insert(0) += 1;
-        }
-        if realized != world.hand {
-            return Err(MaterializeError::InconsistentWorld);
-        }
-
-        if mode == MaterializeMode::RefreshOpponentCommitment
-            && branch
-                .current_action_space
-                .as_ref()
-                .is_some_and(|space| space.player == Some(opponent))
-        {
-            let kind = branch
-                .current_action_space
-                .as_ref()
-                .map(|space| space.kind)
-                .ok_or(MaterializeError::UnsupportedActingPrompt)?;
-            match kind {
-                ActionSpaceKind::Priority => branch.refresh_priority_actions(opponent),
-                ActionSpaceKind::Learn => {
-                    let refreshed = branch
-                        .suspended_decision_action_space()
-                        .filter(|space| {
-                            space.player == Some(opponent) && space.kind == ActionSpaceKind::Learn
-                        })
-                        .ok_or(MaterializeError::UnsupportedActingPrompt)?;
-                    branch.publish_action_space(refreshed);
-                }
-                _ => return Err(MaterializeError::UnsupportedActingPrompt),
-            }
-        }
-
-        Ok(branch)
+        .materialize_validated(source, world, seed, mode)
     }
 
     fn validate_source(&self, source: &Game) -> Result<(), MaterializeError> {

@@ -22,6 +22,7 @@ from manabot.training.models import (
 )
 from manabot.verify.store import VerifyStore
 import managym
+from managym.possible_worlds import PossibleWorldSpace
 
 
 def local_recipe() -> TrainingRegime:
@@ -98,6 +99,25 @@ def test_complete_games_and_three_distillation_controls(tmp_path: Path) -> None:
     for row in dataset[LOCAL_RECEIPT_KEY]:
         receipt = json.loads(str(row))
         assert receipt["policy_sha256"] == run.stages[0].artifacts["raw"]["sha256"]
+    original_targets = dataset[LOCAL_TARGET_KEY].copy()
+    for kind in ("local_soft", "local_argmax", "local_allocation"):
+        targets = _validate_dataset(
+            dataset, policy_target_kind=kind, value_target_kind="terminal_outcome"
+        )
+        assert targets is not None
+        np.testing.assert_allclose(targets.sum(axis=1), 1, atol=1e-7)
+        for index, encoded in enumerate(dataset[LOCAL_RECEIPT_KEY]):
+            receipt = json.loads(str(encoded))
+            count = len(receipt["target"])
+            if kind == "local_soft":
+                expected = receipt["target"]
+            elif kind == "local_argmax":
+                expected = np.eye(count)[np.argmax(receipt["values"])]
+            else:
+                counts = np.asarray(receipt["allocation_counts"])
+                expected = counts / counts.sum()
+            np.testing.assert_allclose(targets[index, :count], expected)
+        np.testing.assert_array_equal(dataset[LOCAL_TARGET_KEY], original_targets)
     for record in run.stages[2:]:
         model, _ = load_checkpoint_agent(record.artifacts["raw"]["path"])
         assert model.world_binding["world"] == managym.WORLD_VERSION
@@ -125,3 +145,48 @@ def test_exact_history_gap_retains_failed_attempt(tmp_path: Path) -> None:
     assert manifest["status"] == "failed"
     assert manifest["seconds"] > 0
     assert list((tmp_path / "failed").glob("*.receipts.jsonl"))
+
+
+def test_learned_regime_requires_same_frozen_policy_and_sampler() -> None:
+    recipe = json.loads(
+        Path("experiments/regimes/learned-belief-local-search.json").read_text()
+    )
+    TrainingRegime.model_validate(recipe)
+    recipe["stages"][3]["sampler"] = "histories"
+    with pytest.raises(ValueError, match="train_belief"):
+        TrainingRegime.model_validate(recipe)
+    recipe["stages"][3]["sampler"] = None
+    with pytest.raises(ValueError, match="sampler stage"):
+        TrainingRegime.model_validate(recipe)
+
+
+def test_learned_pipeline_never_enumerates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+
+    def reject_enumeration(*args: object, **kwargs: object) -> None:
+        raise AssertionError("learned pipeline attempted exact support enumeration")
+
+    monkeypatch.setattr(PossibleWorldSpace, "from_engine", reject_enumeration)
+    recipe = TrainingRegime.model_validate_json(
+        Path("experiments/regimes/learned-belief-local-search.json").read_text()
+    )
+    with VerifyStore(tmp_path / "learned.sqlite") as store:
+        run = execute_regime(recipe, 718, tmp_path / "learned", store)
+    assert run.status == "completed"
+    assert run.stages[1].games == 3
+    assert run.stages[3].games == 8
+    assert run.stages[4].optimizer_exposures > 0
+    for name, artifact in run.stages[3].artifacts.items():
+        if not name.startswith("game-"):
+            continue
+        dataset = load_shards([artifact["path"]])
+        for encoded in dataset[LOCAL_RECEIPT_KEY]:
+            receipt = json.loads(str(encoded))
+            assert (
+                receipt["learned_belief"]["artifact"]["sha256"]
+                == run.stages[2].artifacts["sampler"]["sha256"]
+            )
+            assert receipt["policy_sha256"] == run.stages[0].artifacts["raw"]["sha256"]
+    agent, _ = load_checkpoint_agent(run.stages[4].artifacts["raw"]["path"])
+    assert agent.world_binding["world"] == managym.WORLD_VERSION

@@ -578,6 +578,31 @@ training rejects the new quantile/actor-only knobs rather than silently ignoring
 them; ETU-93's executable contrasts target ordinary self-play. The merged
 omitted-control/frozen-opponent/study paths passed 39 focused checks.
 
+## Learned sampler to local search (ETU-95 continuation, 2026-10-04)
+
+Jack Heart requested the complete ETU-96 sampler → local teacher → distillation
+connection without support enumeration. Native direct count materialization
+shares indexed placement while validating current observation, pool, public
+minima, hand size and viewer-root/offer invariance. Learned play maintains only
+viewer history and never starts an exact tracker. TrainingRegime admits the
+sampler's exact bytes/dataset/schema/world/generating-policy identities and
+requires the same raw/EMA policy for labels, rollouts and signed leaf values.
+
+Approximate learned-hand receipts retain sampled counts, probabilities, seeds
+and branch tapes; they never fabricate canonical world indexes or full-support
+weights. The current public commitment summary remains lossy and order-invariant;
+`True` is supported, conditional learned queries fail explicitly. Compound and
+belief-enabled rollout policies remain unsupported. These boundaries do not
+complete the missing Rules public-commitment/exact-history work.
+
+A two-label-game pilot reached distillation but failed because the fixed
+whole-game held-out partition was empty after three belief games. The bounded
+recipe now collects eight label games to reach that existing partition; it does
+not redefine splits or discard the failed attempt. Current proof and limits live
+in [local-search contracts](../../docs/local-policy-search.md#learned-joint-hand-search).
+No scientific allocation, paid compute or ETU-91 change is authorized by this
+mechanism proof; ETU-95 remains open for scientific acceptance.
+
 ## Complete-loop calibration boundary (ETU-98, 2026-10-04)
 
 PR207's bounded complete-state recovery remains intact. The separate

@@ -2828,6 +2828,15 @@ impl PyEnv {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Diagnostic count of full-support constructions on this Env.
+    fn possible_world_space_construction_count(&self) -> PyResult<u64> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(env.possible_world_space_construction_count())
+    }
+
     /// Canonical viewer-relative PossibleWorldSpace as read-only JSON.
     fn possible_world_space_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
@@ -2908,6 +2917,28 @@ impl PyEnv {
             .possible_world_condition(viewer, space_identity, query)
             .map_err(map_agent_err)?;
         serde_json::to_string(&receipt).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Materialize sampled definition counts against a complete public snapshot.
+    fn materialize_sampled_hand(
+        &self,
+        viewer: usize,
+        constraints_json: &str,
+        hand: std::collections::BTreeMap<String, u32>,
+        seed: u64,
+    ) -> PyResult<PyEnv> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let branch = env
+            .materialize_sampled_hand(viewer, constraints_json, &hand, seed)
+            .map_err(map_agent_err)?;
+        Ok(PyEnv {
+            inner: Arc::new(Mutex::new(branch)),
+            selected_guard: false,
+            prepared_lease: None,
+        })
     }
 
     /// Materialize one identity-bound canonical world into an isolated Env.

@@ -105,6 +105,11 @@ See [frozen-policy belief sampling](../docs/belief-sampler.md). This separately
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
+Frozen-policy local search and same-root distillation run through
+[`collect_local_update` regimes](../docs/local-policy-search.md). The bounded
+compatible-prior recipe completes games; exact-history search rejects unsupported
+Rules likelihood events. Target receipts and arena replay retain this distinction.
+
 Experiment-specific driver scripts live in
 [experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
 only reusable instruments. The experiment discipline and ledger are in
@@ -141,11 +146,6 @@ from manabot.env import ObservationSpace
 # Local imports
 from .sibling import Thing
 ```
-
-Frozen-policy local search and same-root distillation run through
-[`collect_local_update` regimes](../docs/local-policy-search.md). The bounded
-compatible-prior recipe completes games; exact-history search rejects unsupported
-Rules likelihood events. Target receipts and arena replay retain this distinction.
 
 Compound checkpoints use an autoregressive legal-offer decoder and execute via
 ordinary checkpoint players. Their complete-game training stages, credit

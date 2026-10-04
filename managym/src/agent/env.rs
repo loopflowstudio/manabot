@@ -471,6 +471,34 @@ impl Env {
             .map_err(|error| AgentError(format!("possible_world_condition: {error:?}")))
     }
 
+    /// Direct sampled-hand materialization; never enumerates possible worlds.
+    pub fn materialize_sampled_hand(
+        &self,
+        viewer: usize,
+        source_json: &str,
+        hand: &std::collections::BTreeMap<String, u32>,
+        seed: u64,
+    ) -> Result<Env, AgentError> {
+        let constraints = self.hidden_hand_constraints(viewer)?;
+        let expected: serde_json::Value = serde_json::from_str(source_json)
+            .map_err(|error| AgentError(format!("invalid hand constraints: {error}")))?;
+        if serde_json::to_value(&constraints).map_err(|error| AgentError(error.to_string()))?
+            != expected
+        {
+            return Err(AgentError(
+                "sampled hand constraints are stale or inconsistent".to_string(),
+            ));
+        }
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("sampled hand before reset".to_string()))?;
+        let branch = constraints
+            .materialize_hand(game, hand, seed)
+            .map_err(|error| AgentError(format!("sampled hand: {error}")))?;
+        Ok(self.branch_from_game(branch))
+    }
+
     /// Materialize one canonical world index into an isolated branch. The
     /// supplied identity must match the current source exactly.
     pub fn materialize_possible_world(

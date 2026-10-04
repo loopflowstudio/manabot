@@ -27,6 +27,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.infra.hypers import MatchHypers, RewardHypers
 from manabot.sim.flat_mc import AgentMatchupPlayer, load_checkpoint_agent
+import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
     Command,
@@ -210,6 +211,42 @@ def history_features(
     return tuple(value / scale for value in features)
 
 
+def public_sampler_input(
+    engine: managym.Env,
+    history: ViewerHistory,
+    schema: SamplerSchema,
+) -> tuple[SamplerInput, str]:
+    """Bind public features to their native constraint snapshot, without truth access.
+
+    The returned JSON is the authority token for direct hand materialization.
+    Callers must retain history from the source trajectory; opaque event hashes
+    are not decoded into invented public commitments.
+    """
+    encoded = engine.hidden_hand_constraints_json(history.viewer)
+    projected = json.loads(encoded)
+    pool = _counts(projected["pool"])
+    known = _counts(projected["known_hand"])
+    if (set(pool) | set(known)) - set(schema.card_names):
+        raise ValueError("native constraint vocabulary changed")
+    source = projected["source_observation"]
+    if (
+        source["revision"] != history.current_revision
+        or source["viewer"] != history.viewer
+        or source["schema_version"] != history.schema_version
+        or source["viewer_state_hash"] != history.current_viewer_state_hash
+    ):
+        raise ValueError("belief input history does not match current observation")
+    inputs = SamplerInput(
+        schema.vocabulary_identity,
+        tuple(pool.get(name, 0) for name in schema.card_names),
+        tuple(known.get(name, 0) for name in schema.card_names),
+        projected["hand_size"],
+        history_features(history, schema),
+    )
+    inputs.validate(schema)
+    return inputs, encoded
+
+
 def collect_frozen_policy(
     *,
     checkpoint: Path,
@@ -293,31 +330,8 @@ def collect_frozen_policy(
                 if check is not None:
                     check()
                 for viewer in range(2):
-                    projected = json.loads(
-                        env._engine.hidden_hand_constraints_json(viewer)
-                    )
-                    pool = _counts(projected["pool"])
-                    known = _counts(projected["known_hand"])
-                    if (set(pool) | set(known)) - set(schema.card_names):
-                        raise ValueError("native constraint vocabulary changed")
-                    source = projected["source_observation"]
                     history = histories[viewer]
-                    if (
-                        source["revision"] != history.current_revision
-                        or source["viewer_state_hash"]
-                        != history.current_viewer_state_hash
-                    ):
-                        raise ValueError(
-                            "belief input history does not match current observation"
-                        )
-                    inputs = SamplerInput(
-                        schema.vocabulary_identity,
-                        tuple(pool.get(name, 0) for name in schema.card_names),
-                        tuple(known.get(name, 0) for name in schema.card_names),
-                        projected["hand_size"],
-                        history_features(history, schema),
-                    )
-                    inputs.validate(schema)
+                    inputs, _ = public_sampler_input(env._engine, history, schema)
                     # Privileged label access begins only after all inference inputs exist.
                     authority = env._engine.observation_for_player(1 - viewer)
                     hand = Counter(

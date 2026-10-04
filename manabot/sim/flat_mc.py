@@ -259,12 +259,16 @@ def make_player(
             LocalSearchConfig,
             LocalUpdatePlayer,
             LocalUpdateTeacher,
+            SamplerArtifact,
         )
 
         teacher = LocalUpdateTeacher(
             Path(spec["checkpoint"]),
             str(spec["checkpoint_sha256"]),
             LocalSearchConfig.model_validate(spec.get("config", {})),
+            sampler=SamplerArtifact.model_validate(spec["sampler"])
+            if spec.get("sampler")
+            else None,
         )
         return LocalUpdatePlayer(teacher, seed=seed), teacher.space
     if kind == "search":

@@ -130,13 +130,26 @@ class PlayerRegistration(StrictModel):
                 ):
                     raise ValueError("checkpoint inference spec must be fully explicit")
             elif kind == "local_update":
-                from manabot.sim.local_update import LocalSearchConfig
+                from manabot.sim.local_update import LocalSearchConfig, SamplerArtifact
 
-                if set(self.player_spec) != {
+                config = LocalSearchConfig.model_validate(
+                    self.player_spec.get("config", {})
+                )
+                required = {
                     "kind",
                     "config",
                     "implementation_source_sha256",
-                }:
+                }
+                if config.sampling == "learned":
+                    required.add("sampler")
+                    sampler = SamplerArtifact.model_validate(
+                        self.player_spec.get("sampler")
+                    )
+                    if sampler.policy_identity != self.checkpoint_sha256:
+                        raise ValueError(
+                            "sampler generating policy differs from arena checkpoint"
+                        )
+                if set(self.player_spec) != required:
                     raise ValueError(
                         "local-update inference spec must be fully explicit"
                     )

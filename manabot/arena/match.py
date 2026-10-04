@@ -105,6 +105,11 @@ def _execute_game(
             player = built[player_id][0]
             if isinstance(player, LocalUpdatePlayer):
                 player.start_game(env, seat)
+        local_players = [
+            player
+            for player, _ in built.values()
+            if isinstance(player, LocalUpdatePlayer)
+        ]
         decision_counts = dict.fromkeys(built, 0)
         for revision in range(max_commands):
             raw = env.last_raw_obs
@@ -140,11 +145,6 @@ def _execute_game(
             command = build_command(frame, action)
             responsible = None
             send(("phase", None))
-            local_players = [
-                player
-                for player, _ in built.values()
-                if isinstance(player, LocalUpdatePlayer)
-            ]
             if local_players:
                 for player in local_players:
                     player.prepare_step(env, actor, action)

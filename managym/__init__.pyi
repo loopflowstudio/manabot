@@ -68,6 +68,12 @@ class Env:
     def possible_world_support_json(
         self, viewer: int, space_identity: str, query_json: str
     ) -> str: ...
+    def possible_world_space_construction_count(self) -> int: ...
+
+    def materialize_sampled_hand(
+        self, viewer: int, constraints_json: str, hand: dict[str, int], seed: int,
+    ) -> Env: ...
+
     def materialize_possible_world(
         self,
         viewer: int,
