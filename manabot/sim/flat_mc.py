@@ -194,7 +194,11 @@ def load_checkpoint_agent(
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     hypers = checkpoint["hypers"]
     obs_space = ObservationSpace(ObservationSpaceHypers(**hypers["observation_hypers"]))
+    from manabot.model.world import validate_checkpoint_world
+
+    world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent = Agent(obs_space, AgentHypers(**hypers["agent_hypers"]))
+    agent.world_binding = world_binding
     binding = None
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)

@@ -36,6 +36,7 @@ from manabot.env import (
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
+from manabot.model.world import checkpoint_world
 from manabot.verify.util import run_evaluation
 
 ROLLOUT_HEALTH_KEYS = (
@@ -870,6 +871,9 @@ class Trainer:
         # instrument for the strength ladder — never train without saving).
         path = str(self.experiment.runs_dir / f"step_{self.global_step}.pt")
         checkpoint = {
+            "world_binding": checkpoint_world(
+                self.env._player_configs, self.env.observation_space
+            ),
             "model_state_dict": self.agent.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "global_step": self.global_step,
