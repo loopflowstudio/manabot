@@ -189,6 +189,8 @@ class ObservationEncoder:
     @property
     def shapes(self) -> Dict[str, Tuple[int, ...]]:
         return {
+            "semantic_cards": (2, self.cards_per_player),
+            "known_hand": (2, self.cards_per_player, 2),
             # Game objects
             "agent_player": (1, self.player_dim),
             "opponent_player": (1, self.player_dim),
@@ -245,7 +247,10 @@ class ObservationEncoder:
             for action in obs.action_space.actions
         ):
             raise ValueError("Observation capacity exceeded: action focus")
-        out = {}
+        out = {
+            "semantic_cards": np.zeros((2, self.cards_per_player), dtype=np.float32),
+            "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
+        }
 
         ## NOTE: It is very important that we encode in this exact
         ## order.
@@ -276,6 +281,17 @@ class ObservationEncoder:
             out[key] = self._encode_cards(cards, is_mine=is_mine)
         # Outside copies occupy explicit rows after visible owner cards. They
         # have no zone bits; the outside marker identifies their location.
+        for seat, (cards, player) in enumerate(
+            ((obs.agent_cards, obs.agent), (obs.opponent_cards, obs.opponent))
+        ):
+            if len(player.known_hand) > self.cards_per_player:
+                raise ValueError("known hand exceeds observation capacity")
+            for slot, card in enumerate(cards):
+                out["semantic_cards"][seat, slot] = card.registry_key + 1
+            for slot, (definition, count) in enumerate(
+                sorted(player.known_hand.items())
+            ):
+                out["known_hand"][seat, slot] = (int(definition) + 1, count)
         outside = obs.agent_sideboard
         start = len(obs.agent_cards)
         if start + len(outside) > self.cards_per_player:
@@ -283,6 +299,7 @@ class ObservationEncoder:
                 "observation capacity exceeded: agent_cards plus sideboard"
             )
         for offset, card in enumerate(outside):
+            out["semantic_cards"][0, start + offset] = card.registry_key + 1
             row = start + offset
             out["agent_cards"][row, 7] = 1.0
             out["agent_cards"][row, -2] = 1.0

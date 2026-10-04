@@ -104,6 +104,18 @@ def trainer(observation_space, experiment):
 
 
 class TestRollout:
+    def test_saved_checkpoint_round_trips_with_actual_setup(self, trainer):
+        from manabot.sim.flat_mc import load_checkpoint_agent
+
+        trainer.save()
+        agent, space = load_checkpoint_agent(
+            str(trainer.experiment.runs_dir / "step_0.pt")
+        )
+        assert space.shapes == trainer.env.observation_space.shapes
+        assert agent.world_binding["setups"][0]["sideboard"] == {}
+        for name, tensor in trainer.agent.state_dict().items():
+            assert torch.equal(tensor.cpu(), agent.state_dict()[name]), name
+
     def test_rollout_step_shapes(self, trainer):
         next_obs, _ = trainer.env.reset()
         new_obs, reward, done, action, logprob, value = trainer._rollout_step(next_obs)

@@ -38,6 +38,23 @@ require positive integer counts. `Match.swapped()` moves both lists together;
 
 ## World identity
 
+Ordinary checkpoints require `world_binding` from
+`manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
+This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
+content manifest and input schema. Missing or mismatched bindings fail before
+weights load. Seat reversal preserves each deck's sideboard. BC and value
+writers require explicit `player_configs`; never infer training setup from
+tensor dimensions or the default deck.
+
+For the compiled Allies/Lessons matchup, use
+`AgentHypers(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
+viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
+including characteristics and referenced definitions; `known_hand` contains
+public definition minima, not hidden hand slots. Selected compiled checkpoints
+without that semantic input fail admission. Generic uncompiled training keeps
+its existing bounded feature model. These models do not certify strength or
+semantic transfer; no previous checkpoint is relabeled compatible.
+
 An observation/action-shape or rules-meaning change is a world version.
 The current world is **w4** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,

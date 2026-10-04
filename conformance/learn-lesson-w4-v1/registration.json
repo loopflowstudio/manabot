@@ -1,0 +1,934 @@
+{
+  "attempts": [
+    {
+      "reverse": false,
+      "seed": 0
+    },
+    {
+      "reverse": true,
+      "seed": 0
+    },
+    {
+      "reverse": false,
+      "seed": 1
+    },
+    {
+      "reverse": true,
+      "seed": 1
+    },
+    {
+      "reverse": false,
+      "seed": 2
+    },
+    {
+      "reverse": true,
+      "seed": 2
+    },
+    {
+      "reverse": false,
+      "seed": 3
+    },
+    {
+      "reverse": true,
+      "seed": 3
+    },
+    {
+      "reverse": false,
+      "seed": 4
+    },
+    {
+      "reverse": true,
+      "seed": 4
+    },
+    {
+      "reverse": false,
+      "seed": 5
+    },
+    {
+      "reverse": true,
+      "seed": 5
+    },
+    {
+      "reverse": false,
+      "seed": 6
+    },
+    {
+      "reverse": true,
+      "seed": 6
+    },
+    {
+      "reverse": false,
+      "seed": 7
+    },
+    {
+      "reverse": true,
+      "seed": 7
+    }
+  ],
+  "claim": "automated same-Command parity; no human completion, strength or runtime-budget claim",
+  "engine_extension_sha256": "c0bbfc715b9c59af78f44b85c4257cdbfbb9ddc28791d05a8264825b51c5d820",
+  "manifest": {
+    "compiled_semantics": {
+      "ir_hash": "7a70679a4f4952976a286c4a31ffa90318bd0569745aace26353348fe6ee1edd",
+      "pack_key": "ur-lessons-vs-gw-allies",
+      "source_hash": "a8a8bdf74177b50afb8275e3a4de29ac1c8f4f96a10cda6cc8d3c1f8f2a65a2c"
+    },
+    "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+    "definitions": [
+      {
+        "card_def_id": 0,
+        "registry_name": "Forest"
+      },
+      {
+        "card_def_id": 1,
+        "registry_name": "Island"
+      },
+      {
+        "card_def_id": 2,
+        "registry_name": "Mountain"
+      },
+      {
+        "card_def_id": 3,
+        "registry_name": "Plains"
+      },
+      {
+        "card_def_id": 4,
+        "registry_name": "Divide by Zero"
+      },
+      {
+        "card_def_id": 5,
+        "registry_name": "Igneous Inspiration"
+      },
+      {
+        "card_def_id": 6,
+        "registry_name": "Pop Quiz"
+      },
+      {
+        "card_def_id": 7,
+        "registry_name": "Accumulate Wisdom"
+      },
+      {
+        "card_def_id": 8,
+        "registry_name": "Allies at Last"
+      },
+      {
+        "card_def_id": 9,
+        "registry_name": "Badgermole Cub"
+      },
+      {
+        "card_def_id": 10,
+        "registry_name": "Compassionate Healer"
+      },
+      {
+        "card_def_id": 11,
+        "registry_name": "Dragonfly Swarm"
+      },
+      {
+        "card_def_id": 12,
+        "registry_name": "Earth Kingdom Jailer"
+      },
+      {
+        "card_def_id": 13,
+        "registry_name": "Earth King's Lieutenant"
+      },
+      {
+        "card_def_id": 14,
+        "registry_name": "Fancy Footwork"
+      },
+      {
+        "card_def_id": 15,
+        "registry_name": "Fire Nation Cadets"
+      },
+      {
+        "card_def_id": 16,
+        "registry_name": "Firebending Lesson"
+      },
+      {
+        "card_def_id": 17,
+        "registry_name": "First-Time Flyer"
+      },
+      {
+        "card_def_id": 18,
+        "registry_name": "Forecasting Fortune Teller"
+      },
+      {
+        "card_def_id": 19,
+        "registry_name": "Invasion Reinforcements"
+      },
+      {
+        "card_def_id": 20,
+        "registry_name": "It'll Quench Ya!"
+      },
+      {
+        "card_def_id": 21,
+        "registry_name": "Kyoshi Warriors"
+      },
+      {
+        "card_def_id": 22,
+        "registry_name": "Otter-Penguin"
+      },
+      {
+        "card_def_id": 23,
+        "registry_name": "South Pole Voyager"
+      },
+      {
+        "card_def_id": 24,
+        "registry_name": "Suki, Kyoshi Warrior"
+      },
+      {
+        "card_def_id": 25,
+        "registry_name": "Tiger-Seal"
+      },
+      {
+        "card_def_id": 26,
+        "registry_name": "Water Tribe Rallier"
+      },
+      {
+        "card_def_id": 27,
+        "registry_name": "White Lotus Reinforcements"
+      },
+      {
+        "card_def_id": 28,
+        "registry_name": "Yip Yip!"
+      },
+      {
+        "card_def_id": 29,
+        "registry_name": "Ally"
+      },
+      {
+        "card_def_id": 30,
+        "registry_name": "Clue"
+      }
+    ],
+    "schema_version": 1,
+    "world_version": "w4"
+  },
+  "max_commands": 10000,
+  "policy": "DeterministicServerOfferPolicy; independent per-seat Random(deal_seed)",
+  "setups": [
+    {
+      "deck": {
+        "Accumulate Wisdom": 2,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 1,
+        "Fire Nation Cadets": 2,
+        "Firebending Lesson": 4,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Igneous Inspiration": 2,
+        "Island": 9,
+        "It'll Quench Ya!": 2,
+        "Mountain": 8,
+        "Otter-Penguin": 2,
+        "Pop Quiz": 2,
+        "Tiger-Seal": 2
+      },
+      "sideboard": {
+        "Accumulate Wisdom": 1,
+        "Firebending Lesson": 1,
+        "It'll Quench Ya!": 1
+      }
+    },
+    {
+      "deck": {
+        "Allies at Last": 2,
+        "Badgermole Cub": 2,
+        "Compassionate Healer": 2,
+        "Earth King's Lieutenant": 2,
+        "Earth Kingdom Jailer": 2,
+        "Fancy Footwork": 2,
+        "Forest": 8,
+        "Invasion Reinforcements": 2,
+        "Kyoshi Warriors": 2,
+        "Plains": 9,
+        "South Pole Voyager": 1,
+        "Suki, Kyoshi Warrior": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 2,
+        "Yip Yip!": 1
+      },
+      "sideboard": {
+        "Fancy Footwork": 1,
+        "Yip Yip!": 1
+      }
+    }
+  ],
+  "source": {
+    "files": [
+      {
+        "path": "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
+        "sha256": "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147"
+      },
+      {
+        "path": "content/semantic/v1/generated/two_deck.ir.json",
+        "sha256": "7025ca96a12221d8e2916cdab90719c16fb863bae4e04742cdfb817e3ac612e1"
+      },
+      {
+        "path": "content/semantic/v1/learning_schema.json",
+        "sha256": "511b29376f300cf7e8145ee7f28ad22a7320d5939cb438a84736d09c23163237"
+      },
+      {
+        "path": "content/semantic/v1/two_deck.source.json",
+        "sha256": "9b8d8b1b18aa49d6546a3183d53adb2ba9c8d82190a28b97029147578a0b2b1a"
+      },
+      {
+        "path": "etude/__init__.py",
+        "sha256": "60560d03bebe74d88e1f8aa197d809228753f9b547ad7547537c5c7d25cc4384"
+      },
+      {
+        "path": "etude/advice.py",
+        "sha256": "4f1d09f93cc7c64664b27598c3217367968ec62441b4eaa5a36e970a2cf31c11"
+      },
+      {
+        "path": "etude/advice_identity.py",
+        "sha256": "894fcbe0cdb9eadd57d3bd51f55cb352b1ada08ae936433a7e75797c469a480a"
+      },
+      {
+        "path": "etude/attempts.py",
+        "sha256": "59d6b0bf33bbc1149fd62b0dc8434163f89fb44fcaf3702ac1106e4d2007bf20"
+      },
+      {
+        "path": "etude/authored_match_parity.py",
+        "sha256": "835d2eb0ec7cb3809d406a885d76fde2f1b16b4757d6e1179c160266426d28ad"
+      },
+      {
+        "path": "etude/authored_match_receipt.py",
+        "sha256": "c0ce1cd517d52ce50fb05d6b2a9c05203e0441c24a54256eb758fbd599d20418"
+      },
+      {
+        "path": "etude/curated_pack.py",
+        "sha256": "694da207d5ed89c19e70d201b76ad21ae08716ad733b139407d2dd0091cfc6f5"
+      },
+      {
+        "path": "etude/enums.py",
+        "sha256": "5bee9816451f11427a43cd16b4b460ba7a299eacc3f7b60eab144758a6302785"
+      },
+      {
+        "path": "etude/experience_protocol.py",
+        "sha256": "ff77bca191782730c4fbf8dcc497a980dae53dc7d54cc897948dfb33baf360a2"
+      },
+      {
+        "path": "etude/learn_demo.py",
+        "sha256": "38d8dd4e75048973dbd98c9e43b15e39e67a5ab7cd23c8945727c21bd1451a44"
+      },
+      {
+        "path": "etude/learn_lesson_evidence.py",
+        "sha256": "4ca42ccc4377fd26ae6c41195fb78107f59942a397adc51bf15697501871f6f1"
+      },
+      {
+        "path": "etude/live_advice.py",
+        "sha256": "9a000ea7a37886f78e183077b3a73220fd272605845150a8922e34c032758d68"
+      },
+      {
+        "path": "etude/opponent.py",
+        "sha256": "d18b9f28e5473e8ede789e5c2a011f1c634b26bb446bffdd865ea80ab2ee19ae"
+      },
+      {
+        "path": "etude/presentation.py",
+        "sha256": "0c001d81fc480ca03bad4c87e842fba34a0a71fa820acf34343e367a64106a4a"
+      },
+      {
+        "path": "etude/public_commitment_parity.py",
+        "sha256": "73b6f7aa716211d8a3439a0b7c0bc6aa4a9813972789c6ccd235425385803c31"
+      },
+      {
+        "path": "etude/replay_index.py",
+        "sha256": "bee5d45775908de8d77da151f703f14d9233901b965a9342ce32aed582a1ad83"
+      },
+      {
+        "path": "etude/semantic_boundary.py",
+        "sha256": "300dd330b7f1211bdedb736996006af6af4bbd3b9af31687ef44cd4424fae202"
+      },
+      {
+        "path": "etude/server.py",
+        "sha256": "1e7271e08006d7da4bf89e2024527671fea872e6e1b01e717e589187e1867ccd"
+      },
+      {
+        "path": "etude/study_branch.py",
+        "sha256": "66e555392fbda058b403938c37d0e9aee5ba34a1877d976e13a4a39c13ca81cd"
+      },
+      {
+        "path": "etude/study_index.py",
+        "sha256": "e7d52c85760ed4b05a068ffa33389a3626a79ffb58a6e4b91cc5753dfcf5e0e9"
+      },
+      {
+        "path": "etude/study_protocol.py",
+        "sha256": "2bcbf85d1da138f6d4da3c01726066857257fd7d8e4fe5913dcf7a24a4ef10fc"
+      },
+      {
+        "path": "etude/study_runtime.py",
+        "sha256": "7aa984fc8b5ba6e23e112c6ebb08e0fad7e8abb1342218a03e690bc0a7681738"
+      },
+      {
+        "path": "etude/testing_house_protocol.py",
+        "sha256": "5dace976e364c4556f4fc70fa96559e001b0a376eb6b484650d3439ac7cda31b"
+      },
+      {
+        "path": "etude/trace.py",
+        "sha256": "bc1eca5026cd1e17b8220daee6f15bec402d6ef8ef58008d09cbe4bf993838a4"
+      },
+      {
+        "path": "etude/villain.py",
+        "sha256": "5b90141d4f763ef8aac764035dc104193603ae1479be7e1e033225425ab8038a"
+      },
+      {
+        "path": "manabot/env/__init__.py",
+        "sha256": "558b5f4634b570bb73be2cea5490b2a5604c22b857a6c2fd90c7e6e54d2a59ae"
+      },
+      {
+        "path": "manabot/env/env.py",
+        "sha256": "210475d6436332bd7a6f4e59789f402d28a354d9d1f2d4ea313880b9aea4398c"
+      },
+      {
+        "path": "manabot/env/match.py",
+        "sha256": "32ec391f4cd323e9835b3c26eaa545eba1179f9bc08a525cd87e59008bfb98ce"
+      },
+      {
+        "path": "manabot/env/observation.py",
+        "sha256": "58cc883a2d073aef3ac729875e31cb28c06d6287ced282bec701340935aef681"
+      },
+      {
+        "path": "manabot/env/single_agent_env.py",
+        "sha256": "d674e56c9114873743f33db20e729f1d414221d072f8a3f40e1153f7f633b435"
+      },
+      {
+        "path": "manabot/env/vector_env.py",
+        "sha256": "b035566b901438c213671cbcd82cc34cd9817cad142fbabcb6cd069867ce1a67"
+      },
+      {
+        "path": "manabot/infra/__init__.py",
+        "sha256": "9cafb180ba0210681d16136da74e1942544343a4963988729739d5a2dc88bb9d"
+      },
+      {
+        "path": "manabot/infra/experiment.py",
+        "sha256": "50acd37ba362d6292ef314667cca23c4cac015e765935560b131e3a7aac73071"
+      },
+      {
+        "path": "manabot/infra/hypers.py",
+        "sha256": "200f5565a5fada63f4685be68b99fd5869232c82916a930dd327f711c0399226"
+      },
+      {
+        "path": "manabot/infra/log.py",
+        "sha256": "9af21632ab27e8e975751f7525529e0fd28c1b310f186f89f00496bbd124490e"
+      },
+      {
+        "path": "manabot/infra/profiler.py",
+        "sha256": "441f9cd125fc7a95da0d3ce6823f2f0d24c82db0d2d6d8077dca5fc473a615e4"
+      },
+      {
+        "path": "manabot/model/__init__.py",
+        "sha256": "c69e635161669b5dff1a7a47bb066a490b7dd7315e33eba897713f31ef1aaee1"
+      },
+      {
+        "path": "manabot/model/agent.py",
+        "sha256": "3d58bfc53776999601c0a6b5109a5e2f9d7e4d479dce70bba2b5bd622091a8e0"
+      },
+      {
+        "path": "manabot/model/semantic_cards.py",
+        "sha256": "1baf2f35fade34610179f88cb27307cc1594350a5cf8841e8fa9140c8152bacd"
+      },
+      {
+        "path": "manabot/model/train.py",
+        "sha256": "443d1e56424db874a5b58fa1c788a2b4f189d557fa4068ac37e0dfe3ebca1261"
+      },
+      {
+        "path": "manabot/model/world.py",
+        "sha256": "aa6c754fed6be473ee2d2b898ef7c5d7885ff58e66830402fc97b09481e86c32"
+      },
+      {
+        "path": "manabot/semantic/__init__.py",
+        "sha256": "aab00a0145431909eb6ec041c5a95f0b4f4db79ea594821c7b2e9ee0c457443e"
+      },
+      {
+        "path": "manabot/semantic/compiler.py",
+        "sha256": "4763822255a7e38b3fb3281a435d76650721930be106d014c0fa97a6c0898925"
+      },
+      {
+        "path": "manabot/semantic/coverage.py",
+        "sha256": "a6b6df3222fd4a37e74e99fb2c35ccd48c1f5be4963868315cae16bbc5bae3aa"
+      },
+      {
+        "path": "manabot/semantic/decision_contract.py",
+        "sha256": "9252de98e48c0bf93f3222ed1636a4696ff70a58de02084d178d9931cacd8df1"
+      },
+      {
+        "path": "manabot/semantic/learning.py",
+        "sha256": "84fff3015da68ed8d14d075aac176b97ce2093bf65faa0d2e57a8120c6855648"
+      },
+      {
+        "path": "manabot/semantic/policy.py",
+        "sha256": "7176940fc989afb1fa2639590755c41f03519ed21efe8469cdf7a6df6446eb56"
+      },
+      {
+        "path": "manabot/semantic/runtime_policy.py",
+        "sha256": "45143b2da7bec0edd704a1fe64c221c2235af71d279961e601f3aa7ddc8e9711"
+      },
+      {
+        "path": "manabot/semantic/structural.py",
+        "sha256": "eca518f73224c692acf99597d25d701c747fd87002b63a868cb5c4ed5edd7a6e"
+      },
+      {
+        "path": "manabot/semantic/structural_katas.py",
+        "sha256": "cadb5b43deeff3b5519e5d0fdf110b82515dcdb350b4bad99f3550ad9fd10bee"
+      },
+      {
+        "path": "manabot/semantic/transfer.py",
+        "sha256": "3f75bf3fcd970efc4d4396c0ff66f85edd08659f996b43eb5ffcafcf467b92a1"
+      },
+      {
+        "path": "manabot/sim/__init__.py",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "manabot/sim/conditional_distill.py",
+        "sha256": "6f0d18d21f1e5bbbe223fe4ff5c9f121425d24ebe2dfc380a0154032a6788c67"
+      },
+      {
+        "path": "manabot/sim/conditional_search.py",
+        "sha256": "b2b4211c9ece2ab7607d2eb0a53806baf0255bba220bc0ec86ae4bc422e8bbbd"
+      },
+      {
+        "path": "manabot/sim/distill.py",
+        "sha256": "2133f666bd56744c5fb6280c8c460d8e8b98b250699fe629cea6850b876e5c6a"
+      },
+      {
+        "path": "manabot/sim/flat_mc.py",
+        "sha256": "573ffa4c1b8bf3bbcd81ee89755e12a3f834a9a5d021b43f1b301ddcc4e80021"
+      },
+      {
+        "path": "manabot/sim/mcts.py",
+        "sha256": "4006f4be3bcc72055d197be2f1cd9b66b791b21ad8045d1f78663ff1dc9198c9"
+      },
+      {
+        "path": "manabot/sim/net_opponent.py",
+        "sha256": "550f99782e8e0bef801427b342740f716ee2db327e388d4c25be73b500623d87"
+      },
+      {
+        "path": "manabot/sim/player.py",
+        "sha256": "d1a91fd8e084f1ff9d717f9e1ca9901b03c690ef2aa584beac316e15ee11591e"
+      },
+      {
+        "path": "manabot/sim/pooled_datagen.py",
+        "sha256": "1e8c6c51ff21def3c59851a6a5c3d18f4f2d5830aa90735d566b8e8ccb9a2d87"
+      },
+      {
+        "path": "manabot/sim/rollout.py",
+        "sha256": "391dfe6dd934d75aff1b7261bad7aa22c2a8f2c05f10ab91535f796902320ea9"
+      },
+      {
+        "path": "manabot/sim/search_branch.py",
+        "sha256": "8068f9fc6c854287f8d8affd29094b9a4e879e00412218975627e6fe71205e3f"
+      },
+      {
+        "path": "manabot/sim/search_runtime.py",
+        "sha256": "c96b4022df1642849af06cb059af30dd58b64849cc978d79b553b704fd9f911a"
+      },
+      {
+        "path": "manabot/sim/search_supervised.py",
+        "sha256": "075c39c6a5438d05b7017aa49b4cd108da526b7aff6f4e8abf5f479d268bd4d2"
+      },
+      {
+        "path": "manabot/sim/selected_branchdriver_teacher.py",
+        "sha256": "514a504cd1d4b2d759a04fb2628a333c15a80d6ced83c0c5c7c163baf13516ab"
+      },
+      {
+        "path": "manabot/sim/sim.py",
+        "sha256": "ebfcf072cddd8493fe9481070007f9b4249c1428b5aa245814ba935c8db8244b"
+      },
+      {
+        "path": "manabot/sim/structured_benchmark.py",
+        "sha256": "5619c22ec0d2c331f05fed90c3b092d8c247b34db8106f4d68e70170f1462eb1"
+      },
+      {
+        "path": "manabot/sim/structured_policy.py",
+        "sha256": "0b9c7c263a09b889a22c46cc42adb3afc84bd96944fc2764a45cbed385d308ca"
+      },
+      {
+        "path": "manabot/sim/study_evidence.py",
+        "sha256": "56bc5a93df4a20fdd77dc88220fbfdb8f827b525a9cb57afc746b31d5a98d9c5"
+      },
+      {
+        "path": "manabot/sim/teacher1_evidence.py",
+        "sha256": "c44759bc43dadf9c993ac51abe21cd944fde3c6a16ddc816cad781e6bf3f2630"
+      },
+      {
+        "path": "manabot/sim/value.py",
+        "sha256": "1827dbaae2edf583088d4139c043c9a08170d5db367fccf5de7da2ba136b12f4"
+      },
+      {
+        "path": "managym/Cargo.lock",
+        "sha256": "f4958b4438905dafe554fb923002c7e56015cdbfb69f5c7c53bf70955da03456"
+      },
+      {
+        "path": "managym/Cargo.toml",
+        "sha256": "13f2c6e6957e27514f90202d6b2f5318b28a069006ee6f482b6409a044c6c50d"
+      },
+      {
+        "path": "managym/__init__.py",
+        "sha256": "fcb99112a38e029656339bc6541bcfe94ac939b3ead04900698ec51334a8805d"
+      },
+      {
+        "path": "managym/decision.py",
+        "sha256": "713d070bce97c7952e232b5c2245b3754d64b1d917b086b396c9f8d26305ddae"
+      },
+      {
+        "path": "managym/possible_worlds.py",
+        "sha256": "8f4d3f0fb15c876e397047f86fe3e18696789ee746a5ddb86af26623fbf58cad"
+      },
+      {
+        "path": "managym/src/agent/action.rs",
+        "sha256": "d2545f3f688a270e3815c38ceee56d76d23c6cd212e11c885e479d47dc0b62bb"
+      },
+      {
+        "path": "managym/src/agent/behavior_tracker.rs",
+        "sha256": "01e577ef32c76babdb184d015a9bc8e40281efa77a27498afd589fbdcd32b3af"
+      },
+      {
+        "path": "managym/src/agent/env.rs",
+        "sha256": "4038586447d8e453002c6502978115850c16d3724effdc325c470a90e8ac5010"
+      },
+      {
+        "path": "managym/src/agent/mod.rs",
+        "sha256": "24f94b149b57ba5c25bb84e4ce46abc52a75bb658b214d061d44a710e6cc5556"
+      },
+      {
+        "path": "managym/src/agent/observation.rs",
+        "sha256": "e2974a06deb19daeefe0e0ce4de195089a19c25e54b6d1f7840a3e637beae2ba"
+      },
+      {
+        "path": "managym/src/agent/observation_encoder.rs",
+        "sha256": "37eecec6c4b0e81a7e593cb2426210b90759ae81fdc19e3061d1246d79da3107"
+      },
+      {
+        "path": "managym/src/agent/opponent.rs",
+        "sha256": "79c6fa2748879711751fa0216b90b78780664cfd0dbc3b93962b6a3ed3c25581"
+      },
+      {
+        "path": "managym/src/agent/rollout_pool.rs",
+        "sha256": "7c13e30f12afe6bcd5bed80a50e053c47ce0b6d5f6578a9f8bfad9df23a418cb"
+      },
+      {
+        "path": "managym/src/agent/structured_offer.rs",
+        "sha256": "e55fbbeec22efe89615d7d51d3819a95076818d0858b700a4cb630599ecb236b"
+      },
+      {
+        "path": "managym/src/agent/vector_env.rs",
+        "sha256": "7caf27fb45bcab919f442b821ba5c11b451715c378861fe7564d5797c5a72eba"
+      },
+      {
+        "path": "managym/src/benchmark.rs",
+        "sha256": "043b8c39e9f3d29a3657d373ac8f590211a4196cfdee9307dc2190cd8542583f"
+      },
+      {
+        "path": "managym/src/bin/branching_bench.rs",
+        "sha256": "46f05c44c60946ab79b31ce1638f68d963c17faba23dce093f6dfdb655297d82"
+      },
+      {
+        "path": "managym/src/bin/semantic_conformance.rs",
+        "sha256": "7c396316ba3d6fc80be9394d42a8b3dfef39fa319532d8403f072cbee12cdc4f"
+      },
+      {
+        "path": "managym/src/bin/validate_study_artifact.rs",
+        "sha256": "aae42c38a0f8bd4b697e3491fc0a5bb138a5a0e704c9dffd6dab82ad2af9e879"
+      },
+      {
+        "path": "managym/src/canonical_replay.rs",
+        "sha256": "21c3c56211ced9f65ce516b1a69839aa49aa6e0e8765bb0c88b935b7e5e643e9"
+      },
+      {
+        "path": "managym/src/cardsets/alpha.rs",
+        "sha256": "181a96fa5299070cd803af3a98c16e69413926ae1c20aeee13aa7b8847f001c7"
+      },
+      {
+        "path": "managym/src/cardsets/ice_age.rs",
+        "sha256": "5aff3247b60c9e9c101def800fc02417a507b087d0012d5da3d4a1b1f3b06f90"
+      },
+      {
+        "path": "managym/src/cardsets/mkm.rs",
+        "sha256": "14005a80958ab907990867120922acc50962035bfda49cd06cbdeccd32b57a82"
+      },
+      {
+        "path": "managym/src/cardsets/mod.rs",
+        "sha256": "26aa19c301fa8cca375d71e00c31569d9ef3e73d3cfa5ac35889d68914c304fe"
+      },
+      {
+        "path": "managym/src/cardsets/strixhaven.rs",
+        "sha256": "825887cf7bb2ec9686b13c42dcb808e0de30d20088abb833cbb8107562c7b7dc"
+      },
+      {
+        "path": "managym/src/cardsets/tla.rs",
+        "sha256": "027f2a84e43a682e4a39b16c295c4ef3317390a1938365a60b39630f9536a759"
+      },
+      {
+        "path": "managym/src/cardsets/visions.rs",
+        "sha256": "e865b1394694ea75b3b8988baad6d8113e3227678515d2a7de893caf188ecf5a"
+      },
+      {
+        "path": "managym/src/conformance.rs",
+        "sha256": "af86f6534bf4eee8ba5c7a85548dc25e6caf5f23b6fc67e44a0ac209eddd672e"
+      },
+      {
+        "path": "managym/src/decision.rs",
+        "sha256": "8dec3be4bc90593b0698866aaaeaa8339310ee25cc4865c27337a92145669b37"
+      },
+      {
+        "path": "managym/src/experience.rs",
+        "sha256": "bdcd623051bfd29394481b3a4cd655ae6ada56e7c94bac76f93ec08c7836fa2d"
+      },
+      {
+        "path": "managym/src/flow/action.rs",
+        "sha256": "4aa134f23b15945fb382aec32879db1bce557ef71906dd8e03b382da77f7e6f4"
+      },
+      {
+        "path": "managym/src/flow/combat.rs",
+        "sha256": "0e4ec6be6e336521c6750a04c87b1b0b869e4b6d29752b1adc5551148cb3e07a"
+      },
+      {
+        "path": "managym/src/flow/combat_actions.rs",
+        "sha256": "bec6f06e0ee3c2b0146ba636623c2c78d59ef8acd19737d7ba85659abfc7bf45"
+      },
+      {
+        "path": "managym/src/flow/damage.rs",
+        "sha256": "7b611df997df05f2c5b26b542d817b17b4819a17c9e0937baf4abe7ff4a4f645"
+      },
+      {
+        "path": "managym/src/flow/decision.rs",
+        "sha256": "b8d9d272c3750a4b465e546cc10b42a8f40f8630f1a5e06c0bb352b529b024c4"
+      },
+      {
+        "path": "managym/src/flow/event.rs",
+        "sha256": "bf2815bdf7bc607229dff3ab6f0b195149f8bec2960a8f10d557e6bea80170db"
+      },
+      {
+        "path": "managym/src/flow/event_log.rs",
+        "sha256": "8e7b2f06bc5e76718fe4f3e5d8d6f830362d46ac7e0989b1e0ae49c76382e86b"
+      },
+      {
+        "path": "managym/src/flow/game.rs",
+        "sha256": "907d3a9ba016ce3ec0515232c32c9349dc53b69e99a8f96d1d6d290753a0aedb"
+      },
+      {
+        "path": "managym/src/flow/identity.rs",
+        "sha256": "a652eaa8a34ac86add5f0215cea8761bc63d386187972667d0af0460505a8311"
+      },
+      {
+        "path": "managym/src/flow/mana.rs",
+        "sha256": "5a4b92a94d1fb5dd77771cc2273bd3cafe90e8e23e14d4ddde574ac819647a5d"
+      },
+      {
+        "path": "managym/src/flow/mod.rs",
+        "sha256": "0502c48b8b4708ab0755b13c0b4fc7c982c4e8386b7e9b09bf15f7627534c9cb"
+      },
+      {
+        "path": "managym/src/flow/play.rs",
+        "sha256": "47bef2152a513253781fa227b859d45b2a091d639cfc3e4b14b71d2b3c466e8a"
+      },
+      {
+        "path": "managym/src/flow/priority.rs",
+        "sha256": "5844755eedbe4bdf705a98a2f9431fc6a24d2b28c584d1074d4013b2cb5daff6"
+      },
+      {
+        "path": "managym/src/flow/proposed_event.rs",
+        "sha256": "35bdb9e247cbf63457626cb79ab7e0273defada247251fdd6077db52e895fa74"
+      },
+      {
+        "path": "managym/src/flow/resolution.rs",
+        "sha256": "4ac9fa82737092532c19045f60278d66460ac51d0a2f8e4bed7d58426299b620"
+      },
+      {
+        "path": "managym/src/flow/sba.rs",
+        "sha256": "cc0d98e81401c8b6c5f97c6b318e31e2d1335582114c1d25f33a7b23687ba2c4"
+      },
+      {
+        "path": "managym/src/flow/scenario.rs",
+        "sha256": "868e81927456b2ead790b0ad90f53a84b3a1aa00d2b1548e94262f4dab6e6e3a"
+      },
+      {
+        "path": "managym/src/flow/search.rs",
+        "sha256": "b04ceb7a2f40d91e7fb0f5f69833c4a20b1aae04e7c16c8a75ce003b2515ab1b"
+      },
+      {
+        "path": "managym/src/flow/setup.rs",
+        "sha256": "9242a2f14aaacd048f799dbaaf58570494308f73c55d335515107eb2dc8c0aa5"
+      },
+      {
+        "path": "managym/src/flow/stabilization.rs",
+        "sha256": "3688811fbef756cc0580af83d5bef08511adea1c0361bf3bbd7ce0316bb5806a"
+      },
+      {
+        "path": "managym/src/flow/statics.rs",
+        "sha256": "ca23600b7f862a7e136cd400f4811ed371a292326ad88d8e25d58072b481f5ea"
+      },
+      {
+        "path": "managym/src/flow/tick.rs",
+        "sha256": "f22e80222965caedb043cdd665c68102b3b4421acad8eb41000e4852b1f7fce7"
+      },
+      {
+        "path": "managym/src/flow/trigger.rs",
+        "sha256": "55f020d5b7b8ea329bbd0910e0ddddc2a6eb15dc26da6de9ca6c8773c6980661"
+      },
+      {
+        "path": "managym/src/flow/triggers.rs",
+        "sha256": "858938655f6bf4cbc0a454a957bc057bc353c358282db89ac356ed6d42d6306e"
+      },
+      {
+        "path": "managym/src/flow/turn.rs",
+        "sha256": "faf52faef7b83729e82b5524d30245454fbe5904d848bc2da82ffc88c2ee393c"
+      },
+      {
+        "path": "managym/src/flow/undo.rs",
+        "sha256": "bafc2bbe5da6278c8ae853536aaee91174e839500b09409c91f2a2d9cd78a2e2"
+      },
+      {
+        "path": "managym/src/flow/zones.rs",
+        "sha256": "77c355235a499560fde2aad9e278591bc48df79b7b38c3d1a3c635cb6563342d"
+      },
+      {
+        "path": "managym/src/infra/log.rs",
+        "sha256": "751e591198dc0da18daacf4756579cb75e972e47b07378271a496d5ad36c111a"
+      },
+      {
+        "path": "managym/src/infra/mod.rs",
+        "sha256": "e7c35c6640f054ae5c71402be41efa9d6e0145fcd8916d3cc35b7a9b9265a93b"
+      },
+      {
+        "path": "managym/src/infra/profiler.rs",
+        "sha256": "c619d19d6a991f3ac5577d2c4b6ecc4bd5898b9f447d66682eb6d5eb456a264d"
+      },
+      {
+        "path": "managym/src/lib.rs",
+        "sha256": "3a7ba887d0a860b2e6554962f2caeaad4ffc7a549b440b4ece29be021231d51e"
+      },
+      {
+        "path": "managym/src/possible_worlds.rs",
+        "sha256": "a1b604841e0c50d15fbf3a434053a1896d5d3ca3eef715c025e73f2e77eaa2bf"
+      },
+      {
+        "path": "managym/src/python/bindings.rs",
+        "sha256": "d1759d2ac9c276bb72a895b9dc6c63ae372194997f575b41d1f52e1c866fed4e"
+      },
+      {
+        "path": "managym/src/python/convert.rs",
+        "sha256": "fabd640626cad6df6b299beb36d9d59ada38a53c046bee87f7d688639cdcaa03"
+      },
+      {
+        "path": "managym/src/python/mod.rs",
+        "sha256": "ce70dfea8c40b92c8e9d23e3a98a831d5b5de29e9b8d0e7cf5feb6950f932de3"
+      },
+      {
+        "path": "managym/src/python/vector_env_bindings.rs",
+        "sha256": "8e491922ed787ed4320148bc7dbef3d126b877c0f6cb85270cdddd2bbb5054c0"
+      },
+      {
+        "path": "managym/src/search_state.rs",
+        "sha256": "4e594d4f77f8cbee62e286c97c7384c0b4507ef908f2d7bc0925c704f94dd6b0"
+      },
+      {
+        "path": "managym/src/semantic/content.rs",
+        "sha256": "36c5fcf579db2d182d093b39efa5405aa9bb5a81dcc2d2b5ead6c3d29ee464c9"
+      },
+      {
+        "path": "managym/src/semantic/mod.rs",
+        "sha256": "02282e842cae3fbd123d1ae478c125223faf278d5b4bbc88bf910c1d3460abd6"
+      },
+      {
+        "path": "managym/src/state/ability.rs",
+        "sha256": "b638128f70ba9fcfea7eba15bb7b7ce85ef326761b1be9dfa9fb9a2728f6fb9b"
+      },
+      {
+        "path": "managym/src/state/card.rs",
+        "sha256": "74947412ed8cf2090e33dcd01f50bfa267f48b5d9fe7f497bc114b2c65163e61"
+      },
+      {
+        "path": "managym/src/state/game_object.rs",
+        "sha256": "d13a89a5b7148f79e395abc8dadd26983ce1e9a4d7c9b5e2bd48d2a3fc6fa90d"
+      },
+      {
+        "path": "managym/src/state/hash.rs",
+        "sha256": "5416259a74d468bc6dc7a53aecc9fcca8dd19e018d684fd425d9263a5c4022fc"
+      },
+      {
+        "path": "managym/src/state/mana.rs",
+        "sha256": "776d024d4cec449c544c8e2991a6278317aa0907ea990b2bb6596b574eeb7d01"
+      },
+      {
+        "path": "managym/src/state/mod.rs",
+        "sha256": "6f414057047d104b718cfbb1acda3a98e756c27d662c86308c200d5cec9c2fbe"
+      },
+      {
+        "path": "managym/src/state/permanent.rs",
+        "sha256": "476ce0d333f5192ac5e0940a5897e2a52f0710c516d61f9949418b746ab60744"
+      },
+      {
+        "path": "managym/src/state/player.rs",
+        "sha256": "04760e78ea1259250df30631c81b7550bf7934eba2cf91992343078d95d3102a"
+      },
+      {
+        "path": "managym/src/state/predicate.rs",
+        "sha256": "b1903b5f3516028fbb9c5cbc9ce9bf25863d2ba6d6b405c2b6be5bf778079308"
+      },
+      {
+        "path": "managym/src/state/stack_object.rs",
+        "sha256": "6760aec96eefb99a8995df0a8f7898ddb9775a42c93f21966ce656ffba8b1276"
+      },
+      {
+        "path": "managym/src/state/target.rs",
+        "sha256": "78a94baaefa53a8ea3ac8aaf8788c531e7c82ab7acef01faae8edea3caf8359a"
+      },
+      {
+        "path": "managym/src/state/zone.rs",
+        "sha256": "864cd865502284543650897680d0b221b9c739611f3d78c8868e66dd78d1e826"
+      },
+      {
+        "path": "managym/src/study.rs",
+        "sha256": "0d605c7f87b4c48cfad9a0beff0ed7c8864d4b4620602f4905063b5da4bbcac6"
+      },
+      {
+        "path": "managym/tests/rules/structured_offers.rs",
+        "sha256": "f8d13b0fd4b5c452f1d96e785b8f8e57bb1a1e780d7b64c739e5d5d616a7e847"
+      },
+      {
+        "path": "pyproject.toml",
+        "sha256": "3684d75023f3735da000c38cd1f73787352c9c5e6927734f50e3754c073de28b"
+      },
+      {
+        "path": "scripts/verify-authored-match-parity",
+        "sha256": "4150ceee2215c9aed4d7b83d594610a0a3c7ac5a6147bc249311bd132e089286"
+      },
+      {
+        "path": "scripts/verify-learn-lesson",
+        "sha256": "3e176e6fa5b66606f59752b155d17e0048f488666a0220da5da28afa29bef0ef"
+      },
+      {
+        "path": "tests/etude/test_authored_match_parity.py",
+        "sha256": "cd9f9bdc03e3b97f072cc2ea012b9c421fd7061207daeadda47e0b874fa5c664"
+      },
+      {
+        "path": "tests/etude/test_learn_evidence.py",
+        "sha256": "75f8f4a821dc9887b6d49752e5cfda914ce21202801bb232cf26d55087268a87"
+      },
+      {
+        "path": "tests/etude/test_learn_setup.py",
+        "sha256": "d4c49b021d8004e93c577a1df5763747c7dfe6d3ef3c7810bc37c6275a4c7cb9"
+      },
+      {
+        "path": "tests/model/test_semantic_cards.py",
+        "sha256": "625448179ce8f08fd93ba23f006b80c75d17f7d3a12ef62fd79f62e2d8374e54"
+      },
+      {
+        "path": "tests/model/test_world.py",
+        "sha256": "87f69748424bd49d94de1bdbafa6b45b93137fc25b77a2ef026e310851155b2f"
+      },
+      {
+        "path": "tests/semantic/test_learn_contract.py",
+        "sha256": "14f88d6ae07c536c14055b98234b3abfcf580f2141d528dae506df173bce39a8"
+      },
+      {
+        "path": "uv.lock",
+        "sha256": "c2ade83cf6a9f02fa4184b68fa360f49c0bf2f9e0853af656f44c587a04c8c51"
+      }
+    ],
+    "sha256": "2f8480fbd4a522755208b0b602dbb3b00b7668793a0f881f49f84647fab05d7c"
+  },
+  "world": "w4"
+}

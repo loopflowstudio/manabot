@@ -616,7 +616,7 @@ def save_bc_checkpoint(
     the BC policy plugs into every existing matchup/evaluation harness.
     """
 
-    from manabot.model.world import checkpoint_world
+    from manabot.model.world import checkpoint_world, validate_policy_input
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -631,6 +631,7 @@ def save_bc_checkpoint(
         },
         "bc": extra or {},
     }
+    validate_policy_input(agent, checkpoint["world_binding"])
     checkpoint.update(
         belief_checkpoint_fields(
             belief_schema,

@@ -17,10 +17,11 @@ Commands. Preserve mode-first controls, previews, Back and reconnect. The
 ## Findings and chosen route
 
 Current code already implements native Learn, knowledge-aware worlds, setup,
-bounded action kind/focus and browser controls. The ordinary Agent still sees
-outside rows with only location/ownership; its inputs omit complete programs
-and known-definition facts. Trainer.save and load_checkpoint_agent bind shapes
-but not world/setup. GameSession retains canonical decisions separately from
+bounded action kind/focus and browser controls. The starting ordinary Agent omitted complete programs and known-definition
+facts; Trainer.save and load_checkpoint_agent bound shapes but not world/setup.
+The continuation now joins complete compiled programs and public known-hand
+counts into actual Agent inputs, and binds ordinary writers/loaders to the
+full w4 setup. Configured consumers reject a different setup before acting. GameSession retains canonical decisions separately from
 automatic-pass trace rows; reuse its authoritative tape, never reconstruct
 human decisions from those rows. GameConfig.to_rust validates full setup.
 The existing Learn demo is a checked Divide by Zero prefix, not Pop Quiz.
@@ -64,18 +65,20 @@ omission; retain one model/encoder path and existing replay authority. Complete
 semantic programs may not be prefix-truncated, public knowledge may not reveal
 physical copies, and missing evidence may not become a successful receipt.
 
-Check result: source inspection confirms ordinary checkpoint bindings and
-policy semantic inputs remain absent; no new execution evidence yet.
+Check result: full debug Rust, fmt, clippy, 57 focused Python checks, frontend type checking/96 unit tests, and all 3 headless release browser scenarios pass; broad Python gate remains running with confirmed frozen checkpoint-advice mismatch.
 
 ## Main convergence, 2026-10-04
 
 Jack Heart directed ETU-75 to sync to current main before finalizing world
 decisions because ETU-89 implements training regimes against w4. Merge
 `b104fe94` preserves main's w4 cleanup/legend rules, source identities and
-versioned evidence. The initial binding is local implementation under test,
-not a completed contract. Native WORLD_VERSION replaces the provisional w3.
+versioned evidence. Native WORLD_VERSION replaces the provisional w3. The ordinary binding and
+complete semantic policy path have focused execution and rejection evidence.
 ETU-89 received the ordinary Trainer.save/load_checkpoint_agent integration
 boundary through its existing Task; training abstractions remain its owner.
-Complete policy inputs and registered parity remain unchanged requirements.
+The registered parity cohort remains a separate requirement; v1 was unscored
+when verifier review added explicit seed/setup/cap checks. v2 registers all
+16 attempts prospectively before scoring. Frozen advice evidence is a required
+gate blocker under `.lf/steps/gate.md`; do not regenerate it for this change.
 
 Sync check: merged main w4; debug cleanup (2) and Learn (12) tests pass; rebuilt cp312 extension and checkpoint/demo checks pass (12). Broader gate remains separate.

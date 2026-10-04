@@ -28,6 +28,7 @@ import torch
 from manabot.env import Env, Match, ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.model.agent import Agent
+from manabot.model.world import validate_agent_setup
 from manabot.sim.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     GameRecord,
@@ -171,6 +172,8 @@ def run_vector_games(
     match = Match(
         MatchHypers(hero="hero", villain="villain", hero_deck=deck, villain_deck=deck)
     )
+    for controller in (hero, villain):
+        validate_agent_setup(getattr(controller, "agent", None), match.to_rust())
     num_streams = min(num_streams, max(2, num_games))
     env = managym.VectorEnv(
         num_envs=num_streams, seed=seed, skip_trivial=True, opponent_policy="none"
@@ -303,6 +306,7 @@ class PolicyRolloutMCPlayer:
         self._buffers = _allocate_buffers(self._obs_space, self._capacity)
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+        validate_agent_setup(getattr(self.sampler, "agent", None), env.match.to_rust())
         del obs  # search reads the raw engine state, not the encoding
         self._calls += 1
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF

@@ -237,6 +237,8 @@ class TestObservationEncoder:
             # Events
             "events",
             "events_valid",
+            "semantic_cards",
+            "known_hand",
         }
 
     def test_encode_observation(self, observation_space, observation):

@@ -7,19 +7,26 @@ import torch
 
 from etude.villain import CheckpointVillain
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers, MatchHypers
+from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
 from manabot.model import Agent
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def selected_match():
-    return Match(MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies"))
+    return Match(
+        MatchHypers.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+    )
 
 
 def checkpoint():
     space = ObservationSpace()
-    agent = Agent(space, AgentHypers(hidden_dim=8, num_attention_heads=2))
+    agent = Agent(
+        space,
+        AgentHypers(
+            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+        ),
+    )
     return {
         "model_state_dict": agent.state_dict(),
         "hypers": {
@@ -42,7 +49,9 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
     assert space.shapes["actions"][0] == 64
 
 
-@pytest.mark.parametrize("change", ["missing", "world", "rules", "schema", "pack", "sideboard"])
+@pytest.mark.parametrize(
+    "change", ["missing", "world", "rules", "schema", "pack", "sideboard"]
+)
 def test_ordinary_loader_rejects_incompatible_binding_before_weights(tmp_path, change):
     payload = checkpoint()
     if change == "missing":
@@ -74,3 +83,28 @@ def test_same_shapes_do_not_admit_another_matchup():
     changed.hero_sideboard.clear()
     with pytest.raises(ValueError, match="world/setup/input"):
         validate_checkpoint_world(payload, ObservationSpace(), changed.to_rust())
+
+
+@pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value"])
+def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
+    from manabot.env import Env, Reward
+    from manabot.sim.flat_mc import AgentMatchupPlayer
+    from manabot.sim.mcts import AgentLeafEvaluator, DeterminizedPuctPlayer
+    from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
+    from manabot.sim.value import ValueScorer, VGreedyPlayer
+
+    path = tmp_path / "policy.pt"
+    torch.save(checkpoint(), path)
+    agent, space = load_checkpoint_agent(str(path))
+    players = {
+        "policy": lambda: AgentMatchupPlayer(agent),
+        "puct": lambda: DeterminizedPuctPlayer(
+            simulations=1, worlds=1, evaluator=AgentLeafEvaluator(agent, space)
+        ),
+        "rollout": lambda: PolicyRolloutMCPlayer(1, BatchedSampler(agent)),
+        "value": lambda: VGreedyPlayer(ValueScorer(agent)),
+    }
+    env = Env(Match(), space, Reward(RewardHypers()))
+    obs, _ = env.reset(seed=0)
+    with pytest.raises(ValueError, match="setup differs"):
+        players[consumer]().act(env, obs)

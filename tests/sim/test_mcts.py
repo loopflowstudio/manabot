@@ -26,6 +26,18 @@ from manabot.verify.util import INTERACTIVE_DECK
 import managym
 
 
+def _checkpoint_configs():
+    from manabot.env import Match
+    from manabot.infra.hypers import MatchHypers
+    from manabot.verify.util import INTERACTIVE_DECK
+
+    return Match(
+        MatchHypers(
+            hero_deck=dict(INTERACTIVE_DECK), villain_deck=dict(INTERACTIVE_DECK)
+        )
+    ).to_rust()
+
+
 def _fresh_engine(seed: int = 0) -> managym.Env:
     env, _ = _fresh_engine_and_observation(seed)
     return env
@@ -169,7 +181,10 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
     observation_space = ObservationSpace()
     checkpoint = tmp_path / "student.pt"
     save_bc_checkpoint(
-        Agent(observation_space, AgentHypers()), observation_space, checkpoint
+        Agent(observation_space, AgentHypers()),
+        observation_space,
+        checkpoint,
+        player_configs=_checkpoint_configs(),
     )
 
     player, loaded_space = make_player(

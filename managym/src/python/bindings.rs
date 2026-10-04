@@ -213,6 +213,25 @@ fn encoded_to_dict<'py>(
         to_numpy_array_f32(py, &np, &encoded.events_valid, &[config.max_events])?,
     )?;
 
+    dict.set_item(
+        "semantic_cards",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.semantic_cards,
+            &[2, config.max_cards_per_player],
+        )?,
+    )?;
+    dict.set_item(
+        "known_hand",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.known_hand,
+            &[2, config.max_cards_per_player, 2],
+        )?,
+    )?;
+
     Ok(dict)
 }
 

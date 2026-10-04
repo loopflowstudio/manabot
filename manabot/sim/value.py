@@ -39,6 +39,7 @@ import torch
 from manabot.env import Env, ObservationSpace
 from manabot.infra.hypers import AgentHypers
 from manabot.model.agent import Agent
+from manabot.model.world import validate_agent_setup
 from manabot.sim.distill import OBS_KEYS, save_bc_checkpoint, split_by_game
 from manabot.sim.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
@@ -250,11 +251,18 @@ def save_value_checkpoint(
     obs_space: ObservationSpace,
     path: str | Path,
     *,
+    player_configs,
     extra: dict[str, Any] | None = None,
 ) -> None:
     """Persist in the trainer checkpoint format (load_checkpoint_agent)."""
 
-    save_bc_checkpoint(agent, obs_space, path, extra={"value": extra or {}})
+    save_bc_checkpoint(
+        agent,
+        obs_space,
+        path,
+        player_configs=player_configs,
+        extra={"value": extra or {}},
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -365,6 +373,7 @@ class _ValueLeafScorer:
     def score_actions(self, env: Env) -> np.ndarray:
         """Hero-perspective score per legal root action (engine order)."""
 
+        validate_agent_setup(self.scorer.agent, env.match.to_rust())
         self._calls += 1
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
         start = time.perf_counter()

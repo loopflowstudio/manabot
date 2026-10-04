@@ -27,6 +27,18 @@ from manabot.sim.value import (
 from manabot.verify.util import INTERACTIVE_DECK
 
 
+def _checkpoint_configs():
+    from manabot.env import Match
+    from manabot.infra.hypers import MatchHypers
+    from manabot.verify.util import INTERACTIVE_DECK
+
+    return Match(
+        MatchHypers(
+            hero_deck=dict(INTERACTIVE_DECK), villain_deck=dict(INTERACTIVE_DECK)
+        )
+    ).to_rust()
+
+
 def make_env(seed: int = 3) -> tuple[Env, dict]:
     obs_space = ObservationSpace()
     match = Match(
@@ -73,8 +85,7 @@ class TestOutcomeLabels:
         usable, labels = outcome_labels(dataset)
         assert (dataset["winner"][usable] >= 0).all()
         expect = (
-            dataset["winner"][usable].astype(int)
-            == dataset["seat"][usable].astype(int)
+            dataset["winner"][usable].astype(int) == dataset["seat"][usable].astype(int)
         ).astype(np.float32)
         assert np.array_equal(labels, expect)
 
@@ -133,7 +144,9 @@ class TestTrainValue:
         dataset = tiny_dataset()
         agent, obs_space, _ = train_value(dataset, epochs=1, batch_size=32)
         path = tmp_path / "value.pt"
-        save_value_checkpoint(agent, obs_space, path)
+        save_value_checkpoint(
+            agent, obs_space, path, player_configs=_checkpoint_configs()
+        )
         loaded, _ = load_checkpoint_agent(str(path))
         for (name, a), (_, b) in zip(
             agent.state_dict().items(), loaded.state_dict().items()
@@ -166,9 +179,7 @@ class TestPoolPerspective:
         roots = pool.root_actions()
         assert len(roots) == pool.num_slots == 3 * 2 * num_actions
         # (world, action, rollout) lexicographic layout
-        expect = [
-            a for _ in range(3) for a in range(num_actions) for _ in range(2)
-        ]
+        expect = [a for _ in range(3) for a in range(num_actions) for _ in range(2)]
         assert roots == expect
         buffers = _allocate_buffers(ObservationSpace(), pool.num_slots)
         pool.set_buffers(buffers, pool.num_slots)
@@ -186,7 +197,9 @@ class TestPlayers:
         obs_space = ObservationSpace()
         agent = Agent(obs_space, AgentHypers())
         path = tmp_path / "value.pt"
-        save_value_checkpoint(agent, obs_space, path)
+        save_value_checkpoint(
+            agent, obs_space, path, player_configs=_checkpoint_configs()
+        )
         return str(path)
 
     def test_vgreedy_plays_valid_actions(self, tmp_path):

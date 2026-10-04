@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Protocol
 import numpy as np
 
 from manabot.env import Env, ObservationSpace
+from manabot.model.world import validate_agent_setup
 from manabot.sim.search_branch import (
     SELECTED_BRANCH_DRIVER_ID,
     BranchSession,
@@ -534,6 +535,9 @@ class DeterminizedPuctPlayer:
         self.last_result: PuctResult | None = None
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+        agent = getattr(self.evaluator, "agent", None)
+        if agent is not None:
+            validate_agent_setup(agent, env.match.to_rust())
         self._calls += 1
         call_seed = _mix_seed(self._seed, self._calls)
         started = time.perf_counter()

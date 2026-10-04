@@ -36,7 +36,7 @@ from manabot.env import (
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
-from manabot.model.world import checkpoint_world
+from manabot.model.world import checkpoint_world, validate_policy_input
 from manabot.verify.util import run_evaluation
 
 ROLLOUT_HEALTH_KEYS = (
@@ -879,6 +879,7 @@ class Trainer:
             "global_step": self.global_step,
             "hypers": hypers_dict,
         }
+        validate_policy_input(self.agent, checkpoint["world_binding"])
         checkpoint.update(
             belief_checkpoint_fields(
                 self.belief_schema,
