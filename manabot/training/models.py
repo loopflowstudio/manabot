@@ -270,10 +270,11 @@ class TrainingRegime(Strict):
                 "compound stages and compound Agent must be selected together"
             )
         if self.agent.compound_decisions and any(
-            not isinstance(stage, TrainCompound) for stage in self.stages
+            not isinstance(stage, (TrainCompound, CollectBelief, TrainBelief))
+            for stage in self.stages
         ):
             raise ValueError(
-                "compound policies require compound stages throughout the run"
+                "compound policies require compound policy stages throughout the run"
             )
         if self.recovery_max_microsteps is not None and (
             len(self.stages) != 1
@@ -291,7 +292,9 @@ class TrainingRegime(Strict):
                 raise ValueError("stage IDs must be unique")
             if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
                 policy = previous.get(stage.policy)
-                if not isinstance(policy, (TrainSupervised, TrainSelfPlay)):
+                if not isinstance(
+                    policy, (TrainSupervised, TrainSelfPlay, TrainCompound)
+                ):
                     raise ValueError(
                         "belief policy must refer to an earlier policy stage"
                     )

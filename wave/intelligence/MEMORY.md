@@ -507,6 +507,14 @@ preserve the exact tracker as a tractable reference. Wider pools still require
 new world-bound complete-loop measurements. See the
 [sampler guide](../../docs/belief-sampler.md).
 
+The bounded compound follow-up admits `train_compound` raw exports into the
+same belief dependency chain and resets queued Commands at game boundaries.
+Ataraxos raw/EMA already has end-to-end coverage. Compound EMA and mixing flat
+policy training into compound recipes remain rejected. Both collector paths
+enforce the saved observation capacity, even though standalone compound play
+can expand action encoding. This is compatibility evidence, not wider-pool or
+scientific acceptance; ETU-96 remains open for those comparisons.
+
 ## Frozen-policy local update boundary (ETU-95, 2026-10-04)
 
 Jack Heart authorized implementation and landing while leaving scientific
@@ -537,6 +545,7 @@ not a new live advisor registration. Genuine same-root PUCT-visit controls,
 archived-root relabeling, learned-sampler integration, independent-seed strength
 and human-play acceptance remain open. See [local-search contracts](../../docs/local-policy-search.md)
 and the separately budgeted [follow-up protocol](../../experiments/training-regime-followups.md).
+
 ## Omitted learning controls (ETU-93, 2026-10-04)
 
 Jack Heart authorized mechanism implementation and landing with bounded proof,

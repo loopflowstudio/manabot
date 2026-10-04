@@ -28,6 +28,8 @@ worlds fail validation.
 
 `collect_belief` freezes a named earlier policy stage's `raw` or `ema` artifact
 and collects complete self-play games with private hidden-hand labels.
+Compound policy stages support downstream belief collection from `raw` only;
+they do not export EMA. Sampler stages do not update the compound policy.
 `train_belief` fits a constrained autoregressive sampler from that collection's
 immutable whole-game train/validation/test splits. These stages preserve the
 last-complete-raw policy selection; sampler artifacts are separately admitted

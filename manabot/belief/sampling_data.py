@@ -257,6 +257,8 @@ def collect_frozen_policy(
                 seed=seed + game_index,
                 options={"match": match if game_index % 2 == 0 else match.swapped()},
             )
+            # The collector owns game boundaries; discard any queued compound suffix.
+            player.start_game(env, seat=0)
             manifest = env._engine.content_pack_manifest()
             if schema is None:
                 # Restrict work to configured definitions; generated out-of-roster
@@ -335,9 +337,9 @@ def collect_frozen_policy(
                 frame = DecisionFrame.from_json(
                     env._engine.semantic_decision_frame_json()
                 )
-                action = player.act(env, obs)
                 if len(frame.offers) != int(obs["actions_valid"].sum()):
                     raise ValueError("frozen policy cannot encode every legal offer")
+                action = player.act(env, obs)
                 command = Command(
                     f"sampler-{seed}-{game_index}-{step}",
                     frame.revision,

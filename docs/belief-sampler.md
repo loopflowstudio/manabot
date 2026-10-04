@@ -23,6 +23,19 @@ seats throughout collection. `train_belief` references its immutable dataset;
 only the sampler receives gradients. A policy can learn useful behavior before
 this stage, with no circular policy/belief dependency.
 
+Supported behavior exports are observation-only flat policies (PPO or Ataraxos,
+raw or explicitly exported EMA) and compound policies (`train_compound`, raw
+only). Compound recipes may append `collect_belief` and `train_belief`; they may
+not mix flat policy training stages into the run. Belief-conditioned behavior
+policies remain rejected. The collector owns game boundaries and resets queued
+compound Commands after each reset; native lowering owns their legality.
+
+Collection uses the checkpoint's saved observation capacity for both policy
+kinds and fails explicitly if a game exceeds it. The compound player's wider
+native offer support does not remove this collector limit. Pin sufficient
+capacity before training and collection; do not reinterpret checkpoint bindings.
+The collector owns private labels and never passes them to the behavior player.
+
 The dataset retains complete games with disjoint train, validation and test
 membership, alternating deck assignments, policy and world identities, public
 input records and private supervision labels. Capture occurs at the current
