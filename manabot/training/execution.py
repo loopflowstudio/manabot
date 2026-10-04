@@ -268,6 +268,7 @@ def _execute_regime(
             )
             phase = "collection_seconds"
             torch.set_num_threads(stage.execution.threads)
+            record.actual_threads = torch.get_num_threads()
 
             def check() -> None:
                 charged = (
@@ -629,6 +630,7 @@ def _execute_regime(
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
+                record.actual_device = str(next(trainer.agent.parameters()).device)
                 before = deepcopy(trainer.collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0

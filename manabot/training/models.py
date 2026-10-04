@@ -382,6 +382,8 @@ class TrainingRegime(Strict):
 
 class StageRecord(Strict):
     id: str
+    actual_device: str | None = None
+    actual_threads: int | None = None
     status: Literal["running", "completed", "failed", "interrupted"] = "running"
     seconds: float = 0
     cumulative_seconds: float | None = Field(default=None, ge=0)

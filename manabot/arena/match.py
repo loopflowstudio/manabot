@@ -465,11 +465,13 @@ def play_cell(
                 }
             rows.append(row)
     trace_receipt["artifact_path"] = trace_relative_path
+    replay_started = time.perf_counter()
     receipts = [replay_games([game]).to_dict() for game in games]
     replay_payload = {
         name: sum(r[name] for r in receipts) for name in receipts[0] if name != "passed"
     }
     replay_payload["passed"] = all(r["passed"] for r in receipts)
+    replay_payload["seconds"] = time.perf_counter() - replay_started
     for row, receipt in zip(rows, receipts, strict=True):
         row["replay_passed"] = receipt["passed"]
         row["trace_shard_sha256"] = trace_receipt["sha256"]

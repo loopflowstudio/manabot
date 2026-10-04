@@ -151,7 +151,12 @@ def calibration_plan(study: str) -> ResolvedStudy:
 
 
 def run_study(
-    study: str, out: Path, plan: ResolvedStudy | None = None, resume: bool = False
+    study: str,
+    out: Path,
+    plan: ResolvedStudy | None = None,
+    resume: bool = False,
+    *,
+    render_report: bool = True,
 ) -> None:
     if "cumulative_seconds" not in StageRecord.model_fields:
         raise RuntimeError(
@@ -163,10 +168,9 @@ def run_study(
             raise RuntimeError(
                 "insufficient free disk for frozen study and evidence reserve"
             )
-    if study == "omitted-controls" and plan is None:
-        raise ValueError(
-            "omitted controls require an explicit separately resolved plan"
-        )
+    explicit_plan = study in {"omitted-controls", "training-calibration"}
+    if explicit_plan and plan is None:
+        raise ValueError(f"{study} requires an explicit separately resolved plan")
     retained = None
     resumed_runs = []
     if resume:
@@ -199,7 +203,7 @@ def run_study(
     else:
         protocol = plan.protocol
         recipes = [TrainingRegime.model_validate(r) for r in plan.recipes]
-        if study != "omitted-controls" and [r.id for r in recipes] != STUDIES[study]:
+        if not explicit_plan and [r.id for r in recipes] != STUDIES[study]:
             raise ValueError("resolved recipes must preserve the study arm order")
         if not resume:
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
@@ -614,7 +618,8 @@ def run_study(
                 "incomplete arena cohort; every attempted cell retained without retry"
             )
         save()
-        report(out)
+        if render_report:
+            report(out)
         if incomplete:
             raise RuntimeError(result["error"])
         save()

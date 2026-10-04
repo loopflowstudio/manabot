@@ -58,3 +58,7 @@ throughput estimate. CPU/MPS comparisons, multi-seed timing calibration,
 clone/world-sampling costs, multi-stage recovery and complete-cohort projections
 remain ETU-98 work. The active ETU-91 campaign is unchanged and does not gain
 recovery retroactively.
+
+The [complete-loop calibration command](training-calibration.md) adds a separate
+bounded CPU accounting proof through the existing study runner. It does not
+extend the recovery support matrix or establish hardware throughput.

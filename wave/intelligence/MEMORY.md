@@ -568,3 +568,19 @@ The main integration preserves frozen-opponent and compound studies. Compound
 training rejects the new quantile/actor-only knobs rather than silently ignoring
 them; ETU-93's executable contrasts target ordinary self-play. The merged
 omitted-control/frozen-opponent/study paths passed 39 focused checks.
+
+## Complete-loop calibration boundary (ETU-98, 2026-10-04)
+
+PR207's bounded complete-state recovery remains intact. The separate
+[calibration entry point](../../docs/training-calibration.md) reuses TrainingRun,
+VerifyStore and the study arena for two CPU self-play checkpoints and eight
+exact-replayed games. It distinguishes native microsteps, learner transitions
+and optimizer sample exposures, retains failed attempts, records actual model
+device/threads, and reports replay as a subset of arena cost. MPS/CUDA are
+explicitly unsupported on this complete path; inference rates cannot substitute.
+Host load/RSS observations do not correct contention or measure throttling.
+The active ETU-91 campaign was not edited. Concurrent bounded checks prove
+workflow only; uncontended multi-seed hardware calibration, clone/sampling
+costs and conservative cohort projections remain open within the unchanged
+168-hour campaign ceiling. No new scientific allocation or paid compute follows
+from this command. Its costs must be included in campaign accounting.
