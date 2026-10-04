@@ -10,6 +10,13 @@ ambiguity or safety-critical invariants, not substitute products.
 
 ## Learn decisions and current evidence
 
+- On 2026-10-04 Jack Heart authorized autonomous implementation/publication/
+  landing, with ETU-75 kept open for unmet empirical acceptance. Jack then
+  directed synchronization with main `3f297533`: w4 is the current rules world;
+  do not revive the older w3 plan. ETU-89 owns training regimes and consumes
+  the ordinary checkpoint writer/loader contract owned here. Merge `b104fe94`
+  preserves w4; the checkpoint binding continuation is under verification.
+
 [Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup)
 remains unfinished. The [durable Learn record](../../docs/rules/learn-lesson.md)
 preserves accepted decisions, dated proof limits and source history.

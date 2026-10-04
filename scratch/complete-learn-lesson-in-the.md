@@ -26,7 +26,8 @@ human decisions from those rows. GameConfig.to_rust validates full setup.
 The existing Learn demo is a checked Divide by Zero prefix, not Pop Quiz.
 
 Reuse the existing semantic catalog and model input path rather than create
-another rules encoder. Bind the ordinary writer/loader to corrected world w3,
+another rules encoder. Bind the ordinary writer/loader to native WORLD_VERSION
+(w4 after syncing main 3f297533),
 full main-deck/sideboard setup, pack and schema. Do not infer compatibility from
 dimensions or rewrite frozen artifacts. Missing/mismatched bindings fail closed.
 
@@ -35,7 +36,7 @@ dimensions or rewrite frozen artifacts. Missing/mismatched bindings fail closed.
 1. Join complete Lesson programs and public known definitions to ordinary
    scalar/vector policy inputs, retaining native/Python parity and explicit
    capacity rejection. Verify actual Agent logits consume these channels.
-2. Bind ordinary checkpoint writing/loading and configured consumers to w3 and
+2. Bind ordinary checkpoint writing/loading and configured consumers to w4 and
    exact setup. Test round trip and missing/world/setup/schema rejection before
    play; preserve historical checkpoints unchanged.
 3. Exercise configured Search at Learn in both seats, retrieval/discard/decline,
@@ -65,3 +66,16 @@ physical copies, and missing evidence may not become a successful receipt.
 
 Check result: source inspection confirms ordinary checkpoint bindings and
 policy semantic inputs remain absent; no new execution evidence yet.
+
+## Main convergence, 2026-10-04
+
+Jack Heart directed ETU-75 to sync to current main before finalizing world
+decisions because ETU-89 implements training regimes against w4. Merge
+`b104fe94` preserves main's w4 cleanup/legend rules, source identities and
+versioned evidence. The initial binding is local implementation under test,
+not a completed contract. Native WORLD_VERSION replaces the provisional w3.
+ETU-89 received the ordinary Trainer.save/load_checkpoint_agent integration
+boundary through its existing Task; training abstractions remain its owner.
+Complete policy inputs and registered parity remain unchanged requirements.
+
+Sync check: merged main w4; debug cleanup (2) and Learn (12) tests pass; rebuilt cp312 extension and checkpoint/demo checks pass (12). Broader gate remains separate.

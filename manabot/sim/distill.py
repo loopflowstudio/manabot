@@ -606,6 +606,7 @@ def save_bc_checkpoint(
     obs_space: ObservationSpace,
     path: str | Path,
     *,
+    player_configs,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
@@ -615,9 +616,12 @@ def save_bc_checkpoint(
     the BC policy plugs into every existing matchup/evaluation harness.
     """
 
+    from manabot.model.world import checkpoint_world
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
+        "world_binding": checkpoint_world(player_configs, obs_space),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
