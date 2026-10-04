@@ -395,15 +395,22 @@ def test_invalid_or_unstructured_retry_never_creates_an_attempt(
         },
     ) as client:
         projection = client.get(f"/api/traces/{session.trace_id}/decisions").json()
-        row = projection["decisions"][0]
-        restored = client.get(
-            f"/api/traces/{session.trace_id}/decisions/{row['address']}"
-        ).json()
-        play_land = next(
-            offer
-            for offer in restored["frame"]["offers"]
-            if offer["verb"] == "play_land"
-        )
+        for row in projection["decisions"]:
+            restored = client.get(
+                f"/api/traces/{session.trace_id}/decisions/{row['address']}"
+            ).json()
+            play_land = next(
+                (
+                    offer
+                    for offer in restored["frame"]["offers"]
+                    if offer["verb"] == "play_land"
+                ),
+                None,
+            )
+            if play_land is not None:
+                break
+        else:
+            pytest.fail("completed source has no play-land decision")
         command = {
             "command_id": "unsupported-retry",
             "match_id": restored["frame"]["match_id"],

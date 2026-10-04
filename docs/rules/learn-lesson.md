@@ -7,9 +7,71 @@ This is the bounded Rules change following
 [PR #185](https://github.com/loopflowstudio/etude/pull/185),
 not a restart of ETU-14/31/55 or evidence of completed replay certification.
 
+## Continuation on 2026-10-04
+
+Jack Heart authorized autonomous implementation and delivery, superseding the
+September publication restriction while keeping ETU-75 open for unmet empirical
+acceptance. Jack directed synchronization with main `3f297533` before choosing
+identities: **w4 remains the native rules world**. ETU-89 owns training regimes
+and reuses the ordinary checkpoint contract; no second training loader was added.
+The dated September observations below describe the earlier state.
+
+Ordinary policies configured with `semantic_pack="ur-lessons-vs-gw-allies"` now
+join complete checked semantic programs to visible cards and owned outside
+candidates. Definition references are expanded without prefix truncation.
+Public known-hand definition minima enter separate player features; hidden
+opponent cards do not enter the policy. Native scalar/vector encoders and the
+Python encoder carry identical new channels. Focused actual-Agent tests prove
+retrieval logits distinguish all three UR Lessons, gradients reach the program
+encoder, public knowledge affects inference, and hidden-world substitutions
+preserve the new viewer inputs. This is not a transfer or strength experiment.
+
+`Trainer.save`, BC/value writers, the ordinary loader, W&B loading and live
+checkpoint play share `manabot/model/world.py`. Binding includes native world,
+full paired main/sideboard setups, content manifest, rules versions and input
+schema. Compiled matchup checkpoints require the complete program encoder.
+Missing or mismatched bindings fail before weights are admitted. Reversed
+seats remain compatible; policy, PUCT, rollout and value wrappers reject a
+checkpoint bound to another actual setup. Historical unbound files are not
+silently migrated. Current synthetic round trips prove plumbing, not admission
+of a retained trained challenger.
+
+Configured Search executes Learn in both deck assignments without changing the
+source root. The existing GameSession/live tape and canonical replay owners
+feed `etude.learn_lesson_evidence`; no second replay engine was introduced.
+The prospective cohort, exact source closure and 10,000-Command cap are recorded
+in `conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
+19 retrievals, 25 discard/draws and 14 declines) at source `57ac36a5`. Final
+gate repairs to import isolation and diagnostic traceback handling changed the
+source binding, so v3 repeats the same fixed seeds. The earlier unscored v1
+registration and complete v2 receipts remain retained. Run `./scripts/verify-learn-lesson` against the registered
+source to rebuild the extension, check the consumer contracts and verify all
+tapes. It rejects source or binary drift instead of rewriting receipts.
+
+Checks so far: all 377 debug Rust tests, fmt/clippy, compiler/generated checks,
+57 focused Python checks, frontend type checking and 96 unit tests, plus all
+three headless Learn/release-matrix browser scenarios pass. The macOS browser
+run ignored screenshots and does not certify pinned Linux visual references.
+Rendering and new human play are unavailable in this run; the September working
+interaction approval remains accepted with its original proof limits.
+
+A confirmed gate blocker is the frozen checkpoint-advice fixture: it records
+action ABI 3 and possible-world ABI 1, whereas the current request uses 6 and 2,
+with different content, replay and observation identities. `.lf/steps/gate.md`
+explicitly requires preserving failures in frozen advice as blockers. Neither
+historical fixtures nor checkpoint validation were rewritten to conceal that
+mismatch. The broad Python gate returned 813 passed and 30 failed. Ten failures
+were repaired and checked in focused reruns: fresh checkpoint/test setup,
+current mandatory-choice and privacy assertions, deterministic timeout
+synchronization, and PUCT import isolation. Twenty checks still depend on
+historical authority/advice/Study or experiment identities, old checkpoint
+bindings or old tensor shards. Those positive historical replay/admission
+claims remain unproven; no full-suite green or delivery readiness is claimed.
+The final-source v3 cohort result remains pending.
+
 ## Accepted setup and interaction
 
-The human chose formal sideboards: “We just need to give decks formal
+The September reviewer (name not retained in the source) chose formal sideboards: “We just need to give decks formal
 sideboards.” The proposed lists were “totally fine for now,” and “Sideboards
 should be open-decklist, as are the matches.” Keep the shipped main decks:
 UR has 41 cards and GW has 40.

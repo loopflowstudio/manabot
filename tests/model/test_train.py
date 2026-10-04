@@ -107,6 +107,7 @@ class TestRollout:
     def test_saved_checkpoint_round_trips_with_actual_setup(self, trainer):
         from manabot.sim.flat_mc import load_checkpoint_agent
 
+        trainer.start_time = 0.0
         trainer.save()
         agent, space = load_checkpoint_agent(
             str(trainer.experiment.runs_dir / "step_0.pt")

@@ -15,13 +15,16 @@ ambiguity or safety-critical invariants, not substitute products.
   directed synchronization with main `3f297533`: w4 is the current rules world;
   do not revive the older w3 plan. ETU-89 owns training regimes and consumes
   the ordinary checkpoint writer/loader contract owned here. Merge `b104fe94`
-  preserves w4; the checkpoint binding continuation is under verification.
+  preserves w4. Complete semantic-program and public known-hand inputs now
+  reach the ordinary Agent; mandatory full-setup bindings protect ordinary
+  writers/loaders and configured play/search consumers. Synthetic checkpoint
+  proof does not admit a retained trained challenger.
 
 [Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup)
 remains unfinished. The [durable Learn record](../../docs/rules/learn-lesson.md)
 preserves accepted decisions, dated proof limits and source history.
 
-- The human approved formal open-decklist sideboards on 2026-09-24: UR gets
+- The September reviewer (name unresolved) approved open-decklist sideboards on 2026-09-24: UR gets
   one each Firebending Lesson, It'll Quench Ya! and Accumulate Wisdom; GW gets
   one each Yip Yip! and Fancy Footwork. Preserve the 41/40-card main decks.
   Admission of an ordinary sideboard card is separate from Lesson eligibility.
@@ -33,7 +36,7 @@ preserves accepted decisions, dated proof limits and source history.
   Both search samplers must reserve those facts and weight residual deals,
   without exposing which identical copy was retrieved.
 - Mode-first controls, previews, Back and reconnect have real browser evidence.
-  On 2026-09-25 the human said “works. approved.” This accepts the demonstrated
+  On 2026-09-25 that reviewer said “works. approved.” This accepts the demonstrated
   working interaction; it supplies no missing per-attempt tapes and does not
   authorize publication or completion. Do not request duplicate acceptance.
 - Native/raw projection and bounded Learn kind/focus tests pass, but complete

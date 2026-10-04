@@ -72,7 +72,7 @@ def test_selected_live_root_rejects_retired_likelihood_checkpoint(
         with pytest.raises(LiveBeliefUnavailable, match="failed") as failure:
             _await_posterior(game, pending.address.serialize())
         assert isinstance(failure.value.__cause__, ValueError)
-        assert "max_conditions" in str(failure.value.__cause__)
+        assert "compatible w4 world binding" in str(failure.value.__cause__)
         assert game.env.state_digest() == authority_digest
     finally:
         game.close("test")

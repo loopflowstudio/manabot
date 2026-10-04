@@ -48,7 +48,7 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass
 class ParityDivergence(RuntimeError):
     surface: str
     revision: int

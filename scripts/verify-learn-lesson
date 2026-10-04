@@ -14,4 +14,4 @@ with ZipFile(wheel) as archive:
 PY
 
 uv run --extra dev --extra play pytest tests/model/test_world.py tests/model/test_semantic_cards.py tests/semantic/test_learn_contract.py tests/etude/test_learn_setup.py tests/etude/test_learn_evidence.py -q
-uv run --extra dev --extra play python -m etude.learn_lesson_evidence "${1:-verify}" "${2:-conformance/learn-lesson-w4-v2}"
+uv run --extra dev --extra play python -m etude.learn_lesson_evidence "${1:-verify}" "${2:-conformance/learn-lesson-w4-v3}"

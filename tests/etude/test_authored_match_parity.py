@@ -44,3 +44,17 @@ def test_first_divergence_names_both_source_identities() -> None:
     assert "authority_receipt_sha256=" in message
     assert "relevant_source_sha256=" in message
     assert "unavailable" not in message
+
+
+def test_divergence_survives_context_manager_unwinding() -> None:
+    from contextlib import contextmanager
+
+    import pytest
+
+    @contextmanager
+    def scope():
+        yield
+
+    with pytest.raises(ParityDivergence, match="state_witness"):
+        with scope():
+            raise ParityDivergence("headless", 37, "state_witness", "a", "b")

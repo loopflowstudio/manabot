@@ -190,8 +190,8 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     sparse = BeliefState.from_probabilities(
         space, "gate-sparse", weights / weights.sum()
     )
-    # Pin current receipts separately from historical v1 receipts. Matching
-    # marginal shapes does not make the old world binding compatible.
+    # Retain the prior catalog and v1 receipts: equal marginal shapes do not
+    # make their content/world bindings compatible with the expanded w4 catalog.
     cases = (
         (
             prior,
@@ -217,11 +217,19 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     old_schema = replace(
         schema, world_schema_identity="managym.possible-world-space/v1"
     )
-    for belief, receipt, historical_receipt in cases:
+    current_w4_receipts = (
+        "55322cc163dde888e3f9c493d9742c0901eab6673e022ee65baf48b3e87a5fe8",
+        "e663aa5279ff57836824dce86418091740d241d370e35835def0e1cf2a8b1bd3",
+        "5a73465a8502d7d658ac625bf6d402ce65eeb024711759666ef125407926dcef",
+        "71b27f9f081d668ff9209c2cd94935bdd194f4fe1114d8d985d8b07219817803",
+    )
+    for (belief, prior_catalog_receipt, historical_receipt), receipt in zip(
+        cases, current_w4_receipts, strict=True
+    ):
         assert isinstance(belief, BeliefState)
         encoded = encode_belief(belief, schema)
         assert encoded.encoding_receipt == receipt
-        assert encoded.encoding_receipt != historical_receipt
+        assert encoded.encoding_receipt not in (prior_catalog_receipt, historical_receipt)
         with pytest.raises(BeliefError, match="world schema"):
             encode_belief(belief, old_schema)
         # Independent scalar accumulation checks numerical meaning as well as
