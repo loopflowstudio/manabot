@@ -126,9 +126,48 @@ class VerifyStore:
     def close(self) -> None:
         self.con.close()
 
+    def save_training_run(self, run) -> None:
+        """Commit one canonical regime execution and its stage records atomically."""
+        with self.con:
+            self.con.execute(
+                "INSERT INTO training_runs VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                (run.id, run.model_dump_json(exclude={"stages"})),
+            )
+            for stage in run.stages:
+                self.con.execute(
+                    "INSERT INTO training_stages VALUES (?, ?, ?) ON CONFLICT(run_id, stage_id) DO UPDATE SET payload=excluded.payload",
+                    (run.id, stage.id, stage.model_dump_json()),
+                )
+
+    def training_run(self, run_id: str):
+        from manabot.training.models import TrainingRun
+
+        row = self.con.execute(
+            "SELECT payload FROM training_runs WHERE id=?", (run_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(run_id)
+        payload = json.loads(row[0])
+        stage_rows = self.con.execute(
+            "SELECT payload FROM training_stages WHERE run_id=? ORDER BY rowid",
+            (run_id,),
+        ).fetchall()
+        payload["stages"] = [json.loads(stage[0]) for stage in stage_rows]
+        return TrainingRun.model_validate(payload)
+
     def _create_schema(self) -> None:
         self.con.executescript(
             """
+            CREATE TABLE IF NOT EXISTS training_runs (
+                id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS training_stages (
+                run_id TEXT NOT NULL REFERENCES training_runs(id),
+                stage_id TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                PRIMARY KEY (run_id, stage_id)
+            );
             CREATE TABLE IF NOT EXISTS runs (
                 id INTEGER PRIMARY KEY,
                 created_at TEXT NOT NULL,

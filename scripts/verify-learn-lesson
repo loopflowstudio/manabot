@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels
+uv run python - <<'PY'
+from pathlib import Path
+from zipfile import ZipFile
+wheel = max(Path("managym/target/wheels").glob("managym-*-cp312-*.whl"), key=lambda path: path.stat().st_mtime_ns)
+with ZipFile(wheel) as archive:
+    member = next(name for name in archive.namelist() if name.startswith("managym/_managym") and name.endswith(".so"))
+    (Path("managym") / Path(member).name).write_bytes(archive.read(member))
+PY
+
+uv run --extra dev --extra play pytest tests/model/test_world.py tests/model/test_semantic_cards.py tests/semantic/test_learn_contract.py tests/etude/test_learn_setup.py tests/etude/test_learn_evidence.py -q
+uv run --extra dev --extra play python -m etude.learn_lesson_evidence "${1:-verify}" "${2:-conformance/learn-lesson-w4-v3}"

@@ -165,11 +165,15 @@ def test_agent_leaf_evaluator_neutral_mode_keeps_forward_and_priors() -> None:
 
 def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
     tmp_path: Path,
+    interactive_player_configs,
 ) -> None:
     observation_space = ObservationSpace()
     checkpoint = tmp_path / "student.pt"
     save_bc_checkpoint(
-        Agent(observation_space, AgentHypers()), observation_space, checkpoint
+        Agent(observation_space, AgentHypers()),
+        observation_space,
+        checkpoint,
+        player_configs=interactive_player_configs,
     )
 
     player, loaded_space = make_player(

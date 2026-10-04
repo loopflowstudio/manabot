@@ -31,8 +31,9 @@ class UnsupportedAuthorityPrompt(RuntimeError):
 class DeterministicServerOfferPolicy:
     """Choose uniformly from server-built offers without inspecting card text."""
 
-    def __init__(self, seed: int):
+    def __init__(self, seed: int, max_commands: int | None = None):
         self._rng = Random(seed)
+        self.max_commands = max_commands
 
     def choose(
         self,
@@ -42,6 +43,8 @@ class DeterministicServerOfferPolicy:
         revision: int,
         prompt_family: str,
     ) -> dict[str, Any]:
+        if self.max_commands is not None and revision >= self.max_commands:
+            raise UnsupportedAuthorityPrompt("registered total Command cap reached")
         if not offers:
             raise UnsupportedAuthorityPrompt(
                 f"unsupported prompt actor={actor} revision={revision} "
@@ -186,27 +189,33 @@ def _terminal_witness(
     }
 
 
-def play_fixed_authored_match() -> tuple[GameSession, dict[str, Any]]:
+def play_fixed_authored_match(
+    *,
+    seed: int = MATCH_SEED,
+    reverse: bool = False,
+    max_commands: int | None = None,
+    session: GameSession | None = None,
+) -> tuple[GameSession, dict[str, Any]]:
     """Return the deterministic authored Game session with retained Study roots."""
 
-    hero_policy = DeterministicServerOfferPolicy(POLICY_SEED)
-    villain_policy = DeterministicServerOfferPolicy(POLICY_SEED)
-    temporary = TemporaryDirectory()
-    session = GameSession(
-        Path(temporary.name),
-        id_factory=lambda kind: f"authored-authority-{kind}",
-        clock=lambda: FIXED_TIME,
-        villain_offer_policy=villain_policy,
-        capture_authority_evidence=True,
-    )
-    # Retain the temporary directory for the lifetime of the returned session.
-    session._authority_receipt_temporary = temporary  # type: ignore[attr-defined]
+    hero_policy = DeterministicServerOfferPolicy(seed, max_commands)
+    villain_policy = DeterministicServerOfferPolicy(seed, max_commands)
+    if session is None:
+        temporary = TemporaryDirectory()
+        session = GameSession(
+            Path(temporary.name),
+            id_factory=lambda kind: f"authored-authority-{kind}",
+            clock=lambda: FIXED_TIME,
+            capture_authority_evidence=True,
+        )
+        session._authority_receipt_temporary = temporary  # type: ignore[attr-defined]
+    session._villain_offer_policy = villain_policy
     message = session.new_game(
         {
-            "hero_deck": "ur_lessons",
-            "villain_deck": "gw_allies",
+            "hero_deck": "gw_allies" if reverse else "ur_lessons",
+            "villain_deck": "ur_lessons" if reverse else "gw_allies",
             "villain_type": "random",
-            "seed": MATCH_SEED,
+            "seed": seed,
             "auto_pass": False,
         }
     )

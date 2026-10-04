@@ -135,7 +135,9 @@ def test_policy_only_and_joint_arms_isolate_value_gradient() -> None:
     )
 
 
-def test_joint_checkpoint_round_trips(tmp_path: Path) -> None:
+def test_joint_checkpoint_round_trips(
+    tmp_path: Path, interactive_player_configs
+) -> None:
     dataset = _dataset(seed=19)
     agent, obs_space, _, history = train_search_supervised(
         dataset, epochs=1, batch_size=32, val_fraction=0.25, seed=3
@@ -145,6 +147,7 @@ def test_joint_checkpoint_round_trips(tmp_path: Path) -> None:
         agent,
         obs_space,
         path,
+        player_configs=interactive_player_configs,
         extra={
             "search_supervised": True,
             "value_brier": history[-1].validation.value_brier,
@@ -275,3 +278,36 @@ def test_search_supervised_binds_the_declared_observation_shape():
         padded, epochs=1, batch_size=32, observation_hypers=wider
     )
     assert obs_space.encoder.hypers == wider
+
+
+def test_cumulative_training_keeps_whole_game_split_and_adam_state():
+    dataset = _dataset()
+    first = {k: v[dataset["game_index"] < 4] for k, v in dataset.items()}
+    state = {}
+    agent, _, _, _ = train_search_supervised(
+        first,
+        epochs=1,
+        batch_size=8,
+        validation_games={0},
+        continuation=state,
+    )
+    before = max(int(s["step"]) for s in state["optimizer_state"]["state"].values())
+    second = {}
+    train_search_supervised(
+        dataset,
+        epochs=1,
+        batch_size=8,
+        validation_games={0, 4},
+        initial_agent_state=agent.state_dict(),
+        optimizer_state=state["optimizer_state"],
+        continuation=second,
+    )
+    after = max(int(s["step"]) for s in second["optimizer_state"]["state"].values())
+    assert after > before
+    # Old validation game's rows stay excluded when new games arrive.
+    assert np.array_equal(
+        np.flatnonzero(first["game_index"] == 0),
+        np.flatnonzero(dataset["game_index"] == 0),
+    )
+    with pytest.raises(ValueError, match="nonempty"):
+        train_search_supervised(first, epochs=1, validation_games=set())

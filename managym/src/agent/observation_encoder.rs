@@ -60,6 +60,8 @@ impl ObservationEncoderConfig {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncodedObservation {
+    pub semantic_cards: Vec<f32>,
+    pub known_hand: Vec<f32>,
     pub agent_player: Vec<f32>,
     pub opponent_player: Vec<f32>,
     pub agent_cards: Vec<f32>,
@@ -80,6 +82,8 @@ pub struct EncodedObservation {
 }
 
 pub struct EncodedObservationMut<'a> {
+    pub semantic_cards: &'a mut [f32],
+    pub known_hand: &'a mut [f32],
     pub agent_player: &'a mut [f32],
     pub opponent_player: &'a mut [f32],
     pub agent_cards: &'a mut [f32],
@@ -143,6 +147,8 @@ pub fn encode(
     config: &ObservationEncoderConfig,
 ) -> Result<EncodedObservation, ObservationEncodeError> {
     let mut encoded = EncodedObservation {
+        semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
+        known_hand: vec![0.0; 4 * config.max_cards_per_player],
         agent_player: vec![0.0; PLAYER_DIM],
         opponent_player: vec![0.0; PLAYER_DIM],
         agent_cards: vec![0.0; config.cards_len()],
@@ -163,6 +169,8 @@ pub fn encode(
     };
 
     let out = EncodedObservationMut {
+        semantic_cards: &mut encoded.semantic_cards,
+        known_hand: &mut encoded.known_hand,
         agent_player: &mut encoded.agent_player,
         opponent_player: &mut encoded.opponent_player,
         agent_cards: &mut encoded.agent_cards,
@@ -191,6 +199,16 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    validate_buffer_len(
+        "semantic_cards",
+        out.semantic_cards.len(),
+        2 * config.max_cards_per_player,
+    )?;
+    validate_buffer_len(
+        "known_hand",
+        out.known_hand.len(),
+        4 * config.max_cards_per_player,
+    )?;
     validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
     validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
     validate_buffer_len("agent_cards", out.agent_cards.len(), config.cards_len())?;
@@ -285,6 +303,8 @@ pub fn encode_into(
             });
         }
     }
+    out.semantic_cards.fill(0.0);
+    out.known_hand.fill(0.0);
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
     out.agent_cards.fill(0.0);
@@ -302,6 +322,34 @@ pub fn encode_into(
     out.opponent_permanents_valid.fill(0.0);
     out.actions_valid.fill(0.0);
     out.events_valid.fill(0.0);
+
+    for (seat, (cards, player)) in [
+        (&obs.agent_cards, &obs.agent),
+        (&obs.opponent_cards, &obs.opponent),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if player.known_hand.len() > config.max_cards_per_player {
+            return Err(ObservationEncodeError::Capacity {
+                field: "known hand",
+                capacity: config.max_cards_per_player,
+                actual: player.known_hand.len(),
+            });
+        }
+        for (slot, card) in cards.iter().enumerate() {
+            out.semantic_cards[seat * config.max_cards_per_player + slot] =
+                (card.registry_key + 1) as f32;
+        }
+        for (slot, (definition, count)) in player.known_hand.iter().enumerate() {
+            let offset = (seat * config.max_cards_per_player + slot) * 2;
+            out.known_hand[offset] = (definition + 1) as f32;
+            out.known_hand[offset + 1] = *count as f32;
+        }
+    }
+    for (slot, card) in obs.agent_sideboard.iter().enumerate() {
+        out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
+    }
 
     let mut object_to_index: HashMap<i32, i32> = HashMap::new();
     let mut current_object_index: i32 = 0;
@@ -961,6 +1009,8 @@ mod tests {
         };
 
         let mut agent_player = vec![0.0; 1];
+        let mut semantic_cards = vec![0.0; 4];
+        let mut known_hand = vec![0.0; 8];
         let mut opponent_player = vec![0.0; PLAYER_DIM];
         let mut agent_cards = vec![0.0; 2 * CARD_DIM];
         let mut opponent_cards = vec![0.0; 2 * CARD_DIM];
@@ -979,6 +1029,8 @@ mod tests {
         let mut events_valid = vec![0.0; 1];
 
         let out = EncodedObservationMut {
+            semantic_cards: &mut semantic_cards,
+            known_hand: &mut known_hand,
             agent_player: &mut agent_player,
             opponent_player: &mut opponent_player,
             agent_cards: &mut agent_cards,

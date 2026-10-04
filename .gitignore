@@ -27,3 +27,6 @@ frontend/.vite/
 
 # raw experiment data stays local (reports carry the summaries)
 scratch/*.json
+
+# Generated Loopflow context and runtime state stay local.
+.lf/tmp/

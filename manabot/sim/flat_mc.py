@@ -166,7 +166,9 @@ class AgentMatchupPlayer:
         agent.eval()
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
-        del env
+        from manabot.model.world import validate_agent_setup
+
+        validate_agent_setup(self.agent, env.match.to_rust())
         return _select_agent_action(self.agent, obs, deterministic=self.deterministic)
 
 
@@ -196,7 +198,12 @@ def load_checkpoint_agent(
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     hypers = checkpoint["hypers"]
     obs_space = ObservationSpace(ObservationSpaceHypers(**hypers["observation_hypers"]))
+    from manabot.model.world import validate_checkpoint_world, validate_policy_input
+
+    world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent = Agent(obs_space, AgentHypers(**hypers["agent_hypers"]))
+    validate_policy_input(agent, world_binding)
+    agent.world_binding = world_binding
     binding = None
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)

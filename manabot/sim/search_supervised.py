@@ -319,10 +319,14 @@ def train_search_supervised(
     val_fraction: float = 0.1,
     seed: int = 0,
     split_seed: int | None = None,
+    minibatch_seed: int | None = None,
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
     observation_hypers: ObservationSpaceHypers | None = None,
     initial_agent_state: dict[str, Any] | None = None,
+    optimizer_state: dict[str, Any] | None = None,
+    validation_games: set[int] | None = None,
+    continuation: dict[str, Any] | None = None,
     deadline_monotonic: float | None = None,
     log: bool = False,
 ) -> tuple[
@@ -360,11 +364,23 @@ def train_search_supervised(
         agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)
 
-    train_idx, val_idx = split_by_game(
-        dataset,
-        val_fraction=val_fraction,
-        seed=seed if split_seed is None else split_seed,
-    )
+    if optimizer_state is not None:
+        optimizer.load_state_dict(optimizer_state)
+        for group in optimizer.param_groups:
+            group["lr"] = lr
+    if validation_games is None:
+        train_idx, val_idx = split_by_game(
+            dataset,
+            val_fraction=val_fraction,
+            seed=seed if split_seed is None else split_seed,
+        )
+    else:
+        validation = np.isin(dataset["game_index"], list(validation_games))
+        train_idx, val_idx = np.flatnonzero(~validation), np.flatnonzero(validation)
+        if not len(train_idx) or not len(val_idx):
+            raise ValueError(
+                "whole-game training and validation partitions must be nonempty"
+            )
     value_usable, value_targets = value_targets_from_dataset(dataset, value_target_kind)
     initial_validation = evaluate_search_supervised(
         agent,
@@ -376,7 +392,7 @@ def train_search_supervised(
         batch_size=batch_size,
         device=dev,
     )
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed if minibatch_seed is None else minibatch_seed)
     history: list[SearchSupervisedEpochStats] = []
 
     for epoch in range(epochs):
@@ -390,6 +406,13 @@ def train_search_supervised(
         value_rows = 0
         total_loss_sum = 0.0
         for start in range(0, len(order), batch_size):
+            if (
+                deadline_monotonic is not None
+                and time.perf_counter() >= deadline_monotonic
+            ):
+                raise TimeoutError(
+                    "search-supervised training reached its wall deadline"
+                )
             batch = order[start : start + batch_size]
             obs = _batch_observations(dataset, batch, dev)
             logits, value_logits = agent.forward(obs)
@@ -448,4 +471,6 @@ def train_search_supervised(
                 flush=True,
             )
 
+    if continuation is not None:
+        continuation["optimizer_state"] = optimizer.state_dict()
     return agent, obs_space, initial_validation, history

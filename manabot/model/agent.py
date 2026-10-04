@@ -42,6 +42,12 @@ class Agent(nn.Module):
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = hypers.hidden_dim
 
+        self.semantic_cards = None
+        if hypers.semantic_pack is not None:
+            from .semantic_cards import SemanticCardEncoder
+
+            self.semantic_cards = SemanticCardEncoder(hypers.semantic_pack, embed_dim)
+
         # Set up typed object embeddings.
         self.player_embedding = ProjectionLayer(player_dim, embed_dim)
         self.card_embedding = ProjectionLayer(card_dim, embed_dim)
@@ -201,6 +207,12 @@ class Agent(nn.Module):
         enc_opp_player = self.player_embedding(obs["opponent_player"])
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
+        if self.semantic_cards is not None:
+            cards, known = self.semantic_cards(obs)
+            enc_agent_cards = enc_agent_cards + cards[:, 0]
+            enc_opp_cards = enc_opp_cards + cards[:, 1]
+            enc_agent_player = enc_agent_player + known[:, 0, None]
+            enc_opp_player = enc_opp_player + known[:, 1, None]
         enc_agent_perms = self.perm_embedding(obs["agent_permanents"])
         enc_opp_perms = self.perm_embedding(obs["opponent_permanents"])
         object_parts = [

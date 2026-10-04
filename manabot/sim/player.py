@@ -8,8 +8,6 @@ import torch
 import wandb
 
 # Local imports
-from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
 from manabot.infra.log import getLogger
 from manabot.model.agent import Agent
 
@@ -71,54 +69,10 @@ def load_model_from_wandb(
             )
 
         logger.info(f"Loading checkpoint from {checkpoint_path}")
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+        from manabot.sim.flat_mc import load_checkpoint_agent
 
-        # Debug: print the checkpoint keys
-        logger.info(f"Checkpoint keys: {list(checkpoint.keys())}")
-
-        # Look for model state dict with flexible key names
-        state_dict_key = None
-        for key in ["agent_state_dict", "model_state_dict", "state_dict"]:
-            if key in checkpoint:
-                state_dict_key = key
-                break
-
-        if state_dict_key is None:
-            raise ValueError(
-                f"Checkpoint does not contain a state dictionary. Keys found: {list(checkpoint.keys())}"
-            )
-
-        logger.info(f"Using state dictionary from key: {state_dict_key}")
-
-        assert "hypers" in checkpoint
-        logger.info("Found hyperparameters in checkpoint")
-        hypers_dict = checkpoint["hypers"]
-
-        assert "observation_hypers" in hypers_dict
-        obs_hypers = ObservationSpaceHypers(**hypers_dict["observation_hypers"])
-        logger.info("Using saved observation hyperparameters")
-
-        assert "agent_hypers" in hypers_dict
-        agent_hypers = AgentHypers(**hypers_dict["agent_hypers"])
-        logger.info(
-            f"Using saved agent hyperparameters (attention_on={agent_hypers.attention_on})"
-        )
-
-        # Create observation space and agent with the appropriate hyperparameters
-        obs_space = ObservationSpace(obs_hypers)
-        agent = Agent(obs_space, agent_hypers)
-        logger.info(
-            f"Created model with {'saved' if 'hypers' in checkpoint or 'agent_hypers' in checkpoint else 'default'} hyperparameters"
-        )
-
-        # Load model weights
-        agent.load_state_dict(checkpoint[state_dict_key])
-        agent.eval()
+        agent, _ = load_checkpoint_agent(checkpoint_path)
         agent = agent.to(device)
-
-        # See if we have information about training steps
-        if "global_step" in checkpoint:
-            logger.info(f"Model was trained for {checkpoint['global_step']} steps")
 
         logger.info("Successfully loaded model")
         return agent

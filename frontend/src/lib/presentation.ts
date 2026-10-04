@@ -8,7 +8,7 @@ import type {
   PresentationLabels,
   SubjectRef,
 } from './types';
-import curatedCombatToTurn from './fixtures/curated-combat-to-turn.json';
+import curatedCombatToTurn from './fixtures/curated-combat-to-turn-w4.json';
 
 export type {
   ObjectRenderId,

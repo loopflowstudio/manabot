@@ -10,11 +10,21 @@ ambiguity or safety-critical invariants, not substitute products.
 
 ## Learn decisions and current evidence
 
+- On 2026-10-04 Jack Heart authorized autonomous implementation/publication/
+  landing, with ETU-75 kept open for unmet empirical acceptance. Jack then
+  directed synchronization with main `3f297533`: w4 is the current rules world;
+  do not revive the older w3 plan. ETU-89 owns training regimes and consumes
+  the ordinary checkpoint writer/loader contract owned here. Merge `b104fe94`
+  preserves w4. Complete semantic-program and public known-hand inputs now
+  reach the ordinary Agent; mandatory full-setup bindings protect ordinary
+  writers/loaders and configured play/search consumers. Synthetic checkpoint
+  proof does not admit a retained trained challenger.
+
 [Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup)
 remains unfinished. The [durable Learn record](../../docs/rules/learn-lesson.md)
 preserves accepted decisions, dated proof limits and source history.
 
-- The human approved formal open-decklist sideboards on 2026-09-24: UR gets
+- The September reviewer (name unresolved) approved open-decklist sideboards on 2026-09-24: UR gets
   one each Firebending Lesson, It'll Quench Ya! and Accumulate Wisdom; GW gets
   one each Yip Yip! and Fancy Footwork. Preserve the 41/40-card main decks.
   Admission of an ordinary sideboard card is separate from Lesson eligibility.
@@ -26,13 +36,25 @@ preserves accepted decisions, dated proof limits and source history.
   Both search samplers must reserve those facts and weight residual deals,
   without exposing which identical copy was retrieved.
 - Mode-first controls, previews, Back and reconnect have real browser evidence.
-  On 2026-09-25 the human said “works. approved.” This accepts the demonstrated
+  On 2026-09-25 that reviewer said “works. approved.” This accepts the demonstrated
   working interaction; it supplies no missing per-attempt tapes and does not
   authorize publication or completion. Do not request duplicate acceptance.
-- Native/raw projection and bounded Learn kind/focus tests pass, but complete
-  policy semantics/knowledge, w3 ordinary checkpoints, configured Search,
-  reversed-seat demo and registered same-tape parity remain open. Full gates
-  are not green. All remain in ETU-75; no new substrate Tasks are needed.
+- On 2026-10-04 complete policy programs/knowledge, ordinary w4 bindings and
+  configured Search in both seats gained focused execution proof. The
+  prospectively registered v2 cohort passed all 16 games and 3,843 Commands
+  with 19 retrievals, 25 discard/draws and 14 declines. Final-source v3 also
+  passed all 16 cases after import-isolation and diagnostic repairs; its tapes
+  are byte-identical to v2, with zero state/consequence/viewer mismatches.
+  All receipts and the earlier unscored v1 registration remain retained.
+- Full gates are not green: the broad Python run had 813 passes and 30
+  failures; ten current-test/import failures were repaired with focused proof.
+  Twenty historical authority/advice and experiment checks remain incompatible.
+  In particular, frozen advice binds action ABI 3 / possible-world ABI 1,
+  versus current 6 / 2, and its retained checkpoint lacks the ordinary w4
+  binding. The repo gate explicitly preserves frozen advice failures as
+  delivery blockers; do not rewrite them to make the branch green.
+  ETU-75 stays open. No trained-challenger admission, missing human tapes,
+  strength or runtime-budget result is supplied by synthetic checkpoint tests.
 - Changed rules invalidate compatible-looking old evidence. Preserve frozen
   receipts and register all 16 seed/seat attempts before scoring the corrected
   world. Human interaction acceptance and consumer conformance are separate

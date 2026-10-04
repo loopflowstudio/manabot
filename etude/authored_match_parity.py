@@ -48,7 +48,7 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
-@dataclass(frozen=True)
+@dataclass
 class ParityDivergence(RuntimeError):
     surface: str
     revision: int
@@ -207,6 +207,10 @@ def _checkpoint(
         "semantic_event_cursor": env.semantic_event_cursor(),
         "ordered_consequences_sha256": _sha256(_canonical_bytes(events)),
         "viewer_state_sha256": _privacy_projection(env, surface, revision),
+        "viewer_observation_sha256": [
+            _sha256(_canonical_bytes(json.loads(env.semantic_observation_json(viewer))))
+            for viewer in (0, 1)
+        ],
     }
 
 
@@ -241,16 +245,23 @@ def _capture_object_candidate(
 
 
 def _run_engine(
-    surface: str, decisions: list[dict[str, Any]], *, prove_stale: bool = False
+    surface: str,
+    decisions: list[dict[str, Any]],
+    *,
+    prove_stale: bool = False,
+    config: trace_store.GameConfig | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    env = managym.Env(seed=0)
+    env = managym.Env(seed=0 if config is None else config.seed)
     observation, _ = env.reset(
-        [
+        config.to_rust()
+        if config is not None
+        else [
             managym.PlayerConfig("Hero", dict(server.UR_LESSONS_DECK)),
             managym.PlayerConfig("Villain", dict(server.GW_ALLIES_DECK)),
         ]
     )
     checkpoints = [_checkpoint(env, surface, 0, [])]
+    native_root_revision = json.loads(env.semantic_decision_frame_json())["revision"]
     stale_proof: dict[str, Any] | None = None
     captured_address: dict[str, Any] | None = None
     rendered_ref: dict[str, int] | None = None
@@ -267,6 +278,13 @@ def _run_engine(
             env.state_digest(),
         )
         frame = json.loads(env.semantic_decision_frame_json())
+        _equal(
+            surface,
+            revision,
+            "revision",
+            revision + native_root_revision,
+            frame["revision"],
+        )
         _equal(surface, revision, "actor", row["actor"], frame["actor"])
         _equal(
             surface, revision, "offer_count", row["offer_count"], len(frame["offers"])
@@ -404,9 +422,11 @@ def _run_engine(
         checkpoints.append(_checkpoint(env, surface, revision + 1, actual_events))
         observation = next_observation
 
-    _equal(surface, 132, "terminal", True, env.is_game_over())
-    _equal(surface, 132, "terminal_state", TERMINAL_STATE, env.state_digest())
-    return {"commands": 132, "checkpoints": checkpoints}, stale_proof
+    count = len(decisions)
+    _equal(surface, count, "terminal", True, env.is_game_over())
+    expected = TERMINAL_STATE if config is None else decisions[-1]["state"]["after"]
+    _equal(surface, count, "terminal_state", expected, env.state_digest())
+    return {"commands": count, "checkpoints": checkpoints}, stale_proof
 
 
 class _FrozenVillainPolicy:

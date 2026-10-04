@@ -102,6 +102,7 @@ def run_demo() -> dict[str, Any]:
             policy_value.observation_space,
             checkpoint_path,
             belief_schema=schema,
+            player_configs=env.match.to_rust(),
         )
         player, _ = make_player(
             {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=19

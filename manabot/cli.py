@@ -26,14 +26,36 @@ def _run_sim(preset: str, set_values: list[str]) -> None:
 
 @app.command("train")
 def train_command(
-    preset: str = typer.Option(DEFAULT_TRAIN_PRESET, help="Training preset name"),
+    preset: Optional[str] = typer.Option(None, help="Training preset name"),
+    regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
+    seed: Optional[int] = typer.Option(None, help="Regime execution seed"),
+    out: Optional[str] = typer.Option(None, help="New run directory"),
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
         help="Override config values with key.path=value (repeatable)",
     ),
 ) -> None:
-    _run_train(preset, set_values or [])
+    if regime:
+        if preset is not None or set_values:
+            raise typer.BadParameter(
+                "--regime cannot be combined with --preset or --set"
+            )
+        if out is None:
+            raise typer.BadParameter("--regime requires --out")
+        from pathlib import Path
+
+        from manabot.training.execution import execute_regime
+        from manabot.training.models import TrainingRegime
+        from manabot.verify.store import VerifyStore
+
+        recipe = TrainingRegime.model_validate_json(Path(regime).read_text())
+        with VerifyStore(Path(out).parent / "training.sqlite") as store:
+            execute_regime(recipe, 197 if seed is None else seed, out, store)
+    else:
+        if out is not None or seed is not None:
+            raise typer.BadParameter("--out and --seed require --regime")
+        _run_train(preset or DEFAULT_TRAIN_PRESET, set_values or [])
 
 
 @app.command("sim")

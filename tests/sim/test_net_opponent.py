@@ -37,6 +37,11 @@ def _make_agent():
 
 
 def _check_batch(batch, num_steps, num_envs):
+    shapes = ObservationSpace().shapes
+    assert batch.obs.keys() == batch.next_obs.keys() == shapes.keys()
+    for key, shape in shapes.items():
+        assert batch.obs[key].shape == (num_steps, num_envs, *shape)
+        assert batch.next_obs[key].shape == (num_envs, *shape)
     assert batch.actions.shape == (num_steps, num_envs)
     assert batch.logprobs.shape == (num_steps, num_envs)
     assert batch.rewards.shape == (num_steps, num_envs)
@@ -88,3 +93,86 @@ def test_collector_frozen_opponent_and_streaming_continuity():
 def test_collector_requires_opponent_agent_for_frozen():
     with pytest.raises(ValueError):
         _make_collector("frozen", opponent_agent=None)
+
+
+def test_terminal_credit_and_bootstrap():
+    import torch
+
+    from manabot.sim.net_opponent import transition_gae
+
+    rewards = torch.tensor([[0.0], [1.0], [-1.0], [0.0]])
+    advantages, returns = transition_gae(
+        rewards,
+        torch.zeros_like(rewards),
+        torch.tensor([[False], [True], [True], [False]]),
+        torch.tensor([0.4]),
+        1.0,
+        1.0,
+    )
+    torch.testing.assert_close(returns[:, 0], torch.tensor([1.0, 1.0, -1.0, 0.4]))
+
+
+def test_update_boundary_has_no_banked_or_sampled_actions():
+    collector = _make_collector("self")
+    agent = _make_agent()
+    first = collector.collect(agent, 7)
+    assert collector.stats.learner_transitions == 28
+    assert all(not stream for stream in collector._streams)
+    assert all(pending is None for pending in collector._pending)
+    for key in first.next_obs:
+        np.testing.assert_array_equal(first.next_obs[key], collector._buffers[key])
+    collector.collect(agent, 7)
+    assert collector.stats.learner_transitions == 56
+
+
+def test_paused_buffer_rows_are_unchanged_and_clear_step_flags():
+    collector = _make_collector("self", num_envs=2)
+    before = {k: v[0].copy() for k, v in collector._buffers.items()}
+    collector._buffers["terminated"][0] = 1
+    collector._buffers["rewards"][0] = 7
+    collector._env.step_into_buffers([-999, 0], [False, True])
+    for key in collector._buffers:
+        if key in {"terminated", "truncated", "rewards"}:
+            assert collector._buffers[key][0] == 0
+        else:
+            np.testing.assert_array_equal(collector._buffers[key][0], before[key])
+
+
+def test_collection_probabilities_and_bootstrap_survive_weight_change():
+    import torch
+
+    collector = _make_collector("self")
+    agent = _make_agent()
+    first = collector.collect(agent, 7)
+    first_probabilities = first.probabilities.copy()
+    with torch.no_grad():
+        agent.policy_head[-1].weight.mul_(-5)
+        agent.value_head[-1].bias.add_(3.0)
+    second = collector.collect(agent, 7)
+    # Nonterminal streams resume at precisely the bootstrap state, under new
+    # weights. Terminal streams may route the new episode's opponent first.
+    for key in second.obs:
+        np.testing.assert_array_equal(
+            second.obs[key][0, ~first.next_done], first.next_obs[key][~first.next_done]
+        )
+    flat = {
+        k: torch.as_tensor(v.reshape((-1,) + v.shape[2:]))
+        for k, v in second.obs.items()
+    }
+    with torch.no_grad():
+        logits, values = agent(flat)
+    np.testing.assert_allclose(
+        second.values.flatten(), values.numpy().flatten(), atol=1e-5
+    )
+    np.testing.assert_allclose(
+        second.probabilities.reshape(logits.shape),
+        logits.softmax(-1).numpy(),
+        atol=1e-6,
+    )
+    selected = np.take_along_axis(
+        second.probabilities, second.actions[..., None], axis=-1
+    )[..., 0]
+    np.testing.assert_allclose(second.logprobs, np.log(selected), atol=1e-6)
+    assert np.all(second.probabilities[second.obs["actions_valid"] == 0] == 0)
+    np.testing.assert_array_equal(first.probabilities, first_probabilities)
+    assert collector.stats.learner_transitions == 56

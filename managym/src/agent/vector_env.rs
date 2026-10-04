@@ -152,7 +152,12 @@ impl VectorEnv {
         })
     }
 
-    pub fn step_into<F>(&mut self, actions: &[i64], write: F) -> Result<Vec<InfoDict>, AgentError>
+    pub fn step_into<F>(
+        &mut self,
+        actions: &[i64],
+        active: Option<&[bool]>,
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
@@ -163,7 +168,13 @@ impl VectorEnv {
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
+        if let Some(mask) = active {
+            self.validate_actions_len(mask.len())?;
+        }
         self.for_each_env(|env_index, env, next_seed| {
+            if active.is_some_and(|mask| !mask[env_index]) {
+                return Ok(InfoDict::new());
+            }
             let action = actions[env_index];
             let result = Self::step_with_autoreset_on_env(
                 env,
@@ -463,9 +474,32 @@ mod tests {
         assert_eq!(reset_infos.len(), 3);
 
         let step_infos = env
-            .step_into(&[0, 0, 0], |_, _, _, _, _| Ok(()))
+            .step_into(&[0, 0, 0], None, |_, _, _, _, _| Ok(()))
             .expect("step_into should succeed");
         assert_eq!(step_infos.len(), 3);
+    }
+
+    #[test]
+    fn masked_step_preserves_paused_stream_and_ignores_its_action() {
+        let mut paused = VectorEnv::new(2, 99, true, OpponentPolicy::Passive);
+        let mut control = VectorEnv::new(2, 99, true, OpponentPolicy::Passive);
+        paused.reset_all(sample_player_configs()).unwrap();
+        control.reset_all(sample_player_configs()).unwrap();
+        paused
+            .step_into(&[-999, 0], Some(&[false, true]), |index, _, _, _, _| {
+                assert_eq!(index, 1);
+                Ok(())
+            })
+            .unwrap();
+        let actual = paused.step(&[0, 0]).unwrap();
+        let expected = control.step(&[0, 0]).unwrap();
+        assert_eq!(
+            format!("{:?}", actual[0].obs),
+            format!("{:?}", expected[0].obs)
+        );
+        assert!(paused
+            .step_into(&[0, 0], Some(&[true]), |_, _, _, _, _| Ok(()))
+            .is_err());
     }
 
     #[test]
@@ -475,7 +509,7 @@ mod tests {
             .expect("reset_all_into should succeed");
 
         let err = env
-            .step_into(&[0, 0, 0], |env_index, _, _, _, _| {
+            .step_into(&[0, 0, 0], None, |env_index, _, _, _, _| {
                 if env_index >= 1 {
                     return Err(AgentError(format!("env error {env_index}")));
                 }

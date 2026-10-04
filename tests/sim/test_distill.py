@@ -70,7 +70,9 @@ def test_split_by_game_has_no_leakage(tmp_path):
     assert train_games.isdisjoint(val_games)
 
 
-def test_train_bc_learns_and_checkpoint_roundtrips(tmp_path):
+def test_train_bc_learns_and_checkpoint_roundtrips(
+    tmp_path, interactive_player_configs
+):
     dataset = _tiny_dataset(tmp_path, num_games=4)
     agent, obs_space, history = train_bc(
         dataset,
@@ -85,7 +87,13 @@ def test_train_bc_learns_and_checkpoint_roundtrips(tmp_path):
     assert 0.0 <= history[-1].val_accuracy <= 1.0
 
     path = tmp_path / "bc_policy.pt"
-    save_bc_checkpoint(agent, obs_space, path, extra={"lr": 1e-3})
+    save_bc_checkpoint(
+        agent,
+        obs_space,
+        path,
+        player_configs=interactive_player_configs,
+        extra={"lr": 1e-3},
+    )
     loaded, loaded_space = load_checkpoint_agent(str(path))
     assert loaded_space == obs_space
     # Loaded policy reproduces the trained policy's logits exactly.

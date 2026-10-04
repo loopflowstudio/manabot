@@ -104,6 +104,7 @@ class ExperimentHypers(BaseHypersModel):
 
 
 class AgentHypers(BaseHypersModel):
+    semantic_pack: str | None = None
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.

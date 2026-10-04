@@ -25,6 +25,15 @@ are regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any shape change.
 
+ETU-75 completes the ordinary policy input binding against **w4**, preserving
+the native rules world from ETU-88. The base feature widths above remain
+unchanged. Additional derived `semantic_cards` (two sides × card capacity) and
+`known_hand` (two sides × card capacity × definition/count) arrays join the
+already-public native projection to complete typed programs. Ordinary policy
+input version 1 binds these arrays and the learning schema explicitly; earlier
+unbound w4 files are rejected, not treated as equivalent policies. Historical
+w3 and w4 results retain their original input contracts and evidence limits.
+
 ## w4: complete UR additions
 
 Jack Heart accepted a new world on 2026-09-29 for ETU-88. This world adds

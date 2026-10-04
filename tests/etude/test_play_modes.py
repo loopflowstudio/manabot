@@ -22,7 +22,7 @@ MAX_HERO_MOVES = 3000
 CURATED_COMBAT_FIXTURE = json.loads(
     (
         Path(__file__).parents[2]
-        / "frontend/src/lib/fixtures/curated-combat-to-turn.json"
+        / "frontend/src/lib/fixtures/curated-combat-to-turn-w4.json"
     ).read_text(encoding="utf-8")
 )
 
@@ -163,24 +163,24 @@ def test_full_game_vs_random_villain(isolated_traces):
 
 def _write_tiny_checkpoint(path) -> None:
     """Write a minimal (untrained) Agent checkpoint in the training format."""
-    import torch
-
     from manabot.env import ObservationSpace
     from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
     from manabot.model.agent import Agent
 
     obs_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentHypers()
+    agent_hypers = AgentHypers(semantic_pack="ur-lessons-vs-gw-allies")
     agent = Agent(ObservationSpace(obs_hypers), agent_hypers)
-    torch.save(
-        {
-            "hypers": {
-                "observation_hypers": obs_hypers.model_dump(),
-                "agent_hypers": agent_hypers.model_dump(),
-            },
-            "model_state_dict": agent.state_dict(),
-        },
+    from manabot.sim.distill import save_bc_checkpoint
+    import managym
+
+    save_bc_checkpoint(
+        agent,
+        agent.observation_space,
         path,
+        player_configs=[
+            managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
+            for key in ("ur_lessons", "gw_allies")
+        ],
     )
 
 

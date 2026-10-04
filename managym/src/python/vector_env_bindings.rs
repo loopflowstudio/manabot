@@ -40,6 +40,8 @@ type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 
 #[cfg(feature = "python")]
 struct ObservationBuffers {
+    semantic_cards: Py<PyAny>,
+    known_hand: Py<PyAny>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -155,12 +157,34 @@ impl PyVectorEnv {
         })
     }
 
-    fn step_into_buffers(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<()> {
+    #[pyo3(signature = (actions, active=None))]
+    fn step_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        actions: Vec<i64>,
+        active: Option<Vec<bool>>,
+    ) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
-            inner.step_into(&actions, |env_index, obs, reward, terminated, truncated| {
-                write_buffers
-                    .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
-            })
+            if let Some(mask) = &active {
+                if mask.len() != inner.len() {
+                    return Err(AgentError(
+                        "active mask length must match environments".into(),
+                    ));
+                }
+                for (index, enabled) in mask.iter().enumerate() {
+                    if !enabled {
+                        write_buffers.write_step_state(index, 0.0, false, false)?;
+                    }
+                }
+            }
+            inner.step_into(
+                &actions,
+                active.as_deref(),
+                |env_index, obs, reward, terminated, truncated| {
+                    write_buffers
+                        .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                },
+            )
         })
     }
 
@@ -191,6 +215,20 @@ fn read_observation_buffers(
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
     Ok(ObservationBuffers {
+        known_hand: require_numpy_array(
+            buffers,
+            "known_hand",
+            &[n, 2, c.max_cards_per_player, 2],
+            "float32",
+        )?
+        .unbind(),
+        semantic_cards: require_numpy_array(
+            buffers,
+            "semantic_cards",
+            &[n, 2, c.max_cards_per_player],
+            "float32",
+        )?
+        .unbind(),
         agent_player: require_numpy_array(buffers, "agent_player", &[n, 1, PLAYER_DIM], "float32")?
             .unbind(),
         opponent_player: require_numpy_array(
@@ -571,6 +609,8 @@ impl<T> SendSlice<T> {
 #[cfg(feature = "python")]
 #[derive(Clone, Copy)]
 struct SendObservationFieldSlices {
+    semantic_cards: SendSlice<f32>,
+    known_hand: SendSlice<f32>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -597,6 +637,10 @@ impl SendObservationFieldSlices {
         env_index: usize,
         config: &ObservationEncoderConfig,
     ) -> Result<EncodedObservationMut<'_>, AgentError> {
+        let semantic_cards_len = 2 * config.max_cards_per_player;
+        let semantic_cards_ptr = self.semantic_cards.row_ptr(env_index, semantic_cards_len)?;
+        let known_hand_len = 4 * config.max_cards_per_player;
+        let known_hand_ptr = self.known_hand.row_ptr(env_index, known_hand_len)?;
         let cards_len = config.cards_len();
         let permanents_len = config.permanents_len();
         let actions_len = config.actions_len();
@@ -631,6 +675,12 @@ impl SendObservationFieldSlices {
         let events_valid_ptr = self.events_valid.row_ptr(env_index, config.max_events)?;
 
         Ok(EncodedObservationMut {
+            // SAFETY: each call uses disjoint per-env rows.
+            known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
+            // SAFETY: each call uses disjoint per-env rows.
+            semantic_cards: unsafe {
+                slice::from_raw_parts_mut(semantic_cards_ptr, semantic_cards_len)
+            },
             // SAFETY: each call uses disjoint per-env rows.
             agent_player: unsafe { slice::from_raw_parts_mut(agent_player_ptr, PLAYER_DIM) },
             // SAFETY: each call uses disjoint per-env rows.
@@ -752,6 +802,9 @@ fn with_send_write_buffers<R>(
     buffers: &ObservationBuffers,
     f: impl FnOnce(SendWriteBuffers) -> PyResult<R>,
 ) -> PyResult<R> {
+    let semantic_cards_buffer =
+        typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
+    let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
@@ -791,6 +844,8 @@ fn with_send_write_buffers<R>(
     let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
 
     let field_slices = SendObservationFieldSlices {
+        known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
+        semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
         opponent_player: send_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?,
         agent_cards: send_slice_from_buffer(py, &agent_cards_buffer, "agent_cards")?,

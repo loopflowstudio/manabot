@@ -205,6 +205,7 @@ def train(out: Path, recipe: dict) -> None:
     from manabot.sim.distill import load_shards, save_bc_checkpoint
     from manabot.sim.flat_mc import load_checkpoint_agent
     from manabot.sim.search_supervised import train_search_supervised
+    import managym
 
     torch.set_num_threads(1)
     world = recipe["world"]
@@ -263,7 +264,15 @@ def train(out: Path, recipe: dict) -> None:
     write_json(out / "phases.json", phases)
     phase_start = time.monotonic()
     checkpoint = out / "candidate.pt"
-    save_bc_checkpoint(agent, space, checkpoint, extra={"recipe": recipe})
+    save_bc_checkpoint(
+        agent,
+        space,
+        checkpoint,
+        player_configs=[
+            managym.authored_deck_setup(PACK_KEY, key) for key in deck_order(0)
+        ],
+        extra={"recipe": recipe},
+    )
     loaded, _ = load_checkpoint_agent(str(checkpoint))
     sample = {
         key: torch.as_tensor(value[:2])
@@ -471,7 +480,12 @@ def main() -> int:
         "value_target": "terminal_outcome",
         "policy_weight": 1.0,
         "value_weight": 0.0,
-        "agent": {"hidden_dim": 64, "num_attention_heads": 4, "attention_on": True},
+        "agent": {
+            "hidden_dim": 64,
+            "num_attention_heads": 4,
+            "attention_on": True,
+            "semantic_pack": "ur-lessons-vs-gw-allies",
+        },
         "batch_size": 128,
         "learning_rate": 0.001,
         "validation_fraction": 0.1,

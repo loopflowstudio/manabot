@@ -108,8 +108,11 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
     configured stop; everything else was auto-passed and marked in the
     trace."""
     surfaced: list[tuple[str, str | None]] = []
+    surfaced_decisions = []
 
     def observe(payload):
+        if payload["type"] == "observation":
+            surfaced_decisions.append(payload["action_space"])
         if payload["type"] == "observation" and _is_priority_window(payload):
             surfaced.append((_turn_side(payload), _stop_key(payload)))
 
@@ -141,7 +144,7 @@ def test_default_stops_surface_only_configured_windows(isolated_traces):
     assert all(e["action_description"] == "Pass priority" for e in auto_events), (
         "Auto events must all be passes"
     )
-    assert len(clicked_events) == len(surfaced) + 0, (
+    assert len(clicked_events) == len(surfaced_decisions), (
         "Every clicked decision corresponds to a surfaced window"
     )
     assert all(not e["auto"] for e in trace["events"] if e["actor"] == "villain")

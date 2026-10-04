@@ -95,6 +95,7 @@ def generate_selfplay_shard(
     max_steps_per_game: int = 5000,
     round_index: int = 0,
     dataset_run_fingerprint: str | None = None,
+    deadline_monotonic: float | None = None,
     match_hypers: MatchHypers | None = None,
     observation_hypers: ObservationSpaceHypers | None = None,
 ) -> dict[str, Any]:
@@ -159,16 +160,24 @@ def generate_selfplay_shard(
     winners_per_decision: list[list[int]] = []
     steps_per_game: list[int] = []
     winners: list[int | None] = []
+    terminated_games: list[bool] = []
+    truncated_games: list[bool] = []
 
     wall_start = time.perf_counter()
     for i in range(num_games):
         game_index = game_offset + i
         obs, _ = env.reset(seed=seed + game_index)
         done = False
+        terminated, truncated = False, False
         steps = 0
         info: dict[str, Any] = {}
         game_decisions: list[int] = []
         while not done and steps < max_steps_per_game:
+            if (
+                deadline_monotonic is not None
+                and time.perf_counter() >= deadline_monotonic
+            ):
+                raise TimeoutError("teacher collection exceeded training deadline")
             raw_obs = env.last_raw_obs
             acting = int(raw_obs.agent.player_index)
             num_legals.append(len(raw_obs.action_space.actions))
@@ -213,6 +222,8 @@ def generate_selfplay_shard(
             done = bool(terminated or truncated)
         winner = winner_from_info_or_obs(info, env.last_raw_obs) if done else None
         winners.append(winner)
+        terminated_games.append(bool(terminated))
+        truncated_games.append(bool(truncated or not done))
         winners_per_decision.append(game_decisions)
         steps_per_game.append(steps)
     wall_seconds = time.perf_counter() - wall_start
@@ -319,6 +330,8 @@ def generate_selfplay_shard(
         "value_target_kind": provenance["value_target_kind"],
         "steps_per_game": steps_per_game,
         "winners": [w if w is not None else -1 for w in winners],
+        "terminated": terminated_games,
+        "truncated": truncated_games,
         "out_path": str(out_path) if out_path is not None else None,
     }
 
@@ -606,6 +619,7 @@ def save_bc_checkpoint(
     obs_space: ObservationSpace,
     path: str | Path,
     *,
+    player_configs,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
@@ -615,9 +629,12 @@ def save_bc_checkpoint(
     the BC policy plugs into every existing matchup/evaluation harness.
     """
 
+    from manabot.model.world import checkpoint_world, validate_policy_input
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
+        "world_binding": checkpoint_world(player_configs, obs_space),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
@@ -627,6 +644,7 @@ def save_bc_checkpoint(
         },
         "bc": extra or {},
     }
+    validate_policy_input(agent, checkpoint["world_binding"])
     checkpoint.update(
         belief_checkpoint_fields(
             belief_schema,

@@ -108,8 +108,7 @@ def _submission(offer: dict) -> dict:
 
 def test_historical_address_forks_executes_structured_command_and_returns(tmp_path):
     session, replay = _completed_session(tmp_path)
-    row = next(row for row in replay.decisions if row.viewer == 0)
-    address = ReplayDecisionAddress.from_decision(replay, row).serialize()
+    row, address, _, _ = _first_cast(session, replay)
     recorded_replay = json.dumps(
         session.trace.canonical_replay, sort_keys=True, separators=(",", ":")
     )
@@ -217,7 +216,7 @@ def test_submission_failures_are_typed_one_shot_and_zero_fallback(tmp_path):
     returned = branch.return_to_recorded()
 
     assert engine_actions == 1
-    assert not observation.opponent_cards
+    assert all(int(card.zone) != 1 for card in observation.opponent_cards)
     assert returned.source_digest == baseline.source_digest
     assert returned.execution.published_offer_sets == 2
     assert returned.execution.accepted_commands == 1
