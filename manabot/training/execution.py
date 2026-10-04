@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import socket
 import subprocess
 import time
 from typing import Any
@@ -39,7 +40,9 @@ from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sh
 from manabot.verify.store import VerifyStore
 import managym
 
+from .clock import watchdog_seconds
 from .models import (
+    ArtifactReference,
     CollectBelief,
     CollectSearch,
     StageRecord,
@@ -50,9 +53,16 @@ from .models import (
     TrainSupervised,
 )
 from .objectives import update_ema, update_iteration
+from .recovery import (
+    attempt_lock,
+    load_update,
+    restore_learning,
+    save_update,
+    settle_orphan,
+)
 
 
-def atomic_json(path: Path | str, value: object) -> None:
+def atomic_json(path: str | Path, value: object) -> None:
     path = Path(path)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(
@@ -62,7 +72,7 @@ def atomic_json(path: Path | str, value: object) -> None:
 
 
 def export_training_run(
-    run_id: str, store: VerifyStore, out: Path | str
+    run_id: str, store: VerifyStore, out: str | Path
 ) -> TrainingRun:
     run = store.training_run(run_id)
     atomic_json(Path(out) / "run.json", run.model_dump(mode="json"))
@@ -81,15 +91,68 @@ def validate_regime(regime: TrainingRegime | dict[str, Any]) -> TrainingRegime:
 
 
 def execute_regime(
-    regime: TrainingRegime | dict[str, Any],
+    regime: TrainingRegime,
     seed: int,
-    out: Path | str,
+    out: str | Path,
     store: VerifyStore,
+    *,
+    resume_from: str | None = None,
+) -> TrainingRun:
+    """Execute under a local lease, including admission and crash settlement."""
+    regime = validate_regime(regime)
+    destination = Path(out).resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    lease = destination.with_name(destination.name + ".writer.lock")
+    with ExitStack() as leases:
+        leases.enter_context(attempt_lock(lease))
+        if resume_from is not None:
+            parent = store.training_run(resume_from)
+            if parent.recovery_lock_path is None:
+                raise ValueError("attempt has no recovery writer lease")
+            leases.enter_context(
+                attempt_lock(Path(parent.recovery_lock_path), existing=True)
+            )
+            if parent.seed != seed or parent.regime_digest != canonical_sha256(
+                regime.model_dump(mode="json")
+            ):
+                raise ValueError("recovery recipe or seed mismatch")
+            load_update(parent)
+            settled = settle_orphan(parent)
+            if settled != parent:
+                # Preserve the old run.json and snapshots. The canonical record
+                # explains settlement, including the explicitly estimated cost.
+                store.save_training_run(settled)
+        return _execute_regime(
+            regime, seed, destination, store, resume_from=resume_from
+        )
+
+
+def _execute_regime(
+    regime: TrainingRegime,
+    seed: int,
+    out: str | Path,
+    store: VerifyStore,
+    *,
+    resume_from: str | None = None,
 ) -> TrainingRun:
     regime = validate_regime(regime)
+    parent = store.training_run(resume_from) if resume_from is not None else None
+    if parent is not None:
+        if parent.status not in {"failed", "interrupted"}:
+            raise ValueError(
+                "recovery requires a stopped failed or interrupted attempt"
+            )
+        if (
+            regime.recovery_max_microsteps is None
+            or parent.seed != seed
+            or parent.regime_digest != canonical_sha256(regime.model_dump(mode="json"))
+        ):
+            raise ValueError("recovery recipe or seed mismatch")
+    snapshot = load_update(parent) if parent is not None else None
     out = Path(out).resolve()
     out.mkdir(parents=True, exist_ok=False)
     start = time.perf_counter()
+    watchdog_start = watchdog_seconds()
     seeds = {
         name: seed + offset
         for name, offset in (
@@ -109,8 +172,22 @@ def execute_regime(
         seed_streams=seeds,
         identities={},
         status="running",
+        recovery_lock_path=str(out.with_name(out.name + ".writer.lock")),
+        recovery_host=socket.gethostname(),
+        last_recorded_wall_seconds=time.time(),
+        parent_run_id=parent.id if parent is not None else None,
+        prior_seconds=parent.prior_seconds + parent.seconds
+        if parent is not None
+        else 0,
+        prior_watchdog_seconds=(parent.prior_watchdog_seconds + parent.watchdog_seconds)
+        if parent is not None
+        else 0,
+        recovery_artifact=parent.recovery_artifact if parent is not None else None,
     )
-    store.save_training_run(run)
+    if parent is None:
+        store.save_training_run(run)
+    else:
+        store.claim_training_recovery(parent.id, run)
     outputs = {}
     self_play_session = None
     resources = ExitStack()
@@ -118,10 +195,12 @@ def execute_regime(
 
     def persist() -> None:
         run.seconds = time.perf_counter() - start
+        run.watchdog_seconds = watchdog_seconds() - watchdog_start
+        run.last_recorded_wall_seconds = time.time()
         store.save_training_run(run)
         export_training_run(run.id, store, out)
 
-    def artifact(path: Path) -> dict[str, str | int]:
+    def artifact(path: Path) -> ArtifactReference:
         return {
             "path": str(path),
             "sha256": file_sha256(path),
@@ -149,21 +228,52 @@ def execute_regime(
             ).strip(),
         )
         run.identities = identities
+        if snapshot is not None and identities != snapshot.identities:
+            raise ValueError("recovery runtime/source identity mismatch")
         run.setup_seconds = time.perf_counter() - start
         persist()
         for stage in regime.stages:
-            record = StageRecord(id=stage.id)
+            record = (
+                snapshot.record.model_copy(deep=True)
+                if snapshot is not None
+                else StageRecord(id=stage.id)
+            )
+            record.status = "running"
+            record.error = None
+            if snapshot is not None:
+                # Counts describe the continued scientific trajectory; timing
+                # describes this attempt only. Prior attempt costs live on run.
+                for timing in (
+                    "seconds",
+                    "collection_seconds",
+                    "learning_seconds",
+                    "export_seconds",
+                    "cpu_seconds",
+                ):
+                    setattr(record, timing, 0.0)
+                record.cumulative_seconds = None
             run.stages.append(record)
             stage_start = time.perf_counter()
             cpu_start = time.process_time()
             deadline = min(
-                start + regime.wall_seconds, stage_start + stage.execution.wall_seconds
+                start + regime.wall_seconds - run.prior_watchdog_seconds,
+                stage_start + stage.execution.wall_seconds - run.prior_watchdog_seconds,
             )
             phase = "collection_seconds"
             torch.set_num_threads(stage.execution.threads)
 
             def check() -> None:
-                if time.perf_counter() >= deadline:
+                charged = (
+                    run.prior_watchdog_seconds + watchdog_seconds() - watchdog_start
+                )
+                if (
+                    time.perf_counter() >= deadline
+                    or charged >= regime.wall_seconds
+                    or (
+                        regime.recovery_max_microsteps is not None
+                        and charged >= stage.execution.wall_seconds
+                    )
+                ):
                     raise TimeoutError("training resource wall deadline exceeded")
                 process = psutil.Process()
                 memory = process.memory_info().rss + sum(
@@ -310,6 +420,7 @@ def execute_regime(
                         num_envs=stage.streams,
                         seed=seeds["collection"],
                         opponent_mode="self",
+                        recovery_max_microsteps=regime.recovery_max_microsteps,
                     )
                     experiment = Experiment(
                         ExperimentHypers(
@@ -333,12 +444,27 @@ def execute_regime(
                     iteration = 0
                 before = deepcopy(trainer.collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
-                for _ in range(stage.updates):
+                first_update = 0
+                if snapshot is not None:
+                    tick = time.perf_counter()
+                    trainer.collector.restore(snapshot.collector, check)
+                    restore_learning(snapshot, trainer, ema, rng)
+                    iteration = first_update = snapshot.iteration
+                    # Restored counts are committed scientific work; failed work
+                    # remains in the parent attempt and its cost stays charged.
+                    before = type(before)()
+                    run.recovery_seconds = time.perf_counter() - tick
+                for update_index in range(first_update, stage.updates):
                     check()
                     tick = time.perf_counter()
                     phase = "collection_seconds"
                     batch = trainer.collector.collect(
-                        trainer.agent, stage.transitions, deadline_monotonic=deadline
+                        trainer.agent,
+                        stage.transitions,
+                        deadline_monotonic=deadline,
+                        check=check
+                        if regime.recovery_max_microsteps is not None
+                        else None,
                     )
                     record.collection_seconds += time.perf_counter() - tick
                     check()
@@ -348,10 +474,13 @@ def execute_regime(
                         trainer,
                         batch,
                         stage.learning,
-                        (time.perf_counter() - start) / regime.wall_seconds,
+                        update_index / stage.updates
+                        if regime.schedule_clock == "iteration_fraction"
+                        else (time.perf_counter() - start) / regime.wall_seconds,
                         rng,
                         iteration=iteration + 1,
                     )
+                    diagnostic["schedule_clock"] = regime.schedule_clock
                     iteration += 1
                     if ema is not None:
                         update_ema(ema, trainer.agent, stage.learning.ema)
@@ -366,6 +495,12 @@ def execute_regime(
                         trainer.collector.stats.learner_transitions
                         - before.learner_transitions
                     )
+                    if regime.recovery_max_microsteps is not None:
+                        tick = time.perf_counter()
+                        target = out / f"update-{iteration:08d}.pt"
+                        save_update(target, trainer, ema, rng, iteration, record, run)
+                        run.recovery_artifact = artifact(target)
+                        record.export_seconds += time.perf_counter() - tick
                     persist()
                 self_play_session = (trainer, ema, iteration)
                 agent = trainer.agent
@@ -450,13 +585,13 @@ def execute_regime(
                 )
                 os.replace(optimizer_path.with_suffix(".tmp"), optimizer_path)
                 record.artifacts["optimizer"] = artifact(optimizer_path)
-                record.export_seconds = time.perf_counter() - tick
+                record.export_seconds += time.perf_counter() - tick
             check()
             record.seconds = time.perf_counter() - stage_start
             record.cpu_seconds = time.process_time() - cpu_start
             record.status = "completed"
             # Freeze the admission cost; later persistence belongs to later outputs.
-            record.cumulative_seconds = time.perf_counter() - start
+            record.cumulative_seconds = run.prior_seconds + time.perf_counter() - start
             persist()
         completed_models = [
             item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts
@@ -486,6 +621,8 @@ def execute_regime(
             )
             setattr(record, phase, getattr(record, phase) + unaccounted)
         run.seconds = time.perf_counter() - start
+        run.watchdog_seconds = watchdog_seconds() - watchdog_start
+        run.last_recorded_wall_seconds = time.time()
         store.save_training_run(run)
         try:
             export_training_run(run.id, store, out)

@@ -28,6 +28,8 @@ Design notes, kept simple and honest:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 import time
 from typing import Any, Dict
@@ -122,6 +124,21 @@ class CollectorStats:
         }
 
 
+@dataclass
+class CollectorSnapshot:
+    """Private training state. Replay is native execution, not policy inference.
+
+    Journal rows contain [action per stream] and [active per stream]. The
+    native constructor seed plus every vector step also restores auto-reset RNG.
+    Only empty transition buffers at update boundaries may be snapshotted.
+    """
+
+    journal: list[tuple[list[int], list[bool]]]
+    buffers: dict[str, np.ndarray]
+    sampling_rng: torch.Tensor
+    stats: CollectorStats
+
+
 _ACTION_TYPE_NAMES = {int(member): member.name.lower() for member in ActionEnum}
 
 
@@ -149,6 +166,7 @@ class SeatRoutedCollector:
         opponent_mode: str = "random",
         opponent_agent: Agent | None = None,
         device: str = "cpu",
+        recovery_max_microsteps: int | None = None,
     ) -> None:
         if opponent_mode not in OPPONENT_MODES:
             raise ValueError(
@@ -164,6 +182,10 @@ class SeatRoutedCollector:
         self.opponent_mode = opponent_mode
         self.device = torch.device(device)
         self.stats = CollectorStats()
+        if recovery_max_microsteps is not None and opponent_mode != "self":
+            raise ValueError("recovery supports current-self opponents only")
+        self._recovery_limit = recovery_max_microsteps
+        self._journal: list[tuple[list[int], list[bool]]] = []
 
         self._env = managym.VectorEnv(
             num_envs=num_envs,
@@ -194,6 +216,35 @@ class SeatRoutedCollector:
 
         self._win_reward = float(reward.hypers.win_reward)
         self._lose_reward = float(reward.hypers.lose_reward)
+
+    def snapshot(self) -> CollectorSnapshot:
+        """Capture a completed update boundary, including native RNG replay."""
+        if self._recovery_limit is None:
+            raise ValueError("collector recovery is disabled")
+        if any(self._streams) or any(p is not None for p in self._pending):
+            raise ValueError("collector snapshot requires an update boundary")
+        return CollectorSnapshot(
+            deepcopy(self._journal),
+            {key: value.copy() for key, value in self._buffers.items()},
+            self._self_rng.get_state().clone(),
+            deepcopy(self.stats),
+        )
+
+    def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
+        """Replay into a fresh collector; reject divergence before any learning."""
+        if self.stats.micro_steps or self._journal:
+            raise ValueError("restore requires a fresh collector")
+        if self._recovery_limit is None or state.stats.micro_steps > self._recovery_limit:
+            raise ValueError("collector replay exceeds recovery bound")
+        for actions, active in state.journal:
+            check()
+            self._env.step_into_buffers(actions, active)
+        for key, expected in state.buffers.items():
+            if not np.array_equal(self._buffers[key], expected):
+                raise ValueError(f"collector replay diverged: {key}")
+        self._journal = deepcopy(state.journal)
+        self._self_rng.set_state(state.sampling_rng)
+        self.stats = deepcopy(state.stats)
 
     # -- opponent routing -----------------------------------------------------
 
@@ -234,7 +285,8 @@ class SeatRoutedCollector:
     # -- collection loop ------------------------------------------------------
 
     def collect(
-        self, agent: Agent, num_steps: int, *, deadline_monotonic: float | None = None
+        self, agent: Agent, num_steps: int, *, deadline_monotonic: float | None = None,
+        check: Callable[[], None] | None = None
     ) -> RolloutBatch:
         """Advance all streams until every env has ``num_steps`` finalized
         learner transitions, stopping before the bootstrap action is sampled."""
@@ -247,6 +299,8 @@ class SeatRoutedCollector:
         if num_steps < 1:
             raise ValueError("num_steps must be positive")
         while True:
+            if check is not None:
+                check()
             if (
                 deadline_monotonic is not None
                 and time.perf_counter() >= deadline_monotonic
@@ -312,6 +366,10 @@ class SeatRoutedCollector:
                     self.stats.opponent_action_types, opp_rows, opp_acts
                 )
 
+            if self._recovery_limit is not None:
+                if self.stats.micro_steps + int(active.sum()) > self._recovery_limit:
+                    raise RuntimeError("collector recovery journal limit exceeded")
+                self._journal.append((actions.tolist(), active.tolist()))
             env.step_into_buffers(actions.tolist(), active.tolist())
             self.stats.micro_steps += int(active.sum())
 

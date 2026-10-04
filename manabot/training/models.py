@@ -1,10 +1,18 @@
 """Validated training recipes and durable execution records."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.infra.hypers import AgentHypers, MatchHypers, ObservationSpaceHypers
+
+
+class ArtifactReference(TypedDict):
+    """Immutable local bytes admitted by content digest."""
+
+    path: str
+    sha256: str
+    bytes: int
 
 
 class Strict(BaseModel):
@@ -173,11 +181,22 @@ class TrainingRegime(Strict):
     agent: AgentHypers = AgentHypers()
     stages: list[Operation] = Field(min_length=1)
     wall_seconds: float = Field(default=900, gt=0)
-    schedule_clock: Literal["run_elapsed_budget"] = "run_elapsed_budget"
+    schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (
+        "run_elapsed_budget"
+    )
+    recovery_max_microsteps: int | None = Field(default=None, ge=1, le=1_000_000)
     selection: Literal["last-complete-raw"] = "last-complete-raw"
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if self.recovery_max_microsteps is not None and (
+            len(self.stages) != 1
+            or not isinstance(self.stages[0], TrainSelfPlay)
+            or self.schedule_clock != "iteration_fraction"
+        ):
+            raise ValueError(
+                "recovery requires one self-play stage and iteration_fraction schedule"
+            )
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:
@@ -275,5 +294,15 @@ class TrainingRun(Strict):
     stages: list[StageRecord] = []
     seconds: float = 0
     setup_seconds: float = 0
+    parent_run_id: str | None = None
+    recovery_artifact: ArtifactReference | None = None
+    recovery_lock_path: str | None = None
+    recovery_host: str | None = None
+    last_recorded_wall_seconds: float | None = None
+    unobserved_seconds: float = 0
+    recovery_seconds: float = 0
+    prior_seconds: float = 0
+    watchdog_seconds: float = 0
+    prior_watchdog_seconds: float = 0
     selected_artifact: dict | None = None
     error: str | None = None

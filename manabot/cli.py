@@ -30,6 +30,9 @@ def train_command(
     regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
     seed: Optional[int] = typer.Option(None, help="Regime execution seed"),
     out: Optional[str] = typer.Option(None, help="New run directory"),
+    resume_from: Optional[str] = typer.Option(
+        None, help="Stopped TrainingRun ID in the same store"
+    ),
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
@@ -51,9 +54,15 @@ def train_command(
 
         recipe = TrainingRegime.model_validate_json(Path(regime).read_text())
         with VerifyStore(Path(out).parent / "training.sqlite") as store:
-            execute_regime(recipe, 197 if seed is None else seed, out, store)
+            execute_regime(
+                recipe,
+                197 if seed is None else seed,
+                out,
+                store,
+                resume_from=resume_from,
+            )
     else:
-        if out is not None or seed is not None:
+        if out is not None or seed is not None or resume_from is not None:
             raise typer.BadParameter("--out and --seed require --regime")
         _run_train(preset or DEFAULT_TRAIN_PRESET, set_values or [])
 

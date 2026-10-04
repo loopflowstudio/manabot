@@ -7,9 +7,12 @@ import json
 import os
 from pathlib import Path
 import sqlite3
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .util import EvaluationArtifacts
+
+if TYPE_CHECKING:
+    from manabot.training.models import TrainingRun
 
 RUN_CONFIG_FIELDS = (
     "experiment",
@@ -126,7 +129,7 @@ class VerifyStore:
     def close(self) -> None:
         self.con.close()
 
-    def save_training_run(self, run) -> None:
+    def save_training_run(self, run: TrainingRun) -> None:
         """Commit one canonical regime execution and its stage records atomically."""
         with self.con:
             self.con.execute(
@@ -139,7 +142,26 @@ class VerifyStore:
                     (run.id, stage.id, stage.model_dump_json()),
                 )
 
-    def training_run(self, run_id: str):
+    def claim_training_recovery(self, parent_id: str, run: TrainingRun) -> None:
+        """Atomically allow one continuation per stopped attempt, never a fork."""
+        with self.con:
+            self.con.execute("BEGIN IMMEDIATE")
+            if self.con.execute(
+                "SELECT 1 FROM training_runs WHERE json_extract(payload, '$.parent_run_id') = ?",
+                (parent_id,),
+            ).fetchone():
+                raise ValueError(
+                    "attempt already has a recovery child; continue that child"
+                )
+            parent = self.training_run(parent_id)
+            if parent.status not in {"failed", "interrupted"}:
+                raise ValueError("recovery parent is not stopped")
+            self.con.execute(
+                "INSERT INTO training_runs VALUES (?, ?)",
+                (run.id, run.model_dump_json(exclude={"stages"})),
+            )
+
+    def training_run(self, run_id: str) -> TrainingRun:
         from manabot.training.models import TrainingRun
 
         row = self.con.execute(
