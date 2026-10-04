@@ -20,6 +20,18 @@ ambiguity or safety-critical invariants, not substitute products.
   writers/loaders and configured play/search consumers. Synthetic checkpoint
   proof does not admit a retained trained challenger.
 
+- On 2026-10-04 Jack Heart authorized ETU-89 parent PR #200 to carry the
+  remaining verified ETU-75 provider code when serial PR rotation failed.
+  Provider head `aba61859` preserves `checkpoint_world` and
+  `validate_checkpoint_world` signatures and passes 92 focused checks.
+  V4 passed all 16 games and 3,843 Commands against that source with
+  byte-identical v3 tapes and no mismatches.
+  PR #200 merged at `e30b7b82` with all ten CI checks passing. The receipt-only
+  follow-up retains v4 as historical provider proof, not integrated-parent proof.
+  ETU-89 received the exact head for supported branch sync; old merged PR #188
+  must not be presented as containing these newer commits. Keep ETU-75 open
+  and retain historical gate failures and missing human-play evidence.
+
 [Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup)
 remains unfinished. The [durable Learn record](../../docs/rules/learn-lesson.md)
 preserves accepted decisions, dated proof limits and source history.

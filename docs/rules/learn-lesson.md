@@ -74,9 +74,28 @@ focused checks before scoring. This does not resolve the historical gate
 blockers or supply the missing human Command tapes.
 
 Subsequent compression shares the admitted-policy setup check between live
-play and search and removes redundant setup hashing. The retained v3 source
-binding predates that edit; gate must register and score a new cohort after
-the source settles. Existing receipts remain unchanged.
+play and search and removes redundant setup hashing. Provider checkpoint
+`aba618591d22eb5aa367b8ec6c2d4390ad548563` passes 92 focused tests covering
+world bindings, semantic inputs, Learn contracts and search consumers.
+`checkpoint_world` and `validate_checkpoint_world` retain their signatures.
+The retained v3 source binding predates this edit; v4 was registered
+prospectively for the same 16 cases and passed all 3,843 Commands with zero
+state/consequence/viewer mismatches. Every tape is byte-identical to v3.
+The final registration matched provider source `aba61859` and its native binary
+before parent integration. At that historical source, verify this cohort with `./scripts/verify-learn-lesson verify conformance/learn-lesson-w4-v4`.
+Existing receipts remain unchanged.
+
+Jack Heart directed on 2026-10-04 that this verified provider slice may land
+through ETU-89 parent PR #200, explicitly linked to ETU-75, after serial PR
+rotation failed. ETU-89 received the exact provider head by Task steer. The
+failed `lf pr next` replayed historical merged commits and restored this
+checkout; `lf task sync` subsequently reported no active PR. No Loopflow
+repair was attempted. Old PR #188 is already merged and does not contain this
+new code. Historical gate failures remain recorded; authorization to deliver
+code does not certify those receipts. PR #200 subsequently merged at
+`e30b7b82459fd5b21b55519870375aaf43d0fd42` with all ten CI checks passing.
+This receipt-only follow-up preserves the v4 provider binding; it does not
+rebind that cohort to the integrated parent. ETU-75 remains open for unmet evidence.
 
 ## Accepted setup and interaction
 

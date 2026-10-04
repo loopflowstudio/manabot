@@ -1,0 +1,135 @@
+{
+  "attempts": [
+    {
+      "commands": 156,
+      "error": null,
+      "reverse": false,
+      "seed": 0,
+      "sha256": "981a6dbaaf104c6269a5d9ae03341f72daf0a3c66c6b857d23fab49da90188a9",
+      "status": "passed"
+    },
+    {
+      "commands": 109,
+      "error": null,
+      "reverse": true,
+      "seed": 0,
+      "sha256": "a07cd1f70ddcd784a2fd198be416b76b805c4763728a407c0a68ad63f9580f21",
+      "status": "passed"
+    },
+    {
+      "commands": 174,
+      "error": null,
+      "reverse": false,
+      "seed": 1,
+      "sha256": "d63c6245045c07fa401873d0af2f8ed5c5e86f905e25f864d9e812bb90e89bbd",
+      "status": "passed"
+    },
+    {
+      "commands": 155,
+      "error": null,
+      "reverse": true,
+      "seed": 1,
+      "sha256": "742a0b5438310738322d6d4ca446ca4c235678c7129d4f9bca43020e412dc49a",
+      "status": "passed"
+    },
+    {
+      "commands": 173,
+      "error": null,
+      "reverse": false,
+      "seed": 2,
+      "sha256": "0df8a1ecc84e857e24e78308aa6ba51f22b74a67230efba4b936758370a0144d",
+      "status": "passed"
+    },
+    {
+      "commands": 297,
+      "error": null,
+      "reverse": true,
+      "seed": 2,
+      "sha256": "7893aeff6d9ce93e3840a6f5418411dff9f94006e0da1910767a914786ab8dd4",
+      "status": "passed"
+    },
+    {
+      "commands": 197,
+      "error": null,
+      "reverse": false,
+      "seed": 3,
+      "sha256": "de9b2cd4832444c27d25602d78dd31980c1deadc833a8773a7cb601ad42c26f3",
+      "status": "passed"
+    },
+    {
+      "commands": 70,
+      "error": null,
+      "reverse": true,
+      "seed": 3,
+      "sha256": "b772be9ae4a3032b64150be7706a7d50fed4dc2414830063f6bb732c03a7ac36",
+      "status": "passed"
+    },
+    {
+      "commands": 612,
+      "error": null,
+      "reverse": false,
+      "seed": 4,
+      "sha256": "9b6301342053fda3c0aa60c9eed61a5b7e0c8d072ea9d749cc275819d38b16f2",
+      "status": "passed"
+    },
+    {
+      "commands": 414,
+      "error": null,
+      "reverse": true,
+      "seed": 4,
+      "sha256": "26eeca2e07d576cf4a1fa673055f51037c9fb8b44dcfa663e2bb04690e56e083",
+      "status": "passed"
+    },
+    {
+      "commands": 447,
+      "error": null,
+      "reverse": false,
+      "seed": 5,
+      "sha256": "0708731cbe092e10870c0771c272c9cc24c3d4ff8ec9aa7f7fa076a93b053b31",
+      "status": "passed"
+    },
+    {
+      "commands": 235,
+      "error": null,
+      "reverse": true,
+      "seed": 5,
+      "sha256": "d1004fe6e40053843e506d4b9e107a728208653370cb274d27210d723e4bf957",
+      "status": "passed"
+    },
+    {
+      "commands": 377,
+      "error": null,
+      "reverse": false,
+      "seed": 6,
+      "sha256": "6ee055e54ca4e2433b0477ffbb227a5fcfd7ff67587a797842bad260323ea89d",
+      "status": "passed"
+    },
+    {
+      "commands": 101,
+      "error": null,
+      "reverse": true,
+      "seed": 6,
+      "sha256": "f0a6a6852ef04bdd1ba74d118764f59c255d55c0126818566c0e28a43ccd63d5",
+      "status": "passed"
+    },
+    {
+      "commands": 285,
+      "error": null,
+      "reverse": false,
+      "seed": 7,
+      "sha256": "7c5b6ab189b2532d5021397836d603f43492df42260f2f3a44af5af1caea758e",
+      "status": "passed"
+    },
+    {
+      "commands": 41,
+      "error": null,
+      "reverse": true,
+      "seed": 7,
+      "sha256": "e48c36f7d585d321f2d677e625dc588b07f9f626b9a0e994a4536a4a94372599",
+      "status": "passed"
+    }
+  ],
+  "passed": 16,
+  "registration_sha256": "4caacfe208cbeaacb6ed0a4054973005b2df6d13bfe09c9f5ecae57a44d82d98",
+  "total": 16
+}
