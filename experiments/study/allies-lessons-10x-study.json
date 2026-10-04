@@ -1,0 +1,13 @@
+{
+  "subject": "search",
+  "baseline": "random",
+  "mirror_deals": 600,
+  "versus_deals": 150,
+  "baseline_deals": 2000,
+  "seed": 97000,
+  "ur_lessons": "",
+  "gw_allies": "",
+  "keep_decisions": true,
+  "max_commands": 10000,
+  "workers": 10
+}
