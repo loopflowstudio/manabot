@@ -25,6 +25,46 @@ contracts, receipts, wandb history — is never renamed.
   attention to file headers and README content; propose small, iterative
   changes.
 
+### Python structure and documentation
+
+- Design around the domain's data structures and public APIs. Keep the core
+  types and entry points easy to find; separate orchestration, learning rules,
+  and persistence when they have different responsibilities.
+- Give substantial modules a short opening explanation of their purpose,
+  principal types and entry points, and non-obvious ownership or data flow.
+  Use section comments to group related code when that helps navigation.
+- Explain intent, invariants, units, tensor shapes, and algorithmic choices
+  beside the code that depends on them. Training code should explain what an
+  estimator measures, where gradients flow, and which samples a loss uses.
+  Cite a method when claiming to implement it; document meaningful departures.
+- Keep docstrings concise, but include non-obvious contracts, side effects,
+  and failure behavior. Do not repeat signatures in `Args:` / `Returns:`
+  boilerplate or narrate obvious statements. Update comments with behavior.
+- Put imports at the top; use explicit imports and underscore-prefixed private
+  helpers. Keep one implementation and one owner for each fact; use git for
+  old versions rather than `_new`, `_old`, or `_backup` variants.
+
+### Python typing
+
+- Write fully typed Python: annotate parameters and return values on all
+  functions and methods, including private helpers and tests; use `-> None`
+  where appropriate. Type model fields and collections with their element
+  types. Local variables can rely on clear inference.
+- Represent structured domain data with named types: dataclasses, existing
+  Pydantic models, `TypedDict`, or small protocols as appropriate. Avoid
+  passing unstructured dictionaries or positional tuples across API boundaries.
+- Prefer precise unions, literals, and callable signatures to `Any`. At
+  untyped library, JSON, or native-extension boundaries, validate or narrow
+  values once and expose a typed interface. Keep necessary `Any`, casts, and
+  type-checker suppressions local, with a reason when it is not evident.
+- Use Python 3.12 forms (`list[T]`, `T | None`). A nullable annotation means
+  `None` is a real possible value; a default determines whether an argument
+  can be omitted. Return `None` for expected absence only when the API defines
+  it; do not disguise failures as empty results.
+- Apply these conventions to new and changed code incrementally. Do not claim
+  repository-wide type safety without a passing configured type check, or
+  weaken types merely to silence one.
+
 ## Commands
 
 - **All Python commands run through uv.** This repo's environment is
