@@ -23,8 +23,19 @@ class SelectionGroup(TypedDict):
     retained_residual_abs_mean: float | None
 
 
-def selected_rows(advantages: Tensor, fraction: float, minimum: float) -> Tensor:
-    """Stable top-count selection [B]; ties retain the earlier flattened row."""
+def selected_rows(
+    advantages: Tensor,
+    fraction: float,
+    minimum: float,
+    *,
+    kind: Literal["top_count", "quantile"] = "top_count",
+) -> Tensor:
+    """Select [B] indexes, preserving each learner's pre-shuffle order.
+
+    Top-count sorts by magnitude with stable ties; quantiles retain row order.
+    """
+    if kind == "quantile":
+        return selected_moves(advantages, 1 - fraction, minimum).nonzero().flatten()
     magnitude = advantages.abs()
     count = max(1, math.ceil(len(magnitude) * fraction))
     indices = torch.argsort(magnitude, descending=True, stable=True)[:count]
@@ -49,6 +60,11 @@ def selection_mask(
     mask = torch.zeros_like(advantages, dtype=torch.bool).flatten()
     mask[selected_rows(advantages.flatten(), fraction, minimum)] = True
     return mask.reshape_as(advantages)
+
+
+def selected_mean(values: Tensor, selected: Tensor) -> Tensor:
+    """Mean over selected rows; empty support yields zero with zero gradient."""
+    return values[selected].sum() / selected.sum().clamp_min(1)
 
 
 def terminal_distances(ends: Tensor) -> Tensor:

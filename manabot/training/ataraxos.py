@@ -19,6 +19,7 @@ from manabot.training.models import AtaraxosMoveLearning
 from manabot.training.references import reference_distribution
 from manabot.training.selection import (
     UpdateDiagnostics,
+    selected_mean,
     selection_diagnostics,
     selection_mask,
 )
@@ -298,19 +299,20 @@ def update_move_iteration(
             continue
         obs = {key: value[step, selected] for key, value in observations.items()}
         logits, value_logits = trainer.agent.forward_distribution(obs)
+        reference = reference_distribution(obs, learning.reference)
         policy_loss = damped_policy_loss(
             logits,
             actions[step, selected],
             targets.advantages[step, selected],
             behavior[step, selected],
-            reference_distribution(obs, learning.reference),
+            reference,
             valid[step, selected],
             clip=learning.clip,
             collection_kl=learning.collection_kl,
             tau=tau,
         )
         actor_mask = actor_selected[selected]
-        policy_loss = policy_loss[actor_mask].sum() / actor_mask.sum().clamp_min(1)
+        policy_loss = selected_mean(policy_loss, actor_mask)
         if trainer.agent.hypers.value_kind == "categorical_wdl":
             value_loss = (
                 -(targets.values[step, selected] * value_logits.log_softmax(-1))
@@ -333,9 +335,7 @@ def update_move_iteration(
             trainer.agent.parameters(), learning.max_grad_norm, error_if_nonfinite=True
         )
         trainer.optimizer.step()
-        diagnostics["optimizer_exposures"] = int(
-            diagnostics["optimizer_exposures"]
-        ) + int(selected.sum())
+        diagnostics["optimizer_exposures"] += int(selected.sum())
         diagnostics["actor_exposures"] += int(actor_mask.sum())
         diagnostics["critic_exposures"] += int(selected.sum())
         with torch.no_grad():
@@ -350,7 +350,6 @@ def update_move_iteration(
                 .sum(-1)
                 .mean()
             )
-            reference = reference_distribution(obs, learning.reference)
             diagnostics["reference_kl"] = float(
                 (probabilities * (logs - reference.clamp_min(1e-30).log()))
                 .sum(-1)

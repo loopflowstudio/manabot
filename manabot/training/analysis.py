@@ -4,6 +4,14 @@ import hashlib
 import json
 from pathlib import Path
 
+from manabot.arena.models import file_sha256
+from manabot.training.models import CollectSelection, TrainingRun
+from manabot.training.selection_analysis import (
+    analyze_selection,
+    write_selection_report,
+)
+from manabot.training.selection_data import SelectionDataset
+
 from .execution import atomic_json
 
 
@@ -443,3 +451,35 @@ def report(out: Path | str) -> None:
         resources={"metadata": {"path": str(out)}},
     ).execute()
     nbformat.write(notebook, out / "analysis.ipynb")
+
+
+def report_selection_run(run_path: Path, stage_id: str, out: Path) -> None:
+    """Regenerate a complete selection report from content-checked run artifacts.
+
+    No execution state is created or modified; the JSON is an export of the
+    existing VerifyStore run. Incomplete cohorts and changed evidence fail closed.
+    """
+    run = TrainingRun.model_validate_json(run_path.read_text())
+    stage = next(s for s in run.regime.stages if s.id == stage_id)
+    record = next(s for s in run.stages if s.id == stage_id)
+    if not isinstance(stage, CollectSelection) or record.status != "completed":
+        raise ValueError("selection report requires a completed collection stage")
+    for artifact in record.artifacts.values():
+        if file_sha256(artifact["path"]) != artifact["sha256"]:
+            raise ValueError("selection artifact digest mismatch")
+    dataset = SelectionDataset.model_validate_json(
+        Path(record.artifacts["dataset"]["path"]).read_text()
+    )
+    if (
+        dataset.run_id != run.id
+        or dataset.stage_id != stage_id
+        or dataset.policy_sha256 != record.inputs["policy"]["sha256"]
+        or dataset.policy_run_id != (stage.source_run or run.id)
+        or dataset.policy_stage_id != stage.policy
+        or dataset.weights != stage.weights
+    ):
+        raise ValueError("selection dataset provenance differs from run")
+    report = analyze_selection(dataset, stage)
+    out.mkdir(parents=True, exist_ok=False)
+    atomic_json(out / "analysis.json", report.model_dump(mode="json"))
+    write_selection_report(report, out / "report.md")

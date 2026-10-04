@@ -48,6 +48,7 @@ from .models import (
     CollectBelief,
     CollectLocalUpdate,
     CollectSearch,
+    CollectSelection,
     StageRecord,
     TrainBelief,
     TrainCompound,
@@ -64,6 +65,8 @@ from .recovery import (
     save_update,
     settle_orphan,
 )
+from .selection_analysis import analyze_selection, write_selection_report
+from .selection_data import SelectionDataset, collect_selection_game
 
 if TYPE_CHECKING:
     from manabot.verify.store import VerifyStore
@@ -512,6 +515,101 @@ def _execute_regime(
                     persist()
                 outputs[stage.id] = (agent, optimizer)
                 optimizer_state = optimizer.state_dict()
+            elif isinstance(stage, CollectSelection):
+                policy_run = (
+                    store.training_run(stage.source_run) if stage.source_run else run
+                )
+                source = next(
+                    item for item in policy_run.stages if item.id == stage.policy
+                )
+                policy_stage = next(
+                    item for item in policy_run.regime.stages if item.id == stage.policy
+                )
+                if source.status != "completed" or not isinstance(
+                    policy_stage, TrainSelfPlay
+                ):
+                    raise ValueError(
+                        "selection requires a completed self-play checkpoint stage"
+                    )
+                frozen = source.artifacts[stage.weights]
+                record.inputs["policy"] = dict(frozen)
+                persist()
+                if file_sha256(frozen["path"]) != frozen["sha256"]:
+                    raise ValueError("selection policy artifact changed")
+                agent, policy_space = load_checkpoint_agent(frozen["path"])
+                if (
+                    agent.hypers != regime.agent
+                    or policy_space.encoder.hypers != regime.observation
+                ):
+                    raise ValueError(
+                        "selection policy configuration differs from regime"
+                    )
+                if file_sha256(frozen["path"]) != frozen["sha256"]:
+                    raise ValueError("selection policy artifact changed while loading")
+                population = [game.model_dump(mode="json") for game in stage.population]
+                population_path = out / f"{stage.id}-population.json"
+                atomic_json(population_path, population)
+                record.artifacts["population"] = artifact(population_path)
+                persist()
+                games = []
+                match = Match(regime.match)
+                for index, spec in enumerate(stage.population):
+                    target = out / f"{stage.id}-{index}.receipts.jsonl"
+                    tick = time.perf_counter()
+                    game = collect_selection_game(
+                        agent,
+                        policy_space,
+                        match if spec.assignment == 0 else match.swapped(),
+                        spec,
+                        target,
+                        reference=stage.learning.reference,
+                        max_steps=stage.max_steps,
+                        check=check,
+                    )
+                    record.collection_seconds += time.perf_counter() - tick
+                    phase = "diagnostic_seconds"
+                    tick = time.perf_counter()
+                    if replay_game(target) != len(game.rows):
+                        raise ValueError("selection replay decision count mismatch")
+                    record.diagnostic_seconds += time.perf_counter() - tick
+                    record.artifacts[f"game-{index}"] = artifact(target)
+                    record.games += 1
+                    record.environment_decisions += len(game.rows)
+                    games.append(game)
+                    persist()
+                    phase = "collection_seconds"
+                dataset = SelectionDataset(
+                    run_id=run.id,
+                    stage_id=stage.id,
+                    policy_run_id=policy_run.id,
+                    policy_stage_id=stage.policy,
+                    policy_sha256=frozen["sha256"],
+                    weights=stage.weights,
+                    world_binding_sha256=canonical_sha256(agent.world_binding),
+                    population_sha256=canonical_sha256(population),
+                    games=tuple(games),
+                )
+                target = out / f"{stage.id}-dataset.json"
+                atomic_json(target, dataset.model_dump(mode="json"))
+                record.artifacts["dataset"] = artifact(target)
+                phase = "diagnostic_seconds"
+                tick = time.perf_counter()
+                report = analyze_selection(dataset, stage, check=check)
+                target = out / f"{stage.id}-analysis.json"
+                atomic_json(target, report.model_dump(mode="json"))
+                record.artifacts["analysis"] = artifact(target)
+                target = out / f"{stage.id}-report.md"
+                write_selection_report(report, target)
+                record.artifacts["report"] = artifact(target)
+                record.diagnostic_seconds += time.perf_counter() - tick
+                record.diagnostics = [
+                    {
+                        "selection_groups": report.selection_groups,
+                        "optimizer_exposures": 0,
+                        "bootstrapped_tail_fraction": 0,
+                        "analysis": "frozen-complete-game-associations",
+                    }
+                ]
             elif isinstance(stage, CollectBelief):
                 source = next(item for item in run.stages if item.id == stage.policy)
                 policy_artifact = source.artifacts[stage.weights]
@@ -860,7 +958,8 @@ def _execute_regime(
                 record.seconds
                 - record.collection_seconds
                 - record.learning_seconds
-                - record.export_seconds,
+                - record.export_seconds
+                - record.diagnostic_seconds,
             )
             setattr(record, phase, getattr(record, phase) + unaccounted)
         run.seconds = time.perf_counter() - start

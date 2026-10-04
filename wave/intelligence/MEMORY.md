@@ -567,16 +567,36 @@ Paper schedules retain their iteration clock in executor receipts.
 Selection diagnostics cross action type with observed terminal distance and
 retain raw/selected signed advantage quartiles and target-residual means.
 Unfinished batch tails are censored, not distant. These residuals use lambda
-targets; they cannot prove independent terminal-outcome critic error for
-unfinished games. Whole-game held-out analysis and multi-seed matched-cost
-scoring remain required. One bounded EMA-behavior comparison completed 48 exact
-replayed games in 117 seconds; this proves the integrated workflow, not strength,
+targets; they cannot supply terminal-outcome residuals for unfinished games.
+The separate complete-game diagnostic below closes that instrument gap;
+multi-seed matched-cost scientific scoring remains required. One bounded
+EMA-behavior comparison completed 48 exact replayed games in 117 seconds; this proves the integrated workflow, not strength,
 demo admission, human completion or a technique retention decision.
 
 The main integration preserves frozen-opponent and compound studies. Compound
 training rejects the new quantile/actor-only knobs rather than silently ignoring
 them; ETU-93's executable contrasts target ordinary self-play. The merged
 omitted-control/frozen-opponent/study paths passed 39 focused checks.
+
+The serial complete-game diagnostic freezes self-play raw/EMA checkpoint bytes,
+explicit deal/action seeds and immutable development/held-out game membership in
+TrainingRegime. `collect_selection` and offline report regeneration reuse
+TrainingRun, VerifyStore, artifact digests and semantic receipt replay. Both seats
+stay together in game-cluster bootstrap intervals. Complete same-viewer sequences
+use observed terminal outcomes, with lambda-target residuals kept separate from
+sampled terminal residuals and discounted returns. Partial games retain failed
+journals/costs and cannot become a completed cohort.
+
+Held-out means unused for updates and separate from diagnostic development games;
+it does not certify noncoincidence with historical training deals. Partition-wide
+filter selection is descriptive, not a reconstruction of live minibatch masks.
+A terminal outcome is a noisy sample, not true expected-value error: residual
+associations cannot prove filtering selects mistakes or causally benefits learning.
+Intervals condition on the frozen policy and mask, not training-seed uncertainty.
+At commit `152d11eb`, the documented four-game command completed 1,073 replayed
+decisions in 17.72 seconds and regenerated identical analysis/report bytes. This
+is bounded workflow proof only. No ETU-91 evidence was reconstructed or changed;
+ETU-93 scientific acceptance and every technique disposition remain open.
 
 ## Learned sampler to local search (ETU-95 continuation, 2026-10-04)
 

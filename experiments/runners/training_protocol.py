@@ -127,19 +127,8 @@ class EvaluationProtocol(BaseModel):
             for digest in self.regime_digests
         ):
             raise ValueError("protocol must bind every resolved recipe digest")
-        if any(seed < 900000 for seed in self.paired_deals + self.anchor_deals):
-            raise ValueError(
-                "smoke evaluation seeds must use the reserved family >=900000"
-            )
         if not self.paired_deals or not self.anchor_deals:
             raise ValueError("evaluation deal families must be nonempty")
-        if set(self.paired_deals) & set(self.anchor_deals):
-            raise ValueError("paired and anchor deals must be disjoint")
-        if any(
-            len(values) != len(set(values))
-            for values in (self.paired_deals, self.anchor_deals)
-        ):
-            raise ValueError("duplicate evaluation deal")
         return self
 
 

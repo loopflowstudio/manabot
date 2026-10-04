@@ -196,3 +196,21 @@ byte. The attempts retain source identities, individual costs, underlying
 microchoices, grouped decisions, and latency in their manifests and reports.
 These ignored local receipts are workflow evidence, not a committed benchmark
 or a multi-seed strength result. No ETU-91 run or allocation was changed.
+
+### Complete-game selection diagnostics
+
+`collect_selection` freezes a prior self-play stage's raw/EMA checkpoint and
+collects a recipe-declared population with unique deal seeds, action seeds,
+deck assignments and whole-game development/held-out splits. `source_run` can
+name a prior TrainingRun in the same VerifyStore; omit it for a policy stage in
+this run. Complete semantic receipt replay, artifact admission, failed-attempt
+retention and measured collection/diagnostic costs use the ordinary executor.
+No weights change. Scalar and categorical expected signed values are supported;
+compound, belief-input and supervised win-logit policy sources are unsupported.
+
+The [omitted-control protocol](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic)
+provides the bounded command and analysis contract. Reports compare retained and
+excluded rows within action/distance strata, separating lambda-target residuals
+from noisy terminal-outcome samples, with game-cluster uncertainty. These are
+frozen-policy associations, not causal filter benefits or ground-truth critic
+errors. Scientific technique dispositions remain unresolved.

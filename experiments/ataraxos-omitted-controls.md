@@ -101,8 +101,9 @@ Compare selection rates and residuals **within** each action/distance stratum.
 A retained residual excess is an association with the estimator's own target,
 not proof that filtering selects true critic error. Independent terminal-return
 residuals for censored full episodes remain unavailable in these batch summaries.
-Freeze a held-out whole-game analysis population before making that causal claim;
-no positions from a game may cross partitions. Pass/combat choices remain in
+Use a frozen held-out whole-game population for a separate terminal-outcome
+association analysis; it still cannot establish a causal claim. No positions
+from a game may cross partitions. Pass/combat choices remain in
 the population. No action type is assumed irrelevant.
 
 Before costly scoring, freeze at least three independent training seeds per
@@ -153,3 +154,101 @@ Compound training explicitly rejects quantile or actor-only filtering because
 its joint-action optimizer does not implement those controls; the contrasts
 above target ordinary self-play. Post-sync verification passed 39 focused
 omitted-control, frozen-opponent and study tests. CI owns the full merged matrix.
+
+## Frozen complete-game selection diagnostic
+
+The serial ETU-93 follow-up closes the batch-tail diagnostic gap with
+`CollectSelection` in the existing TrainingRegime executor. It freezes explicit
+deal seeds, action seeds, deck assignments and development/held-out membership
+before collection. Both seats use one admitted self-play raw or EMA checkpoint;
+no optimizer runs during collection or analysis. Pass and combat rows remain.
+
+A bounded reproducible example (four complete games, one thread, 180-second
+whole-run cap including a tiny workflow-only training stage):
+
+```bash
+uv run -m experiments.runners.selection_diagnostic --out .runs/etu93-selection-plan.json
+uv run manabot train --regime .runs/etu93-selection-plan.json --seed 693 --out .runs/etu93-selection
+uv run -m experiments.runners.selection_diagnostic --report-only .runs/etu93-selection/run.json --out .runs/etu93-selection-report
+```
+
+The generator and execution refuse existing output destinations. Keep each
+failed attempt and use a new output name; do not replace a failed population
+member or silently retry a seed. A capped or interrupted game leaves its partial
+prediction/Command/receipt journal and costs in the failed TrainingRun. Completed
+games are exact-replayed before admission. A failed cohort has no complete report.
+Population, trajectories, analysis and Markdown are content-digested artifacts;
+VerifyStore remains the sole execution-state authority. The report-only command
+checks every retained artifact digest and requires a completed collection stage.
+Its JSON and Markdown regenerate without loading a policy or playing another game.
+
+To reuse an existing policy without training, generate with
+`--source-run RUN_ID --policy-stage STAGE_ID --store .runs/training.sqlite`.
+Execute with an output under that same store's parent directory: the ordinary
+CLI uses `OUT/../training.sqlite`. `source_run`, `policy`, and `weights` identify
+the source TrainingRun/stage/artifact. The recipe accepts `weights: "ema"` where
+that admitted artifact exists. Source status, digest, checkpoint ABI and actual
+match setup are checked. Only ordinary observation-only self-play checkpoint
+stages are supported; supervised win-logit, compound and belief-input policies
+are rejected rather than assigning them a false value or likelihood meaning.
+Raw/EMA collections remain correlated within their original training seed.
+
+Held-out membership means whole games reserved from this diagnostic's development
+partition, never used for updates or threshold fitting. Separate collection RNG
+streams do not prove zero coincident deals in historical training. The command
+cannot reconstruct unavailable row evidence from ETU-91 or any old live batch.
+It does not modify that campaign, authorize long runs, or allocate scientific
+compute. Both partitions contain both deck assignments; both seats act in each
+game. Every deal seed is unique across the entire population.
+
+Analysis applies the configured estimator to each complete same-viewer sequence.
+The final transition receives the signed terminal outcome, with zero bootstrap;
+all earlier rewards are zero. Distances count same-viewer surfaced decisions:
+the last decision has distance zero. Forced native auto-resolution adds no row.
+Categorical critics contribute their expected signed loss/draw/win value; these
+residuals are not a categorical calibration or cross-entropy measurement.
+
+Selection is descriptive: the configured top-count or inclusive quantile mask is
+applied to detached raw advantages over each complete partition, ordered by game,
+seat and decision. It does not reproduce historical live minibatch selection or
+change its controls. Actor-only versus actor/critic filtering has no different
+optimization effect here because no update occurs. Reported optimizer exposures
+and bootstrapped-tail fractions are zero.
+
+The typed dataset and row analysis retain policy predictions, action likelihood,
+action type, exact distance, raw signed advantage and selected/excluded membership.
+Within each action/distance stratum, summaries include signed advantage quartiles,
+entropy, reference KL, the estimator's own absolute lambda-target residual,
+signed/absolute **sampled terminal-outcome residual**, and absolute discounted
+terminal-return residual. The discounted quantity matches gamma's same-viewer
+clock; the undiscounted outcome residual remains separate when gamma is below one.
+
+A single terminal outcome is a noisy sample, **not ground-truth expected value or
+critic error**. Retained-minus-excluded residual differences are associations;
+neither this instrument nor a held-out population alone establishes causal
+benefit or proves filtering selects mistakes. The 95% percentile intervals
+resample whole games, keeping both seats together, conditional on the frozen
+checkpoint and observed mask. They exclude threshold-estimation and training-seed
+uncertainty. Both groups must occur in at least two games and at least 95% of
+bootstrap draws must contain both groups; otherwise the interval is unavailable.
+Sparse intervals in a four-game smoke are descriptive only. Multiple strata are
+not multiplicity-adjusted hypothesis tests. Every technique remains unresolved.
+
+### Bounded complete-game evidence
+
+At commit `152d11eb`, the documented command retained TrainingRun
+`1ccbcc75b3d047d5a1400b56bb3b6084` at `.runs/etu93-selection`. Its frozen policy
+SHA-256 is `ab930b248d0ab8dbebda822a9bfb4aced191651942a1e9b6024311493e408868`.
+The four-game population completed 1,073 decisions with exact replay in 17.72
+seconds total (14.91 collection, 1.75 analysis/replay). Report-only regeneration
+produced byte-identical JSON and Markdown. This one-checkpoint smoke proves the
+workflow; it is not uncontended calibration or independent-seed inference.
+No standalone diagnostic execution failed. Failure-injection tests retain capped
+game journals and source-artifact mismatch attempts in VerifyStore.
+
+Reproduction means reusing exact policy bytes, resolved population/action seeds,
+runtime and estimator settings. Retraining the example policy does not promise
+identical checkpoint bytes: its training schedule has an elapsed-budget clock.
+The dataset and receipt journals contain both seats' evidence and are private
+audit artifacts, not viewer-facing Study exports. All costs belong to the run;
+scientific allocation remains zero.

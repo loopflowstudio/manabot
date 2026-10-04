@@ -183,6 +183,43 @@ class TrainSelfPlay(Stage):
         return self
 
 
+class SelectionGameSpec(Strict):
+    """Population and split membership frozen before observing any outcome."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+    seed: int = Field(ge=0, le=2**32 - 1)
+    action_seed: int = Field(ge=0, le=2**32 - 1)
+    assignment: Literal[0, 1]
+    split: Literal["development", "held_out"]
+
+
+class CollectSelection(Stage):
+    """Diagnostic complete games from a fixed admitted self-play policy.
+
+    source_run refers to VerifyStore, never an unverified run JSON export.
+    Selection is recomputed per partition over its complete rows, not fitted.
+    """
+
+    operation: Literal["collect_selection"]
+    policy: str
+    source_run: str | None = None
+    weights: Literal["raw", "ema"] = "raw"
+    population: tuple[SelectionGameSpec, ...] = Field(min_length=4)
+    max_steps: int = Field(default=2000, ge=1)
+    learning: Learning | AtaraxosMoveLearning = Learning()
+    bootstrap_samples: int = Field(default=500, ge=100, le=10000)
+    bootstrap_seed: int = Field(default=93, ge=0)
+
+    @model_validator(mode="after")
+    def valid_population(self) -> "CollectSelection":
+        if len({game.seed for game in self.population}) != len(self.population):
+            raise ValueError("selection population requires unique deal seeds")
+        for split in ("development", "held_out"):
+            if {g.assignment for g in self.population if g.split == split} != {0, 1}:
+                raise ValueError("each whole-game split requires both deck assignments")
+        return self
+
+
 class CollectBelief(Stage):
     """Freeze one admitted policy artifact before collecting private labels."""
 
@@ -242,6 +279,7 @@ Operation = Annotated[
     | TrainSelfPlay
     | TrainCompound
     | CollectBelief
+    | CollectSelection
     | TrainBelief,
     Field(discriminator="operation"),
 ]
@@ -291,6 +329,12 @@ class TrainingRegime(Strict):
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
+            if isinstance(stage, CollectSelection) and stage.source_run is None:
+                policy = previous.get(stage.policy)
+                if not isinstance(policy, TrainSelfPlay):
+                    raise ValueError("selection requires an earlier self-play policy")
+                if stage.weights == "ema" and policy.learning.ema is None:
+                    raise ValueError("selection EMA dependency requires EMA weights")
             if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
                 policy = previous.get(stage.policy)
                 if not isinstance(
@@ -403,6 +447,7 @@ class StageRecord(Strict):
     collection_seconds: float = 0
     learning_seconds: float = 0
     export_seconds: float = 0
+    diagnostic_seconds: float = 0
     games: int = 0
     environment_decisions: int = 0
     learner_transitions: int = 0

@@ -12,9 +12,9 @@ from manabot.training.models import AtaraxosMoveLearning, Learning
 from manabot.training.references import reference_distribution
 from manabot.training.selection import (
     UpdateDiagnostics,
+    selected_mean,
     selected_rows,
     selection_diagnostics,
-    selection_mask,
 )
 
 
@@ -72,18 +72,14 @@ def update_iteration(
     actions = torch.as_tensor(batch.actions, device=dev).flatten()
     old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
     behavior = torch.as_tensor(batch.probabilities, device=dev).flatten(0, 1)
-    mask = selection_mask(
+    selected = selected_rows(
         advantages,
-        learning.filter_kind,
         learning.retained_fraction,
         learning.min_advantage,
+        kind=learning.filter_kind,
     )
-    # Preserve the pilot's descending-magnitude order before its seeded shuffle.
-    selected = (
-        selected_rows(advantages, learning.retained_fraction, learning.min_advantage)
-        if learning.filter_kind == "top_count"
-        else mask.nonzero().flatten()
-    )
+    mask = torch.zeros_like(advantages, dtype=torch.bool)
+    mask[selected] = True
     training_rows = (
         selected
         if learning.filter_scope == "actor_critic"
@@ -147,17 +143,23 @@ def update_iteration(
             ratio = (dist.log_prob(actions[indices]) - old_logs[indices]).exp()
             adv = advantages[indices]
             actor_mask = mask[indices]
-            policy = torch.maximum(
-                -adv * ratio, -adv * ratio.clamp(1 - learning.clip, 1 + learning.clip)
-            )[actor_mask].sum() / actor_mask.sum().clamp_min(1)
+            policy = selected_mean(
+                torch.maximum(
+                    -adv * ratio,
+                    -adv * ratio.clamp(1 - learning.clip, 1 + learning.clip),
+                ),
+                actor_mask,
+            )
             probs = dist.probs
             logs = probs.clamp_min(1e-12).log()
-            kl_ref = (probs * (logs - reference[indices].clamp_min(1e-12).log())).sum(
-                -1
-            )[actor_mask].sum() / actor_mask.sum().clamp_min(1)
-            kl_behavior = (
-                probs * (logs - behavior[indices].clamp_min(1e-12).log())
-            ).sum(-1)[actor_mask].sum() / actor_mask.sum().clamp_min(1)
+            kl_ref = selected_mean(
+                (probs * (logs - reference[indices].clamp_min(1e-12).log())).sum(-1),
+                actor_mask,
+            )
+            kl_behavior = selected_mean(
+                (probs * (logs - behavior[indices].clamp_min(1e-12).log())).sum(-1),
+                actor_mask,
+            )
             value_loss = 0.5 * (value.flatten() - returns[indices]).square().mean()
             loss = (
                 policy
