@@ -1,5 +1,9 @@
 """
 agent.py
+Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
+
+Agent.forward preserves the serving policy/value interface. Training uses
+forward_distribution when it needs loss/draw/win logits rather than their mean.
 """
 
 from typing import Dict, Optional, Tuple
@@ -25,7 +29,9 @@ class Agent(nn.Module):
     such as why the model appears to always select the default action.
     """
 
-    def __init__(self, observation_space: ObservationSpace, hypers: AgentHypers):
+    def __init__(
+        self, observation_space: ObservationSpace, hypers: AgentHypers
+    ) -> None:
         super().__init__()
         self.observation_space = observation_space
         self.hypers = hypers
@@ -81,16 +87,17 @@ class Agent(nn.Module):
             nn.ReLU(),
             layer_init(nn.Linear(embed_dim, 1), gain=0.01),
         )
+        value_dim = 3 if hypers.value_kind == "categorical_wdl" else 1
         self.value_head = nn.Sequential(
             layer_init(nn.Linear(embed_dim, embed_dim)),
             nn.ReLU(),
             MeanPoolingLayer(dim=1),
             layer_init(nn.Linear(embed_dim, embed_dim)),
             nn.ReLU(),
-            layer_init(nn.Linear(embed_dim, 1)),
+            layer_init(nn.Linear(embed_dim, value_dim)),
         )
         self.logger.info(f"Policy head: ({embed_dim} -> 1)")
-        self.logger.info(f"Value head: ({embed_dim} -> 1)")
+        self.logger.info(f"Value head: ({embed_dim} -> {value_dim})")
 
         self.belief_count_buckets = int(hypers.belief_count_buckets)
         if self.belief_count_buckets > 0:
@@ -142,8 +149,28 @@ class Agent(nn.Module):
         self.last_raw_logits: Optional[torch.Tensor] = None
 
     def forward(
-        self, obs: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, obs: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return policy logits [B,A] and acting-viewer signed values [B]."""
+        logits, raw_value = self.forward_distribution(obs)
+        if self.hypers.value_kind == "categorical_wdl":
+            probabilities = raw_value.softmax(dim=-1)
+            value = probabilities[:, 2] - probabilities[:, 0]
+        else:
+            value = raw_value.squeeze(-1)
+        return logits, value
+
+    def forward_distribution(
+        self, obs: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return policy logits and raw critic output from one shared encoding.
+
+        Categorical output [B,3] contains loss/draw/win logits from the acting
+        viewer's perspective; scalar output [B,1] is an unconstrained value.
+        Neither output is detached: categorical supervision can train the
+        critic and shared encoder directly without passing through its mean.
+        A distributional head alone does not select a categorical loss.
+        """
         objects, is_agent, validity = self._gather_object_embeddings(obs)
 
         key_padding_mask = validity == 0
@@ -162,7 +189,7 @@ class Agent(nn.Module):
             # Save raw logits for offline diagnosis (scripts/diagnose_*).
             self.last_raw_logits = logits_before_mask.detach().cpu()
         logits = logits_before_mask.masked_fill(obs["actions_valid"] == 0, -1e8)
-        value = self.value_head(post_attention_objects).squeeze(-1)
+        value = self.value_head(post_attention_objects)
         return logits, value
 
     def _add_focus(

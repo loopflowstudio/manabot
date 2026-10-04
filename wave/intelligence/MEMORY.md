@@ -401,6 +401,32 @@ vector tests passed after rebuilding the extension. These are current-ABI
 workflow and treatment-correctness proofs, not strength or human-play results.
 ETU-91 retains ownership of final replayed study/notebook evidence.
 
+## Ataraxos source correction and move recipe (2026-10-04)
+
+ETU-92 checked the final Nature paper and actual supplement S3.4, equations
+(5)–(6), Table S7. The move-learning loss explicitly uses clipped per-action
+importance ratios plus reverse KL to collection and magnet policies. A claim
+that PPO clipping disqualifies this mechanism is incorrect; scheduled entropy
+alone still does not establish fidelity. This is not DeepNash R-NaD.
+
+The selectable `ataraxos_move` recipe adds categorical outcome lambda targets,
+unnormalized advantages, inclusive quantile filtering, timestep-grouped updates
+and iteration schedules. Scalar MSE remains a separate representation ablation;
+ordinary PPO controls retain their elapsed-budget schedules. Checkpoint metadata
+binds scalar versus categorical heads; serving still returns signed expected
+value. Behavior likelihoods and outcome distributions are recorded at collection,
+not reconstructed after updates. MTG same-viewer transitions and action-type
+magnet, CPU architecture and boundary conventions are declared adaptations in
+[the fidelity table](../../docs/ataraxos.md).
+
+A bounded one-thread categorical execution completed five games and 512 learner
+transitions with 46 optimizer exposures in 2.15 seconds, exporting four admitted
+raw/EMA artifacts. Analytic mixed-policy gradients, categorical terminal/reset
+boundaries and real reload checks establish mechanism/wiring evidence only.
+No matched-cost multi-seed comparison or challenger strength is established;
+scientific scoring needs its separate protocol and budget. ETU-91's frozen
+campaign and retained checkout were not altered or restarted.
+
 ## Frozen-policy sampler mechanism (ETU-96, 2026-10-04)
 
 `collect_belief` and `train_belief` extend TrainingRegime with explicit frozen

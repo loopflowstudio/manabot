@@ -2,27 +2,18 @@
 
 import math
 
+import numpy as np
 import torch
 
-
-def reference_distribution(obs, kind):
-    if kind not in {"uniform", "action_type_uniform"}:
-        raise ValueError(f"unknown reference: {kind}")
-    valid = obs["actions_valid"] > 0
-    if not valid.any(-1).all():
-        raise ValueError("reference requires at least one legal offer per row")
-    if kind == "uniform":
-        return valid / valid.sum(-1, keepdim=True)
-    action_types = obs["actions"][..., :-1]
-    types = action_types.argmax(-1)
-    # Count each type once per row without an offers-by-offers matrix.
-    counts = action_types.new_zeros(*types.shape[:-1], action_types.shape[-1])
-    counts.scatter_add_(-1, types, valid.to(counts.dtype))
-    weights = valid / counts.gather(-1, types).clamp_min(1)
-    return weights / weights.sum(-1, keepdim=True)
+from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
+from manabot.training.ataraxos import update_move_iteration
+from manabot.training.models import AtaraxosMoveLearning, Learning
+from manabot.training.references import reference_distribution
 
 
-def selected_rows(advantages, fraction, minimum):
+def selected_rows(
+    advantages: torch.Tensor, fraction: float, minimum: float
+) -> torch.Tensor:
     magnitude = advantages.abs()
     count = max(1, math.ceil(len(magnitude) * fraction))
     indices = torch.argsort(magnitude, descending=True, stable=True)[:count]
@@ -30,7 +21,9 @@ def selected_rows(advantages, fraction, minimum):
 
 
 @torch.no_grad()
-def update_ema(averaged, learner, rate):
+def update_ema(
+    averaged: torch.nn.Module, learner: torch.nn.Module, rate: float
+) -> None:
     """Advance once per collection/update iteration, including filtered skips.
 
     Initialize with a deep copy of the learner. Parameters are averaged;
@@ -45,9 +38,18 @@ def update_ema(averaged, learner, rate):
         dest.copy_(learner.get_buffer(name))
 
 
-def update_iteration(trainer, batch, learning, progress, rng):
+def update_iteration(
+    trainer: NetOpponentTrainer,
+    batch: RolloutBatch,
+    learning: Learning | AtaraxosMoveLearning,
+    progress: float,
+    rng: np.random.Generator,
+    *,
+    iteration: int = 1,
+) -> dict[str, int | float | str | list[int]]:
     """Optimize one fresh collector batch on the existing trainer and Adam owner."""
-    from manabot.sim.net_opponent import transition_gae
+    if isinstance(learning, AtaraxosMoveLearning):
+        return update_move_iteration(trainer, batch, learning, iteration)
 
     dev = trainer.experiment.device
     obs = trainer._obs_to_tensors(batch.obs, dev)
@@ -72,7 +74,7 @@ def update_iteration(trainer, batch, learning, progress, rng):
     selected = selected_rows(
         advantages, learning.retained_fraction, learning.min_advantage
     )
-    diagnostics = {
+    diagnostics: dict[str, int | float | str | list[int]] = {
         "rows": len(advantages),
         "retained": len(selected),
         "optimizer_exposures": 0,

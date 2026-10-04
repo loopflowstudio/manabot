@@ -350,6 +350,7 @@ def execute_regime(
                         stage.learning,
                         (time.perf_counter() - start) / regime.wall_seconds,
                         rng,
+                        iteration=iteration + 1,
                     )
                     iteration += 1
                     if ema is not None:

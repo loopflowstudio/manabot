@@ -2,14 +2,17 @@
 
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
 from manabot.belief.sampling_data import read_dataset
 from manabot.belief.sampling_fit import load_belief_sampler
 from manabot.infra.hypers import AgentHypers, MatchHypers
+from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
+    AtaraxosMoveLearning,
     CollectBelief,
     Execution,
     Learning,
@@ -79,18 +82,40 @@ def test_belief_dependencies_reject_forward_and_wrong_artifacts() -> None:
         TrainingRegime.model_validate(recipe.model_dump())
 
 
-def test_frozen_belief_stages_run_and_reload(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "gradient,weights",
+    [("ppo", "raw"), ("ataraxos_move", "raw"), ("ataraxos_move", "ema")],
+)
+def test_frozen_belief_stages_run_and_reload(
+    tmp_path: Path,
+    gradient: Literal["ppo", "ataraxos_move"],
+    weights: Literal["raw", "ema"],
+) -> None:
+    recipe = belief_recipe()
+    policy_stage = recipe.stages[0]
+    collection_stage = recipe.stages[1]
+    assert isinstance(policy_stage, TrainSelfPlay)
+    assert isinstance(collection_stage, CollectBelief)
+    if gradient == "ataraxos_move":
+        recipe.agent.value_kind = "categorical_wdl"
+        policy_stage.learning = AtaraxosMoveLearning(
+            gradient="ataraxos_move", min_advantage=0, advantage_quantile=0
+        )
+    collection_stage.weights = weights
     with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(belief_recipe(), 421, tmp_path / "run", store)
+        run = execute_regime(recipe, 421, tmp_path / "run", store)
         assert run.status == "completed"
         policy, collection, fit = run.stages
         assert collection.games == 3
         assert collection.inputs["policy/raw"] == policy.artifacts["raw"]
+        assert collection.inputs[f"policy/{weights}"] == policy.artifacts[weights]
+        loaded, _ = load_checkpoint_agent(policy.artifacts[weights]["path"])
+        assert loaded.hypers.value_kind == recipe.agent.value_kind
         assert fit.inputs["histories/dataset"] == collection.artifacts["dataset"]
         dataset = read_dataset(Path(collection.artifacts["dataset"]["path"]))
         assert {game.split for game in dataset.games} == {"train", "validation", "test"}
         assert len({game.game_id for game in dataset.games}) == 3
-        assert dataset.policy_identity == policy.artifacts["raw"]["sha256"]
+        assert dataset.policy_identity == policy.artifacts[weights]["sha256"]
         model = load_belief_sampler(
             Path(fit.artifacts["sampler"]["path"]),
             expected_dataset_identity=dataset.identity,

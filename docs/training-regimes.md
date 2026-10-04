@@ -94,3 +94,8 @@ vector tests passed in debug, and scoped Ruff and diff checks passed. ETU-90
 owns final RL acceptance and ETU-91 owns final replayed study/notebook evidence.
 ETU-75 remains open for its unmet empirical evidence; shared delivery does not
 close those claims. No scientific experiment ran in this infrastructure pass.
+
+The separate `ataraxos_move` gradient selector follows the final supplement's
+move recipe, including categorical outcome targets and iteration schedules.
+See [its source fidelity table and bounded commands](ataraxos.md). Existing PPO
+recipes remain controls; the new recipe does not alter a frozen study.

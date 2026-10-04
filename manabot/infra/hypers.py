@@ -5,7 +5,7 @@ Pydantic hyperparameter schemas shared across training and simulation.
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -105,6 +105,8 @@ class ExperimentHypers(BaseHypersModel):
 
 class AgentHypers(BaseHypersModel):
     semantic_pack: str | None = None
+    # Serialized architecture choice; categorical logits are loss/draw/win.
+    value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
