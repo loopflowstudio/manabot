@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "frozen-policy-belief-pilot",
+  "world": "w4",
+  "match": {
+    "hero_deck": {"Mountain": 8, "Gray Ogre": 8},
+    "villain_deck": {"Forest": 8, "Llanowar Elves": 8}
+  },
+  "agent": {"hidden_dim": 16, "num_attention_heads": 2},
+  "stages": [
+    {
+      "id": "policy",
+      "operation": "train_self_play",
+      "updates": 1,
+      "streams": 2,
+      "transitions": 16,
+      "learning": {"epochs": 1, "minibatches": 1},
+      "execution": {"threads": 1, "wall_seconds": 60}
+    },
+    {
+      "id": "histories",
+      "operation": "collect_belief",
+      "policy": "policy",
+      "weights": "raw",
+      "games": 3,
+      "max_steps": 1000,
+      "execution": {"threads": 1, "wall_seconds": 60}
+    },
+    {
+      "id": "belief",
+      "operation": "train_belief",
+      "dataset": "histories",
+      "steps": 4,
+      "batch_size": 8,
+      "hidden_size": 16,
+      "history_dropout": 0,
+      "evaluation_samples": 4,
+      "execution": {"threads": 1, "wall_seconds": 60}
+    }
+  ],
+  "wall_seconds": 180
+}

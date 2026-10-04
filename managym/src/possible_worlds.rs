@@ -348,6 +348,54 @@ pub struct PossibleWorldProjection {
     pub weight: String,
 }
 
+/// Viewer-safe domain constraints without enumerating compatible hands.
+/// The exact space and scalable samplers consume this same authority projection.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct HiddenHandConstraints {
+    pub viewer: PlayerId,
+    pub opponent: PlayerId,
+    pub source_observation: ObservationIdentity,
+    pub hand_size: u32,
+    pub pool: BTreeMap<String, u32>,
+    pub known_hand: BTreeMap<String, u32>,
+}
+
+impl HiddenHandConstraints {
+    pub fn for_viewer(game: &Game, viewer: PlayerId) -> Self {
+        assert!(
+            viewer.0 < game.state.players.len(),
+            "viewer must name a player"
+        );
+        let opponent = PlayerId((viewer.0 + 1) % 2);
+        let mut pool: BTreeMap<String, u32> = BTreeMap::new();
+        for zone in [ZoneType::Hand, ZoneType::Library] {
+            for &card in game.state.zones.zone_cards(zone, opponent) {
+                *pool.entry(game.state.cards[card].name.clone()).or_insert(0) += 1;
+            }
+        }
+        let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
+        let source_observation = game
+            .semantic_observation(viewer)
+            .expect("valid viewer has a semantic observation")
+            .identity;
+        let (known, _) = game.hidden_hand_partition(opponent);
+        let mut known_hand = BTreeMap::new();
+        for card in known {
+            *known_hand
+                .entry(game.state.cards[card].name.clone())
+                .or_insert(0) += 1;
+        }
+        Self {
+            viewer,
+            opponent,
+            source_observation,
+            hand_size,
+            pool,
+            known_hand,
+        }
+    }
+}
+
 /// Read-only, identity-bound projection consumed by manabot. It contains no
 /// physical card IDs and does not grant mutation authority.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -538,36 +586,14 @@ impl PossibleWorldSpace {
     /// other player; the unseen pool is the opponent's Hand ∪ Library name
     /// multiset; `H` is the opponent's current hand size.
     pub fn for_viewer(game: &Game, viewer: PlayerId) -> Self {
-        assert!(
-            viewer.0 < game.state.players.len(),
-            "viewer must name a player"
-        );
-        let opponent = PlayerId((viewer.0 + 1) % 2);
-        let mut pool: BTreeMap<String, u32> = BTreeMap::new();
-        for zone in [ZoneType::Hand, ZoneType::Library] {
-            for &card in game.state.zones.zone_cards(zone, opponent) {
-                *pool.entry(game.state.cards[card].name.clone()).or_insert(0) += 1;
-            }
-        }
-        let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
-        let source_observation = game
-            .semantic_observation(viewer)
-            .expect("valid viewer has a semantic observation")
-            .identity;
-        let (known, _) = game.hidden_hand_partition(opponent);
-        let mut known_hand = BTreeMap::new();
-        for card in known {
-            *known_hand
-                .entry(game.state.cards[card].name.clone())
-                .or_insert(0) += 1;
-        }
+        let constraints = HiddenHandConstraints::for_viewer(game, viewer);
         Self::from_parts(
-            viewer,
-            opponent,
-            source_observation,
-            hand_size,
-            pool,
-            known_hand,
+            constraints.viewer,
+            constraints.opponent,
+            constraints.source_observation,
+            constraints.hand_size,
+            constraints.pool,
+            constraints.known_hand,
         )
     }
 

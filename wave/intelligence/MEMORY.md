@@ -400,3 +400,30 @@ suite passed 65 tests (one notebook dependency skip), and six native debug
 vector tests passed after rebuilding the extension. These are current-ABI
 workflow and treatment-correctness proofs, not strength or human-play results.
 ETU-91 retains ownership of final replayed study/notebook evidence.
+
+## Frozen-policy sampler mechanism (ETU-96, 2026-10-04)
+
+`collect_belief` and `train_belief` extend TrainingRegime with explicit frozen
+raw/EMA policy → whole-game private dataset → sampler dependencies. They do not
+mutate ETU-91 or feed a belief loss back into the behavior policy. VerifyStore
+retains attempts/costs; sampler admission binds exact bytes, policy, dataset,
+schema and world. Ordinary last-complete-raw policy selection is unchanged.
+
+managym now exposes hand constraints without enumerating the support, using the
+same pool/minima source as exact possible worlds. Autoregressive count masks
+preserve hand size, known minima and residual card capacity. The physical-deal
+baseline removes known cards before dealing unknown slots. Joint NLL uses truth
+only as a label; inference sees public constraints and a lossy, order-invariant
+commitment summary, not full board/ordered history. Out-of-roster generated
+cards fail explicitly. This is a bounded mechanism, not a calibrated posterior
+on every viewer information set.
+
+Exact-tracker comparison and foreign/adversarial cohort measurement are exposed
+as instruments. Synthetic checks do not replace independent-seed calibration,
+real foreign-policy histories, history-dropout comparisons or matched-time
+complete-game search evidence. These scientific comparisons remain open and
+require their own frozen protocol/budget; no new costly run or paid compute was
+started. Coordinate sampled-hand consumption with the post-RL search Task and
+preserve the exact tracker as a tractable reference. Wider pools still require
+new world-bound complete-loop measurements. See the
+[sampler guide](../../docs/belief-sampler.md).

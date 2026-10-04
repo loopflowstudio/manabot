@@ -15,7 +15,7 @@ The ordinary preset command remains available. Combining `--regime` with a
 preset or `--set` fails rather than silently ignoring overrides. Choose a new
 output directory for every attempt; checkpoints are not process-resume files.
 
-Stages are `collect_search`, `train_supervised`, and `train_self_play`.
+Policy stages are `collect_search`, `train_supervised`, and `train_self_play`.
 A supervised stage's `datasets` name earlier collection outputs. Its `initial`
 names an earlier supervised stage, carrying learner and Adam state; each source
 game keeps its identity and validation assignment as the corpus grows. Game IDs
@@ -25,6 +25,15 @@ live collector/learner/optimizer within the same execution; streams pause at the
 exact update boundary. External checkpoint reuse is not supported as implicit
 resume. Unsupported operations, forward references, and incompatible runtime
 worlds fail validation.
+
+`collect_belief` freezes a named earlier policy stage's `raw` or `ema` artifact
+and collects complete self-play games with private hidden-hand labels.
+`train_belief` fits a constrained autoregressive sampler from that collection's
+immutable whole-game train/validation/test splits. These stages preserve the
+last-complete-raw policy selection; sampler artifacts are separately admitted
+and do not turn an observation-only policy into a belief-enabled player.
+The [belief sampler guide](belief-sampler.md) describes the bounded pilot,
+physical-deal baseline, history-dropout treatment and scientific limits.
 
 The recipe reuses `AgentHypers`, `ObservationSpaceHypers`, and authored
 `MatchHypers`, including both sideboards. Architecture and match binding live

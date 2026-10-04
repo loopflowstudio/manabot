@@ -365,6 +365,25 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    /// Project hidden-hand constraints without enumerating compatible hands.
+    pub fn hidden_hand_constraints(
+        &self,
+        viewer: usize,
+    ) -> Result<crate::possible_worlds::HiddenHandConstraints, AgentError> {
+        let game = self.game.as_ref().ok_or_else(|| {
+            AgentError("env.hidden_hand_constraints called before reset".to_string())
+        })?;
+        if viewer >= game.state.players.len() {
+            return Err(AgentError(
+                "hidden_hand_constraints: invalid viewer".to_string(),
+            ));
+        }
+        Ok(crate::possible_worlds::HiddenHandConstraints::for_viewer(
+            game,
+            PlayerId(viewer),
+        ))
+    }
+
     /// Canonical viewer-relative possible-world space. Enumeration, exact
     /// physical-deal weights, ordering, and identity all remain managym-owned.
     pub fn possible_world_space(

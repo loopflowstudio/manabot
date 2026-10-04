@@ -99,6 +99,12 @@ transfer. The generic PPO and teacher-shard trainers do not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical
 positional-condition checkpoints are rejected rather than reinterpreted.
 
+Training regimes can freeze a policy, collect private whole-game supervision,
+and fit a constrained autoregressive hand sampler without exact enumeration.
+See [frozen-policy belief sampling](../docs/belief-sampler.md). This separately
+admitted belief artifact does not change the policy's input contract or establish
+foreign-opponent calibration or search strength.
+
 Experiment-specific driver scripts live in
 [experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
 only reusable instruments. The experiment discipline and ledger are in

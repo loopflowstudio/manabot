@@ -1131,6 +1131,20 @@ mod learn_tests {
     }
 
     #[test]
+    fn hidden_hand_constraints_match_exact_domain_without_truth() {
+        use crate::possible_worlds::{HiddenHandConstraints, PossibleWorldSpace};
+        let mut game = small_known_hand_game();
+        let before = HiddenHandConstraints::for_viewer(&game, PlayerId(1));
+        let exact = PossibleWorldSpace::for_viewer(&game, PlayerId(1)).projection();
+        assert_eq!(before.pool, exact.pool);
+        assert_eq!(before.known_hand, exact.known_hand);
+        assert_eq!(before.hand_size, exact.hand_size);
+        game.determinize(PlayerId(1), 781);
+        let after = HiddenHandConstraints::for_viewer(&game, PlayerId(1));
+        assert_eq!(before, after);
+    }
+
+    #[test]
     fn learn_possible_worlds_use_residual_copy_weights_and_reject_missing_knowledge() {
         use crate::possible_worlds::{PossibleWorldSpace, WorldQuery};
         let game = small_known_hand_game();

@@ -3,7 +3,10 @@
 2026-10-04. These proposals belong to ETU-91's experiment design; no execution
 or expensive allocation is authorized by their presence. Each requires frozen
 inputs and predictions, a separately approved cost cap, fresh evaluation deals,
-and retained failed attempts before scoring. None is a runnable regime stage.
+and retained failed attempts before scoring. The frozen-policy collection and
+belief fitting stages in item 4 now have a bounded implementation described in
+[the sampler guide](../docs/belief-sampler.md); its scientific allocations and
+acceptance comparisons below remain unexecuted proposals.
 
 ## Following the learned policy into search and belief experiments
 

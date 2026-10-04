@@ -93,8 +93,32 @@ class TrainSelfPlay(Stage):
     learning: Learning = Learning()
 
 
+class CollectBelief(Stage):
+    """Freeze one admitted policy artifact before collecting private labels."""
+
+    operation: Literal["collect_belief"]
+    policy: str
+    weights: Literal["raw", "ema"] = "raw"
+    games: int = Field(ge=3)
+    max_steps: int = Field(default=2000, ge=1)
+
+
+class TrainBelief(Stage):
+    """Fit only the sampler; policy weights are never updated by belief NLL."""
+
+    operation: Literal["train_belief"]
+    dataset: str
+    steps: int = Field(default=32, ge=1)
+    batch_size: int = Field(default=32, ge=1)
+    hidden_size: int = Field(default=32, ge=2)
+    learning_rate: float = Field(default=0.001, gt=0)
+    history_dropout: float = Field(default=0, ge=0, le=1)
+    evaluation_samples: int = Field(default=32, ge=1)
+
+
 Operation = Annotated[
-    CollectSearch | TrainSupervised | TrainSelfPlay, Field(discriminator="operation")
+    CollectSearch | TrainSupervised | TrainSelfPlay | CollectBelief | TrainBelief,
+    Field(discriminator="operation"),
 ]
 
 
@@ -111,12 +135,30 @@ class TrainingRegime(Strict):
     selection: Literal["last-complete-raw"] = "last-complete-raw"
 
     @model_validator(mode="after")
-    def references(self):
+    def references(self) -> "TrainingRegime":
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
+            if isinstance(stage, CollectBelief):
+                policy = previous.get(stage.policy)
+                if not isinstance(policy, (TrainSupervised, TrainSelfPlay)):
+                    raise ValueError(
+                        "belief policy must refer to an earlier policy stage"
+                    )
+                if stage.weights == "ema" and (
+                    not isinstance(policy, TrainSelfPlay) or policy.learning.ema is None
+                ):
+                    raise ValueError(
+                        "belief EMA dependency requires an EMA policy artifact"
+                    )
+            if isinstance(stage, TrainBelief) and not isinstance(
+                previous.get(stage.dataset), CollectBelief
+            ):
+                raise ValueError(
+                    "belief dataset must refer to an earlier belief collection"
+                )
             if isinstance(stage, TrainSupervised):
                 if len(stage.datasets) != len(set(stage.datasets)):
                     raise ValueError("dataset references must be unique")

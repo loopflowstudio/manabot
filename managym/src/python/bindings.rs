@@ -2790,6 +2790,17 @@ impl PyEnv {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Viewer-safe hand-count constraints; never enumerates possible worlds.
+    fn hidden_hand_constraints_json(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let projection = env.hidden_hand_constraints(viewer).map_err(map_agent_err)?;
+        serde_json::to_string(&projection)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Canonical viewer-relative PossibleWorldSpace as read-only JSON.
     fn possible_world_space_json(&self, viewer: usize) -> PyResult<String> {
         let env = self
