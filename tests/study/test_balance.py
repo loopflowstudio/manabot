@@ -20,6 +20,11 @@ def test_edits_parse_and_apply_without_touching_the_source():
     }
 
 
+def test_card_names_may_contain_commas():
+    edits = balance.parse_edits("-1 Suki, Kyoshi Warrior, +1 Plains")
+    assert edits == [(-1, "Suki, Kyoshi Warrior"), (1, "Plains")]
+
+
 def test_bad_edits_are_rejected():
     with pytest.raises(ValueError):
         balance.parse_edits("two Tiger-Seal")

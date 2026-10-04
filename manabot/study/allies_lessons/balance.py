@@ -32,7 +32,9 @@ FILLER = {"ur_lessons": "Island", "gw_allies": "Plains"}
 def parse_edits(text: str) -> list[tuple[int, str]]:
     """'+2 Tiger-Seal, -2 Pop Quiz' -> [(2, 'Tiger-Seal'), (-2, 'Pop Quiz')]"""
     edits = []
-    for part in filter(None, (piece.strip() for piece in text.split(","))):
+    # Split only before a signed count, so names like "Suki, Kyoshi Warrior" survive.
+    parts = re.split(r",\s*(?=[+-]\d)", text)
+    for part in filter(None, (piece.strip() for piece in parts)):
         found = re.fullmatch(r"([+-]\d+)\s+(.+)", part)
         if not found:
             raise ValueError(

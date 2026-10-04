@@ -45,6 +45,7 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 | [10](exp-10-value-gate.md) | does search-with-V beat V-greedy? | gate passes deal-diverse 60.25% [55.4, 64.9], but V loses to cheaper random-rollout search (P3 refuted); V's ordering near-noise in undecided positions; first battery + training corpus (3 deals/225g) were deal-narrow |
 | [11](exp-11-curriculum-exploitability.md) | does a stronger opponent teach better? | self-play quietly wins; the opponent installs the strategy; student robust (exploiter ≤26%) |
 | [W2-214](w2-214-structural-semantic-katas.md) | can a bounded structural encoder break the bag encoder's exact symmetry on five static semantic relations? | instrument valid; bag exactly 50%; relational arm learned order/hierarchy but failed the pre-registered trainability and cost gates — redesign optimization/capacity before interpreting the remaining katas |
+| [ETU-87](etu-87-allies-lessons-balance.md) | which cards decide Allies versus Lessons? | exploratory — the 70–30 gap is in the lists (Random mirrors reproduce it); cutting White Lotus Reinforcements ×2 and Suki for lands gives UR Lessons 47.7% [45, 51] on w3; the revised Lessons list is worth ~13 points on w4 |
 
 ### Teacher program (W2-234)
 
