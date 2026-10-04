@@ -50,7 +50,7 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(tmp_path, c
     else:
         binding = payload["world_binding"]
         if change == "world":
-            binding["world"] = "w2"
+            binding["world"] = "w3"
         elif change == "rules":
             binding["rules"] = "discard-only"
         elif change == "schema":

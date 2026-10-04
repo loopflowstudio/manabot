@@ -10,7 +10,7 @@ from typing import Any
 
 import managym
 
-WORLD = "w3"
+WORLD = managym.WORLD_VERSION
 RULES = "owned-sideboards-learn-known-hand-v1"
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -57,7 +57,7 @@ def validate_checkpoint_world(
 ) -> dict:
     binding = checkpoint.get("world_binding")
     if not isinstance(binding, dict) or binding.get("world") != WORLD:
-        raise ValueError("checkpoint requires an explicit compatible w3 world binding")
+        raise ValueError(f"checkpoint requires an explicit compatible {WORLD} world binding")
     try:
         configs = player_configs
         if configs is None:

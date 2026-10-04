@@ -7,3 +7,7 @@
 - The launch goal exceeds 16,000 tokens because it includes the generated
   workspace inventory. Authored scratch and Rules memory fit their budgets;
   do not edit generated context or raise limits to conceal that overage.
+
+- Sync onto main: retain main’s w4 rules, versioned fixtures and v5 visual
+  references; bind ordinary checkpoints to native WORLD_VERSION instead of
+  the earlier planned w3. Preserve Learn behavior and reject w3 checkpoints.
