@@ -252,6 +252,21 @@ def make_player(
     """
 
     kind = spec["kind"]
+    if kind == "local_update":
+        from pathlib import Path
+
+        from manabot.sim.local_update import (
+            LocalSearchConfig,
+            LocalUpdatePlayer,
+            LocalUpdateTeacher,
+        )
+
+        teacher = LocalUpdateTeacher(
+            Path(spec["checkpoint"]),
+            str(spec["checkpoint_sha256"]),
+            LocalSearchConfig.model_validate(spec.get("config", {})),
+        )
+        return LocalUpdatePlayer(teacher, seed=seed), teacher.space
     if kind == "search":
         return (
             FlatMCPlayer(

@@ -99,6 +99,47 @@ Exploiters report every seed's attack curve and failed attempts; their maximum
 observed win rate is a bounded attack result, never an exact exploitability
 number. No mechanism is retained solely because a single seed improved.
 
+## ETU-95 implementation boundary (2026-10-04)
+
+The [local-search guide](../docs/local-policy-search.md) and executable
+[`frozen-policy-local-update.json`](regimes/frozen-policy-local-update.json)
+now cover frozen raw/EMA collection, viewer-safe rollouts, the two-KL local
+update, complete target receipts, hard/soft/allocation controls, and cumulative
+multi-round fitting. The recipe is a bounded mechanism proof, not authorization
+for the proposed 8-hour search or 14-hour distillation allocations above.
+The allocation target is not the requested genuine PUCT-visit comparison.
+
+Full-game exact-posterior scoring is blocked: combat/target choices lack public
+likelihood identities and ordinary discard cannot refresh counterfactual offers.
+The local exact player stops explicitly there. The compatible-prior recipe can
+complete; substituting it does not satisfy the exact-belief comparison.
+
+Before any scientific launch, freeze three independent producer checkpoints and
+all failed producer attempts; checkpoint native/setup/ABI hashes; alpha/beta,
+rollout depth and 50/200-ms envelopes; source policy identities; held-out paired
+deal subranges; training/validation/test whole-game membership; endpoint cohort;
+and calibrated storage/time estimates. Exact-history capability must pass first.
+The proposed B=.55 criterion uses a training-seed-level uncertainty interval
+whose lower bound exceeds .50; game-level paired uncertainty remains separate.
+Keep the original proposed caps and stop on deadline/support/provider failures,
+with incomplete cells retained. An unavailable comparison is not a negative
+strength result. No paid compute or extra ETU-91 allocation is authorized.
+
+Evaluate additional teacher lessons separately:
+
+| Question | Frozen comparison | Required evidence / stop |
+| --- | --- | --- |
+| Does full/cheap allocation pay? | All-full versus configured random full/cheap worlds at equal total label cost | Realized counts, entropy, held-out KL and complete-game cost; no inference from nominal world counts |
+| Does replay help? | Latest-round-only versus cumulative immutable shards, identical fits/seeds and endpoint budgets | Immutable root membership, per-teacher target age/weight and charged historical generation cost; no split reshuffle |
+| Does relabeling beat fresh games? | Stronger teacher on archived roots versus newly generated roots at equal total cost | Canonical archived root/trajectory replay and new immutable receipts; unavailable until relabeling admission exists |
+| Do improvements compound? | At least two frozen collect/fit rounds versus first-round student, fixed controls and endpoint deals | Full-game cross-seed uncertainty, unchanged inference envelopes and every attempted round; pipeline iteration alone is insufficient |
+| Which target preserves strategy? | Hard Q argmax, actual same-root PUCT visits and regularized soft update | Same roots, separately identified teachers, entropy, held-out KL, arena and adversarial response; allocation frequencies do not substitute for visits |
+
+Source basis: final Ataraxos S3.7 uses a regularized local update after fixed-policy
+rollouts; the implementation guide records its exact equation and adaptations.
+KataGo's allocation idea is a separate ablation, not evidence about hidden-information
+MTG. No new scientific result is reported by this addition.
+
 ## Compound implementation and separate comparison — 2026-10-04
 
 ETU-94 implements a recurrent joint decoder, native lowering to canonical

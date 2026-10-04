@@ -507,6 +507,36 @@ preserve the exact tracker as a tractable reference. Wider pools still require
 new world-bound complete-loop measurements. See the
 [sampler guide](../../docs/belief-sampler.md).
 
+## Frozen-policy local update boundary (ETU-95, 2026-10-04)
+
+Jack Heart authorized implementation and landing while leaving scientific
+acceptance open and ETU-91 untouched. `collect_local_update` freezes raw/EMA
+policy bytes, labels frozen-policy trajectories with viewer-safe rollout/value
+estimates, and retains the two-KL local update from final Ataraxos S3.7 (7)–(8).
+Policy, likelihood, rollout and value identities agree; arena opponents need not
+match that model. Scalar critic units must be explicitly signed outcomes;
+old supervised win-logit checkpoints cannot silently enter this search.
+
+The bounded compatible-prior recipe completed four tiny-pool games and 318
+labeled decisions in 9.94 seconds, including hard/soft/allocation targets and a
+second teacher/student round with cumulative immutable data. This is workflow
+proof, not selected-matchup strength, compounding or a calibrated posterior.
+Allocation frequencies from balanced flat rollouts are not PUCT visits.
+
+Real-game verification exposed a provider gap: the retained tracker cannot form
+an exact full-history posterior when opponent combat/target choices have no
+public likelihood identity; ordinary discard refresh is also unsupported. The
+new exact arm fails explicitly instead of inheriting the tracker's partial-history
+claim. Rules must supply these capabilities before full-game exact-versus-prior
+scoring. Source roots plus belief history remain required for rollout replay;
+private receipts are not a replacement for GameSession/Trace authority.
+
+The arena lifecycle retains private targets and actual command replay, including
+commands preceding failed belief updates. Etude has a typed viewer-safe projection,
+not a new live advisor registration. Genuine same-root PUCT-visit controls,
+archived-root relabeling, learned-sampler integration, independent-seed strength
+and human-play acceptance remain open. See [local-search contracts](../../docs/local-policy-search.md)
+and the separately budgeted [follow-up protocol](../../experiments/training-regime-followups.md).
 ## Omitted learning controls (ETU-93, 2026-10-04)
 
 Jack Heart authorized mechanism implementation and landing with bounded proof,

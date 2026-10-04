@@ -46,6 +46,7 @@ from .compound import CompoundStatistics, collect_game, optimize_games, replay_g
 from .models import (
     ArtifactReference,
     CollectBelief,
+    CollectLocalUpdate,
     CollectSearch,
     StageRecord,
     TrainBelief,
@@ -294,7 +295,7 @@ def _execute_regime(
                     raise MemoryError("training process tree memory limit exceeded")
 
             references = list(getattr(stage, "datasets", []))
-            if isinstance(stage, CollectBelief):
+            if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
                 references.append(stage.policy)
             if isinstance(stage, TrainBelief):
                 references.append(stage.dataset)
@@ -308,7 +309,25 @@ def _execute_regime(
                     record.inputs[f"{reference}/{name}"] = dict(item)
             persist()
             check()
-            if isinstance(stage, CollectSearch):
+            if isinstance(stage, (CollectSearch, CollectLocalUpdate)):
+                if isinstance(stage, CollectLocalUpdate):
+                    source = next(
+                        item for item in run.stages if item.id == stage.policy
+                    )
+                    frozen = source.artifacts[stage.weights]
+                    teacher_spec = {
+                        "kind": "local_update",
+                        "checkpoint": frozen["path"],
+                        "checkpoint_sha256": frozen["sha256"],
+                        "config": stage.search.model_dump(),
+                    }
+                else:
+                    teacher_spec = {
+                        "kind": "determinized_puct",
+                        "sims": stage.simulations,
+                        "worlds": stage.worlds,
+                        "max_steps": stage.max_steps,
+                    }
                 shards = []
                 for _ in range(stage.games):
                     check()
@@ -321,12 +340,10 @@ def _execute_regime(
                     )
                     summary = generate_selfplay_shard(
                         num_games=1,
-                        teacher_spec={
-                            "kind": "determinized_puct",
-                            "sims": stage.simulations,
-                            "worlds": stage.worlds,
-                            "max_steps": stage.max_steps,
-                        },
+                        teacher_spec=teacher_spec,
+                        max_steps_per_game=stage.max_steps
+                        if isinstance(stage, CollectLocalUpdate)
+                        else 5000,
                         seed=seeds["collection"],
                         game_offset=game_index,
                         out_path=temporary,
@@ -335,6 +352,9 @@ def _execute_regime(
                         deadline_monotonic=deadline,
                     )
                     os.replace(temporary, target)
+                    journal = Path(str(temporary) + ".receipts.jsonl")
+                    if journal.exists():
+                        record.artifacts[f"receipts-{game_index}"] = artifact(journal)
                     summary["out_path"] = str(target)
                     record.artifacts[f"game-{game_index}"] = artifact(target)
                     record.diagnostics.append(summary)
@@ -688,12 +708,20 @@ def _execute_regime(
                     int(g) for g in np.unique(dataset["game_index"]) if int(g) % 10 == 0
                 }
                 previous = outputs.get(stage.initial, {})
+                if stage.initial and not previous:
+                    source = next(
+                        item for item in run.stages if item.id == stage.initial
+                    )
+                    initial_agent, _ = load_checkpoint_agent(
+                        source.artifacts["raw"]["path"]
+                    )
+                    previous = {"agent": initial_agent}
                 continuation = {}
                 phase = "learning_seconds"
                 tick = time.perf_counter()
                 agent, _, _, history = train_search_supervised(
                     dataset,
-                    policy_target_kind="visit_distribution",
+                    policy_target_kind=stage.target,
                     value_weight=0,
                     agent_hypers=regime.agent,
                     observation_hypers=regime.observation,
@@ -743,6 +771,10 @@ def _execute_regime(
                             if name == "ema"
                             else None,
                             "regime_digest": run.regime_digest,
+                            "value_semantic": "signed_outcome"
+                            if isinstance(stage, (TrainSelfPlay, TrainCompound))
+                            or stage.target.startswith("local_")
+                            else "win_logit",
                         },
                     )
                     os.replace(temporary, target)
@@ -786,6 +818,10 @@ def _execute_regime(
             run.stages[-1].error = run.error
             run.stages[-1].seconds = time.perf_counter() - stage_start
             record = run.stages[-1]
+            retained_paths = {item["path"] for item in record.artifacts.values()}
+            for journal in out.glob(f"{record.id}-*.receipts.jsonl"):
+                if str(journal) not in retained_paths:
+                    record.rejected_artifacts[journal.name] = artifact(journal)
             record.cpu_seconds = time.process_time() - cpu_start
             unaccounted = max(
                 0.0,

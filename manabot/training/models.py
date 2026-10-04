@@ -5,6 +5,7 @@ from typing import Annotated, Literal, TypedDict
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.infra.hypers import AgentHypers, MatchHypers, ObservationSpaceHypers
+from manabot.sim.local_update import LocalSearchConfig
 
 
 class ArtifactReference(TypedDict):
@@ -121,12 +122,25 @@ class CollectSearch(Stage):
     max_steps: int = Field(default=2000, ge=1)
 
 
+class CollectLocalUpdate(Stage):
+    """Freeze an admitted raw/EMA policy for exact-range local targets."""
+
+    operation: Literal["collect_local_update"]
+    policy: str
+    weights: Literal["raw", "ema"] = "raw"
+    games: int = Field(ge=2)
+    max_steps: int = Field(default=2000, ge=1)
+    search: LocalSearchConfig = LocalSearchConfig()
+
+
 class TrainSupervised(Stage):
     operation: Literal["train_supervised"]
     trainer: Literal["search_supervised"] = "search_supervised"
     optimizer: Literal["adam"] = "adam"
     trainable: Literal["policy"] = "policy"
-    target: Literal["visit_distribution"] = "visit_distribution"
+    target: Literal[
+        "visit_distribution", "local_soft", "local_argmax", "local_allocation"
+    ] = "visit_distribution"
     datasets: list[str] = Field(min_length=1)
     initial: str | None = None
     epochs: int = Field(default=10, ge=1)
@@ -222,6 +236,7 @@ class TrainCompound(Stage):
 
 Operation = Annotated[
     CollectSearch
+    | CollectLocalUpdate
     | TrainSupervised
     | TrainSelfPlay
     | TrainCompound
@@ -274,7 +289,7 @@ class TrainingRegime(Strict):
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
-            if isinstance(stage, CollectBelief):
+            if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
                 policy = previous.get(stage.policy)
                 if not isinstance(policy, (TrainSupervised, TrainSelfPlay)):
                     raise ValueError(
@@ -296,13 +311,37 @@ class TrainingRegime(Strict):
                 if len(stage.datasets) != len(set(stage.datasets)):
                     raise ValueError("dataset references must be unique")
                 for ref in stage.datasets:
-                    if not isinstance(previous.get(ref), CollectSearch):
+                    if not isinstance(
+                        previous.get(ref), (CollectSearch, CollectLocalUpdate)
+                    ):
                         raise ValueError(
                             f"dataset {ref} must refer to an earlier collection"
                         )
+                    if stage.target.startswith("local_") != isinstance(
+                        previous[ref], CollectLocalUpdate
+                    ):
+                        raise ValueError(
+                            "supervised target must match collection semantics"
+                        )
             initial = getattr(stage, "initial", None)
             parent = previous.get(initial)
-            if initial and type(parent) is not type(stage):
+            if isinstance(stage, TrainSupervised) and stage.target.startswith("local_"):
+                if not isinstance(parent, (TrainSelfPlay, TrainSupervised)) or (
+                    isinstance(parent, TrainSupervised)
+                    and not parent.target.startswith("local_")
+                ):
+                    raise ValueError(
+                        "local distillation requires an earlier signed-value policy"
+                    )
+            if (
+                initial
+                and type(parent) is not type(stage)
+                and not (
+                    isinstance(stage, TrainSupervised)
+                    and stage.target.startswith("local_")
+                    and isinstance(parent, TrainSelfPlay)
+                )
+            ):
                 raise ValueError(
                     "continuation requires an earlier stage of the same operation"
                 )
@@ -328,7 +367,9 @@ class TrainingRegime(Strict):
                     )
                 latest_compound = stage
             if self.agent.value_kind == "categorical_wdl" and (
-                isinstance(stage, (TrainSupervised, TrainCompound))
+                isinstance(stage, TrainCompound)
+                or isinstance(stage, TrainSupervised)
+                and not stage.target.startswith("local_")
                 or isinstance(stage, TrainSelfPlay)
                 and not isinstance(stage.learning, AtaraxosMoveLearning)
             ):

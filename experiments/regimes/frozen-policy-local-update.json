@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "id": "frozen-policy-local-update",
+  "world": "w4",
+  "match": {
+    "hero": "gaea",
+    "villain": "urza",
+    "hero_deck": {
+      "Mountain": 8,
+      "Gray Ogre": 8
+    },
+    "villain_deck": {
+      "Forest": 8,
+      "Llanowar Elves": 8
+    },
+    "hero_sideboard": {},
+    "villain_sideboard": {}
+  },
+  "observation": {
+    "max_cards_per_player": 60,
+    "max_permanents_per_player": 40,
+    "max_actions": 64,
+    "max_focus_objects": 2,
+    "max_events": 32
+  },
+  "agent": {
+    "semantic_pack": null,
+    "value_kind": "scalar",
+    "hidden_dim": 8,
+    "num_attention_heads": 2,
+    "attention_on": true,
+    "belief_count_buckets": 0,
+    "belief_card_vocab_size": 0,
+    "belief_owner_role_vocab_size": 2,
+    "belief_hidden_zone_vocab_size": 7
+  },
+  "stages": [
+    {
+      "id": "policy",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_self_play",
+      "trainer": "net_opponent",
+      "optimizer": "adam",
+      "trainable": "policy_value",
+      "behavior": "current-self",
+      "initial": null,
+      "updates": 1,
+      "streams": 2,
+      "transitions": 32,
+      "learning": {
+        "gradient": "ppo",
+        "gamma": 1.0,
+        "policy_lambda": 0.95,
+        "value_lambda": 1.0,
+        "retained_fraction": 0.5,
+        "min_advantage": 0.0,
+        "reference": "uniform",
+        "learning_rate": {
+          "initial": 0.00025,
+          "decay": 9.0,
+          "power": 1.0
+        },
+        "tau": {
+          "initial": 0.01,
+          "decay": 9.0,
+          "power": 1.0
+        },
+        "collection_kl": 0.1,
+        "clip": 0.1,
+        "value_weight": 0.5,
+        "max_grad_norm": 0.5,
+        "epochs": 1,
+        "minibatches": 1,
+        "ema": null
+      }
+    },
+    {
+      "id": "labels",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "collect_local_update",
+      "policy": "policy",
+      "weights": "raw",
+      "games": 2,
+      "max_steps": 2000,
+      "search": {
+        "worlds": 2,
+        "depth": 2,
+        "full_probability": 0.5,
+        "cheap_worlds": 1,
+        "alpha": 0.02,
+        "beta": 1.0,
+        "decision_seconds": 5.0,
+        "max_support": 20000,
+        "sampling": "compatible_prior"
+      }
+    },
+    {
+      "id": "local-soft",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_supervised",
+      "trainer": "search_supervised",
+      "optimizer": "adam",
+      "trainable": "policy",
+      "target": "local_soft",
+      "datasets": [
+        "labels"
+      ],
+      "initial": "policy",
+      "epochs": 2,
+      "batch_size": 64,
+      "learning_rate": 0.001
+    },
+    {
+      "id": "local-argmax",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_supervised",
+      "trainer": "search_supervised",
+      "optimizer": "adam",
+      "trainable": "policy",
+      "target": "local_argmax",
+      "datasets": [
+        "labels"
+      ],
+      "initial": "policy",
+      "epochs": 2,
+      "batch_size": 64,
+      "learning_rate": 0.001
+    },
+    {
+      "id": "local-allocation",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_supervised",
+      "trainer": "search_supervised",
+      "optimizer": "adam",
+      "trainable": "policy",
+      "target": "local_allocation",
+      "datasets": [
+        "labels"
+      ],
+      "initial": "policy",
+      "epochs": 2,
+      "batch_size": 64,
+      "learning_rate": 0.001
+    },
+    {
+      "id": "round-two",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "collect_local_update",
+      "policy": "local-soft",
+      "weights": "raw",
+      "games": 2,
+      "max_steps": 2000,
+      "search": {
+        "worlds": 1,
+        "depth": 1,
+        "full_probability": 1.0,
+        "cheap_worlds": 1,
+        "alpha": 0.02,
+        "beta": 1.0,
+        "decision_seconds": 5.0,
+        "max_support": 20000,
+        "sampling": "compatible_prior"
+      }
+    },
+    {
+      "id": "cumulative",
+      "execution": {
+        "device": "cpu",
+        "precision": "float32",
+        "workers": 1,
+        "threads": 1,
+        "wall_seconds": 300.0,
+        "memory_bytes": 34359738368
+      },
+      "operation": "train_supervised",
+      "trainer": "search_supervised",
+      "optimizer": "adam",
+      "trainable": "policy",
+      "target": "local_soft",
+      "datasets": [
+        "labels",
+        "round-two"
+      ],
+      "initial": "local-soft",
+      "epochs": 1,
+      "batch_size": 64,
+      "learning_rate": 0.001
+    }
+  ],
+  "wall_seconds": 180.0,
+  "schedule_clock": "run_elapsed_budget",
+  "recovery_max_microsteps": null,
+  "selection": "last-complete-raw"
+}

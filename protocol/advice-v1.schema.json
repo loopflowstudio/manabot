@@ -943,7 +943,10 @@
           "type": "string"
         },
         "policy_semantic": {
-          "const": "puct_visit_distribution/v1",
+          "enum": [
+            "puct_visit_distribution/v1",
+            "regularized-local-update/v1"
+          ],
           "title": "Policy Semantic",
           "type": "string"
         },

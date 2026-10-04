@@ -7,7 +7,7 @@ viewer-safe observation, legal mask, chosen action, and provenance boundary.
 Dataset format (one .npz shard per worker):
     - one array per observation key (shape (D, *obs_shape), float32) — exactly
       the encoded observation dict the Agent consumes at that decision;
-    - "action" (D,) int16 — the searcher's argmax action index;
+    - "action" (D,) int16 — the action actually played;
     - "game_index" (D,) int32, "seat" (D,) int8 — provenance;
     - "num_valid" (D,) int16 — count of valid actions at the decision;
     - "winner" (D,) int8 — winner seat of the source game (-1 if none);
@@ -21,6 +21,7 @@ teacher decision and both seats' decisions are recorded.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import time
@@ -43,6 +44,7 @@ from manabot.infra.hypers import (
 from manabot.model.agent import Agent
 from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
+from managym.decision import Command, DecisionFrame
 
 OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
 META_KEYS = ("action", "game_index", "seat", "num_valid", "winner")
@@ -54,6 +56,8 @@ SCORE_KEY = "scores"
 # these stable columns. Legacy flat-MC shards omit them.
 VISIT_COUNT_KEY = "visit_counts"
 ROOT_VALUE_KEY = "root_value"
+LOCAL_TARGET_KEY = "local_target"
+LOCAL_RECEIPT_KEY = "local_receipt"
 # Admission columns: the rules engine's own legal-offer count and decision
 # kind (managym.ActionSpaceEnum) at each decision, recorded independently of
 # the encoded mask so an omitted legal choice is measurable afterwards.
@@ -106,7 +110,8 @@ def generate_selfplay_shard(
     determinized PUCT); passing ``sims`` alone is shorthand for the exp-03
     random-rollout teacher. Every decision records the encoded observation,
     chosen action, and raw per-action values. Tree teachers additionally emit
-    root visit counts and root values.
+    root visit counts and root values. Local-update teachers label trajectories
+    played by their frozen base policy and retain complete update receipts.
 
     Returns a summary dict (games, decisions, wall/search seconds, steps).
     When ``out_path`` is given the decisions are written there as an .npz.
@@ -146,6 +151,14 @@ def generate_selfplay_shard(
         for player in players
     )
 
+    local_targets: list[np.ndarray] = []
+    local_receipts: list[str] = []
+    mixing_rows: list[dict[str, float]] = []
+    is_local = teacher_spec["kind"] == "local_update"
+    journal = Path(str(out_path) + ".receipts.jsonl") if is_local and out_path else None
+    if journal is not None:
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        journal.touch(exist_ok=False)
     max_actions = obs_space.encoder.max_actions
     obs_buffers: dict[str, list[np.ndarray]] = {key: [] for key in OBS_KEYS}
     score_rows: list[np.ndarray] = []
@@ -163,10 +176,16 @@ def generate_selfplay_shard(
     terminated_games: list[bool] = []
     truncated_games: list[bool] = []
 
+    behavior_rng = np.random.default_rng(seed ^ 0x578ABC)
     wall_start = time.perf_counter()
     for i in range(num_games):
         game_index = game_offset + i
         obs, _ = env.reset(seed=seed + game_index)
+        for seat, player in enumerate(players):
+            if hasattr(player, "start_game"):
+                player.start_game(env, seat)
+            if is_local:
+                player.deadline = deadline_monotonic
         done = False
         terminated, truncated = False, False
         steps = 0
@@ -183,6 +202,12 @@ def generate_selfplay_shard(
             num_legals.append(len(raw_obs.action_space.actions))
             decision_kinds.append(int(raw_obs.action_space.action_space_type))
             action = players[acting].act(env, obs)
+            if is_local:
+                # Frozen-policy histories make its action-likelihood posterior
+                # the matched model. Search targets label, but do not generate,
+                # this trajectory; arena play samples the improved distribution.
+                receipt = players[acting].last_receipt
+                action = int(behavior_rng.choice(len(receipt.base), p=receipt.base))
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
             encoded_valid_count = int(np.sum(obs["actions_valid"] > 0))
@@ -212,12 +237,53 @@ def generate_selfplay_shard(
                 visit_row[: len(raw_visits)] = raw_visits
                 visit_rows.append(visit_row)
                 root_values.append(float(root_value))
+            if is_local:
+                receipt = players[acting].last_receipt
+                if receipt is None:
+                    raise RuntimeError("local teacher did not retain its update")
+                target = np.zeros(max_actions, dtype=np.float32)
+                target[: len(receipt.target)] = receipt.target
+                local_targets.append(target)
+                local_receipts.append(receipt.to_json())
+                mixing_rows.append(receipt.mixing_diagnostics())
+                if journal is not None:
+                    with journal.open("a") as output:
+                        output.write(
+                            json.dumps(
+                                {
+                                    "game_index": game_index,
+                                    "step": steps,
+                                    "action": action,
+                                    "receipt": json.loads(receipt.to_json()),
+                                }
+                            )
+                            + "\n"
+                        )
+                        output.flush()
+                        os.fsync(output.fileno())
             actions.append(action)
             game_indices.append(game_index)
             seats.append(acting)
             num_valids.append(encoded_valid_count)
             game_decisions.append(len(actions) - 1)
-            obs, _, terminated, truncated, info = env.step(action)
+            if is_local:
+                for player in players:
+                    player.prepare_step(env, acting, action)
+                frame = DecisionFrame.from_json(
+                    env._engine.semantic_decision_frame_json()
+                )
+                command = Command(
+                    f"teacher-{game_index}-{steps}",
+                    frame.revision,
+                    int(frame.offers[action]["id"]),
+                )
+                obs, _, terminated, truncated, info, transition = env.step_semantic(
+                    command
+                )
+                for player in players:
+                    player.observe_step(env, acting, transition)
+            else:
+                obs, _, terminated, truncated, info = env.step(action)
             steps += 1
             done = bool(terminated or truncated)
         winner = winner_from_info_or_obs(info, env.last_raw_obs) if done else None
@@ -261,6 +327,10 @@ def generate_selfplay_shard(
         )
         arrays[ROOT_VALUE_KEY] = np.asarray(root_values, dtype=np.float32)
 
+    if is_local:
+        arrays[LOCAL_TARGET_KEY] = np.stack(local_targets)
+        arrays[LOCAL_RECEIPT_KEY] = np.asarray(local_receipts)
+
     # Provenance tag (expert-iteration staleness accounting, exp-07): who
     # generated these labels, with what rollout policy, at which round, from
     # which code. Self-play mirror, so the generating opponent is the teacher.
@@ -271,7 +341,7 @@ def generate_selfplay_shard(
         "teacher_spec": {k: v for k, v in teacher_spec.items() if k != "device"},
         "teacher_name": teacher_name,
         "rollout_policy_checkpoint": teacher_spec.get("checkpoint"),
-        "generating_opponent": teacher_name,
+        "generating_opponent": "frozen-policy" if is_local else teacher_name,
         "git_commit": _git_commit(),
         "seed": seed,
         "game_offset": game_offset,
@@ -281,7 +351,11 @@ def generate_selfplay_shard(
         "content_manifest": env._engine.content_pack_manifest(),
         "dataset_run_fingerprint": dataset_run_fingerprint,
         "policy_target_kind": (
-            "visit_distribution" if has_tree_targets else "score_softmax"
+            "local_soft"
+            if is_local
+            else "visit_distribution"
+            if has_tree_targets
+            else "score_softmax"
         ),
         "value_target_kind": "root_value" if has_tree_targets else "terminal_outcome",
     }
@@ -300,11 +374,10 @@ def generate_selfplay_shard(
         finally:
             temporary.unlink(missing_ok=True)
 
+    stats = [player.search_stats if is_local else player.stats for player in players]
     search_stats = {
-        "decisions": players[0].stats.decisions + players[1].stats.decisions,
-        "seconds": players[0].stats.seconds + players[1].stats.seconds,
-        "simulations": players[0].stats.simulations + players[1].stats.simulations,
-        "cap_hits": players[0].stats.cap_hits + players[1].stats.cap_hits,
+        key: sum(getattr(item, key) for item in stats)
+        for key in ("decisions", "seconds", "simulations", "cap_hits")
     }
     if has_tree_targets:
         search_stats.update(
@@ -326,6 +399,16 @@ def generate_selfplay_shard(
         "decisions": len(actions),
         "wall_seconds": wall_seconds,
         "search": search_stats,
+        **(
+            {
+                "local_mixing": {
+                    key: float(np.mean([row[key] for row in mixing_rows]))
+                    for key in mixing_rows[0]
+                }
+            }
+            if mixing_rows
+            else {}
+        ),
         "policy_target_kind": provenance["policy_target_kind"],
         "value_target_kind": provenance["value_target_kind"],
         "steps_per_game": steps_per_game,
@@ -363,6 +446,8 @@ def load_shards(
         ROOT_VALUE_KEY,
         NUM_LEGAL_KEY,
         DECISION_KIND_KEY,
+        LOCAL_TARGET_KEY,
+        LOCAL_RECEIPT_KEY,
     ):
         if all(optional_key in shard for shard in shards):
             keys.append(optional_key)

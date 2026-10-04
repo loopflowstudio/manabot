@@ -320,7 +320,7 @@ class AdvisorSemanticOffer(ProtocolModel):
 
 class AdvisorStrategyEvidence(ProtocolModel):
     schema_version: Literal[1] = 1
-    policy_semantic: Literal["puct_visit_distribution/v1"]
+    policy_semantic: Literal["puct_visit_distribution/v1", "regularized-local-update/v1"]
     decision_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     viewer_frame_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     advisor_identity: AdvisorIdentity

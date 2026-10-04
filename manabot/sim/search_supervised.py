@@ -20,6 +20,8 @@ from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
+    LOCAL_RECEIPT_KEY,
+    LOCAL_TARGET_KEY,
     OBS_KEYS,
     ROOT_VALUE_KEY,
     SCORE_KEY,
@@ -28,6 +30,7 @@ from manabot.sim.distill import (
     soft_targets_from_scores,
     split_by_game,
 )
+from manabot.sim.local_update import LocalUpdateReceipt
 
 SCORE_SOFTMAX_TARGET = "score_softmax"
 VISIT_DISTRIBUTION_TARGET = "visit_distribution"
@@ -119,6 +122,8 @@ def _validate_dataset(
         required.add(SCORE_KEY)
     elif policy_target_kind == VISIT_DISTRIBUTION_TARGET:
         required.add(VISIT_COUNT_KEY)
+    elif policy_target_kind in {"local_soft", "local_argmax", "local_allocation"}:
+        required.update({LOCAL_TARGET_KEY, LOCAL_RECEIPT_KEY})
     elif policy_target_kind == CHOSEN_ACTION_TARGET:
         pass
     else:
@@ -172,6 +177,20 @@ def _validate_dataset(
             raise ValueError("visit_counts must be zero outside the legal mask")
         if (visits.sum(axis=1) <= 0).any():
             raise ValueError("every decision must have a positive visit count")
+    if policy_target_kind.startswith("local_"):
+        targets = dataset[LOCAL_TARGET_KEY]
+        if targets.shape != valid_actions.shape or not np.isfinite(targets).all():
+            raise ValueError("local targets must align with legal actions")
+        if np.any(targets < 0) or np.any(targets[~valid_actions] != 0):
+            raise ValueError("local targets have invalid support")
+        for row, encoded in enumerate(dataset[LOCAL_RECEIPT_KEY]):
+            receipt = LocalUpdateReceipt.from_json(str(encoded))
+            if len(receipt.target) != int(encoded_counts[row]):
+                raise ValueError("local receipt offers do not align")
+            if not np.allclose(
+                targets[row, valid_actions[row]], receipt.target, atol=1e-7
+            ):
+                raise ValueError("local target differs from retained update")
     value_targets_from_dataset(dataset, value_target_kind)
 
 
@@ -191,6 +210,21 @@ def _policy_targets(
     temperature: float,
     device: torch.device,
 ) -> torch.Tensor:
+    if target_kind.startswith("local_"):
+        targets = np.array(dataset[LOCAL_TARGET_KEY][indices], copy=True)
+        if target_kind != "local_soft":
+            targets.fill(0)
+            for row, index in enumerate(indices):
+                receipt = LocalUpdateReceipt.from_json(
+                    str(dataset[LOCAL_RECEIPT_KEY][index])
+                )
+                if target_kind == "local_argmax":
+                    targets[row, int(np.argmax(receipt.values))] = 1
+                else:
+                    counts = np.asarray(receipt.allocation_counts)
+                    targets[row, : len(counts)] = counts / counts.sum()
+        # Fixed labels: only student logits receive policy gradients.
+        return torch.as_tensor(targets, dtype=torch.float32, device=device)
     if target_kind == SCORE_SOFTMAX_TARGET:
         scores = torch.as_tensor(
             dataset[SCORE_KEY][indices], dtype=torch.float32, device=device
@@ -261,7 +295,11 @@ def evaluate_search_supervised(
             .item()
         )
         predictions = logits.argmax(dim=-1).cpu().numpy()
-        targets = np.asarray(dataset["action"][batch], dtype=np.int64)
+        targets = (
+            policy_target.argmax(dim=-1).cpu().numpy()
+            if policy_target_kind.startswith("local_")
+            else np.asarray(dataset["action"][batch], dtype=np.int64)
+        )
         hits = predictions == targets
         policy_correct += int(hits.sum())
         nontrivial = np.asarray(dataset["num_valid"][batch]) > 1
@@ -277,12 +315,17 @@ def evaluate_search_supervised(
                 value_targets[batch][usable], dtype=torch.float32, device=dev
             )
             selected_logits = value_logits[torch.as_tensor(usable, device=dev)]
-            value_loss += float(
-                torch.nn.functional.binary_cross_entropy_with_logits(
-                    selected_logits, target, reduction="sum"
-                ).item()
-            )
-            probabilities = torch.sigmoid(selected_logits)
+            if policy_target_kind.startswith("local_"):
+                # Frozen RL critics predict signed outcomes, not Bernoulli logits.
+                value_loss += float(((selected_logits - (2 * target - 1)) ** 2).sum())
+                probabilities = (selected_logits + 1) / 2
+            else:
+                value_loss += float(
+                    torch.nn.functional.binary_cross_entropy_with_logits(
+                        selected_logits, target, reduction="sum"
+                    ).item()
+                )
+                probabilities = torch.sigmoid(selected_logits)
             value_brier += float(((probabilities - target) ** 2).sum().item())
             value_correct += int(
                 ((probabilities >= 0.5) == (target >= 0.5)).sum().item()
@@ -426,8 +469,13 @@ def train_search_supervised(
                 target = torch.as_tensor(
                     value_targets[batch][usable], dtype=torch.float32, device=dev
                 )
-                value_loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                    value_logits[torch.as_tensor(usable, device=dev)], target
+                selected_values = value_logits[torch.as_tensor(usable, device=dev)]
+                value_loss = (
+                    torch.nn.functional.mse_loss(selected_values, 2 * target - 1)
+                    if policy_target_kind.startswith("local_")
+                    else torch.nn.functional.binary_cross_entropy_with_logits(
+                        selected_values, target
+                    )
                 )
                 batch_value_rows = int(usable.sum())
             else:
