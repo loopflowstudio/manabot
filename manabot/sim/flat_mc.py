@@ -59,6 +59,8 @@ ACTION_SPACE_KIND_NAMES = {
     8: "modal",
     9: "learn",
     10: "waterbend",
+    11: "discard",
+    12: "legend_rule",
 }
 
 

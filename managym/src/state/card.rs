@@ -221,8 +221,19 @@ pub struct ActivatedAbilityDefinition {
     pub effect: Effect,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SpellCostReduction {
+    pub predicate: CardPredicate,
+    pub condition: StaticCondition,
+    pub generic: u8,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spell_cost_reductions: Vec<SpellCostReduction>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,

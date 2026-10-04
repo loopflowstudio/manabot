@@ -6,8 +6,8 @@
     "manifest_sha256": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d"
   },
   "visual_references": {
-    "version": 4,
-    "directory": "visual-references/v4",
+    "version": 5,
+    "directory": "visual-references/v5",
     "profile": {
       "name": "ubuntu-24.04-chromium",
       "operating_system": "Ubuntu 24.04 x86-64",
@@ -82,6 +82,12 @@
         "family": "WATERBEND",
         "scenario_id": "gw-prompts-seed-62",
         "occurrence": 1
+      },
+      {
+        "id": "prompt-discard",
+        "family": "DISCARD",
+        "scenario_id": "gw-prompts-seed-62",
+        "occurrence": 1
       }
     ],
     "boards": [
@@ -111,7 +117,7 @@
     },
     "terminals": [
       { "id": "terminal-ur-lessons-loss", "scenario_id": "ur-lessons-seed-51" },
-      { "id": "terminal-gw-allies-loss", "scenario_id": "gw-prompts-seed-62" }
+      { "id": "terminal-gw-allies-win", "scenario_id": "gw-prompts-seed-62" }
     ]
   },
   "action_spaces": {
@@ -124,7 +130,8 @@
       "LOOK_AND_SELECT",
       "PAY_OR_NOT",
       "LEARN",
-      "WATERBEND"
+      "WATERBEND",
+      "DISCARD"
     ],
     "terminal": ["GAME_OVER"],
     "excluded": [
@@ -132,6 +139,11 @@
         "family": "MODAL",
         "reason": "Crossroads of Destiny is not in either selected deck.",
         "proof_card": "Crossroads of Destiny"
+      },
+      {
+        "family": "LEGEND_RULE",
+        "reason": "The legend rule needs two legendary permanents with the same name under one controller. Suki, Kyoshi Warrior is the only legendary card in the selected decks and appears once; Gran-Gran and Proft's Eidetic Memory are not in either selected deck.",
+        "proof_card": "Gran-Gran"
       }
     ]
   },
@@ -189,6 +201,10 @@
     },
     "WATERBEND": {
       "sources": [{ "kind": "card", "name": "Water Tribe Rallier" }],
+      "scenario_ids": ["gw-prompts-seed-62"]
+    },
+    "DISCARD": {
+      "sources": [{ "kind": "core", "name": "cleanup hand size" }],
       "scenario_ids": ["gw-prompts-seed-62"]
     }
   },
@@ -261,20 +277,21 @@
       "policy": "curated-v1",
       "max_commands": 250,
       "expected": {
-        "winner": 1,
-        "turn": 36,
-        "commands": 80,
+        "winner": 0,
+        "turn": 35,
+        "commands": 58,
         "prompt_counts": {
-          "PRIORITY": 33,
-          "CHOOSE_TARGET": 9,
-          "DECLARE_ATTACKER": 5,
+          "PRIORITY": 24,
+          "CHOOSE_TARGET": 5,
+          "DECLARE_ATTACKER": 15,
+          "DISCARD": 4,
           "PAY_OR_NOT": 1,
-          "SCRY": 2,
-          "LOOK_AND_SELECT": 7,
-          "WATERBEND": 22,
-          "DECLARE_BLOCKER": 1
+          "SCRY": 1,
+          "DECLARE_BLOCKER": 4,
+          "LOOK_AND_SELECT": 2,
+          "WATERBEND": 2
         },
-        "prompt_sequence": ["PRIORITY", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "CHOOSE_TARGET", "CHOOSE_TARGET", "DECLARE_ATTACKER", "PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "PAY_OR_NOT", "DECLARE_ATTACKER", "SCRY", "PRIORITY", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "LOOK_AND_SELECT", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "CHOOSE_TARGET", "PRIORITY", "WATERBEND", "WATERBEND", "LOOK_AND_SELECT", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "LOOK_AND_SELECT", "PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "WATERBEND", "LOOK_AND_SELECT", "LOOK_AND_SELECT", "PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "WATERBEND", "PRIORITY", "WATERBEND", "WATERBEND", "WATERBEND", "SCRY", "LOOK_AND_SELECT", "PRIORITY", "LOOK_AND_SELECT", "PRIORITY", "WATERBEND", "WATERBEND"]
+        "prompt_sequence": ["PRIORITY", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DISCARD", "DISCARD", "DISCARD", "DISCARD", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "CHOOSE_TARGET", "PRIORITY", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "PAY_OR_NOT", "DECLARE_ATTACKER", "SCRY", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "PRIORITY", "PRIORITY", "LOOK_AND_SELECT", "DECLARE_BLOCKER", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "CHOOSE_TARGET", "CHOOSE_TARGET", "DECLARE_ATTACKER", "DECLARE_BLOCKER", "PRIORITY", "PRIORITY", "PRIORITY", "WATERBEND", "WATERBEND", "LOOK_AND_SELECT", "PRIORITY", "PRIORITY", "PRIORITY", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "PRIORITY", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER", "DECLARE_ATTACKER"]
       }
     }
   ]

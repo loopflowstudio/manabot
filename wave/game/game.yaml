@@ -1,4 +1,4 @@
-flow: ship-wave
+flow: code
 area:
   - etude/
   - manabot/env/

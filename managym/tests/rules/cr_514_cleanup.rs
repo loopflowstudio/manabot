@@ -48,6 +48,14 @@ fn cr_514_2_cleanup_clears_marked_damage() {
 
     s.pass_priority();
     s.pass_priority();
+    // CR 514.1 precedes 514.2: excess cards are discarded before damage clears.
+    while s.action_space().kind == managym::agent::action::ActionSpaceKind::Discard {
+        assert_eq!(
+            s.game().state.permanents[ogre_id].as_ref().unwrap().damage,
+            1
+        );
+        s.step_action(0);
+    }
 
     let damage_after = s.game().state.permanents[ogre_id]
         .as_ref()

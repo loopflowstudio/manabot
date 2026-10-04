@@ -140,6 +140,9 @@ impl Game {
         controller: PlayerId,
     ) -> bool {
         match condition {
+            StaticCondition::CardsDrawnAtLeast { count } => {
+                self.state.turn.cards_drawn_this_turn[controller.0] >= *count
+            }
             StaticCondition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }

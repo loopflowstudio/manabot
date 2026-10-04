@@ -1,7 +1,5 @@
 // tla.rs
-// Avatar: The Last Airbender — Milestone-1 two-deck slice, Stage 1 cards.
-// Every card here is registered with its full oracle behavior; cards whose
-// text needs Stage 2+ machinery (choices, costs, statics) are not registered.
+// Avatar: The Last Airbender cards with complete registered behavior.
 
 use crate::state::{
     ability::{
@@ -791,6 +789,46 @@ impl CardRegistry {
                 effect: Effect::DrawCards { count: 1 },
             }],
             text_box: "{2}, Sacrifice this token: Draw a card.".to_string(),
+            ..Default::default()
+        });
+    }
+}
+
+impl CardRegistry {
+    pub(super) fn register_tla_lessons_increment(&mut self) {
+        use crate::state::{ability::EffectValue, card::SpellCostReduction};
+        self.register_card(CardDefinition {
+            name: "Gran-Gran".into(),
+            mana_cost: Some(ManaCost::parse("U")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(1), toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::BecomesTapped { subject: TriggerSubject::This },
+                effects: vec![Effect::DrawCards { count: 1 }, Effect::Discard],
+            }],
+            spell_cost_reductions: vec![SpellCostReduction {
+                predicate: CardPredicate { not_card_types: vec![CardType::Creature], ..Default::default() },
+                condition: StaticCondition::GraveyardAtLeast { count: 3, predicate: lesson() },
+                generic: 1,
+            }],
+            text_box: "Whenever Gran-Gran becomes tapped, draw a card, then discard a card.\nNoncreature spells you cast cost {1} less to cast as long as there are three or more Lesson cards in your graveyard.".into(),
+            ..Default::default()
+        });
+        self.register_card(CardDefinition {
+            name: "Combustion Technique".into(),
+            mana_cost: Some(ManaCost::parse("1R")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::DealDamageValue {
+                    amount: EffectValue::GraveyardMatching { base: 2, predicate: lesson() },
+                    target: TargetSpec::Creature,
+                },
+                Effect::ExileIfDiesThisTurn { target: TargetSpec::Creature },
+            ],
+            text_box: "Combustion Technique deals damage equal to 2 plus the number of Lesson cards in your graveyard to target creature. If that creature would die this turn, exile it instead.".into(),
             ..Default::default()
         });
     }

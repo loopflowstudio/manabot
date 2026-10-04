@@ -85,7 +85,7 @@ cd etude
 One command installs locked dependencies, builds the engine, starts the
 backend and frontend, and opens the curated matchup in your browser. Ctrl-C
 stops both services. The path from a fresh checkout to play is itself under
-test: `./scripts/verify-clean-machine` proves launch within 60 seconds, offline
+test: `./scripts/verify-clean-machine` proves launch within 90 seconds, offline
 reload, and session recovery, and CI records the receipt (see
 [docs/clean-machine-play.md](docs/clean-machine-play.md)).
 
@@ -97,8 +97,8 @@ and preserves the exact frame, offer, played Command, semantic event cursor,
 and attributable evidence needed to inspect, Retry, compare, and return. The
 guided Retry and comparison experience is still being connected to the shared
 table. The versioned experience and Study schemas live in
-[protocol/](protocol/README.md); the folded roadmap is
-[wave/study/](wave/study/GOAL.md).
+[protocol/](protocol/README.md); Study work is planned within
+[wave/game/](wave/game/GOAL.md).
 
 ## Train a manabot
 

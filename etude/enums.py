@@ -62,6 +62,8 @@ class ActionSpaceEnum(IntEnum):
     MODAL = 8
     LEARN = 9
     WATERBEND = 10
+    DISCARD = 11
+    LEGEND_RULE = 12
 
 
 class ZoneEnum(IntEnum):

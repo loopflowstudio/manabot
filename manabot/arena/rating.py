@@ -48,11 +48,9 @@ def fit_population(
     tolerance: float = 1e-10,
     max_iterations: int = 100,
 ) -> PopulationFit:
-    retained = [
-        dict(row)
-        for row in rows
-        if not row.get("truncated") and row.get("termination_reason") != "truncated"
-    ]
+    retained = [dict(row) for row in rows]
+    if any(row.get("score_a") is None or row.get("truncated") for row in retained):
+        raise ValueError("unscored failures reject the cohort; do not drop attempts")
     players = tuple(
         sorted(
             {str(row["player_a"]) for row in retained}
@@ -202,12 +200,7 @@ def bootstrap_population(
 
 
 def payoff_matrix(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    retained = [
-        dict(row)
-        for row in rows
-        if not row.get("truncated") and row.get("termination_reason") != "truncated"
-    ]
-    fit = fit_population(retained)
+    fit = fit_population(rows)
     cells: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in fit.rows:
         a, b = sorted((str(row["player_a"]), str(row["player_b"])))
@@ -246,9 +239,12 @@ def payoff_matrix(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
         paired: dict[int, list[float]] = {}
         for row, score in zip(cell, scores, strict=True):
             paired.setdefault(int(row["deal_block"]), []).append(score)
-        sweeps_a = sum(values == [1.0, 1.0] for values in paired.values())
-        sweeps_b = sum(values == [0.0, 0.0] for values in paired.values())
-        splits = sum(sorted(values) == [0.0, 1.0] for values in paired.values())
+        sweeps_a = sum(all(v == 1.0 for v in values) for values in paired.values())
+        sweeps_b = sum(all(v == 0.0 for v in values) for values in paired.values())
+        splits = sum(
+            set(values) == {0.0, 1.0} and sum(values) == len(values) / 2
+            for values in paired.values()
+        )
         paired_draws = len(paired) - sweeps_a - sweeps_b - splits
         observed = float(np.sum(scores))
         expected = float(np.sum(predicted_scores))
@@ -261,6 +257,7 @@ def payoff_matrix(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "mean_score_a": float(np.mean(scores)),
             "wins_a": sum(score == 1.0 for score in scores),
             "draws": sum(score == 0.5 for score in scores),
+            "failures": sum(row.get("failure") is not None for row in cell),
             "wins_b": sum(score == 0.0 for score in scores),
             "per_seat": seat_results,
             "paired_blocks": {

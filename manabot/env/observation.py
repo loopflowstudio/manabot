@@ -92,6 +92,8 @@ class ActionSpaceEnum(IntEnum):
     MODAL = 8
     LEARN = 9
     WATERBEND = 10
+    DISCARD = 11
+    LEGEND_RULE = 12
 
 
 class ZoneEnum(IntEnum):
@@ -171,8 +173,8 @@ class ObservationEncoder:
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
-        # (printed + until-EOT grants), validity.
-        self.permanent_dim = 10 + 13 + 1
+        # (printed + until-EOT grants), death-to-exile replacement, validity.
+        self.permanent_dim = 25
         self.event_dim = 7
 
         # Action space dimension: action type + validity bit.
@@ -468,6 +470,7 @@ class ObservationEncoder:
         arr[20] = float(perm.keywords.defender)
         arr[21] = float(perm.keywords.menace)
         arr[22] = float(perm.keywords.hexproof)
+        arr[23] = float(perm.exile_if_dies_this_turn)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

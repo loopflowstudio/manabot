@@ -35,27 +35,42 @@ impl Ability {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
     /// "When [subject] enters the battlefield."
-    EntersTheBattlefield { subject: TriggerSubject },
+    EntersTheBattlefield {
+        subject: TriggerSubject,
+    },
     /// "When [subject] dies." — battlefield to graveyard (CR 700.4).
-    Dies { subject: TriggerSubject },
+    Dies {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] attacks." Fires after the declare-attackers
     /// turn-based action (CR 508.1); a subject of `AnotherYouControl` /
     /// `AnyYouControl` fires once per combat ("whenever one or more ...
     /// attack"), not once per attacker.
-    Attacks { subject: TriggerSubject },
+    Attacks {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] becomes tapped."
-    BecomesTapped { subject: TriggerSubject },
+    BecomesTapped {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] is tapped for mana."
-    TappedForMana { subject: TriggerSubject },
+    TappedForMana {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] becomes the target of a spell an opponent
     /// controls." (Ward, CR 702.21.) The triggering spell is threaded to the
     /// ability's effects as the trigger context target.
-    BecomesTargeted { subject: TriggerSubject },
+    BecomesTargeted {
+        subject: TriggerSubject,
+    },
     /// "At the beginning of your upkeep."
     BeginningOfYourUpkeep,
+    BeginningOfYourCombat,
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `TurnState::cards_drawn_this_turn`).
-    YouDrawNthCardThisTurn { n: u32 },
+    YouDrawNthCardThisTurn {
+        n: u32,
+    },
     /// The inner condition only fires while `active_if` holds for the
     /// ability's controller. Used for conditionally-granted triggered
     /// abilities ("has firebending 2 as long as there's a Lesson card in
@@ -71,6 +86,9 @@ pub enum TriggerCondition {
 /// checks, evaluated for a specific controller ("you").
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticCondition {
+    CardsDrawnAtLeast {
+        count: u32,
+    },
     /// "as long as there are `count` or more [predicate] cards in your
     /// graveyard".
     GraveyardAtLeast {
@@ -90,8 +108,31 @@ pub enum TriggerSubject {
     AnyYouControl(CardPredicate),
 }
 
+/// A resolution-time quantity relative to the effect controller.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum EffectValue {
+    GraveyardMatching { base: i32, predicate: CardPredicate },
+    CardsDrawnMinus { subtract: u32 },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
+    Discard,
+    DealDamageValue {
+        amount: EffectValue,
+        target: TargetSpec,
+    },
+    PutCountersValue {
+        count: EffectValue,
+        target: TargetSpec,
+    },
+    ExileIfDiesThisTurn {
+        target: TargetSpec,
+    },
+    IfCondition {
+        condition: StaticCondition,
+        effects: Vec<Effect>,
+    },
     ReturnToHand {
         target: TargetSpec,
     },
@@ -313,6 +354,11 @@ impl TargetRequirement {
 impl Effect {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
+            Effect::DealDamageValue { target, .. }
+            | Effect::PutCountersValue { target, .. }
+            | Effect::ExileIfDiesThisTurn { target } => Some(target),
+            Effect::IfCondition { effects, .. } => effects.iter().find_map(Effect::target_spec),
+            Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
             Effect::CounterSpell { target } => Some(target),

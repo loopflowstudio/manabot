@@ -168,6 +168,8 @@ fn combat_damage_reduces_life() {
             | ActionSpaceKind::PayOrNot
             | ActionSpaceKind::Modal
             | ActionSpaceKind::Learn
+            | ActionSpaceKind::Discard
+            | ActionSpaceKind::LegendRule
             | ActionSpaceKind::Waterbend => 0,
         };
 

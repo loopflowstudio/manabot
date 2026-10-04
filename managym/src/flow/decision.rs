@@ -61,6 +61,13 @@ pub struct EffectFrame {
 }
 
 impl EffectFrame {
+    /// Run a selected branch before the remaining effects, in authored order.
+    pub fn prepend_effects(&mut self, effects: impl DoubleEndedIterator<Item = Effect>) {
+        for effect in effects.rev() {
+            self.queue.push_front(effect);
+        }
+    }
+
     /// The single target most effects act on: the first chosen target, or
     /// the trigger-context object.
     pub fn primary_target(&self) -> Option<Target> {
@@ -103,7 +110,18 @@ pub enum Decision {
         modes: Vec<Vec<Effect>>,
     },
     /// Learn: retrieve a Lesson, discard then draw, or do neither.
-    Learn { player: PlayerId },
+    Learn {
+        player: PlayerId,
+    },
+    Discard {
+        player: PlayerId,
+    },
+    /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
+    LegendRule {
+        player: PlayerId,
+        groups: Vec<Vec<CardId>>,
+        keep: Vec<CardId>,
+    },
 }
 
 impl Decision {
@@ -113,7 +131,9 @@ impl Decision {
             | Decision::LookAndSelect { player, .. }
             | Decision::PayOrNot { player, .. }
             | Decision::Modal { player, .. }
-            | Decision::Learn { player } => *player,
+            | Decision::Learn { player }
+            | Decision::Discard { player }
+            | Decision::LegendRule { player, .. } => *player,
         }
     }
 
@@ -125,7 +145,11 @@ impl Decision {
         match self {
             Decision::Scry { remaining, .. } => remaining,
             Decision::LookAndSelect { looked, .. } => looked,
-            Decision::PayOrNot { .. } | Decision::Modal { .. } | Decision::Learn { .. } => &[],
+            Decision::PayOrNot { .. }
+            | Decision::Modal { .. }
+            | Decision::Learn { .. }
+            | Decision::Discard { .. }
+            | Decision::LegendRule { .. } => &[],
         }
     }
 }
@@ -138,6 +162,24 @@ pub struct SuspendedResolution {
 }
 
 impl Game {
+    pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
+        self.state.suspended_decision = Some(SuspendedResolution {
+            frame: EffectFrame {
+                source: None,
+                source_ref: None,
+                controller: decision.player(),
+                resolutions_this_turn: 0,
+                kicked: false,
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+                context_target: None,
+                queue: VecDeque::new(),
+                finalize: FrameFinalize::None,
+            },
+            decision,
+        });
+    }
+
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
@@ -251,6 +293,36 @@ impl Game {
                     })
                     .collect(),
                 focus: source_focus,
+            },
+            Decision::Discard { player } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Discard,
+                actions: self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Hand, *player)
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::LegendRule { player, groups, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LegendRule,
+                actions: groups[0]
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect(),
+                focus: groups[0]
+                    .iter()
+                    .map(|card| self.state.cards[*card].id)
+                    .collect(),
             },
             Decision::Learn { player } => {
                 let mut actions: Vec<Action> = self
@@ -400,13 +472,13 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(err);
                 }
-                push_front(&mut suspended.frame.queue, effects);
+                suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
                 Ok(())
             }
             (Decision::PayOrNot { if_declined, .. }, Action::Decline { .. }) => {
                 let effects = std::mem::take(if_declined);
-                push_front(&mut suspended.frame.queue, effects);
+                suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -417,8 +489,43 @@ impl Game {
                     return Err(err);
                 }
                 let effects = std::mem::take(&mut modes[*mode]);
-                push_front(&mut suspended.frame.queue, effects);
+                suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::Discard { player }, Action::SelectCard { card, .. }) => {
+                if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("card to discard is not in hand".into()));
+                }
+                self.move_card(*card, ZoneType::Graveyard);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::LegendRule {
+                    player,
+                    groups,
+                    keep,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                if !groups[0].contains(card) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a legend in this group".into()));
+                }
+                keep.push(*card);
+                groups.remove(0);
+                if let Some(group) = groups.first() {
+                    let id = self.state.card_to_permanent[group[0]].expect("legend on battlefield");
+                    *player = self.state.permanents[id]
+                        .as_ref()
+                        .expect("legend")
+                        .controller;
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    self.perform_state_based_actions_with_legends(keep);
+                }
                 Ok(())
             }
             (Decision::Learn { player }, Action::LearnDiscard { card, .. }) => {
@@ -511,12 +618,6 @@ impl Game {
         for card in cards {
             self.put_on_bottom_of_library(card);
         }
-    }
-}
-
-fn push_front(queue: &mut VecDeque<Effect>, effects: Vec<Effect>) {
-    for effect in effects.into_iter().rev() {
-        queue.push_front(effect);
     }
 }
 

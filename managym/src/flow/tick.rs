@@ -121,11 +121,34 @@ impl Game {
             self.state.turn.turn_based_actions_complete = false;
         }
 
+        if let Some(space) = self.suspended_decision_action_space() {
+            return Some(space);
+        }
+
         if !self.state.turn.turn_based_actions_complete {
             if let Some(space) = self.perform_turn_based_actions(step) {
                 return Some(space);
             }
             self.state.turn.turn_based_actions_complete = true;
+        }
+
+        if step == StepKind::Cleanup {
+            if !self.state.turn.cleanup_priority {
+                let choice = self.stabilize_before_priority();
+                self.state.turn.cleanup_priority |= choice.is_some();
+                if let Some(space) = choice {
+                    return Some(space);
+                }
+            }
+            if self.state.turn.cleanup_priority {
+                if let Some(space) = self.tick_priority() {
+                    return Some(space);
+                }
+                // CR 514.3a: repeat cleanup after this priority round finishes.
+                self.state.turn.cleanup_priority = false;
+                self.state.turn.turn_based_actions_complete = false;
+                return None;
+            }
         }
 
         if TurnState::step_has_priority(step) {
@@ -337,6 +360,21 @@ impl Game {
                 None
             }
             StepKind::Cleanup => {
+                let player = self.active_player();
+                let unlimited = self.battlefield_permanents(player).iter().any(|id| {
+                    let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
+                    self.state.cards[permanent.card].no_maximum_hand_size
+                });
+                if !unlimited
+                    && self
+                        .state
+                        .zones
+                        .size(crate::state::zone::ZoneType::Hand, player)
+                        > 7
+                {
+                    self.suspend_rule_decision(crate::flow::decision::Decision::Discard { player });
+                    return self.suspended_decision_action_space();
+                }
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
                 self.clear_temporary_modifiers();

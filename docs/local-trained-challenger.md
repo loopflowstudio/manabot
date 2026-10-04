@@ -1,18 +1,31 @@
 # Train, play, and retain a local challenger
 
-This workflow runs the existing search-distillation recipe on the checked-out
-Allies/Lessons world. Exp-03 supports that method over early PPO in its
-historical world; it does **not** rank this small new candidate as the strongest
-current bot. The generic `manabot train --preset local` uses a different deck
-and is a training smoke, not this matchup's challenger recipe.
+This workflow runs the existing search-distillation trainer on the corrected
+Allies/Lessons world: the authored decks with their sideboards, so every Learn
+decision offers Take a Lesson, Discard and draw, and Decline. Exp-03 supports
+distillation over early PPO in its historical world; it does **not** rank this
+small new candidate as the strongest current bot. The generic
+`manabot train --preset local` uses a different deck and is a training smoke,
+not this matchup's challenger recipe.
 
-No cloud account is needed. The fixed local workflow uses search-64 teacher
-self-play for eight games, alternating deck assignment, then eight supervised
-epochs (lr 0.001, batch 64, seed 79, whole-game 20% validation). Both seats
-contribute labels. The selected artifact is the final epoch of this one run,
-without tuning or a strength claim. Each execution has one CPU worker/thread,
-a ten-minute wall cap and a 4 GiB process-tree RSS cap. Overflow of a fixed
-training observation rejects the run rather than dropping legal choices.
+No cloud account is needed. The fixed local workflow follows the
+[approved starting configuration](plans/strongest-manabot-training.md):
+uniform-prior determinized PUCT with 64 simulations across four compatible
+worlds plays eight teacher games, alternating which deck moves first. A
+width-64 policy then learns the complete visit distributions for eight epochs
+(policy weight 1, value weight 0, lr 0.001, batch 128, seed 79, whole-game 10%
+validation). Both seats contribute labels. The selected artifact is the final
+epoch of this one run, without tuning or a strength claim. Each execution has
+one CPU worker/thread, a ten-minute wall cap and a 4 GiB process-tree RSS cap.
+
+Teacher data must pass admission before training. `admission.json` compares
+the rules engine's own legal-offer count with the encoded training row at
+every decision, overall and by decision kind. The run is rejected if any
+choice is missing, if no Learn decision offered a Lesson, if a game used
+another deck or sideboard, or if more than 1% of search continuations hit
+their step cap. Overflow of a fixed training observation also rejects the run
+rather than dropping legal choices. Training rows hold only the acting
+player's observation.
 
 From the repository root, prepare the locked environment and native runtime:
 
@@ -32,23 +45,33 @@ uv run scripts/train_challenger.py --out .runs/my-challenger --seed 79
 
 Use a new output directory for every execution. `recipe.json` and an exact
 source/native archive `sources.zip` are written before work; per-game shards
-and `games.json` survive failures. `phases.json` reports
+and `games.json` survive failures. `recipe.json` also records the world the
+run binds to: rules runtime digest, content manifest, deck and sideboard
+setup, Lesson pool, and the observation/action tensor shapes and enumerations,
+each with its own digest. `phases.json` reports
 seconds and teacher decisions/second; `receipt.json` reports worker elapsed
 `wall_seconds`, total script `operator_wall_seconds` including source capture,
 sampled worker process-tree RSS (excluding the supervisor), actual new cloud
 spend and unknown electricity cost. Build, browser and human-play time are
 separate; missing phase measurements remain unknown.
-`candidate.json` binds the checkpoint digest, source/recipe, data, observation
-configuration, content manifest and inference setting. Export reloads the
-checkpoint and checks exact logits against the trained model. A failed receipt
-cannot be configured as an opponent.
+`candidate.json` binds the checkpoint digest, source/recipe, data, admission
+report, world identities, observation configuration, content manifest and
+inference setting. Export reloads the checkpoint and checks exact logits
+against the trained model. The run then loads the candidate the way the play
+server does and plays one complete game in each deck assignment against a
+random player, recording both in `demo_check.json` and
+`demo-check/play.sqlite` with `automated_validation` origin. This proves the
+checkpoint loads and finishes legal games; it measures no strength. A run that
+fails this check has a failed receipt, and a failed receipt cannot be
+configured as an opponent.
 
 Reproducibility means retained inputs and procedure, complete legal games and
 replay witnesses. It does not promise identical stochastic checkpoints across
 devices or independent seeds. These receipts are the ETU-80 measurement input;
 do not copy results into a separate measurement store. Early ETU-79 feasibility
-uses the pre-ETU-75 world. Corrected rules/Lesson-pool acceptance remains open
-until that world is integrated and the same workflow is repeated.
+used the pre-ETU-75 world and a flat search-64 teacher; those checkpoints do
+not bind to this world. The first corrected-world executions are in the
+[2026-09-29 record](evidence/corrected-world-training-2026-09-29.md).
 
 Build and serve the same SPA/ASGI entrypoint as the hosted app, locally:
 
@@ -125,6 +148,70 @@ Before any hosted deployment, configure persistent storage and bundle the
 training runtime and candidate. The checked Fly deployment has no volume mount;
 this local workflow does not deploy anything.
 
+
+## Evaluate the selected matchup
+
+Use the existing arena's bounded instrument command on the authored Allies
+versus Lessons setup, including both sideboards:
+
+```bash
+uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
+  --out-dir .runs/allies-lessons-arena-1 --deal-seeds 83001
+```
+
+Without a candidate registration this runs Random against the shipped default
+demo Search-64. It calls `etude.villain.SearchVillain` itself: 64 simulations
+per legal action, four rollouts per world, 2,000-step playout cap, deterministic
+first-maximum selection, CPU, one worker and one Torch thread. The baseline
+registration pins the policy source bytes; the protocol additionally pins the
+native extension, rules sources, compiled content, complete setup, observation
+and action ABIs and evaluator sources. It does not substitute a historical
+trained opponent whose runtime no longer matches.
+
+Each deal seed produces **four games**. Legs 0/1 keep UR in starting seat 0 and
+GW in seat 1 while swapping players; legs 2/3 put GW in starting seat 0 and UR
+in seat 1 and swap players again. Thus each player gets both decks and both
+starting seats. The same seed fixes each per-seat deal within its pair. Reversing
+the decks does not promise identical opening hands across those two pairs.
+Bootstrap resampling keeps the entire four-game deal block together.
+
+To evaluate exported bytes, pass `--candidate registration.json` and
+`--candidate-checkpoint candidate.pt`. Use the existing `PlayerRegistration`
+schema: world `w4`, suite `w4-allies-lessons-v1`, exact checkpoint SHA-256/size,
+parameter count, training seed, immutable artifact ID and explicit inference
+spec (`checkpoint`, `deterministic`, `cpu`, batch size 1). Compute the setup and
+ABI fingerprints with `runtime_fingerprints(match_hypers=selected_match(),
+observation_space=loaded_space, world="w4")`; both are existing Python APIs.
+The ordinary checkpoint loader supplies `loaded_space`; the arena retains its
+bounds in every trace. No checkpoint port or loader bypass is performed.
+Stochastic policies are reseeded per player decision, with the exact seed in
+the trace. Treat an untrained fixture as a fixture, never as training evidence.
+
+The default limits are 120 wall seconds per game (including worker startup)
+and 10,000 Commands; change them explicitly with `--game-seconds` and
+`--max-commands` before starting a cohort. Player exceptions and native worker
+crashes attributable to a policy are forfeits. Total-game timeouts, Command
+caps and environment failures are retained as unscored failures and reject the
+cohort's statistical admission. They never earn draw credit or disappear from
+the denominator. Only authoritative terminal draws score 0.5. Any failed game,
+replay mismatch or evaluator source change causes a nonzero exit after writing
+the attempt artifacts. A passing replay of a failed prefix is not a completed
+game. Admission errors before gameplay, such as wrong bytes or ABI, fail before
+creating the output directory.
+
+`protocol.json` is written before play; `players.json`, `matches.jsonl`, the
+existing compressed Command traces, `replay.json`, `rating.json`, the resource
+ledger and digest manifest retain the result. Existing output directories are
+rejected. Replay rebuilds the exact retained setup and observation bounds and
+checks frames, offers, Commands, actors, state digests and terminal results
+without invoking policies. Frozen historical arena contracts keep their
+interactive-mirror interpretation and are not regenerated.
+
+This command builds the instrument. Its four-game default is not a strength
+comparison or useful uncertainty estimate; source-pinned current Learn rules
+are not a declaration that ETU-75's remaining w3 certification passed. A scored
+comparison still needs that gate, independent training seeds, held-out deals,
+a preregistered cohort and matched inference budgets.
 
 ## Shared game history
 

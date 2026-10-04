@@ -10,7 +10,7 @@ use managym::conformance::{
 
 const ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../conformance/semantic-kernel-v2"
+    "/../conformance/semantic-kernel-w4-v1"
 );
 
 #[test]

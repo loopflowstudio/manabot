@@ -10,7 +10,9 @@ Dataset format (one .npz shard per worker):
     - "action" (D,) int16 — the searcher's argmax action index;
     - "game_index" (D,) int32, "seat" (D,) int8 — provenance;
     - "num_valid" (D,) int16 — count of valid actions at the decision;
-    - "winner" (D,) int8 — winner seat of the source game (-1 if none).
+    - "winner" (D,) int8 — winner seat of the source game (-1 if none);
+    - "num_legal" (D,) int16, "decision_kind" (D,) int8 — the engine's legal
+      offer count and action-space kind (absent from older shards).
 
 Both players are searchers (self-play mirror), so every env step is one
 teacher decision and both seats' decisions are recorded.
@@ -52,6 +54,11 @@ SCORE_KEY = "scores"
 # these stable columns. Legacy flat-MC shards omit them.
 VISIT_COUNT_KEY = "visit_counts"
 ROOT_VALUE_KEY = "root_value"
+# Admission columns: the rules engine's own legal-offer count and decision
+# kind (managym.ActionSpaceEnum) at each decision, recorded independently of
+# the encoded mask so an omitted legal choice is measurable afterwards.
+NUM_LEGAL_KEY = "num_legal"
+DECISION_KIND_KEY = "decision_kind"
 
 
 # -----------------------------------------------------------------------------
@@ -147,6 +154,8 @@ def generate_selfplay_shard(
     game_indices: list[int] = []
     seats: list[int] = []
     num_valids: list[int] = []
+    num_legals: list[int] = []
+    decision_kinds: list[int] = []
     winners_per_decision: list[list[int]] = []
     steps_per_game: list[int] = []
     winners: list[int | None] = []
@@ -160,7 +169,10 @@ def generate_selfplay_shard(
         info: dict[str, Any] = {}
         game_decisions: list[int] = []
         while not done and steps < max_steps_per_game:
-            acting = int(env.last_raw_obs.agent.player_index)
+            raw_obs = env.last_raw_obs
+            acting = int(raw_obs.agent.player_index)
+            num_legals.append(len(raw_obs.action_space.actions))
+            decision_kinds.append(int(raw_obs.action_space.action_space_type))
             action = players[acting].act(env, obs)
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
@@ -223,6 +235,8 @@ def generate_selfplay_shard(
     arrays["seat"] = np.asarray(seats, dtype=np.int8)
     arrays["num_valid"] = np.asarray(num_valids, dtype=np.int16)
     arrays["winner"] = winner_column
+    arrays[NUM_LEGAL_KEY] = np.asarray(num_legals, dtype=np.int16)
+    arrays[DECISION_KIND_KEY] = np.asarray(decision_kinds, dtype=np.int8)
     arrays[SCORE_KEY] = (
         np.stack(score_rows)
         if score_rows
@@ -330,7 +344,13 @@ def load_shards(
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)
-    for optional_key in (SCORE_KEY, VISIT_COUNT_KEY, ROOT_VALUE_KEY):
+    for optional_key in (
+        SCORE_KEY,
+        VISIT_COUNT_KEY,
+        ROOT_VALUE_KEY,
+        NUM_LEGAL_KEY,
+        DECISION_KIND_KEY,
+    ):
         if all(optional_key in shard for shard in shards):
             keys.append(optional_key)
     out = {key: np.concatenate([s[key] for s in shards]) for key in keys}
@@ -461,6 +481,20 @@ def evaluate_bc(
     )
 
 
+def dataset_observation_space(
+    dataset: dict[str, np.ndarray],
+    observation_hypers: ObservationSpaceHypers | None,
+) -> ObservationSpace:
+    """Build the declared observation space; reject data of another shape."""
+    obs_space = ObservationSpace(observation_hypers or ObservationSpaceHypers())
+    for key, shape in obs_space.shapes.items():
+        if dataset[key].shape[1:] != shape:
+            raise ValueError(
+                f"Dataset {key} shape differs from observation configuration"
+            )
+    return obs_space
+
+
 def train_bc(
     dataset: dict[str, np.ndarray],
     *,
@@ -493,12 +527,7 @@ def train_bc(
 
     torch.manual_seed(seed)
     dev = torch.device(device)
-    obs_space = ObservationSpace(observation_hypers or ObservationSpaceHypers())
-    for key, shape in obs_space.shapes.items():
-        if dataset[key].shape[1:] != shape:
-            raise ValueError(
-                f"Dataset {key} shape differs from observation configuration"
-            )
+    obs_space = dataset_observation_space(dataset, observation_hypers)
     agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)

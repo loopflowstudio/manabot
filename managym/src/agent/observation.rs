@@ -66,6 +66,7 @@ pub struct CardData {
     pub id: i32,
     pub registry_key: i32,
     pub name: String,
+    pub text_box: String,
     pub power: i32,
     pub toughness: i32,
     pub is_token: bool,
@@ -89,6 +90,7 @@ pub struct SideboardCardData {
     pub owner_id: i32,
     pub registry_key: i32,
     pub name: String,
+    pub text_box: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -180,6 +182,7 @@ pub struct PermanentData {
     pub is_animated: bool,
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
+    pub exile_if_dies_this_turn: bool,
     /// Effective keywords — printed keywords unioned with until-EOT grants
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
     /// printed keywords; this is what the permanent can actually do now.
@@ -436,6 +439,7 @@ impl Observation {
                     owner_id: self.agent.id,
                     registry_key: card.definition_id.0 as i32,
                     name: card.name.clone(),
+                    text_box: card.text_box.clone(),
                 });
             }
         }
@@ -521,6 +525,7 @@ impl Observation {
             damage: permanent.damage,
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
+            exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,
             toughness,
@@ -552,6 +557,7 @@ impl Observation {
             id: card.id.0 as i32,
             registry_key: card.registry_key.0 as i32,
             name: card.name.clone(),
+            text_box: card.text_box.clone(),
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
             is_token: card.is_token,
@@ -1009,6 +1015,7 @@ impl Observation {
                 "id": card.id,
                 "registry_key": card.registry_key,
                 "name": card.name,
+                "text_box": card.text_box,
                 "zone": card.zone as i32,
                 "owner_id": card.owner_id,
                 "power": card.power,

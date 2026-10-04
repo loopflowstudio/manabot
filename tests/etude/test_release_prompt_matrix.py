@@ -30,15 +30,18 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
     excluded_records = action_spaces["excluded"]
     excluded = [record["family"] for record in excluded_records]
 
-    assert len(reachable) == len(set(reachable)) == 9
+    assert len(reachable) == len(set(reachable)) == 10
     assert terminal == ["GAME_OVER"]
-    assert excluded == ["MODAL"]
+    assert excluded == ["MODAL", "LEGEND_RULE"]
     classifications = [*reachable, *terminal, *excluded]
     assert len(classifications) == len(set(classifications))
     assert set(classifications) == set(ActionSpaceEnum.__members__)
 
     selected_cards = set(CURATED_PACK.hero_deck) | set(CURATED_PACK.villain_deck)
-    assert excluded_records[0]["proof_card"] not in selected_cards
+    for record in excluded_records:
+        assert record["reason"]
+        if "proof_card" in record:
+            assert record["proof_card"] not in selected_cards
 
     families = matrix["families"]
     assert set(families) == set(reachable)
@@ -107,8 +110,8 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         assert set(record["scenario_ids"]) == expected_ids
 
     visual = matrix["visual_references"]
-    assert visual["version"] == 4
-    assert visual["directory"] == "visual-references/v4"
+    assert visual["version"] == 5
+    assert visual["directory"] == "visual-references/v5"
     assert visual["profile"] == {
         "name": "ubuntu-24.04-chromium",
         "operating_system": "Ubuntu 24.04 x86-64",
@@ -142,7 +145,9 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         scenario = scenarios_by_id[reference["scenario_id"]]
         family = reference["family"]
         assert family in scenario["expected"]["prompt_counts"]
-        assert 0 < reference["occurrence"] <= scenario["expected"]["prompt_counts"][family]
+        assert (
+            0 < reference["occurrence"] <= scenario["expected"]["prompt_counts"][family]
+        )
 
     assert {reference["id"] for reference in visual["boards"]} == {
         "board-opening",
@@ -162,7 +167,7 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
     assert {reference["scenario_id"] for reference in terminals} == set(scenarios_by_id)
     assert len(terminals) == len(scenarios_by_id)
     ids.extend(reference["id"] for reference in terminals)
-    assert len(ids) == len(set(ids)) == 17
+    assert len(ids) == len(set(ids)) == 18
 
     reference_dir = MATRIX_PATH.parent / visual["directory"]
     assert reference_dir.is_dir()

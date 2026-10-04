@@ -26,6 +26,10 @@ impl Game {
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.
             if self.perform_state_based_actions() {
+                if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
+                    self.journal_turn();
+                    self.state.turn.cleanup_priority = true;
+                }
                 if self.is_game_over() {
                     return None;
                 }
@@ -35,6 +39,9 @@ impl Game {
             if self.is_game_over() {
                 return None;
             }
+            if let Some(space) = self.suspended_decision_action_space() {
+                return Some(space);
+            }
 
             // CR 603.3, 603.3b — put waiting triggers on the stack in the
             // engine's deterministic APNAP/enqueue order. Stacking triggers
@@ -42,6 +49,10 @@ impl Game {
             let had_waiting_triggers = self.state.pending_trigger_choice.is_some()
                 || !self.state.pending_triggers.is_empty();
             if had_waiting_triggers {
+                if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
+                    self.journal_turn();
+                    self.state.turn.cleanup_priority = true;
+                }
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);
                 }

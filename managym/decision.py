@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import json
 from typing import Any, Mapping
 
-SEMANTIC_DECISION_VERSION: int = 5
+SEMANTIC_DECISION_VERSION: int = 6
 
 PUBLIC_COMMITMENT_KINDS: tuple[str, ...] = (
     "cast",

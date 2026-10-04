@@ -270,3 +270,26 @@ address and posterior resolver now exist, so the claim that a live address is
 wholly missing is stale. `/api/advice` still calls the fixture provider, so the
 end-to-end finish line remains open. The carried design and remaining release
 gates are in [the live-advice plan](../../docs/plans/live-belief-advice.md).
+
+## Corrected-world training binding (2026-09-29)
+
+`scripts/train_challenger.py` is the one training-to-demo runner. It builds
+teacher games with `MatchHypers.authored`, so sideboards are present and Learn
+offers a Lesson; deck constants alone give the old setup. The play server
+rejects a candidate whose content manifest was taken without sideboards. The
+runner records rules-runtime, content, setup, Lesson-pool and
+observation/action ABI digests, requires admission (engine legal-offer count
+equals encoded rows at every decision, at least one Learn decision offering a
+Lesson, search cap hits at most 1%), and completes only after the candidate
+plays both deck assignments through `configured_opponent` and `GameSession`.
+`train_search_supervised` now takes `observation_hypers`.
+
+Two eight-game executions completed on 2026-09-29 in 200 s and 139 s with zero
+omitted choices over 993 and 824 decisions (18 and 17 Learn decisions). In
+both, held-out policy KL stayed at its untrained value (0.0218 → 0.0222,
+0.0197 → 0.0212): PUCT-64×4 visit targets were close to uniform (top share 47%
+versus 39% uniform) and each run took about 56 optimizer steps. Which of those
+limits learning is untested. Treat these checkpoints as pipeline proof only.
+Details and unreviewed decisions are in the
+[2026-09-29 record](../../docs/evidence/corrected-world-training-2026-09-29.md).
+WORLDS.md has not registered w3; that stays with ETU-75.

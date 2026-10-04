@@ -38,7 +38,7 @@ prior proof browser profile. The proof job restores no uv, npm, Cargo, target,
 or project-install cache. Installing the host tools, browser, and checkout is
 provisioning and is outside the measured command.
 
-## Sixty-second boundary
+## Ninety-second boundary
 
 The wall clock starts immediately before `./scripts/play` is spawned. It ends
 only when a fresh Chromium context shows all of the following:
@@ -51,7 +51,10 @@ only when a fresh Chromium context shows all of the following:
 
 The measured time includes uv's locked play-runtime sync, the release native build,
 `npm ci`, both service startups, browser navigation, and default match
-creation. It must be strictly less than 60,000 ms. The launcher-internal time
+creation. It must be strictly less than 90,000 ms. The budget was 60,000 ms
+until 2026-09-30; the release native build alone had reached about 52 s on
+GitHub's runner before the w4 cards added rules, and the first w4 run timed
+out, so Jack Heart accepted 90 s. The launcher-internal time
 is diagnostic; the externally measured receipt is authoritative because it
 also includes uv startup and dependency work.
 
@@ -75,7 +78,7 @@ Both services must pass readiness before the launcher emits its ready record.
 Any installation or service-start failure tears down the started services. The
 browser waits for `ETUDE_PLAY_READY` before navigating. This overlaps proof
 setup with installation without moving the external start time or relaxing
-the sixty-second playable-state assertion.
+the ninety-second playable-state assertion.
 
 ## Offline reload boundary
 

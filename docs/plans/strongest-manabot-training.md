@@ -189,6 +189,11 @@ profile evidence; they must not pretend to perform all calibration anew.
 
 ## Measurement and evaluation
 
+The [candidate versus demo comparison protocol](candidate-demo-comparison.md)
+(ETU-84, 2026-09-29) proposes the concrete local KR 2 cohort, budgets and
+analysis. It awaits Jack Heart's acceptance in the comparison Task's design
+review; this approved budget plan does not itself accept that protocol.
+
 The dated ETU-78 read contained no accepted corrected-world throughput
 receipt. ETU-78 was subsequently superseded by ETU-79; the latter owns
 repeatable corrected train/export/play and its provenance, timing and cost

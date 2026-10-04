@@ -38,13 +38,16 @@ require positive integer counts. `Match.swapped()` moves both lists together;
 
 ## World identity
 
-An observation/action-shape change is a world version, and artifacts are only
-comparable within a world. The **w2** baselines and porting rules are in
-[WORLDS.md](../WORLDS.md). Full Learn changes that world's rules and inputs;
-the [Learn integration record](../docs/rules/learn-lesson.md) tracks the
-unfinished w3 declaration and ordinary checkpoint binding. Existing w2
-checkpoints do not certify the corrected rules, even if they load or their
-dimensions match.
+An observation/action-shape or rules-meaning change is a world version.
+The current world is **w4** (`managym.WORLD_VERSION`); its rules, tensor shape,
+and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
+including corrected-Learn w3 artifacts, are not comparable to w4. The local
+challenger workflow records the native world identity and current rules,
+content, Lesson-pool and tensor identities with each run. Historical Learn
+certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
+
+`train_bc` and `train_search_supervised` take the `observation_hypers` the
+shards were encoded with and reject a dataset of any other shape.
 
 ## Architecture
 
@@ -67,6 +70,8 @@ world. The cross-package contracts and convergence status are in
    config models, profiling
 7. **`manabot.belief`**: canonical world distributions, viewer history,
    supervised exact-world learning, and the `ManabotPlayer` lifecycle
+8. **`manabot.study`**: behavioral study of recorded games (`record_games`,
+   `measures`, `report`), with one subpackage per matchup
 
 Belief input is opt-in: schema-bound checkpoints load through the ordinary
 `checkpoint` player and update belief before each policy/value decision.

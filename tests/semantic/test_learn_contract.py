@@ -14,7 +14,11 @@ from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
-from managym.decision import Observation, SemanticContractError
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Observation,
+    SemanticContractError,
+)
 from managym.possible_worlds import PossibleWorldError, PossibleWorldSpace, WorldQuery
 
 
@@ -174,7 +178,10 @@ def test_world_reader_requires_explicit_known_counts(known_hand):
             return json.dumps(
                 {
                     "schema_version": 2,
-                    "source_observation": {"schema_version": 5, "viewer": viewer},
+                    "source_observation": {
+                        "schema_version": SEMANTIC_DECISION_VERSION,
+                        "viewer": viewer,
+                    },
                     "viewer": viewer,
                     "known_hand": known_hand,
                 }
@@ -184,7 +191,18 @@ def test_world_reader_requires_explicit_known_counts(known_hand):
         PossibleWorldSpace.from_engine(MalformedEngine(), 0)
 
 
-@pytest.mark.parametrize("version", [1, 4, 6, "5", 5.0, True])
+@pytest.mark.parametrize(
+    "version",
+    [
+        1,
+        4,
+        5,
+        SEMANTIC_DECISION_VERSION + 1,
+        str(SEMANTIC_DECISION_VERSION),
+        float(SEMANTIC_DECISION_VERSION),
+        True,
+    ],
+)
 def test_world_reader_rejects_incompatible_source_observation(version):
     class IncompatibleEngine:
         def possible_world_space_json(self, viewer):

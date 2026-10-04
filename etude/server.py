@@ -378,6 +378,7 @@ def _serialize_card(card: managym.Card) -> dict[str, Any]:
         "id": int(card.id),
         "registry_key": int(card.registry_key),
         "name": card.name,
+        "text_box": card.text_box,
         "zone": _enum_name(ZoneEnum, card.zone),
         "owner_id": int(card.owner_id),
         "power": int(card.power),
@@ -402,6 +403,8 @@ def _serialize_permanent(
     return {
         "id": int(permanent.id),
         "name": card.name if card else None,
+        "text_box": card.text_box if card else "",
+        "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
         "controller_id": int(permanent.controller_id),
         "tapped": bool(permanent.tapped),
         "damage": int(permanent.damage),
@@ -499,6 +502,7 @@ def serialize_observation(obs: managym.Observation) -> dict[str, Any]:
             "owner_id": int(card.owner_id),
             "registry_key": int(card.registry_key),
             "name": card.name,
+            "text_box": card.text_box,
         }
         for card in obs.agent_sideboard
     ]
@@ -713,6 +717,10 @@ def _format_action(
     if action_name == "LEARN_DISCARD" and first:
         return f"Discard {first}, then draw a card"
     if action_name == "SELECT_CARD" and first:
+        if space_kind == "DISCARD":
+            return f"Discard {first}"
+        if space_kind == "LEGEND_RULE":
+            return f"Keep {first} (legend rule)"
         return f"Put {first} into your hand"
     if action_name == "DECLINE_CHOICE":
         if space_kind == "LEARN":

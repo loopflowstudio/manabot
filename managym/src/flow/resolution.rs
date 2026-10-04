@@ -12,7 +12,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
     },
     state::{
-        ability::{Ability, Effect, TargetSpec},
+        ability::{Ability, Effect, EffectValue, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
         stack_object::{
@@ -23,6 +23,17 @@ use crate::{
 };
 
 impl Game {
+    fn effect_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
+        match value {
+            EffectValue::GraveyardMatching { base, predicate } => {
+                base.saturating_add(self.count_graveyard_matching(controller, predicate) as i32)
+            }
+            EffectValue::CardsDrawnMinus { subtract } => {
+                self.state.turn.cards_drawn_this_turn[controller.0].saturating_sub(*subtract) as i32
+            }
+        }
+    }
+
     pub(crate) fn resolve_top_of_stack(&mut self) {
         let Some(stack_object) = self.state.stack_objects.last().cloned() else {
             return;
@@ -266,6 +277,50 @@ impl Game {
                 }
                 None
             }
+            Effect::Discard => (!self
+                .state
+                .zones
+                .zone_cards(ZoneType::Hand, frame.controller)
+                .is_empty())
+            .then_some(Decision::Discard {
+                player: frame.controller,
+            }),
+            Effect::IfCondition { condition, effects } => {
+                if self.check_static_condition(condition, frame.controller) {
+                    frame.prepend_effects(effects.iter().cloned());
+                }
+                None
+            }
+            Effect::DealDamageValue { amount, target } => {
+                let amount = self.effect_value(amount, frame.controller);
+                self.execute_frame_effect(
+                    &Effect::DealDamage {
+                        amount,
+                        target: target.clone(),
+                    },
+                    frame,
+                )
+            }
+            Effect::PutCountersValue { count, target } => {
+                let count = self.effect_value(count, frame.controller);
+                self.execute_frame_effect(
+                    &Effect::PutCounters {
+                        count,
+                        target: target.clone(),
+                    },
+                    frame,
+                )
+            }
+            Effect::ExileIfDiesThisTurn { target } => {
+                let chosen = frame.primary_target()?;
+                if self.target_is_legal(chosen, target, frame.controller) {
+                    if let Target::Permanent(id) = chosen {
+                        self.journal_permanent(id);
+                        self.state.permanents[id].as_mut()?.exile_if_dies_this_turn = true;
+                    }
+                }
+                None
+            }
             Effect::DrawCards { count } => {
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
@@ -409,9 +464,7 @@ impl Game {
             }
             Effect::IfKicked { then, otherwise } => {
                 let branch = if frame.kicked { then } else { otherwise };
-                for effect in branch.iter().rev() {
-                    frame.queue.push_front(effect.clone());
-                }
+                frame.prepend_effects(branch.iter().cloned());
                 None
             }
             Effect::IfGraveyardAtLeast {
@@ -422,9 +475,7 @@ impl Game {
             } => {
                 let matches = self.count_graveyard_matching(frame.controller, predicate);
                 let branch = if matches >= *count { then } else { otherwise };
-                for effect in branch.iter().rev() {
-                    frame.queue.push_front(effect.clone());
-                }
+                frame.prepend_effects(branch.iter().cloned());
                 None
             }
             Effect::TargetCreaturesDealPowerDamageToLastTarget => {
@@ -593,9 +644,7 @@ impl Game {
                     return None;
                 };
                 if self.permanent_matches_predicate(permanent_id, predicate) {
-                    for effect in then.iter().rev() {
-                        frame.queue.push_front(effect.clone());
-                    }
+                    frame.prepend_effects(then.iter().cloned());
                 }
                 None
             }

@@ -255,3 +255,23 @@ def test_training_fails_closed_at_expired_wall_deadline() -> None:
             seed=11,
             deadline_monotonic=time.perf_counter() - 1.0,
         )
+
+
+def test_search_supervised_binds_the_declared_observation_shape():
+    from manabot.infra.hypers import ObservationSpaceHypers
+
+    dataset = _dataset()
+    wider = ObservationSpaceHypers(max_actions=128)
+    with pytest.raises(ValueError, match="actions shape differs"):
+        train_search_supervised(dataset, epochs=1, observation_hypers=wider)
+
+    padded = dict(dataset)
+    for key in ("actions", "action_focus", "actions_valid", SCORE_KEY):
+        width = [(0, 0)] * dataset[key].ndim
+        width[1] = (0, 128 - dataset[key].shape[1])
+        fill = {"action_focus": -1, SCORE_KEY: -1.0}.get(key, 0)
+        padded[key] = np.pad(dataset[key], width, constant_values=fill)
+    _, obs_space, _, _ = train_search_supervised(
+        padded, epochs=1, batch_size=32, observation_hypers=wider
+    )
+    assert obs_space.encoder.hypers == wider

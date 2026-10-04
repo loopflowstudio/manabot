@@ -541,6 +541,12 @@ impl Game {
                     )
             }
             (
+                TriggerCondition::BeginningOfYourCombat,
+                GameEvent::StepStarted {
+                    step: StepKind::BeginningOfCombat,
+                },
+            ) => self.active_player() == source_controller,
+            (
                 TriggerCondition::BeginningOfYourUpkeep,
                 GameEvent::StepStarted {
                     step: StepKind::Upkeep,

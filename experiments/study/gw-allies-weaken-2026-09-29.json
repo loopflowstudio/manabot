@@ -1,0 +1,8 @@
+[
+  {"name": "Cub to lands", "gw": "-2 Badgermole Cub, +1 Forest, +1 Plains"},
+  {"name": "Voyager to land", "gw": "-1 South Pole Voyager, +1 Plains"},
+  {"name": "Cub and Voyager to lands", "gw": "-2 Badgermole Cub, -1 South Pole Voyager, +1 Forest, +2 Plains"},
+  {"name": "Cub to Healer", "gw": "-2 Badgermole Cub, +2 Compassionate Healer"},
+  {"name": "Voyager to Healer", "gw": "-1 South Pole Voyager, +1 Compassionate Healer"},
+  {"name": "Cub and Voyager to Healer and Deserters", "gw": "-2 Badgermole Cub, -1 South Pole Voyager, +2 Compassionate Healer, +1 Jeong Jeong's Deserters"}
+]

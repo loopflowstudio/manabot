@@ -17,13 +17,14 @@ import numpy as np
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
     OBS_KEYS,
     ROOT_VALUE_KEY,
     SCORE_KEY,
     VISIT_COUNT_KEY,
+    dataset_observation_space,
     soft_targets_from_scores,
     split_by_game,
 )
@@ -320,6 +321,7 @@ def train_search_supervised(
     split_seed: int | None = None,
     device: str = "cpu",
     agent_hypers: AgentHypers | None = None,
+    observation_hypers: ObservationSpaceHypers | None = None,
     initial_agent_state: dict[str, Any] | None = None,
     deadline_monotonic: float | None = None,
     log: bool = False,
@@ -334,6 +336,8 @@ def train_search_supervised(
     Callers are responsible for matched experimental arms. The Teacher-0
     runner uses ``value_weight=0`` to isolate value supervision; Teacher-1
     holds root-value supervision fixed while changing the policy target.
+    The dataset must match ``observation_hypers`` exactly; a shard encoded
+    under another observation shape is rejected instead of reinterpreted.
     """
 
     _validate_dataset(
@@ -350,7 +354,7 @@ def train_search_supervised(
 
     torch.manual_seed(seed)
     dev = torch.device(device)
-    obs_space = ObservationSpace()
+    obs_space = dataset_observation_space(dataset, observation_hypers)
     agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)

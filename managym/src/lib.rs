@@ -19,3 +19,6 @@ pub use agent::vector_env::VectorEnv;
 pub use flow::game::Game;
 pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
 pub use state::player::PlayerConfig;
+
+/// Rules and observation/action meaning; see WORLDS.md for compatibility.
+pub const WORLD_VERSION: &str = "w4";

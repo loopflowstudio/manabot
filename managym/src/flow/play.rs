@@ -68,6 +68,16 @@ impl Game {
             }
             cost = cost.reduced_generic(count);
         }
+        for permanent_id in self.battlefield_permanents(player) {
+            let permanent = self.state.permanents[permanent_id].as_ref()?;
+            for reduction in &self.state.cards[permanent.card].spell_cost_reductions {
+                if reduction.predicate.matches_card(card_ref)
+                    && self.check_static_condition(&reduction.condition, player)
+                {
+                    cost = cost.reduced_generic(reduction.generic);
+                }
+            }
+        }
         Some(cost)
     }
 

@@ -190,14 +190,19 @@ def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path, monkeypatch)
     import hashlib
 
     from etude.opponent import Opponent
-    from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
     import managym
 
+    # The server admits an opponent only for the setup it was bound to,
+    # sideboards included.
+    setups = {
+        deck: managym.authored_deck_setup("ur-lessons-vs-gw-allies", deck)
+        for deck in ("ur_lessons", "gw_allies")
+    }
     env = managym.Env()
     env.reset(
         [
-            managym.PlayerConfig("Hero", UR_LESSONS_DECK),
-            managym.PlayerConfig("Villain", GW_ALLIES_DECK),
+            managym.PlayerConfig(deck, setup.decklist, setup.sideboard)
+            for deck, setup in setups.items()
         ]
     )
     opponent = Opponent(
@@ -207,7 +212,7 @@ def test_full_game_vs_checkpoint_villain(isolated_traces, tmp_path, monkeypatch)
         checkpoint_path,
         False,
         env.content_pack_manifest(),
-        {"ur_lessons": UR_LESSONS_DECK, "gw_allies": GW_ALLIES_DECK},
+        {deck: dict(setup.decklist) for deck, setup in setups.items()},
     )
     monkeypatch.setattr(server, "configured_opponent", lambda: opponent)
 

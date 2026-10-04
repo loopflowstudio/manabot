@@ -8,7 +8,15 @@ export interface CardTypes {
   is_battle: boolean;
 }
 
+export interface CardPreview {
+  name: string | null;
+  text_box?: string;
+  power: number | null;
+  toughness: number | null;
+}
+
 export interface CardState {
+  text_box?: string;
   id: number;
   registry_key: number;
   name: string;
@@ -21,6 +29,8 @@ export interface CardState {
 }
 
 export interface PermanentState {
+  exile_if_dies_this_turn?: boolean;
+  text_box?: string;
   id: number;
   name: string | null;
   controller_id: number;
@@ -35,6 +45,7 @@ export interface PermanentState {
 }
 
 export interface SideboardCard {
+  text_box?: string;
   candidate_id: number;
   owner_id: number;
   registry_key: number;
