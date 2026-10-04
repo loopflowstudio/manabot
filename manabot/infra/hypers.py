@@ -104,6 +104,7 @@ class ExperimentHypers(BaseHypersModel):
 
 
 class AgentHypers(BaseHypersModel):
+    compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     semantic_pack: str | None = None
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"

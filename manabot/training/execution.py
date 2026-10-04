@@ -1,5 +1,6 @@
 """Bounded regime execution; VerifyStore owns state, manifests are exports."""
 
+from collections.abc import Mapping
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import asdict
@@ -10,7 +11,7 @@ import platform
 import socket
 import subprocess
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 import uuid
 
 import numpy as np
@@ -37,16 +38,17 @@ from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
 from manabot.sim.search_supervised import train_search_supervised
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
-from manabot.verify.store import VerifyStore
 import managym
 
 from .clock import watchdog_seconds
+from .compound import CompoundStatistics, collect_game, optimize_games, replay_game
 from .models import (
     ArtifactReference,
     CollectBelief,
     CollectSearch,
     StageRecord,
     TrainBelief,
+    TrainCompound,
     TrainingRegime,
     TrainingRun,
     TrainSelfPlay,
@@ -61,6 +63,9 @@ from .recovery import (
     settle_orphan,
 )
 
+if TYPE_CHECKING:
+    from manabot.verify.store import VerifyStore
+
 
 def atomic_json(path: str | Path, value: object) -> None:
     path = Path(path)
@@ -72,14 +77,14 @@ def atomic_json(path: str | Path, value: object) -> None:
 
 
 def export_training_run(
-    run_id: str, store: VerifyStore, out: str | Path
+    run_id: str, store: "VerifyStore", out: str | Path
 ) -> TrainingRun:
     run = store.training_run(run_id)
     atomic_json(Path(out) / "run.json", run.model_dump(mode="json"))
     return run
 
 
-def validate_regime(regime: TrainingRegime | dict[str, Any]) -> TrainingRegime:
+def validate_regime(regime: TrainingRegime | Mapping[str, object]) -> TrainingRegime:
     regime = TrainingRegime.model_validate(
         regime.model_dump() if isinstance(regime, TrainingRegime) else regime
     )
@@ -91,10 +96,10 @@ def validate_regime(regime: TrainingRegime | dict[str, Any]) -> TrainingRegime:
 
 
 def execute_regime(
-    regime: TrainingRegime,
+    regime: TrainingRegime | Mapping[str, object],
     seed: int,
     out: str | Path,
-    store: VerifyStore,
+    store: "VerifyStore",
     *,
     resume_from: str | None = None,
 ) -> TrainingRun:
@@ -131,7 +136,7 @@ def _execute_regime(
     regime: TrainingRegime,
     seed: int,
     out: str | Path,
-    store: VerifyStore,
+    store: "VerifyStore",
     *,
     resume_from: str | None = None,
 ) -> TrainingRun:
@@ -345,6 +350,116 @@ def _execute_regime(
                     shards.append(target)
                     game_index += 1
                 outputs[stage.id] = shards
+            elif isinstance(stage, TrainCompound):
+                if stage.initial:
+                    agent, optimizer = outputs[stage.initial]
+                else:
+                    torch.manual_seed(seeds["initialization"])
+                    agent = Agent(space, regime.agent)
+                    optimizer = torch.optim.Adam(
+                        agent.parameters(), lr=stage.learning.learning_rate.initial
+                    )
+                sampling = torch.Generator().manual_seed(
+                    seeds["collection"] + game_index
+                )
+                shuffling = torch.Generator().manual_seed(
+                    seeds["minibatches"] + game_index
+                )
+                stats = CompoundStatistics()
+                record.diagnostics = [asdict(stats)]
+                for _ in range(stage.updates):
+                    games = []
+                    for _ in range(stage.games_per_update):
+                        phase = "collection_seconds"
+                        target = out / f"{stage.id}-game-{game_index}.jsonl"
+                        match = Match(regime.match)
+                        if game_index % 2:
+                            match = match.swapped()
+                        tick = time.perf_counter()
+                        stats.attempted_games += 1
+                        try:
+                            game = collect_game(
+                                agent,
+                                match,
+                                seeds["collection"] + game_index,
+                                sampling,
+                                target,
+                                max_commands=stage.max_commands,
+                                check=check,
+                                skip_trivial=stage.skip_trivial,
+                            )
+                            # Replay consumes the retained Commands, never another policy.
+                            check()
+                            replay_game(target)
+                        except BaseException:
+                            stats.failed_games += 1
+                            if target.exists():
+                                record.rejected_artifacts[f"game-{game_index}"] = (
+                                    artifact(target)
+                                )
+                                with target.open() as partial:
+                                    stats.interrupted_microchoices += sum(
+                                        '"command":' in line for line in partial
+                                    )
+                            record.diagnostics = [asdict(stats)]
+                            raise
+                        record.collection_seconds += time.perf_counter() - tick
+                        record.artifacts[f"game-{game_index}"] = artifact(target)
+                        record.games += 1
+                        record.environment_decisions += game.microchoices
+                        record.learner_transitions += (
+                            sum(
+                                len(item.decision.output.tokens)
+                                for item in game.decisions
+                            )
+                            if stage.grouping == "sequential"
+                            else len(game.decisions)
+                        )
+                        stats.games += 1
+                        stats.decisions += len(game.decisions)
+                        stats.microchoices += game.microchoices
+                        stats.auto_resolved += game.auto_resolved
+                        for item in game.decisions:
+                            kind = str(item.decision.offers.projection["kind"])
+                            stats.prompt_kinds[kind] = (
+                                stats.prompt_kinds.get(kind, 0) + 1
+                            )
+                            stats.factors += len(item.decision.output.tokens)
+                            stats.forced_factors += sum(
+                                int((probs > 0).sum()) == 1
+                                for probs in item.decision.output.probabilities
+                            )
+                            stats.decision_seconds += item.decision.seconds
+                            stats.max_decision_seconds = max(
+                                stats.max_decision_seconds, item.decision.seconds
+                            )
+                        games.append(game)
+                        game_index += 1
+                        stats.collection_seconds = record.collection_seconds
+                        record.diagnostics = [asdict(stats)]
+                        persist()
+                    phase = "learning_seconds"
+                    tick = time.perf_counter()
+                    update = optimize_games(
+                        agent,
+                        optimizer,
+                        games,
+                        stage.learning,
+                        grouped=stage.grouping == "grouped",
+                        estimator=stage.estimator,
+                        progress=(time.perf_counter() - start) / regime.wall_seconds,
+                        generator=shuffling,
+                        check=check,
+                    )
+                    record.learning_seconds += time.perf_counter() - tick
+                    record.optimizer_exposures += update.optimizer_exposures
+                    stats.learning_seconds = record.learning_seconds
+                    stats.optimizer_exposures += update.optimizer_exposures
+                    stats.losses.extend(update.losses)
+                    record.diagnostics = [asdict(stats)]
+                    persist()
+                outputs[stage.id] = (agent, optimizer)
+                optimizer_state = optimizer.state_dict()
             elif isinstance(stage, CollectBelief):
                 source = next(item for item in run.stages if item.id == stage.policy)
                 policy_artifact = source.artifacts[stage.weights]
@@ -542,7 +657,7 @@ def _execute_regime(
                 record.diagnostics = [asdict(item) for item in history]
                 outputs[stage.id] = {"agent": agent, **deepcopy(continuation)}
                 optimizer_state = continuation["optimizer_state"]
-            if isinstance(stage, (TrainSelfPlay, TrainSupervised)):
+            if isinstance(stage, (TrainSelfPlay, TrainSupervised, TrainCompound)):
                 phase = "export_seconds"
                 tick = time.perf_counter()
                 variants = {"raw": agent}

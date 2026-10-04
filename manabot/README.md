@@ -141,3 +141,8 @@ from manabot.env import ObservationSpace
 # Local imports
 from .sibling import Thing
 ```
+
+Compound checkpoints use an autoregressive legal-offer decoder and execute via
+ordinary checkpoint players. Their complete-game training stages, credit
+boundaries and separate comparison recipes are documented under
+[compound decisions](../docs/training-regimes.md#compound-decisions).

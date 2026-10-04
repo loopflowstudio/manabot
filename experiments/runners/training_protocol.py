@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class EvaluationProtocol(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     schema_version: Literal[2] = 2
-    study: Literal["learning-speed", "ataraxos-ablations"]
+    study: Literal["learning-speed", "ataraxos-ablations", "compound-decisions"]
     purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
     regime_digests: tuple[str, ...]
     training_seeds: tuple[int, ...] = (197,)
@@ -93,7 +93,11 @@ class EvaluationProtocol(BaseModel):
             )
         if any(s < 900000 for s in flat):
             raise ValueError("evaluation deals must use reserved family >=900000")
-        expected = 2 if self.study == "learning-speed" else 5
+        expected = {
+            "learning-speed": 2,
+            "ataraxos-ablations": 5,
+            "compound-decisions": 4,
+        }[self.study]
         if len(self.regime_digests) != expected or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
             for digest in self.regime_digests

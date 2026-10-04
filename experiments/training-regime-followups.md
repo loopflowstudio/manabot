@@ -3,10 +3,11 @@
 2026-10-04. These proposals belong to ETU-91's experiment design; no execution
 or expensive allocation is authorized by their presence. Each requires frozen
 inputs and predictions, a separately approved cost cap, fresh evaluation deals,
-and retained failed attempts before scoring. The frozen-policy collection and
-belief fitting stages in item 4 now have a bounded implementation described in
-[the sampler guide](../docs/belief-sampler.md); its scientific allocations and
-acceptance comparisons below remain unexecuted proposals.
+and retained failed attempts before scoring. Compound training (ETU-94, below)
+and the frozen-policy collection and belief fitting stages in item 4 now have
+bounded implementations. See [the sampler guide](../docs/belief-sampler.md) for
+the latter; scientific allocations and acceptance comparisons remain unexecuted
+proposals.
 
 ## Following the learned policy into search and belief experiments
 
@@ -97,3 +98,54 @@ computable and search quality; a low marginal error cannot certify the joint.
 Exploiters report every seed's attack curve and failed attempts; their maximum
 observed win rate is a bounded attack result, never an exact exploitability
 number. No mechanism is retained solely because a single seed improved.
+
+## Compound implementation and separate comparison — 2026-10-04
+
+ETU-94 implements a recurrent joint decoder, native lowering to canonical
+Commands, complete-game `train_compound`, ordinary checkpoint serving, and
+four `compound-decisions` study arms. The search/distillation/belief proposals above remain future work. See
+[the execution contract](../docs/training-regimes.md#compound-decisions).
+
+The primary Ataraxos construction is now available in the
+[Nature methods and Extended Data Fig. 1](https://www.nature.com/articles/s41586-026-11036-y):
+its decoder-only setup transformer generates placements in row-major order,
+with prefix outcome and entropy predictions; setup credit uses final game
+outcomes, whereas move learning uses lambda estimators. ETU-94 uses a GRU and
+scalar prefix values over MTG's native offers. This is a mechanism analogy,
+not a reproduction or evidence that outcome credit is superior in MTG.
+
+The runnable 2×2 is sequential/grouped decoder credit × bootstrapped/outcome
+credit, with identical initialization, model, world, setup and conditional
+reference. Both sequential and grouped arms execute complete sampled native
+submissions. It isolates credit boundaries without changing the policy family;
+comparison against the historical flat policy would be a separate architecture
+ablation. Grouped attacker declarations and single-target casts are supported.
+Blockers and payments remain separate published observations, explicitly tested
+as boundaries; a general atomic blocker/payment representation remains Rules
+work rather than a Python grouping heuristic.
+
+Keep gamma=1 and all non-estimator settings fixed. Predeclare the measured
+number of complete games/updates that fits each arm's same wall cap, report
+unused allocation and failed attempts, and compare checkpoints only over
+observed overlapping cost ranges. Native optionless-step collapse is a separate
+`skip_trivial` audit, not part of the grouping contrast. Report games, native
+Commands, groups, decoder factors (including forced factors), optimizer units,
+wall cost and decision latency together. Full-game paired arena blocks cover
+both deck and seat assignments; every Command is replayed. Whole training games
+stay intact, and evaluation deal families remain disjoint from training.
+
+The prior 12 training + 4 evaluation hour proposal covers only the original
+six-run, two-arm study. It does **not** allocate twelve runs for the 2×2. Before
+scientific scoring, freeze a separately authorized total cap, three or more
+independent training seeds per arm, all failure/recovery accounting, development
+and untouched endpoint deal schedules, matched inference limits and a numeric
+criterion. Keep seeds 401–403 and reserved follow-up deal families provisional
+until collision checks against actual producer receipts. No ETU-91 allocation
+or retained running checkout is changed by this implementation.
+
+Bounded checks establish normalized conditionals/joints, prefix dependence,
+score-function and finite-difference gradients, terminal versus bootstrapped
+credit, 65-attacker/35-target legality and Command parity, interruption rejection,
+hidden-world invariance and ordinary reload. They do not establish method-level
+improvement, competence, or a human challenger. Outcome versus bootstrapped
+superiority remains an open scientific result even when both paths execute.

@@ -539,3 +539,38 @@ fn structured_attacker_offer_fixture_matches_typed_wire_shape() {
         projection
     );
 }
+
+#[test]
+fn compound_lowering_preserves_root_and_all_attacker_subsets() {
+    let deck = BTreeMap::from([("Gray Ogre".to_string(), 20), ("Mountain".to_string(), 20)]);
+    let scenario = arranged_attack_scenario(deck.clone(), deck, &["Gray Ogre"; 6], 814);
+    let game = scenario.game();
+    let root = game
+        .semantic_observation(managym::state::game_object::PlayerId(0))
+        .unwrap();
+    let offers = game.compound_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    for mask in 0..64 {
+        let (submission, _) = submission_for_mask(offer, role, candidates, mask);
+        let commands = game.compound_commands(&offers, &submission).unwrap();
+        assert_eq!(commands.len(), 6);
+        let mut sequential = game.clone();
+        let mut atomic = game.clone();
+        atomic.apply_offer_submission(&offers, &submission).unwrap();
+        for command in commands {
+            sequential.execute_semantic_command(&command).unwrap();
+        }
+        // Canonical execution consumes the observation-event queue on every step.
+        atomic.take_observation_events();
+        assert_equivalent_surface(&atomic, &sequential);
+    }
+    assert_eq!(
+        serde_json::to_value(root).unwrap(),
+        serde_json::to_value(
+            game.semantic_observation(managym::state::game_object::PlayerId(0))
+                .unwrap()
+        )
+        .unwrap()
+    );
+}

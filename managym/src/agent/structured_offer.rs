@@ -5,7 +5,8 @@
 //! single `CreatureOrPlayer` target casts, and complete attacker declarations,
 //! then lowers accepted IDs through the existing rules executor. It
 //! intentionally does not own match revisions, prompt persistence, recovery,
-//! or policy decoding.
+//! or policy decoding. `compound_offers` covers the full legal surface and
+//! `compound_commands` lowers its atomic selections to canonical Commands.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -566,6 +567,86 @@ impl Game {
         })
     }
 
+    /// Complete legal policy surface. Only engine-owned atomic choices group;
+    /// every other decision retains its ordinary action-aligned offer.
+    pub fn compound_offers(&self) -> Result<StructuredOfferSet, StructuredOfferError> {
+        let mut complete = self.structured_search_offers()?;
+        match self.current_action_space.as_ref().map(|space| space.kind) {
+            Some(ActionSpaceKind::DeclareAttacker) => self.structured_attacker_offers(),
+            Some(ActionSpaceKind::Priority) => {
+                let presentation = self.structured_priority_offers()?;
+                for offer in &mut complete.projection.offers {
+                    let Some(InternalOffer::SearchAction {
+                        action: Action::CastSpell { card, .. },
+                    }) = complete.internal.get(&offer.id)
+                    else {
+                        continue;
+                    };
+                    let replacement =
+                        presentation
+                            .internal
+                            .iter()
+                            .find_map(|(id, inner)| match inner {
+                                InternalOffer::CastSingleTarget {
+                                    card: target_card, ..
+                                } if target_card == card => Some((*id, inner.clone())),
+                                _ => None,
+                            });
+                    if let Some((id, inner)) = replacement {
+                        let original_id = offer.id;
+                        *offer = presentation
+                            .projection
+                            .offers
+                            .iter()
+                            .find(|candidate| candidate.id == id)
+                            .expect("bound offer")
+                            .clone();
+                        offer.id = original_id;
+                        complete.internal.insert(original_id, inner);
+                    }
+                }
+                Ok(complete)
+            }
+            _ => Ok(complete),
+        }
+    }
+
+    /// Lower a complete submission on an exact fork, never mutate the root.
+    /// The only multi-command cases are the native atomic cast/attack offers.
+    /// No planner or policy observes intermediate states during this operation.
+    pub fn compound_commands(
+        &self,
+        offers: &StructuredOfferSet,
+        submission: &OfferSubmission,
+    ) -> Result<Vec<crate::decision::Command>, StructuredOfferError> {
+        let command = offers.decode(submission)?;
+        let mut fork = self.clone();
+        let mut commands = Some(Vec::new());
+        fork.apply_legacy_command_inner(&command, &mut commands)?;
+        Ok(commands.expect("recording enabled"))
+    }
+
+    fn record_compound_step(
+        &mut self,
+        action: usize,
+        commands: &mut Option<Vec<crate::decision::Command>>,
+    ) -> Result<bool, StructuredOfferError> {
+        if let Some(commands) = commands {
+            let frame = self
+                .semantic_decision_frame()
+                .map_err(|error| StructuredOfferError::Invariant(error.to_string()))?;
+            commands.push(crate::decision::Command {
+                command_id: format!("compound-{}-{}", frame.revision, commands.len()),
+                expected_revision: frame.revision,
+                offer_id: frame.offers[action].id.0,
+                answers: Vec::new(),
+                object_preconditions: Vec::new(),
+            });
+        }
+        self.step(action)
+            .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))
+    }
+
     /// Project the currently covered priority actions without changing state.
     ///
     /// Unsupported legacy actions remain available through `ActionSpace`; this
@@ -824,7 +905,7 @@ impl Game {
     ) -> Result<(bool, usize), StructuredOfferError> {
         let command = offers.decode(submission)?;
         let checkpoint = self.clone();
-        match self.apply_legacy_command_inner(&command) {
+        match self.apply_legacy_command_inner(&command, &mut None) {
             Ok(result) => Ok(result),
             Err(error) => {
                 *self = checkpoint;
@@ -836,6 +917,7 @@ impl Game {
     fn apply_legacy_command_inner(
         &mut self,
         command: &AtomicCommand,
+        commands: &mut Option<Vec<crate::decision::Command>>,
     ) -> Result<(bool, usize), StructuredOfferError> {
         let binding = match command {
             AtomicCommand::PassPriority { binding, .. }
@@ -866,9 +948,7 @@ impl Game {
                         })
                     })
                     .ok_or(StructuredOfferError::WrongDecision)?;
-                let done = self
-                    .step(action)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                let done = self.record_compound_step(action, commands)?;
                 Ok((done, 1))
             }
             AtomicCommand::CastSpell {
@@ -898,9 +978,7 @@ impl Game {
                         })
                     })
                     .ok_or(StructuredOfferError::WrongDecision)?;
-                let mut done = self
-                    .step(cast)
-                    .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                let mut done = self.record_compound_step(cast, commands)?;
                 let mut actions = 1;
 
                 // With skip_trivial enabled, a sole legal target may already
@@ -929,9 +1007,7 @@ impl Game {
                                 "structured target is absent from the legacy prompt".to_string(),
                             )
                         })?;
-                    done = self
-                        .step(target)
-                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                    done = self.record_compound_step(target, commands)?;
                     actions += 1;
                 }
                 Ok((done, actions))
@@ -993,14 +1069,18 @@ impl Game {
                                 "legacy attacker prompt lacks a binary choice".to_string(),
                             )
                         })?;
-                    done = self
-                        .step(action)
-                        .map_err(|error| StructuredOfferError::StaleOrIllegal(error.0))?;
+                    done = self.record_compound_step(action, commands)?;
                     actions += 1;
                 }
                 Ok((done, actions))
             }
-            AtomicCommand::SearchAction { .. } => Err(StructuredOfferError::WrongDecision),
+            AtomicCommand::SearchAction { action, .. } => {
+                let index = self
+                    .action_space()
+                    .and_then(|space| space.actions.iter().position(|legal| legal == action))
+                    .ok_or(StructuredOfferError::WrongDecision)?;
+                Ok((self.record_compound_step(index, commands)?, 1))
+            }
         }
     }
 

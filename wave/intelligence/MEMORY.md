@@ -401,6 +401,59 @@ vector tests passed after rebuilding the extension. These are current-ABI
 workflow and treatment-correctness proofs, not strength or human-play results.
 ETU-91 retains ownership of final replayed study/notebook evidence.
 
+## Compound decision implementation (2026-10-04)
+
+Jack Heart authorized ETU-94's bounded implementation and landing separately
+from the frozen ETU-91 campaign. `train_compound` now connects a trainable
+recurrent legal-offer decoder, complete-game collection, explicit sequential or
+grouped credit, outcome or bootstrapped estimators, and ordinary world-bound
+checkpoint reload/serving. The four-arm study uses the existing arena/report
+path. The sequential arm is a conditional-factor credit control with the same
+decoder, not the historical flat policy. No scientific allocation is inherited
+from ETU-91; the campaign plan generator rejects that reuse.
+
+Canonical DecisionFrames remain action-aligned. Native `compound_offers` and
+`compound_commands_json` reuse the existing structured bridge to lower one
+complete declaration on an exact fork into revision-bound Commands. Python does
+not reconstruct combat legality. Atomic attackers and eligible single-target
+casts group; blockers, payments and other newly published observations remain
+separate. Broader atomic blocker/payment support needs native authority work.
+Ordinary Etude and arena consumers drain the sampled suffix without resampling;
+stale/interrupted suffixes fail closed.
+
+The useful estimator boundary is explicit: terminal reward per seat, no update
+within a game/declaration, grouped joint log probability versus sequential
+conditional factors, detached targets/behavior, and gamma=1 in comparison
+recipes. Trace/discount clocks otherwise change with grouping. Forced decoder
+factors and native optionless auto-resolution have separate counters. Summed
+conditional reverse-KL terms at retained prefixes are sampled-prefix
+regularizers, not exact joint reverse KL. Prefix values are scalar and the
+policy uses a GRU; neither is an exact Ataraxos setup-network reproduction.
+
+Focused evidence includes normalized joint distributions, score-function and
+finite-difference gradients, 65-attacker/35-target native parity, payment/blocker
+boundaries, terminal and interrupted-game credit, hidden-world swap invariance,
+and ordinary learned checkpoint reload. Native debug comparison must account
+for canonical execution consuming its observation-event queue; comparing an
+undrained raw atomic bridge to a drained Command stream compares different
+ownership points. No physics change or frozen evidence rewrite was needed.
+
+Two retained one-thread workflow executions completed in 268 and 224 seconds;
+the latter followed integration with ETU-92 and ETU-96. Each trained four arms
+for two games apiece, exported eight admitted checkpoints, and exact-replayed
+56 arena games with no failed cells. Offline reports/metrics regenerated
+unchanged. These one-seed receipts are retained under this Task checkout's
+ignored `.runs/etu94-compound-smoke-{1,final}`; they are not method uncertainty
+or authorization for further scoring.
+
+Scientific outcome-versus-bootstrap and sequential-versus-grouped improvement
+remain unmeasured. Multi-seed, held-out, equal-cost complete-game scoring needs
+its own frozen protocol and budget. Candidate runtime-object representation in
+set-valued choices is still limited to public labels plus pooled viewer state;
+this is runnable mechanism evidence, not strategic-strength or challenger proof.
+The [compound contract](../../docs/training-regimes.md#compound-decisions) and
+[follow-up protocol](../../experiments/training-regime-followups.md) own details.
+
 ## Ataraxos source correction and move recipe (2026-10-04)
 
 ETU-92 checked the final Nature paper and actual supplement S3.4, equations

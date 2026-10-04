@@ -99,3 +99,98 @@ The separate `ataraxos_move` gradient selector follows the final supplement's
 move recipe, including categorical outcome targets and iteration schedules.
 See [its source fidelity table and bounded commands](ataraxos.md). Existing PPO
 recipes remain controls; the new recipe does not alter a frozen study.
+
+## Compound decisions
+
+`AgentHypers.compound_decisions=true` selects the learned ragged policy, and
+`train_compound` collects complete self-play games before each optimizer update.
+Use the four `compound-{sequential,grouped}-{bootstrap,outcome}` recipes. These
+are separate from the frozen ETU-91 campaign. Their defaults are bounded proof
+recipes, not a scientific allocation.
+
+managym's `compound_offers` supplies a complete legal surface. Its existing
+atomic attacker declarations and non-kicked, single CreatureOrPlayer casts
+are represented jointly; other actions remain action-aligned. In particular,
+blocker assignments, kicker/payment, ward, opponent priority, and newly revealed
+choices are **new observations**, never inferred continuations. A native
+`compound_commands_json` call lowers the sampled submission on an exact fork
+into ordinary revision-bound Commands. Sampling and lowering leave the live
+root untouched. The ordinary checkpoint player and Etude villain execute the
+resulting suffix without asking the model to reconsider it. Interruption rejects
+and clears a stale suffix.
+
+The model reuses the viewer-safe object/semantic encoder. Complete priority and
+fallback offer rows also use the existing action/focus embeddings. A small GRU
+conditions candidate include/exclude logits on the selected prefix, public
+candidate labels, and position/count features. Physical IDs route submissions;
+they are not learned embeddings. Candidate-specific runtime object binding is
+still limited to the native public labels in set-valued choices; this prototype
+does not establish optimal representation or strategic strength. The decoder
+handles arbitrary candidate counts, but the configured observation capacities
+still fail closed rather than truncating game objects.
+
+For each unordered choice, candidates are visited once in native order. Minimum
+and maximum cardinalities mask illegal next tokens. This gives each subset one
+unique encoding. Joint log probability is the **sum of normalized conditional
+log probabilities**. Dynamic dependencies and ordered selections fail closed.
+A forced token has probability one and log probability zero. Conditional entropy
+and conditional-uniform regularization at sampled prefixes are not exact joint
+entropy or a uniform distribution over complete subsets.
+
+`grouping=grouped` uses one joint PPO ratio and root value per submission;
+`sequential` uses per-factor ratios and prefix values with the same model and
+sampled complete submissions. It is a decoder-credit ablation, not the older
+flat-policy baseline. Both keep weights frozen through complete games, separate
+seat trajectories, assign only terminal ±1/0 rewards, and never optimize an
+incomplete game or partial declaration. `estimator=outcome` uses terminal Monte
+Carlo returns; `bootstrapped` uses ETU-90's transition-end GAE with separate
+policy/value lambdas. Targets and behavior distributions are detached. Gradients
+flow through recomputed normalized logits, recurrent prefixes, and the shared
+viewer encoder. Uniform-reference and collection reverse-KL terms use retained
+behavior prefixes; summed conditional terms are sampled-prefix regularizers,
+not exact joint reverse KL. Raw weights only; unsupported EMA and action-type
+reference settings are rejected.
+
+Discount and trace clocks count credit units: submissions for grouped credit,
+all decoder factors (including forced factors) for sequential credit. The
+comparison recipes fix gamma=1 to preserve the undiscounted outcome objective;
+lambda remains an explicit treatment. Changing gamma changes time preference
+under grouping and must be reported as an additional confound.
+
+Each stage retains private JSONL Command/transition evidence, exact replay,
+whole-game boundaries, world/setup/source identities, optimizer state, and the
+ordinary admitted checkpoint. Continuation preserves Adam and cannot branch
+from older weights; checkpoints do not promise process resume. Interrupted
+JSONL evidence remains incomplete and cannot supply a terminal target.
+
+Accounting distinguishes native microchoices, grouped decisions, decoder
+factors, forced factors, native optionless auto-resolution, completed games,
+optimizer exposures, collection/learning/export costs, and total/max group
+latency. `skip_trivial` is a separate explicit collection setting. Arena traces
+retain underlying Commands and per-command latency; report complete-game wall
+cost alongside these counts. Fewer exposed prompts alone are not a speedup.
+
+The comparison smoke uses the existing arena and offline notebook/report path:
+
+```bash
+OMP_NUM_THREADS=1 uv run --extra notebook -m experiments.runners.run_training_regimes --study compound-decisions --profile smoke --out .runs/compound-smoke
+uv run --extra notebook -m experiments.runners.run_training_regimes --report-only .runs/compound-smoke
+```
+
+This smoke has one initialization seed and four-leg, held-out complete-game
+blocks. Scientific comparison requires a separately authorized, calibrated plan
+with independent training seeds, fresh deals, equal wall budgets and measured
+inference cost. The ETU-91 scientific-plan generator explicitly rejects borrowing
+its campaign allocation for compound work.
+
+Bounded evidence (2026-10-04): the retained one-thread ETU-94 workflow attempts
+`.runs/etu94-compound-smoke-1` and `.runs/etu94-compound-smoke-final` completed
+in 268 and 224 seconds respectively. The latter ran after integrating main's
+Ataraxos and belief-sampler stages: four arms, one seed, eight training games,
+eight ordinary admitted checkpoints, and 56 complete arena games in 14 cells.
+Every arena cell replayed exactly with zero failed games. Offline regeneration
+preserved `cost-comparison.json`, `uncertainty.json`, and `report.md` byte for
+byte. The attempts retain source identities, individual costs, underlying
+microchoices, grouped decisions, and latency in their manifests and reports.
+These ignored local receipts are workflow evidence, not a committed benchmark
+or a multi-seed strength result. No ETU-91 run or allocation was changed.

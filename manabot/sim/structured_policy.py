@@ -126,6 +126,8 @@ def flatten_projection(projection: Mapping[str, Any]) -> RaggedOfferBatch:
             maximum = _integer(raw_choice.get("max"), "choice.max")
             if maximum < minimum:
                 raise StructuredPolicyError("choice max is below min")
+            if raw_choice.get("ordered") is True:
+                raise StructuredPolicyError("ordered selections are unsupported")
             if raw_choice.get("distinct") is not True:
                 raise StructuredPolicyError("decoder requires distinct candidates")
 

@@ -11,10 +11,16 @@ from manabot.training.analysis import verify_saved_inputs
 from manabot.training.models import CollectSearch, TrainingRegime, TrainSelfPlay
 
 
-def scientific_plan(calibration, prior_seconds, reserved_disk_bytes=0):
+def scientific_plan(
+    calibration: Path | str, prior_seconds: float, reserved_disk_bytes: int = 0
+) -> ResolvedStudy:
     """Reserve both studies inside 168 hours; extrapolation is not timing proof."""
     out = Path(calibration).resolve()
     study = json.loads((out / "study.json").read_text())
+    if study["study"] == "compound-decisions":
+        raise ValueError(
+            "compound study needs a separate allocation; the ETU-91 campaign budget cannot be reused"
+        )
     verify_saved_inputs(out, study)
     if study["profile"] != "calibration" or study["status"] != "completed":
         raise ValueError("a completed integrated calibration cohort is required")

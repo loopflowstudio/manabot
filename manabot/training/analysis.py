@@ -218,7 +218,7 @@ def paired_uncertainty(comparisons):
     return results
 
 
-def report(out):
+def report(out: Path | str) -> None:
     from nbclient import NotebookClient
     import nbformat
 
@@ -270,6 +270,44 @@ def report(out):
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
+    if study["study"] == "compound-decisions":
+        lines += [
+            "",
+            "Compound accounting (training; forced factors and native automatic steps remain distinct):",
+            "",
+            "| Recipe | Seed | Checkpoint | Groups | Native microchoices | Decoder factors | Forced factors | Auto-resolved | Policy seconds | Max group latency seconds |",
+            "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        seen = set()
+        for row in rows:
+            key = (row["regime"], row["seed"], row["checkpoint"]["sha256"])
+            if key in seen:
+                continue
+            seen.add(key)
+            statistics = [
+                item for stage in row.get("compound_accounting", []) for item in stage
+            ]
+            sums = {
+                name: sum(item[name] for item in statistics)
+                for name in (
+                    "decisions",
+                    "microchoices",
+                    "factors",
+                    "forced_factors",
+                    "auto_resolved",
+                    "decision_seconds",
+                )
+            }
+            latency = max(
+                (item["max_decision_seconds"] for item in statistics), default=0
+            )
+            lines.append(
+                f"| {row['regime']} | {row['seed']} | {row['cutoff']} | {sums['decisions']} | {sums['microchoices']} | {sums['factors']} | {sums['forced_factors']} | {sums['auto_resolved']} | {sums['decision_seconds']:.3f} | {latency:.6f} |"
+            )
+        lines += [
+            "",
+            "Grouping and estimator effects remain unproven by smoke. Blocker/payment prompts remain separate engine decisions. The sequential arm uses conditional decoder factors, not the historical flat policy.",
+        ]
     lines += [
         "",
         "Equal-cost comparison uses the last available checkpoint, without interpolation.",
@@ -316,7 +354,7 @@ def report(out):
         "Evaluation seconds: "
         + str(sum(c["evaluation_seconds"] for c in study["comparisons"])),
         "",
-        "Not established by this report: confirmatory strength, S1–S5 current-world rebinding, human play, raw/EMA arena comparison, compound actions, belief-guided search, update distillation, belief sampling and exploiters. See the experiment protocols before funding those runs.",
+        "Not established by this report: confirmatory strength, S1–S5 current-world rebinding, human play, raw/EMA arena comparison, compound-action strength, belief-guided search, update distillation, belief sampling and exploiters. See the experiment protocols before funding those runs.",
         "",
         "Traces and per-game failures:",
     ]

@@ -166,8 +166,30 @@ class TrainBelief(Stage):
     evaluation_samples: int = Field(default=32, ge=1)
 
 
+class TrainCompound(Stage):
+    """Complete-game self-play with explicit decoder credit units."""
+
+    operation: Literal["train_compound"]
+    initial: str | None = None
+    updates: int = Field(default=1, ge=1)
+    games_per_update: int = Field(default=2, ge=1)
+    max_commands: int = Field(default=4000, ge=1)
+    grouping: Literal["sequential", "grouped"] = "grouped"
+    estimator: Literal["outcome", "bootstrapped"] = "outcome"
+    skip_trivial: bool = True
+    learning: Learning = Learning(retained_fraction=1, epochs=1)
+
+    @model_validator(mode="after")
+    def supported_learning(self) -> "TrainCompound":
+        if self.learning.reference != "uniform" or self.learning.ema is not None:
+            raise ValueError(
+                "compound stages require conditional uniform reference and raw weights"
+            )
+        return self
+
+
 Operation = Annotated[
-    CollectSearch | TrainSupervised | TrainSelfPlay | CollectBelief | TrainBelief,
+    CollectSearch | TrainSupervised | TrainSelfPlay | TrainCompound | CollectBelief | TrainBelief,
     Field(discriminator="operation"),
 ]
 
@@ -189,6 +211,18 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if self.agent.compound_decisions != any(
+            isinstance(stage, TrainCompound) for stage in self.stages
+        ):
+            raise ValueError(
+                "compound stages and compound Agent must be selected together"
+            )
+        if self.agent.compound_decisions and any(
+            not isinstance(stage, TrainCompound) for stage in self.stages
+        ):
+            raise ValueError(
+                "compound policies require compound stages throughout the run"
+            )
         if self.recovery_max_microsteps is not None and (
             len(self.stages) != 1
             or not isinstance(self.stages[0], TrainSelfPlay)
@@ -199,6 +233,7 @@ class TrainingRegime(Strict):
             )
         previous: dict[str, Stage] = {}
         latest_self_play = None
+        latest_compound = None
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
@@ -247,8 +282,14 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         "live self-play continuation must preserve streams, gradient and EMA clock"
                     )
+            if isinstance(stage, TrainCompound):
+                if initial and parent is not latest_compound:
+                    raise ValueError(
+                        "compound continuation cannot branch from older weights"
+                    )
+                latest_compound = stage
             if self.agent.value_kind == "categorical_wdl" and (
-                isinstance(stage, TrainSupervised)
+                isinstance(stage, (TrainSupervised, TrainCompound))
                 or isinstance(stage, TrainSelfPlay)
                 and not isinstance(stage.learning, AtaraxosMoveLearning)
             ):

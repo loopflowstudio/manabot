@@ -15,6 +15,8 @@ import torch.nn as nn
 from manabot.env import ObservationSpace
 from manabot.infra import AgentHypers
 from manabot.infra.log import getLogger
+from manabot.model.compound import CompoundDecoder, CompoundOutput
+from manabot.sim.structured_policy import RaggedOfferBatch
 
 
 class Agent(nn.Module):
@@ -47,6 +49,9 @@ class Agent(nn.Module):
         action_dim = enc.action_dim  # e.g., 6 (5 action types + validity flag)
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = hypers.hidden_dim
+        self.compound_decoder = (
+            CompoundDecoder(embed_dim) if hypers.compound_decisions else None
+        )
 
         self.semantic_cards = None
         if hypers.semantic_pack is not None:
@@ -171,6 +176,10 @@ class Agent(nn.Module):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
+        if self.compound_decoder is not None:
+            raise ValueError(
+                "compound checkpoint requires authoritative offers; use Agent.compound"
+            )
         objects, is_agent, validity = self._gather_object_embeddings(obs)
 
         key_padding_mask = validity == 0
@@ -191,6 +200,42 @@ class Agent(nn.Module):
         logits = logits_before_mask.masked_fill(obs["actions_valid"] == 0, -1e8)
         value = self.value_head(post_attention_objects)
         return logits, value
+
+    def compound(
+        self,
+        obs: dict[str, torch.Tensor],
+        batch: RaggedOfferBatch,
+        *,
+        tokens: tuple[int, ...] | None = None,
+        generator: torch.Generator | None = None,
+        deterministic: bool = False,
+    ) -> CompoundOutput:
+        """One viewer-safe root, one ragged action; no intermediate observation."""
+        if self.compound_decoder is None:
+            raise ValueError("checkpoint has no compound policy")
+        objects, ownership, valid = self._gather_object_embeddings(obs)
+        if objects.shape[0] != 1:
+            raise ValueError("compound decoding requires one root")
+        if self.hypers.attention_on:
+            objects = self.attention(objects, ownership, key_padding_mask=valid == 0)
+        context = (objects * valid.unsqueeze(-1)).sum(1) / valid.sum(
+            1, keepdim=True
+        ).clamp_min(1)
+        # Complete priority/fallback offers preserve the native action ordering.
+        # Atomic attacker declarations instead have one set-valued offer.
+        features = None
+        if not any(offer["verb"] == "declare_attackers" for offer in batch.offers):
+            features = self._gather_informed_actions(obs, objects)[
+                0, : len(batch.offers)
+            ]
+        return self.compound_decoder(
+            context[0],
+            batch,
+            offer_features=features,
+            tokens=tokens,
+            generator=generator,
+            deterministic=deterministic,
+        )
 
     def _add_focus(
         self,

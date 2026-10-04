@@ -276,6 +276,26 @@ impl Env {
     }
 
     /// Project the complete action-aligned structured surface used by search.
+    pub fn compound_offers(&self) -> Result<StructuredOfferSet, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env not reset".into()))?
+            .compound_offers()
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
+    pub fn compound_commands(
+        &self,
+        offers: &StructuredOfferSet,
+        submission: &OfferSubmission,
+    ) -> Result<Vec<SemanticCommand>, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env not reset".into()))?
+            .compound_commands(offers, submission)
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
     pub fn structured_search_offers(&self) -> Result<StructuredOfferSet, AgentError> {
         self.game
             .as_ref()

@@ -2549,6 +2549,33 @@ impl PyEnv {
         })
     }
 
+    fn compound_offers(&self) -> PyResult<PyStructuredOfferSet> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        Ok(PyStructuredOfferSet {
+            inner: env.compound_offers().map_err(map_agent_err)?,
+        })
+    }
+
+    fn compound_commands_json(
+        &self,
+        offers: &PyStructuredOfferSet,
+        submission_json: &str,
+    ) -> PyResult<String> {
+        let submission: OfferSubmission = serde_json::from_str(submission_json)
+            .map_err(|error| PyAgentError::new_err(error.to_string()))?;
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        let commands = env
+            .compound_commands(&offers.inner, &submission)
+            .map_err(map_agent_err)?;
+        serde_json::to_string(&commands).map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     /// Complete action-aligned structured surface used by the selected
     /// production search backend.
     fn structured_search_offers(&self) -> PyResult<PyStructuredOfferSet> {
