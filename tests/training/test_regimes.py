@@ -9,7 +9,8 @@ import torch
 
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import StageRecord, TrainingRegime, TrainingRun
-from manabot.training.objectives import reference_distribution, selected_rows
+from manabot.training.references import reference_distribution
+from manabot.training.selection import selected_rows
 from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]

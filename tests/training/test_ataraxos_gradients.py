@@ -14,8 +14,8 @@ import torch
 from manabot.training.ataraxos import (
     categorical_lambda_returns,
     damped_policy_loss,
-    selected_moves,
 )
+from manabot.training.selection import selected_moves
 
 
 @pytest.fixture(autouse=True)

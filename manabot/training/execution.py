@@ -625,8 +625,12 @@ def _execute_regime(
                     check()
                     tick = time.perf_counter()
                     phase = "collection_seconds"
+                    behavior_agent = (
+                        ema if stage.behavior == "ema-self" else trainer.agent
+                    )
+                    assert behavior_agent is not None
                     batch = trainer.collector.collect(
-                        trainer.agent,
+                        behavior_agent,
                         stage.transitions,
                         deadline_monotonic=deadline,
                         check=check
@@ -646,8 +650,12 @@ def _execute_regime(
                         else (time.perf_counter() - start) / regime.wall_seconds,
                         rng,
                         iteration=iteration + 1,
+                        bootstrap_agent=behavior_agent,
                     )
-                    diagnostic["schedule_clock"] = regime.schedule_clock
+                    diagnostic["behavior"] = stage.behavior
+                    diagnostic["behavior_iteration"] = iteration
+                    if stage.learning.gradient != "ataraxos_move":
+                        diagnostic["schedule_clock"] = regime.schedule_clock
                     iteration += 1
                     if ema is not None:
                         update_ema(ema, trainer.agent, stage.learning.ema)

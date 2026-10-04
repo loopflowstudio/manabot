@@ -8,8 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class EvaluationProtocol(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     schema_version: Literal[2] = 2
-    study: Literal["learning-speed", "ataraxos-ablations", "compound-decisions"]
+    study: Literal[
+        "learning-speed", "ataraxos-ablations", "omitted-controls", "compound-decisions"
+    ]
     purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
+    evaluation_variants: tuple[Literal["raw", "ema"], ...] = ("raw",)
     regime_digests: tuple[str, ...]
     training_seeds: tuple[int, ...] = (197,)
     paired_deals: tuple[int, ...] = (910001,)
@@ -27,14 +30,29 @@ class EvaluationProtocol(BaseModel):
     game_seconds: float = Field(default=120, gt=0, le=120)
     max_commands: int = Field(default=10000, gt=0, le=10000)
     process_seconds: float = Field(default=900, gt=0, le=168 * 3600)
-    selection: Literal["all-completed-cutoffs-raw"] = "all-completed-cutoffs-raw"
+    selection: Literal[
+        "all-completed-cutoffs-raw", "all-completed-cutoffs-raw-and-ema"
+    ] = "all-completed-cutoffs-raw"
     uncertainty: Literal["cross-seed-unavailable", "paired-seed-descriptive"] = (
         "cross-seed-unavailable"
     )
     incomplete: Literal["fail-retain-all-attempts"] = "fail-retain-all-attempts"
 
     @model_validator(mode="after")
-    def disjoint(self):
+    def disjoint(self) -> "EvaluationProtocol":
+        expected_selection = (
+            "all-completed-cutoffs-raw-and-ema"
+            if "ema" in self.evaluation_variants
+            else "all-completed-cutoffs-raw"
+        )
+        if self.selection != expected_selection:
+            raise ValueError("selection label must agree with evaluation variants")
+        if not self.evaluation_variants or len(set(self.evaluation_variants)) != len(
+            self.evaluation_variants
+        ):
+            raise ValueError("evaluation variants must be nonempty and unique")
+        if self.study != "omitted-controls" and self.evaluation_variants != ("raw",):
+            raise ValueError("existing frozen studies evaluate raw only")
         if (
             any(c <= 0 for c in self.cost_cutoffs_seconds)
             or tuple(sorted(set(self.cost_cutoffs_seconds)))
@@ -93,12 +111,13 @@ class EvaluationProtocol(BaseModel):
             )
         if any(s < 900000 for s in flat):
             raise ValueError("evaluation deals must use reserved family >=900000")
-        expected = {
-            "learning-speed": 2,
-            "ataraxos-ablations": 5,
-            "compound-decisions": 4,
+        expected_counts = {
+            "learning-speed": {2},
+            "ataraxos-ablations": {5},
+            "compound-decisions": {4},
+            "omitted-controls": {1, 2},
         }[self.study]
-        if len(self.regime_digests) != expected or any(
+        if len(self.regime_digests) not in expected_counts or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
             for digest in self.regime_digests
         ):
@@ -133,9 +152,9 @@ class ResolvedStudy(BaseModel):
     calibration_evidence: str
 
     @model_validator(mode="after")
-    def allocation(self):
+    def allocation(self) -> "ResolvedStudy":
         from manabot.arena.models import canonical_sha256
-        from manabot.training.models import TrainingRegime
+        from manabot.training.models import TrainingRegime, TrainSelfPlay
 
         recipes = [TrainingRegime.model_validate(r) for r in self.recipes]
         if (
@@ -143,6 +162,12 @@ class ResolvedStudy(BaseModel):
             != self.protocol.regime_digests
         ):
             raise ValueError("resolved plan recipe digests do not match")
+        if "ema" in self.protocol.evaluation_variants and any(
+            not isinstance(s, TrainSelfPlay) or s.learning.ema is None
+            for r in recipes
+            for s in r.stages
+        ):
+            raise ValueError("EMA evaluation requires EMA at every checkpoint")
         if len({r.id for r in recipes}) != len(recipes):
             raise ValueError("recipe IDs must be unique")
         if any(

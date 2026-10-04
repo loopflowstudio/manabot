@@ -506,3 +506,35 @@ started. Coordinate sampled-hand consumption with the post-RL search Task and
 preserve the exact tracker as a tractable reference. Wider pools still require
 new world-bound complete-loop measurements. See the
 [sampler guide](../../docs/belief-sampler.md).
+
+## Omitted learning controls (ETU-93, 2026-10-04)
+
+Jack Heart authorized mechanism implementation and landing with bounded proof,
+not another scientific allocation. Independent resolved contrasts now cover
+discount, policy trace, paper estimator settings, reference, collection KL,
+filter threshold/ties/scope, raw/EMA evaluation and behavior, separate schedule
+decay and conditional leave-one-out follow-ups. They use the existing regime
+executor and arena/report path; ETU-91's live checkout and frozen cohort remain
+untouched. The [separate protocol](../../experiments/ataraxos-omitted-controls.md)
+keeps every scientific technique disposition unresolved.
+
+EMA behavior uses averaged weights for both collection seats, saved likelihoods
+and paused-tail bootstrap; raw weights receive gradients, then EMA advances.
+Evaluation EMA alone does not test this mechanism. Actor-only filtering trains
+the critic on all rows even with no retained actor rows; shared encoder changes
+can still alter policy outputs. Raw/EMA variants remain correlated per seed.
+Paper schedules retain their iteration clock in executor receipts.
+
+Selection diagnostics cross action type with observed terminal distance and
+retain raw/selected signed advantage quartiles and target-residual means.
+Unfinished batch tails are censored, not distant. These residuals use lambda
+targets; they cannot prove independent terminal-outcome critic error for
+unfinished games. Whole-game held-out analysis and multi-seed matched-cost
+scoring remain required. One bounded EMA-behavior comparison completed 48 exact
+replayed games in 117 seconds; this proves the integrated workflow, not strength,
+demo admission, human completion or a technique retention decision.
+
+The main integration preserves frozen-opponent and compound studies. Compound
+training rejects the new quantile/actor-only knobs rather than silently ignoring
+them; ETU-93's executable contrasts target ordinary self-play. The merged
+omitted-control/frozen-opponent/study paths passed 39 focused checks.

@@ -28,7 +28,7 @@ from manabot.sim.net_opponent import transition_gae
 import managym
 
 from .models import Learning
-from .objectives import selected_rows
+from .selection import selected_rows
 
 
 @dataclass(frozen=True)

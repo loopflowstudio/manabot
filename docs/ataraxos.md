@@ -130,3 +130,12 @@ workflow evidence, not a claim of repeatable strength or human completion.
 Verification: 77 relevant Python tests passed across the focused objective,
 regime, categorical model, existing collector and PPO regression suites. Ruff
 and diff whitespace checks passed. No Rust source changed.
+
+## Independent follow-up controls
+
+[ETU-93's separate protocol](../experiments/ataraxos-omitted-controls.md) adds
+explicit selection scope and EMA behavior contrasts to the existing trainers.
+The paper recipe defaults above remain unchanged. `filter_scope="actor"` keeps
+all critic rows; `behavior="ema-self"` collects and bootstraps with averaged
+weights before updating raw weights. These are named hypotheses. Their bounded
+proofs do not accept a technique or alter the frozen ETU-91 campaign.

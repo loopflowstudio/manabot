@@ -147,11 +147,20 @@ def paired_uncertainty(comparisons):
     groups = {}
     for cell in comparisons:
         groups.setdefault(
-            (cell["a"], cell["b"], cell["cutoff"], cell.get("phase", "development")), []
+            (
+                cell["a"],
+                cell["b"],
+                cell["cutoff"],
+                cell.get("phase", "development"),
+                cell.get("variant", "raw"),
+            ),
+            [],
         ).append(cell)
     results = []
-    for (a, b, cutoff, phase), cells in sorted(groups.items()):
-        result = dict(a=a, b=b, cutoff=cutoff, phase=phase, status="unavailable")
+    for (a, b, cutoff, phase, variant), cells in sorted(groups.items()):
+        result = dict(
+            a=a, b=b, cutoff=cutoff, phase=phase, variant=variant, status="unavailable"
+        )
         results.append(result)
         seeds = {c.get("training_seed") for c in cells}
         if None in seeds or len(seeds) < 3:
@@ -340,13 +349,43 @@ def report(out: Path | str) -> None:
     for item in uncertainty:
         lines += [
             "",
-            f"{item['a']} / {item['b']} {item['phase']} cutoff {item['cutoff']}: "
+            f"{item['a']} / {item['b']} {item['variant']} {item['phase']} cutoff {item['cutoff']}: "
             + (
                 f"A score {item['score_a']:.3f}, descriptive 95% interval {item['interval_95']}; {item['method']}."
                 if item["status"] == "available"
                 else item["reason"] + "."
             ),
         ]
+    if (
+        study.get("study") == "omitted-controls"
+        or protocol.get("study") == "omitted-controls"
+    ):
+        lines += [
+            "",
+            "Technique disposition: unresolved. Raw/EMA are correlated outputs of each training seed; they never add training replicates.",
+        ]
+    selection_rows = []
+    for entry in study["runs"]:
+        if not Path(entry["path"]).exists():
+            continue
+        run = json.loads(Path(entry["path"]).read_text())
+        for stage in run["stages"]:
+            for iteration, diagnostic in enumerate(stage["diagnostics"]):
+                for group in diagnostic.get("selection_groups", []):
+                    selection_rows.append(
+                        dict(
+                            run=run["id"],
+                            seed=run["seed"],
+                            stage=stage["id"],
+                            iteration=iteration,
+                            **group,
+                        )
+                    )
+    atomic_json(out / "selection-diagnostics.json", selection_rows)
+    lines += [
+        "",
+        "[Raw/retained selection diagnostics](selection-diagnostics.json): signed advantage quartiles and lambda-target residuals by action type and observed terminal distance. Censored tails remain unknown. Residual association does not establish critic error causality.",
+    ]
     if study.get("error"):
         lines += ["", study["error"]]
     lines += [
@@ -354,7 +393,7 @@ def report(out: Path | str) -> None:
         "Evaluation seconds: "
         + str(sum(c["evaluation_seconds"] for c in study["comparisons"])),
         "",
-        "Not established by this report: confirmatory strength, S1–S5 current-world rebinding, human play, raw/EMA arena comparison, compound-action strength, belief-guided search, update distillation, belief sampling and exploiters. See the experiment protocols before funding those runs.",
+        "Not established by this report: confirmatory strength, S1–S5 current-world rebinding, human play, compound-action strength, belief-guided search, update distillation, belief sampling and exploiters. See the experiment protocols before funding those runs.",
         "",
         "Traces and per-game failures:",
     ]

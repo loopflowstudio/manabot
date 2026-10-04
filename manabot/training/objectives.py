@@ -5,19 +5,17 @@ import math
 import numpy as np
 import torch
 
+from manabot.model.agent import Agent
 from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
 from manabot.training.ataraxos import update_move_iteration
 from manabot.training.models import AtaraxosMoveLearning, Learning
 from manabot.training.references import reference_distribution
-
-
-def selected_rows(
-    advantages: torch.Tensor, fraction: float, minimum: float
-) -> torch.Tensor:
-    magnitude = advantages.abs()
-    count = max(1, math.ceil(len(magnitude) * fraction))
-    indices = torch.argsort(magnitude, descending=True, stable=True)[:count]
-    return indices[magnitude[indices] >= minimum]
+from manabot.training.selection import (
+    UpdateDiagnostics,
+    selected_rows,
+    selection_diagnostics,
+    selection_mask,
+)
 
 
 @torch.no_grad()
@@ -27,8 +25,8 @@ def update_ema(
     """Advance once per collection/update iteration, including filtered skips.
 
     Initialize with a deep copy of the learner. Parameters are averaged;
-    buffers describe the current model and are copied exactly. Collection
-    continues to use the learner, never this evaluation-only model.
+    buffers describe the current model and are copied exactly. The executor
+    explicitly selects raw or averaged behavior; this helper changes neither.
     """
     if not 0 <= rate < 1:
         raise ValueError("EMA rate must be in [0, 1)")
@@ -46,10 +44,13 @@ def update_iteration(
     rng: np.random.Generator,
     *,
     iteration: int = 1,
-) -> dict[str, int | float | str | list[int]]:
+    bootstrap_agent: Agent | None = None,
+) -> UpdateDiagnostics:
     """Optimize one fresh collector batch on the existing trainer and Adam owner."""
     if isinstance(learning, AtaraxosMoveLearning):
-        return update_move_iteration(trainer, batch, learning, iteration)
+        return update_move_iteration(
+            trainer, batch, learning, iteration, bootstrap_agent=bootstrap_agent
+        )
 
     dev = trainer.experiment.device
     obs = trainer._obs_to_tensors(batch.obs, dev)
@@ -57,7 +58,7 @@ def update_iteration(
     rewards = torch.as_tensor(batch.rewards, device=dev)
     ends = torch.as_tensor(batch.dones, device=dev)
     with torch.no_grad():
-        next_value = trainer.agent.get_value(
+        next_value = (bootstrap_agent or trainer.agent).get_value(
             trainer._obs_to_tensors(batch.next_obs, dev)
         )
         advantages, _ = transition_gae(
@@ -71,10 +72,24 @@ def update_iteration(
     actions = torch.as_tensor(batch.actions, device=dev).flatten()
     old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
     behavior = torch.as_tensor(batch.probabilities, device=dev).flatten(0, 1)
-    selected = selected_rows(
-        advantages, learning.retained_fraction, learning.min_advantage
+    mask = selection_mask(
+        advantages,
+        learning.filter_kind,
+        learning.retained_fraction,
+        learning.min_advantage,
     )
-    diagnostics: dict[str, int | float | str | list[int]] = {
+    # Preserve the pilot's descending-magnitude order before its seeded shuffle.
+    selected = (
+        selected_rows(advantages, learning.retained_fraction, learning.min_advantage)
+        if learning.filter_kind == "top_count"
+        else mask.nonzero().flatten()
+    )
+    training_rows = (
+        selected
+        if learning.filter_scope == "actor_critic"
+        else torch.arange(len(advantages), device=dev)
+    )
+    diagnostics: UpdateDiagnostics = {
         "rows": len(advantages),
         "retained": len(selected),
         "optimizer_exposures": 0,
@@ -102,38 +117,47 @@ def update_iteration(
     diagnostics["selected_action_types"] = torch.bincount(
         chosen_types[selected], minlength=obs["actions"].shape[-1] - 1
     ).tolist()
-    if not len(selected):
+    diagnostics["selection_groups"] = selection_diagnostics(
+        advantages.reshape_as(ends),
+        (returns - values.flatten()).reshape_as(ends),
+        mask.reshape_as(ends),
+        ends,
+        chosen_types.reshape_as(ends),
+    )
+    diagnostics["actor_exposures"] = 0
+    diagnostics["critic_exposures"] = 0
+    if not len(training_rows):
         diagnostics["skipped"] = "empty advantage filter"
         return diagnostics
-    advantages = (advantages - advantages[selected].mean()) / advantages[selected].std(
-        unbiased=False
-    ).clamp_min(1e-8)
+    if len(selected):
+        advantages = (advantages - advantages[selected].mean()) / advantages[
+            selected
+        ].std(unbiased=False).clamp_min(1e-8)
     for group in trainer.optimizer.param_groups:
         group["lr"] = diagnostics["learning_rate"]
     reference = reference_distribution(obs, learning.reference)
-    size = max(1, math.ceil(len(selected) / learning.minibatches))
+    size = max(1, math.ceil(len(training_rows) / learning.minibatches))
     for _ in range(learning.epochs):
-        order = selected[torch.as_tensor(rng.permutation(len(selected)), device=dev)]
+        order = training_rows[
+            torch.as_tensor(rng.permutation(len(training_rows)), device=dev)
+        ]
         for indices in order.split(size):
             logits, value = trainer.agent({k: v[indices] for k, v in obs.items()})
             dist = torch.distributions.Categorical(logits=logits)
             ratio = (dist.log_prob(actions[indices]) - old_logs[indices]).exp()
             adv = advantages[indices]
+            actor_mask = mask[indices]
             policy = torch.maximum(
                 -adv * ratio, -adv * ratio.clamp(1 - learning.clip, 1 + learning.clip)
-            ).mean()
+            )[actor_mask].sum() / actor_mask.sum().clamp_min(1)
             probs = dist.probs
             logs = probs.clamp_min(1e-12).log()
-            kl_ref = (
-                (probs * (logs - reference[indices].clamp_min(1e-12).log()))
-                .sum(-1)
-                .mean()
-            )
+            kl_ref = (probs * (logs - reference[indices].clamp_min(1e-12).log())).sum(
+                -1
+            )[actor_mask].sum() / actor_mask.sum().clamp_min(1)
             kl_behavior = (
-                (probs * (logs - behavior[indices].clamp_min(1e-12).log()))
-                .sum(-1)
-                .mean()
-            )
+                probs * (logs - behavior[indices].clamp_min(1e-12).log())
+            ).sum(-1)[actor_mask].sum() / actor_mask.sum().clamp_min(1)
             value_loss = 0.5 * (value.flatten() - returns[indices]).square().mean()
             loss = (
                 policy
@@ -150,6 +174,8 @@ def update_iteration(
             )
             trainer.optimizer.step()
             diagnostics["optimizer_exposures"] += len(indices)
+            diagnostics["actor_exposures"] += int(actor_mask.sum())
+            diagnostics["critic_exposures"] += len(indices)
             diagnostics.update(
                 loss=float(loss.detach()),
                 entropy=float(dist.entropy().mean().detach()),

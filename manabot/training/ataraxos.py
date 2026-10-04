@@ -13,9 +13,15 @@ import torch
 from torch import Tensor
 from torch.nn import functional as F
 
+from manabot.model.agent import Agent
 from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
 from manabot.training.models import AtaraxosMoveLearning
 from manabot.training.references import reference_distribution
+from manabot.training.selection import (
+    UpdateDiagnostics,
+    selection_diagnostics,
+    selection_mask,
+)
 
 
 def _check_distribution(probabilities: Tensor, valid: Tensor) -> None:
@@ -158,25 +164,19 @@ class MoveTargets:
     selected: Tensor
 
 
-def selected_moves(advantages: Tensor, quantile: float, minimum: float) -> Tensor:
-    """Supplement S3.4 inclusive magnitude filter, including quantile ties."""
-    magnitude = advantages.detach().abs()
-    threshold = max(float(torch.quantile(magnitude, quantile)), minimum)
-    return magnitude >= threshold
-
-
 @torch.no_grad()
 def _targets(
     trainer: NetOpponentTrainer,
     batch: RolloutBatch,
     learning: AtaraxosMoveLearning,
+    bootstrap_agent: Agent | None = None,
 ) -> MoveTargets:
     device = trainer.experiment.device
     rewards = torch.as_tensor(batch.rewards, device=device)
     ends = torch.as_tensor(batch.dones, device=device)
     values = torch.as_tensor(batch.values, device=device)
     next_obs = trainer._obs_to_tensors(batch.next_obs, device)
-    _, next_raw = trainer.agent.forward_distribution(next_obs)
+    _, next_raw = (bootstrap_agent or trainer.agent).forward_distribution(next_obs)
     if trainer.agent.hypers.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
             raise ValueError(
@@ -203,8 +203,11 @@ def _targets(
         rewards, values, ends, next_value, 1.0, learning.policy_lambda
     )
     # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
-    selected = selected_moves(
-        advantages, learning.advantage_quantile, learning.min_advantage
+    selected = selection_mask(
+        advantages,
+        learning.filter_kind,
+        1 - learning.advantage_quantile,
+        learning.min_advantage,
     )
     return MoveTargets(advantages, value_targets, selected)
 
@@ -214,14 +217,16 @@ def update_move_iteration(
     batch: RolloutBatch,
     learning: AtaraxosMoveLearning,
     iteration: int,
-) -> dict[str, int | float | str]:
+    *,
+    bootstrap_agent: Agent | None = None,
+) -> UpdateDiagnostics:
     """One fresh, timestep-grouped epoch with frozen collection targets.
 
     EMA remains owned by execute_regime and advances once even on an empty
     filter. No batch shuffling, advantage normalization, replay or hidden truth.
     Scalar value is an explicit MSE ablation; categorical uses equation (5).
     """
-    targets = _targets(trainer, batch, learning)
+    targets = _targets(trainer, batch, learning, bootstrap_agent)
     device = trainer.experiment.device
     observations = trainer._obs_to_tensors(batch.obs, device)
     actions = torch.as_tensor(batch.actions, device=device)
@@ -235,7 +240,7 @@ def update_move_iteration(
     ):
         raise ValueError("saved action likelihood differs from collection distribution")
     rate, tau = learning.rates(iteration)
-    diagnostics: dict[str, int | float | str] = {
+    diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
         "value_kind": trainer.agent.hypers.value_kind,
         "rows": actions.numel(),
@@ -251,14 +256,44 @@ def update_move_iteration(
             (~torch.as_tensor(batch.dones[-1])).float().mean()
         ),
     }
+    expected_targets = (
+        targets.values[..., 2] - targets.values[..., 0]
+        if trainer.agent.hypers.value_kind == "categorical_wdl"
+        else targets.values
+    )
+    chosen_types = (
+        observations["actions"]
+        .gather(
+            2,
+            actions[..., None, None].expand(
+                *actions.shape, 1, observations["actions"].shape[-1]
+            ),
+        )
+        .squeeze(2)[..., :-1]
+        .argmax(-1)
+    )
+    diagnostics["selection_groups"] = selection_diagnostics(
+        targets.advantages,
+        expected_targets - torch.as_tensor(batch.values, device=device),
+        targets.selected,
+        torch.as_tensor(batch.dones, device=device),
+        chosen_types,
+    )
+    diagnostics["actor_exposures"] = 0
+    diagnostics["critic_exposures"] = 0
     for group in trainer.optimizer.param_groups:
         group["lr"] = rate
-    if not targets.selected.any():
+    if not targets.selected.any() and learning.filter_scope == "actor_critic":
         diagnostics["skipped"] = "empty advantage filter"
         return diagnostics
     # Each learner timestep is one minibatch, preserving the paper's grouping
     # in MTG learner-decision units rather than Stratego simulator plies.
-    for step, selected in enumerate(targets.selected):
+    for step, actor_selected in enumerate(targets.selected):
+        selected = (
+            actor_selected
+            if learning.filter_scope == "actor_critic"
+            else torch.ones_like(actor_selected)
+        )
         if not selected.any():
             continue
         obs = {key: value[step, selected] for key, value in observations.items()}
@@ -273,7 +308,9 @@ def update_move_iteration(
             clip=learning.clip,
             collection_kl=learning.collection_kl,
             tau=tau,
-        ).mean()
+        )
+        actor_mask = actor_selected[selected]
+        policy_loss = policy_loss[actor_mask].sum() / actor_mask.sum().clamp_min(1)
         if trainer.agent.hypers.value_kind == "categorical_wdl":
             value_loss = (
                 -(targets.values[step, selected] * value_logits.log_softmax(-1))
@@ -299,6 +336,26 @@ def update_move_iteration(
         diagnostics["optimizer_exposures"] = int(
             diagnostics["optimizer_exposures"]
         ) + int(selected.sum())
+        diagnostics["actor_exposures"] += int(actor_mask.sum())
+        diagnostics["critic_exposures"] += int(selected.sum())
+        with torch.no_grad():
+            probabilities = logits.softmax(-1)
+            logs = probabilities.clamp_min(1e-30).log()
+            diagnostics["entropy"] = float(-(probabilities * logs).sum(-1).mean())
+            diagnostics["collection_kl"] = float(
+                (
+                    probabilities
+                    * (logs - behavior[step, selected].clamp_min(1e-30).log())
+                )
+                .sum(-1)
+                .mean()
+            )
+            reference = reference_distribution(obs, learning.reference)
+            diagnostics["reference_kl"] = float(
+                (probabilities * (logs - reference.clamp_min(1e-30).log()))
+                .sum(-1)
+                .mean()
+            )
         diagnostics.update(
             loss=float(loss.detach()),
             value_loss=float(value_loss.detach()),

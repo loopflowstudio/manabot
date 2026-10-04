@@ -11,10 +11,10 @@ from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transitio
 from manabot.training.models import Learning, Schedule
 from manabot.training.objectives import (
     reference_distribution,
-    selected_rows,
     update_ema,
     update_iteration,
 )
+from manabot.training.selection import selected_rows
 
 
 class TinyPolicy(torch.nn.Module):
@@ -205,3 +205,44 @@ def test_ema_is_iteration_clocked_and_never_overwrites_learner():
     trainer.agent.identity.fill_(8)
     update_ema(averaged, trainer.agent, 0)
     assert averaged.identity.item() == 8
+
+
+def test_actor_only_empty_filter_trains_only_critic() -> None:
+    trainer, batch = fixture()
+    before_policy = trainer.agent.logits.detach().clone()
+    before_value = trainer.agent.value.detach().clone()
+    diagnostics = run(trainer, batch, control(min_advantage=100, filter_scope="actor"))
+    torch.testing.assert_close(trainer.agent.logits, before_policy, rtol=0, atol=0)
+    assert not torch.equal(trainer.agent.value, before_value)
+    assert diagnostics["actor_exposures"] == 0
+    assert diagnostics["critic_exposures"] == 4
+    assert diagnostics["optimizer_exposures"] == 4
+    assert sum(group["rows"] for group in diagnostics["selection_groups"]) == 4
+
+
+def test_bootstrap_uses_collection_model() -> None:
+    trainer, batch = fixture()
+    batch.dones[:] = False
+    batch.rewards[:] = 0
+    behavior = deepcopy(trainer.agent)
+    with torch.no_grad():
+        behavior.value.fill_(3)
+    expected, _ = transition_gae(
+        torch.tensor(batch.rewards),
+        torch.tensor(batch.values),
+        torch.tensor(batch.dones),
+        torch.tensor([3.0]),
+        1,
+        0.95,
+    )
+    diagnostics = update_iteration(
+        trainer,
+        batch,
+        control(min_advantage=100),
+        0.5,
+        np.random.default_rng(9),
+        bootstrap_agent=behavior,
+    )
+    assert diagnostics["advantage_abs_mean"] == pytest.approx(
+        float(expected.abs().mean())
+    )
