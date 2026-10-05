@@ -95,6 +95,7 @@ jobs:
         run: |
           uv run --python 3.12 --extra dev pytest tests/env/ tests/agent/ tests/model/ \
             tests/sim/test_structured_policy.py \
+            tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py
 
       - name: Enum smoke test

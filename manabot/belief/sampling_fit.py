@@ -116,7 +116,7 @@ def _ece(probabilities: torch.Tensor, truths: torch.Tensor) -> float:
 
 @torch.no_grad()
 def _evaluate_arm(
-    model: AutoregressiveBeliefSampler,
+    model: AutoregressiveBeliefSampler | None,
     examples: Sequence[SamplerExample],
     *,
     physical: bool,
@@ -124,6 +124,10 @@ def _evaluate_arm(
     seed: int,
     check: Callable[[], None] | None,
 ) -> SamplerArmMetrics:
+    if not physical and model is None:
+        raise ValueError("learned evaluation requires a sampler")
+    score_hand = physical_deal_log_prob if model is None or physical else model.log_prob
+    draw_hand = sample_physical_deal if model is None or physical else model.sample
     generator = torch.Generator().manual_seed(seed)
     nll = 0.0
     forecasts: list[torch.Tensor] = []
@@ -141,19 +145,11 @@ def _evaluate_arm(
             _check(check)
             inputs = example.inputs
             target = torch.tensor([example.target_hand], dtype=torch.int64)
-            score = (
-                physical_deal_log_prob([inputs], target)
-                if physical
-                else model.log_prob([inputs], target)
-            )
+            score = score_hand([inputs], target)
             nll -= float(score[0])
             started = time.perf_counter()
             batch = [inputs] * samples
-            draws = (
-                sample_physical_deal(batch, generator=generator)
-                if physical
-                else model.sample(batch, generator=generator)
-            )
+            draws = draw_hand(batch, generator=generator)
             elapsed += time.perf_counter() - started
             largest_tensor = max(largest_tensor, draws.numel() * draws.element_size())
             present = draws > 0
@@ -188,6 +184,17 @@ def _evaluate_arm(
         sampling_seconds=elapsed,
         peak_python_bytes=peak_python,
         largest_sample_tensor_bytes=largest_tensor,
+    )
+
+
+def evaluate_physical_sampler(
+    examples: Sequence[SamplerExample], *, samples: int = 32, seed: int = 0
+) -> SamplerArmMetrics:
+    """Measure saved labels against the physical prior without a model artifact."""
+    if not examples or samples < 1:
+        raise ValueError("evaluation needs examples and a positive sample count")
+    return _evaluate_arm(
+        None, examples, physical=True, samples=samples, seed=seed, check=None
     )
 
 

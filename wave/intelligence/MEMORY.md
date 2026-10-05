@@ -640,6 +640,28 @@ costs and conservative cohort projections remain open within the unchanged
 168-hour campaign ceiling. No new scientific allocation or paid compute follows
 from this command. Its costs must be included in campaign accounting.
 
+## Offline sampler software boundary (ETU-96, 2026-10-04)
+
+Jack Heart separated software completion from empirical acceptance: ETU-96 owns
+saved-game quality reporting; ETU-99 owns calibration, dropout and foreign-policy
+comparisons. Earlier statements keeping ETU-96 open for those scientific gates
+are superseded by this scope decision. ETU-91's campaign remains unchanged.
+
+`uv run python -m manabot.belief.sampling_report` reuses immutable datasets,
+checkpoint admission and existing sampler metrics. It preserves whole-game splits,
+generating policy/world/schema identities and learned artifact bytes, identifies
+foreign policies, and reports physical-prior and learned quality across sample
+counts without enumerating hands. Train metrics are explicitly in-sample. Private
+labels enter scoring only. Arbitrary queries, posterior KL without an exact
+reference, native peak memory and strength acceptance stay unavailable.
+
+Fixed non-optimized fixture weights cover reload, label-isolated samples, invalid
+draw detection and widened 40-definition/80-copy count spaces. Measured Python
+allocation peaks exclude native Torch workspace; timing and memory are fresh
+measurements, while statistical replay binds seed, artifacts and runtime/source
+identities. These are software proofs, not learned calibration or strength.
+The [sampler guide](../../docs/belief-sampler.md#offline-saved-game-quality-report)
+owns the command and interpretation limits.
 
 ## Compound software completion (ETU-94, 2026-10-04)
 
