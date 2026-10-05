@@ -775,3 +775,25 @@ canonical action can have exact zero policy mass; reverse KL forbids assigning
 positive updated mass there. Preserve the original root/prefix and change the
 update/receipt support contract explicitly rather than smoothing or resampling.
 No training or scientific allocation was started.
+
+
+## Exact compound payment support (ETU-100, 2026-10-04)
+
+Jack Heart authorized the software continuation and required integration of
+ETU-95's final single-cursor/single-deque rollout simplification. Ordered payment
+subsets now project disjoint next-tap prefixes and mana completion from the
+original viewer root. Legal canonical actions outside that prefix keep exact
+zero mass. No declaration or hand support enumeration, smoothing, flat-head
+fallback or microstep resampling is introduced.
+
+The v3 local receipt restricts the reverse-KL update and branch allocation to
+positive base support, retaining zero targets/counts and null unvisited Q.
+Historical v1/v2 positive-support admission remains intact. Soft, argmax and
+allocation readers retain the same support; advice marks inaccessible Q
+unavailable. This supersedes the payment-specific software blocker above, not
+the exact-history, belief-input, compound EMA or scientific acceptance limits.
+Saved untrained fixtures cover joint parity, root-to-payment physical/learned
+rollouts, retained-prefix replay, hidden-world invariance, deadlines, sequential
+compatibility and target admission. No scientific training, paid compute or
+ETU-91 changes occurred. The [local-search contract](../../docs/local-policy-search.md)
+owns the support semantics and remaining limits.

@@ -45,7 +45,7 @@ The MTG budget, horizon, reference and value representation are explicit
 adaptations; this is not an assertion that arbitrary PPO training inherits the
 paper's improvement properties.
 
-Each sampled canonical world gets every root action, followed by frozen-policy
+Each sampled canonical world gets every positive-support root action, followed by frozen-policy
 moves to the declared depth (including the forced first action). At each step,
 only the acting player's ordinary Observation is encoded. Terminal values are
 -1/0/+1; nonterminal values are that acting player's signed estimate, reversed
@@ -96,7 +96,7 @@ an outer execution bound. Equal nominal milliseconds do not prove equal realized
 cost; retain overruns and unavailable cells.
 
 `full_probability`, `worlds`, and `cheap_worlds` permit reproducible per-root
-full/cheap allocation. All actions still receive coverage; all roots are retained.
+full/cheap allocation. All positive-support actions receive coverage; all roots are retained.
 This is an instrument inspired by [KataGo's playout-cap randomization](https://arxiv.org/abs/1902.10565),
 not its target-selection recipe or a measured efficiency improvement. Every
 receipt carries the resolved counts. Mixing diagnostics report entropy, KL to
@@ -105,9 +105,9 @@ base and L1 distance; none establishes bluff quality.
 Targets on the same retained roots:
 
 - `local_soft`: the exact regularized distribution.
-- `local_argmax`: one-hot maximal Q, with first-offer tie breaking.
+- `local_argmax`: one-hot maximal measured Q on policy support, with first-offer tie breaking.
 - `local_allocation`: realized root allocation frequencies. Balanced flat
-  allocation makes this uniform; it is **not a PUCT visit-distribution arm**.
+  allocation makes this uniform over policy support; it is **not a PUCT visit-distribution arm**.
 
 A same-root genuine PUCT-visit comparison remains separate scientific work.
 The existing `visit_distribution` trainer remains available for its own teacher.
@@ -281,32 +281,39 @@ ones); neither counts speculative native lowering calls. All preparation,
 lowering, sampling, rollouts and value inference contribute to elapsed cost.
 Individual model/native calls are cooperative; an overrun yields no target.
 
-Ordered **waterbend subset** boundaries remain explicitly unsupported by compound
-search. Excluding an earlier tap while choosing a later one can leave a currently
-legal micro-action with zero conditional probability; the existing local-update
-contract requires positive support for every canonical action. Search rejects that
-native compound boundary rather than evaluating the dormant flat head or silently
-switching policies. Ordinary sequential checkpoints retain their payment support,
-and compound serving outside this search continues to support ETU-94's subsets.
-Menace, effectful payments, kicker and ward follow the native sequential fallback
-when the compound offer API exposes ordinary offers.
+Ordered **waterbend subsets** preserve the original viewer root and token prefix.
+The next canonical tap is represented by excluding each intervening candidate and
+including that candidate; mana completion excludes the remaining candidates.
+These disjoint prefixes integrate the unchosen suffix exactly. Production never
+enumerates subsets or compatible hands. A legal tap outside the retained ordered
+prefix has exactly zero conditional mass; it is not a numerical approximation.
+Native optionless completion ends the declaration without another cached action.
+Menace, effectful payments, kicker and ward still use the native sequential fallback.
+Ordinary sequential checkpoints retain their payment behavior.
 
-**Arbitrary full-game compound search is unsupported.** An admitted priority,
-cast or combat root can reach a waterbend subset during rollout; that search
-fails without returning a target. The complete-game fixtures below cover bounded
-decks without this boundary and do not establish compatibility with every game.
-The priority-to-payment regression exercises both physical and learned sampling,
-verifies admission of the initial root and the actual native activation transition,
-and checks that the failed search leaves the source root unchanged.
+`regularized-local-update/v3` makes policy support explicit through the aligned
+base probabilities. Because beta is strictly positive, reverse KL restricts the
+updated policy to that support. The uniform reference still covers all legal
+offers; the optimizer normalizes its closed-form logits only on positive base
+support. Zero-base actions receive zero target and allocation, and JSON `null`
+for their unmeasured Q. No rollout is allocated to an inaccessible action. There
+is no epsilon smoothing, flat-head fallback or declaration resampling. Supported
+probability underflow in the update still fails rather than silently losing mass.
 
-[ETU-100](https://linear.app/loopflow/issue/ETU-100) owns the software follow-up,
-separately from ETU-99's empirical work. At a retained prefix, `p(a | prefix)=0`
-is exact policy support, not numerical underflow. A reverse-KL penalty
-`KL(q || p)` forbids positive `q(a)` there. Supporting this boundary therefore
-requires explicit zero-support semantics in the update, branch allocation and
-target/receipt readers, or another exact representation of the same declaration
-policy. Smoothing probabilities or rebuilding the policy from the new microstep
-would change the frozen teacher. Preserve the original root and prefix.
+The receipt reader checks support, null availability, per-hand supported-action
+coverage and rollout means. Historical v1/v2 receipts retain their complete
+positive-support contract and serialized bytes. `local_soft` preserves zeros;
+`local_argmax` chooses only measured Q; `local_allocation` normalizes realized
+supported counts. Numeric legacy score columns use NaN for unavailable Q and
+cannot be admitted as score-softmax targets. Advice marks unvisited Q unavailable
+and computes the root value over the supported target. Receipts still require
+the original-root cursor for intermediate-prefix replay.
+
+An admitted priority root can now reach a payment subset during rollout with
+either direct sampler. This removes ETU-95's payment-specific full-game blocker;
+other documented admission, history, capacity and deadline limits still apply.
+This is software compatibility, not an arbitrary-game completion or strength
+claim. ETU-99 retains scientific comparison ownership.
 
 `collect_local_update` accepts raw compound policy stages and compatible admitted
 samplers. Compound EMA remains unsupported by its training owner. Its canonical
@@ -324,3 +331,10 @@ arena Command replay, small joint-probability parity and wide attacker/cast root
 No optimizer ran, no paid compute was used, and ETU-91 was not modified. CI runs
 the new search fixtures on Linux and macOS; these results are software evidence,
 not calibration, strength or human-play acceptance.
+
+ETU-100 fixture gate on 2026-10-04: 42 affected Python tests and six native debug
+compound tests passed after integrating ETU-95's final parent. Fixed untrained
+weights exercise exact payment joint parity (tap-only, mixed and mana-only),
+65-candidate support projection, both saved samplers, sequential compatibility,
+retained zero-support receipts/readers/advice, replay and deadlines. No optimizer
+or scientific study ran locally; these checks make no strength claim.

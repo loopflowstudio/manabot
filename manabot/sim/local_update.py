@@ -112,7 +112,9 @@ def regularized_update(
 ) -> FloatArray:
     """Maximize p·Q - alpha KL(p||reference) - beta KL(p||base).
 
-    All vectors have shape [legal_actions]. Values are signed expected outcomes;
+    All vectors have shape [legal_actions]. Base zeros restrict the feasible
+    simplex; values outside its support may be NaN and are never consulted.
+    The reference remains strictly positive. Values are signed expected outcomes;
     beta is the inverse step scale. This is one detached local simplex update,
     not a gradient through a determinized game or an argmax improvement claim.
     """
@@ -122,19 +124,34 @@ def regularized_update(
     base, values, reference = arrays
     if base.ndim != 1 or not base.size or any(a.shape != base.shape for a in arrays):
         raise ValueError("local update vectors must align with legal offers")
-    if any(not np.isfinite(a).all() for a in arrays):
+    support = base > 0
+    if not np.isfinite(values[support]).all() or any(
+        not np.isfinite(a).all() for a in (base, reference)
+    ):
         raise ValueError("local update vectors must be finite")
     for probabilities in (base, reference):
-        if np.any(probabilities <= 0) or not np.isclose(probabilities.sum(), 1):
-            raise ValueError("base and reference require normalized positive support")
-    logits = (values + alpha * np.log(reference) + beta * np.log(base)) / (alpha + beta)
+        if np.any(probabilities < 0) or not np.isclose(probabilities.sum(), 1):
+            raise ValueError(
+                "base and reference require normalized nonnegative support"
+            )
+    if np.any(reference <= 0):
+        raise ValueError("reference requires positive support")
+    # beta > 0 restricts the feasible simplex to the base support. Missing Q
+    # outside it is deliberately unused, never treated as a zero-valued rollout.
+    logits = (
+        values[support]
+        + alpha * np.log(reference[support])
+        + beta * np.log(base[support])
+    ) / (alpha + beta)
     if not np.isfinite(logits).all():
         raise ValueError("local update logits are nonfinite")
     target = np.exp(logits - logits.max())
     target /= target.sum()
     if np.any(target == 0):
         raise ValueError("local update numerically lost mixed support")
-    return target
+    aligned = np.zeros_like(base)
+    aligned[support] = target
+    return aligned
 
 
 @dataclass(frozen=True)
@@ -169,7 +186,7 @@ class LocalUpdateReceipt:
     viewer_state_hash: str
     offer_ids: tuple[int, ...]
     base: tuple[float, ...]
-    values: tuple[float, ...]
+    values: tuple[float | None, ...]
     reference: tuple[float, ...]
     target: tuple[float, ...]
     allocation_counts: tuple[int, ...]
@@ -188,20 +205,37 @@ class LocalUpdateReceipt:
         if receipt.schema not in (
             "regularized-local-update/v1",
             "regularized-local-update/v2",
+            "regularized-local-update/v3",
         ):
             raise ValueError("unsupported local update receipt")
         config = LocalSearchConfig.model_validate_json(receipt.config_json)
         target = regularized_update(
             np.asarray(receipt.base),
-            np.asarray(receipt.values),
+            np.asarray(receipt.values, dtype=np.float64),
             np.asarray(receipt.reference),
             alpha=config.alpha,
             beta=config.beta,
         )
+        support = np.asarray(receipt.base) > 0
+        if receipt.schema != "regularized-local-update/v3" and (
+            not support.all() or any(value is None for value in receipt.values)
+        ):
+            raise ValueError("historical receipts require complete positive support")
+        if any(
+            (value is None) == bool(active)
+            for value, active in zip(receipt.values, support)
+        ):
+            raise ValueError("local values must be available exactly on policy support")
         count = len(target)
         if len(receipt.offer_ids) != count or len(set(receipt.offer_ids)) != count:
             raise ValueError("local receipt offers do not align")
-        if len(receipt.target) != count or not np.allclose(target, receipt.target):
+        if (
+            len(receipt.target) != count
+            or not np.allclose(target, receipt.target)
+            or not np.array_equal(np.asarray(receipt.target) > 0, support)
+            or not np.isfinite(receipt.target).all()
+            or np.any(np.asarray(receipt.target) < 0)
+        ):
             raise ValueError("local target differs from retained update")
         if any(
             row.action_index < 0 or row.action_index >= count
@@ -211,16 +245,21 @@ class LocalUpdateReceipt:
         counts = np.bincount(
             [row.action_index for row in receipt.rollouts], minlength=count
         )
-        if np.any(counts == 0) or not np.array_equal(counts, receipt.allocation_counts):
-            raise ValueError("local update lacks complete action coverage")
+        if not np.array_equal(counts > 0, support) or not np.array_equal(
+            counts, receipt.allocation_counts
+        ):
+            raise ValueError("local update lacks complete policy-support coverage")
         sums = np.bincount(
             [row.action_index for row in receipt.rollouts],
             weights=[row.signed_value for row in receipt.rollouts],
             minlength=count,
         )
-        if not np.allclose(sums / counts, receipt.values):
+        if not np.allclose(
+            sums[support] / counts[support],
+            np.asarray(receipt.values, dtype=np.float64)[support],
+        ):
             raise ValueError("local values differ from retained rollouts")
-        if receipt.schema == "regularized-local-update/v2" and any(
+        if receipt.schema != "regularized-local-update/v1" and any(
             row.canonical_commands != len(row.actor_observation_hashes)
             or not 1 <= row.canonical_commands <= config.depth
             for row in receipt.rollouts
@@ -236,7 +275,7 @@ class LocalUpdateReceipt:
             root = Observation.from_json(prefix.root_observation_json)
             revisions = [command.expected_revision for command in prefix.commands]
             if (
-                receipt.schema != "regularized-local-update/v2"
+                receipt.schema == "regularized-local-update/v1"
                 or root.viewer != receipt.viewer
                 or root.revision > receipt.revision
                 or any(a >= b for a, b in zip(revisions, revisions[1:]))
@@ -263,7 +302,7 @@ class LocalUpdateReceipt:
             raise ValueError("local receipt sampling provenance differs")
         if direct is not None:
             if (
-                receipt.schema != "regularized-local-update/v2"
+                receipt.schema == "regularized-local-update/v1"
                 or config.sampling == "belief"
             ):
                 raise ValueError("direct sampling requires a production sampling mode")
@@ -302,7 +341,7 @@ class LocalUpdateReceipt:
             )
         else:
             if (
-                receipt.schema == "regularized-local-update/v2"
+                receipt.schema != "regularized-local-update/v1"
                 and config.sampling != "belief"
             ):
                 raise ValueError("production receipt lacks direct sampling evidence")
@@ -328,12 +367,15 @@ class LocalUpdateReceipt:
             or receipt.sampling_probabilities
             or receipt.condition_mass != 1.0
             or json.loads(receipt.query_json) != {"kind": "true"}
-            or len(receipt.rollouts) != len(hands) * count
+            or len(receipt.rollouts) != len(hands) * int(support.sum())
         ):
             raise ValueError("local receipt sampled root identity differs")
+        width = int(support.sum())
         for ordinal, hand in enumerate(hands):
             validate_hand(hand, constraints_json)
-            rows = receipt.rollouts[ordinal * count : (ordinal + 1) * count]
+            rows = receipt.rollouts[ordinal * width : (ordinal + 1) * width]
+            if [row.action_index for row in rows] != list(np.flatnonzero(support)):
+                raise ValueError("sampled hand lacks policy-support coverage")
             if any(
                 row.world_index is not None or row.sampled_hand != hand for row in rows
             ):
@@ -364,6 +406,8 @@ class LocalUpdateReceipt:
     def mixing_diagnostics(self) -> dict[str, float]:
         """Root-local nats and probability distances, not bluffing quality."""
         target, base = np.asarray(self.target), np.asarray(self.base)
+        support = base > 0
+        target, base = target[support], base[support]
         return {
             "target_entropy": float(-(target * np.log(target)).sum()),
             "base_entropy": float(-(base * np.log(base)).sum()),
@@ -690,7 +734,8 @@ class LocalUpdateTeacher:
             world_frame = DecisionFrame.from_json(world.semantic_decision_frame_json())
             if world_frame.offers != frame.offers:
                 raise ValueError("materialization changed semantic root offers")
-            for action in range(len(base)):
+            for action in np.flatnonzero(base > 0):
+                action = int(action)
                 check()
                 rollout_seed = int(rng.integers(0, 2**63))
                 policy_rng = np.random.default_rng(rollout_seed)
@@ -776,12 +821,14 @@ class LocalUpdateTeacher:
                     )
                 )
         check()
-        values = sums / counts
+        values = np.divide(
+            sums, counts, out=np.full_like(sums, np.nan), where=counts > 0
+        )
         target = regularized_update(
             base, values, reference, alpha=self.config.alpha, beta=self.config.beta
         )
         receipt = LocalUpdateReceipt(
-            schema="regularized-local-update/v2",
+            schema="regularized-local-update/v3",
             policy_sha256=self.likelihood.checkpoint_sha256,
             runtime_sha256=self.runtime_sha256,
             teacher_source_sha256=self.source_sha256,
@@ -799,7 +846,7 @@ class LocalUpdateTeacher:
             viewer_state_hash=observation.viewer_state_hash,
             offer_ids=tuple(int(offer["id"]) for offer in frame.offers),
             base=tuple(base),
-            values=tuple(values),
+            values=tuple(float(v) if counts[i] else None for i, v in enumerate(values)),
             reference=tuple(reference),
             target=tuple(target),
             allocation_counts=tuple(int(n) for n in counts),
@@ -990,7 +1037,7 @@ class LocalUpdatePlayer(ExactRangePlayer):
             seconds=time.perf_counter() - search_started,
         )
         self._belief_seconds = -update_seconds
-        self.last_scores = np.asarray(self.last_receipt.values)
+        self.last_scores = np.asarray(self.last_receipt.values, dtype=np.float64)
         self.stats.search.decisions += 1
         self.stats.search.seconds += self.last_receipt.seconds + spent
         self.stats.search.simulations += len(self.last_receipt.rollouts)

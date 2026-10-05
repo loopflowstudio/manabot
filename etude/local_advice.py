@@ -7,8 +7,6 @@ identified by method; it is not silently called a win probability.
 
 from collections.abc import Sequence
 
-import numpy as np
-
 from etude.advice import (
     AdvisorOfferEvidence,
     AdvisorScenarioEvidence,
@@ -36,22 +34,23 @@ def local_update_scenario(
     unavailable = UnavailableQuantity(
         status="unavailable", reason="insufficient_world_coverage"
     )
-    values = np.asarray(receipt.values)
     return AdvisorScenarioEvidence(
         scenario_id=belief.scenario_id,
         belief=belief,
         condition_mass=receipt.condition_mass,
         support=belief.positive_support,
-        sampled_worlds=len(receipt.rollouts) // len(receipt.offer_ids),
+        sampled_worlds=max(receipt.allocation_counts),
         actions=[
             AdvisorOfferEvidence(
                 offer_id=offer,
                 label=labels[index],
                 probability=receipt.target[index],
                 visits=receipt.allocation_counts[index],
-                q=AvailableQuantity(
+                q=UnavailableQuantity(status="unavailable", reason="no_realized_visits")
+                if receipt.values[index] is None
+                else AvailableQuantity(
                     status="available",
-                    value=float(values[index]),
+                    value=receipt.values[index],
                     method="signed_frozen_policy_rollout_value/v1",
                 ),
                 robustness=unavailable,
@@ -61,7 +60,11 @@ def local_update_scenario(
         ],
         root_value=AvailableQuantity(
             status="available",
-            value=float(values @ receipt.target),
+            value=sum(
+                value * probability
+                for value, probability in zip(receipt.values, receipt.target)
+                if value is not None
+            ),
             method="signed_local_policy_value/v1",
         ),
         root_uncertainty=unavailable,

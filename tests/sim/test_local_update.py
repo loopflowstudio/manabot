@@ -87,8 +87,33 @@ def test_two_kl_optimum_and_shift_invariance() -> None:
     np.testing.assert_allclose(
         result, regularized_update(base, values + 8, reference, alpha=0.3, beta=2)
     )
-    with pytest.raises(ValueError, match="positive support"):
-        regularized_update(np.array([0.0, 1.0]), values, reference, alpha=0.3, beta=2)
+    np.testing.assert_array_equal(
+        regularized_update(
+            np.array([0.0, 1.0]), np.array([np.nan, 1.0]), reference, alpha=0.3, beta=2
+        ),
+        [0.0, 1.0],
+    )
+
+
+def test_zero_support_update_is_the_restricted_simplex_optimum() -> None:
+    base = np.array([0.2, 0.0, 0.8])
+    values = np.array([-0.7, np.nan, 0.4])
+    reference = np.full(3, 1 / 3)
+    target = regularized_update(base, values, reference, alpha=0.3, beta=2)
+    active = base > 0
+    gradient = (
+        values[active]
+        - 0.3 * (np.log(target[active] / reference[active]) + 1)
+        - 2 * (np.log(target[active] / base[active]) + 1)
+    )
+    assert gradient[0] == pytest.approx(gradient[1])
+    assert target[1] == 0
+    assert target.sum() == pytest.approx(1)
+    for inaccessible in (-1e10, 1e10, np.nan):
+        values[1] = inaccessible
+        np.testing.assert_array_equal(
+            target, regularized_update(base, values, reference, alpha=0.3, beta=2)
+        )
 
 
 def test_real_root_replay_and_hidden_swap(tmp_path: Path) -> None:
