@@ -58,7 +58,8 @@ def registration(
     agent, _ = load_checkpoint_agent(artifact["path"])
     identity = run.identities
     return PlayerRegistration(
-        player_id=f"{run.regime.id}-{run.seed}-{stage.id}-{variant}",
+        # Arena names are separate from immutable training recipe identities.
+        player_id=f"{run.regime.id}-{run.seed}-{stage.id}-{variant}".replace("_", "-"),
         display_name=run.regime.id,
         role="challenger",
         runner_kind="checkpoint",
@@ -168,7 +169,11 @@ def run_study(
             raise RuntimeError(
                 "insufficient free disk for frozen study and evidence reserve"
             )
-    explicit_plan = study in {"omitted-controls", "training-calibration"}
+    explicit_plan = study in {
+        "omitted-controls",
+        "training-calibration",
+        "value-models",
+    }
     if explicit_plan and plan is None:
         raise ValueError(f"{study} requires an explicit separately resolved plan")
     retained = None
@@ -207,6 +212,8 @@ def run_study(
             raise ValueError("resolved recipes must preserve the study arm order")
         if not resume:
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
+    if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
+        raise ValueError("recipe IDs collide after arena normalization")
     if resume or (plan is not None and plan.protocol.purpose == "scientific"):
         from manabot.env import ObservationSpace
         from manabot.sim.teacher1_evidence import (

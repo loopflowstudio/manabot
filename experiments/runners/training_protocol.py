@@ -14,6 +14,7 @@ class EvaluationProtocol(BaseModel):
         "omitted-controls",
         "compound-decisions",
         "training-calibration",
+        "value-models",
     ]
     purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
     evaluation_variants: tuple[Literal["raw", "ema"], ...] = ("raw",)
@@ -121,6 +122,7 @@ class EvaluationProtocol(BaseModel):
             "compound-decisions": {4},
             "omitted-controls": {1, 2},
             "training-calibration": {1},
+            "value-models": {8},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)

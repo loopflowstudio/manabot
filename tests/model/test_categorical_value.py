@@ -18,10 +18,22 @@ from manabot.sim.net_opponent import SeatRoutedCollector
 import managym
 
 
-def _agent(kind: Literal["scalar", "categorical_wdl"]) -> Agent:
+def _agent(
+    kind: Literal["scalar", "categorical_wdl"],
+    aggregation: Literal[
+        "historical_mean", "masked_mean", "value_token"
+    ] = "historical_mean",
+    depth: Literal[1, 2] = 1,
+) -> Agent:
     return Agent(
         ObservationSpace(),
-        AgentHypers(hidden_dim=8, attention_on=False, value_kind=kind),
+        AgentHypers(
+            hidden_dim=8,
+            attention_on=True,
+            value_kind=kind,
+            value_aggregation=aggregation,
+            attention_layers=depth,
+        ),
     )
 
 
@@ -31,11 +43,44 @@ def _collector(agent: Agent) -> SeatRoutedCollector:
     )
 
 
+def _save_checkpoint(
+    path: Path,
+    agent: Agent,
+    saved_hypers: dict[str, object],
+    weights: dict[str, torch.Tensor],
+) -> None:
+    torch.save(
+        {
+            "model_state_dict": weights,
+            "hypers": {
+                "agent_hypers": saved_hypers,
+                "observation_hypers": agent.observation_space.encoder.hypers.model_dump(),
+            },
+            "world_binding": checkpoint_world(
+                Match().to_rust(), agent.observation_space
+            ),
+        },
+        path,
+    )
+
+
+@pytest.mark.parametrize(
+    "aggregation,depth",
+    [
+        ("historical_mean", 1),
+        ("masked_mean", 1),
+        ("value_token", 1),
+        ("value_token", 2),
+    ],
+)
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])
 def test_value_interface_and_collection_likelihoods(
-    kind: Literal["scalar", "categorical_wdl"], tmp_path: Path
+    kind: Literal["scalar", "categorical_wdl"],
+    tmp_path: Path,
+    aggregation: Literal["historical_mean", "masked_mean", "value_token"],
+    depth: Literal[1, 2],
 ) -> None:
-    agent = _agent(kind)
+    agent = _agent(kind, aggregation, depth)
     collector = _collector(agent)
     batch = collector.collect(agent, 4)
     obs = {
@@ -70,21 +115,15 @@ def test_value_interface_and_collection_likelihoods(
     torch.testing.assert_close(agent.get_value(obs), value)
 
     path = tmp_path / "critic.pt"
-    torch.save(
-        {
-            "model_state_dict": agent.state_dict(),
-            "hypers": {
-                "agent_hypers": agent.hypers.model_dump(),
-                "observation_hypers": agent.observation_space.encoder.hypers.model_dump(),
-            },
-            "world_binding": checkpoint_world(
-                Match().to_rust(), agent.observation_space
-            ),
-        },
-        path,
-    )
+    saved_hypers = agent.hypers.model_dump()
+    if aggregation == "historical_mean":
+        saved_hypers.pop("value_aggregation")
+        saved_hypers.pop("attention_layers")
+    _save_checkpoint(path, agent, saved_hypers, agent.state_dict())
     loaded, _ = load_checkpoint_agent(str(path))
     assert loaded.hypers.value_kind == kind
+    assert loaded.hypers.value_aggregation == aggregation
+    assert loaded.hypers.attention_layers == depth
     loaded_policy, loaded_value = loaded.forward_distribution(obs)
     torch.testing.assert_close(loaded_policy, policy, rtol=0, atol=0)
     torch.testing.assert_close(loaded_value, raw_value, rtol=0, atol=0)
@@ -101,6 +140,53 @@ def test_outcome_supervision_distinguishes_draw_from_balanced_win_loss() -> None
     assert not torch.equal(logits.grad[0], logits.grad[1])
 
 
+@pytest.mark.parametrize(
+    "fields,error",
+    [
+        ({"value_aggregation": "masked_mean"}, 'Unexpected key.*"value_token"'),
+        ({"attention_layers": 1}, 'Unexpected key.*"extra_attention'),
+        ({"value_kind": "scalar"}, "size mismatch for value_head"),
+        ({"attention_layers": 3}, "attention_layers"),
+    ],
+)
+def test_checkpoint_rejects_incompatible_saved_architecture(
+    tmp_path: Path, fields: dict[str, object], error: str
+) -> None:
+    agent = _agent("categorical_wdl", "value_token", 2)
+    path = tmp_path / "incompatible.pt"
+    _save_checkpoint(
+        path, agent, {**agent.hypers.model_dump(), **fields}, agent.state_dict()
+    )
+    with pytest.raises((RuntimeError, ValueError), match=error):
+        load_checkpoint_agent(str(path))
+
+
+@pytest.mark.parametrize("damage", ["missing_token", "token_shape", "missing_layer"])
+def test_checkpoint_rejects_incompatible_architecture_weights(
+    tmp_path: Path,
+    damage: Literal["missing_token", "token_shape", "missing_layer"],
+) -> None:
+    agent = _agent("categorical_wdl", "value_token", 2)
+    weights = agent.state_dict()
+    if damage == "missing_token":
+        del weights["value_token"]
+        error = 'Missing key.*"value_token"'
+    elif damage == "token_shape":
+        weights["value_token"] = weights["value_token"][..., :-1]
+        error = "size mismatch for value_token"
+    else:
+        weights = {
+            key: value
+            for key, value in weights.items()
+            if not key.startswith("extra_attention.")
+        }
+        error = 'Missing key.*"extra_attention'
+    path = tmp_path / "incompatible.pt"
+    _save_checkpoint(path, agent, agent.hypers.model_dump(), weights)
+    with pytest.raises(RuntimeError, match=error):
+        load_checkpoint_agent(str(path))
+
+
 def test_distributional_supervision_reaches_shared_encoder() -> None:
     agent = _agent("categorical_wdl")
     collector = _collector(agent)
@@ -115,11 +201,23 @@ def test_distributional_supervision_reaches_shared_encoder() -> None:
     assert all(parameter.grad is None for parameter in agent.policy_head.parameters())
 
 
-def test_categorical_policy_and_value_do_not_read_hidden_deal() -> None:
+@pytest.mark.parametrize(
+    "aggregation,depth",
+    [
+        ("historical_mean", 1),
+        ("masked_mean", 1),
+        ("value_token", 1),
+        ("value_token", 2),
+    ],
+)
+def test_categorical_policy_and_value_do_not_read_hidden_deal(
+    aggregation: Literal["historical_mean", "masked_mean", "value_token"],
+    depth: Literal[1, 2],
+) -> None:
     engine = managym.Env(seed=29, skip_trivial=True)
     engine.reset(Match().to_rust())
     actor = SemanticDecisionContract.from_env(engine).frame.actor
-    agent = _agent("categorical_wdl")
+    agent = _agent("categorical_wdl", aggregation, depth)
     space = agent.observation_space
     original = {
         key: torch.from_numpy(value).unsqueeze(0)

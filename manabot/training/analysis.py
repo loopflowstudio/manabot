@@ -287,6 +287,33 @@ def report(out: Path | str) -> None:
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
+    if study["study"] == "value-models":
+        lines += [
+            "",
+            "Value-model disposition: all strength comparisons unresolved. The token "
+            "changes the shared policy representation; one CPU thread is not equal inference cost.",
+            "",
+            "Resolved configurations: [recipes](recipes.json), [protocol](protocol.json), "
+            "[allocation](resolved-plan.json). Every run and failed attempt remains in study.json.",
+            "",
+            "| Recipe | Stage | Status | Learner transitions | Native steps | Optimizer exposures | Collection s | Learning s | Export s |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        for entry in study["runs"]:
+            run = TrainingRun.model_validate_json(Path(entry["path"]).read_text())
+            for stage in run.stages:
+                lines.append(
+                    f"| {run.regime.id} | {stage.id} | {stage.status} | "
+                    f"{stage.learner_transitions} | {stage.environment_decisions} | "
+                    f"{stage.optimizer_exposures} | {stage.collection_seconds:.3f} | "
+                    f"{stage.learning_seconds:.3f} | {stage.export_seconds:.3f} |"
+                )
+        lines += [
+            "",
+            "Per-player inference latency is retained in each arena game row. "
+            "Parameter counts are in the arena registrations; host RSS/CPU observations "
+            "are in run exports. These do not correct concurrent host contention.",
+        ]
     if study["study"] == "compound-decisions":
         lines += [
             "",

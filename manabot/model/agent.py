@@ -147,6 +147,18 @@ class Agent(nn.Module):
         is_agent_template = torch.cat(is_agent_parts).unsqueeze(0)
         self.register_buffer("_is_agent_template", is_agent_template)
 
+        # Construct optional parameters after the historical model to preserve
+        # its initialization order and state-dict names.
+        self.extra_attention = nn.ModuleList(
+            GameObjectAttention(embed_dim, hypers.num_attention_heads, ownership=False)
+            for _ in range(hypers.attention_layers - 1)
+        )
+        self.value_token = (
+            nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
+            if hypers.value_aggregation == "value_token"
+            else None
+        )
+
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
         # detach/cpu copy is measurable in the inference hot path.
@@ -182,14 +194,9 @@ class Agent(nn.Module):
             )
         objects, is_agent, validity = self._gather_object_embeddings(obs)
 
-        key_padding_mask = validity == 0
-
-        if self.hypers.attention_on:
-            post_attention_objects = self.attention(
-                objects, is_agent, key_padding_mask=key_padding_mask
-            )
-        else:
-            post_attention_objects = objects
+        encoded = self._attend_objects(objects, is_agent, validity)
+        # The optional trailing token is a critic input, never an action focus.
+        post_attention_objects = encoded[:, : validity.shape[1]]
 
         informed_actions = self._gather_informed_actions(obs, post_attention_objects)
 
@@ -198,8 +205,50 @@ class Agent(nn.Module):
             # Save raw logits for offline diagnosis (scripts/diagnose_*).
             self.last_raw_logits = logits_before_mask.detach().cpu()
         logits = logits_before_mask.masked_fill(obs["actions_valid"] == 0, -1e8)
-        value = self.value_head(post_attention_objects)
-        return logits, value
+        return logits, self._value_from_objects(encoded, validity)
+
+    def _attend_objects(
+        self,
+        objects: torch.Tensor,
+        is_agent: torch.Tensor,
+        validity: torch.Tensor,
+    ) -> torch.Tensor:
+        """Encode real objects and, when configured, a trailing neutral value token."""
+        if (
+            self.hypers.value_aggregation != "historical_mean"
+            and (validity.sum(1) == 0).any()
+        ):
+            raise ValueError("value aggregation requires a valid object")
+        key_padding_mask = validity == 0
+        if self.value_token is not None:
+            objects = torch.cat(
+                (objects, self.value_token.expand(objects.shape[0], -1, -1)), dim=1
+            )
+            key_padding_mask = torch.cat(
+                (key_padding_mask, torch.zeros_like(key_padding_mask[:, :1])), dim=1
+            )
+        if self.hypers.attention_on:
+            objects = self.attention(
+                objects, is_agent, key_padding_mask=key_padding_mask
+            )
+            for layer in self.extra_attention:
+                objects = layer(objects, is_agent, key_padding_mask)
+        return objects
+
+    def _value_from_objects(
+        self, objects: torch.Tensor, validity: torch.Tensor
+    ) -> torch.Tensor:
+        """Read the critic while preserving historical value_head parameter names."""
+        if self.hypers.value_aggregation == "historical_mean":
+            return self.value_head(objects)
+        if self.value_token is not None:
+            objects = objects[:, -1]
+        projected = self.value_head[1](self.value_head[0](objects))
+        if self.hypers.value_aggregation == "masked_mean":
+            projected = projected.masked_fill((validity == 0).unsqueeze(-1), 0)
+            projected = projected.sum(1) / validity.sum(1, keepdim=True)
+        # Indexing avoids constructing temporary Sequential modules per decision.
+        return self.value_head[5](self.value_head[4](self.value_head[3](projected)))
 
     def compound(
         self,
@@ -474,12 +523,18 @@ class GameObjectAttention(nn.Module):
       - And returning the context-rich output.
     """
 
-    def __init__(self, embedding_dim: int, num_heads: int):
+    def __init__(
+        self, embedding_dim: int, num_heads: int, *, ownership: bool = True
+    ) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
         self.logger = getLogger(__name__).getChild("attention")
         self.logger.info(f"Creating perspective vector of size {embedding_dim}")
-        self.perspective = nn.Parameter(torch.randn(embedding_dim) / embedding_dim**0.5)
+        self.perspective = (
+            nn.Parameter(torch.randn(embedding_dim) / embedding_dim**0.5)
+            if ownership
+            else None
+        )
         self.mha = nn.MultiheadAttention(
             embedding_dim, num_heads=num_heads, batch_first=True
         )
@@ -497,8 +552,16 @@ class GameObjectAttention(nn.Module):
         is_agent: torch.Tensor,
         key_padding_mask: torch.BoolTensor,
     ) -> torch.Tensor:
-        perspective_scale = torch.where(is_agent.unsqueeze(-1), 1.0, -1.0)
-        owned_objects = objects + perspective_scale * self.perspective
+        owned_objects = objects
+        if self.perspective is not None:
+            perspective_scale = torch.where(is_agent.unsqueeze(-1), 1.0, -1.0)
+            # A trailing value token has no owner; real-object indexes stay fixed.
+            if objects.shape[1] > is_agent.shape[1]:
+                perspective_scale = torch.cat(
+                    (perspective_scale, torch.zeros_like(perspective_scale[:, :1])),
+                    dim=1,
+                )
+            owned_objects = objects + perspective_scale * self.perspective
 
         attn_out, _ = self.mha(
             owned_objects,

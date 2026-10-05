@@ -108,6 +108,10 @@ class AgentHypers(BaseHypersModel):
     semantic_pack: str | None = None
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
+    value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
+        "historical_mean"
+    )
+    attention_layers: Literal[1, 2] = 1
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -120,6 +124,24 @@ class AgentHypers(BaseHypersModel):
     belief_card_vocab_size: int = 0
     belief_owner_role_vocab_size: int = 2
     belief_hidden_zone_vocab_size: int = 7
+
+    @model_validator(mode="after")
+    def validate_value_architecture(self) -> "AgentHypers":
+        if self.hidden_dim < 1 or self.num_attention_heads < 1:
+            raise ValueError("embedding width and head count must be positive")
+        if self.attention_on and self.hidden_dim % self.num_attention_heads:
+            raise ValueError("embedding width must be divisible by attention heads")
+        if not self.attention_on and (
+            self.value_aggregation == "value_token" or self.attention_layers != 1
+        ):
+            raise ValueError("value token and stacked layers require attention")
+        if self.compound_decisions and (
+            self.value_aggregation != "historical_mean" or self.attention_layers != 1
+        ):
+            raise ValueError(
+                "compound critic does not support value aggregation variants"
+            )
+        return self
 
 
 class TrainHypers(BaseHypersModel):
