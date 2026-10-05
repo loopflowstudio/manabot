@@ -59,10 +59,8 @@ class SamplerInput:
     history_features: tuple[float, ...]
 
     def __post_init__(self) -> None:
-        if (
-            not self.vocabulary_identity
-            or not self.pool_counts
-            or len(self.pool_counts) != len(self.known_minima)
+        if not self.vocabulary_identity or len(self.pool_counts) != len(
+            self.known_minima
         ):
             raise ValueError("invalid sampler input vocabulary or dimensions")
         if type(self.hand_size) is not int or any(
@@ -169,6 +167,9 @@ def sample_physical_deal(
 ) -> torch.Tensor:
     """Sample the safe card-removal baseline on CPU in O(cards × max count)."""
     residual, minima, remaining = _constraints(inputs, torch.device("cpu"))
+    # Empty hidden pools have one physical deal: the empty hand.
+    if residual.shape[1] == 0:
+        return minima
     counts: list[torch.Tensor] = []
     max_count = int(residual.max().item())
     later = residual.sum(dim=1)

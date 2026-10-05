@@ -207,6 +207,7 @@ class Agent(nn.Module):
         batch: RaggedOfferBatch,
         *,
         tokens: tuple[int, ...] | None = None,
+        prefix: tuple[int, ...] = (),
         generator: torch.Generator | None = None,
         deterministic: bool = False,
     ) -> CompoundOutput:
@@ -237,6 +238,7 @@ class Agent(nn.Module):
             batch,
             offer_features=features,
             tokens=tokens,
+            prefix=prefix,
             generator=generator,
             deterministic=deterministic,
         )

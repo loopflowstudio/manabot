@@ -29,6 +29,7 @@ class CompoundOutput:
     log_probs: Tensor  # [factors], including zero-log-probability forced factors
     values: Tensor  # [factors], acting-seat expected terminal return
     probabilities: tuple[Tensor, ...]  # each [legal support including masked entries]
+    end_value: Tensor  # signed value after the complete token prefix
 
     @property
     def log_prob(self) -> Tensor:
@@ -61,15 +62,18 @@ class CompoundDecoder(nn.Module):
         *,
         offer_features: Tensor | None = None,
         tokens: tuple[int, ...] | None = None,
+        prefix: tuple[int, ...] = (),
         generator: torch.Generator | None = None,
         deterministic: bool = False,
     ) -> CompoundOutput:
-        """Sample or teacher-force one complete submission; reject partial tapes.
+        """Sample, teacher-force a complete tape, or complete a forced prefix.
 
         `context` is [hidden_dim]. Gradients flow through context, all prefix
         states, and normalized conditional logits. Sampled discrete tokens are
         constants during recomputation, as required by the score-function loss.
         """
+        if tokens is not None and prefix:
+            raise ValueError("provide a complete tape or prefix, not both")
         if context.ndim != 1:
             raise ValueError("compound context must be one hidden vector")
         state = context
@@ -87,6 +91,8 @@ class CompoundDecoder(nn.Module):
                 if ordinal >= len(tokens):
                     raise StructuredPolicyError("interrupted compound token tape")
                 token = tokens[ordinal]
+            elif ordinal < len(prefix):
+                token = prefix[ordinal]
             elif deterministic:
                 token = int(logits.argmax().item())
             else:
@@ -151,6 +157,8 @@ class CompoundDecoder(nn.Module):
             answers.append(
                 {"kind": "candidates", "role": row.role, "candidates": selected}
             )
+        if len(prefix) > len(selected_tokens):
+            raise StructuredPolicyError("compound prefix has trailing choices")
         if tokens is not None and len(tokens) != len(selected_tokens):
             raise StructuredPolicyError("compound token tape has trailing choices")
         return CompoundOutput(
@@ -159,4 +167,5 @@ class CompoundDecoder(nn.Module):
             torch.stack(log_probs),
             torch.stack(values),
             tuple(probabilities),
+            self.value(state).squeeze(-1),
         )

@@ -640,6 +640,44 @@ costs and conservative cohort projections belong to ETU-99 within the unchanged
 168-hour campaign ceiling. No new scientific allocation or paid compute follows
 from this command. Its costs must be included in campaign accounting.
 
+## ETU-95 software finish line (2026-10-04)
+
+Jack Heart separated software delivery from new training: ETU-95 now owns
+compound-policy sampling search and reloadable distillation targets; ETU-99 owns
+the scientific comparisons previously left open under ETU-95. Historical evidence
+and its limits above remain intact. No new training study or ETU-91 mutation is
+authorized by this continuation.
+
+The final software connects both direct hand samplers to frozen ordinary and
+supported compound policies. Production history never enumerates support; the
+explicit tiny exact reference remains separate. Empty hidden pools have one
+physical deal, the empty hand. Learned sampler admission retains exact policy,
+dataset, schema and world identity. `True` is the only production sampling query.
+
+Jack Heart confirmed ETU-94 PR #216 merged; its blocker/payment API was synced
+before final compound verification. Compound search retains original viewer
+roots and decoder prefixes, proves each canonical route through native lowering,
+and drains sampled suffixes in rollouts and base collection. Attackers,
+single-target casts, independent blocker roles and ordinary fallback offers work.
+The selected branch runtime owns snapshots and prefix replay; raw cloning a
+selected branch is forbidden. No model parameters or checkpoint fields changed.
+
+Ordered waterbend subsets remain explicitly unsupported in this search: excluding
+an earlier tap can give a currently legal micro-action zero conditional mass,
+which the teacher's positive-support local-update contract cannot accept. The
+explicit failure follows Jack Heart's role-boundary allowance. Sequential policies
+still handle payments; ETU-94 compound serving retains its own subset support.
+Compound exact likelihood, belief-input memory and live advice registration remain
+unavailable. Canonical conditional targets are not joint declaration targets.
+
+The fixture-only gate passed 60 affected Python checks, six native debug compound
+tests and focused lint/format checks, including saved-artifact physical/learned
+search, full-game target reader admission and compound arena replay. No optimizer,
+scientific study or paid compute ran. ETU-91 was untouched; these proofs establish
+software behavior, not strength, calibration or human-play success. The durable
+[local-search contract](../../docs/local-policy-search.md) records supported paths,
+receipt/replay requirements and remaining scientific ownership.
+
 ## Offline sampler software boundary (ETU-96, 2026-10-04)
 
 Jack Heart separated software completion from empirical acceptance: ETU-96 owns
@@ -724,3 +762,16 @@ hidden-world swap invariance. The ordinary checkpoint reload and complete-game
 credit checks remain in the affected suite. These are software correctness
 checks, not scientific training, strength, calibration or challenger evidence.
 See [compound contracts](../../docs/training-regimes.md#compound-decisions).
+
+## Compound search payment limitation (ETU-95 review, 2026-10-04)
+
+Jack Heart identified that an admitted root can reach unsupported waterbend
+subsets during rollout. Both saved physical/learned sampler regressions now
+exercise the real priority-to-payment transition and fail without a target.
+Arbitrary full-game compound search remains unsupported; small complete-game
+fixtures are not general compatibility evidence. [ETU-100](https://linear.app/loopflow/issue/ETU-100)
+owns the software follow-up, not ETU-99. At a retained decoder prefix, a legal
+canonical action can have exact zero policy mass; reverse KL forbids assigning
+positive updated mass there. Preserve the original root/prefix and change the
+update/receipt support contract explicitly rather than smoothing or resampling.
+No training or scientific allocation was started.

@@ -123,7 +123,7 @@ class CollectSearch(Stage):
 
 
 class CollectLocalUpdate(Stage):
-    """Freeze an admitted raw/EMA policy for exact-range local targets."""
+    """Freeze an admitted raw/EMA policy for sampling-based local targets."""
 
     operation: Literal["collect_local_update"]
     policy: str
@@ -309,7 +309,9 @@ class TrainingRegime(Strict):
                 "compound stages and compound Agent must be selected together"
             )
         if self.agent.compound_decisions and any(
-            not isinstance(stage, (TrainCompound, CollectBelief, TrainBelief))
+            not isinstance(
+                stage, (TrainCompound, CollectBelief, TrainBelief, CollectLocalUpdate)
+            )
             for stage in self.stages
         ):
             raise ValueError(

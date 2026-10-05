@@ -62,7 +62,7 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     teacher = LocalUpdateTeacher(
         path,
         file_sha256(path),
-        LocalSearchConfig(worlds=2, depth=3, decision_seconds=10),
+        LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
     )
     env = Env(
         match, space, Reward(RewardHypers()), auto_reset=False, enable_profiler=False
@@ -167,8 +167,12 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
 ) -> None:
 
     teacher, _ = make_teacher(tmp_path)
-    teacher.config = teacher.config.model_copy(
-        update={"sampling": "compatible_prior", "worlds": 1, "depth": 1}
+    teacher = LocalUpdateTeacher(
+        teacher.likelihood.checkpoint,
+        teacher.likelihood.checkpoint_sha256,
+        teacher.config.model_copy(
+            update={"sampling": "compatible_prior", "worlds": 1, "depth": 1}
+        ),
     )
     if learned:
         teacher = attach_learned_sampler(teacher, tmp_path)
@@ -203,7 +207,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
                 if teacher.sampler_artifact is not None
                 else {}
             ),
-            "implementation_source_sha256": file_sha256(Path(local_update.__file__)),
+            "implementation_source_sha256": local_update.local_search_source_sha256(),
         },
         search_call_seed_derivation_id="local-policy-seed-times-1000003-plus-call-mod-2pow63/v1",
         search_semantics=SearchSemantics(

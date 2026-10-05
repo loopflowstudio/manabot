@@ -99,6 +99,12 @@ jobs:
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py
 
+      - name: Frozen-policy search fixtures
+        run: |
+          uv run --python 3.12 --extra dev pytest -q \
+            tests/sim/test_local_update_sampling.py \
+            tests/sim/test_local_update_compound.py
+
       - name: Enum smoke test
         run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 

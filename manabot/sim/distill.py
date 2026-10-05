@@ -209,7 +209,7 @@ def generate_selfplay_shard(
                 # this trajectory; arena play samples the improved distribution.
                 if receipt is None:
                     raise RuntimeError("local teacher did not retain its update")
-                action = int(behavior_rng.choice(len(receipt.base), p=receipt.base))
+                action = players[acting].base_action(behavior_rng)
             for key in OBS_KEYS:
                 obs_buffers[key].append(np.asarray(obs[key], dtype=np.float32))
             encoded_valid_count = int(np.sum(obs["actions_valid"] > 0))
@@ -434,7 +434,6 @@ def load_shards(
     diagnostic): taken from ``rounds`` (one per shard) when given, else from
     each shard's embedded provenance tag, else -1 for legacy shards.
     """
-
 
     shards = [np.load(Path(p)) for p in paths]
     keys = list(OBS_KEYS) + list(META_KEYS)

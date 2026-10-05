@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -73,11 +72,10 @@ def build_player(
             raise FileNotFoundError("checkpoint candidate bytes are unavailable")
         spec["path"] = checkpoint_path
         if spec["kind"] == "local_update":
-            from manabot.belief.likelihood import file_sha256
             from manabot.sim import local_update
 
             if (
-                file_sha256(Path(local_update.__file__))
+                local_update.local_search_source_sha256()
                 != spec["implementation_source_sha256"]
             ):
                 raise ValueError("local-update implementation source drift")
