@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Literal, TypedDict
 
 from manabot.infra.hypers import MatchHypers
 from manabot.verify.competency import (
@@ -327,3 +327,24 @@ def validate_scenarios(
             )
         )
     return tuple(records)
+
+
+class ScenarioIdentity(TypedDict):
+    version: int
+    name: str
+    world: str
+    source_sha256: str
+
+
+def scenario_identity(name: str) -> ScenarioIdentity:
+    """Version the retained injection recipe and its implementation, not old scores."""
+    if name not in SCENARIOS:
+        raise ValueError(f"unknown scenario: {name}")
+    return {
+        "version": 1,
+        "name": name,
+        "world": str(managym.WORLD_VERSION),
+        "source_sha256": hashlib.sha256(
+            Path(__file__).with_name("competency.py").read_bytes()
+        ).hexdigest(),
+    }

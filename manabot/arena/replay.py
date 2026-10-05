@@ -12,7 +12,10 @@ from etude.experience_protocol import Command
 from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
+from manabot.model.world import checkpoint_world
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
+from manabot.verify.competency import SCENARIOS, build_scenario_env
+from manabot.verify.scenario_validation import scenario_identity
 from manabot.verify.util import INTERACTIVE_DECK
 
 from .models import canonical_json, canonical_sha256, file_sha256
@@ -68,6 +71,21 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
 def replay_environment(
     game: dict[str, Any], observation_space: ObservationSpace | None = None
 ) -> tuple[Env, dict[str, Any]]:
+    if "scenario_root" in game:
+        root = game["scenario_root"]
+        name = root["name"]
+        if root != scenario_identity(name):
+            raise ValueError("scenario root version/world/source mismatch")
+        space = observation_space or ObservationSpace(
+            ObservationSpaceHypers(**game["observation_hypers"])
+        )
+        env, observation, _ = build_scenario_env(
+            SCENARIOS[name], space, int(game["deal_seed"])
+        )
+        if checkpoint_world(env.match.to_rust(), space) != game["world_binding"]:
+            env.close()
+            raise ValueError("scenario world/setup/input mismatch")
+        return env, observation
     names = game["seat_players"]
     match = Match(
         MatchHypers.model_validate(game["match_hypers"])
@@ -111,7 +129,14 @@ def replay_prefix(
     return env, observation
 
 
-def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
+def replay_games(
+    games: list[dict[str, Any]], *, require_terminal: bool = True
+) -> ArenaReplayReceipt:
+    """Verify saved Commands; diagnostics may explicitly request prefix replay.
+
+    A passing prefix receipt proves only the retained trajectory, never game
+    completion. Arena callers retain the complete-game requirement by default.
+    """
     counts = {
         "decisions": 0,
         "frame_mismatches": 0,
@@ -133,6 +158,7 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
         initial_digest = env._engine.state_digest()
         if game.get("initial_state_digest", initial_digest) != initial_digest:
             counts["state_mismatches"] += 1
+            env.close()
             continue
         done = False
         for revision, expected in enumerate(game["decisions"]):
@@ -189,7 +215,7 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
                 counts["state_mismatches"] += 1
             counts["decisions"] += 1
         failed = game.get("failure") is not None
-        if not done and not failed:
+        if require_terminal and not done and not failed:
             counts["missing_decisions"] += 1
         winner = env._engine.winner_index() if done else None
         if not failed and (
@@ -197,4 +223,5 @@ def replay_games(games: list[dict[str, Any]]) -> ArenaReplayReceipt:
             or bool(game.get("terminated")) != bool(done and not game.get("truncated"))
         ):
             counts["outcome_mismatches"] += 1
+        env.close()
     return ArenaReplayReceipt(games=len(games), **counts)

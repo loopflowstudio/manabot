@@ -64,7 +64,9 @@ need a separately frozen allocation; the active ETU-91 run is unchanged.
 `scenarios.json` records legal scripted contrasts for historical S1–S5. All five
 fixtures resolve their intended contrasts on the tested runtime, but their
 custom decks differ from the selected matchup. They are explicitly marked
-unsupported for selected-checkpoint scoring. Their results are mechanism checks,
+unsupported for selected-checkpoint scoring. Exact scenario-bound checkpoint
+scoring is available through [the tactical runner](checkpoint-scenarios.md).
+Their results are mechanism checks,
 not full-game arena strength, historical rating parity or optimal-strategy proof.
 
 ## Development evidence
@@ -90,5 +92,5 @@ are fixture development observations, not independently preregistered findings.
 
 Scientific attacks on the main experiment's policies, larger attacker budgets,
 comparisons with fixed anchors, current-match control scenarios and any historical
-opponent-population treatment remain open ETU-97 work. A failed bounded attacker
+opponent-population treatment belong to ETU-99 scientific work. A failed bounded attacker
 never certifies Nash equilibrium. ETU-85 demo acceptance is separate.

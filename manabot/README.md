@@ -115,6 +115,10 @@ Experiment-specific driver scripts live in
 only reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
+see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
+custom-deck root requires its exact checkpoint setup binding.
+
 ## Research program
 
 [RESEARCH.md](RESEARCH.md) is the durable map from runnable manabots to a
