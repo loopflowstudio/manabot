@@ -164,11 +164,11 @@ def test_full_game_vs_random_villain(isolated_traces):
 def _write_tiny_checkpoint(path) -> None:
     """Write a minimal (untrained) Agent checkpoint in the training format."""
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
+    from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
     from manabot.model.agent import Agent
 
     obs_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentHypers(semantic_pack="ur-lessons-vs-gw-allies")
+    agent_hypers = AgentSpec(semantic_pack="ur-lessons-vs-gw-allies")
     agent = Agent(ObservationSpace(obs_hypers), agent_hypers)
     from manabot.sim.distill import save_bc_checkpoint
     import managym

@@ -1,7 +1,7 @@
 """Matched belief-conditioned vs unconditioned policy/value ablation (INT-14).
 
 A 2×2 factorial ablation through the existing arena path. All four arms share
-ONE conditioned ``Agent`` architecture (``AgentHypers.max_conditions = K``) and
+ONE conditioned ``Agent`` architecture (``AgentSpec.max_conditions = K``) and
 train on the SAME D×K expanded conditional rows with the SAME per-row policy
 targets. The only differences are:
 
@@ -45,7 +45,7 @@ from experiments.runners.run_belief_conditioned_snapshot import (
     freeze_conditional_snapshot,
     verify_conditional_snapshot,
 )
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.sim.conditional_distill import (
     CONDITION_ROLES,
     build_conditional_dataset,
@@ -249,7 +249,7 @@ def main() -> None:
             val_fraction=args.val_fraction,
             seed=args.seed,
             device=args.device,
-            agent_hypers=AgentHypers(max_conditions=k),
+            agent_hypers=AgentSpec(max_conditions=k),
             log=True,
         )
         checkpoint = out_dir / f"{name}.pt"

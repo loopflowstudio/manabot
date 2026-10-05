@@ -13,7 +13,7 @@ from manabot.belief import (
 )
 from manabot.belief.demo import _runtime_env, run_demo
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace
@@ -42,7 +42,7 @@ def test_belief_enabled_agent_has_no_silent_fallback() -> None:
     decision, schema = fixture_decision()
     agent = Agent(
         ObservationSpace(),
-        AgentHypers(
+        AgentSpec(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,

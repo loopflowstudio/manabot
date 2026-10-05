@@ -39,7 +39,7 @@ and do not turn an observation-only policy into a belief-enabled player.
 The [belief sampler guide](belief-sampler.md) describes the bounded pilot,
 physical-deal baseline, history-dropout treatment and scientific limits.
 
-The recipe reuses `AgentHypers`, `ObservationSpaceHypers`, and authored
+The recipe reuses `AgentSpec`, `ObservationSpaceHypers`, and authored
 `MatchHypers`, including both sideboards. Architecture and match binding live
 once per regime. Every stage declares its CPU device, float32 precision, one
 worker, thread count, wall and memory limits. Learning settings independently
@@ -49,6 +49,19 @@ by the regime's total `wall_seconds`, including generation, collection, updates
 and export. Continuation stages do not reset that clock. Stage deadlines remain
 independent bounds inside the same total allowance. Evaluation is outside the
 training execution and does not consume this clock.
+
+Architecture comparisons can be authored as Python functions returning regimes.
+`manabot.training.recipes` supplies an explicit Ataraxos baseline and validated
+model, value-output, pooling and width/depth variations. Each helper snapshots
+the full regime and rejects unsupported model/objective combinations; it does
+not allocate compute or run training. `AgentSpec` is the model type, while saved
+checkpoints retain the `agent_hypers` dictionary and its existing field meanings.
+The [value study](../experiments/runners/run_value_models.py) shows eight cells
+with an explicit evaluation protocol; the
+[capacity examples](../experiments/runners/model_capacity.py) only construct
+variants of a caller-supplied baseline. See the
+[accepted recipe design](plans/modular-architecture-recipes.md#11-delivery-cut-and-acceptance-after-review)
+for scope and compatibility.
 
 The policy stays on the acting viewer's tensor inputs; private teacher metadata
 is not a model input. Learner and behavior weights are raw; EMA is a separately
@@ -107,7 +120,7 @@ recipes remain controls; the new recipe does not alter a frozen study.
 
 ## Compound decisions
 
-`AgentHypers.compound_decisions=true` selects the learned ragged policy, and
+`AgentSpec.compound_decisions=true` selects the learned ragged policy, and
 `train_compound` collects complete self-play games before each optimizer update.
 Use the four `compound-{sequential,grouped}-{bootstrap,outcome}` recipes. These
 are separate from the frozen ETU-91 campaign. Their defaults are bounded proof

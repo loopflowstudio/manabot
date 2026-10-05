@@ -103,7 +103,13 @@ class ExperimentHypers(BaseHypersModel):
     profiler_enabled: bool = False
 
 
-class AgentHypers(BaseHypersModel):
+class AgentSpec(BaseHypersModel):
+    """Model construction contract, independent of learning and execution settings.
+
+    Checkpoints retain the serialized ``agent_hypers`` dictionary key; renaming
+    this Python type changes neither field meanings nor ordinary reload admission.
+    """
+
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     semantic_pack: str | None = None
     # Serialized architecture choice; categorical logits are loss/draw/win.
@@ -126,7 +132,7 @@ class AgentHypers(BaseHypersModel):
     belief_hidden_zone_vocab_size: int = 7
 
     @model_validator(mode="after")
-    def validate_value_architecture(self) -> "AgentHypers":
+    def validate_value_architecture(self) -> "AgentSpec":
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
@@ -211,7 +217,7 @@ class Hypers(BaseHypersModel):
     match: MatchHypers = Field(default_factory=MatchHypers)
     train: TrainHypers = Field(default_factory=TrainHypers)
     reward: RewardHypers = Field(default_factory=RewardHypers)
-    agent: AgentHypers = Field(default_factory=AgentHypers)
+    agent: AgentSpec = Field(default_factory=AgentSpec)
     experiment: ExperimentHypers = Field(default_factory=ExperimentHypers)
 
     @model_validator(mode="after")

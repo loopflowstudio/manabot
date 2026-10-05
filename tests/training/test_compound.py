@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers, MatchHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.model.compound import CompoundDecoder
 from manabot.sim.compound import CompoundPolicy, sample_compound
@@ -65,7 +65,7 @@ def _agent(*, wide: bool = False) -> Agent:
                 max_actions=128 if wide else 64,
             )
         ),
-        AgentHypers(compound_decisions=True, hidden_dim=16, num_attention_heads=2),
+        AgentSpec(compound_decisions=True, hidden_dim=16, num_attention_heads=2),
     )
 
 
@@ -601,8 +601,8 @@ def test_hidden_world_swap_cannot_change_root_policy(kind: str) -> None:
 
 
 def test_legacy_recipe_serialization_does_not_gain_compound_identity() -> None:
-    assert "compound_decisions" not in AgentHypers().model_dump()
-    assert AgentHypers(compound_decisions=True).model_dump()["compound_decisions"]
+    assert "compound_decisions" not in AgentSpec().model_dump()
+    assert AgentSpec(compound_decisions=True).model_dump()["compound_decisions"]
 
 
 def test_failed_regime_registers_incomplete_attempt_without_checkpoint(

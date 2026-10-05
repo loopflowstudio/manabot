@@ -22,7 +22,7 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
 
 # Configure logging
@@ -41,16 +41,16 @@ def observation_space() -> ObservationSpace:
 
 
 @pytest.fixture
-def agent_hypers() -> AgentHypers:
+def agent_hypers() -> AgentSpec:
     """Create agent hyperparameters optimized for testing."""
-    return AgentHypers(
+    return AgentSpec(
         hidden_dim=4,  # Small embedding dimension for fast testing
         num_attention_heads=2,  # Multiple heads but keep it small
     )
 
 
 @pytest.fixture
-def agent(observation_space: ObservationSpace, agent_hypers: AgentHypers) -> Agent:
+def agent(observation_space: ObservationSpace, agent_hypers: AgentSpec) -> Agent:
     """Create an agent instance with controlled randomization."""
     torch.manual_seed(42)  # Ensure reproducible initialization
     return Agent(observation_space, agent_hypers)

@@ -7,7 +7,7 @@ import torch
 
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers, MatchHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -27,7 +27,7 @@ def _regime(path: Path) -> TrainingRegime:
         id="frozen-proof",
         world=managym.WORLD_VERSION,
         match=MatchHypers(),
-        agent=AgentHypers(hidden_dim=8, num_attention_heads=2),
+        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
         stages=[
             TrainSelfPlay(
                 id="attack",
@@ -66,7 +66,7 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
     torch.set_num_threads(1)
     path = tmp_path / "opponent.pt"
     space = ObservationSpace()
-    opponent = Agent(space, AgentHypers(hidden_dim=8, num_attention_heads=2))
+    opponent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
     save_bc_checkpoint(
         opponent, space, path, player_configs=Match(MatchHypers()).to_rust()
     )
@@ -94,7 +94,7 @@ def test_frozen_run_preserves_opponent_and_initial_attacker(tmp_path: Path) -> N
 def test_compound_opponent_is_rejected_before_training(tmp_path: Path) -> None:
     space = ObservationSpace()
     opponent = Agent(
-        space, AgentHypers(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
+        space, AgentSpec(hidden_dim=8, num_attention_heads=2, compound_decisions=True)
     )
     path = tmp_path / "compound.pt"
     save_bc_checkpoint(

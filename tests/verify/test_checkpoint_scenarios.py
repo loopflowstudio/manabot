@@ -11,7 +11,7 @@ import torch
 from manabot.arena.models import file_sha256
 from manabot.arena.replay import replay_games
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers, MatchHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import make_player
@@ -28,7 +28,7 @@ def _checkpoint(
     space = ObservationSpace(ObservationSpaceHypers(max_actions=max_actions))
     agent = Agent(
         space,
-        AgentHypers(hidden_dim=8, num_attention_heads=2, compound_decisions=compound),
+        AgentSpec(hidden_dim=8, num_attention_heads=2, compound_decisions=compound),
     )
     path = tmp_path / f"{name}.pt"
     save_bc_checkpoint(

@@ -23,7 +23,7 @@ from manabot.env import (
     VectorEnv,
 )
 from manabot.infra import (
-    AgentHypers,
+    AgentSpec,
     Experiment,
     ExperimentHypers,
     Hypers,
@@ -87,7 +87,7 @@ def trainer(observation_space, experiment):
     )
     agent = Agent(
         observation_space,
-        AgentHypers(hidden_dim=4, num_attention_heads=2),
+        AgentSpec(hidden_dim=4, num_attention_heads=2),
     )
     hypers = TrainHypers(
         num_envs=2,
@@ -257,7 +257,7 @@ def test_training_loop_runs_100_steps(observation_space, experiment):
         device=experiment.device,
         opponent_policy="passive",
     )
-    agent = Agent(observation_space, AgentHypers(hidden_dim=4, num_attention_heads=2))
+    agent = Agent(observation_space, AgentSpec(hidden_dim=4, num_attention_heads=2))
     hypers = TrainHypers(
         num_envs=2,
         num_steps=10,

@@ -8,7 +8,7 @@ import pytest
 
 from manabot.belief.sampling_data import read_dataset
 from manabot.belief.sampling_fit import load_belief_sampler
-from manabot.infra.hypers import AgentHypers, MatchHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
@@ -33,7 +33,7 @@ def belief_recipe() -> TrainingRegime:
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentHypers(hidden_dim=8, num_attention_heads=2),
+        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
         wall_seconds=120,
         stages=[
             TrainSelfPlay(

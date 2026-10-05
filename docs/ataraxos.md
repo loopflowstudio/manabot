@@ -27,7 +27,7 @@ scientific allocations. The normal executor retains the resolved recipe, seed
 streams, source/runtime/setup identities, costs and all failed attempts in
 VerifyStore; JSON is its export. Both raw and evaluation-EMA weights pass the
 ordinary world-bound loader. Categorical checkpoints serve the signed expected
-value through the existing interface; their saved AgentHypers bind the three
+value through the existing interface; their saved AgentSpec bind the three
 logits. An old scalar checkpoint is not converted to a categorical checkpoint.
 
 The selected artifact remains last-complete-raw; EMA selection is explicit in

@@ -23,7 +23,7 @@ from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim import local_update
 from manabot.sim.distill import save_bc_checkpoint
@@ -49,7 +49,7 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
-    agent = Agent(space, AgentHypers(hidden_dim=8, num_attention_heads=2))
+    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
     match = Match(small_match())
     path = tmp_path / "policy.pt"
     save_bc_checkpoint(

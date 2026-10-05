@@ -12,9 +12,16 @@ import shutil
 from experiments.runners.run_training_regimes import run_study
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256, file_sha256
+from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.training.analysis import report, verify_saved_inputs
 from manabot.training.execution import atomic_json
-from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
+from manabot.training.models import TrainingRegime, TrainingRun
+from manabot.training.recipes import (
+    ataraxos_baseline,
+    value_outputs,
+    with_capacity,
+    with_value_aggregation,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -74,36 +81,48 @@ def recover_evaluation(source: Path, out: Path) -> None:
     run_study("value-models", out, plan, resume=True)
 
 
-def smoke_plan() -> ResolvedStudy:
-    template = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/ataraxos-move-scalar.json").read_text()
+def smoke_baseline() -> TrainingRegime:
+    """Explicit workload shared by the value cross and non-executing capacity example."""
+    return ataraxos_baseline(
+        id="value-historical-mean-1",
+        world="w4",
+        match=MatchHypers.authored(
+            "ur-lessons-vs-gw-allies",
+            "ur_lessons",
+            "gw_allies",
+            hero="arena-seat-0",
+            villain="arena-seat-1",
+        ),
+        observation=ObservationSpaceHypers(),
+        agent=AgentSpec(
+            hidden_dim=64,
+            num_attention_heads=4,
+            semantic_pack="ur-lessons-vs-gw-allies",
+        ),
+        checkpoints=2,
+        updates=1,
+        transitions=64,
+        streams=4,
+        stage_seconds=30,
+        wall_seconds=60,
     )
-    recipes: list[TrainingRegime] = []
-    for aggregation, depth in (
-        ("historical_mean", 1),
-        ("masked_mean", 1),
-        ("value_token", 1),
-        ("value_token", 2),
-    ):
-        for kind in ("scalar", "categorical_wdl"):
-            recipe = template.model_copy(deep=True)
-            recipe.id = f"value-{aggregation}-{depth}-{kind}".replace("_", "-")
-            recipe.agent = recipe.agent.model_validate(
-                {
-                    **recipe.agent.model_dump(),
-                    "hidden_dim": 64,
-                    "num_attention_heads": 4,
-                    "value_aggregation": aggregation,
-                    "attention_layers": depth,
-                    "value_kind": kind,
-                }
-            )
-            recipe.wall_seconds = 60
-            for stage in recipe.stages:
-                assert isinstance(stage, TrainSelfPlay)
-                stage.execution.wall_seconds = 30
-            recipes.append(TrainingRegime.model_validate(recipe.model_dump()))
-    resolved = tuple(recipe.model_dump(mode="json") for recipe in recipes)
+
+
+def smoke_plan() -> ResolvedStudy:
+    base = smoke_baseline()
+    token = with_value_aggregation(
+        base, id="value-value-token-1", aggregation="value_token"
+    )
+    models = (
+        base,
+        with_value_aggregation(
+            base, id="value-masked-mean-1", aggregation="masked_mean"
+        ),
+        token,
+        with_capacity(token, id="value-value-token-2", width=64, depth=2, heads=4),
+    )
+    recipes = value_outputs(models, ("scalar", "categorical_wdl"))
+    resolved = tuple(recipe.model_dump(mode="json") for recipe in recipes.values())
     return ResolvedStudy(
         protocol=EvaluationProtocol(
             study="value-models",

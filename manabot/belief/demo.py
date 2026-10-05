@@ -21,7 +21,7 @@ from manabot.belief.encoding import (
 from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.flat_mc import make_player
@@ -64,7 +64,7 @@ def _schema_and_agent(engine: Any, viewer: int) -> tuple[BeliefEncodingSchema, A
     torch.manual_seed(19)
     policy_value = Agent(
         ObservationSpace(),
-        AgentHypers(
+        AgentSpec(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,

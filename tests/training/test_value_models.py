@@ -20,7 +20,17 @@ from manabot.training.models import (
 def test_value_factorial_protocol() -> None:
     plan = smoke_plan()
     assert ResolvedStudy.model_validate_json(plan.model_dump_json()) == plan
-    assert len(set(plan.protocol.regime_digests)) == 8
+    # ETU-106 admitted recipes and cohort survive Python-authoring migration.
+    assert plan.protocol.regime_digests == (
+        "d8edc13e39529beda851acd23ca1fa079bf29de9c1ed4e555fdc5df768972c70",
+        "a8112475522fa51e446d564e2c02a8a10d368672745444255d3c3b6ff6fbc8f2",
+        "eea3b7eb7e22ba798a6fe4ed2925a4667bd18771c103f988b78dce5126ef4809",
+        "c3c806d48fa135d38fe09b8f39a75085156d87c7bd033f99f9469ee2ede54c76",
+        "b7b9cd82c6384af682b580a722e48ae282186c8fc65c3614c1d1dbed580437d5",
+        "94e9eca9205e1ab67a708103048ab5aa95c90255d68e1c9bbba2a3d897c5cac8",
+        "997114b6661dfd886f9daa9346cc63d51fd68ea7be3377e658ee03a2c99abae4",
+        "4538a605eafbf580f19bc1bb2e1561145172620136445041d17ad8455d5f4661",
+    )
     recipes = [TrainingRegime.model_validate(row) for row in plan.recipes]
     assert {
         (r.agent.value_aggregation, r.agent.attention_layers, r.agent.value_kind)

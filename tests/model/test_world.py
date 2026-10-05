@@ -7,7 +7,7 @@ import torch
 
 from etude.villain import CheckpointVillain
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model import Agent
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -23,7 +23,7 @@ def checkpoint():
     space = ObservationSpace()
     agent = Agent(
         space,
-        AgentHypers(
+        AgentSpec(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
         ),
     )

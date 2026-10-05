@@ -94,14 +94,14 @@ def test_named_treatments_execute_real_optimizer_batches():
     from types import SimpleNamespace
 
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentHypers
+    from manabot.infra.hypers import AgentSpec
     from manabot.model.agent import Agent
     from manabot.sim.net_opponent import RolloutBatch
     from manabot.training.objectives import update_iteration
 
     torch.set_num_threads(1)
     space = ObservationSpace()
-    agent = Agent(space, AgentHypers(hidden_dim=8, num_attention_heads=2))
+    agent = Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
     obs = space.encoder.allocate(2)
     obs["actions_valid"][:, :2] = 1
     obs["agent_player_valid"][:] = 1

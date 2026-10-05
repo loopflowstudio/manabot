@@ -1,7 +1,7 @@
 # Local directory imports
 from .experiment import Experiment
 from .hypers import (
-    AgentHypers,
+    AgentSpec,
     ExperimentHypers,
     Hypers,
     MatchHypers,
@@ -19,7 +19,7 @@ __all__ = [
     "RewardHypers",
     "TrainHypers",
     "SimulationHypers",
-    "AgentHypers",
+    "AgentSpec",
     "ObservationSpaceHypers",
     "ExperimentHypers",
     "getLogger",

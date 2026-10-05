@@ -10,7 +10,7 @@ import torch
 from manabot.arena.match import selected_match
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.training import attack_execution
@@ -29,7 +29,7 @@ def _plan(tmp_path: Path) -> AttackPlan:
     torch.set_num_threads(1)
     match = selected_match()
     space = ObservationSpace()
-    hypers = AgentHypers(
+    hypers = AgentSpec(
         hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
     )
     target = tmp_path / "target.pt"

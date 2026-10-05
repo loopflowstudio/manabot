@@ -23,7 +23,7 @@ from manabot.arena.models import (
 from manabot.arena.profile import profile_players, verify_profile
 from manabot.arena.replay import read_trace
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.verify.competency import SCENARIOS
 
@@ -221,7 +221,7 @@ def test_diagnostic_decision_kills_ambiguous_smoke_guidance() -> None:
 
 def _write_fixture_checkpoint(path: Path) -> int:
     observation_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentHypers()
+    agent_hypers = AgentSpec()
     agent = Agent(ObservationSpace(observation_hypers), agent_hypers)
     torch.save(
         {

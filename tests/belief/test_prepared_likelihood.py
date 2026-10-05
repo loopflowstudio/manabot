@@ -273,7 +273,7 @@ def test_batch_observer_aborts_before_the_next_provider_call() -> None:
 
 def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
     from manabot.env import ObservationSpace
-    from manabot.infra.hypers import AgentHypers
+    from manabot.infra.hypers import AgentSpec
     from manabot.model.agent import Agent
 
     root = managym.Env(seed=157)
@@ -289,7 +289,7 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
     likelihood.counterfactual_seed = 907
     likelihood.obs_space = ObservationSpace()
     torch.manual_seed(19)
-    likelihood.agent = Agent(likelihood.obs_space, AgentHypers()).eval()
+    likelihood.agent = Agent(likelihood.obs_space, AgentSpec()).eval()
     progress = []
     likelihood.batch_observer = progress.append
     commitment = {"kind": "pass_priority"}

@@ -34,7 +34,7 @@ import torch
 
 from etude.study_protocol import StudyArtifact
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
     OBS_KEYS,
@@ -447,7 +447,7 @@ def _state_sha256(state: dict[str, torch.Tensor]) -> str:
 
 def _initialization_sha256(seed: int) -> str:
     torch.manual_seed(seed)
-    agent = Agent(ObservationSpace(), AgentHypers())
+    agent = Agent(ObservationSpace(), AgentSpec())
     return _state_sha256(agent.state_dict())
 
 

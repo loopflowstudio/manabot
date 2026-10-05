@@ -14,7 +14,7 @@ from manabot.belief import (
     ViewerHistory,
 )
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
 from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
 from managym.possible_worlds import PossibleWorldSpace
@@ -133,7 +133,7 @@ def fixture_manabot(schema: BeliefEncodingSchema) -> Manabot:
     torch.manual_seed(19)
     policy_value = Agent(
         ObservationSpace(),
-        AgentHypers(
+        AgentSpec(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=schema.count_buckets,

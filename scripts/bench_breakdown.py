@@ -9,7 +9,7 @@ import argparse
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward, VectorEnv
-from manabot.infra.hypers import AgentHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, RewardHypers
 from manabot.infra.profiler import Profiler
 from manabot.model import Agent
 
@@ -37,7 +37,7 @@ def run_breakdown(
 
     agent = None
     if with_inference:
-        agent = Agent(env.observation_space, AgentHypers())
+        agent = Agent(env.observation_space, AgentSpec())
         agent.eval()
 
     obs, _ = env.reset()

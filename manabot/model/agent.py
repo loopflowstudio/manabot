@@ -13,7 +13,7 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
-from manabot.infra import AgentHypers
+from manabot.infra import AgentSpec
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.sim.structured_policy import RaggedOfferBatch
@@ -31,9 +31,7 @@ class Agent(nn.Module):
     such as why the model appears to always select the default action.
     """
 
-    def __init__(
-        self, observation_space: ObservationSpace, hypers: AgentHypers
-    ) -> None:
+    def __init__(self, observation_space: ObservationSpace, hypers: AgentSpec) -> None:
         super().__init__()
         self.observation_space = observation_space
         self.hypers = hypers

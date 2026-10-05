@@ -19,7 +19,7 @@ from manabot.belief.sampling_data import (
 )
 from manabot.env import ObservationSpace
 from manabot.env.match import Match
-from manabot.infra.hypers import AgentHypers, MatchHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.model.world import checkpoint_world
 
@@ -82,7 +82,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     )
     obs_hypers = ObservationSpaceHypers(max_actions=max_actions)
     obs_space = ObservationSpace(obs_hypers)
-    agent_hypers = AgentHypers(hidden_dim=8, compound_decisions=compound)
+    agent_hypers = AgentSpec(hidden_dim=8, compound_decisions=compound)
     agent = Agent(obs_space, agent_hypers)
     checkpoint = tmp_path / "policy.pt"
     torch.save(

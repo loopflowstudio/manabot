@@ -5,8 +5,9 @@
 Jack Heart authorized historical mean, validity-masked mean, one-layer value
 token and two-layer width-64 value-token software contrasts, crossed independently
 with the existing scalar/WDL heads. Recent-event input follows; learned recurrent
-memory is deferred. ETU-104's general architecture framework still requires its
-separate review. ETU-91's running campaign and frozen checkout remain untouched;
+memory is deferred. Jack Heart separately approved ETU-104's incremental
+recipe design; broader architecture sketches remain proposals. ETU-91's running
+campaign and frozen checkout remain untouched;
 only cheap bounded checks and protocol preparation are authorized here.
 
 Source inspection found that attention masks padded outputs but the ordinary
@@ -47,8 +48,9 @@ review found no concrete architecture/masking defect; direct comparison against
 the base implementation confirmed historical initialization bytes for scalar/WDL
 and attention on/off. This is software acceptance, not human review approval,
 strength, demo admission or chapter acceptance. The protocol and recovery command
-live in experiments/value-models.md; ETU-104's software dependency can clear when
-this PR merges, while its separately approved implementation owns its own scope.
+live in experiments/value-models.md. ETU-106 merged as PR #222 at a371af46
+and is integrated into ETU-104; its separately approved recipe implementation
+owns its own scope.
 
 ## Operating principle
 
@@ -847,3 +849,59 @@ rollouts, retained-prefix replay, hidden-world invariance, deadlines, sequential
 compatibility and target admission. No scientific training, paid compute or
 ETU-91 changes occurred. The [local-search contract](../../docs/local-policy-search.md)
 owns the support semantics and remaining limits.
+
+## Architecture-recipe implementation boundary (ETU-104, 2026-10-05)
+
+Jack Heart reviewed and approved the incremental architecture-recipe design,
+implementation and landing. Python functions construct existing TrainingRegime
+values; model configuration stays in its agent field. AgentSpec refines the existing
+AgentHypers in place, reusing Pydantic validation, ordinary construction,
+checkpoint admission and EvaluationProtocol. No registry, backend migration or
+new execution framework is required. The approved software workflow cap is
+15 minutes on one CPU thread per complete attempt; no scientific allocation or
+paid compute follows. ETU-101 retains W&B ownership; ETU-91 remains untouched.
+The [design and HTML review](../../docs/plans/modular-architecture-recipes.md)
+preserve the primary-source research, accepted first cut and remaining work.
+
+Shared recipe helpers now build the explicit Ataraxos move baseline and independent
+model, value-output, pooling and capacity variants. Full regime validation rejects
+incompatible targets; representation selects existing value dispatch without
+changing stage learning settings. Both the paper-value contrast and eight-cell
+value study consume these helpers. AgentSpec is the single Python model type;
+checkpoint dictionaries retain `agent_hypers`, existing fields and admission.
+No checkpoint metadata migration or state-key port is necessary for this rename.
+
+Jack Heart reported ETU-106 merged as PR #222 at `a371af46` with CI passing and
+120 exact-replayed evaluation-recovery games. ETU-104 integrated it with `lf sync`.
+The old dependency review blocker is resolved. Recipe composition retains all
+eight regime digests and the evaluation protocol. Capacity examples use the
+merged width/depth fields and allocate no ETU-102/103 study. Feedforward expansion,
+post-normalization and ownership injection stay with the delivered model.
+
+The retained ETU-104 bounded run at `486739d5` completed eight regimes, 32
+admitted raw/EMA exports and 120 exact-replayed games in 348.04 charged seconds.
+It first failed reporting because the notebook extra was absent; ordinary resume
+retained the failure and completed reporting without retraining or replacing
+arena rows. Offline report/metrics regeneration was byte-identical. This proves
+software composition and reload/evaluation, not strength or chapter acceptance.
+PR #223 is published. Jack Heart explicitly requested completion through landing;
+the landing pass reviewed the diff and retained evidence, with 64 focused checks
+passing. This is agent technical review, not human code review. Required CI and
+verified merge remain delivery conditions.
+
+Inspection at `db820056` separates semantic-program GRU, compound prefix GRU,
+explicit viewer/belief memory and the frozen-policy hand sampler. Current Agent
+ignores recent events; new history input is an explicit information treatment.
+History/sequence training and transfer tooling remain later interventions. Equal
+tensor shapes do not establish equal meaning or compatible weights. No architecture
+strength claim or scientific study follows from these software changes.
+
+Recipe composition uses regime IDs as the single cell-label source and rejects
+duplicates before crossing value outputs. Every variation snapshots and validates
+the complete result, so nested edits cannot mutate sibling arms and unsupported
+model/objective combinations fail before execution. Compression preserved all
+eight resolved regime digests and the evaluation protocol; recipe labels do not
+substitute for artifact or model identity. The delivered no-attention switch is
+`attention_on=False`, not a zero-depth model. Broader nested specs and receipts
+remain design sketches; ordinary AgentSpec and checkpoint admission own the
+implemented path.

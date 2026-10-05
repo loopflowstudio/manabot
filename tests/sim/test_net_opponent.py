@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.verify.util import INTERACTIVE_DECK
@@ -33,7 +33,7 @@ def _make_collector(opponent_mode, opponent_agent=None, num_envs=4, seed=7):
 
 
 def _make_agent():
-    return Agent(ObservationSpace(), AgentHypers(attention_on=False))
+    return Agent(ObservationSpace(), AgentSpec(attention_on=False))
 
 
 def _check_batch(batch, num_steps, num_envs):

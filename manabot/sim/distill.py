@@ -36,7 +36,7 @@ from manabot.belief.encoding import (
 )
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import (
-    AgentHypers,
+    AgentSpec,
     MatchHypers,
     ObservationSpaceHypers,
     RewardHypers,
@@ -599,7 +599,7 @@ def train_bc(
     val_fraction: float = 0.1,
     seed: int = 0,
     device: str = "cpu",
-    agent_hypers: AgentHypers | None = None,
+    agent_hypers: AgentSpec | None = None,
     observation_hypers: ObservationSpaceHypers | None = None,
     soft_temperature: float | None = None,
     initial_agent_state: dict[str, Any] | None = None,
@@ -623,7 +623,7 @@ def train_bc(
     torch.manual_seed(seed)
     dev = torch.device(device)
     obs_space = dataset_observation_space(dataset, observation_hypers)
-    agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
+    agent = Agent(obs_space, agent_hypers or AgentSpec()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)

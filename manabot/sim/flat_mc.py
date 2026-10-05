@@ -29,7 +29,7 @@ import torch
 from manabot.belief.encoding import BeliefCheckpointBinding
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import (
-    AgentHypers,
+    AgentSpec,
     MatchHypers,
     ObservationSpaceHypers,
     RewardHypers,
@@ -213,7 +213,7 @@ def load_checkpoint_agent(
     from manabot.model.world import validate_checkpoint_world, validate_policy_input
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent = Agent(obs_space, AgentHypers(**hypers["agent_hypers"]))
+    agent = Agent(obs_space, AgentSpec(**hypers["agent_hypers"]))
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
     binding = None

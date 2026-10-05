@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from manabot.env import Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.infra.profiler import Profiler
 from manabot.model import Agent
 from manabot.sim.rollout import BatchedSampler, _allocate_buffers
@@ -33,14 +33,16 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=200)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--threads", type=int, default=0, help="torch threads (0 = default)")
+    parser.add_argument(
+        "--threads", type=int, default=0, help="torch threads (0 = default)"
+    )
     args = parser.parse_args()
 
     if args.threads:
         torch.set_num_threads(args.threads)
 
     obs_space = ObservationSpace()
-    agent = Agent(obs_space, AgentHypers())
+    agent = Agent(obs_space, AgentSpec())
     agent.eval()
     sampler = BatchedSampler(agent, seed=args.seed, device=args.device)
 

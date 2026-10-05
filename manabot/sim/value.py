@@ -37,7 +37,7 @@ import numpy as np
 import torch
 
 from manabot.env import Env, ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.model.world import validate_agent_setup
 from manabot.sim.distill import OBS_KEYS, save_bc_checkpoint, split_by_game
@@ -160,7 +160,7 @@ def train_value(
     val_fraction: float = 0.1,
     seed: int = 0,
     device: str = "cpu",
-    agent_hypers: AgentHypers | None = None,
+    agent_hypers: AgentSpec | None = None,
     log: bool = False,
 ) -> tuple[Agent, ObservationSpace, list[ValueEpochStats]]:
     """Fit the Agent's value head to terminal outcomes (BCE, split by game).
@@ -176,7 +176,7 @@ def train_value(
     torch.manual_seed(seed)
     dev = torch.device(device)
     obs_space = ObservationSpace()
-    agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
+    agent = Agent(obs_space, agent_hypers or AgentSpec()).to(dev)
     if init_state is not None:
         agent.load_state_dict(init_state)
     if freeze_encoder:

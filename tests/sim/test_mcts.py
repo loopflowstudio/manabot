@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
     ROOT_VALUE_KEY,
@@ -92,7 +92,7 @@ def test_puct_rejects_more_worlds_than_simulations() -> None:
 def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
     root, observation = _fresh_engine_and_observation(seed=35)
     observation_space = ObservationSpace()
-    agent = Agent(observation_space, AgentHypers())
+    agent = Agent(observation_space, AgentSpec())
     with torch.no_grad():
         for parameter in agent.parameters():
             parameter.zero_()
@@ -140,7 +140,7 @@ def test_agent_leaf_evaluator_uses_masked_priors_and_root_perspective() -> None:
 def test_agent_leaf_evaluator_neutral_mode_keeps_forward_and_priors() -> None:
     root, observation = _fresh_engine_and_observation(seed=36)
     observation_space = ObservationSpace()
-    agent = Agent(observation_space, AgentHypers())
+    agent = Agent(observation_space, AgentSpec())
     learned = AgentLeafEvaluator(agent, observation_space, value_mode="learned")
     neutral = AgentLeafEvaluator(agent, observation_space, value_mode="neutral")
     action_count = int(root.action_count())
@@ -170,7 +170,7 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
     observation_space = ObservationSpace()
     checkpoint = tmp_path / "student.pt"
     save_bc_checkpoint(
-        Agent(observation_space, AgentHypers()),
+        Agent(observation_space, AgentSpec()),
         observation_space,
         checkpoint,
         player_configs=interactive_player_configs,

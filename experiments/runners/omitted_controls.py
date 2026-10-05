@@ -13,12 +13,14 @@ from pydantic import BaseModel, ConfigDict
 
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256
+from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.training.models import (
     Learning,
     Schedule,
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.recipes import ataraxos_baseline, with_value_output
 
 ROOT = Path(__file__).resolve().parents[2]
 ContrastName = Literal[
@@ -52,13 +54,43 @@ class Contrast(BaseModel):
 
 def resolve_contrast(name: ContrastName) -> Contrast:
     """Return fully resolved arms; every delta is explicit in their digests."""
+    if name == "paper-value-head":
+        base = ataraxos_baseline(
+            id=f"{name}-control",
+            world="w4",
+            match=MatchHypers.authored(
+                "ur-lessons-vs-gw-allies",
+                "ur_lessons",
+                "gw_allies",
+                hero="arena-seat-0",
+                villain="arena-seat-1",
+            ),
+            observation=ObservationSpaceHypers(),
+            agent=AgentSpec(
+                hidden_dim=16,
+                num_attention_heads=2,
+                semantic_pack="ur-lessons-vs-gw-allies",
+            ),
+            checkpoints=2,
+            updates=2,
+            transitions=64,
+            streams=4,
+            stage_seconds=60,
+            wall_seconds=150,
+        )
+        return Contrast(
+            name=name,
+            baseline=base,
+            treatment=with_value_output(
+                base, id=f"{name}-treatment", output="categorical_wdl"
+            ),
+        )
+
     base_name = "rl-control"
     if name in {"paper-filter", "filter-ties", "filter-scope"}:
         base_name = "advantage-filtering"
     elif name.startswith("combined-no-"):
         base_name = "combined"
-    elif name == "paper-value-head":
-        base_name = "ataraxos-move-scalar"
     base = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes" / f"{base_name}.json").read_text()
     )
@@ -78,9 +110,6 @@ def resolve_contrast(name: ContrastName) -> Contrast:
     for stage in treatment.stages:
         assert isinstance(stage, TrainSelfPlay)
         learning = stage.learning
-        if name == "paper-value-head":
-            treatment.agent.value_kind = "categorical_wdl"
-            continue
         assert isinstance(learning, Learning)
         match name:
             case "discount":

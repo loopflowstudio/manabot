@@ -4,7 +4,7 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.infra.hypers import AgentHypers, MatchHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.sim.local_update import LocalSearchConfig
 
 
@@ -291,7 +291,7 @@ class TrainingRegime(Strict):
     world: str
     match: MatchHypers
     observation: ObservationSpaceHypers = ObservationSpaceHypers()
-    agent: AgentHypers = AgentHypers()
+    agent: AgentSpec = AgentSpec()
     stages: list[Operation] = Field(min_length=1)
     wall_seconds: float = Field(default=900, gt=0)
     schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (

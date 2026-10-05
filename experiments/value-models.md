@@ -18,7 +18,7 @@ Allies/Lessons inputs and authored sideboards. Ownership enters once; the token
 has no ownership offset. Real-object focus indexes are unchanged. WDL retains
 the existing targets and serving expectation P(win)−P(loss).
 
-Saved AgentHypers own aggregation and depth, even when weight shapes coincide.
+Saved AgentSpec own aggregation and depth, even when weight shapes coincide.
 Omitted fields mean historical one-layer behavior, preserving initialization
 order, parameter names and equations. World/setup admission and strict loading
 remain unchanged. Compound critics reject these new modes. Disabled attention
@@ -29,13 +29,13 @@ rejects tokens and stacked layers.
 Resolve without training:
 
 ```bash
-uv run python -m experiments.runners.run_value_models --write-plan value-model-plan.json
+uv run --extra notebook python -m experiments.runners.run_value_models --write-plan value-model-plan.json
 ```
 
 The gate's single initial workflow attempt:
 
 ```bash
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run python -m experiments.runners.run_value_models --profile smoke --out .runs/etu106-value-smoke
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --extra notebook python -m experiments.runners.run_value_models --profile smoke --out .runs/etu106-value-smoke
 ```
 
 Each cell has two linked stages of one update, four streams and 64 transitions:
@@ -53,7 +53,7 @@ and do not authorize longer retries. Do not edit imported source during executio
 Regenerate retained analysis without training:
 
 ```bash
-uv run python -m experiments.runners.run_value_models --report-only .runs/etu106-value-smoke
+uv run --extra notebook python -m experiments.runners.run_value_models --report-only .runs/etu106-value-smoke
 ```
 
 The existing notebook plots score against learner decisions and cumulative
@@ -89,7 +89,7 @@ remain charged against the 900-second ceiling, leaving at most 863.88 seconds.
 No retraining, expanded cohort or scientific allocation is authorized.
 
 ```bash
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run python -m experiments.runners.run_value_models --recover-from .runs/etu106-value-smoke --out .runs/etu106-value-recovery
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --extra notebook python -m experiments.runners.run_value_models --recover-from .runs/etu106-value-smoke --out .runs/etu106-value-recovery
 ```
 
 `recovery.json` binds the original files and evaluation runner bytes. Resume checks

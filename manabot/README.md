@@ -47,7 +47,7 @@ writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
 For the compiled Allies/Lessons matchup, use
-`AgentHypers(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
+`AgentSpec(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. Selected compiled checkpoints

@@ -14,7 +14,7 @@ from etude.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env import Env, Match, ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
     LOCAL_RECEIPT_KEY,
@@ -136,7 +136,7 @@ def test_supported_root_rollout_reaching_payment_replays(
     agent = (
         _agent()
         if compound
-        else Agent(space, AgentHypers(hidden_dim=8, num_attention_heads=2))
+        else Agent(space, AgentSpec(hidden_dim=8, num_attention_heads=2))
     )
     path = tmp_path / "compound.pt"
     save_bc_checkpoint(
@@ -343,7 +343,7 @@ def test_saved_compound_teacher_replays(
     torch.manual_seed(3)
     space = ObservationSpace()
     agent = Agent(
-        space, AgentHypers(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+        space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
     )
     config = [
         managym.PlayerConfig(
@@ -393,7 +393,7 @@ def test_compound_complete_game_targets_without_fitting(
     match = Match(small_match())
     space = ObservationSpace()
     agent = Agent(
-        space, AgentHypers(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
+        space, AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2)
     )
     checkpoint = tmp_path / "compound.pt"
     save_bc_checkpoint(agent, space, checkpoint, player_configs=match.to_rust())
@@ -479,7 +479,7 @@ def test_compound_regime_admits_direct_collection() -> None:
         id="saved-compound-collection-contract",
         world=managym.WORLD_VERSION,
         match=small_match(),
-        agent=AgentHypers(compound_decisions=True),
+        agent=AgentSpec(compound_decisions=True),
         stages=[
             TrainCompound(id="policy", operation="train_compound"),
             CollectLocalUpdate(
@@ -527,7 +527,7 @@ def test_compound_arena_executes_and_replays_saved_policies(
         original, env = original_make(directory)
         agent = Agent(
             original.space,
-            AgentHypers(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
+            AgentSpec(compound_decisions=True, hidden_dim=8, num_attention_heads=2),
         )
         checkpoint = directory / "compound.pt"
         save_bc_checkpoint(

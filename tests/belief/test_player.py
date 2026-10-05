@@ -14,7 +14,7 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.player import ExactRangePlayer, UniformRangePlayer
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.flat_mc import play_games
 from manabot.sim.teacher1_evidence import _fresh_env
@@ -230,7 +230,7 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
     tiny_deck = {"Mountain": 4, "Raging Goblin": 4}
     checkpoint = tmp_path / "tiny-policy.pt"
     obs_hypers = ObservationSpaceHypers()
-    agent_hypers = AgentHypers()
+    agent_hypers = AgentSpec()
     obs_space = ObservationSpace(obs_hypers)
     agent = Agent(obs_space, agent_hypers)
     torch.save(

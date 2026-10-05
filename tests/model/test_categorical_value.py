@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, RewardHypers
 from manabot.model.agent import Agent
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
@@ -27,7 +27,7 @@ def _agent(
 ) -> Agent:
     return Agent(
         ObservationSpace(),
-        AgentHypers(
+        AgentSpec(
             hidden_dim=8,
             attention_on=True,
             value_kind=kind,

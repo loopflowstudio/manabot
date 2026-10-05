@@ -18,7 +18,7 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
+from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
     LOCAL_RECEIPT_KEY,
@@ -398,7 +398,7 @@ def train_search_supervised(
     split_seed: int | None = None,
     minibatch_seed: int | None = None,
     device: str = "cpu",
-    agent_hypers: AgentHypers | None = None,
+    agent_hypers: AgentSpec | None = None,
     observation_hypers: ObservationSpaceHypers | None = None,
     initial_agent_state: dict[str, Any] | None = None,
     optimizer_state: dict[str, Any] | None = None,
@@ -436,7 +436,7 @@ def train_search_supervised(
     torch.manual_seed(seed)
     dev = torch.device(device)
     obs_space = dataset_observation_space(dataset, observation_hypers)
-    agent = Agent(obs_space, agent_hypers or AgentHypers()).to(dev)
+    agent = Agent(obs_space, agent_hypers or AgentSpec()).to(dev)
     if initial_agent_state is not None:
         agent.load_state_dict(initial_agent_state)
     optimizer = torch.optim.Adam(agent.parameters(), lr=lr)

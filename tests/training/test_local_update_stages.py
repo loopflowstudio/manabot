@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from manabot.belief.likelihood import RulesProviderGap
-from manabot.infra.hypers import AgentHypers, MatchHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers
 from manabot.sim.distill import LOCAL_RECEIPT_KEY, LOCAL_TARGET_KEY, load_shards
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.local_update import LocalSearchConfig
@@ -33,7 +33,7 @@ def local_recipe() -> TrainingRegime:
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
             villain_deck={"Forest": 8, "Llanowar Elves": 8},
         ),
-        agent=AgentHypers(hidden_dim=8, num_attention_heads=2),
+        agent=AgentSpec(hidden_dim=8, num_attention_heads=2),
         wall_seconds=90,
         stages=[
             TrainSelfPlay(

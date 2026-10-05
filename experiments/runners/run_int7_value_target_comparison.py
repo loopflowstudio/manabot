@@ -51,7 +51,7 @@ from manabot.arena.profile import native_gameplay_profiles, verify_profile
 from manabot.arena.rating import payoff_matrix
 from manabot.arena.replay import read_trace, replay_games
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
 from manabot.sim.distill import load_shards, save_bc_checkpoint, split_by_game
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -508,7 +508,7 @@ def train_students(
     deadline = ledger.started + RESOURCE_CAPS["wall_hours"] * 3600.0
     for seed in MODEL_SEEDS:
         torch.manual_seed(seed)
-        initial_agent = Agent(ObservationSpace(), AgentHypers())
+        initial_agent = Agent(ObservationSpace(), AgentSpec())
         initial_state = {
             key: value.detach().cpu().clone()
             for key, value in initial_agent.state_dict().items()

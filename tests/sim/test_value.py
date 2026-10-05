@@ -11,7 +11,7 @@ import pytest
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import OBS_KEYS
 from manabot.sim.flat_mc import load_checkpoint_agent, make_player, spec_name
@@ -104,7 +104,7 @@ class TestSpearman:
 class TestTrainValue:
     def test_loss_decreases_and_policy_head_untouched(self):
         dataset = tiny_dataset()
-        init = Agent(ObservationSpace(), AgentHypers())
+        init = Agent(ObservationSpace(), AgentSpec())
         init_state = {k: v.clone() for k, v in init.state_dict().items()}
         agent, _, history = train_value(
             dataset, init_state=init_state, epochs=3, lr=1e-3, batch_size=32
@@ -116,7 +116,7 @@ class TestTrainValue:
 
     def test_freeze_encoder_only_moves_value_head(self):
         dataset = tiny_dataset()
-        init = Agent(ObservationSpace(), AgentHypers())
+        init = Agent(ObservationSpace(), AgentSpec())
         init_state = {k: v.clone() for k, v in init.state_dict().items()}
         agent, _, _ = train_value(
             dataset,
@@ -146,7 +146,7 @@ class TestTrainValue:
 class TestValueScorer:
     def test_scores_are_probs(self):
         env, obs = make_env()
-        scorer = ValueScorer(Agent(ObservationSpace(), AgentHypers()))
+        scorer = ValueScorer(Agent(ObservationSpace(), AgentSpec()))
         batch = {
             key: np.asarray(obs[key])[None].astype(
                 np.int32 if key == "action_focus" else np.float32
@@ -185,7 +185,7 @@ class TestPlayers:
     @pytest.fixture
     def value_checkpoint(self, tmp_path, interactive_player_configs) -> str:
         obs_space = ObservationSpace()
-        agent = Agent(obs_space, AgentHypers())
+        agent = Agent(obs_space, AgentSpec())
         path = tmp_path / "value.pt"
         save_value_checkpoint(
             agent, obs_space, path, player_configs=interactive_player_configs

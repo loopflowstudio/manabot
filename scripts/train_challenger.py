@@ -201,7 +201,7 @@ def teacher_game(recipe: dict, index: int, shard: Path) -> dict:
 def train(out: Path, recipe: dict) -> None:
     import torch
 
-    from manabot.infra.hypers import AgentHypers, ObservationSpaceHypers
+    from manabot.infra.hypers import AgentSpec, ObservationSpaceHypers
     from manabot.sim.distill import load_shards, save_bc_checkpoint
     from manabot.sim.flat_mc import load_checkpoint_agent
     from manabot.sim.search_supervised import train_search_supervised
@@ -244,7 +244,7 @@ def train(out: Path, recipe: dict) -> None:
         value_target_kind=recipe["value_target"],
         policy_weight=recipe["policy_weight"],
         value_weight=recipe["value_weight"],
-        agent_hypers=AgentHypers(**recipe["agent"]),
+        agent_hypers=AgentSpec(**recipe["agent"]),
         observation_hypers=observation,
         epochs=recipe["epochs"],
         seed=recipe["seed"],

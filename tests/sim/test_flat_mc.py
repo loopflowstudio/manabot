@@ -10,7 +10,7 @@ import pytest
 
 from manabot.belief import ManabotPlayer
 from manabot.env import ObservationSpace
-from manabot.infra.hypers import AgentHypers
+from manabot.infra.hypers import AgentSpec
 from manabot.model import Agent
 import manabot.sim.flat_mc as flat_mc
 from manabot.sim.flat_mc import (
@@ -118,7 +118,7 @@ def test_checkpoint_routes_by_serialized_agent_capability(
     observation_space = ObservationSpace()
     belief_agent = Agent(
         observation_space,
-        AgentHypers(
+        AgentSpec(
             hidden_dim=8,
             num_attention_heads=2,
             belief_count_buckets=3,
@@ -138,7 +138,7 @@ def test_checkpoint_routes_by_serialized_agent_capability(
 
     policy_agent = Agent(
         observation_space,
-        AgentHypers(hidden_dim=8, num_attention_heads=2),
+        AgentSpec(hidden_dim=8, num_attention_heads=2),
     )
 
     def load_policy_agent(_path, *, include_belief_binding=False):

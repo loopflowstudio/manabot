@@ -6,7 +6,7 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim.net_opponent import SeatRoutedCollector
 
@@ -24,7 +24,7 @@ def test_padding_and_gradient_contract(
     torch.manual_seed(106)
     agent = Agent(
         ObservationSpace(),
-        AgentHypers(
+        AgentSpec(
             value_aggregation=aggregation, attention_layers=depth, value_kind=kind
         ),
     )
@@ -70,7 +70,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     torch.manual_seed(106)
     agent = Agent(
         ObservationSpace(),
-        AgentHypers(value_aggregation="value_token", attention_layers=depth),
+        AgentSpec(value_aggregation="value_token", attention_layers=depth),
     )
     collector = SeatRoutedCollector(
         agent.observation_space, Match(), Reward(RewardHypers()), num_envs=1, seed=29
@@ -111,16 +111,16 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
 )
 def test_invalid_architecture_rejected(fields: dict[str, object]) -> None:
     with pytest.raises(ValueError):
-        AgentHypers.model_validate(fields)
+        AgentSpec.model_validate(fields)
 
 
 def test_missing_fields_preserve_historical_initialization() -> None:
     torch.manual_seed(19)
-    implicit = Agent(ObservationSpace(), AgentHypers())
+    implicit = Agent(ObservationSpace(), AgentSpec())
     torch.manual_seed(19)
     explicit = Agent(
         ObservationSpace(),
-        AgentHypers(value_aggregation="historical_mean", attention_layers=1),
+        AgentSpec(value_aggregation="historical_mean", attention_layers=1),
     )
     assert implicit.state_dict().keys() == explicit.state_dict().keys()
     for key, value in implicit.state_dict().items():
@@ -136,7 +136,7 @@ def test_missing_fields_preserve_historical_initialization() -> None:
 )
 def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) -> None:
     torch.manual_seed(106)
-    agent = Agent(ObservationSpace(), AgentHypers(value_aggregation=aggregation))
+    agent = Agent(ObservationSpace(), AgentSpec(value_aggregation=aggregation))
     collector = SeatRoutedCollector(
         agent.observation_space, Match(), Reward(RewardHypers()), num_envs=1, seed=29
     )

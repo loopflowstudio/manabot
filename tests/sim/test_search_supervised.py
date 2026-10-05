@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.infra.hypers import AgentHypers, MatchHypers, RewardHypers
+from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim.distill import (
     OBS_KEYS,
@@ -97,7 +97,7 @@ def test_policy_only_and_joint_arms_isolate_value_gradient() -> None:
     dataset = _dataset()
     seed = 11
     torch.manual_seed(seed)
-    initial = Agent(ObservationSpace(), AgentHypers())
+    initial = Agent(ObservationSpace(), AgentSpec())
     initial_state = {
         name: value.clone() for name, value in initial.state_dict().items()
     }
