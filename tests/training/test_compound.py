@@ -62,6 +62,7 @@ def _agent(*, wide: bool = False) -> Agent:
             ObservationSpaceHypers(
                 max_cards_per_player=100 if wide else 60,
                 max_permanents_per_player=80 if wide else 40,
+                max_actions=128 if wide else 64,
             )
         ),
         AgentHypers(compound_decisions=True, hidden_dim=16, num_attention_heads=2),
@@ -124,7 +125,9 @@ def test_prefix_changes_conditionals_and_rejects_incomplete_illegal_tapes() -> N
     assert torch.isfinite(output.log_prob)
 
 
-def _root(kind: str, count: int) -> tuple[managym.Env, managym.Observation]:
+def _root(
+    kind: str, count: int, *, blockers: int = 1
+) -> tuple[managym.Env, managym.Observation]:
     env = managym.Env(seed=81, skip_trivial=False)
     obs, _ = env.reset(
         [
@@ -134,7 +137,9 @@ def _root(kind: str, count: int) -> tuple[managym.Env, managym.Observation]:
                 if kind == "cast"
                 else {"Gray Ogre": count + 8, "Mountain": 4},
             ),
-            managym.PlayerConfig("b", {"Gray Ogre": 36, "Mountain": 4}),
+            managym.PlayerConfig(
+                "b", {"Gray Ogre": max(36, blockers + 8), "Mountain": 4}
+            ),
         ]
     )
     env.scenario_clear_hand(0)
@@ -147,7 +152,8 @@ def _root(kind: str, count: int) -> tuple[managym.Env, managym.Observation]:
             1 if kind == "cast" else 0, "Gray Ogre", ready=True
         )
     if kind == "attack":
-        env.scenario_force_battlefield(1, "Gray Ogre")
+        for _ in range(blockers):
+            env.scenario_force_battlefield(1, "Gray Ogre")
     obs = env.scenario_refresh()
     if kind == "attack":
         for _ in range(30):
@@ -322,8 +328,14 @@ def test_regime_trains_reloads_and_ordinary_player_uses_compound(
         loaded({})
 
 
-def test_serving_interrupt_discards_suffix() -> None:
-    env, raw = _root("attack", 6)
+@pytest.mark.parametrize("kind", ["attack", "blockers", "payment"])
+def test_serving_interrupt_discards_suffix(kind: str) -> None:
+    if kind == "blockers":
+        env, raw = _block_root(2, 6)
+    elif kind == "payment":
+        env, raw = _waterbend_root(6)
+    else:
+        env, raw = _root("attack", 6)
     player = CompoundPolicy(_agent())
     player.act(env, raw)
     assert player.pending
@@ -376,8 +388,10 @@ def test_payment_is_a_new_observation_not_a_cached_suffix() -> None:
     env.execute_semantic_command_json(payment.commands[0].to_json())
 
 
-def test_blockers_remain_individual_authority_decisions() -> None:
-    env, raw = _root("attack", 6)
+def _block_root(
+    attackers: int, blockers: int
+) -> tuple[managym.Env, managym.Observation]:
+    env, raw = _root("attack", attackers, blockers=blockers)
     offers = env.compound_offers()
     projection = json.loads(offers.projection_json())
     offer = projection["offers"][0]
@@ -413,16 +427,161 @@ def test_blockers_remain_individual_authority_decisions() -> None:
         env.step(index)
     else:
         pytest.fail("fixture did not reach blockers")
+    return env, raw
+
+
+def _assert_authoritative_replay(
+    env: managym.Env, submission: str
+) -> list[dict[str, object]]:
+    """Compare canonical replay with native submission and repeated receipts."""
+    offers = env.compound_offers()
+    before = env.state_digest()
+    tape = json.loads(env.compound_commands_json(offers, submission))
+    assert env.state_digest() == before
+    atomic = env.clone_env()
+    atomic.step_structured(offers, submission)
+    replay = env.clone_env()
+    for command in tape:
+        text = json.dumps(command)
+        assert env.execute_semantic_command_json(
+            text
+        ) == replay.execute_semantic_command_json(text)
+    assert env.state_digest() == atomic.state_digest() == replay.state_digest()
+    return tape
+
+
+def test_blocker_joint_roles_normalize_and_differentiate() -> None:
+    env, _ = _block_root(2, 2)
+    batch = flatten_projection(json.loads(env.compound_offers().projection_json()))
+    assert len(batch.choices) == 2
+    assert all(row.minimum == 0 and row.maximum == 1 for row in batch.choices)
+    decoder = CompoundDecoder(8).double()
+    context = torch.randn(8, dtype=torch.double, requires_grad=True)
+    assignments = ((0, 0), (1, 0), (0, 1))
+    outputs = [
+        decoder(context, batch, tokens=(0, *first, *second))
+        for first, second in product(assignments, repeat=2)
+    ]
+    probs = torch.stack([output.log_prob.exp() for output in outputs])
+    torch.testing.assert_close(probs.sum(), probs.new_tensor(1))
+    rewards = torch.arange(len(outputs), dtype=torch.double)
+    direct = torch.autograd.grad((probs * rewards).sum(), context, retain_graph=True)[0]
+    score = torch.autograd.grad(
+        sum(
+            p.detach() * reward * output.log_prob
+            for p, reward, output in zip(probs, rewards, outputs, strict=True)
+        ),
+        context,
+    )[0]
+    torch.testing.assert_close(direct, score)
+    assert direct.abs().sum() > 0
+    assert torch.autograd.gradcheck(
+        lambda x: decoder(x, batch, tokens=(0, 1, 0, 0, 1)).log_prob, (context,)
+    )
+    for output in outputs:
+        _assert_authoritative_replay(env.clone_env(), output.submission.to_json())
+
+
+def test_wide_blocker_declaration_replays_and_stops_at_priority() -> None:
+    env, raw = _block_root(35, 65)
+    with torch.no_grad():
+        decision = sample_compound(_agent(wide=True), env, raw, deterministic=True)
+    assert decision.offers.offers[0]["verb"] == "declare_blockers"
+    assert len(decision.offers.choices) == 65
+    assert decision.offers.max_candidate_count == 35
+    assert len(decision.commands) == 65
+    _assert_authoritative_replay(env, decision.output.submission.to_json())
+    assert json.loads(env.compound_offers().projection_json())["kind"] == "priority"
+
+
+def _waterbend_root(
+    count: int, *, lands: int = 0, bonus_mana: bool = False
+) -> tuple[managym.Env, managym.Observation]:
+    env = managym.Env(seed=81, skip_trivial=False)
+    env.reset(
+        [
+            managym.PlayerConfig(
+                "a", {"Water Tribe Rallier": 80, "Forest": 20, "Badgermole Cub": 4}
+            ),
+            managym.PlayerConfig("b", {"Gray Ogre": 20, "Mountain": 20}),
+        ]
+    )
+    env.scenario_clear_hand(0)
+    env.scenario_clear_hand(1)
+    for _ in range(count):
+        env.scenario_force_battlefield(0, "Water Tribe Rallier", ready=True)
+    for _ in range(lands):
+        env.scenario_force_battlefield(0, "Forest", ready=True)
+    if bonus_mana:
+        env.scenario_force_battlefield(0, "Badgermole Cub", ready=True)
+    raw = env.scenario_refresh()
+    index = next(
+        i
+        for i, action in enumerate(raw.action_space.actions)
+        if action.action_type == managym.ActionEnum.PRIORITY_ACTIVATE_ABILITY
+    )
+    raw, _, _, _, _ = env.step(index)
+    assert json.loads(env.compound_offers().projection_json())["kind"] == "waterbend"
+    return env, raw
+
+
+@pytest.mark.parametrize("lands,taps", [(0, 5), (2, 3), (5, 0)])
+def test_wide_payment_subset_replays_and_stops_before_reveal(
+    lands: int, taps: int
+) -> None:
+    env, raw = _waterbend_root(65, lands=lands)
+    agent = _agent(wide=True)
+    batch = flatten_projection(json.loads(env.compound_offers().projection_json()))
+    assert batch.offers[0]["verb"] == "pay_waterbend"
+    assert batch.max_candidate_count == 65
+    row = batch.choices[0]
+    assert (row.minimum, row.maximum) == (max(0, 5 - lands), 5)
+    observation = {
+        key: torch.as_tensor(value).unsqueeze(0)
+        for key, value in agent.observation_space.encode(raw).items()
+    }
+    output = agent.compound(
+        observation, batch, tokens=(0, *(int(i < taps) for i in range(65)))
+    )
+    assert torch.isfinite(output.log_prob)
+    tape = _assert_authoritative_replay(env, output.submission.to_json())
+    assert len(tape) == taps + int(taps < 5)
+    assert json.loads(env.compound_offers().projection_json())["kind"] == "priority"
+    # The library look happens only after both players pass: it is never part
+    # of the payment policy's sampled suffix.
+    for _ in range(2):
+        actor = env.current_agent_index()
+        assert actor is not None
+        raw = env.observation_for_player(actor)
+        index = next(
+            i
+            for i, action in enumerate(raw.action_space.actions)
+            if action.action_type == managym.ActionEnum.PRIORITY_PASS_PRIORITY
+        )
+        env.step(index)
+    assert (
+        json.loads(env.compound_offers().projection_json())["kind"] == "look_and_select"
+    )
+
+
+def test_triggered_mana_payment_remains_sequential() -> None:
+    env, raw = _waterbend_root(5, bonus_mana=True)
     with torch.no_grad():
         decision = sample_compound(_agent(), env, raw)
+    assert all(not offer["choices"] for offer in decision.offers.offers)
     assert len(decision.commands) == 1
-    assert decision.offers.projection["kind"] == "declare_blockers"
-    env.execute_semantic_command_json(decision.commands[0].to_json())
+    _assert_authoritative_replay(env, decision.output.submission.to_json())
 
 
-def test_hidden_world_swap_cannot_change_root_policy() -> None:
-    env = managym.Env(seed=94)
-    raw, _ = env.reset(_match().to_rust())
+@pytest.mark.parametrize("kind", ["priority", "blockers", "payment"])
+def test_hidden_world_swap_cannot_change_root_policy(kind: str) -> None:
+    if kind == "blockers":
+        env, raw = _block_root(2, 2)
+    elif kind == "payment":
+        env, raw = _waterbend_root(6)
+    else:
+        env = managym.Env(seed=94)
+        raw, _ = env.reset(_match().to_rust())
     viewer = env.current_agent_index()
     assert viewer is not None
     raw = env.observation_for_player(viewer)

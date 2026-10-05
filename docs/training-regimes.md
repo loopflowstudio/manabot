@@ -110,16 +110,31 @@ Use the four `compound-{sequential,grouped}-{bootstrap,outcome}` recipes. These
 are separate from the frozen ETU-91 campaign. Their defaults are bounded proof
 recipes, not a scientific allocation.
 
-managym's `compound_offers` supplies a complete legal surface. Its existing
-atomic attacker declarations and non-kicked, single CreatureOrPlayer casts
-are represented jointly; other actions remain action-aligned. In particular,
-blocker assignments, kicker/payment, ward, opponent priority, and newly revealed
-choices are **new observations**, never inferred continuations. A native
-`compound_commands_json` call lowers the sampled submission on an exact fork
-into ordinary revision-bound Commands. Sampling and lowering leave the live
-root untouched. The ordinary checkpoint player and Etude villain execute the
-resulting suffix without asking the model to reconsider it. Interruption rejects
-and clears a stale suffix.
+managym's `compound_offers` supplies a complete legal surface. It groups:
+
+- Complete attacker declarations and non-kicked, single CreatureOrPlayer casts.
+- Complete remaining blocker declarations when each blocker's legal targets are
+  independent. Each blocker gets one optional target choice, using the engine's
+  flying, reach and blocking restrictions. Menace remains sequential: the engine
+  removes singleton menace blocks at declaration end, so independent choices
+  would assign probability to invalid declarations and alias the no-block result.
+- Waterbend payments with fixed tap/mana economics: choose an unordered subset
+  of eligible permanents, then pay any remainder with mana. Native affordability
+  determines the minimum taps; remaining generic cost bounds the maximum.
+  Candidate mana abilities, battlefield triggered abilities/triggered mana, and
+  delayed triggers retain sequential decisions because taps may change payment
+  support or produce effects. No Python code reconstructs these rules.
+
+Kicker and ward remain individual pay/decline decisions. Kicker can change later
+requirements; ward belongs to stack resolution. Neither is fused with casting,
+resolution, priority exchange or newly revealed choices. Other action kinds
+remain action-aligned. A native `compound_commands_json` call lowers the sampled
+submission on an exact fork into ordinary revision-bound Commands, ending at the
+native declaration/payment boundary. Sampling and lowering leave the live root
+untouched. The ordinary checkpoint player and Etude villain execute the resulting
+suffix without asking the model to reconsider it. Interruption rejects and clears
+a stale suffix. Canonical DecisionFrames stay action-aligned, and the existing
+local-search/sampler consumers keep their API and checkpoint fields.
 
 The model reuses the viewer-safe object/semantic encoder. Complete priority and
 fallback offer rows also use the existing action/focus embeddings. A small GRU
@@ -172,7 +187,10 @@ latency. `skip_trivial` is a separate explicit collection setting. Arena traces
 retain underlying Commands and per-command latency; report complete-game wall
 cost alongside these counts. Fewer exposed prompts alone are not a speedup.
 
-The comparison smoke uses the existing arena and offline notebook/report path:
+Scientific learning-speed and outcome/bootstrap comparisons belong to ETU-99.
+Software acceptance uses deterministic fixtures and bounded correctness/integration
+checks; it does not require another training study. The retained comparison smoke
+uses the existing arena and offline notebook/report path:
 
 ```bash
 OMP_NUM_THREADS=1 uv run --extra notebook -m experiments.runners.run_training_regimes --study compound-decisions --profile smoke --out .runs/compound-smoke

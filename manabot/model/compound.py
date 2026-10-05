@@ -27,9 +27,6 @@ class CompoundOutput:
     submission: DecodedSubmission
     tokens: tuple[int, ...]
     log_probs: Tensor  # [factors], including zero-log-probability forced factors
-    entropies: (
-        Tensor  # conditional entropy at each sampled prefix, not exact joint entropy
-    )
     values: Tensor  # [factors], acting-seat expected terminal return
     probabilities: tuple[Tensor, ...]  # each [legal support including masked entries]
 
@@ -78,7 +75,6 @@ class CompoundDecoder(nn.Module):
         state = context
         selected_tokens: list[int] = []
         log_probs: list[Tensor] = []
-        entropies: list[Tensor] = []
         values: list[Tensor] = []
         probabilities: list[Tensor] = []
 
@@ -103,7 +99,6 @@ class CompoundDecoder(nn.Module):
             log_probs.append(
                 distribution.log_prob(torch.tensor(token, device=context.device))
             )
-            entropies.append(distribution.entropy())
             probabilities.append(distribution.probs)
             values.append(self.value(state).squeeze(-1))
             return token
@@ -162,7 +157,6 @@ class CompoundDecoder(nn.Module):
             DecodedSubmission(int(batch.offers[offer_index]["id"]), tuple(answers)),
             tuple(selected_tokens),
             torch.stack(log_probs),
-            torch.stack(entropies),
             torch.stack(values),
             tuple(probabilities),
         )

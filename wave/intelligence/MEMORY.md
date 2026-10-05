@@ -416,8 +416,9 @@ Canonical DecisionFrames remain action-aligned. Native `compound_offers` and
 `compound_commands_json` reuse the existing structured bridge to lower one
 complete declaration on an exact fork into revision-bound Commands. Python does
 not reconstruct combat legality. Atomic attackers and eligible single-target
-casts group; blockers, payments and other newly published observations remain
-separate. Broader atomic blocker/payment support needs native authority work.
+casts group. The software completion below adds native independent blocker
+assignments and fixed-economics waterbend payments; dependent choices and other
+new information boundaries remain separate.
 Ordinary Etude and arena consumers drain the sampled suffix without resampling;
 stale/interrupted suffixes fail closed.
 
@@ -638,3 +639,30 @@ workflow only; uncontended multi-seed hardware calibration, clone/sampling
 costs and conservative cohort projections remain open within the unchanged
 168-hour campaign ceiling. No new scientific allocation or paid compute follows
 from this command. Its costs must be included in campaign accounting.
+
+
+## Compound software completion (ETU-94, 2026-10-04)
+
+Jack Heart separated software delivery from scientific acceptance: ETU-94 owns
+legal compound functionality, ETU-99 owns subsequent comparisons, and ETU-91's
+frozen campaign remains untouched. Native compound offers now group independent
+blocker assignments and waterbend tap subsets with fixed mana economics. The
+existing recurrent decoder consumes multiple choice roles; canonical DecisionFrames,
+checkpoint fields, and local-search/sampler exports remain unchanged.
+
+Menace stays sequential because independent assignment support includes illegal
+singleton blocks that the engine removes at declaration end. Waterbend with
+candidate mana abilities, battlefield triggers/triggered mana, or delayed triggers
+stays sequential because tap order can change affordability or effects. Kicker,
+ward, reveals and priority are not fused into cached continuations. The native
+subset/cardinality contract must justify grouping; a published same-actor prompt
+alone is insufficient. Existing optionless auto-resolution remains separately
+counted and must not be executed again by a cached suffix.
+
+Deterministic fixtures exercise 65 blockers with 35 targets each, 65 payment
+candidates with tap-only/mixed/mana-only completion, normalized multi-role joint
+probabilities and gradients, exact canonical receipt replay, interruption, and
+hidden-world swap invariance. The ordinary checkpoint reload and complete-game
+credit checks remain in the affected suite. These are software correctness
+checks, not scientific training, strength, calibration or challenger evidence.
+See [compound contracts](../../docs/training-regimes.md#compound-decisions).

@@ -460,34 +460,14 @@ def _execute_regime(
                             raise
                         record.collection_seconds += time.perf_counter() - tick
                         record.artifacts[f"game-{game_index}"] = artifact(target)
-                        record.games += 1
-                        record.environment_decisions += game.microchoices
-                        record.learner_transitions += (
-                            sum(
-                                len(item.decision.output.tokens)
-                                for item in game.decisions
-                            )
+                        stats.record_game(game)
+                        record.games = stats.games
+                        record.environment_decisions = stats.microchoices
+                        record.learner_transitions = (
+                            stats.factors
                             if stage.grouping == "sequential"
-                            else len(game.decisions)
+                            else stats.decisions
                         )
-                        stats.games += 1
-                        stats.decisions += len(game.decisions)
-                        stats.microchoices += game.microchoices
-                        stats.auto_resolved += game.auto_resolved
-                        for item in game.decisions:
-                            kind = str(item.decision.offers.projection["kind"])
-                            stats.prompt_kinds[kind] = (
-                                stats.prompt_kinds.get(kind, 0) + 1
-                            )
-                            stats.factors += len(item.decision.output.tokens)
-                            stats.forced_factors += sum(
-                                int((probs > 0).sum()) == 1
-                                for probs in item.decision.output.probabilities
-                            )
-                            stats.decision_seconds += item.decision.seconds
-                            stats.max_decision_seconds = max(
-                                stats.max_decision_seconds, item.decision.seconds
-                            )
                         games.append(game)
                         game_index += 1
                         stats.collection_seconds = record.collection_seconds

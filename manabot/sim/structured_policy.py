@@ -1,8 +1,8 @@
-"""Experimental ragged decoder for the structured-offer prototype.
+"""Validated ragged offers shared by prototype and learned compound decoders.
 
-This module is intentionally isolated from the production policy network and
-the fixed-width observation encoder. Rust remains authoritative for IDs and
-legality; the decoder only scores public rows and emits an ID-only submission.
+Rust remains authoritative for IDs and legality. `flatten_projection` validates
+public choice rows without fixed-width padding; decoders return ID-only
+submissions. The deterministic prototype scorer remains a parity instrument.
 """
 
 from __future__ import annotations

@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 import json
 import math
 from pathlib import Path
-from time import perf_counter
 from typing import Literal
 
 import torch
@@ -43,7 +42,6 @@ class CompoundGame:
     winner: int | None
     microchoices: int
     auto_resolved: int
-    seconds: float
 
 
 @dataclass
@@ -65,6 +63,26 @@ class CompoundStatistics:
     losses: list[float] = field(default_factory=list)
     prompt_kinds: dict[str, int] = field(default_factory=dict)
 
+    def record_game(self, game: CompoundGame) -> None:
+        """Count accepted games; native steps and decoder factors stay distinct."""
+        self.games += 1
+        self.decisions += len(game.decisions)
+        self.microchoices += game.microchoices
+        self.auto_resolved += game.auto_resolved
+        for item in game.decisions:
+            decision = item.decision
+            kind = str(decision.offers.projection["kind"])
+            self.prompt_kinds[kind] = self.prompt_kinds.get(kind, 0) + 1
+            self.factors += len(decision.output.tokens)
+            self.forced_factors += sum(
+                int((probs > 0).sum()) == 1
+                for probs in decision.output.probabilities
+            )
+            self.decision_seconds += decision.seconds
+            self.max_decision_seconds = max(
+                self.max_decision_seconds, decision.seconds
+            )
+
 
 def collect_game(
     agent: Agent,
@@ -82,7 +100,6 @@ def collect_game(
     Evidence contains both seats' observations in native receipts and is private
     training audit data. It must not be served as viewer-facing Study evidence.
     """
-    start = perf_counter()
     env = managym.Env(seed=seed, skip_trivial=skip_trivial)
     raw, _ = env.reset(match.to_rust())
     decisions: list[EpisodeDecision] = []
@@ -140,7 +157,6 @@ def collect_game(
         env.winner_index(),
         count,
         env.skip_trivial_count(),
-        perf_counter() - start,
     )
 
 

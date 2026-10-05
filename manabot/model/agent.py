@@ -222,9 +222,13 @@ class Agent(nn.Module):
             1, keepdim=True
         ).clamp_min(1)
         # Complete priority/fallback offers preserve the native action ordering.
-        # Atomic attacker declarations instead have one set-valued offer.
+        # Complete declarations/payments instead have one set-valued offer;
+        # its first row must not inherit an unrelated microchoice embedding.
         features = None
-        if not any(offer["verb"] == "declare_attackers" for offer in batch.offers):
+        if not any(
+            offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
+            for offer in batch.offers
+        ):
             features = self._gather_informed_actions(obs, objects)[
                 0, : len(batch.offers)
             ]
