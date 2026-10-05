@@ -71,7 +71,11 @@ def interrupt(
         run_id: str, owner: VerifyStore, path: str | Path
     ) -> TrainingRun:
         run = export(run_id, owner, path)
-        if run.status == "running" and run.recovery_artifact is not None:
+        if (
+            run.status == "running"
+            and run.recovery_artifact is not None
+            and run.stages[-1].diagnostics
+        ):
             raise KeyboardInterrupt("injected after durable update")
         return run
 
@@ -193,9 +197,12 @@ def test_recovery_rejects_partial_support() -> None:
         execution.validate_regime(value)
 
 
-def test_abrupt_exit_recovers_without_rewriting_last_export(tmp_path: Path) -> None:
+@pytest.mark.parametrize("boundary", ["update", "completed"])
+def test_abrupt_exit_recovers_without_rewriting_last_export(
+    tmp_path: Path, boundary: str
+) -> None:
     """os._exit bypasses exception handlers and models a lost training process."""
-    value = recipe()
+    value = multistage_recipe()
     recipe_path = tmp_path / "recipe.json"
     recipe_path.write_text(value.model_dump_json())
     database = tmp_path / "training.sqlite"
@@ -211,7 +218,9 @@ export = execution.export_training_run
 def terminate_after_commit(run_id, store, out):
     run = export(run_id, store, out)
     if run.status == 'running' and run.recovery_artifact is not None:
-        os._exit(86)
+        name = Path(run.recovery_artifact['path']).name
+        if name.startswith('second-' + sys.argv[4]):
+            os._exit(86)
     return run
 execution.export_training_run = terminate_after_commit
 recipe = TrainingRegime.model_validate_json(Path(sys.argv[1]).read_text())
@@ -226,10 +235,11 @@ with VerifyStore(Path(sys.argv[2])) as store:
             str(recipe_path),
             str(database),
             str(failed_out),
+            boundary,
         ],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=120,
         check=False,
     )
     assert result.returncode == 86, result.stderr
@@ -262,3 +272,263 @@ def test_live_lease_rejects_recovery(
                 execution.execute_regime(
                     value, 197, tmp_path / "child", store, resume_from=parent.id
                 )
+
+
+def multistage_recipe(*, fresh: bool = False) -> TrainingRegime:
+    value = recipe()
+    first = value.stages[0]
+    assert isinstance(first, TrainSelfPlay)
+    first.updates = 2
+    second = first.model_copy(deep=True)
+    second.id = "second"
+    second.initial = None if fresh else first.id
+    value.stages.append(second)
+    return value
+
+
+@pytest.mark.parametrize(
+    "boundary", ["start", "before_complete", "completed", "second_update", "terminal"]
+)
+@pytest.mark.parametrize("fresh", [False, True])
+def test_multistage_boundaries_preserve_state_and_completed_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str, fresh: bool
+) -> None:
+    value = multistage_recipe(fresh=fresh)
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+        export = execution.export_training_run
+        save = execution.save_update
+        fired = False
+
+        def fail_at_boundary(
+            run_id: str, owner: VerifyStore, path: str | Path
+        ) -> TrainingRun:
+            nonlocal fired
+            run = export(run_id, owner, path)
+            if fired or run.status != "running" or run.recovery_artifact is None:
+                return run
+            name = Path(run.recovery_artifact["path"]).name
+            first = value.stages[0].id
+            matches = {
+                "start": name == f"{first}-start.pt",
+                "completed": name == f"{first}-completed.pt",
+                "second_update": name.startswith("second-update-"),
+                "terminal": name == "second-completed.pt",
+            }
+            if matches.get(boundary, False):
+                fired = True
+                raise KeyboardInterrupt("boundary injection")
+            return run
+
+        def fail_before_completion(*args: Any, **kwargs: Any) -> None:
+            nonlocal fired
+            if (
+                boundary == "before_complete"
+                and not fired
+                and str(args[0]).endswith("-completed.pt")
+            ):
+                fired = True
+                raise KeyboardInterrupt("before completion publication")
+            save(*args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(execution, "export_training_run", fail_at_boundary)
+            patch.setattr(execution, "save_update", fail_before_completion)
+            with pytest.raises(KeyboardInterrupt):
+                execution.execute_regime(value, 197, tmp_path / "failed", store)
+        parent_id = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()[0]
+        parent = store.training_run(parent_id)
+        completed = [item for item in parent.stages if item.status == "completed"]
+        frozen = {
+            item["path"]: Path(item["path"]).read_bytes()
+            for row in completed
+            for item in row.artifacts.values()
+        }
+        child = execution.execute_regime(
+            value, 197, tmp_path / "child", store, resume_from=parent.id
+        )
+        assert child.status == "completed"
+        assert store.training_run(parent.id) == parent
+        assert child.prior_seconds == parent.prior_seconds + parent.seconds
+        assert child.stages[: len(completed)] == completed
+        for path, data in frozen.items():
+            assert Path(path).read_bytes() == data
+        for row in completed:
+            assert not list((tmp_path / "child").glob(f"{row.id}-*.pt"))
+        a, b = load_update(whole), load_update(child)
+        for name in (
+            "learner",
+            "optimizer",
+            "ema",
+            "minibatch_rng",
+            "python_rng",
+            "numpy_rng",
+            "torch_rng",
+        ):
+            assert_state_equal(getattr(a, name), getattr(b, name))
+        assert a.iteration == b.iteration
+        assert a.collector.journal == b.collector.journal
+        assert_state_equal(a.collector.buffers, b.collector.buffers)
+        for left, right in zip(whole.stages, child.stages, strict=True):
+            assert left.diagnostics == right.diagnostics
+            assert left.learner_transitions == right.learner_transitions
+            assert left.environment_decisions == right.environment_decisions
+            assert left.games == right.games
+        with pytest.raises(ValueError, match="stopped failed or interrupted"):
+            execution.execute_regime(
+                value, 197, tmp_path / "terminal", store, resume_from=child.id
+            )
+
+
+def test_setup_failure_retains_stage_lineage_and_admission_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = multistage_recipe()
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        parent = interrupt(value, tmp_path / "parent", store, monkeypatch)
+        fingerprints = execution._runtime_identities
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                execution, "_runtime_identities", lambda *args: {"incompatible": True}
+            )
+            with pytest.raises(ValueError, match="runtime/source"):
+                execution.execute_regime(
+                    value, 197, tmp_path / "incompatible", store, resume_from=parent.id
+                )
+        assert execution._runtime_identities is fingerprints
+        export = execution.export_training_run
+        fired = False
+
+        def fail_setup(
+            run_id: str, owner: VerifyStore, path: str | Path
+        ) -> TrainingRun:
+            nonlocal fired
+            run = export(run_id, owner, path)
+            if not fired and run.status == "running":
+                fired = True
+                raise KeyboardInterrupt("setup failure")
+            return run
+
+        with monkeypatch.context() as patch:
+            patch.setattr(execution, "export_training_run", fail_setup)
+            with pytest.raises(KeyboardInterrupt):
+                execution.execute_regime(
+                    value, 197, tmp_path / "setup", store, resume_from=parent.id
+                )
+        child_id = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()[0]
+        child = store.training_run(child_id)
+        resumed = execution.execute_regime(
+            value, 197, tmp_path / "resumed", store, resume_from=child.id
+        )
+        assert resumed.status == "completed"
+        assert resumed.prior_seconds == parent.seconds + child.seconds
+        assert resumed.stages[0].watchdog_seconds >= parent.stages[0].watchdog_seconds
+        assert store.training_run(parent.id) == parent
+        assert store.training_run(child.id) == child
+
+
+def test_stage_budgets_do_not_charge_previous_stages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = multistage_recipe()
+    for stage in value.stages:
+        assert isinstance(stage, TrainSelfPlay)
+        stage.updates = 1
+        stage.execution.wall_seconds = 100
+    clock = 0.0
+    update = execution.update_iteration
+
+    def timed_update(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        nonlocal clock
+        result = update(*args, **kwargs)
+        clock += 60
+        return result
+
+    monkeypatch.setattr(execution, "watchdog_seconds", lambda: clock)
+    monkeypatch.setattr(execution, "update_iteration", timed_update)
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        run = execution.execute_regime(value, 197, tmp_path / "run", store)
+        assert run.status == "completed"
+        assert run.watchdog_seconds == 120
+        assert [stage.watchdog_seconds for stage in run.stages] == [60, 60]
+
+
+def test_completed_artifact_corruption_rejects_before_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = multistage_recipe()
+    export = execution.export_training_run
+    fired = False
+
+    def fail_completed(
+        run_id: str, owner: VerifyStore, path: str | Path
+    ) -> TrainingRun:
+        nonlocal fired
+        run = export(run_id, owner, path)
+        if (
+            not fired
+            and run.status == "running"
+            and run.stages
+            and run.stages[-1].status == "completed"
+        ):
+            fired = True
+            raise KeyboardInterrupt("completed boundary")
+        return run
+
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        with monkeypatch.context() as patch:
+            patch.setattr(execution, "export_training_run", fail_completed)
+            with pytest.raises(KeyboardInterrupt):
+                execution.execute_regime(value, 197, tmp_path / "parent", store)
+        parent_id = store.con.execute("SELECT id FROM training_runs").fetchone()[0]
+        parent = store.training_run(parent_id)
+        path = Path(parent.stages[0].artifacts["raw"]["path"])
+        original = path.read_bytes()
+        path.write_bytes(b"stale bytes")
+        with pytest.raises(ValueError, match="stage artifact digest"):
+            execution.execute_regime(
+                value, 197, tmp_path / "rejected", store, resume_from=parent.id
+            )
+        path.write_bytes(original)
+        resumed = execution.execute_regime(
+            value, 197, tmp_path / "resumed", store, resume_from=parent.id
+        )
+        assert resumed.status == "completed"
+        assert resumed.stages[0] == parent.stages[0]
+
+
+def test_death_immediately_after_recovery_claim_keeps_snapshot_admissible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = recipe()
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        parent = interrupt(value, tmp_path / "parent", store, monkeypatch)
+        claim = store.claim_training_recovery
+
+        def die_after_claim(parent_id: str, run: TrainingRun) -> None:
+            claim(parent_id, run)
+            raise KeyboardInterrupt("death before setup handler")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(store, "claim_training_recovery", die_after_claim)
+            with pytest.raises(KeyboardInterrupt):
+                execution.execute_regime(
+                    value, 197, tmp_path / "claimed", store, resume_from=parent.id
+                )
+        child_id = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()[0]
+        assert store.training_run(child_id).status == "running"
+        resumed = execution.execute_regime(
+            value, 197, tmp_path / "resumed", store, resume_from=child_id
+        )
+        child = store.training_run(child_id)
+        assert child.status == "interrupted"
+        assert child.unobserved_seconds > 0
+        assert resumed.prior_seconds == parent.seconds + child.seconds
+        assert resumed.stages[0].watchdog_seconds >= parent.stages[0].watchdog_seconds
+        assert resumed.status == "completed"

@@ -13,7 +13,9 @@ uv run manabot train --regime experiments/regimes/search-distillation.json --see
 The supplied recipes are bounded pilots, not the proposed week-long experiment.
 The ordinary preset command remains available. Combining `--regime` with a
 preset or `--set` fails rather than silently ignoring overrides. Choose a new
-output directory for every attempt; checkpoints are not process-resume files.
+output directory for every attempt; serving checkpoints are not process-resume
+files. Opt-in [bounded CPU self-play recovery](training-recovery.md) uses private
+complete-state snapshots and retains completed multistage work.
 
 Policy stages are `collect_search`, `train_supervised`, and `train_self_play`.
 A supervised stage's `datasets` name earlier collection outputs. Its `initial`
@@ -74,7 +76,8 @@ Records distinguish complete games, environment decisions, learner transitions,
 and optimizer exposures. Runtime/source/content/tensor identities and hardware
 are saved at creation. The reproducibility contract is resolved settings and
 artifact provenance, not byte-identical stochastic training or exact process
-continuation. A fresh execution owns fresh costs; no pre-existing corpus is free.
+continuation unless the bounded recovery contract is explicitly selected. A fresh
+execution owns fresh costs; no pre-existing corpus is free.
 
 [Learning-speed protocol](../experiments/training-regimes.md) and
 [ablation protocol](../experiments/ataraxos-mtg-ablations.md) describe the bounded

@@ -636,7 +636,7 @@ explicitly unsupported on this complete path; inference rates cannot substitute.
 Host load/RSS observations do not correct contention or measure throttling.
 The active ETU-91 campaign was not edited. Concurrent bounded checks prove
 workflow only; uncontended multi-seed hardware calibration, clone/sampling
-costs and conservative cohort projections remain open within the unchanged
+costs and conservative cohort projections belong to ETU-99 within the unchanged
 168-hour campaign ceiling. No new scientific allocation or paid compute follows
 from this command. Its costs must be included in campaign accounting.
 
@@ -662,6 +662,25 @@ measurements, while statistical replay binds seed, artifacts and runtime/source
 identities. These are software proofs, not learned calibration or strength.
 The [sampler guide](../../docs/belief-sampler.md#offline-saved-game-quality-report)
 owns the command and interpretation limits.
+
+## Multistage software recovery (ETU-98, 2026-10-04)
+
+Jack Heart separated software acceptance from scientific measurements: ETU-98
+owns recovery delivery; ETU-99 owns empirical calibration. The bounded CPU
+recovery contract extends across self-play stages with stage-entry, update and
+completed-export snapshots. Linked stages preserve learner/Adam/EMA, RNGs,
+collector and iteration; fresh stages reset the learner. Completed records and
+artifact paths remain immutable across attempts. Other operation types and
+MPS/CUDA recovery remain unsupported.
+
+Stage-local update coordinates differ from the run-wide iteration and collector
+counters. Each stage retains its own watchdog allowance; ancestor run costs are
+charged once. Failed attempts and conservative abrupt-death costs remain in
+VerifyStore, including failures during recovery setup. Same-host source/runtime
+and artifact checks plus local leases bound the promise. These mechanisms do
+not retrofit the active ETU-91 campaign or establish strength, throughput,
+portable process snapshots or chapter acceptance. See the
+[recovery contract](../../docs/training-recovery.md).
 
 ## Compound software completion (ETU-94, 2026-10-04)
 

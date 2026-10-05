@@ -16,20 +16,27 @@ from pathlib import Path
 import random
 import socket
 import time
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import torch
 
 from manabot.arena.models import file_sha256
 from manabot.model.agent import Agent
-from manabot.sim.net_opponent import CollectorSnapshot, NetOpponentTrainer
+from manabot.sim.net_opponent import (
+    CollectorSnapshot,
+    CollectorStats,
+    NetOpponentTrainer,
+)
 from manabot.training.models import StageRecord, TrainingRun
 
 
 @dataclass
 class UpdateSnapshot:
+    format_version: Literal[2]
     iteration: int
+    completed_stages: list[StageRecord]
+    collector_before: CollectorStats
     record: StageRecord
     learner: dict[str, torch.Tensor]
     ema: dict[str, torch.Tensor] | None
@@ -53,10 +60,14 @@ def save_update(
     iteration: int,
     record: StageRecord,
     run: TrainingRun,
+    collector_before: CollectorStats,
 ) -> None:
     """Publish immutable bytes before the store advertises their digest."""
     state = UpdateSnapshot(
+        format_version=2,
         iteration=iteration,
+        completed_stages=deepcopy(run.stages[:-1]),
+        collector_before=deepcopy(collector_before),
         record=record.model_copy(deep=True),
         learner=deepcopy(trainer.agent.state_dict()),
         ema=deepcopy(ema.state_dict()) if ema is not None else None,
@@ -89,7 +100,10 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
     if file_sha256(path) != artifact["sha256"]:
         raise ValueError("recovery artifact digest mismatch")
     state = torch.load(path, map_location="cpu", weights_only=False)
-    if not isinstance(state, UpdateSnapshot):
+    if (
+        not isinstance(state, UpdateSnapshot)
+        or getattr(state, "format_version", None) != 2
+    ):
         raise ValueError("invalid recovery snapshot type")
     if (
         state.regime_digest != parent.regime_digest
@@ -97,6 +111,16 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
         or state.identities != parent.identities
     ):
         raise ValueError("recovery snapshot identity mismatch")
+    records = [*state.completed_stages, state.record]
+    expected = [stage.id for stage in parent.regime.stages[: len(records)]]
+    if [record.id for record in records] != expected or any(
+        record.status != "completed" for record in state.completed_stages
+    ):
+        raise ValueError("recovery stage prefix mismatch")
+    for record in records:
+        for item in (*record.artifacts.values(), *record.inputs.values()):
+            if file_sha256(item["path"]) != item["sha256"]:
+                raise ValueError("recovery stage artifact digest mismatch")
     return state
 
 
@@ -157,5 +181,7 @@ def settle_orphan(parent: TrainingRun) -> TrainingRun:
     settled.seconds += gap
     settled.watchdog_seconds += gap
     settled.unobserved_seconds += gap
+    if settled.stages and settled.stages[-1].status != "completed":
+        settled.stages[-1].watchdog_seconds += gap
     settled.error = "Writer lease released; unobserved interval charged conservatively"
     return settled

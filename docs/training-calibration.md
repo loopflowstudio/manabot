@@ -62,7 +62,7 @@ schedules. Concurrent runs, sleeping and contention invalidate hardware speed
 comparisons. The real-game test establishes execution, accounting, failure
 retention and replay, not strength or calibrated performance.
 
-ETU-98 remains open for uncontended independent-seed measurements as policies
+ETU-99 owns uncontended independent-seed measurements as policies
 change, supported CPU/MPS comparisons, cloning/sampling micro-costs, and
 conservative complete-cohort projections. Those measurements require a separate
 frozen protocol within the retained cap; rented hardware needs explicit funding.

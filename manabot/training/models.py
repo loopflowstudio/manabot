@@ -316,12 +316,11 @@ class TrainingRegime(Strict):
                 "compound policies require compound policy stages throughout the run"
             )
         if self.recovery_max_microsteps is not None and (
-            len(self.stages) != 1
-            or not isinstance(self.stages[0], TrainSelfPlay)
+            any(not isinstance(stage, TrainSelfPlay) for stage in self.stages)
             or self.schedule_clock != "iteration_fraction"
         ):
             raise ValueError(
-                "recovery requires one self-play stage and iteration_fraction schedule"
+                "recovery requires only self-play stages and iteration_fraction schedule"
             )
         previous: dict[str, Stage] = {}
         latest_self_play = None
@@ -438,6 +437,8 @@ class TrainingRegime(Strict):
 
 
 class StageRecord(Strict):
+    # Cumulative across attempts for this stage; run costs remain attempt-local.
+    watchdog_seconds: float = 0
     id: str
     actual_device: str | None = None
     actual_threads: int | None = None
