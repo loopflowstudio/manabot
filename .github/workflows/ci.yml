@@ -98,7 +98,7 @@ jobs:
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
             tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
-            tests/training/test_technique_screen.py \
+            tests/training/test_technique_screen.py tests/training/test_capacity_study.py \
             tests/training/test_value_models.py \
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py

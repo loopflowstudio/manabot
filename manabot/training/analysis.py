@@ -3,8 +3,11 @@
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
+from experiments.runners.training_protocol import EvaluationProtocol
 from manabot.arena.models import file_sha256
+from manabot.training import capacity_analysis
 from manabot.training.models import CollectSelection, TrainingRun
 from manabot.training.selection_analysis import (
     analyze_selection,
@@ -25,7 +28,14 @@ def valid_game(row):
     )
 
 
-def cost_comparison(rows, anchor="random-smoke-anchor"):
+def cost_comparison(
+    rows: list[dict[str, Any]],
+    anchor: str = "random-smoke-anchor",
+    *,
+    end_seconds: float | None = None,
+) -> dict[str, Any]:
+    # Existing study JSON contains heterogeneous checkpoint/metric values.
+
     """Compare only observed checkpoints at a shared cost; never backfill."""
     groups = {}
     for row in rows:
@@ -46,6 +56,8 @@ def cost_comparison(rows, anchor="random-smoke-anchor"):
     }
     start = max(points[0]["training_seconds"] for points in groups.values())
     end = min(points[-1]["training_seconds"] for points in groups.values())
+    if end_seconds is not None:
+        end = min(end, end_seconds)
     if end < start:
         return {
             "status": "unavailable",
@@ -463,6 +475,20 @@ def report(out: Path | str) -> None:
             )
     (out / "report.md").write_text("\n".join(lines) + "\n")
     atomic_json(out / "metrics.json", rows)
+    if study["study"] == "model-capacity":
+        recipes = json.loads((out / "recipes.json").read_text())
+        with (out / "report.md").open("a") as stream:
+            stream.write(
+                f"\nTotal retained study seconds (including evaluation): {study.get('seconds', 'unavailable')}.\n"
+            )
+        capacity_analysis.write_capacity_report(
+            out,
+            [capacity_analysis.Measurement.model_validate(r) for r in rows],
+            EvaluationProtocol.model_validate(protocol),
+            tuple(r["id"] for r in recipes),
+            study["status"] == "completed",
+        )
+
     notebook = nbformat.read(
         Path(__file__).resolve().parents[2]
         / "experiments/study/training-regimes.ipynb",

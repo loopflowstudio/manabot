@@ -33,6 +33,7 @@ from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
 STUDIES = {
+    "model-capacity": [],
     "omitted-controls": [],
     "compound-decisions": [
         "compound-sequential-bootstrap",
@@ -173,6 +174,7 @@ def run_study(
         "omitted-controls",
         "training-calibration",
         "capacity-calibration",
+        "model-capacity",
         "value-models",
     }
     if explicit_plan and plan is None:
@@ -519,6 +521,9 @@ def run_study(
                         learning_seconds=sum(s.learning_seconds for s in cumulative),
                         export_seconds=sum(s.export_seconds for s in cumulative),
                         decisions=sum(s.environment_decisions for s in cumulative),
+                        optimizer_exposures=sum(
+                            s.optimizer_exposures for s in cumulative
+                        ),
                         games=sum(s.games for s in cumulative),
                         **(
                             {"compound_accounting": [s.diagnostics for s in cumulative]}
@@ -716,11 +721,15 @@ def main():
     elif args.plan is not None:
         plan = ResolvedStudy.model_validate_json(args.plan.read_text())
         if (
-            args.study != "omitted-controls"
+            args.study not in {"omitted-controls", "model-capacity"}
             or plan.protocol.study != args.study
             or plan.protocol.purpose != "workflow-smoke"
         ):
-            parser.error("smoke accepts only an omitted-controls workflow plan")
+            parser.error(
+                "smoke accepts only an omitted-controls or model-capacity workflow plan"
+            )
+    if args.study == "model-capacity" and plan is None:
+        parser.error("model-capacity requires an explicit --plan")
     torch.set_num_threads(1)
     out = args.out.resolve()
     run_study(args.study, out, plan, resume=args.resume)

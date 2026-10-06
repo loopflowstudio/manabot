@@ -15,6 +15,7 @@ class EvaluationProtocol(BaseModel):
         "compound-decisions",
         "training-calibration",
         "capacity-calibration",
+        "model-capacity",
         "value-models",
     ]
     purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
@@ -25,6 +26,12 @@ class EvaluationProtocol(BaseModel):
     anchor_deals: tuple[int, ...] = (920001,)
     checkpoint_count: int = Field(default=2, ge=2)
     cost_cutoffs_seconds: tuple[float, ...] = ()
+    early_progress_seconds: float | None = Field(
+        default=None, gt=0, exclude_if=lambda v: v is None
+    )
+    progress_score: float | None = Field(
+        default=None, ge=0, le=1, exclude_if=lambda v: v is None
+    )
     anchors: tuple[Literal["random", "scripted-greedy", "puct-64"], ...] = ("random",)
     endpoint_paired_deals: tuple[int, ...] = ()
     endpoint_anchor_deals: tuple[int, ...] = ()
@@ -46,6 +53,10 @@ class EvaluationProtocol(BaseModel):
 
     @model_validator(mode="after")
     def disjoint(self) -> "EvaluationProtocol":
+        if self.study == "model-capacity" and (
+            self.early_progress_seconds is None or self.progress_score is None
+        ):
+            raise ValueError("capacity requires an early window and threshold")
         expected_selection = (
             "all-completed-cutoffs-raw-and-ema"
             if "ema" in self.evaluation_variants
@@ -124,6 +135,7 @@ class EvaluationProtocol(BaseModel):
             "omitted-controls": {1, 2},
             "training-calibration": {1},
             "capacity-calibration": {3},
+            "model-capacity": {3},
             "value-models": {8},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(

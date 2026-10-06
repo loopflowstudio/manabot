@@ -186,3 +186,6 @@ mutation isolation, baseline pinning, ordered matrix names, existing identity
 parity and admission failures. An execution guard forbids model/store construction
 and executor calls during resolution. These tests establish authoring software
 behavior; they establish no strength, calibration or training acceptance result.
+
+Capacity early-progress and terminal comparison plans use the same declarative
+ladder and ordinary study executor; see the [unexecuted protocol](../experiments/model-capacity.md).

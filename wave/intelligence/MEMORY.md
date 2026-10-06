@@ -1060,3 +1060,29 @@ packaged preset checks passed. The affected checks passed after rebuilding this
 checkout's stale native extension; one notebook-dependent check remains skipped.
 No scientific campaign or paid compute ran. Software acceptance does not establish
 training, calibration, demo admission or chapter outcomes.
+
+## Capacity comparison software preparation (ETU-103, 2026-10-05)
+
+Jack Heart authorized independent software delivery and landing while leaving
+ETU-103 open for empirical work. Declarative capacity plans reuse ETU-102's
+64/1, 64/2 and 128/2 ladder and ETU-109's pinned token/WDL Ataraxos baseline.
+Only width/depth vary. Existing TrainingRun, EvaluationProtocol, arena and offline
+reporting retain execution, metrics, paired seed/deal uncertainty and provenance.
+No training, arena cohort, throughput benchmark or paid compute ran; frozen
+ETU-91/106 checkouts remain untouched.
+
+The [proposed protocol](../../experiments/model-capacity.md) distinguishes a
+20-minute scheduled-progress window from a calibrated fixed-update terminal
+checkpoint under a common roughly one-hour per-arm ceiling. Its three-seed,
+24-hour study proposal is unallocated and unexecuted; calibration, resource
+coordination and scientific judgment remain prerequisites. Export requires
+reviewed counts, evidence digest, runtime identities and resource projections.
+Concurrent historical-mean smoke timings cannot calibrate the token baseline.
+
+Offline analysis reuses the existing cost integrator on shared observed wall-time,
+native-decision and optimizer-exposure support. Scheduled threshold misses are
+right-censored, absent observations unavailable, and terminal evidence stays on
+held-out endpoint deals. Incomplete cohorts retain diagnostics without comparative
+curves. Synthetic report regeneration establishes software behavior only. Fast
+experimental and promotion model choices remain unresolved; throughput is not
+terminal strength and the current default remains unchanged.
