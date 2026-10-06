@@ -259,7 +259,8 @@ def report(out: Path | str) -> None:
         cost_comparison(
             rows,
             "scripted-greedy-fixed-anchor"
-            if study["study"] in {"value-token-screen", "pooling-filter"}
+            if study["study"]
+            in {"value-token-screen", "pooling-filter", "history-input"}
             else "random-smoke-anchor",
         )
         if study["status"] == "completed"
@@ -304,7 +305,12 @@ def report(out: Path | str) -> None:
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
-    if study["study"] in {"value-models", "value-token-screen", "pooling-filter"}:
+    if study["study"] in {
+        "value-models",
+        "value-token-screen",
+        "pooling-filter",
+        "history-input",
+    }:
         lines += [
             "",
             "Value-model disposition: exploratory evidence only; no automatic promotion. The token "

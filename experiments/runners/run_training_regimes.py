@@ -10,6 +10,7 @@ import time
 
 import torch
 
+from experiments.runners.history_input import EVALUATION_SECONDS
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.match import SELECTED_SUITE, play_cell
 from manabot.arena.models import (
@@ -33,6 +34,7 @@ from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
 STUDIES = {
+    "history-input": [],
     "model-capacity": [],
     "omitted-controls": [],
     "compound-decisions": [
@@ -159,6 +161,7 @@ def run_study(
     resume: bool = False,
     *,
     render_report: bool = True,
+    history_run_paths: tuple[Path, ...] = (),
 ) -> None:
     if "cumulative_seconds" not in StageRecord.model_fields:
         raise RuntimeError(
@@ -178,15 +181,45 @@ def run_study(
         "value-models",
         "value-token-screen",
         "pooling-filter",
+        "history-input",
     }
     if explicit_plan and plan is None:
         raise ValueError(f"{study} requires an explicit separately resolved plan")
-    if study in {"value-token-screen", "pooling-filter"} and resume:
+    if study in {"value-token-screen", "pooling-filter", "history-input"} and resume:
         raise ValueError(
             "screen retries require a new reviewed allocation; retain this attempt"
         )
     if plan is not None and plan.protocol.study != study:
         raise ValueError("study differs from resolved protocol")
+    if study == "history-input":
+        if plan is None or len(history_run_paths) != 6 or render_report:
+            raise ValueError(
+                "history requires six supervised runs and separate reporting phase"
+            )
+        from experiments.runners.history_input import (
+            ORDER as HISTORY_ORDER,
+            SEEDS as HISTORY_SEEDS,
+            validate_run,
+        )
+        from experiments.runners.run_history_input import verify_runtime
+
+        verify_runtime(plan)
+        expected_runs = [
+            (i, seed)
+            for order, seed in zip(HISTORY_ORDER, HISTORY_SEEDS, strict=True)
+            for i in order
+        ]
+        for path, (index, seed) in zip(history_run_paths, expected_runs, strict=True):
+            run = TrainingRun.model_validate_json(path.read_text())
+            validate_run(
+                run,
+                TrainingRegime.model_validate(plan.recipes[index]),
+                seed,
+                plan.input_bindings[index],
+                plan.runtime_identities,
+            )
+    elif history_run_paths:
+        raise ValueError("pretrained run admission is scoped to history-input")
     retained = None
     resumed_runs = []
     if resume:
@@ -235,8 +268,9 @@ def run_study(
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
-    if resume or (
-        plan is not None and plan.protocol.purpose in {"scientific", "screening"}
+    if study != "history-input" and (
+        resume
+        or (plan is not None and plan.protocol.purpose in {"scientific", "screening"})
     ):
         from manabot.env import ObservationSpace
         from manabot.sim.teacher1_evidence import (
@@ -307,6 +341,13 @@ def run_study(
         "limits": f"{protocol.process_seconds} seconds total; {len(protocol.training_seeds)} training seeds; {protocol.uncertainty}; purpose={protocol.purpose}",
     }
 
+    if study == "history-input":
+        result["limits"] = (
+            "4,500 seconds evaluation; parent supervisor owns the 21,600-second campaign including calibration, training and reporting"
+        )
+        result["accounting"] = (
+            "study.seconds is evaluation time only; run costs are included once in supervisor.seconds"
+        )
     if retained:
         result = retained
         result.setdefault("interruptions", []).append(
@@ -316,7 +357,9 @@ def run_study(
             }
         )
         result["status"] = "running"
-    remaining = protocol.process_seconds - (time.perf_counter() - start)
+    remaining = (
+        EVALUATION_SECONDS if study == "history-input" else protocol.process_seconds
+    ) - (time.perf_counter() - start)
     if remaining <= 0:
         raise TimeoutError("frozen study allocation is exhausted; cannot resume")
 
@@ -325,6 +368,7 @@ def run_study(
         atomic_json(out / "study.json", result)
 
     screening = protocol.purpose == "screening"
+    legacy_screening = screening and study != "history-input"
     training = True
     diagnostic_done = False
 
@@ -341,7 +385,7 @@ def run_study(
     def deadline(*_: object) -> None:
         nonlocal diagnostic_done
         elapsed = time.perf_counter() - start
-        if screening and not diagnostic_done:
+        if legacy_screening and not diagnostic_done:
             diagnostic_done = True
             diagnostic(elapsed)
             limit = 21600 if training else protocol.process_seconds
@@ -353,14 +397,29 @@ def run_study(
     signal.setitimer(
         signal.ITIMER_REAL,
         min(remaining, max(0.001, 7200 - calibration_seconds))
-        if screening
+        if legacy_screening
         else remaining,
     )
     save()
     try:
         runs = resumed_runs
+        if study == "history-input":
+            for path in history_run_paths:
+                run = TrainingRun.model_validate_json(path.read_text())
+                runs.append(run)
+                result["runs"].append(
+                    {
+                        "path": str(path),
+                        "regime": run.regime.id,
+                        "id": run.id,
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    }
+                )
+            save()
         with VerifyStore(out / "training.sqlite") as store:
-            for index, seed in enumerate(() if resume else protocol.training_seeds):
+            for index, seed in enumerate(
+                () if resume or study == "history-input" else protocol.training_seeds
+            ):
                 if study == "pooling-filter":
                     from experiments.runners.pooling_filter import ORDER
 
@@ -391,7 +450,7 @@ def run_study(
                 out / "phase.json",
                 {"evaluation_deadline_monotonic": time.monotonic() + 7200},
             )
-        if screening:
+        if legacy_screening:
             # Evaluation and report share two hours; unused training time is not borrowed.
             evaluation_limit = min(
                 protocol.process_seconds, time.perf_counter() - start + 7200

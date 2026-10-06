@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from experiments.runners.history_input import TOTAL_SECONDS, InputBinding
+
 
 class EvaluationProtocol(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
@@ -19,6 +21,7 @@ class EvaluationProtocol(BaseModel):
         "value-models",
         "value-token-screen",
         "pooling-filter",
+        "history-input",
     ]
     purpose: Literal["workflow-smoke", "calibration", "scientific", "screening"] = (
         "workflow-smoke"
@@ -57,9 +60,9 @@ class EvaluationProtocol(BaseModel):
 
     @model_validator(mode="after")
     def disjoint(self) -> "EvaluationProtocol":
-        if (self.study in {"value-token-screen", "pooling-filter"}) != (
-            self.purpose == "screening"
-        ):
+        if (
+            self.study in {"value-token-screen", "pooling-filter", "history-input"}
+        ) != (self.purpose == "screening"):
             raise ValueError(
                 "value-token-screen requires its distinct screening purpose"
             )
@@ -73,7 +76,8 @@ class EvaluationProtocol(BaseModel):
             or self.endpoint_anchor_deals
             or self.endpoint_seed_pairs
             or self.cost_cutoffs_seconds
-            or self.process_seconds != 28800
+            or self.process_seconds
+            != (TOTAL_SECONDS if self.study == "history-input" else 28800)
             or self.uncertainty != "paired-seed-descriptive"
         ):
             raise ValueError(
@@ -165,6 +169,7 @@ class EvaluationProtocol(BaseModel):
             "value-models": {8},
             "value-token-screen": {3},
             "pooling-filter": {4},
+            "history-input": {2},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
@@ -187,6 +192,9 @@ class ResolvedStudy(BaseModel):
     allocation_seconds: float = Field(gt=0, le=168 * 3600)
     prior_campaign_seconds: float = Field(ge=0)
     runtime_identities: dict[str, str] = Field(default_factory=dict)
+    input_bindings: tuple[InputBinding, ...] = Field(
+        default=(), exclude_if=lambda v: not v
+    )
     projected_disk_bytes: int = Field(default=0, ge=0)
     disk_reserve_bytes: int = Field(default=4 * 1024**3, ge=0)
     calibration_evidence: str
@@ -205,7 +213,36 @@ class ResolvedStudy(BaseModel):
         if self.protocol.purpose == "screening":
             from experiments.runners.value_screen import validate_screen_recipes
 
-            if self.protocol.study == "pooling-filter":
+            if self.protocol.study == "history-input":
+                from experiments.runners.history_input import (
+                    DEALS,
+                    SEEDS,
+                    validate_plan_recipes,
+                )
+
+                receipt = validate_plan_recipes(
+                    recipes,
+                    self.calibration_evidence,
+                    self.runtime_identities,
+                    self.input_bindings,
+                )
+                if (
+                    self.protocol.training_seeds != SEEDS
+                    or self.protocol.anchor_deals != DEALS
+                    or self.protocol.game_seconds != 120
+                    or self.protocol.max_commands != 10000
+                    or self.protocol.early_progress_seconds is not None
+                    or self.protocol.progress_score is not None
+                ):
+                    raise ValueError("history requires its frozen paired seeds/deals")
+                if (
+                    self.projected_disk_bytes != receipt.projected_disk_bytes
+                    or self.disk_reserve_bytes != 4 * 1024**3
+                ):
+                    raise ValueError(
+                        "history disk projection/reserve differs from admission"
+                    )
+            elif self.protocol.study == "pooling-filter":
                 from experiments.runners.pooling_filter import SEEDS, validate_followup
 
                 validate_followup(
@@ -230,13 +267,24 @@ class ResolvedStudy(BaseModel):
                 "training_source_sha256",
                 "study_source_sha256",
             }
+            if self.protocol.study == "history-input":
+                required.remove("observation_abi_sha256")
+                required.add("runtime_environment_sha256")
             if set(self.runtime_identities) != required or any(
                 len(v) != 64 or any(c not in "0123456789abcdef" for c in v)
                 for v in self.runtime_identities.values()
             ):
                 raise ValueError("screen must bind all runtime and study sources")
-            if self.allocation_seconds != 28800 or self.prior_campaign_seconds != 0:
+            allocation = (
+                TOTAL_SECONDS if self.protocol.study == "history-input" else 28800
+            )
+            if (
+                self.allocation_seconds != allocation
+                or self.prior_campaign_seconds != 0
+            ):
                 raise ValueError("screen owns a separate eight-hour allocation")
+        if self.protocol.study != "history-input" and self.input_bindings:
+            raise ValueError("per-arm input bindings are scoped to history-input")
         if "ema" in self.protocol.evaluation_variants and any(
             not isinstance(s, TrainSelfPlay) or s.learning.ema is None
             for r in recipes

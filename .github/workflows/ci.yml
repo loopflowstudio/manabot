@@ -93,13 +93,14 @@ jobs:
 
       - name: Integration tests
         run: |
-          uv run --python 3.12 --extra dev pytest tests/env/ tests/agent/ tests/model/ \
+          uv run --python 3.12 --extra dev --extra notebook pytest tests/env/ tests/agent/ tests/model/ \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
             tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
             tests/training/test_technique_screen.py tests/training/test_capacity_study.py \
             tests/training/test_value_models.py \
+            tests/training/test_history_input.py tests/training/test_history_arena.py \
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py tests/bench/test_distributed_recipe_workloads.py
 

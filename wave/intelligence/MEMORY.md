@@ -1,5 +1,14 @@
 # Intelligence memory
 
+## History input (ETU-106, 2026-10-06)
+
+Jack Heart authorized [history-screen delivery](../../experiments/history-input.md).
+Off/on ABIs differ. Native fixtures and eight fixed-weight replayed games pass; the old
+extension and campaign bytes remain preserved. No calibration or campaign ran; delivered source,
+exclusive-host/cohort audit and prospective cost admission precede execution.
+History adds information and parameters; fixed-update scores cannot establish
+common-cost superiority. ETU-106 stays open.
+
 ## Completed pooling × advantage-floor follow-up (ETU-106, 2026-10-06)
 
 Jack Heart authorized the bounded follow-up after PR #226 and requested evidence
@@ -461,19 +470,12 @@ separate claim boundaries, irrespective of a task's completion status.
 
 ### Historical planning reconciliation (2026-09-24)
 
-The migration-blocked cache review is retained at `59f16e0d` in this file's
-history; it was not live planning authority. Its unresolved delivery limits
-remain: bounded belief demos do not satisfy conditional policy-only action-change,
-live advice, multi-game calibration or arena strength. ETU-31 remains deferred.
-Check current Tasks before creating conditional atlas/distillation, calibration,
-semantic-history replay or shared-vocabulary work; do not create parallel Rules
-meaning. ETU-34's later merged/completed disposition is in GOAL.md.
-
-ETU-21 and Game's ETU-14 already cover the live-advice continuation. The `ed2`
-address and posterior resolver now exist, so the claim that a live address is
-wholly missing is stale. `/api/advice` still calls the fixture provider, so the
-end-to-end finish line remains open. The carried design and remaining release
-gates are in [the live-advice plan](../../docs/plans/live-belief-advice.md).
+Planning detail remains at `59f16e0d` and `60e2f897`. GOAL.md owns dispositions:
+ETU-21 abandoned, ETU-31 deferred, ETU-34 completed. Bounded demos establish
+neither conditional student flips, live advice, full-game calibration nor strength.
+The ed2 replay exists; fixture-backed advice and unavailable checkpoints remain
+subject to [the live-advice plan](../../docs/plans/live-belief-advice.md).
+Check existing Tasks before overlapping work; Rules owns history semantics.
 
 ## Corrected-world training binding (2026-09-29)
 
