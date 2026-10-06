@@ -78,3 +78,8 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 (Older platform docs: [first-light-run-1](first-light-run-1.md),
 [sps-closeout](sps-closeout.md).)
+
+Distributed-RL research and the unexecuted bounded workload plan live in
+[the ETU-108 report](../docs/distributed-rl.md). Its supervisor is in
+[runners/distributed_benchmark.py](runners/distributed_benchmark.py); this is
+benchmark preparation, not a completed two-host training experiment.
