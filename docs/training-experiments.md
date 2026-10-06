@@ -189,3 +189,13 @@ behavior; they establish no strength, calibration or training acceptance result.
 
 Capacity early-progress and terminal comparison plans use the same declarative
 ladder and ordinary study executor; see the [unexecuted protocol](../experiments/model-capacity.md).
+
+## Execute a comparison
+
+`Experiment.schedule` declares seeds, configured hardware, process/wall budgets
+and monitoring independently of regime resolution. The shared explicit
+`run_experiment` runner records actual attempts in `ExperimentRun`, evaluates
+milestones during learning and creates one editable comparison notebook.
+[Execution, continuation and notebook contracts](experiment-execution.md) describe
+the supported local CPU placement, history/depth consumers and evidence limits.
+Interpretation and repository knowledge updates belong to an experiment skill.

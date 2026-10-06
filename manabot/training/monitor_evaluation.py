@@ -60,6 +60,38 @@ class MonitorProtocol(Strict):
         return self
 
 
+class Checkpoint(Strict):
+    artifact: ArtifactReference
+    coordinates: TrainingCoordinates
+
+
+def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
+    """Return a completed raw stage export with original cumulative coordinates."""
+    for index, stage in enumerate(run.stages):
+        if stage.id != stage_id:
+            continue
+        if (
+            stage.status != "completed"
+            or "raw" not in stage.artifacts
+            or stage.cumulative_seconds is None
+        ):
+            return None
+        prefix = run.stages[: index + 1]
+        return Checkpoint(
+            artifact=stage.artifacts["raw"],
+            coordinates=TrainingCoordinates(
+                stage_id=stage.id,
+                updates=run.updates_through(stage.id),
+                training_seconds=stage.cumulative_seconds,
+                environment_decisions=sum(s.environment_decisions for s in prefix),
+                learner_transitions=sum(s.learner_transitions for s in prefix),
+                optimizer_exposures=sum(s.optimizer_exposures for s in prefix),
+                games=sum(s.games for s in prefix),
+            ),
+        )
+    return None
+
+
 class ArenaRow(BaseModel):
     """Narrow the arena JSON boundary while retaining every additional field."""
 

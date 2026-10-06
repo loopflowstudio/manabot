@@ -17,6 +17,7 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 from manabot.arena.models import canonical_json, canonical_sha256
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.training.execution import validate_regime
+from manabot.training.experiment_execution import ExperimentSchedule
 from manabot.training.models import (
     AtaraxosMoveLearning,
     Execution,
@@ -371,6 +372,7 @@ class Experiment:
     overrides: tuple[Component, ...] = ()
     cases: tuple[Case, ...] = ()
     matrix: tuple[Axis, ...] = ()
+    schedule: ExperimentSchedule | None = None
 
     def resolve(self) -> ResolvedExperiment:
         if self.name:

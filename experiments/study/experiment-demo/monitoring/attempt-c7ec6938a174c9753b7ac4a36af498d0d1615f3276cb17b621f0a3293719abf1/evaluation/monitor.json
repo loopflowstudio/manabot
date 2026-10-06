@@ -1,0 +1,466 @@
+{
+  "artifact": {
+    "bytes": 86467,
+    "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0000/policy-0-raw.pt",
+    "sha256": "85ff3fa957ce912b983499f224e3b1863499d7433b15e811e3f5e8fcddfa06ae"
+  },
+  "candidate": {
+    "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+    "artifact_id": "monitor/85ff3fa957ce912b983499f224e3b1863499d7433b15e811e3f5e8fcddfa06ae",
+    "checkpoint_bytes": 86467,
+    "checkpoint_sha256": "85ff3fa957ce912b983499f224e3b1863499d7433b15e811e3f5e8fcddfa06ae",
+    "compute_class_id": "policy-cpu-one-thread-one-pass",
+    "content_suite": "w4-allies-lessons-v1",
+    "display_name": "Monitored checkpoint",
+    "evidence_class": "production",
+    "information_boundary": "acting-viewer",
+    "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+    "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+    "parameter_count": 4668,
+    "player_id": "monitor-checkpoint",
+    "player_seed_derivation_id": "arena-pair-deal-player-v1",
+    "player_spec": {
+      "batch_size": 1,
+      "deterministic": false,
+      "device": "cpu",
+      "kind": "checkpoint"
+    },
+    "role": "challenger",
+    "runner_kind": "checkpoint",
+    "search_call_seed_derivation_id": null,
+    "search_semantics": null,
+    "source_sha256": null,
+    "training_seed": 117,
+    "world": "w4"
+  },
+  "concurrent_activity": "campaign learner may overlap; one evaluator CPU thread; no contention correction",
+  "coordinates": {
+    "environment_decisions": 29,
+    "games": 0,
+    "learner_transitions": 16,
+    "optimizer_exposures": 4,
+    "stage_id": "policy-0",
+    "training_seconds": 1.1338517499971204,
+    "updates": 1
+  },
+  "coordinator_cpu_seconds": 0.7792640000000002,
+  "coordinator_rss_after_bytes": 278642688,
+  "coordinator_rss_before_bytes": 273858560,
+  "draw": {
+    "lower": 0.0,
+    "mean": 0.0,
+    "upper": 0.0
+  },
+  "error": null,
+  "evaluation_identities": {
+    "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+    "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+    "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+    "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+    "content_schema_version": 1,
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "9e3be349db2e65780e5ee32061f0677e255357d5776bef77fcb234b6d90da677",
+    "engine_source_sha256": "ad14ccee1544cf5f091f5b825970f848177c9654be3295d83e348a17149e8134",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+    "matchup": {
+      "hero": "arena-seat-0",
+      "hero_deck": {
+        "Accumulate Wisdom": 2,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 1,
+        "Fire Nation Cadets": 2,
+        "Firebending Lesson": 4,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Igneous Inspiration": 2,
+        "Island": 9,
+        "It'll Quench Ya!": 2,
+        "Mountain": 8,
+        "Otter-Penguin": 2,
+        "Pop Quiz": 2,
+        "Tiger-Seal": 2
+      },
+      "hero_sideboard": {
+        "Accumulate Wisdom": 1,
+        "Firebending Lesson": 1,
+        "It'll Quench Ya!": 1
+      },
+      "villain": "arena-seat-1",
+      "villain_deck": {
+        "Allies at Last": 2,
+        "Badgermole Cub": 2,
+        "Compassionate Healer": 2,
+        "Earth King's Lieutenant": 2,
+        "Earth Kingdom Jailer": 2,
+        "Fancy Footwork": 2,
+        "Forest": 8,
+        "Invasion Reinforcements": 2,
+        "Kyoshi Warriors": 2,
+        "Plains": 9,
+        "South Pole Voyager": 1,
+        "Suki, Kyoshi Warrior": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 2,
+        "Yip Yip!": 1
+      },
+      "villain_sideboard": {
+        "Fancy Footwork": 1,
+        "Yip Yip!": 1
+      }
+    },
+    "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+    "monitor_source_sha256": "7e15dc317cf3a011c058cd47cf91556282eb38e6ff5a79f7fb9a6b5c64a833b4",
+    "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+    "pilot_source_sha256": "95f40d0e218a0722825d324c310f5d110a4f0fab451765c1b67894066ef5c495",
+    "world": "w4"
+  },
+  "evaluation_seconds": 11.327554457995575,
+  "expected_games": 4,
+  "host_load_after": [
+    11.22802734375,
+    19.68701171875,
+    23.84912109375
+  ],
+  "host_load_before": [
+    10.8916015625,
+    19.9150390625,
+    23.9775390625
+  ],
+  "imported": false,
+  "key": {
+    "anchor_cohort_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+    "arena_version": "training-monitor-v1",
+    "content_suite": "w4-allies-lessons-v1",
+    "evaluation_compute_envelope_id": "policy-cpu-one-thread-one-pass",
+    "rating_model_version": "unrated-monitoring",
+    "rating_prior_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "viewer_boundary": "acting-viewer",
+    "world": "w4"
+  },
+  "opponent": {
+    "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+    "artifact_id": null,
+    "checkpoint_bytes": null,
+    "checkpoint_sha256": null,
+    "compute_class_id": "scripted-greedy-cpu-v1",
+    "content_suite": "w4-allies-lessons-v1",
+    "display_name": "Frozen scripted greedy",
+    "evidence_class": "production",
+    "information_boundary": "acting-viewer",
+    "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+    "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+    "parameter_count": null,
+    "player_id": "monitor-scripted-greedy",
+    "player_seed_derivation_id": "arena-pair-deal-player-v1",
+    "player_spec": {
+      "kind": "scripted_greedy"
+    },
+    "role": "anchor",
+    "runner_kind": "code",
+    "search_call_seed_derivation_id": null,
+    "search_semantics": null,
+    "source_sha256": "bc78361b82521d2b813c6ebd6afcd346bc1b022db387801b921168c82e252af3",
+    "training_seed": null,
+    "world": "w4"
+  },
+  "protocol": {
+    "bootstrap_replicates": 20,
+    "bootstrap_seed": 101,
+    "deal_seeds": [
+      1910101000
+    ],
+    "game_seconds": 30.0,
+    "max_commands": 10000
+  },
+  "purpose": "monitoring-not-scientific-evaluation",
+  "reaped_worker_cpu_seconds": 10.307886,
+  "regime_digest": "f551502ba50d5173c72b38f8824764edce62779a3ec5c0a17bccc847e26ad318",
+  "resource_limit": "RSS is coordinator-only, not peak; reaped worker CPU includes any other children reaped by this process during evaluation",
+  "rows": [
+    {
+      "arena_key": {
+        "anchor_cohort_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+        "arena_version": "training-monitor-v1",
+        "content_suite": "w4-allies-lessons-v1",
+        "evaluation_compute_envelope_id": "policy-cpu-one-thread-one-pass",
+        "rating_model_version": "unrated-monitoring",
+        "rating_prior_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "viewer_boundary": "acting-viewer",
+        "world": "w4"
+      },
+      "cell_id": "monitor-checkpoint__monitor-scripted-greedy",
+      "deal_block": 0,
+      "deal_seed": 1910101000,
+      "deal_seed_set_sha256": "c2a892613697edcdc3627c2fcba9867a144e34fde85c83a0b80a16d7a8848999",
+      "decisions": 68,
+      "failed_player_id": null,
+      "failure": null,
+      "game_seconds": 2.9645400419831276,
+      "game_trace_sha256": "9c2da937feb5f17b6e64d3e4150993666e263bbf5fde53051abc0d895a4d8ce0",
+      "integrity": {
+        "command_fabrications": 0,
+        "illegal_actions": 0,
+        "offer_binding_failures": 0,
+        "private_exposures": 0,
+        "replay_mismatches": 0,
+        "root_mutations": 0,
+        "truncations": 0
+      },
+      "latency": {
+        "monitor-checkpoint": {
+          "count": 26,
+          "p50": 0.007409541998640634,
+          "p95": 0.009575312236847822,
+          "seconds": 0.4794672930438537
+        },
+        "monitor-scripted-greedy": {
+          "count": 42,
+          "p50": 9.08348010852933e-06,
+          "p95": 1.7158313130494198e-05,
+          "seconds": 0.00043595899478532374
+        }
+      },
+      "leg": 0,
+      "player_a": "monitor-checkpoint",
+      "player_a_compute_class": "policy-cpu-one-thread-one-pass",
+      "player_a_registration_sha256": "e669e8f707a83cd0de91dedcf623c80c3c7d8d46da9549d6729485180b694606",
+      "player_a_seat": 0,
+      "player_a_seed": 2822493882032583575,
+      "player_b": "monitor-scripted-greedy",
+      "player_b_compute_class": "scripted-greedy-cpu-v1",
+      "player_b_registration_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+      "player_b_seed": 15804834428202933552,
+      "replay_passed": true,
+      "score_a": 0.0,
+      "seat_decks": [
+        "ur_lessons",
+        "gw_allies"
+      ],
+      "terminated": true,
+      "termination_reason": "terminal",
+      "trace_path": "deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
+      "trace_sha256": "9c2da937feb5f17b6e64d3e4150993666e263bbf5fde53051abc0d895a4d8ce0",
+      "trace_shard_sha256": "d65e56c665fb81ef990766988736fae98aa376f79e1c33030956d174799598ac",
+      "truncated": false,
+      "winner": 1
+    },
+    {
+      "arena_key": {
+        "anchor_cohort_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+        "arena_version": "training-monitor-v1",
+        "content_suite": "w4-allies-lessons-v1",
+        "evaluation_compute_envelope_id": "policy-cpu-one-thread-one-pass",
+        "rating_model_version": "unrated-monitoring",
+        "rating_prior_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "viewer_boundary": "acting-viewer",
+        "world": "w4"
+      },
+      "cell_id": "monitor-checkpoint__monitor-scripted-greedy",
+      "deal_block": 0,
+      "deal_seed": 1910101000,
+      "deal_seed_set_sha256": "c2a892613697edcdc3627c2fcba9867a144e34fde85c83a0b80a16d7a8848999",
+      "decisions": 246,
+      "failed_player_id": null,
+      "failure": null,
+      "game_seconds": 3.176968624989968,
+      "game_trace_sha256": "de2a7bd08ce1abffb0a5c180ebae2372871b3d08cc400f002fa2bdb6d362d684",
+      "integrity": {
+        "command_fabrications": 0,
+        "illegal_actions": 0,
+        "offer_binding_failures": 0,
+        "private_exposures": 0,
+        "replay_mismatches": 0,
+        "root_mutations": 0,
+        "truncations": 0
+      },
+      "latency": {
+        "monitor-checkpoint": {
+          "count": 71,
+          "p50": 0.005045458005042747,
+          "p95": 0.007086603989591822,
+          "seconds": 0.5779212000197731
+        },
+        "monitor-scripted-greedy": {
+          "count": 175,
+          "p50": 7.833004929125309e-06,
+          "p95": 1.8749997252598405e-05,
+          "seconds": 0.0017390790453646332
+        }
+      },
+      "leg": 1,
+      "player_a": "monitor-checkpoint",
+      "player_a_compute_class": "policy-cpu-one-thread-one-pass",
+      "player_a_registration_sha256": "e669e8f707a83cd0de91dedcf623c80c3c7d8d46da9549d6729485180b694606",
+      "player_a_seat": 1,
+      "player_a_seed": 2822493882032583575,
+      "player_b": "monitor-scripted-greedy",
+      "player_b_compute_class": "scripted-greedy-cpu-v1",
+      "player_b_registration_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+      "player_b_seed": 15804834428202933552,
+      "replay_passed": true,
+      "score_a": 1.0,
+      "seat_decks": [
+        "ur_lessons",
+        "gw_allies"
+      ],
+      "terminated": true,
+      "termination_reason": "terminal",
+      "trace_path": "deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
+      "trace_sha256": "de2a7bd08ce1abffb0a5c180ebae2372871b3d08cc400f002fa2bdb6d362d684",
+      "trace_shard_sha256": "d65e56c665fb81ef990766988736fae98aa376f79e1c33030956d174799598ac",
+      "truncated": false,
+      "winner": 1
+    },
+    {
+      "arena_key": {
+        "anchor_cohort_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+        "arena_version": "training-monitor-v1",
+        "content_suite": "w4-allies-lessons-v1",
+        "evaluation_compute_envelope_id": "policy-cpu-one-thread-one-pass",
+        "rating_model_version": "unrated-monitoring",
+        "rating_prior_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "viewer_boundary": "acting-viewer",
+        "world": "w4"
+      },
+      "cell_id": "monitor-checkpoint__monitor-scripted-greedy",
+      "deal_block": 0,
+      "deal_seed": 1910101000,
+      "deal_seed_set_sha256": "c2a892613697edcdc3627c2fcba9867a144e34fde85c83a0b80a16d7a8848999",
+      "decisions": 114,
+      "failed_player_id": null,
+      "failure": null,
+      "game_seconds": 2.7246384159952868,
+      "game_trace_sha256": "d0abb1b08bbaf9274a3ba293483e031ec2fc25b9465f944097623fc36d1df3a3",
+      "integrity": {
+        "command_fabrications": 0,
+        "illegal_actions": 0,
+        "offer_binding_failures": 0,
+        "private_exposures": 0,
+        "replay_mismatches": 0,
+        "root_mutations": 0,
+        "truncations": 0
+      },
+      "latency": {
+        "monitor-checkpoint": {
+          "count": 66,
+          "p50": 0.005009645989048295,
+          "p95": 0.005852843743923586,
+          "seconds": 0.540667501045391
+        },
+        "monitor-scripted-greedy": {
+          "count": 48,
+          "p50": 6.750007742084563e-06,
+          "p95": 1.0805809870362281e-05,
+          "seconds": 0.00034287714515812695
+        }
+      },
+      "leg": 2,
+      "player_a": "monitor-checkpoint",
+      "player_a_compute_class": "policy-cpu-one-thread-one-pass",
+      "player_a_registration_sha256": "e669e8f707a83cd0de91dedcf623c80c3c7d8d46da9549d6729485180b694606",
+      "player_a_seat": 0,
+      "player_a_seed": 2822493882032583575,
+      "player_b": "monitor-scripted-greedy",
+      "player_b_compute_class": "scripted-greedy-cpu-v1",
+      "player_b_registration_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+      "player_b_seed": 15804834428202933552,
+      "replay_passed": true,
+      "score_a": 1.0,
+      "seat_decks": [
+        "gw_allies",
+        "ur_lessons"
+      ],
+      "terminated": true,
+      "termination_reason": "terminal",
+      "trace_path": "deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
+      "trace_sha256": "d0abb1b08bbaf9274a3ba293483e031ec2fc25b9465f944097623fc36d1df3a3",
+      "trace_shard_sha256": "d65e56c665fb81ef990766988736fae98aa376f79e1c33030956d174799598ac",
+      "truncated": false,
+      "winner": 0
+    },
+    {
+      "arena_key": {
+        "anchor_cohort_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+        "arena_version": "training-monitor-v1",
+        "content_suite": "w4-allies-lessons-v1",
+        "evaluation_compute_envelope_id": "policy-cpu-one-thread-one-pass",
+        "rating_model_version": "unrated-monitoring",
+        "rating_prior_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "viewer_boundary": "acting-viewer",
+        "world": "w4"
+      },
+      "cell_id": "monitor-checkpoint__monitor-scripted-greedy",
+      "deal_block": 0,
+      "deal_seed": 1910101000,
+      "deal_seed_set_sha256": "c2a892613697edcdc3627c2fcba9867a144e34fde85c83a0b80a16d7a8848999",
+      "decisions": 83,
+      "failed_player_id": null,
+      "failure": null,
+      "game_seconds": 1.7833292499999516,
+      "game_trace_sha256": "6115e535424246b0023432663fec62dbefe3eb46650d6c47337c5c70b20bbae0",
+      "integrity": {
+        "command_fabrications": 0,
+        "illegal_actions": 0,
+        "offer_binding_failures": 0,
+        "private_exposures": 0,
+        "replay_mismatches": 0,
+        "root_mutations": 0,
+        "truncations": 0
+      },
+      "latency": {
+        "monitor-checkpoint": {
+          "count": 41,
+          "p50": 0.0036991669912822545,
+          "p95": 0.0040894169942475855,
+          "seconds": 0.29927392106037587
+        },
+        "monitor-scripted-greedy": {
+          "count": 42,
+          "p50": 4.4374901335686445e-06,
+          "p95": 8.146498294081533e-06,
+          "seconds": 0.0002035449433606118
+        }
+      },
+      "leg": 3,
+      "player_a": "monitor-checkpoint",
+      "player_a_compute_class": "policy-cpu-one-thread-one-pass",
+      "player_a_registration_sha256": "e669e8f707a83cd0de91dedcf623c80c3c7d8d46da9549d6729485180b694606",
+      "player_a_seat": 1,
+      "player_a_seed": 2822493882032583575,
+      "player_b": "monitor-scripted-greedy",
+      "player_b_compute_class": "scripted-greedy-cpu-v1",
+      "player_b_registration_sha256": "8dec663853bcc214e9c761ce8c25498f39c3239212358edef279fc5423737e77",
+      "player_b_seed": 15804834428202933552,
+      "replay_passed": true,
+      "score_a": 0.0,
+      "seat_decks": [
+        "gw_allies",
+        "ur_lessons"
+      ],
+      "terminated": true,
+      "termination_reason": "terminal",
+      "trace_path": "deal-000/traces/monitor-checkpoint__monitor-scripted-greedy.commands.jsonl.gz",
+      "trace_sha256": "6115e535424246b0023432663fec62dbefe3eb46650d6c47337c5c70b20bbae0",
+      "trace_shard_sha256": "d65e56c665fb81ef990766988736fae98aa376f79e1c33030956d174799598ac",
+      "truncated": false,
+      "winner": 0
+    }
+  ],
+  "run_id": "1f950f796ef64db8983105779faf6b7e",
+  "schema_version": 1,
+  "score": {
+    "lower": 0.5,
+    "mean": 0.5,
+    "upper": 0.5
+  },
+  "source_rows_path": null,
+  "source_rows_sha256": null,
+  "status": "completed",
+  "training_seed": 117,
+  "win": {
+    "lower": 0.5,
+    "mean": 0.5,
+    "upper": 0.5
+  }
+}

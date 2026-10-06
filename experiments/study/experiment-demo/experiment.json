@@ -1,0 +1,2453 @@
+{
+  "attempts": [
+    {
+      "allowance_seconds": 20.0,
+      "case": "fixture-small",
+      "error": null,
+      "finished_unix": 1791311038.967498,
+      "ordinal": 0,
+      "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0000",
+      "process_seconds": 3.485413166024955,
+      "recovery_parent": null,
+      "run_id": "1f950f796ef64db8983105779faf6b7e",
+      "seed": 117,
+      "started_unix": 1791311035.478774,
+      "status": "completed"
+    },
+    {
+      "allowance_seconds": 20.0,
+      "case": "fixture-wide",
+      "error": null,
+      "finished_unix": 1791311042.668787,
+      "ordinal": 1,
+      "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0001",
+      "process_seconds": 3.6799160419905093,
+      "recovery_parent": null,
+      "run_id": "d2674baa68ea4ca29a1a785779946c9b",
+      "seed": 117,
+      "started_unix": 1791311038.985059,
+      "status": "completed"
+    },
+    {
+      "allowance_seconds": 20.0,
+      "case": "fixture-small",
+      "error": null,
+      "finished_unix": 1791311046.188877,
+      "ordinal": 2,
+      "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0002",
+      "process_seconds": 3.4952075830078684,
+      "recovery_parent": null,
+      "run_id": "a6b558d2dcc94be6b811835aebe7a449",
+      "seed": 118,
+      "started_unix": 1791311042.689066,
+      "status": "completed"
+    },
+    {
+      "allowance_seconds": 20.0,
+      "case": "fixture-wide",
+      "error": null,
+      "finished_unix": 1791311049.674583,
+      "ordinal": 3,
+      "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0003",
+      "process_seconds": 3.4747163339925464,
+      "recovery_parent": null,
+      "run_id": "77b32ff95731421c99d15d12296e16a3",
+      "seed": 118,
+      "started_unix": 1791311046.197248,
+      "status": "completed"
+    }
+  ],
+  "coordinator_cpu_seconds": 1.9899379999999987,
+  "elapsed_seconds": 50.782234582991805,
+  "error": null,
+  "evaluator_seconds": 47.169547416997375,
+  "hardware": {
+    "backend": "local-cpu",
+    "cpu_threads": 2,
+    "dollars_per_hour": null,
+    "host": "Jacks-MacBook-Pro-2.local",
+    "name": "fixture"
+  },
+  "host_dollars": null,
+  "host_load": [
+    11.29736328125,
+    18.66943359375,
+    23.28515625
+  ],
+  "id": "experiment-b9b3029fa97a4c9dafebd271eff536da",
+  "intent": {
+    "experiment": {
+      "cases": [
+        {
+          "baseline": "fixture",
+          "baseline_digest": "6d6a1c9b453d9d9cbf4251bfda79c9141bf438f50f13beb1050f1190278dc851",
+          "label": "small",
+          "name": "fixture-small",
+          "regime": {
+            "agent": {
+              "attention_layers": 2,
+              "attention_on": true,
+              "belief_card_vocab_size": 0,
+              "belief_count_buckets": 0,
+              "belief_hidden_zone_vocab_size": 7,
+              "belief_owner_role_vocab_size": 2,
+              "hidden_dim": 8,
+              "num_attention_heads": 2,
+              "semantic_pack": "ur-lessons-vs-gw-allies",
+              "value_aggregation": "value_token",
+              "value_kind": "categorical_wdl"
+            },
+            "id": "fixture-small",
+            "match": {
+              "hero": "arena-seat-0",
+              "hero_deck": {
+                "Accumulate Wisdom": 2,
+                "Divide by Zero": 2,
+                "Dragonfly Swarm": 1,
+                "Fire Nation Cadets": 2,
+                "Firebending Lesson": 4,
+                "First-Time Flyer": 2,
+                "Forecasting Fortune Teller": 1,
+                "Igneous Inspiration": 2,
+                "Island": 9,
+                "It'll Quench Ya!": 2,
+                "Mountain": 8,
+                "Otter-Penguin": 2,
+                "Pop Quiz": 2,
+                "Tiger-Seal": 2
+              },
+              "hero_sideboard": {
+                "Accumulate Wisdom": 1,
+                "Firebending Lesson": 1,
+                "It'll Quench Ya!": 1
+              },
+              "villain": "arena-seat-1",
+              "villain_deck": {
+                "Allies at Last": 2,
+                "Badgermole Cub": 2,
+                "Compassionate Healer": 2,
+                "Earth King's Lieutenant": 2,
+                "Earth Kingdom Jailer": 2,
+                "Fancy Footwork": 2,
+                "Forest": 8,
+                "Invasion Reinforcements": 2,
+                "Kyoshi Warriors": 2,
+                "Plains": 9,
+                "South Pole Voyager": 1,
+                "Suki, Kyoshi Warrior": 1,
+                "Water Tribe Rallier": 2,
+                "White Lotus Reinforcements": 2,
+                "Yip Yip!": 1
+              },
+              "villain_sideboard": {
+                "Fancy Footwork": 1,
+                "Yip Yip!": 1
+              }
+            },
+            "observation": {
+              "max_actions": 64,
+              "max_cards_per_player": 60,
+              "max_events": 32,
+              "max_focus_objects": 2,
+              "max_permanents_per_player": 40
+            },
+            "recovery_max_microsteps": null,
+            "schedule_clock": "run_elapsed_budget",
+            "schema_version": 1,
+            "selection": "last-complete-raw",
+            "stages": [
+              {
+                "behavior": "current-self",
+                "execution": {
+                  "device": "cpu",
+                  "memory_bytes": 34359738368,
+                  "precision": "float32",
+                  "threads": 1,
+                  "wall_seconds": 8.0,
+                  "workers": 1
+                },
+                "id": "policy-0",
+                "initial": null,
+                "learning": {
+                  "advantage_quantile": 0.75,
+                  "clip": 0.2,
+                  "collection_kl": 0.1,
+                  "ema": 0.999,
+                  "filter_kind": "quantile",
+                  "filter_scope": "actor_critic",
+                  "gradient": "ataraxos_move",
+                  "learning_rate_max": 0.0001,
+                  "learning_rate_min": 5e-06,
+                  "learning_rate_power": 1.1,
+                  "learning_rate_scale": 0.5,
+                  "max_grad_norm": 0.267,
+                  "min_advantage": 0.01,
+                  "policy_lambda": 0.5,
+                  "reference": "action_type_uniform",
+                  "tau_power": 0.3,
+                  "tau_scale": 0.05,
+                  "value_lambda": 0.8
+                },
+                "operation": "train_self_play",
+                "opponent": null,
+                "optimizer": "adam",
+                "streams": 2,
+                "trainable": "policy_value",
+                "trainer": "net_opponent",
+                "transitions": 8,
+                "updates": 1
+              }
+            ],
+            "wall_seconds": 20.0,
+            "world": "w4"
+          },
+          "regime_digest": "f551502ba50d5173c72b38f8824764edce62779a3ec5c0a17bccc847e26ad318",
+          "schema_version": 1,
+          "settings": [
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_layers"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_on"
+              ],
+              "source": "fixture",
+              "value": true
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_card_vocab_size"
+              ],
+              "source": "fixture",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_count_buckets"
+              ],
+              "source": "fixture",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_hidden_zone_vocab_size"
+              ],
+              "source": "fixture",
+              "value": 7
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_owner_role_vocab_size"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "compound_decisions"
+              ],
+              "source": "fixture",
+              "value": false
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "hidden_dim"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "num_attention_heads"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "semantic_pack"
+              ],
+              "source": "fixture",
+              "value": "ur-lessons-vs-gw-allies"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_aggregation"
+              ],
+              "source": "fixture",
+              "value": "value_token"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_kind"
+              ],
+              "source": "fixture",
+              "value": "categorical_wdl"
+            },
+            {
+              "component": "identity",
+              "origin": "identity",
+              "path": [
+                "id"
+              ],
+              "source": "experiment-name",
+              "value": "fixture-small"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero"
+              ],
+              "source": "fixture",
+              "value": "arena-seat-0"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Accumulate Wisdom"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Divide by Zero"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Dragonfly Swarm"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Fire Nation Cadets"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Firebending Lesson"
+              ],
+              "source": "fixture",
+              "value": 4
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "First-Time Flyer"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Forecasting Fortune Teller"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Igneous Inspiration"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Island"
+              ],
+              "source": "fixture",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "It'll Quench Ya!"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Mountain"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Otter-Penguin"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Pop Quiz"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Tiger-Seal"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Accumulate Wisdom"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Firebending Lesson"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "It'll Quench Ya!"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain"
+              ],
+              "source": "fixture",
+              "value": "arena-seat-1"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Allies at Last"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Badgermole Cub"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Compassionate Healer"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth King's Lieutenant"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth Kingdom Jailer"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Fancy Footwork"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Forest"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Invasion Reinforcements"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Kyoshi Warriors"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Plains"
+              ],
+              "source": "fixture",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "South Pole Voyager"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Suki, Kyoshi Warrior"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Water Tribe Rallier"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "White Lotus Reinforcements"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Yip Yip!"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Fancy Footwork"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Yip Yip!"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_actions"
+              ],
+              "source": "fixture",
+              "value": 64
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_cards_per_player"
+              ],
+              "source": "fixture",
+              "value": 60
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_events"
+              ],
+              "source": "fixture",
+              "value": 32
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_focus_objects"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_permanents_per_player"
+              ],
+              "source": "fixture",
+              "value": 40
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "recovery_max_microsteps"
+              ],
+              "source": "fixture",
+              "value": null
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "schedule_clock"
+              ],
+              "source": "fixture",
+              "value": "run_elapsed_budget"
+            },
+            {
+              "component": "identity",
+              "origin": "baseline",
+              "path": [
+                "schema_version"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "selection"
+              ],
+              "source": "fixture",
+              "value": "last-complete-raw"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "behavior"
+              ],
+              "source": "fixture",
+              "value": "current-self"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "device"
+              ],
+              "source": "fixture",
+              "value": "cpu"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "memory_bytes"
+              ],
+              "source": "fixture",
+              "value": 34359738368
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "precision"
+              ],
+              "source": "fixture",
+              "value": "float32"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "threads"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "wall_seconds"
+              ],
+              "source": "fixture",
+              "value": 8.0
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "workers"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "id"
+              ],
+              "source": "fixture",
+              "value": "policy-0"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "initial"
+              ],
+              "source": "fixture",
+              "value": null
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "advantage_quantile"
+              ],
+              "source": "fixture",
+              "value": 0.75
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "clip"
+              ],
+              "source": "fixture",
+              "value": 0.2
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "collection_kl"
+              ],
+              "source": "fixture",
+              "value": 0.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "ema"
+              ],
+              "source": "fixture",
+              "value": 0.999
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_kind"
+              ],
+              "source": "fixture",
+              "value": "quantile"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_scope"
+              ],
+              "source": "fixture",
+              "value": "actor_critic"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "gradient"
+              ],
+              "source": "fixture",
+              "value": "ataraxos_move"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_max"
+              ],
+              "source": "fixture",
+              "value": 0.0001
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_min"
+              ],
+              "source": "fixture",
+              "value": 5e-06
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_power"
+              ],
+              "source": "fixture",
+              "value": 1.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_scale"
+              ],
+              "source": "fixture",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "max_grad_norm"
+              ],
+              "source": "fixture",
+              "value": 0.267
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "min_advantage"
+              ],
+              "source": "fixture",
+              "value": 0.01
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "policy_lambda"
+              ],
+              "source": "fixture",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "reference"
+              ],
+              "source": "fixture",
+              "value": "action_type_uniform"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_power"
+              ],
+              "source": "fixture",
+              "value": 0.3
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_scale"
+              ],
+              "source": "fixture",
+              "value": 0.05
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "value_lambda"
+              ],
+              "source": "fixture",
+              "value": 0.8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "operation"
+              ],
+              "source": "fixture",
+              "value": "train_self_play"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "opponent"
+              ],
+              "source": "fixture",
+              "value": null
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "optimizer"
+              ],
+              "source": "fixture",
+              "value": "adam"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "streams"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainable"
+              ],
+              "source": "fixture",
+              "value": "policy_value"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainer"
+              ],
+              "source": "fixture",
+              "value": "net_opponent"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "transitions"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "updates"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "wall_seconds"
+              ],
+              "source": "fixture",
+              "value": 20.0
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "world"
+              ],
+              "source": "fixture",
+              "value": "w4"
+            }
+          ]
+        },
+        {
+          "baseline": "fixture",
+          "baseline_digest": "6d6a1c9b453d9d9cbf4251bfda79c9141bf438f50f13beb1050f1190278dc851",
+          "label": "wide",
+          "name": "fixture-wide",
+          "regime": {
+            "agent": {
+              "attention_layers": 2,
+              "attention_on": true,
+              "belief_card_vocab_size": 0,
+              "belief_count_buckets": 0,
+              "belief_hidden_zone_vocab_size": 7,
+              "belief_owner_role_vocab_size": 2,
+              "hidden_dim": 16,
+              "num_attention_heads": 2,
+              "semantic_pack": "ur-lessons-vs-gw-allies",
+              "value_aggregation": "value_token",
+              "value_kind": "categorical_wdl"
+            },
+            "id": "fixture-wide",
+            "match": {
+              "hero": "arena-seat-0",
+              "hero_deck": {
+                "Accumulate Wisdom": 2,
+                "Divide by Zero": 2,
+                "Dragonfly Swarm": 1,
+                "Fire Nation Cadets": 2,
+                "Firebending Lesson": 4,
+                "First-Time Flyer": 2,
+                "Forecasting Fortune Teller": 1,
+                "Igneous Inspiration": 2,
+                "Island": 9,
+                "It'll Quench Ya!": 2,
+                "Mountain": 8,
+                "Otter-Penguin": 2,
+                "Pop Quiz": 2,
+                "Tiger-Seal": 2
+              },
+              "hero_sideboard": {
+                "Accumulate Wisdom": 1,
+                "Firebending Lesson": 1,
+                "It'll Quench Ya!": 1
+              },
+              "villain": "arena-seat-1",
+              "villain_deck": {
+                "Allies at Last": 2,
+                "Badgermole Cub": 2,
+                "Compassionate Healer": 2,
+                "Earth King's Lieutenant": 2,
+                "Earth Kingdom Jailer": 2,
+                "Fancy Footwork": 2,
+                "Forest": 8,
+                "Invasion Reinforcements": 2,
+                "Kyoshi Warriors": 2,
+                "Plains": 9,
+                "South Pole Voyager": 1,
+                "Suki, Kyoshi Warrior": 1,
+                "Water Tribe Rallier": 2,
+                "White Lotus Reinforcements": 2,
+                "Yip Yip!": 1
+              },
+              "villain_sideboard": {
+                "Fancy Footwork": 1,
+                "Yip Yip!": 1
+              }
+            },
+            "observation": {
+              "max_actions": 64,
+              "max_cards_per_player": 60,
+              "max_events": 32,
+              "max_focus_objects": 2,
+              "max_permanents_per_player": 40
+            },
+            "recovery_max_microsteps": null,
+            "schedule_clock": "run_elapsed_budget",
+            "schema_version": 1,
+            "selection": "last-complete-raw",
+            "stages": [
+              {
+                "behavior": "current-self",
+                "execution": {
+                  "device": "cpu",
+                  "memory_bytes": 34359738368,
+                  "precision": "float32",
+                  "threads": 1,
+                  "wall_seconds": 8.0,
+                  "workers": 1
+                },
+                "id": "policy-0",
+                "initial": null,
+                "learning": {
+                  "advantage_quantile": 0.75,
+                  "clip": 0.2,
+                  "collection_kl": 0.1,
+                  "ema": 0.999,
+                  "filter_kind": "quantile",
+                  "filter_scope": "actor_critic",
+                  "gradient": "ataraxos_move",
+                  "learning_rate_max": 0.0001,
+                  "learning_rate_min": 5e-06,
+                  "learning_rate_power": 1.1,
+                  "learning_rate_scale": 0.5,
+                  "max_grad_norm": 0.267,
+                  "min_advantage": 0.01,
+                  "policy_lambda": 0.5,
+                  "reference": "action_type_uniform",
+                  "tau_power": 0.3,
+                  "tau_scale": 0.05,
+                  "value_lambda": 0.8
+                },
+                "operation": "train_self_play",
+                "opponent": null,
+                "optimizer": "adam",
+                "streams": 2,
+                "trainable": "policy_value",
+                "trainer": "net_opponent",
+                "transitions": 8,
+                "updates": 1
+              }
+            ],
+            "wall_seconds": 20.0,
+            "world": "w4"
+          },
+          "regime_digest": "a98077be271bb01c54f098b7a959a10bf1867f77221bde7636336b151fc4f7da",
+          "schema_version": 1,
+          "settings": [
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_layers"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_on"
+              ],
+              "source": "fixture",
+              "value": true
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_card_vocab_size"
+              ],
+              "source": "fixture",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_count_buckets"
+              ],
+              "source": "fixture",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_hidden_zone_vocab_size"
+              ],
+              "source": "fixture",
+              "value": 7
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_owner_role_vocab_size"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "compound_decisions"
+              ],
+              "source": "fixture",
+              "value": false
+            },
+            {
+              "component": "model",
+              "origin": "override",
+              "path": [
+                "agent",
+                "hidden_dim"
+              ],
+              "source": "case:wide",
+              "value": 16
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "num_attention_heads"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "semantic_pack"
+              ],
+              "source": "fixture",
+              "value": "ur-lessons-vs-gw-allies"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_aggregation"
+              ],
+              "source": "fixture",
+              "value": "value_token"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_kind"
+              ],
+              "source": "fixture",
+              "value": "categorical_wdl"
+            },
+            {
+              "component": "identity",
+              "origin": "identity",
+              "path": [
+                "id"
+              ],
+              "source": "experiment-name",
+              "value": "fixture-wide"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero"
+              ],
+              "source": "fixture",
+              "value": "arena-seat-0"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Accumulate Wisdom"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Divide by Zero"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Dragonfly Swarm"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Fire Nation Cadets"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Firebending Lesson"
+              ],
+              "source": "fixture",
+              "value": 4
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "First-Time Flyer"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Forecasting Fortune Teller"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Igneous Inspiration"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Island"
+              ],
+              "source": "fixture",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "It'll Quench Ya!"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Mountain"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Otter-Penguin"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Pop Quiz"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Tiger-Seal"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Accumulate Wisdom"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Firebending Lesson"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "It'll Quench Ya!"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain"
+              ],
+              "source": "fixture",
+              "value": "arena-seat-1"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Allies at Last"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Badgermole Cub"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Compassionate Healer"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth King's Lieutenant"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth Kingdom Jailer"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Fancy Footwork"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Forest"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Invasion Reinforcements"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Kyoshi Warriors"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Plains"
+              ],
+              "source": "fixture",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "South Pole Voyager"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Suki, Kyoshi Warrior"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Water Tribe Rallier"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "White Lotus Reinforcements"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Yip Yip!"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Fancy Footwork"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Yip Yip!"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_actions"
+              ],
+              "source": "fixture",
+              "value": 64
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_cards_per_player"
+              ],
+              "source": "fixture",
+              "value": 60
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_events"
+              ],
+              "source": "fixture",
+              "value": 32
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_focus_objects"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_permanents_per_player"
+              ],
+              "source": "fixture",
+              "value": 40
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "recovery_max_microsteps"
+              ],
+              "source": "fixture",
+              "value": null
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "schedule_clock"
+              ],
+              "source": "fixture",
+              "value": "run_elapsed_budget"
+            },
+            {
+              "component": "identity",
+              "origin": "baseline",
+              "path": [
+                "schema_version"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "selection"
+              ],
+              "source": "fixture",
+              "value": "last-complete-raw"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "behavior"
+              ],
+              "source": "fixture",
+              "value": "current-self"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "device"
+              ],
+              "source": "fixture",
+              "value": "cpu"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "memory_bytes"
+              ],
+              "source": "fixture",
+              "value": 34359738368
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "precision"
+              ],
+              "source": "fixture",
+              "value": "float32"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "threads"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "wall_seconds"
+              ],
+              "source": "fixture",
+              "value": 8.0
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "workers"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "id"
+              ],
+              "source": "fixture",
+              "value": "policy-0"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "initial"
+              ],
+              "source": "fixture",
+              "value": null
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "advantage_quantile"
+              ],
+              "source": "fixture",
+              "value": 0.75
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "clip"
+              ],
+              "source": "fixture",
+              "value": 0.2
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "collection_kl"
+              ],
+              "source": "fixture",
+              "value": 0.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "ema"
+              ],
+              "source": "fixture",
+              "value": 0.999
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_kind"
+              ],
+              "source": "fixture",
+              "value": "quantile"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_scope"
+              ],
+              "source": "fixture",
+              "value": "actor_critic"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "gradient"
+              ],
+              "source": "fixture",
+              "value": "ataraxos_move"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_max"
+              ],
+              "source": "fixture",
+              "value": 0.0001
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_min"
+              ],
+              "source": "fixture",
+              "value": 5e-06
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_power"
+              ],
+              "source": "fixture",
+              "value": 1.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_scale"
+              ],
+              "source": "fixture",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "max_grad_norm"
+              ],
+              "source": "fixture",
+              "value": 0.267
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "min_advantage"
+              ],
+              "source": "fixture",
+              "value": 0.01
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "policy_lambda"
+              ],
+              "source": "fixture",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "reference"
+              ],
+              "source": "fixture",
+              "value": "action_type_uniform"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_power"
+              ],
+              "source": "fixture",
+              "value": 0.3
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_scale"
+              ],
+              "source": "fixture",
+              "value": 0.05
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "value_lambda"
+              ],
+              "source": "fixture",
+              "value": 0.8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "operation"
+              ],
+              "source": "fixture",
+              "value": "train_self_play"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "opponent"
+              ],
+              "source": "fixture",
+              "value": null
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "optimizer"
+              ],
+              "source": "fixture",
+              "value": "adam"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "streams"
+              ],
+              "source": "fixture",
+              "value": 2
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainable"
+              ],
+              "source": "fixture",
+              "value": "policy_value"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainer"
+              ],
+              "source": "fixture",
+              "value": "net_opponent"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "transitions"
+              ],
+              "source": "fixture",
+              "value": 8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "updates"
+              ],
+              "source": "fixture",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "wall_seconds"
+              ],
+              "source": "fixture",
+              "value": 20.0
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "world"
+              ],
+              "source": "fixture",
+              "value": "w4"
+            }
+          ]
+        }
+      ],
+      "name": "fixture",
+      "schema_version": 1
+    },
+    "schedule": {
+      "checkpoint_seconds": 3600.0,
+      "disk_reserve_bytes": 0,
+      "hardware": "fixture",
+      "monitoring": {
+        "attempt_seconds": 140.0,
+        "protocol": {
+          "bootstrap_replicates": 20,
+          "bootstrap_seed": 101,
+          "deal_seeds": [
+            1910101000
+          ],
+          "game_seconds": 30.0,
+          "max_commands": 10000
+        },
+        "seconds": 650.0
+      },
+      "order": [],
+      "process_seconds": 750.0,
+      "scientific_deal_seeds": [],
+      "seeds": [
+        117,
+        118
+      ],
+      "wall_seconds": 750.0
+    }
+  },
+  "intent_sha256": "c924d989973f816b97249cbea9aa7c1113a66473e1b3434ac21ee6d19f898d99",
+  "last_seen_unix": 1791311090.626569,
+  "notebook": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/comparison.ipynb",
+  "process_seconds": 61.304800542013254,
+  "runtime": {
+    "native": "8f279a8ec1f3d2aa9673aa71af34a2a7df0d187056f1ea647826a253056fac68",
+    "platform": "macOS-26.0.1-arm64-arm-64bit",
+    "python": "3.12.12",
+    "source": "a409051a24ad7802df9031c95ef1c39435e0ce5fe1961233b8f2c3b38bdbe181",
+    "torch": "2.10.0",
+    "world": "w4"
+  },
+  "status": "completed"
+}

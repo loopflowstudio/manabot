@@ -1,5 +1,30 @@
 # Intelligence memory
 
+## Experiment execution and notebook boundary (ETU-113, 2026-10-06)
+
+Jack Heart accepted Experiment as the declarative comparison interface, with one
+Python declaration per experiment and a shared explicit runner. History/depth
+consumers preserve calibrated regime identities, seed order and scientific deal
+reservations. Configured local CPU placement admits one learner plus one bounded
+evaluator; remote placement/provisioning and alternative trackers remain follow-ups.
+TrainingRun and VerifyStore retain learning and execution authority. Monitoring
+reuses ETU-101, keeps original checkpoint coordinates, retains failures and charges
+evaluator process time separately. Resume grants no budget or silent retries.
+
+Jack Heart revised the viewing contract after the demo: one create-once editable
+notebook generates a concise read-only HTML dashboard. Graphs render in HTML,
+with progress/freshness, applicable loss, latest evaluation, costs and failures
+first; comparisons use shared milestones. Metric docs and reusable functions own
+deeper analysis. Notebook edits survive refresh; Jack Heart's original edited
+demo remains intact beside a separately named revised generator. Cells only read
+retained data. Interpretation, ledger updates and next-experiment choices belong
+to a skill. Landing and auto-merge remain forbidden pending Jack Heart's review.
+
+Tiny fixtures prove scheduling/reporting only; timeouts remain retained and
+incomplete cohorts never become rates. No strength claim or live ETU-103/106
+change follows. The [execution guide](../../docs/experiment-execution.md) owns
+launch, recovery, costs and reporting. 
+
 ## History input (ETU-106, 2026-10-06)
 
 Jack Heart authorized [history-screen delivery and recovery](../../experiments/history-input.md).
@@ -473,30 +498,12 @@ Rules owns history semantics; check existing Tasks before overlapping work.
 
 ## Corrected-world training binding (2026-09-29)
 
-`scripts/train_challenger.py` remains the receipt-bound training-to-demo runner.
-The regime executor described below adds staged training; it does not yet
-replace that demo admission path. It builds
-teacher games with `MatchHypers.authored`, so sideboards are present and Learn
-offers a Lesson; deck constants alone give the old setup. The play server
-rejects a candidate whose content manifest was taken without sideboards. The
-runner records rules-runtime, content, setup, Lesson-pool and
-observation/action ABI digests, requires admission (engine legal-offer count
-equals encoded rows at every decision, at least one Learn decision offering a
-Lesson, search cap hits at most 1%), and completes only after the candidate
-plays both deck assignments through `configured_opponent` and `GameSession`.
-`train_search_supervised` now takes `observation_hypers`.
-
-Two eight-game executions completed on 2026-09-29 in 200 s and 139 s with zero
-omitted choices over 993 and 824 decisions (18 and 17 Learn decisions). In
-both, held-out policy KL stayed at its untrained value (0.0218 → 0.0222,
-0.0197 → 0.0212): PUCT-64×4 visit targets were close to uniform (top share 47%
-versus 39% uniform) and each run took about 56 optimizer steps. Which of those
-limits learning is untested. Treat these checkpoints as pipeline proof only.
-Details and unreviewed decisions are in the
-[2026-09-29 record](../../docs/evidence/corrected-world-training-2026-09-29.md).
-That record predates the current w4 declaration. New runs resolve the native
-world and exact ABI identities; ETU-75 owns the shared checkpoint/setup binding.
-
+`scripts/train_challenger.py` owns training-to-demo admission with authored
+sideboards and exact world/setup/ABI bindings. Two bounded executions proved the
+pipeline, not improvement: held-out KL stayed near initialization. Full observations
+and unresolved label/optimizer limits remain in
+[the dated record](../../docs/evidence/corrected-world-training-2026-09-29.md) and
+this memory at `fd7437df`. Regime execution does not replace demo admission.
 
 ## Training regime reconciliation (2026-10-04)
 
@@ -1026,18 +1033,16 @@ eight regime digests and the evaluation protocol. Capacity examples use the
 merged width/depth fields and allocate no ETU-102/103 study. Feedforward expansion,
 post-normalization and ownership injection stay with the delivered model.
 
-The retained ETU-104 bounded run at `486739d5` completed eight regimes, 32
-admitted raw/EMA exports and 120 exact-replayed games in 348.04 charged seconds.
-It first failed reporting because the notebook extra was absent; ordinary resume
-retained the failure and completed reporting without retraining or replacing
-arena rows. Offline report/metrics regeneration was byte-identical. This proves
+ETU-104 at `486739d5` completed eight regimes, 32 admitted exports and 120
+exact-replayed games in 348.04 seconds. Missing-notebook-dependency recovery
+retained failure evidence without retraining; offline regeneration was identical.
+Full details remain at `a3b22009`. This proves
 software composition and reload/evaluation, not strength or chapter acceptance.
 PR #223 is published. Jack Heart explicitly requested completion through landing;
 the landing pass reviewed the diff and retained evidence, with 64 focused checks
 passing. This is agent technical review, not human code review. Required CI and
 verified merge remain delivery conditions.
 
-Inspection at `ccb6538c`: equal shapes do not establish weight compatibility.
 
 Recipe composition uses regime IDs as the single cell-label source and rejects
 duplicates before crossing value outputs. Every variation snapshots and validates

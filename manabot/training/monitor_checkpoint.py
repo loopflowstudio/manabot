@@ -14,6 +14,7 @@ from manabot.training.monitor_evaluation import (
     TrainingCoordinates,
     evaluate_checkpoint,
     import_saved_rows,
+    stage_checkpoint,
 )
 from manabot.training.monitoring import evaluation_dashboard, publish_dashboard
 from manabot.training.recovery import attempt_lock
@@ -191,27 +192,12 @@ def main() -> None:
                 receipt.model_dump(exclude={"ordinal", "artifact", "error"})
             )
         else:
-            stage = next((s for s in run.stages if s.id == args.stage), None)
-            if (
-                stage is None
-                or "raw" not in stage.artifacts
-                or stage.status != "completed"
-                or stage.cumulative_seconds is None
-            ):
+            checkpoint = stage_checkpoint(run, args.stage)
+            if checkpoint is None:
                 parser.error(
                     "stage lacks a completed raw checkpoint with original elapsed coordinate"
                 )
-            artifact = stage.artifacts["raw"]
-            prefix = run.stages[: run.stages.index(stage) + 1]
-            coordinates = TrainingCoordinates(
-                stage_id=stage.id,
-                updates=run.updates_through(stage.id),
-                training_seconds=stage.cumulative_seconds,
-                environment_decisions=sum(s.environment_decisions for s in prefix),
-                learner_transitions=sum(s.learner_transitions for s in prefix),
-                optimizer_exposures=sum(s.optimizer_exposures for s in prefix),
-                games=sum(s.games for s in prefix),
-            )
+            artifact, coordinates = checkpoint.artifact, checkpoint.coordinates
         protocol = (
             MonitorProtocol.model_validate_json(args.protocol.read_text())
             if args.protocol

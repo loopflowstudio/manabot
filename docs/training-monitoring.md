@@ -158,3 +158,11 @@ retain their original stage/ordinal and are explicitly marked incomplete; final
 stage duration is never spread over earlier updates. Missing fixed validation,
 losses or resource observations cannot be recreated from aggregate results.
 Historical schemas still need to be readable by the ordinary TrainingRun model.
+
+## Experiment comparisons
+
+New comparisons can schedule stage and periodic monitoring through the shared
+[Experiment execution interface](experiment-execution.md). Its primary report is
+one editable Jupyter report generator for learning, milestone, comparison and cost
+plots in a read-only HTML dashboard. The existing evaluator and dashboard APIs remain the evidence projection
+owners; trackers are optional. Frozen live campaigns are not retrofitted.

@@ -97,6 +97,7 @@ jobs:
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
+            tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
             tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
             tests/training/test_technique_screen.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \
             tests/training/test_value_models.py \
