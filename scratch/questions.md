@@ -19,3 +19,13 @@ Reversible design assumption: coordinate ETU-104 through its merged AgentSpec,
 recipe helpers and accepted section 11, without launching another contribution.
 Its broader module hierarchy remains unapproved. No new session, scientific
 allocation, training, value-token checkout edit or ETU-91 change is needed.
+
+## Sync integration — 2026-10-06
+
+Merged main while retaining both typed compound and public-history APIs. Focused
+verification: rebuilt native extension; Python checks yielded 6 passed, 1 skipped,
+1 failed; native debug blocker replay passed. The failure is
+`test_history_off_and_declarative_identity`: the pinned `ataraxos-mtg-v1` preset
+selects w4 and current native admission requires w5. Preserved the versioned
+preset and strict admission; resolving this requires an explicit environment
+override or a new preset version, without rebinding frozen experiments.
