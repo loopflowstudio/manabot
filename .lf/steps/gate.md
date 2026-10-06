@@ -2,6 +2,12 @@
 
 Polish and validate only the current branch scope.
 
+## Required checks for new Python test modules
+
+Use unique test module basenames across unpackaged test directories. Collect new
+modules together with the existing tests in their CI invocation using
+`uv run pytest --collect-only`; isolated file runs miss import-name collisions.
+
 ## Required checks for play layout changes
 
 Run `combat-presentation.spec.ts` for board/sidebar geometry and narration controls.

@@ -179,10 +179,10 @@ and league scheduling until measurements require them.
 ## Benchmark evidence and remaining measurements
 
 **Original research-only budget (2026-10-05):** no training runs; one name-resolution/access
-attempt; dependency-free inventory and syntax/guard checks only. Later harness
-invocations allow one CPU thread, at most 110 seconds per child with five seconds
-for kill/reap. Microbenchmark timing windows default to three seconds (maximum
-ten). This is a per-diagnostic cap, not an allocation for repeatedly benchmarking.
+attempt; dependency-free inventory and syntax/guard checks only. The supervisor
+defaults to 110 seconds and one CPU thread, with five seconds for kill/reap. Explicit `--timeout` admits at most 240 seconds, matching the
+retained representative probe ceiling; recipe budgets never raise this deadline.
+Microbenchmark timing windows default to three seconds (maximum ten). This is a per-diagnostic cap, not an allocation for repeatedly benchmarking.
 Value-token training keeps priority. No ETU-91 files or running services changed.
 
 | Observation | Result |
@@ -293,11 +293,11 @@ Harness modes and their scopes:
 | --- | --- |
 | `inventory` | No Torch/native imports or training; host and source receipt only |
 | `simulator` | Four native streams, random legal actions, current authored setup; surfaced decisions/s including wrapper/tensor/sampling overhead, not pure Rust ticks/s |
-| `inference` | Width-16 semantic WDL Agent; batch 64 drawn from a real 4-stream, 16-step self-play collection; forward observations/s, initialization and collection excluded |
-| `train` | Existing Ataraxos recipe narrowed to two updates, 4 streams × 16 transitions/update; executor phase clocks isolate actual gradient-update time and sample exposures; raw/EMA exports through ordinary admission |
+| `inference` | Defaults to width-16 semantic WDL, batch 64; an explicit recipe selects AgentSpec, match/observation and first self-play stage streams × transitions. Forward observations/s excludes initialization and collection; no weights are trained or loaded |
+| `train` | Defaults to two iterations, 4 streams × 16 transitions/iteration; an explicit recipe executes unchanged through TrainingRegime. Reports collection, learning and export clocks, completed iterations, learner transitions, optimizer exposures and empty-filter skips |
 | `complete` | Existing CPU calibration (its own direct-self-play recipe and seed), export plus eight exact-replayed arena games; outer cap can cut it short and is not relaxed on failure |
 
-The inference batch is one small, untrained trajectory sample, not a representative
+The inference batch is one untrained trajectory sample, not a representative
 state distribution for every checkpoint. It measures neither actor throughput nor
 useful learning. Train-mode learning time includes target/filter/minibatch
 overhead; a pure backward-kernel test is still missing. Complete mode uses a
@@ -328,6 +328,50 @@ Ctrl-C stops its own child process group and retains an interrupted result;
 the deadline does the same for timeout. Use a new output path for every attempt.
 An external hard kill of the supervisor itself is outside this cleanup promise.
 
+For a future authorized representative measurement, supply resolved TrainingRegime
+JSON with `--recipe` and a declared `--seed` (default 108). For example, after
+exporting the desired recipe to `.runs/representative-recipe.json`:
+
+```bash
+uv run --no-project --python 3.12 --no-python-downloads experiments/runners/distributed_benchmark.py \
+  --mode train --recipe .runs/representative-recipe.json --seed 10831 \
+  --timeout 240 --out .runs/etu108-representative-new
+```
+
+This is an unexecuted launch example, not an allocation. The exact representative
+mini recipe is retained in the compact evidence extract's
+`attempts[attempt="etu108-mini-representative-1"]["recipe.json"]`; it declares
+220 seconds overall and 100 per stage. It can be exported as JSON without
+importing its original ad hoc script. A new run binds current source/runtime
+identities; it cannot inherit the old measurement or source identity. Inference
+can use the same recipe and seed in another fresh attempt directory, but measures
+an untrained model and only the first stage's collection geometry. Remaining
+stages are provenance, not executed inference work.
+
+Only inference and train accept recipes. Admission uses the ordinary regime
+validator and requires current-self self-play stages, CPU float32, one worker
+and one thread; unsupported stages, belief input, EMA/frozen behavior, wrong
+worlds, malformed fields and budgets beyond the supervisor cap fail explicitly.
+PPO and Ataraxos move settings retain their existing validators. Simulator remains
+a fixed four-stream probe; complete retains calibration's own recipe and seed
+197. Neither silently consumes a supplied recipe or custom calibration seed.
+
+`input-recipe.json` preserves supplied bytes and their SHA-256 before the child
+launches. `workload/recipe.json` is the resolved recipe; `identity.json` binds its
+canonical regime digest, serialized recipe hash, training source bundle,
+Python/Torch/native runtime, world/setup/ABI, seed and requested memory by stage.
+The supervisor retains its source hashes, host RAM and actual deadline separately.
+Requested memory is **not enforced** by this harness. Raw/EMA checkpoint admission,
+TrainingRun and VerifyStore remain the training authorities.
+
+Train's `measurement.json` projects completed iterations, learner transitions,
+optimizer exposures and explicit empty-filter skips from TrainingRun; an iteration
+is not proof of a gradient update. Learning time includes target/filter overhead
+and may be positive with zero exposures. On executor exceptions, original store
+and run failure receipts plus supervisor logs remain authoritative; abrupt kill
+may leave no summary, which must not be treated as zero work. Per-stage resources
+and diagnostics remain in `training-result.json` on normal return.
+
 Remote mini execution succeeded in the retained receipts. Future placement/remote
 task execution must use `lf`; run the same
 harness at the pinned source on mini. Do not copy a Mac native extension blindly
@@ -341,9 +385,9 @@ Measure both hosts independently with identical code/runtime/content, AgentSpec,
 batch/stream sizes and seeds; preserve cold startup separately from warm timing.
 Repeat only under a separately declared aggregate budget. Report device and thread
 counts, memory and host load beside the counters. Select intended value-token/depth
-variants through existing AgentSpec fields and
-add PPO recipe contrasts before representative comparisons; the current fixed
-harness exposes neither contrast. Do not retrofit any future results.
+variants and PPO/Ataraxos contrasts through existing AgentSpec and TrainingRegime
+fields. The explicit recipe path now
+exposes these choices without changing the learner. Do not retrofit future results.
 
 For transfer, measure application echo RTT (median/p95) on a persistent connection,
 then bidirectional uncompressed transfer of 1 KiB, 1 MiB and actual serialized
@@ -387,7 +431,8 @@ active ETU-91 campaign and its budget are not borrowed for this prototype.
 
 Reusable result: the estimator/transport distinction and explicit provenance,
 admission and accounting boundaries. Disposable result: the benchmark supervisor
-and fixed smoke workloads. Unresolved: machine placement, synchronization,
+and its smoke defaults; explicit recipes reuse the existing domain executor.
+Unresolved: machine placement, synchronization,
 safe nonzero lag for each rule, actor quotas under heterogeneity, representative
 model size, matched runtime provisioning and the aggregate prototype budget.
 
@@ -419,7 +464,8 @@ that either existing learner tolerates stale data.
 
 The review leaves placement, quotas and nonzero lag unresolved until measurements.
 The reusable deliverable is the ownership/data contract and bounded supervisor;
-the fixed workloads are disposable probes. Two-host contributions, updates,
+the smoke defaults are disposable probes, with explicit recipes available for later
+matched measurements. Two-host contributions, updates,
 checkpoint reload, replay evaluation and disconnect accounting still define the
 prototype finish line. ETU-108 remains open. This is agent technical review;
 no human architecture approval or completed distributed system is claimed.
@@ -433,3 +479,9 @@ with child reap. They do not import Torch/native code or certify its workloads.
 The existing CI Python unit job includes these tests. These historical delivery
 checks were dependency-free; the subsequent mini runtime evidence is recorded
 above. The evidence-report pass only parsed and checked retained files.
+
+Software-only follow-up checks (2026-10-06): 25 supervisor/workload fixtures and
+seven rejection subtests passed, with focused Ruff lint/format checks. Executor,
+collector and forward work are replaced by fixtures; no training, games or
+benchmark measurements ran. CI includes the recipe fixtures in both native
+integration jobs. This establishes propagation and receipt handling, not throughput.

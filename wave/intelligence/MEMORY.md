@@ -112,47 +112,45 @@ The plan-only notebook has no empirical outputs. All 18 plans exported, and
 63 focused admission/authoring/gradient checks passed without training or games.
 No method benefit, challenger strength or chapter acceptance follows.
 
-## Distributed RL research boundary (ETU-108, 2026-10-05)
+## Distributed RL research and software boundary (ETU-108, 2026-10-06)
 
-On 2026-10-06 Jack Heart requested delivery of the completed mini evidence.
-The [report](../../docs/distributed-rl.md) and compact evidence extract retain
-all five initial attempts plus representative training. Mini is M1/16 GiB, CPU
-one-thread. Initial inference failed on absent collector.close(); PR #237 fixed
-ownership cleanup and a fresh attempt succeeded. Tiny training filtered out both
-updates, so it supplies no gradient-throughput evidence. Representative masked
-mean/scalar width-64 training completed 20 updates, 5,120 learner transitions and
-1,280 optimizer exposures in 68.60 training / 70.73 process seconds, with six
-artifacts verified by the retained receipt. A separate tiny calibration replayed
-eight games; the representative checkpoint was not strength-evaluated. Its
-inherited 32 GiB execution budget exceeds actual RAM: sub-500 MB sampled RSS
-proves neither memory enforcement nor capacity. These are agent-inspected
-single-host receipts, not speedup, GPU, strength or distributed-training evidence.
+Jack Heart requested delivery of completed mini evidence, then a software-only
+follow-up exposing explicit recipes through the existing benchmark harness.
+The [report](../../docs/distributed-rl.md) and compact extract retain all five
+initial attempts and representative training. Mini is M1/16 GiB, CPU one-thread.
+Initial inference failed on absent collector.close(); PR #237 corrected ownership
+cleanup and a fresh attempt succeeded. Tiny training filtered both iterations,
+so it provides no gradient-throughput evidence. Representative masked-mean/scalar
+width-64 training completed 20 iterations, 5,120 learner transitions and 1,280
+optimizer exposures in 68.60 training / 70.73 process seconds, with six artifacts
+verified by the retained receipt. Eight replayed games belong to separate tiny
+calibration, not representative strength evaluation. The inherited 32 GiB budget
+exceeds actual RAM; sub-500 MB sampled RSS proves neither enforcement nor capacity.
+These single-host receipts establish no speedup, GPU or distributed-training claim.
 
-Jack Heart requested primary-source research and a disposable laptop/mini
-prototype where both hosts contribute to one model; speedup is not acceptance.
+The harness now accepts resolved TrainingRegime JSON for inference/train and
+preserves tiny smoke defaults. Input bytes, resolved recipe, source/runtime and
+world identities remain distinct. Train reuses execute_regime and reports actual
+iterations, transitions, exposures and empty-filter skips. Inference uses the
+first stage's batch geometry and an untrained model. Current-self self-play,
+CPU float32 and one thread are required; unsupported modes/configurations fail.
+The supervisor defaults to 110 seconds, admits explicit caps up to 240 seconds,
+and never expands its deadline from a recipe. Requested memory is not enforced.
+Fixture checks launch no training or benchmarks; frozen evidence remains unchanged.
+
 Matched laptop and transfer measurements, concurrent contributions to one learner,
-and disconnect accounting remain open. ETU-108 stays open. The evidence-report
-pass runs no benchmarks and leaves ETU-106 and ETU-91 untouched; no paid compute
-or new training allocation follows. Original source/attempt identities remain
-frozen; the earlier name-resolution failure is historical.
-
+and disconnect accounting remain open. ETU-108 stays open. ETU-106 and ETU-91
+remain untouched; no paid compute or new scientific allocation follows.
 Actor/inference placement and stale-data admission are separate decisions.
-Current PPO and the Ataraxos move rule retain collection behavior but do not
-implement V-trace; clipped ratios and reverse KL do not authorize arbitrary
-policy lag. Preserve same-viewer terminal/bootstrap boundaries, full behavior
-distributions, opponent versions, unique sample accounting and one optimizer
-owner before adding transport. Zero-lag collection is a compatibility baseline
-proposal, not reinstatement of the superseded synchronous-round decision.
-Synchronization and placement await measurements and an explicit estimator
-contract. The [research report](../../docs/distributed-rl.md) retains primary sources,
-code seams, proposed retry semantics and outstanding prototype acceptance;
-`experiments/runners/distributed_benchmark.py` owns the bounded supervisor.
-Full forward-path review corrected the contribution's mistaken claim that the
-base lacks value-token support: token/masked aggregation and extra attention
-already exist. The fixed benchmark recipe selects historical mean and one layer;
-representative token measurements need configuration, not model implementation.
-Jack Heart authorized this research/software delivery with ETU-108 left open;
-no training or mini retry was authorized in the delivery pass.
+Neither current PPO nor Ataraxos implements V-trace; clipped ratios and reverse
+KL do not authorize arbitrary lag. Preserve same-viewer terminal/bootstrap
+boundaries, full behavior distributions, opponent versions, unique sample
+accounting and one optimizer owner before transport. Zero-lag collection is a
+compatibility proposal, not reinstatement of synchronous rounds. Placement and
+synchronization await measurements and an explicit estimator contract.
+Value-token aggregation and extra attention already exist; representative variants
+need configuration, not another model implementation. The report owns primary
+sources, retry proposals, launch/stop instructions and outstanding acceptance.
 
 ## Focused value-model priority (ETU-106, 2026-10-05)
 

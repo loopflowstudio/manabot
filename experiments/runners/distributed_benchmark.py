@@ -60,10 +60,26 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--seconds", type=float, default=3)
     parser.add_argument("--timeout", type=float, default=110)
+    parser.add_argument(
+        "--recipe",
+        type=Path,
+        help="Resolved TrainingRegime JSON (inference/train only)",
+    )
+    parser.add_argument("--seed", type=int, default=108)
     args = parser.parse_args()
     attempt_start = time.monotonic()
-    if not 0 < args.seconds <= 10 or not 0 < args.timeout <= 110:
-        parser.error("seconds must be in (0,10]; timeout must be in (0,110]")
+    if not 0 < args.seconds <= 10 or not 0 < args.timeout <= 240:
+        parser.error("seconds must be in (0,10]; timeout must be in (0,240]")
+    if args.recipe is not None and args.mode not in {"inference", "train"}:
+        parser.error("--recipe is supported only for inference/train")
+    if not 0 <= args.seed < 2**32:
+        parser.error("seed must be in [0,2**32)")
+    if args.mode in {"inventory", "complete"} and args.seed != 108:
+        parser.error("inventory/complete do not accept a custom seed")
+    try:
+        recipe_bytes = None if args.recipe is None else args.recipe.read_bytes()
+    except OSError as error:
+        parser.error(str(error))
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     command = [
@@ -78,7 +94,16 @@ def main() -> None:
         str(out / "workload"),
         "--seconds",
         str(args.seconds),
+        "--timeout",
+        str(args.timeout),
+        "--seed",
+        str(args.seed),
     ]
+    if recipe_bytes is not None:
+        # Child reads this immutable attempt input, never the mutable source path.
+        recipe_path = out / "input-recipe.json"
+        recipe_path.write_bytes(recipe_bytes)
+        command.extend(["--recipe", str(recipe_path)])
     manifest = {
         "schema": 1,
         "started_utc": datetime.now(timezone.utc).isoformat(),
@@ -88,6 +113,12 @@ def main() -> None:
         "timeout_seconds": args.timeout,
         "threads": 1,
         "device": "cpu",
+        "recipe_input_sha256": None
+        if recipe_bytes is None
+        else hashlib.sha256(recipe_bytes).hexdigest(),
+        "recipe_input_path": None
+        if args.recipe is None
+        else str(args.recipe.resolve()),
         "head": _read(["git", "rev-parse", "HEAD"]),
         "tracked_diff_sha256": hashlib.sha256(
             _read(["git", "diff", "HEAD"]).encode()
@@ -106,6 +137,7 @@ def main() -> None:
             "Child rusage peak RSS is not aggregate process-tree peak",
             "No hardware comparison under contention",
             "No distributed contributions measured",
+            "Recipe memory_bytes is a requested budget, not an enforced memory limit",
             "Timed-out child store may require reconciliation; summary is not TrainingRun authority",
         ],
     }
