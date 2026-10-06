@@ -500,7 +500,7 @@ async function assertAccessiblePrompt(
   await expect(panel).toHaveAccessibleName('Actions');
   await expect(panel).toHaveAccessibleDescription(instruction);
   await expect(prompt).toHaveText(instruction);
-  await expect(panel.getByRole('status')).toHaveText('Your move');
+  await expect(panel.getByRole('status').filter({ hasText: /^Your move$/ })).toBeVisible();
   await expect(actionButtons).toHaveCount(actions.length);
 
   for (let index = 0; index < actions.length; index += 1) {

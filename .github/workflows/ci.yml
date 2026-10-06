@@ -288,8 +288,8 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
         uses: actions/upload-artifact@v4
         with:
-          name: visual-references-v5
-          path: frontend/e2e/visual-references/v5
+          name: visual-references-v6
+          path: frontend/e2e/visual-references/v6
           if-no-files-found: error
 
       - name: Upload visual failure evidence

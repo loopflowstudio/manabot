@@ -60,6 +60,10 @@ the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](../docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
+Long action lists have an optional **Find an action** filter. See the
+[retained choice positions and local walkthrough](../docs/choice-navigation.md)
+for target, discard, Learn, combat and optional-cost coverage.
+
 Development server without the launcher:
 
 ```bash
