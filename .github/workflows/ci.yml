@@ -96,6 +96,8 @@ jobs:
           uv run --python 3.12 --extra dev pytest tests/env/ tests/agent/ tests/model/ \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
+            tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
+            tests/training/test_value_models.py \
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py
 

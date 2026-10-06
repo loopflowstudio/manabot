@@ -933,3 +933,31 @@ substitute for artifact or model identity. The delivered no-attention switch is
 `attention_on=False`, not a zero-depth model. Broader nested specs and receipts
 remain design sketches; ordinary AgentSpec and checkpoint admission own the
 implemented path.
+
+## Declarative experiment authoring (ETU-109, 2026-10-05)
+
+Jack Heart authorized the declarative follow-up to merged PR #223, including
+publication and landing without another interactive gate. Experiment declarations
+now use typed components, immutable baseline snapshots, ordered cases/matrices
+and explicit overrides. Resolution uses existing TrainingRegime admission without
+constructing a model or starting execution. Every effective setting has a component
+owner and origin; overlapping explicit writes fail even when their values agree.
+A configuration digest retains the executor's meaning, while a separate receipt
+identity binds labels, baseline bytes and provenance. Run seeds remain outside
+recipe authoring; EvaluationProtocol and ResolvedStudy retain cohort authority.
+
+`ataraxos-mtg-v1` pins a complete categorical move-learning configuration with the
+supported small two-layer value-token model. The token and post-normalization are
+local architecture choices; history, setup learning and belief/search stages are
+not supplied by that name. New preset meanings require new versions. This is a
+paper-inspired MTG baseline, not reproduction or strength evidence. The value
+study retains its separate historical baseline: all eight regime digests and its
+entire protocol are unchanged. Three capacity example identities also remain
+unchanged; ETU-102 accounting/calibration and ETU-91's checkout were not modified.
+
+The [authoring guide and technical walkthrough](../../docs/training-experiments.md)
+own usage, ownership and fidelity limits. Configuration/provenance exports and
+packaged preset checks passed. The affected checks passed after rebuilding this
+checkout's stale native extension; one notebook-dependent check remains skipped.
+No scientific campaign or paid compute ran. Software acceptance does not establish
+training, calibration, demo admission or chapter outcomes.

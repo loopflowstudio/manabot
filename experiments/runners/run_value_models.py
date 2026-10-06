@@ -11,17 +11,19 @@ import shutil
 
 from experiments.runners.run_training_regimes import run_study
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
-from manabot.arena.models import canonical_sha256, file_sha256
-from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
+from manabot.arena.models import file_sha256
+from manabot.infra.hypers import AgentSpec
 from manabot.training.analysis import report, verify_saved_inputs
 from manabot.training.execution import atomic_json
-from manabot.training.models import TrainingRegime, TrainingRun
-from manabot.training.recipes import (
-    ataraxos_baseline,
-    value_outputs,
-    with_capacity,
-    with_value_aggregation,
+from manabot.training.experiments import (
+    Axis,
+    Baseline,
+    Case,
+    Experiment,
+    Model,
+    ResolvedExperiment,
 )
+from manabot.training.models import TrainingRegime, TrainingRun
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -82,51 +84,65 @@ def recover_evaluation(source: Path, out: Path) -> None:
 
 
 def smoke_baseline() -> TrainingRegime:
-    """Explicit workload shared by the value cross and non-executing capacity example."""
-    return ataraxos_baseline(
-        id="value-historical-mean-1",
-        world="w4",
-        match=MatchHypers.authored(
-            "ur-lessons-vs-gw-allies",
-            "ur_lessons",
-            "gw_allies",
-            hero="arena-seat-0",
-            villain="arena-seat-1",
+    """Frozen ETU-106 settings; future defaults cannot alter the registered cross."""
+    return Baseline(
+        "value-model-baseline-v1",
+        (ROOT / "experiments/regimes/value-model-baseline-v1.json").read_text(),
+    ).regime()
+
+
+def experiment() -> Experiment:
+    """Declare pooling/depth cases crossed independently with value output."""
+    return Experiment(
+        name="value",
+        baseline=Baseline.capture("value-model-baseline-v1", smoke_baseline()),
+        cases=(
+            Case("historical-mean-1", label="Historical mean"),
+            Case(
+                "masked-mean-1",
+                (Model(AgentSpec(value_aggregation="masked_mean")),),
+                "Masked mean",
+            ),
+            Case(
+                "value-token-1",
+                (Model(AgentSpec(value_aggregation="value_token")),),
+                "Token ×1",
+            ),
+            Case(
+                "value-token-2",
+                (
+                    Model(
+                        AgentSpec(value_aggregation="value_token", attention_layers=2)
+                    ),
+                ),
+                "Token ×2",
+            ),
         ),
-        observation=ObservationSpaceHypers(),
-        agent=AgentSpec(
-            hidden_dim=64,
-            num_attention_heads=4,
-            semantic_pack="ur-lessons-vs-gw-allies",
+        matrix=(
+            Axis(
+                "output",
+                (
+                    Case("scalar", (Model(AgentSpec(value_kind="scalar")),), "Scalar"),
+                    Case(
+                        "categorical-wdl",
+                        (Model(AgentSpec(value_kind="categorical_wdl")),),
+                        "WDL",
+                    ),
+                ),
+            ),
         ),
-        checkpoints=2,
-        updates=1,
-        transitions=64,
-        streams=4,
-        stage_seconds=30,
-        wall_seconds=60,
     )
 
 
-def smoke_plan() -> ResolvedStudy:
-    base = smoke_baseline()
-    token = with_value_aggregation(
-        base, id="value-value-token-1", aggregation="value_token"
+def smoke_plan(resolution: ResolvedExperiment | None = None) -> ResolvedStudy:
+    cells = resolution if resolution is not None else experiment().resolve()
+    resolved = tuple(
+        recipe.model_dump(mode="json") for recipe in cells.regimes.values()
     )
-    models = (
-        base,
-        with_value_aggregation(
-            base, id="value-masked-mean-1", aggregation="masked_mean"
-        ),
-        token,
-        with_capacity(token, id="value-value-token-2", width=64, depth=2, heads=4),
-    )
-    recipes = value_outputs(models, ("scalar", "categorical_wdl"))
-    resolved = tuple(recipe.model_dump(mode="json") for recipe in recipes.values())
     return ResolvedStudy(
         protocol=EvaluationProtocol(
             study="value-models",
-            regime_digests=tuple(canonical_sha256(recipe) for recipe in resolved),
+            regime_digests=cells.digests,
             training_seeds=(1061,),
             paired_deals=(910106,),
             anchor_deals=(920106,),
@@ -147,7 +163,14 @@ def main() -> None:
     action.add_argument("--out", type=Path)
     action.add_argument("--report-only", type=Path)
     parser.add_argument("--recover-from", type=Path)
+    parser.add_argument(
+        "--write-provenance",
+        type=Path,
+        help="Export authoring receipt alongside --write-plan",
+    )
     args = parser.parse_args()
+    if args.write_provenance and args.write_plan is None:
+        parser.error("--write-provenance requires --write-plan")
     if args.recover_from:
         if args.out is None:
             parser.error("--recover-from requires --out")
@@ -155,8 +178,12 @@ def main() -> None:
     elif args.report_only:
         report(args.report_only)
     elif args.write_plan:
+        cells = experiment().resolve()
         with args.write_plan.open("x") as stream:
-            stream.write(smoke_plan().model_dump_json(indent=2) + "\n")
+            stream.write(smoke_plan(cells).model_dump_json(indent=2) + "\n")
+        if args.write_provenance:
+            with args.write_provenance.open("x") as stream:
+                stream.write(json.dumps(cells.receipt(), indent=2) + "\n")
     else:
         run_study("value-models", args.out.resolve(), smoke_plan())
 

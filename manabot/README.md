@@ -110,6 +110,10 @@ Frozen-policy local search and same-root distillation run through
 compatible-prior recipe completes games; exact-history search rejects unsupported
 Rules likelihood events. Target receipts and arena replay retain this distinction.
 
+Declare training comparisons with [typed Python experiments](../docs/training-experiments.md).
+Versioned presets, named component overrides and variant matrices resolve to complete
+existing regimes with provenance; resolution never launches training.
+
 Experiment-specific driver scripts live in
 [experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
 only reusable instruments. The experiment discipline and ledger are in

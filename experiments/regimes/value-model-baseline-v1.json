@@ -1,0 +1,159 @@
+{
+  "agent": {
+    "attention_layers": 1,
+    "attention_on": true,
+    "belief_card_vocab_size": 0,
+    "belief_count_buckets": 0,
+    "belief_hidden_zone_vocab_size": 7,
+    "belief_owner_role_vocab_size": 2,
+    "hidden_dim": 64,
+    "num_attention_heads": 4,
+    "semantic_pack": "ur-lessons-vs-gw-allies",
+    "value_aggregation": "historical_mean",
+    "value_kind": "scalar"
+  },
+  "id": "value-historical-mean-1",
+  "match": {
+    "hero": "arena-seat-0",
+    "hero_deck": {
+      "Accumulate Wisdom": 2,
+      "Divide by Zero": 2,
+      "Dragonfly Swarm": 1,
+      "Fire Nation Cadets": 2,
+      "Firebending Lesson": 4,
+      "First-Time Flyer": 2,
+      "Forecasting Fortune Teller": 1,
+      "Igneous Inspiration": 2,
+      "Island": 9,
+      "It'll Quench Ya!": 2,
+      "Mountain": 8,
+      "Otter-Penguin": 2,
+      "Pop Quiz": 2,
+      "Tiger-Seal": 2
+    },
+    "hero_sideboard": {
+      "Accumulate Wisdom": 1,
+      "Firebending Lesson": 1,
+      "It'll Quench Ya!": 1
+    },
+    "villain": "arena-seat-1",
+    "villain_deck": {
+      "Allies at Last": 2,
+      "Badgermole Cub": 2,
+      "Compassionate Healer": 2,
+      "Earth King's Lieutenant": 2,
+      "Earth Kingdom Jailer": 2,
+      "Fancy Footwork": 2,
+      "Forest": 8,
+      "Invasion Reinforcements": 2,
+      "Kyoshi Warriors": 2,
+      "Plains": 9,
+      "South Pole Voyager": 1,
+      "Suki, Kyoshi Warrior": 1,
+      "Water Tribe Rallier": 2,
+      "White Lotus Reinforcements": 2,
+      "Yip Yip!": 1
+    },
+    "villain_sideboard": {
+      "Fancy Footwork": 1,
+      "Yip Yip!": 1
+    }
+  },
+  "observation": {
+    "max_actions": 64,
+    "max_cards_per_player": 60,
+    "max_events": 32,
+    "max_focus_objects": 2,
+    "max_permanents_per_player": 40
+  },
+  "recovery_max_microsteps": null,
+  "schedule_clock": "run_elapsed_budget",
+  "schema_version": 1,
+  "selection": "last-complete-raw",
+  "stages": [
+    {
+      "behavior": "current-self",
+      "execution": {
+        "device": "cpu",
+        "memory_bytes": 34359738368,
+        "precision": "float32",
+        "threads": 1,
+        "wall_seconds": 30.0,
+        "workers": 1
+      },
+      "id": "policy-0",
+      "initial": null,
+      "learning": {
+        "advantage_quantile": 0.75,
+        "clip": 0.2,
+        "collection_kl": 0.1,
+        "ema": 0.999,
+        "filter_kind": "quantile",
+        "filter_scope": "actor_critic",
+        "gradient": "ataraxos_move",
+        "learning_rate_max": 0.0001,
+        "learning_rate_min": 5e-06,
+        "learning_rate_power": 1.1,
+        "learning_rate_scale": 0.5,
+        "max_grad_norm": 0.267,
+        "min_advantage": 0.01,
+        "policy_lambda": 0.5,
+        "reference": "action_type_uniform",
+        "tau_power": 0.3,
+        "tau_scale": 0.05,
+        "value_lambda": 0.8
+      },
+      "operation": "train_self_play",
+      "opponent": null,
+      "optimizer": "adam",
+      "streams": 4,
+      "trainable": "policy_value",
+      "trainer": "net_opponent",
+      "transitions": 64,
+      "updates": 1
+    },
+    {
+      "behavior": "current-self",
+      "execution": {
+        "device": "cpu",
+        "memory_bytes": 34359738368,
+        "precision": "float32",
+        "threads": 1,
+        "wall_seconds": 30.0,
+        "workers": 1
+      },
+      "id": "policy-1",
+      "initial": "policy-0",
+      "learning": {
+        "advantage_quantile": 0.75,
+        "clip": 0.2,
+        "collection_kl": 0.1,
+        "ema": 0.999,
+        "filter_kind": "quantile",
+        "filter_scope": "actor_critic",
+        "gradient": "ataraxos_move",
+        "learning_rate_max": 0.0001,
+        "learning_rate_min": 5e-06,
+        "learning_rate_power": 1.1,
+        "learning_rate_scale": 0.5,
+        "max_grad_norm": 0.267,
+        "min_advantage": 0.01,
+        "policy_lambda": 0.5,
+        "reference": "action_type_uniform",
+        "tau_power": 0.3,
+        "tau_scale": 0.05,
+        "value_lambda": 0.8
+      },
+      "operation": "train_self_play",
+      "opponent": null,
+      "optimizer": "adam",
+      "streams": 4,
+      "trainable": "policy_value",
+      "trainer": "net_opponent",
+      "transitions": 64,
+      "updates": 1
+    }
+  ],
+  "wall_seconds": 60.0,
+  "world": "w4"
+}

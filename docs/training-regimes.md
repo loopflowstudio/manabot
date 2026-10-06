@@ -50,18 +50,13 @@ and export. Continuation stages do not reset that clock. Stage deadlines remain
 independent bounds inside the same total allowance. Evaluation is outside the
 training execution and does not consume this clock.
 
-Architecture comparisons can be authored as Python functions returning regimes.
-`manabot.training.recipes` supplies an explicit Ataraxos baseline and validated
-model, value-output, pooling and width/depth variations. Each helper snapshots
-the full regime and rejects unsupported model/objective combinations; it does
-not allocate compute or run training. `AgentSpec` is the model type, while saved
-checkpoints retain the `agent_hypers` dictionary and its existing field meanings.
-The [value study](../experiments/runners/run_value_models.py) shows eight cells
-with an explicit evaluation protocol; the
-[capacity examples](../experiments/runners/model_capacity.py) only construct
-variants of a caller-supplied baseline. See the
-[accepted recipe design](plans/modular-architecture-recipes.md#11-delivery-cut-and-acceptance-after-review)
-for scope and compatibility.
+Training comparisons use [declarative typed-Python experiments](training-experiments.md):
+named components, frozen baselines/versioned presets, explicit overrides and ordered
+cases or matrices resolve to existing TrainingRegime values with setting provenance.
+The value-model and capacity examples preserve their previous configurations and
+identities. `manabot.training.recipes` retains internal composition helpers.
+`AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
+and existing field meanings. Resolution never allocates compute or starts training.
 
 The policy stays on the acting viewer's tensor inputs; private teacher metadata
 is not a model input. Learner and behavior weights are raw; EMA is a separately
