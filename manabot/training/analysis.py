@@ -259,7 +259,7 @@ def report(out: Path | str) -> None:
         cost_comparison(
             rows,
             "scripted-greedy-fixed-anchor"
-            if study["study"] == "value-token-screen"
+            if study["study"] in {"value-token-screen", "pooling-filter"}
             else "random-smoke-anchor",
         )
         if study["status"] == "completed"
@@ -294,7 +294,7 @@ def report(out: Path | str) -> None:
         "",
         f"Status: {study['status']}. {study['limits']}",
         "",
-        "Playing score is measured against the named opponent. Cost curves use the declared anchor (scripted for value-token-screen, random otherwise); paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
+        "Playing score is measured against the named opponent. Cost curves use the declared anchor (scripted for screening, random otherwise); paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
         "",
         "| Recipe | Seed | Variant | Phase | Cutoff | Opponent | Training seconds | Decisions | Complete games | Score |",
         "| --- | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
@@ -304,7 +304,7 @@ def report(out: Path | str) -> None:
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
-    if study["study"] in {"value-models", "value-token-screen"}:
+    if study["study"] in {"value-models", "value-token-screen", "pooling-filter"}:
         lines += [
             "",
             "Value-model disposition: exploratory evidence only; no automatic promotion. The token "

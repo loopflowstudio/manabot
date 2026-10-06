@@ -177,10 +177,11 @@ def run_study(
         "model-capacity",
         "value-models",
         "value-token-screen",
+        "pooling-filter",
     }
     if explicit_plan and plan is None:
         raise ValueError(f"{study} requires an explicit separately resolved plan")
-    if study == "value-token-screen" and resume:
+    if study in {"value-token-screen", "pooling-filter"} and resume:
         raise ValueError(
             "screen retries require a new reviewed allocation; retain this attempt"
         )
@@ -206,7 +207,17 @@ def run_study(
             resumed_runs.append(run)
     else:
         out.mkdir(parents=True, exist_ok=False)
-    start = time.perf_counter() - (retained["seconds"] if retained else 0)
+    calibration_seconds = 0.0
+    if study == "pooling-filter":
+        from experiments.runners.pooling_filter import Calibration
+
+        assert plan is not None
+        calibration_seconds = Calibration.model_validate_json(
+            plan.calibration_evidence
+        ).seconds
+    start = time.perf_counter() - (
+        retained["seconds"] if retained else calibration_seconds
+    )
     if plan is None:
         recipes = [smoke_recipe(name) for name in STUDIES[study]]
         protocol = EvaluationProtocol(
@@ -317,14 +328,22 @@ def run_study(
     training = True
     diagnostic_done = False
 
+    def diagnostic(elapsed: float) -> None:
+        from experiments.runners.value_screen import screen_diagnostic
+
+        planned_updates = sum(
+            s.updates for r in recipes for s in r.stages if isinstance(s, TrainSelfPlay)
+        ) * len(protocol.training_seeds)
+        screen_diagnostic(
+            out, elapsed, training=training, planned_updates=planned_updates
+        )
+
     def deadline(*_: object) -> None:
         nonlocal diagnostic_done
         elapsed = time.perf_counter() - start
         if screening and not diagnostic_done:
-            from experiments.runners.value_screen import screen_diagnostic
-
             diagnostic_done = True
-            screen_diagnostic(out, elapsed, training=training)
+            diagnostic(elapsed)
             limit = 21600 if training else protocol.process_seconds
             signal.setitimer(signal.ITIMER_REAL, max(0.001, limit - elapsed))
             return
@@ -332,14 +351,23 @@ def run_study(
 
     signal.signal(signal.SIGALRM, deadline)
     signal.setitimer(
-        signal.ITIMER_REAL, min(remaining, 7200) if screening else remaining
+        signal.ITIMER_REAL,
+        min(remaining, max(0.001, 7200 - calibration_seconds))
+        if screening
+        else remaining,
     )
     save()
     try:
         runs = resumed_runs
         with VerifyStore(out / "training.sqlite") as store:
             for index, seed in enumerate(() if resume else protocol.training_seeds):
-                for recipe in recipes if index % 2 == 0 else list(reversed(recipes)):
+                if study == "pooling-filter":
+                    from experiments.runners.pooling_filter import ORDER
+
+                    ordered = [recipes[i] for i in ORDER[index]]
+                else:
+                    ordered = recipes if index % 2 == 0 else list(reversed(recipes))
+                for recipe in ordered:
                     entry = {
                         "path": str(out / f"{recipe.id}-seed-{seed}" / "run.json"),
                         "regime": recipe.id,
@@ -358,6 +386,11 @@ def run_study(
                     )
                     save()
         training = False
+        if study == "pooling-filter":
+            atomic_json(
+                out / "phase.json",
+                {"evaluation_deadline_monotonic": time.monotonic() + 7200},
+            )
         if screening:
             # Evaluation and report share two hours; unused training time is not borrowed.
             evaluation_limit = min(
@@ -368,10 +401,8 @@ def run_study(
                 nonlocal diagnostic_done
                 elapsed = time.perf_counter() - start
                 if not diagnostic_done:
-                    from experiments.runners.value_screen import screen_diagnostic
-
                     diagnostic_done = True
-                    screen_diagnostic(out, elapsed, training=False)
+                    diagnostic(elapsed)
                     signal.setitimer(
                         signal.ITIMER_REAL, max(0.001, evaluation_limit - elapsed)
                     )

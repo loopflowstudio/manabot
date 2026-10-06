@@ -120,13 +120,40 @@ def test_two_hour_diagnostic_retains_decision(
     assert not receipt["strength_inspected"]
 
 
+@pytest.mark.parametrize("study", ["value-token-screen", "pooling-filter"])
 @pytest.mark.parametrize("invalid_cell", [False, True])
 def test_screen_executor_schedules_only_scripted_games(
     plan: ResolvedStudy,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     invalid_cell: bool,
+    study: str,
 ) -> None:
+    if study == "pooling-filter":
+        from experiments.runners.pooling_filter import (
+            ORDER,
+            Calibration,
+            CalibrationArm,
+            recipes,
+        )
+        from experiments.runners.run_pooling_filter import followup_plan
+
+        plan = followup_plan(
+            Calibration(
+                arms=tuple(
+                    CalibrationArm(
+                        recipe_id=r.id,
+                        run_path="/fixture",
+                        run_sha256="a" * 64,
+                        seconds=60,
+                    )
+                    for r in recipes(40, 400)
+                ),
+                seconds=250,
+                source_commit="a" * 40,
+                runtime_identities=plan.runtime_identities,
+            )
+        )
     training_calls: list[tuple[str, int]] = []
     game_counts: list[int] = []
 
@@ -190,17 +217,24 @@ def test_screen_executor_schedules_only_scripted_games(
     out = tmp_path / "screen"
     if invalid_cell:
         with pytest.raises(RuntimeError, match="invalid arena cell"):
-            runner.run_study("value-token-screen", out, plan, render_report=False)
+            runner.run_study(study, out, plan, render_report=False)
         result = json.loads((out / "study.json").read_text())
         assert result["status"] == "failed"
         assert game_counts == [100]
         return
-    runner.run_study("value-token-screen", out, plan, render_report=False)
-    assert len(set(training_calls)) == 9
-    assert len(game_counts) == 18 and sum(game_counts) == 1800
+    runner.run_study(study, out, plan, render_report=False)
+    assert len(set(training_calls)) == (12 if study == "pooling-filter" else 9)
+    if study == "pooling-filter":
+        assert training_calls == [
+            (plan.recipes[i]["id"], seed)
+            for seed, order in zip(plan.protocol.training_seeds, ORDER, strict=True)
+            for i in order
+        ]
+    assert len(game_counts) == (24 if study == "pooling-filter" else 18)
+    assert set(game_counts) == {100}
     result = json.loads((out / "study.json").read_text())
     assert result["status"] == "completed"
-    assert len(result["measurements"]) == 18
+    assert len(result["measurements"]) == len(game_counts)
     runner.report(out)
     paths = ("metrics.json", "report.md", "cost-comparison.json")
     before = {p: (out / p).read_bytes() for p in paths}
@@ -209,7 +243,7 @@ def test_screen_executor_schedules_only_scripted_games(
     assert json.loads(before["cost-comparison.json"])["status"] == "available"
     assert (out / "learning-transitions.png").exists()
     with pytest.raises(ValueError, match="retries require"):
-        runner.run_study("value-token-screen", out, plan, resume=True)
+        runner.run_study(study, out, plan, resume=True)
 
 
 def test_changed_source_fails_before_training(

@@ -57,7 +57,9 @@ def validate_screen_recipes(recipes: list[TrainingRegime]) -> None:
         raise ValueError("screen may vary only value aggregation and recipe ID")
 
 
-def screen_diagnostic(out: Path, elapsed: float, *, training: bool) -> None:
+def screen_diagnostic(
+    out: Path, elapsed: float, *, training: bool, planned_updates: int = 7200
+) -> None:
     """Stop on insufficient progress or disk, without inspecting strength scores.
 
     Conservative remaining-training projection uses the slowest observed run's
@@ -72,7 +74,8 @@ def screen_diagnostic(out: Path, elapsed: float, *, training: bool) -> None:
     completed = sum(updates)
     rates = [r.seconds / n for r, n in zip(runs, updates, strict=True) if n]
     projected = (
-        elapsed + 1.25 * max(rates, default=float("inf")) * max(0, 7200 - completed)
+        elapsed
+        + 1.25 * max(rates, default=float("inf")) * max(0, planned_updates - completed)
         if training
         else elapsed
     )
@@ -90,7 +93,7 @@ def screen_diagnostic(out: Path, elapsed: float, *, training: bool) -> None:
             "elapsed_seconds": elapsed,
             "training": training,
             "completed_updates": completed,
-            "planned_updates": 7200,
+            "planned_updates": planned_updates,
             "projected_training_seconds": projected if rates else None,
             "free_disk_bytes": free,
             "decision": "stop" if reasons else "continue",

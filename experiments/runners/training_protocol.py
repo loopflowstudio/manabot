@@ -18,6 +18,7 @@ class EvaluationProtocol(BaseModel):
         "model-capacity",
         "value-models",
         "value-token-screen",
+        "pooling-filter",
     ]
     purpose: Literal["workflow-smoke", "calibration", "scientific", "screening"] = (
         "workflow-smoke"
@@ -56,7 +57,9 @@ class EvaluationProtocol(BaseModel):
 
     @model_validator(mode="after")
     def disjoint(self) -> "EvaluationProtocol":
-        if (self.study == "value-token-screen") != (self.purpose == "screening"):
+        if (self.study in {"value-token-screen", "pooling-filter"}) != (
+            self.purpose == "screening"
+        ):
             raise ValueError(
                 "value-token-screen requires its distinct screening purpose"
             )
@@ -161,6 +164,7 @@ class EvaluationProtocol(BaseModel):
             "model-capacity": {3},
             "value-models": {8},
             "value-token-screen": {3},
+            "pooling-filter": {4},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
@@ -201,7 +205,21 @@ class ResolvedStudy(BaseModel):
         if self.protocol.purpose == "screening":
             from experiments.runners.value_screen import validate_screen_recipes
 
-            validate_screen_recipes(recipes)
+            if self.protocol.study == "pooling-filter":
+                from experiments.runners.pooling_filter import SEEDS, validate_followup
+
+                validate_followup(
+                    recipes, self.calibration_evidence, self.runtime_identities
+                )
+                if (
+                    self.protocol.training_seeds != SEEDS
+                    or self.protocol.anchor_deals != tuple(range(961160, 961185))
+                ):
+                    raise ValueError(
+                        "follow-up requires its fresh seeds and fixed paired deals"
+                    )
+            else:
+                validate_screen_recipes(recipes)
             required = {
                 "engine_extension_sha256",
                 "engine_source_sha256",

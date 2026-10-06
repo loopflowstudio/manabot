@@ -1,5 +1,25 @@
 # Intelligence memory
 
+## Pooling × advantage-floor follow-up (ETU-106, 2026-10-06)
+
+After PR #226 merged, Jack Heart authorized autonomous software delivery and one
+bounded laptop follow-up: masked mean/value token crossed with .01/zero advantage
+floor, preserving .75 quantile and actor_critic scope. The completed screen and
+ETU-91 remain immutable. Its equal-update endpoint ordering differs from common
+cost; exposure accounting does not causally explain its scores.
+
+The [separate protocol](../../experiments/pooling-filter-followup.md) owns fresh
+seeds, 24 paired 100-game cells, calibration, counterbalanced order and analysis.
+All four arms must calibrate before strength is inspected. Eight hours includes
+six for calibration/training and two for evaluation/reporting; minimum 400 total
+updates, target 800, with shared counts frozen from the slowest measured rate and
+25% headroom. A failure to fit stops instead of shrinking the evaluation cohort.
+Software delivery precedes scientific source pinning. A single durable supervisor
+retains child handles, all failures, calibrated plans and actual costs. This is
+permission for the bounded follow-up, not paid compute, a default change, human
+review or Task completion. The value token changes shared policy representations;
+a floor interaction cannot isolate a critic-only mechanism.
+
 ## Completed scalar value-token screen (ETU-106, 2026-10-06)
 
 Jack Heart requested delivery after the frozen screen completed. Nine runs over
