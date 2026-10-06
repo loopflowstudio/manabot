@@ -3,7 +3,8 @@
 Research began 2026-10-05 on `be6260d9136e49069a12864514b849811f32b32d`;
 mini receipts were reviewed on 2026-10-06. Jack Heart requested research and a
 disposable prototype in which laptop and mini contribute to one learner. Completed probes now include matched-recipe CPU inference/training on both hosts,
-a bounded SSH upload probe, and the earlier mini replay-verified workflow. They do not implement that distributed prototype or
+a bounded SSH upload probe, the earlier mini replay-verified workflow, and an
+eight-game ordinary evaluation of the matched mini checkpoint. They do not implement that distributed prototype or
 complete ETU-108. Speedup is an observation, not the acceptance condition.
 The evidence-report follow-up ran no benchmarks and accessed no ETU-106 checkout.
 
@@ -338,8 +339,10 @@ Training seconds include setup and other executor work beyond the listed phase
 clocks. Child max RSS is an OS child-process observation, not aggregate process-tree
 memory. No energy, throttling or pure gradient-kernel measurement is available.
 Neither inference observations/s nor optimizer exposures/s measures useful policy
-progress. These matched checkpoints have no arena or strength evaluation; the
-previous eight-game replay result belongs only to the separate tiny calibration.
+progress. At measurement time these matched checkpoints had no arena evaluation.
+The follow-up below evaluates the final raw mini checkpoint for feasibility only;
+the earlier eight-game replay result remains separate tiny-calibration evidence.
+Neither cohort establishes strength.
 
 Laptop is M4 Max / 16 logical CPUs / 128 GiB, macOS 26.0.1, Python 3.12.12;
 mini is M1 / 8 logical CPUs / 16 GiB, macOS 15.5, Python 3.12.11. Both use Torch
@@ -382,6 +385,80 @@ transport before choosing per-decision remote inference. They do not choose
 synchronous rounds, asynchronous learning or a safe policy-lag bound. Concurrent
 admitted contributions to one learner and disconnect/retry accounting remain the
 prototype finish line; ETU-108 remains open.
+
+### Ordinary mini evaluation feasibility (2026-10-06)
+
+The [compact provenance and cost extract](../experiments/data/etu108/mini-evaluation-20261006.json)
+retains the frozen plan, admission, runtime, transport, replay summary and source
+hashes. One attempt completed **8 terminal games / 1,037 decisions with exact
+replay**, zero mismatches, failures or truncations. This demonstrates the ordinary
+evaluator on mini for this checkpoint and cohort. No score analysis, new training,
+strength comparison or distributed learning claim follows.
+
+The candidate is the matched mini run's final raw `policy-1` export (training seed
+10831): semantic masked-mean scalar, width 64, one layer, four heads, 138,434
+parameters. Its 618,025 bytes have SHA-256
+`9d4a818669d636a492ef3d15ad71734a70d5e192f1854043170ac2af634807db`.
+The existing TrainingRun receipt and checkpoint were read in place and admitted
+through ordinary strict registration/loading; no checkpoint payload transfer was
+needed. The disposable typed adapter calls existing `registration` and `play_cell`;
+no production evaluator changes were needed.
+
+The pre-execution plan fixed feasibility seeds 108610061 and 108610062, each with
+four native arena deck/seat legs, against source-pinned `scripted_greedy`. Historical
+training-deal disjointness is not certified. CPU evaluation used one Torch thread,
+batch-one stochastic checkpoint play and ordinary per-decision RNG derivation.
+Limits were eight games, 45 seconds and 10,000 Commands per game, a 450-second
+remote child deadline and a 600-second aggregate launch deadline. No retry,
+replacement cohort or tuning ran.
+
+| Clock or resource | Observed |
+| --- | ---: |
+| Whole launch, upload, evaluation and receipt download | 21.994247 s |
+| SSH setup / script and plan upload / receipt download | 0.415306 / 0.478962 / 1.086059 s |
+| SSH evaluation command, including startup | 20.012532 s |
+| Remote child, including imports and setup | 19.569565 s |
+| Registration/load and admission receipt | 0.095110 s |
+| Arena including exact replay | 17.673832 s |
+| Sum of game clocks / replay subset | 16.264543 / 1.290067 s |
+| Checkpoint action calls / cumulative act time | 579 / 5.379214 s |
+| Child CPU / OS child max RSS | 19.137302 s / 332,447,744 bytes |
+
+The arena rates are about 0.453 games/s and 58.7 decisions/s for this single cohort.
+Action time includes wrappers, tensor preparation and sampling; game clocks include
+spawned-worker startup and strict loading. Arena time also includes durable trace
+writes and replay. The launch total excludes preceding source inspection/adapter
+authoring and subsequent report/hash verification. Replay is already charged inside
+arena time. These clocks must not be summed as independent costs.
+
+Mini was Apple M1, eight logical CPUs, 16 GiB, macOS 15.5 arm64, Python 3.12.11,
+Torch 2.10.0; launch load averages were 1.736/1.862/1.986. HEAD was `b43066d1`
+with clean tracked files. Evaluator source hashes match the integration checkout;
+retained final hashes bind unchanged candidate/native bytes. CPU is supervisor
+`RUSAGE_CHILDREN`, including helper commands; max RSS is not aggregate process-tree
+memory. Pure forward time, energy and thermal state are unavailable. A single
+attempt cannot establish universal compatibility, machine ranking or uncertainty
+across runs. Disconnect recovery was not exercised.
+
+Retained originals (including raw scores and compressed Command tapes, excluded
+from Git) are in
+`.runs/etu108-mini-eval-20261006-1/` in this checkout, and
+`/Users/jack/src/etude/.runs/etu108-mini-eval-20261006-1/` on mini
+(`jack@100.96.227.95`). The extract records their absolute locations and hashes.
+All ten remote result files, including the trace shard, match their local copies
+by SHA-256. Summary/replay counts agree with all eight terminal game rows and the
+planned seed/leg pairs; transport phases all exited zero. Integration verified
+retained files only; it launched no games, benchmarks or training and did not
+access ETU-91 or ETU-106.
+
+Exact launch commands live in retained `transport.json`, with `evaluate.py`,
+`launch.py` and `plan.json` bound by the extract. A separately authorized rerun
+requires fresh output paths and a declared cohort/budget; existing paths refuse
+overwrite. The remote supervisor kills its child process group at its deadline or
+KeyboardInterrupt; game workers enforce their own caps. An SSH disconnect alone
+does not confirm cancellation: check the remote supervisor receipt. This result
+supports mini as a possible frozen-evaluation host; concurrent two-host training,
+placement and safe lag treatment remain unresolved.
 
 Harness modes and their scopes:
 

@@ -122,45 +122,45 @@ No method benefit, challenger strength or chapter acceptance follows.
 
 ## Distributed RL research and software boundary (ETU-108, 2026-10-06)
 
-Jack Heart authorized delivery of retained mini and matched CPU/SSH evidence,
-with no new training and ETU-108 kept open. The [report](../../docs/distributed-rl.md)
-and compact extracts retain failed initial inference, its successful retry, tiny
-empty-filter training and separate eight-game replay calibration. The earlier mini
-representative run took 68.60 training seconds; it is not the matched run below.
+Jack Heart authorized retained evidence delivery without new training, keeping
+ETU-108 open. The [report](../../docs/distributed-rl.md) and compact extracts
+preserve failed inference/retry, tiny empty-filter training, separate eight-game
+calibration and the earlier 68.60-second mini representative run. Full prior
+integration detail remains in this file at `8b576a45`.
 
 The matched recipe completed once per host: laptop 45.32455 versus mini 65.00472
 training seconds, each with 20 iterations, 5,120 transitions and 1,280 exposures.
-Inference was 2,396.22 versus 1,160.53 observations/s. All twelve raw/EMA/optimizer
-artifact hashes and sizes verified. Training source/recipe/world bindings match;
-HEADs differ after LF sync but Git trees agree. Python 3.12.12 versus 3.12.11,
-different macOS releases and train-launch load near 15 versus 1.55 prevent a
-controlled hardware ranking. These single attempts establish no GPU, strength,
-useful-learning-progress or distributed-speedup claim. Matched checkpoints were
-not evaluated; eight replayed games belong to the earlier tiny calibration.
+Inference was 2,396.22 versus 1,160.53 observations/s. Twelve artifact hashes/sizes
+verified; source/recipe/world bindings and Git trees match despite different HEADs.
+Python 3.12.12 versus 3.12.11, macOS differences and launch load near 15 versus
+1.55 prevent controlled hardware ranking. No GPU, strength, useful-progress or
+distributed-speedup claim follows.
 
-The SSH upload probe retains three trials each for zero, 618,025 and 8 MiB
-synthetic bytes; median command times were .448, 1.093 and 5.052 seconds.
-Startup/authentication and remote completion are included. This is not persistent
-RPC RTT, bidirectional bandwidth or real trajectory transfer. The transfer receipt
-records an active laptop campaign; the matched compute plan waited for its exit.
-No ETU-106 or ETU-91 checkout was changed. Raw evidence remains in the supplied
-agent checkout; durable extracts bind source files and original artifact paths.
+The final raw mini checkpoint subsequently completed eight ordinary evaluator
+games / 1,037 decisions with exact replay and zero failures/truncations. Total
+launch cost was 21.99 s versus 17.67 s arena including replay; ten copied result
+hashes verified. No new training or score analysis ran. This single-cohort
+feasibility result is separate from the earlier calibration, not strength or
+distributed learning. The compact evaluation extract binds admission, runtime,
+costs and retained originals; raw tapes stay outside Git.
 
-The recipe-aware harness reuses TrainingRegime and records input bytes, resolved
-recipe, runtime/world identities and actual work. CPU float32/current-self/one
-thread admission and 240-second maximum supervisor caps remain. Requested memory
-is not enforced. Concurrent contributions to one learner, persistent transport,
-and disconnect/retry accounting remain open; no new scientific allocation follows.
-Actor/inference placement and stale-data admission are separate decisions.
-Neither current PPO nor Ataraxos implements V-trace; clipped ratios and reverse
-KL do not authorize arbitrary lag. Preserve same-viewer terminal/bootstrap
-boundaries, full behavior distributions, opponent versions, unique sample
-accounting and one optimizer owner before transport. Zero-lag collection is a
-compatibility proposal, not reinstatement of synchronous rounds. Placement and
-synchronization await measurements and an explicit estimator contract.
-Value-token aggregation and extra attention already exist; representative variants
-need configuration, not another model implementation. The report owns primary
-sources, retry proposals, launch/stop instructions and outstanding acceptance.
+SSH synthetic-upload medians for zero, 618,025 and 8 MiB were .448, 1.093 and
+5.052 seconds (three trials each), including startup/authentication/completion.
+They are not persistent RTT, bidirectional bandwidth or real trajectory transfer.
+The transfer probe overlapped a laptop campaign; matched compute waited for exit.
+ETU-91/106 checkouts remain untouched; original evidence paths stay retained.
+
+The recipe-aware harness reuses TrainingRegime with input/resolved-recipe,
+source/runtime/world and actual-work receipts. Admission stays CPU float32,
+current-self, one thread, with 240-second benchmark supervisor caps; requested
+memory is not enforced. Concurrent contributions, persistent transport and
+retry/sample accounting remain open. Actor/inference placement and synchronization
+await measurements and an explicit estimator contract. Neither PPO nor Ataraxos
+implements V-trace; clipping/reverse KL do not authorize arbitrary lag. Preserve
+same-viewer terminal/bootstrap boundaries, full behavior distributions, opponent
+versions, unique samples and one optimizer owner. Zero-lag compatibility remains
+a proposal, not reinstatement of synchronous rounds. No scientific allocation follows; the report owns sources, launch/stop
+instructions and acceptance.
 
 ## Focused value-model priority (ETU-106, 2026-10-05)
 
