@@ -8,6 +8,7 @@ import {
 } from '@playwright/test';
 
 import { DECISION_PROMPTS } from '../src/lib/prompt-instructions';
+import { finishBoardNarration } from './presentation-readiness';
 import matrixJson from './release-prompt-matrix.json' with { type: 'json' };
 
 interface PromptPolicy {
@@ -279,24 +280,7 @@ async function captureVisualReference(
 }
 
 async function settleBoardPresentation(page: Page): Promise<void> {
-  const presentationStage = page.getByTestId('presentation-stage');
-  const finished = await page.evaluate(() => {
-    const stage = document.querySelector<HTMLElement>('[data-testid="presentation-stage"]');
-    if (!stage) {
-      return false;
-    }
-    const finish = [...stage.querySelectorAll('button')].find(
-      (button) => button.textContent?.trim() === 'Finish',
-    );
-    if (!(finish instanceof HTMLButtonElement)) {
-      throw new Error('presentation stage has no Finish control');
-    }
-    finish.click();
-    return true;
-  });
-  if (finished) {
-    await expect(presentationStage).toBeHidden();
-  }
+  await finishBoardNarration(page);
 
   // The action can already own DOM focus while its derived board emphasis was
   // cleared by a prior presentation transition. Re-fire the focus boundary so
@@ -998,6 +982,8 @@ async function runScenario(
   await assertReducedMotion(page, `${scenario.id}: GAME_OVER`);
   await auditAccessibility(page, `${scenario.id}: GAME_OVER`);
   await assertCuratedAssets(page, `${scenario.id}: GAME_OVER`, failures);
+  await finishBoardNarration(page);
+  await expect(resultAction).toBeFocused();
   const terminalReference = matrix.visual_references.terminals.find(
     (reference) => reference.scenario_id === scenario.id,
   );

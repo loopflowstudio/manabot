@@ -137,7 +137,7 @@ describe('curated combat-to-turn presentation fixture', () => {
     player.setFastForward(true);
     expect(player.effectiveDurationMs).toBe(125);
     player.setReducedMotion(true);
-    expect(player.effectiveDurationMs).toBe(100);
+    expect(player.effectiveDurationMs).toBe(125);
     player.skipCurrent();
     expect(player.currentEvent?.kind.kind).toBe('blocked');
     player.finishSequence();
@@ -171,8 +171,9 @@ describe('PresentationPlayer', () => {
     expect(player.effectiveDurationMs).toBeLessThan(normalDuration);
     expect(player.currentBeat).toEqual(first);
 
+    const fastDuration = player.effectiveDurationMs;
     player.setReducedMotion(true);
-    expect(player.effectiveDurationMs).toBe(100);
+    expect(player.effectiveDurationMs).toBe(fastDuration);
     expect(player.currentBeat).toEqual(first);
 
     player.skipCurrent();
@@ -180,6 +181,35 @@ describe('PresentationPlayer', () => {
     player.finishSequence();
     expect(player.currentEvent).toBeNull();
     expect(player.remaining).toBe(0);
+    expect(player.events).toHaveLength(5);
+  });
+
+  it('pauses reading without changing the cursor or losing skipped consequences', () => {
+    const player = createPresentationPlayer();
+    player.load(COMBAT_TO_TURN_PRESENTATION);
+    const first = player.currentBeat;
+    player.togglePlayback();
+    expect(player.playing).toBe(false);
+    expect(player.currentBeat).toEqual(first);
+    player.togglePlayback();
+    expect(player.playing).toBe(true);
+    const duration = player.effectiveDurationMs;
+    player.setReducedMotion(true);
+    expect(player.effectiveDurationMs).toBe(duration);
+    player.finishSequence();
+    expect(presentationInspectorRows(player.events, player.labels).map(row => row.detail))
+      .toEqual(presentationInspectorRows(COMBAT_TO_TURN_PRESENTATION.events, COMBAT_TO_TURN_PRESENTATION.labels).map(row => row.detail));
+    player.togglePlayback();
+    expect(player.playing).toBe(false);
+  });
+
+  it('keeps narration paused when another committed update arrives', () => {
+    const player = createPresentationPlayer();
+    player.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(0, 2), LIGHTNING_BOLT_PRESENTATION.labels);
+    player.togglePlayback();
+    player.enqueue(LIGHTNING_BOLT_PRESENTATION.events.slice(2), LIGHTNING_BOLT_PRESENTATION.labels);
+    expect(player.playing).toBe(false);
+    expect(player.currentEvent?.seq).toBe(900);
     expect(player.events).toHaveLength(5);
   });
 

@@ -96,3 +96,70 @@ not a durable cross-process checkpoint.
 Upgrading the viewer projection to exact render identities is separate.
 Converting that concern, recovery, or any combat fact into arbitrary
 snapshot-diff text would break the contract.
+
+## Readable consequences and current decision (ETU-76, 2026-10-04)
+
+The shared live/replay Recent consequences component retains the latest 12 available semantic events in
+an expandable, keyboard-scrollable Recent consequences list. Completion, Skip,
+Fast-forward and Finish move the narration cursor without erasing this text.
+Pause holds the current beat, including when another live update arrives.
+Reduced motion removes movement without shortening reading time; explicit
+Fast-forward still changes speed. The board remains at the authoritative current
+position, as the history explains. Replay replaces the list when seeking to another
+frame; a frame without semantic events says that narration is unavailable.
+
+The live action panel names the current prompt actor and instruction separately
+from narration and active turn. Waiting for a Command, disconnection, spectator
+access, isolated Study and game-over have distinct status text. No presentation
+control changes an offer, Command or authoritative frame.
+
+At base `3f2975334e6fa2f1a36683d3686a7ecc2d68ffe9`, finishing either
+`bolt-kills-ally-v1` (revisions 42–43, sequences 900–904) or
+`ur-lessons-vs-gw-allies-combat-v1` (the checked-in
+`frontend/src/lib/fixtures/curated-combat-to-turn.json`) removed all visible
+semantic beat text; reduced motion allotted just 100 ms per beat. These are
+reproducible fixture positions, not identified recordings of Jack Heart's report.
+The regression tests retain Bolt casting/targeting/resolution/damage/death and
+Allies/Lessons attack/block/damage/death/turn text after cursor movement. The
+browser scenarios use a mocked authority and do not certify full-game behavior.
+
+Coverage remains bounded. The authority projector still specializes spell facts
+to Lightning Bolt, alongside combat/death/turn facts. Other spell families,
+the original reported match/Command, human confirmation and full-game recurrence
+remain open under ETU-76. A readable list cannot repair absent authority events.
+Human acceptance is not inferred from fixture tests. No rules, world identity,
+persisted trace format, or hidden-information boundary changed.
+
+Validation on 2026-10-04: 49 focused presentation/store/socket/replay/protocol
+tests pass, Svelte check has zero errors/warnings, and the production build
+passes. Browser regressions were authored but not executed; the supplied run
+had no rendering environment. Visual and browser acceptance remain unverified.
+
+CI repair on 2026-10-05: PR #199 head
+`b4e026f5bc8a88611c65d2cf44e00ec130f786b7`, run `37189676719`, failed
+`board-combat` because the board grew from 1159 to 1419 pixels high. The
+live grid stretched the board to the taller decision/history sidebar. Aligning
+columns at the start preserves the board's content height without changing
+visual references. A headless production-build regression reproduced sidebar
+stretch (807 to 3000 pixels) before the fix and passes after it. Both narration
+motion-mode scenarios, Svelte check and the build also pass locally on macOS.
+The full release suite could not start without the local managym extension;
+the pointer/keyboard scenario also needs backend HTTP routes. Linux screenshot
+certification remains with CI, and human-play acceptance remains open.
+
+
+Terminal capture repair on 2026-10-05: PR #199 head
+`0a8a2a5b3a920bdc75ef924a62ce1018179ae494`, run `37409396849`, job
+`112094186785`, reached `terminal-ur-lessons-loss.png` after the geometry repair.
+Its successive screenshot diff changes the narration counter and damage text
+behind the result dialog. Terminal capture omitted the Finish step used for
+ordinary board references; disabling CSS animations does not stop JavaScript
+beat timers, and reduced motion intentionally preserves reading time.
+The shared capture helper now finishes narration at terminal without moving
+result focus. Product narration, reference images and comparison tolerances
+remain unchanged. A clock-controlled production-build browser test reproduces
+changing terminal pixels before Finish, then verifies identical captures across
+10 seconds of virtual time, retained consequences and Play Again focus.
+Four focused browser checks, Svelte check and build pass on macOS. The local
+managym extension is absent, so the full server-backed release matrix and pinned
+Linux visual corpus remain CI responsibilities; this is not full-gate proof.
