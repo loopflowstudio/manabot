@@ -33,6 +33,10 @@ def train_command(
     resume_from: Optional[str] = typer.Option(
         None, help="Stopped TrainingRun ID in the same store"
     ),
+    checkpoint_seconds: Optional[float] = typer.Option(
+        None,
+        help="Monitoring raw checkpoint interval (3600 for hourly), at update/epoch boundaries",
+    ),
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
@@ -60,10 +64,18 @@ def train_command(
                 out,
                 store,
                 resume_from=resume_from,
+                checkpoint_seconds=checkpoint_seconds,
             )
     else:
-        if out is not None or seed is not None or resume_from is not None:
-            raise typer.BadParameter("--out and --seed require --regime")
+        if (
+            out is not None
+            or seed is not None
+            or resume_from is not None
+            or checkpoint_seconds is not None
+        ):
+            raise typer.BadParameter(
+                "--out, --seed, --resume-from and --checkpoint-seconds require --regime"
+            )
         _run_train(preset or DEFAULT_TRAIN_PRESET, set_values or [])
 
 

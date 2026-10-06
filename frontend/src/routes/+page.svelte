@@ -9,6 +9,7 @@
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
+  import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import TestingHousePanel from '$lib/components/TestingHousePanel.svelte';
@@ -365,7 +366,7 @@
     <p class="mt-3 text-sm text-ink-2">New games appear in shared <a href="/games" class="underline">Games history</a>, where you can set your player name. Completed replays are shared; feedback stays private.</p>
   {/if}
   {#if gameStore.observation && boardObservation}
-    <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px]">
+    <div class="grid grid-cols-1 items-start xl:grid-cols-[minmax(0,1fr)_300px]">
       <GameBoard
         observation={boardObservation}
         focusedIds={gameStore.focusIds}
@@ -386,6 +387,9 @@
       <div
         class="flex min-w-0 flex-col gap-6 pt-4 max-xl:mt-2 max-xl:border-t max-xl:border-line xl:ml-8 xl:border-l xl:border-line xl:pl-8"
       >
+        <p data-testid="current-decision" role="status" aria-live="polite" aria-atomic="true" class="text-ink">
+          {gameStore.decisionStatus}
+        </p>
         <ActionPanel
           actions={filteredActions}
           previewNames={Object.fromEntries([
@@ -408,6 +412,8 @@
             gameStore.clearFocus();
           }}
         />
+
+        <PresentationHistory player={presentationPlayer} />
 
         <div class="border-t border-line pt-4">
           <DecisionAdvice

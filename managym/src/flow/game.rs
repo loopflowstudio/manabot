@@ -105,6 +105,9 @@ pub(crate) enum CombatDamagePass {
 #[derive(Debug)]
 pub struct Game {
     pub state: GameState,
+    /// Derived public suffix, updated only by emit; excluded from rules-state
+    /// hashing like other projections. Ordinary observation reads share it.
+    pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
     pub skip_trivial: bool,
     pub current_action_space: Option<ActionSpace>,
     /// Monotonic identity for the currently published external decision.
@@ -128,6 +131,7 @@ impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
+            policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,
@@ -206,6 +210,7 @@ impl Game {
                 id_gen: id_gen.clone(),
                 content: content.clone(),
             },
+            policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
             decision_epoch: self.decision_epoch,

@@ -96,3 +96,7 @@ counts still require the semantic input path during the Learn migration.
 Shared offers and native prefix support are described in the
 [choice contract](../docs/choice-contract.md). `managym.choice.OfferProjection`
 is the typed Python reader; live submission stays with bound native offers.
+
+The optional [policy-history v1 projection](../docs/recent-events.md) is a bounded
+derived suffix updated at the native event append. Observation reads share it;
+clone/undo and diagnostic injection must preserve its documented lifecycle.

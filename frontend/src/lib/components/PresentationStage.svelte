@@ -45,7 +45,7 @@
             : 'border-island/40 bg-panel/95'
       }`}
     >
-      <div class="flex items-start justify-between gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-4">
         <div role="status" aria-live="polite" aria-atomic="true">
           <p class="type-rubric text-ink-2">
             Beat {player.currentIndex + 1} of {player.events.length}
@@ -53,7 +53,15 @@
           <h2 class="type-title mt-1 text-ink">{beat.heading}</h2>
           <p class="mt-1 text-ink">{beat.detail}</p>
         </div>
-        <div class="flex shrink-0 gap-2">
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            aria-pressed={!player.playing}
+            onclick={() => player.togglePlayback()}
+          >
+            {player.playing ? 'Pause narration' : 'Resume narration'}
+          </button>
           <button
             type="button"
             class={`btn btn-secondary btn-sm ${player.speed > 1 ? 'border-plains bg-plains/20' : ''}`}

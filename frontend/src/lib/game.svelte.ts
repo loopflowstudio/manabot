@@ -91,6 +91,20 @@ export class GameStore {
   // Surfaced in the DOM so tests can serialize on server responses.
   updateSeq = $state(0);
 
+  get decisionStatus(): string {
+    if (this.restoredDecision) return 'Study position — return to live to play.';
+    if (this.gameOver) return 'Game over — no next decision.';
+    if (this.connection !== 'connected') return 'Waiting for connection — play is unavailable.';
+    if (this.commandPending || this.fastForwarding) return 'Waiting for the table — your action is being processed.';
+    const prompt = this.protocolFrame?.prompt;
+    if (!prompt) return 'Waiting for the next decision.';
+    const hero = prompt.actor === this.observation?.agent.player_index;
+    const actor = hero
+      ? (this.hasCapability('submit_live_command') ? 'Your decision' : "Pilot's decision")
+      : "Opponent's decision";
+    return `${actor} — ${prompt.instruction || prompt.title}`;
+  }
+
   private logSequence = 0;
 
   applyTable(table: TableSnapshot | null | undefined): void {

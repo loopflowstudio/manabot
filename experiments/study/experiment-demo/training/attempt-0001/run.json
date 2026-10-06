@@ -1,0 +1,367 @@
+{
+  "error": null,
+  "fixed_validation": null,
+  "id": "d2674baa68ea4ca29a1a785779946c9b",
+  "identities": {
+    "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+    "architecture": "19d72d8244a6032b246f253fccc17bba00b2142e4d89b6f3adb4afa423b12faa",
+    "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+    "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+    "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+    "content_schema_version": 1,
+    "engine_extension_name": "_managym.cpython-312-darwin.so",
+    "engine_extension_sha256": "9e3be349db2e65780e5ee32061f0677e255357d5776bef77fcb234b6d90da677",
+    "engine_source_sha256": "ad14ccee1544cf5f091f5b825970f848177c9654be3295d83e348a17149e8134",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+    "hardware": {
+      "cpu_count": 16,
+      "memory_bytes": 137438953472,
+      "platform": "macOS-26.0.1-arm64-arm-64bit",
+      "processor": "arm"
+    },
+    "matchup": {
+      "hero": "arena-seat-0",
+      "hero_deck": {
+        "Accumulate Wisdom": 2,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 1,
+        "Fire Nation Cadets": 2,
+        "Firebending Lesson": 4,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Igneous Inspiration": 2,
+        "Island": 9,
+        "It'll Quench Ya!": 2,
+        "Mountain": 8,
+        "Otter-Penguin": 2,
+        "Pop Quiz": 2,
+        "Tiger-Seal": 2
+      },
+      "hero_sideboard": {
+        "Accumulate Wisdom": 1,
+        "Firebending Lesson": 1,
+        "It'll Quench Ya!": 1
+      },
+      "villain": "arena-seat-1",
+      "villain_deck": {
+        "Allies at Last": 2,
+        "Badgermole Cub": 2,
+        "Compassionate Healer": 2,
+        "Earth King's Lieutenant": 2,
+        "Earth Kingdom Jailer": 2,
+        "Fancy Footwork": 2,
+        "Forest": 8,
+        "Invasion Reinforcements": 2,
+        "Kyoshi Warriors": 2,
+        "Plains": 9,
+        "South Pole Voyager": 1,
+        "Suki, Kyoshi Warrior": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 2,
+        "Yip Yip!": 1
+      },
+      "villain_sideboard": {
+        "Fancy Footwork": 1,
+        "Yip Yip!": 1
+      }
+    },
+    "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+    "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+    "pilot_source_sha256": "95f40d0e218a0722825d324c310f5d110a4f0fab451765c1b67894066ef5c495",
+    "source_commit": "fd7437dfd84cd1e24785a6d7febee78fceff3d80",
+    "torch": "2.10.0",
+    "training_source_sha256": "a409051a24ad7802df9031c95ef1c39435e0ce5fe1961233b8f2c3b38bdbe181",
+    "world": "w4"
+  },
+  "last_recorded_wall_seconds": 1791311042.02438,
+  "monitoring_checkpoint_seconds": 3600.0,
+  "monitoring_checkpoints": [],
+  "monitoring_export_seconds": 0.0,
+  "parent_run_id": null,
+  "prior_seconds": 0.0,
+  "prior_watchdog_seconds": 0.0,
+  "recovery_artifact": null,
+  "recovery_host": "Jacks-MacBook-Pro-2.local",
+  "recovery_lock_path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0001.writer.lock",
+  "recovery_seconds": 0.0,
+  "regime": {
+    "agent": {
+      "attention_layers": 2,
+      "attention_on": true,
+      "belief_card_vocab_size": 0,
+      "belief_count_buckets": 0,
+      "belief_hidden_zone_vocab_size": 7,
+      "belief_owner_role_vocab_size": 2,
+      "hidden_dim": 16,
+      "num_attention_heads": 2,
+      "semantic_pack": "ur-lessons-vs-gw-allies",
+      "value_aggregation": "value_token",
+      "value_kind": "categorical_wdl"
+    },
+    "id": "fixture-wide",
+    "match": {
+      "hero": "arena-seat-0",
+      "hero_deck": {
+        "Accumulate Wisdom": 2,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 1,
+        "Fire Nation Cadets": 2,
+        "Firebending Lesson": 4,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Igneous Inspiration": 2,
+        "Island": 9,
+        "It'll Quench Ya!": 2,
+        "Mountain": 8,
+        "Otter-Penguin": 2,
+        "Pop Quiz": 2,
+        "Tiger-Seal": 2
+      },
+      "hero_sideboard": {
+        "Accumulate Wisdom": 1,
+        "Firebending Lesson": 1,
+        "It'll Quench Ya!": 1
+      },
+      "villain": "arena-seat-1",
+      "villain_deck": {
+        "Allies at Last": 2,
+        "Badgermole Cub": 2,
+        "Compassionate Healer": 2,
+        "Earth King's Lieutenant": 2,
+        "Earth Kingdom Jailer": 2,
+        "Fancy Footwork": 2,
+        "Forest": 8,
+        "Invasion Reinforcements": 2,
+        "Kyoshi Warriors": 2,
+        "Plains": 9,
+        "South Pole Voyager": 1,
+        "Suki, Kyoshi Warrior": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 2,
+        "Yip Yip!": 1
+      },
+      "villain_sideboard": {
+        "Fancy Footwork": 1,
+        "Yip Yip!": 1
+      }
+    },
+    "observation": {
+      "max_actions": 64,
+      "max_cards_per_player": 60,
+      "max_events": 32,
+      "max_focus_objects": 2,
+      "max_permanents_per_player": 40
+    },
+    "recovery_max_microsteps": null,
+    "schedule_clock": "run_elapsed_budget",
+    "schema_version": 1,
+    "selection": "last-complete-raw",
+    "stages": [
+      {
+        "behavior": "current-self",
+        "execution": {
+          "device": "cpu",
+          "memory_bytes": 34359738368,
+          "precision": "float32",
+          "threads": 1,
+          "wall_seconds": 8.0,
+          "workers": 1
+        },
+        "id": "policy-0",
+        "initial": null,
+        "learning": {
+          "advantage_quantile": 0.75,
+          "clip": 0.2,
+          "collection_kl": 0.1,
+          "ema": 0.999,
+          "filter_kind": "quantile",
+          "filter_scope": "actor_critic",
+          "gradient": "ataraxos_move",
+          "learning_rate_max": 0.0001,
+          "learning_rate_min": 5e-06,
+          "learning_rate_power": 1.1,
+          "learning_rate_scale": 0.5,
+          "max_grad_norm": 0.267,
+          "min_advantage": 0.01,
+          "policy_lambda": 0.5,
+          "reference": "action_type_uniform",
+          "tau_power": 0.3,
+          "tau_scale": 0.05,
+          "value_lambda": 0.8
+        },
+        "operation": "train_self_play",
+        "opponent": null,
+        "optimizer": "adam",
+        "streams": 2,
+        "trainable": "policy_value",
+        "trainer": "net_opponent",
+        "transitions": 8,
+        "updates": 1
+      }
+    ],
+    "wall_seconds": 20.0,
+    "world": "w4"
+  },
+  "regime_digest": "a98077be271bb01c54f098b7a959a10bf1867f77221bde7636336b151fc4f7da",
+  "schema_version": 1,
+  "seconds": 1.049952375004068,
+  "seed": 117,
+  "seed_streams": {
+    "belief_collection": 40117,
+    "belief_initialization": 50117,
+    "collection": 10117,
+    "evaluation": 30117,
+    "initialization": 117,
+    "minibatches": 20117
+  },
+  "selected_artifact": {
+    "bytes": 123203,
+    "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0001/policy-0-raw.pt",
+    "sha256": "a95c00039055d9d45eb74a1c8f4fe2ed4522d68a73d176bafc87b1c73dbc5e1e"
+  },
+  "setup_seconds": 0.08939758298220113,
+  "stages": [
+    {
+      "actual_device": "cpu",
+      "actual_threads": 1,
+      "artifacts": {
+        "ema": {
+          "bytes": 123267,
+          "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0001/policy-0-ema.pt",
+          "sha256": "48084784d0ed13091e9e929fb7d7845a8e8827269d5c43b3c0af40ee2f2785fc"
+        },
+        "optimizer": {
+          "bytes": 1711,
+          "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0001/policy-0-optimizer.pt",
+          "sha256": "319bac9364df9705b35469d533ad7d4d390c3cc07927e7e7d4ea9866cca4b799"
+        },
+        "raw": {
+          "bytes": 123203,
+          "path": "/Users/jack/src/etude.evaluate-campaign-checkpoints-during-training/.runs/etu113-validation/gate/test_tiny_comparison_evaluates0/comparison/training/attempt-0001/policy-0-raw.pt",
+          "sha256": "a95c00039055d9d45eb74a1c8f4fe2ed4522d68a73d176bafc87b1c73dbc5e1e"
+        }
+      },
+      "collection_seconds": 0.11473570798989385,
+      "cpu_seconds": 0.9406920000000003,
+      "cumulative_seconds": 1.0478961250046268,
+      "diagnostic_seconds": 0.0,
+      "diagnostics": [
+        {
+          "actor_exposures": 0,
+          "advantage_abs_mean": 0.0019273387733846903,
+          "behavior": "current-self",
+          "behavior_iteration": 0,
+          "bootstrapped_tail_fraction": 1.0,
+          "coordinates": {
+            "environment_decisions": 29,
+            "games": 0,
+            "host_load_1m": 10.8916015625,
+            "learner_transitions": 16,
+            "optimizer_exposures": 0,
+            "process_cpu_seconds": 0.8679760000000001,
+            "rss_bytes": 345735168,
+            "training_seconds": 0.9715844579914119,
+            "updates": 1
+          },
+          "critic_exposures": 0,
+          "gradient": "ataraxos_move",
+          "iteration": 1,
+          "learning_rate": 0.0001,
+          "optimizer_exposures": 0,
+          "reference": "action_type_uniform",
+          "retained": 0,
+          "rows": 16,
+          "schedule_clock": "collection-update-iteration",
+          "selection_groups": [
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.00018316705245524645,
+                0.00014377757906913757,
+                0.0003285333514213562,
+                0.0019321884028613567,
+                0.002769394777715206
+              ],
+              "residual_abs_mean": 0.0013281702995300293,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 5,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.0035409945994615555,
+                -0.0029473411850631237,
+                -0.002353687770664692,
+                -0.0017600343562662601,
+                -0.0011663809418678284
+              ],
+              "residual_abs_mean": 0.0024720802903175354,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 2,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.002810785546898842,
+                -0.0006367253372445703,
+                0.0001768128713592887,
+                0.003267331048846245,
+                0.004467307589948177
+              ],
+              "residual_abs_mean": 0.0027213143184781075,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 8,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.003556612879037857,
+                -0.003556612879037857,
+                -0.003556612879037857,
+                -0.003556612879037857,
+                -0.003556612879037857
+              ],
+              "residual_abs_mean": 0.003458060324192047,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 1,
+              "terminal_distance": "censored"
+            }
+          ],
+          "skipped": "empty advantage filter",
+          "tau": 0.05,
+          "value_kind": "categorical_wdl"
+        }
+      ],
+      "environment_decisions": 29,
+      "error": null,
+      "export_seconds": 0.03686929200193845,
+      "games": 0,
+      "id": "policy-0",
+      "inputs": {},
+      "learner_transitions": 16,
+      "learning_seconds": 0.006682500010356307,
+      "optimizer_exposures": 0,
+      "producer_cost": null,
+      "rejected_artifacts": {},
+      "sampled_peak_rss_bytes": 347209728,
+      "seconds": 0.9560308340005577,
+      "status": "completed",
+      "watchdog_seconds": 0.9560304166516289
+    }
+  ],
+  "status": "completed",
+  "unobserved_seconds": 0.0,
+  "watchdog_seconds": 1.049951916676946
+}

@@ -286,3 +286,33 @@ describe('GameStore', () => {
     ]);
   });
 });
+
+describe('current decision status', () => {
+  it('names the authoritative actor independently of whose turn it is', () => {
+    const store = createGameStore();
+    store.connection = 'connected';
+    store.protocolFrame = structuredClone(boltProtocolFixture.recovery.frame);
+    store.observation = store.protocolFrame.projection;
+    const prompt = store.protocolFrame.prompt!;
+    prompt.actor = store.observation.agent.player_index;
+    prompt.instruction = 'Choose a target.';
+    store.observation.turn.active_player_id = store.observation.opponent.id;
+    expect(store.decisionStatus).toBe('Your decision — Choose a target.');
+    prompt.actor = store.observation.opponent.player_index;
+    expect(store.decisionStatus).toBe("Opponent's decision — Choose a target.");
+  });
+
+  it('does not invite a decision while waiting, disconnected, studying or finished', () => {
+    const store = createGameStore();
+    store.connection = 'connected';
+    expect(store.decisionStatus).toBe('Waiting for the next decision.');
+    store.commandPending = true;
+    expect(store.decisionStatus).toContain('being processed');
+    store.connection = 'reconnecting';
+    expect(store.decisionStatus).toContain('play is unavailable');
+    store.gameOver = true;
+    expect(store.decisionStatus).toBe('Game over — no next decision.');
+    store.restoredDecision = {} as NonNullable<typeof store.restoredDecision>;
+    expect(store.decisionStatus).toBe('Study position — return to live to play.');
+  });
+});

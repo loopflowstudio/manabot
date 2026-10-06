@@ -175,7 +175,7 @@ class ObservationEncoder:
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, validity.
         self.permanent_dim = 25
-        self.event_dim = 7
+        self.event_dim = 12 if hypers.policy_history_version == 1 else 7
 
         # Action space dimension: action type + validity bit.
         self.action_dim = self.num_actions + 1  # validity bit
@@ -325,7 +325,17 @@ class ObservationEncoder:
         # Actionspace
         out["actions"], out["action_focus"] = self._encode_actions(obs)
         out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
-        out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
+        if self.hypers.policy_history_version == 1:
+            rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
+            out["events"] = np.zeros(
+                (self.max_events, self.event_dim), dtype=np.float32
+            )
+            out["events_valid"] = np.zeros(self.max_events, dtype=np.float32)
+            if rows:
+                out["events"][: len(rows)] = rows
+                out["events_valid"][: len(rows)] = 1
+        else:
+            out["events"], out["events_valid"] = self._encode_events(obs.recent_events)
 
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")

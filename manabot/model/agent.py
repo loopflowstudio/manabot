@@ -16,6 +16,7 @@ from manabot.env import ObservationSpace
 from manabot.infra import AgentSpec
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
+from manabot.model.recent_events import RecentEventEncoder
 from manabot.sim.structured_policy import RaggedOfferBatch
 
 
@@ -39,6 +40,16 @@ class Agent(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
+        if hypers.recent_events and (
+            hypers.semantic_pack is None or enc.hypers.policy_history_version != 1
+        ):
+            raise ValueError(
+                "recent events require semantic_pack and policy_history_version=1"
+            )
+        if not hypers.recent_events and enc.hypers.policy_history_version != 0:
+            raise ValueError(
+                "history observation contract requires recent_events Agent"
+            )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
         perm_dim = (
@@ -76,7 +87,11 @@ class Agent(nn.Module):
         # Global game state processor via attention.
         if self.hypers.attention_on:
             num_heads = self.hypers.num_attention_heads
-            self.attention = GameObjectAttention(embed_dim, num_heads=num_heads)
+            self.attention = GameObjectAttention(
+                embed_dim,
+                num_heads=num_heads,
+                feedforward_dim=hypers.attention_feedforward_dim,
+            )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
             )
@@ -152,13 +167,21 @@ class Agent(nn.Module):
         # Construct optional parameters after the historical model to preserve
         # its initialization order and state-dict names.
         self.extra_attention = nn.ModuleList(
-            GameObjectAttention(embed_dim, hypers.num_attention_heads, ownership=False)
+            GameObjectAttention(
+                embed_dim,
+                hypers.num_attention_heads,
+                ownership=False,
+                feedforward_dim=hypers.attention_feedforward_dim,
+            )
             for _ in range(hypers.attention_layers - 1)
         )
         self.value_token = (
             nn.Parameter(torch.randn(1, 1, embed_dim) / embed_dim**0.5)
             if hypers.value_aggregation == "value_token"
             else None
+        )
+        self.recent_events = (
+            RecentEventEncoder(embed_dim) if hypers.recent_events else None
         )
 
         # When True, forward() stashes raw pre-mask logits on
@@ -194,13 +217,15 @@ class Agent(nn.Module):
             raise ValueError(
                 "compound checkpoint requires authoritative offers; use Agent.compound"
             )
-        objects, is_agent, validity = self._gather_object_embeddings(obs)
+        objects, is_agent, validity, history = self._gather_object_embeddings(obs)
 
         encoded = self._attend_objects(objects, is_agent, validity)
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : validity.shape[1]]
 
-        informed_actions = self._gather_informed_actions(obs, post_attention_objects)
+        informed_actions = self._gather_informed_actions(
+            obs, post_attention_objects, history
+        )
 
         logits_before_mask = self.policy_head(informed_actions).squeeze(-1)
         if self.debug:
@@ -266,7 +291,7 @@ class Agent(nn.Module):
         """One viewer-safe root, one ragged action; no intermediate observation."""
         if self.compound_decoder is None:
             raise ValueError("checkpoint has no compound policy")
-        objects, ownership, valid = self._gather_object_embeddings(obs)
+        objects, ownership, valid, history = self._gather_object_embeddings(obs)
         if objects.shape[0] != 1:
             raise ValueError("compound decoding requires one root")
         if self.hypers.attention_on:
@@ -282,7 +307,7 @@ class Agent(nn.Module):
             offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
             for offer in batch.offers
         ):
-            features = self._gather_informed_actions(obs, objects)[
+            features = self._gather_informed_actions(obs, objects, history)[
                 0, : len(batch.offers)
             ]
         return self.compound_decoder(
@@ -322,9 +347,15 @@ class Agent(nn.Module):
         return torch.cat([actions, focus_flat], dim=-1)
 
     def _gather_informed_actions(
-        self, obs: Dict[str, torch.Tensor], post_attention_objects: torch.Tensor
+        self,
+        obs: Dict[str, torch.Tensor],
+        post_attention_objects: torch.Tensor,
+        history: torch.Tensor | None,
     ) -> torch.Tensor:
         actions = self.action_embedding(obs["actions"][..., :-1])
+        if history is not None:
+            # Focus-free actions also receive the same context without attention.
+            actions = actions + history.unsqueeze(1)
         valid_mask = obs["actions_valid"].unsqueeze(-1)
         actions = actions * valid_mask
         actions_with_focus = self._add_focus(
@@ -334,13 +365,15 @@ class Agent(nn.Module):
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         enc_agent_player = self.player_embedding(obs["agent_player"])
         enc_opp_player = self.player_embedding(obs["opponent_player"])
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
+        definitions = None
         if self.semantic_cards is not None:
-            cards, known = self.semantic_cards(obs)
+            definitions = self.semantic_cards.definitions()
+            cards, known = self.semantic_cards(obs, definitions)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
@@ -381,6 +414,13 @@ class Agent(nn.Module):
             )
 
         objects = torch.cat(object_parts, dim=1)
+        history = None
+        if self.recent_events is not None:
+            assert self.semantic_cards is not None and definitions is not None
+            history = self.recent_events(
+                obs, objects, definitions, self.semantic_cards.definition_rows
+            )
+            objects = objects + history.unsqueeze(1)
 
         # The visible object layout is static, so its ownership mask is a
         # registered buffer. Explicit belief rows extend it below.
@@ -397,7 +437,7 @@ class Agent(nn.Module):
             )
 
         validity = torch.cat(validity_parts, dim=1)
-        return objects, is_agent, validity
+        return objects, is_agent, validity, history
 
     def _belief_rows(
         self, obs: Dict[str, torch.Tensor]
@@ -529,7 +569,12 @@ class GameObjectAttention(nn.Module):
     """
 
     def __init__(
-        self, embedding_dim: int, num_heads: int, *, ownership: bool = True
+        self,
+        embedding_dim: int,
+        num_heads: int,
+        *,
+        ownership: bool = True,
+        feedforward_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
@@ -544,10 +589,15 @@ class GameObjectAttention(nn.Module):
             embedding_dim, num_heads=num_heads, batch_first=True
         )
         self.norm1 = nn.LayerNorm(embedding_dim)
+        expansion = (
+            feedforward_dim
+            if feedforward_dim is not None
+            else num_heads * embedding_dim
+        )
         self.mlp = nn.Sequential(
-            layer_init(nn.Linear(embedding_dim, num_heads * embedding_dim)),
+            layer_init(nn.Linear(embedding_dim, expansion)),
             nn.ReLU(),
-            layer_init(nn.Linear(num_heads * embedding_dim, embedding_dim)),
+            layer_init(nn.Linear(expansion, embedding_dim)),
         )
         self.norm2 = nn.LayerNorm(embedding_dim)
 

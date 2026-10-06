@@ -1,0 +1,5058 @@
+{
+  "purpose": "Unscored ETU-77 navigation fixtures; not human acceptance or replay certification",
+  "source_commit": "20b0a611ca4709be9b5aa8799e72cf82c74d533c",
+  "positions": {
+    "CHOOSE_TARGET": {
+      "config": {
+        "seed": 3,
+        "villain_type": "random",
+        "auto_pass": false,
+        "hero_deck": "ur_lessons",
+        "villain_deck": "gw_allies"
+      },
+      "prefix": [
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 3,
+          "label": "Cast Pop Quiz"
+        },
+        {
+          "offer_id": 8,
+          "label": "Decline Learn"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Divide by Zero"
+        },
+        {
+          "offer_id": 1,
+          "label": "Discard It'll Quench Ya!, then draw a card"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 4,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 3,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Dragonfly Swarm"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast First-Time Flyer"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Ally with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Dragonfly Swarm: do not block"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Invasion Reinforcements with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "First-Time Flyer: do not block"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Invasion Reinforcements with Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 0,
+          "label": "Pay the cost (Firebending Lesson)"
+        }
+      ],
+      "digest": "38996c42848c18c65e3d7e87817abff192773569951656d686f653c9e6bc0784",
+      "frame": {
+        "protocol": 1,
+        "match_id": "AjuDiyN3g1y9CFHt7ekE2A",
+        "revision": 109,
+        "frame_hash": "4cb409a1a72bb2919225cabfae4441918e7646609cc81576e5b0c494fe9a0d5a",
+        "content_hash": "legacy-content-unversioned",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "status": "ready",
+        "prompt": {
+          "id": 110,
+          "actor": 0,
+          "kind": "choose_target",
+          "title": "Choose an action",
+          "instruction": "Choose an action"
+        },
+        "projection": {
+          "definition_names": {
+            "0": "Forest",
+            "1": "Island",
+            "2": "Mountain",
+            "3": "Plains",
+            "4": "Divide by Zero",
+            "5": "Igneous Inspiration",
+            "6": "Pop Quiz",
+            "7": "Accumulate Wisdom",
+            "8": "Allies at Last",
+            "9": "Badgermole Cub",
+            "10": "Compassionate Healer",
+            "11": "Dragonfly Swarm",
+            "12": "Earth Kingdom Jailer",
+            "13": "Earth King's Lieutenant",
+            "14": "Fancy Footwork",
+            "15": "Fire Nation Cadets",
+            "16": "Firebending Lesson",
+            "17": "First-Time Flyer",
+            "18": "Forecasting Fortune Teller",
+            "19": "Invasion Reinforcements",
+            "20": "It'll Quench Ya!",
+            "21": "Kyoshi Warriors",
+            "22": "Otter-Penguin",
+            "23": "South Pole Voyager",
+            "24": "Suki, Kyoshi Warrior",
+            "25": "Tiger-Seal",
+            "26": "Water Tribe Rallier",
+            "27": "White Lotus Reinforcements",
+            "28": "Yip Yip!",
+            "29": "Ally",
+            "30": "Clue"
+          },
+          "game_over": false,
+          "won": false,
+          "turn": {
+            "turn_number": 21,
+            "phase": "BEGINNING",
+            "step": "BEGINNING_DRAW",
+            "active_player_id": 0,
+            "agent_player_id": 0
+          },
+          "agent": {
+            "player_index": 0,
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "life": 13,
+            "zone_counts": {
+              "LIBRARY": 22,
+              "HAND": 2,
+              "BATTLEFIELD": 10,
+              "GRAVEYARD": 6,
+              "STACK": 0,
+              "EXILE": 1,
+              "COMMAND": 0
+            },
+            "library_count": 22,
+            "sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "remaining_sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "sideboard": [
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "candidate_id": 83,
+                "owner_id": 0,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom"
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "candidate_id": 84,
+                "owner_id": 0,
+                "registry_key": 16,
+                "name": "Firebending Lesson"
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "candidate_id": 85,
+                "owner_id": 0,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!"
+              }
+            ],
+            "hand": [
+              {
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 13,
+                "registry_key": 17,
+                "name": "First-Time Flyer",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 11,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "graveyard": [
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 12,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 9,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+                "id": 40,
+                "registry_key": 6,
+                "name": "Pop Quiz",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 10,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 27,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Return target spell or permanent with mana value 1 or greater to its owner's hand.\nLearn.",
+                "id": 5,
+                "registry_key": 4,
+                "name": "Divide by Zero",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [
+              {
+                "text_box": "Flying, ward {1}\nThis creature's power is equal to the number of noncreature, nonland cards in your graveyard.\nWhen this creature dies, if there's a Lesson card in your graveyard, draw a card.",
+                "id": 6,
+                "registry_key": 11,
+                "name": "Dragonfly Swarm",
+                "zone": "EXILE",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 3,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 88,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 90,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 97,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 104,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 109,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 113,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 127,
+                "name": "First-Time Flyer",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 3,
+                "base_power": 1,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 128,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
+                "id": 135,
+                "name": "Fire Nation Cadets",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 1,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 139,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              }
+            ]
+          },
+          "opponent": {
+            "player_index": 1,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "life": 20,
+            "zone_counts": {
+              "LIBRARY": 23,
+              "HAND": 1,
+              "BATTLEFIELD": 14,
+              "GRAVEYARD": 5,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 23,
+            "sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "remaining_sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "hand_hidden_count": 1,
+            "hand": [],
+            "graveyard": [
+              {
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 50,
+                "registry_key": 13,
+                "name": "Earth King's Lieutenant",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "id": 82,
+                "registry_key": 28,
+                "name": "Yip Yip!",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
+                "id": 54,
+                "registry_key": 14,
+                "name": "Fancy Footwork",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
+                "id": 53,
+                "registry_key": 14,
+                "name": "Fancy Footwork",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Flash\nWhen this creature enters, create a 1/1 white Ally creature token.",
+                "id": 63,
+                "registry_key": 19,
+                "name": "Invasion Reinforcements",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 89,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 91,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 92,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 98,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 110,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Suki's power is equal to the number of creatures you control.\nWhenever Suki attacks, create a 1/1 white Ally creature token that's tapped and attacking.",
+                "id": 112,
+                "name": "Suki, Kyoshi Warrior",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 7,
+                "toughness": 4,
+                "base_power": 0,
+                "base_toughness": 4,
+                "plus1_counters": 0
+              },
+              {
+                "id": 122,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 123,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
+                "id": 130,
+                "name": "Kyoshi Warriors",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "id": 133,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 141,
+                "name": "Earth Kingdom Jailer",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 143,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
+                "id": 149,
+                "name": "Kyoshi Warriors",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "id": 152,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              }
+            ]
+          }
+        },
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target First-Time Flyer",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target First-Time Flyer",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              127
+            ]
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Fire Nation Cadets",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Fire Nation Cadets",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              135
+            ]
+          },
+          {
+            "id": 2,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Suki, Kyoshi Warrior",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Suki, Kyoshi Warrior",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              112
+            ]
+          },
+          {
+            "id": 3,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Ally",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Ally",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              122
+            ]
+          },
+          {
+            "id": 4,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Kyoshi Warriors",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Kyoshi Warriors",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              130
+            ]
+          },
+          {
+            "id": 5,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Ally",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Ally",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              133
+            ]
+          },
+          {
+            "id": 6,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Earth Kingdom Jailer",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Earth Kingdom Jailer",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              141
+            ]
+          },
+          {
+            "id": 7,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Kyoshi Warriors",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Kyoshi Warriors",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              149
+            ]
+          },
+          {
+            "id": 8,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Ally",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Ally",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              152
+            ]
+          }
+        ],
+        "winner": null,
+        "action_space": "CHOOSE_TARGET",
+        "stops": {
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true,
+          "auto_pass": false
+        },
+        "deck_names": {
+          "hero": "UR Lessons",
+          "villain": "GW Allies"
+        },
+        "asset_pack": {
+          "id": "tla-ur-lessons-vs-gw-allies",
+          "version": "2.0.0",
+          "manifest_sha256": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d"
+        }
+      }
+    },
+    "DISCARD": {
+      "config": {
+        "seed": 62,
+        "villain_type": "random",
+        "auto_pass": false,
+        "hero_deck": "gw_allies",
+        "villain_deck": "ur_lessons"
+      },
+      "prefix": [
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Forest"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Forest"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Badgermole Cub"
+        },
+        {
+          "offer_id": 1,
+          "label": "Target Forest"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Badgermole Cub"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Forest"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Otter-Penguin with Badgermole Cub"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Otter-Penguin with Forest"
+        },
+        {
+          "offer_id": 0,
+          "label": "Attack with Forest"
+        },
+        {
+          "offer_id": 0,
+          "label": "Attack with Forest"
+        }
+      ],
+      "digest": "b72b77e3fdbefe15a3b070ec62be6500af2b3d66fd86761f2a1b446360933c14",
+      "frame": {
+        "protocol": 1,
+        "match_id": "9TNno26tLBes9f-JS5RrVw",
+        "revision": 30,
+        "frame_hash": "fd8f0ca189c971a94f6e3da6a80cbfd0d7f060f6cf23e1b2b1807503a9986494",
+        "content_hash": "legacy-content-unversioned",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "status": "ready",
+        "prompt": {
+          "id": 31,
+          "actor": 0,
+          "kind": "discard",
+          "title": "Choose an action",
+          "instruction": "Choose an action"
+        },
+        "projection": {
+          "definition_names": {
+            "0": "Forest",
+            "1": "Island",
+            "2": "Mountain",
+            "3": "Plains",
+            "4": "Divide by Zero",
+            "5": "Igneous Inspiration",
+            "6": "Pop Quiz",
+            "7": "Accumulate Wisdom",
+            "8": "Allies at Last",
+            "9": "Badgermole Cub",
+            "10": "Compassionate Healer",
+            "11": "Dragonfly Swarm",
+            "12": "Earth Kingdom Jailer",
+            "13": "Earth King's Lieutenant",
+            "14": "Fancy Footwork",
+            "15": "Fire Nation Cadets",
+            "16": "Firebending Lesson",
+            "17": "First-Time Flyer",
+            "18": "Forecasting Fortune Teller",
+            "19": "Invasion Reinforcements",
+            "20": "It'll Quench Ya!",
+            "21": "Kyoshi Warriors",
+            "22": "Otter-Penguin",
+            "23": "South Pole Voyager",
+            "24": "Suki, Kyoshi Warrior",
+            "25": "Tiger-Seal",
+            "26": "Water Tribe Rallier",
+            "27": "White Lotus Reinforcements",
+            "28": "Yip Yip!",
+            "29": "Ally",
+            "30": "Clue"
+          },
+          "game_over": false,
+          "won": false,
+          "turn": {
+            "turn_number": 9,
+            "phase": "ENDING",
+            "step": "ENDING_CLEANUP",
+            "active_player_id": 0,
+            "agent_player_id": 0
+          },
+          "agent": {
+            "player_index": 0,
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "life": 17,
+            "zone_counts": {
+              "LIBRARY": 29,
+              "HAND": 8,
+              "BATTLEFIELD": 2,
+              "GRAVEYARD": 1,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 29,
+            "sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "remaining_sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "sideboard": [
+              {
+                "text_box": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
+                "candidate_id": 83,
+                "owner_id": 0,
+                "registry_key": 14,
+                "name": "Fancy Footwork"
+              },
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "candidate_id": 84,
+                "owner_id": 0,
+                "registry_key": 28,
+                "name": "Yip Yip!"
+              }
+            ],
+            "hand": [
+              {
+                "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
+                "id": 25,
+                "registry_key": 21,
+                "name": "Kyoshi Warriors",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 4,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 10,
+                "registry_key": 12,
+                "name": "Earth Kingdom Jailer",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 8,
+                "registry_key": 13,
+                "name": "Earth King's Lieutenant",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Affinity for Allies (This spell costs {1} less to cast for each Ally you control.)\nUp to two target creatures you control each deal damage equal to their power to target creature an opponent controls.",
+                "id": 2,
+                "registry_key": 8,
+                "name": "Allies at Last",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+                "id": 37,
+                "registry_key": 26,
+                "name": "Water Tribe Rallier",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 2,
+                "toughness": 2,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 11,
+                "registry_key": 12,
+                "name": "Earth Kingdom Jailer",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "id": 41,
+                "registry_key": 28,
+                "name": "Yip Yip!",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 9,
+                "registry_key": 13,
+                "name": "Earth King's Lieutenant",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "graveyard": [
+              {
+                "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+                "id": 4,
+                "registry_key": 9,
+                "name": "Badgermole Cub",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 2,
+                "toughness": 2,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 88,
+                "name": "Forest",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 90,
+                "name": "Forest",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 1
+              }
+            ]
+          },
+          "opponent": {
+            "player_index": 1,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "life": 18,
+            "zone_counts": {
+              "LIBRARY": 29,
+              "HAND": 6,
+              "BATTLEFIELD": 4,
+              "GRAVEYARD": 3,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 29,
+            "known_hand": {
+              "20": 1
+            },
+            "sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "remaining_sideboard_counts": {
+              "7": 1,
+              "16": 1
+            },
+            "hand_hidden_count": 6,
+            "hand": [],
+            "graveyard": [
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "id": 42,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 77,
+                "registry_key": 22,
+                "name": "Otter-Penguin",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 2,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Igneous Inspiration deals 3 damage to any target.\nLearn.",
+                "id": 56,
+                "registry_key": 5,
+                "name": "Igneous Inspiration",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 89,
+                "name": "Island",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 94,
+                "name": "Mountain",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 98,
+                "name": "Mountain",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 99,
+                "name": "Island",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              }
+            ]
+          }
+        },
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Kyoshi Warriors",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Kyoshi Warriors",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              25
+            ]
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Earth Kingdom Jailer",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Earth Kingdom Jailer",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              10
+            ]
+          },
+          {
+            "id": 2,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Earth King's Lieutenant",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Earth King's Lieutenant",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              8
+            ]
+          },
+          {
+            "id": 3,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Allies at Last",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Allies at Last",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              2
+            ]
+          },
+          {
+            "id": 4,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Water Tribe Rallier",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Water Tribe Rallier",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              37
+            ]
+          },
+          {
+            "id": 5,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Earth Kingdom Jailer",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Earth Kingdom Jailer",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              11
+            ]
+          },
+          {
+            "id": 6,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Yip Yip!",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Yip Yip!",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              41
+            ]
+          },
+          {
+            "id": 7,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Earth King's Lieutenant",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Earth King's Lieutenant",
+            "action_type": "SELECT_CARD",
+            "focus": [
+              9
+            ]
+          }
+        ],
+        "winner": null,
+        "action_space": "DISCARD",
+        "stops": {
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true,
+          "auto_pass": false
+        },
+        "deck_names": {
+          "hero": "GW Allies",
+          "villain": "UR Lessons"
+        },
+        "asset_pack": {
+          "id": "tla-ur-lessons-vs-gw-allies",
+          "version": "2.0.0",
+          "manifest_sha256": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d"
+        }
+      }
+    },
+    "LEARN": {
+      "config": {
+        "seed": 51,
+        "villain_type": "random",
+        "auto_pass": false,
+        "hero_deck": "ur_lessons",
+        "villain_deck": "gw_allies"
+      },
+      "prefix": [
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 2,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 3,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Accumulate Wisdom"
+        },
+        {
+          "offer_id": 0,
+          "label": "Put Mountain into your hand"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 3,
+          "label": "Target Earth King's Lieutenant"
+        },
+        {
+          "offer_id": 0,
+          "label": "Attack with Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 2,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Fire Nation Cadets: do not block"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Pop Quiz"
+        }
+      ],
+      "digest": "0eefb1877dcc611bccbc0ca84538a32afa578f6538414259944d8ceecc4f7e39",
+      "frame": {
+        "protocol": 1,
+        "match_id": "TYFTNjw4FZiuHomgux6eUg",
+        "revision": 54,
+        "frame_hash": "6252bfe86b3d02b5039a989ad996a467b47c30dd3b0db51d852151f19201a9b4",
+        "content_hash": "legacy-content-unversioned",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "status": "ready",
+        "prompt": {
+          "id": 55,
+          "actor": 0,
+          "kind": "learn",
+          "title": "Choose an action",
+          "instruction": "Choose an action"
+        },
+        "projection": {
+          "definition_names": {
+            "0": "Forest",
+            "1": "Island",
+            "2": "Mountain",
+            "3": "Plains",
+            "4": "Divide by Zero",
+            "5": "Igneous Inspiration",
+            "6": "Pop Quiz",
+            "7": "Accumulate Wisdom",
+            "8": "Allies at Last",
+            "9": "Badgermole Cub",
+            "10": "Compassionate Healer",
+            "11": "Dragonfly Swarm",
+            "12": "Earth Kingdom Jailer",
+            "13": "Earth King's Lieutenant",
+            "14": "Fancy Footwork",
+            "15": "Fire Nation Cadets",
+            "16": "Firebending Lesson",
+            "17": "First-Time Flyer",
+            "18": "Forecasting Fortune Teller",
+            "19": "Invasion Reinforcements",
+            "20": "It'll Quench Ya!",
+            "21": "Kyoshi Warriors",
+            "22": "Otter-Penguin",
+            "23": "South Pole Voyager",
+            "24": "Suki, Kyoshi Warrior",
+            "25": "Tiger-Seal",
+            "26": "Water Tribe Rallier",
+            "27": "White Lotus Reinforcements",
+            "28": "Yip Yip!",
+            "29": "Ally",
+            "30": "Clue"
+          },
+          "game_over": false,
+          "won": false,
+          "turn": {
+            "turn_number": 13,
+            "phase": "BEGINNING",
+            "step": "BEGINNING_UPKEEP",
+            "active_player_id": 0,
+            "agent_player_id": 0
+          },
+          "agent": {
+            "player_index": 0,
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "life": 17,
+            "zone_counts": {
+              "LIBRARY": 27,
+              "HAND": 6,
+              "BATTLEFIELD": 4,
+              "GRAVEYARD": 3,
+              "STACK": 1,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 27,
+            "sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "remaining_sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "sideboard": [
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "candidate_id": 83,
+                "owner_id": 0,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom"
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "candidate_id": 84,
+                "owner_id": 0,
+                "registry_key": 16,
+                "name": "Firebending Lesson"
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "candidate_id": 85,
+                "owner_id": 0,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!"
+              }
+            ],
+            "hand": [
+              {
+                "text_box": "Return target spell or permanent with mana value 1 or greater to its owner's hand.\nLearn.",
+                "id": 5,
+                "registry_key": 4,
+                "name": "Divide by Zero",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 37,
+                "registry_key": 22,
+                "name": "Otter-Penguin",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 2,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature.",
+                "id": 41,
+                "registry_key": 25,
+                "name": "Tiger-Seal",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "When this creature enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+                "id": 15,
+                "registry_key": 18,
+                "name": "Forecasting Fortune Teller",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 3,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 27,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 21,
+                "registry_key": 1,
+                "name": "Island",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 0,
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "graveyard": [
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "id": 2,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 9,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 38,
+                "registry_key": 22,
+                "name": "Otter-Penguin",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 2,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [
+              {
+                "text_box": "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+                "id": 39,
+                "registry_key": 6,
+                "name": "Pop Quiz",
+                "zone": "STACK",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 88,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
+                "id": 90,
+                "name": "Fire Nation Cadets",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 2,
+                "base_power": 1,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 92,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 109,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              }
+            ]
+          },
+          "opponent": {
+            "player_index": 1,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "life": 25,
+            "zone_counts": {
+              "LIBRARY": 26,
+              "HAND": 1,
+              "BATTLEFIELD": 10,
+              "GRAVEYARD": 3,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 26,
+            "sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "remaining_sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "hand_hidden_count": 1,
+            "hand": [],
+            "graveyard": [
+              {
+                "text_box": "Affinity for Allies (This spell costs {1} less to cast for each Ally you control.)\nUp to two target creatures you control each deal damage equal to their power to target creature an opponent controls.",
+                "id": 44,
+                "registry_key": 8,
+                "name": "Allies at Last",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 50,
+                "registry_key": 13,
+                "name": "Earth King's Lieutenant",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "id": 82,
+                "registry_key": 28,
+                "name": "Yip Yip!",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 91,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 95,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Whenever this creature or another Ally you control enters, you gain 1 life. If this is the second time this ability has resolved this turn, draw a card.",
+                "id": 97,
+                "name": "South Pole Voyager",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 4,
+                "toughness": 4,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 2
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 101,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 107,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 112,
+                "name": "Earth King's Lieutenant",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 2
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 115,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 117,
+                "name": "Earth Kingdom Jailer",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+                "id": 123,
+                "name": "Compassionate Healer",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 127,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              }
+            ]
+          }
+        },
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Divide by Zero, then draw a card",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Divide by Zero, then draw a card",
+            "action_type": "LEARN_DISCARD",
+            "focus": [
+              5
+            ]
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Otter-Penguin, then draw a card",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Otter-Penguin, then draw a card",
+            "action_type": "LEARN_DISCARD",
+            "focus": [
+              37
+            ]
+          },
+          {
+            "id": 2,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Tiger-Seal, then draw a card",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Tiger-Seal, then draw a card",
+            "action_type": "LEARN_DISCARD",
+            "focus": [
+              41
+            ]
+          },
+          {
+            "id": 3,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Forecasting Fortune Teller, then draw a card",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Forecasting Fortune Teller, then draw a card",
+            "action_type": "LEARN_DISCARD",
+            "focus": [
+              15
+            ]
+          },
+          {
+            "id": 4,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard It'll Quench Ya!, then draw a card",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard It'll Quench Ya!, then draw a card",
+            "action_type": "LEARN_DISCARD",
+            "focus": [
+              27
+            ]
+          },
+          {
+            "id": 5,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Discard Island, then draw a card",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Discard Island, then draw a card",
+            "action_type": "LEARN_DISCARD",
+            "focus": [
+              21
+            ]
+          },
+          {
+            "id": 6,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Take Accumulate Wisdom",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Take Accumulate Wisdom",
+            "action_type": "LEARN_TAKE_LESSON",
+            "focus": [
+              83
+            ]
+          },
+          {
+            "id": 7,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Take Firebending Lesson",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Take Firebending Lesson",
+            "action_type": "LEARN_TAKE_LESSON",
+            "focus": [
+              84
+            ]
+          },
+          {
+            "id": 8,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Take It'll Quench Ya!",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Take It'll Quench Ya!",
+            "action_type": "LEARN_TAKE_LESSON",
+            "focus": [
+              85
+            ]
+          },
+          {
+            "id": 9,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Decline Learn",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Decline Learn",
+            "action_type": "DECLINE_CHOICE",
+            "focus": [
+              39
+            ]
+          }
+        ],
+        "winner": null,
+        "action_space": "LEARN",
+        "stops": {
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true,
+          "auto_pass": false
+        },
+        "deck_names": {
+          "hero": "UR Lessons",
+          "villain": "GW Allies"
+        },
+        "asset_pack": {
+          "id": "tla-ur-lessons-vs-gw-allies",
+          "version": "2.0.0",
+          "manifest_sha256": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d"
+        }
+      }
+    },
+    "DECLARE_BLOCKER": {
+      "config": {
+        "seed": 3,
+        "villain_type": "random",
+        "auto_pass": false,
+        "hero_deck": "ur_lessons",
+        "villain_deck": "gw_allies"
+      },
+      "prefix": [
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 3,
+          "label": "Cast Pop Quiz"
+        },
+        {
+          "offer_id": 8,
+          "label": "Decline Learn"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Divide by Zero"
+        },
+        {
+          "offer_id": 1,
+          "label": "Discard It'll Quench Ya!, then draw a card"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 4,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 3,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Dragonfly Swarm"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast First-Time Flyer"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Ally with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Dragonfly Swarm: do not block"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Invasion Reinforcements with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "First-Time Flyer: do not block"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Invasion Reinforcements with Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 0,
+          "label": "Pay the cost (Firebending Lesson)"
+        },
+        {
+          "offer_id": 7,
+          "label": "Target Kyoshi Warriors"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 2,
+          "label": "Block Ally with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Activate ability: Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Ally with First-Time Flyer"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast First-Time Flyer"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast It'll Quench Ya!"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Earth Kingdom Jailer with First-Time Flyer"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Accumulate Wisdom"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Otter-Penguin"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with First-Time Flyer"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Tiger-Seal"
+        }
+      ],
+      "digest": "bb84930ba52e8065246708e3a04f668bd4c78bf155a9fb2ac19c306e41f0e495",
+      "frame": {
+        "protocol": 1,
+        "match_id": "AjuDiyN3g1y9CFHt7ekE2A",
+        "revision": 176,
+        "frame_hash": "c7ff3ad6f9405593b6b33040c2431120999cdd1163eadaba1adc92acfc475fe5",
+        "content_hash": "legacy-content-unversioned",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "status": "ready",
+        "prompt": {
+          "id": 177,
+          "actor": 0,
+          "kind": "declare_blocker",
+          "title": "Choose an action",
+          "instruction": "Choose an action"
+        },
+        "projection": {
+          "definition_names": {
+            "0": "Forest",
+            "1": "Island",
+            "2": "Mountain",
+            "3": "Plains",
+            "4": "Divide by Zero",
+            "5": "Igneous Inspiration",
+            "6": "Pop Quiz",
+            "7": "Accumulate Wisdom",
+            "8": "Allies at Last",
+            "9": "Badgermole Cub",
+            "10": "Compassionate Healer",
+            "11": "Dragonfly Swarm",
+            "12": "Earth Kingdom Jailer",
+            "13": "Earth King's Lieutenant",
+            "14": "Fancy Footwork",
+            "15": "Fire Nation Cadets",
+            "16": "Firebending Lesson",
+            "17": "First-Time Flyer",
+            "18": "Forecasting Fortune Teller",
+            "19": "Invasion Reinforcements",
+            "20": "It'll Quench Ya!",
+            "21": "Kyoshi Warriors",
+            "22": "Otter-Penguin",
+            "23": "South Pole Voyager",
+            "24": "Suki, Kyoshi Warrior",
+            "25": "Tiger-Seal",
+            "26": "Water Tribe Rallier",
+            "27": "White Lotus Reinforcements",
+            "28": "Yip Yip!",
+            "29": "Ally",
+            "30": "Clue"
+          },
+          "game_over": false,
+          "won": false,
+          "turn": {
+            "turn_number": 28,
+            "phase": "COMBAT",
+            "step": "COMBAT_DECLARE_BLOCKERS",
+            "active_player_id": 1,
+            "agent_player_id": 0
+          },
+          "agent": {
+            "player_index": 0,
+            "id": 0,
+            "is_active": false,
+            "is_agent": true,
+            "life": 11,
+            "zone_counts": {
+              "LIBRARY": 15,
+              "HAND": 1,
+              "BATTLEFIELD": 13,
+              "GRAVEYARD": 12,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 15,
+            "sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "remaining_sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "sideboard": [
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "candidate_id": 83,
+                "owner_id": 0,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom"
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "candidate_id": 84,
+                "owner_id": 0,
+                "registry_key": 16,
+                "name": "Firebending Lesson"
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "candidate_id": 85,
+                "owner_id": 0,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!"
+              }
+            ],
+            "hand": [
+              {
+                "text_box": "Igneous Inspiration deals 3 damage to any target.\nLearn.",
+                "id": 16,
+                "registry_key": 5,
+                "name": "Igneous Inspiration",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "graveyard": [
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 12,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 9,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Draw a card.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
+                "id": 40,
+                "registry_key": 6,
+                "name": "Pop Quiz",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 10,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 27,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Return target spell or permanent with mana value 1 or greater to its owner's hand.\nLearn.",
+                "id": 5,
+                "registry_key": 4,
+                "name": "Divide by Zero",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 11,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
+                "id": 8,
+                "registry_key": 15,
+                "name": "Fire Nation Cadets",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Flying, ward {1}\nThis creature's power is equal to the number of noncreature, nonland cards in your graveyard.\nWhen this creature dies, if there's a Lesson card in your graveyard, draw a card.",
+                "id": 6,
+                "registry_key": 11,
+                "name": "Dragonfly Swarm",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 3,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 28,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 13,
+                "registry_key": 17,
+                "name": "First-Time Flyer",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "id": 2,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 88,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 90,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 97,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 104,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 109,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 113,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 127,
+                "name": "First-Time Flyer",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 3,
+                "base_power": 1,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 128,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 139,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 159,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 171,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 177,
+                "name": "Otter-Penguin",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 2,
+                "toughness": 1,
+                "base_power": 2,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature.",
+                "id": 179,
+                "name": "Tiger-Seal",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              }
+            ]
+          },
+          "opponent": {
+            "player_index": 1,
+            "id": 1,
+            "is_active": true,
+            "is_agent": false,
+            "life": 16,
+            "zone_counts": {
+              "LIBRARY": 19,
+              "HAND": 0,
+              "BATTLEFIELD": 15,
+              "GRAVEYARD": 8,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 19,
+            "sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "remaining_sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "hand_hidden_count": 0,
+            "hand": [],
+            "graveyard": [
+              {
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 50,
+                "registry_key": 13,
+                "name": "Earth King's Lieutenant",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "id": 82,
+                "registry_key": 28,
+                "name": "Yip Yip!",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
+                "id": 54,
+                "registry_key": 14,
+                "name": "Fancy Footwork",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Untap one or two target creatures. They each get +2/+2 until end of turn.",
+                "id": 53,
+                "registry_key": 14,
+                "name": "Fancy Footwork",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Flash\nWhen this creature enters, create a 1/1 white Ally creature token.",
+                "id": 63,
+                "registry_key": 19,
+                "name": "Invasion Reinforcements",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 1,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
+                "id": 66,
+                "registry_key": 21,
+                "name": "Kyoshi Warriors",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 4,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 51,
+                "registry_key": 12,
+                "name": "Earth Kingdom Jailer",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 3,
+                "toughness": 3,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Affinity for Allies (This spell costs {1} less to cast for each Ally you control.)\nUp to two target creatures you control each deal damage equal to their power to target creature an opponent controls.",
+                "id": 43,
+                "registry_key": 8,
+                "name": "Allies at Last",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 89,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 1
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 91,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 92,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 98,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 110,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Suki's power is equal to the number of creatures you control.\nWhenever Suki attacks, create a 1/1 white Ally creature token that's tapped and attacking.",
+                "id": 112,
+                "name": "Suki, Kyoshi Warrior",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 8,
+                "toughness": 4,
+                "base_power": 0,
+                "base_toughness": 4,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 123,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
+                "id": 130,
+                "name": "Kyoshi Warriors",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "id": 133,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 143,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 162,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 164,
+                "name": "Earth Kingdom Jailer",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+                "id": 174,
+                "name": "Compassionate Healer",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+                "id": 181,
+                "name": "Badgermole Cub",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "id": 185,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              }
+            ]
+          }
+        },
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "declare_blockers",
+            "source": null,
+            "label": "Block Earth Kingdom Jailer with Tiger-Seal",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Block Earth Kingdom Jailer with Tiger-Seal",
+            "action_type": "DECLARE_BLOCKER",
+            "focus": [
+              179,
+              164
+            ]
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "declare_blockers",
+            "source": null,
+            "label": "Block Ally with Tiger-Seal",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Block Ally with Tiger-Seal",
+            "action_type": "DECLARE_BLOCKER",
+            "focus": [
+              179,
+              133
+            ]
+          },
+          {
+            "id": 2,
+            "actor": 0,
+            "verb": "declare_blockers",
+            "source": null,
+            "label": "Block Kyoshi Warriors with Tiger-Seal",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Block Kyoshi Warriors with Tiger-Seal",
+            "action_type": "DECLARE_BLOCKER",
+            "focus": [
+              179,
+              130
+            ]
+          },
+          {
+            "id": 3,
+            "actor": 0,
+            "verb": "declare_blockers",
+            "source": null,
+            "label": "Block Suki, Kyoshi Warrior with Tiger-Seal",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Block Suki, Kyoshi Warrior with Tiger-Seal",
+            "action_type": "DECLARE_BLOCKER",
+            "focus": [
+              179,
+              112
+            ]
+          },
+          {
+            "id": 4,
+            "actor": 0,
+            "verb": "declare_blockers",
+            "source": null,
+            "label": "Block Ally with Tiger-Seal",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Block Ally with Tiger-Seal",
+            "action_type": "DECLARE_BLOCKER",
+            "focus": [
+              179,
+              185
+            ]
+          },
+          {
+            "id": 5,
+            "actor": 0,
+            "verb": "declare_blockers",
+            "source": null,
+            "label": "Tiger-Seal: do not block",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Tiger-Seal: do not block",
+            "action_type": "DECLARE_BLOCKER",
+            "focus": [
+              179
+            ]
+          }
+        ],
+        "winner": null,
+        "action_space": "DECLARE_BLOCKER",
+        "stops": {
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true,
+          "auto_pass": false
+        },
+        "deck_names": {
+          "hero": "UR Lessons",
+          "villain": "GW Allies"
+        },
+        "asset_pack": {
+          "id": "tla-ur-lessons-vs-gw-allies",
+          "version": "2.0.0",
+          "manifest_sha256": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d"
+        }
+      }
+    },
+    "PAY_OR_NOT": {
+      "config": {
+        "seed": 0,
+        "villain_type": "random",
+        "auto_pass": false,
+        "hero_deck": "ur_lessons",
+        "villain_deck": "gw_allies"
+      },
+      "prefix": [
+        {
+          "offer_id": 3,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Tiger-Seal"
+        },
+        {
+          "offer_id": 2,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 3,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 3,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 3,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Firebending Lesson"
+        },
+        {
+          "offer_id": 2,
+          "label": "Target Badgermole Cub"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast It'll Quench Ya!"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Divide by Zero"
+        },
+        {
+          "offer_id": 1,
+          "label": "Target Badgermole Cub"
+        },
+        {
+          "offer_id": 1,
+          "label": "Discard Island, then draw a card"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Tiger-Seal"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block White Lotus Reinforcements with Tiger-Seal"
+        },
+        {
+          "offer_id": 2,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Igneous Inspiration"
+        },
+        {
+          "offer_id": 0,
+          "label": "Target Hero"
+        },
+        {
+          "offer_id": 5,
+          "label": "Decline Learn"
+        },
+        {
+          "offer_id": 2,
+          "label": "Cast Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Forecasting Fortune Teller"
+        },
+        {
+          "offer_id": 1,
+          "label": "Activate ability: Clue"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Do not attack with Tiger-Seal"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Igneous Inspiration"
+        },
+        {
+          "offer_id": 0,
+          "label": "Target Hero"
+        },
+        {
+          "offer_id": 0,
+          "label": "Take Accumulate Wisdom"
+        },
+        {
+          "offer_id": 1,
+          "label": "Forecasting Fortune Teller: do not block"
+        },
+        {
+          "offer_id": 0,
+          "label": "Block Water Tribe Rallier with Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Tiger-Seal: do not block"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Accumulate Wisdom"
+        },
+        {
+          "offer_id": 2,
+          "label": "Put Firebending Lesson into your hand"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
+        }
+      ],
+      "digest": "28fbc8f9d1a47059d87978281fe362720b2432a0638cea8740da9baf33b66c7d",
+      "frame": {
+        "protocol": 1,
+        "match_id": "sKaBtdZwkAKMJITe8R2eew",
+        "revision": 87,
+        "frame_hash": "daa7d9b2ac0b48888a1743f96aa8ce822d02c58b7fa2b82119fb84dfd8834784",
+        "content_hash": "legacy-content-unversioned",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "status": "ready",
+        "prompt": {
+          "id": 88,
+          "actor": 0,
+          "kind": "pay_or_not",
+          "title": "Choose an action",
+          "instruction": "Choose an action"
+        },
+        "projection": {
+          "definition_names": {
+            "0": "Forest",
+            "1": "Island",
+            "2": "Mountain",
+            "3": "Plains",
+            "4": "Divide by Zero",
+            "5": "Igneous Inspiration",
+            "6": "Pop Quiz",
+            "7": "Accumulate Wisdom",
+            "8": "Allies at Last",
+            "9": "Badgermole Cub",
+            "10": "Compassionate Healer",
+            "11": "Dragonfly Swarm",
+            "12": "Earth Kingdom Jailer",
+            "13": "Earth King's Lieutenant",
+            "14": "Fancy Footwork",
+            "15": "Fire Nation Cadets",
+            "16": "Firebending Lesson",
+            "17": "First-Time Flyer",
+            "18": "Forecasting Fortune Teller",
+            "19": "Invasion Reinforcements",
+            "20": "It'll Quench Ya!",
+            "21": "Kyoshi Warriors",
+            "22": "Otter-Penguin",
+            "23": "South Pole Voyager",
+            "24": "Suki, Kyoshi Warrior",
+            "25": "Tiger-Seal",
+            "26": "Water Tribe Rallier",
+            "27": "White Lotus Reinforcements",
+            "28": "Yip Yip!",
+            "29": "Ally",
+            "30": "Clue"
+          },
+          "game_over": false,
+          "won": false,
+          "turn": {
+            "turn_number": 17,
+            "phase": "PRECOMBAT_MAIN",
+            "step": "PRECOMBAT_MAIN_STEP",
+            "active_player_id": 0,
+            "agent_player_id": 0
+          },
+          "agent": {
+            "player_index": 0,
+            "id": 0,
+            "is_active": true,
+            "is_agent": true,
+            "life": 12,
+            "zone_counts": {
+              "LIBRARY": 23,
+              "HAND": 2,
+              "BATTLEFIELD": 10,
+              "GRAVEYARD": 7,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 23,
+            "sideboard_counts": {
+              "7": 1,
+              "16": 1,
+              "20": 1
+            },
+            "remaining_sideboard_counts": {
+              "16": 1,
+              "20": 1
+            },
+            "sideboard": [
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "candidate_id": 84,
+                "owner_id": 0,
+                "registry_key": 16,
+                "name": "Firebending Lesson"
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "candidate_id": 85,
+                "owner_id": 0,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!"
+              }
+            ],
+            "hand": [
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 10,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "id": 3,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom",
+                "zone": "HAND",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "graveyard": [
+              {
+                "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
+                "id": 9,
+                "registry_key": 16,
+                "name": "Firebending Lesson",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 28,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 20,
+                "registry_key": 1,
+                "name": "Island",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 0,
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Return target spell or permanent with mana value 1 or greater to its owner's hand.\nLearn.",
+                "id": 4,
+                "registry_key": 4,
+                "name": "Divide by Zero",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Igneous Inspiration deals 3 damage to any target.\nLearn.",
+                "id": 16,
+                "registry_key": 5,
+                "name": "Igneous Inspiration",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Igneous Inspiration deals 3 damage to any target.\nLearn.",
+                "id": 17,
+                "registry_key": 5,
+                "name": "Igneous Inspiration",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
+                "id": 83,
+                "registry_key": 7,
+                "name": "Accumulate Wisdom",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 88,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature.",
+                "id": 90,
+                "name": "Tiger-Seal",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 93,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 102,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 111,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {U}.",
+                "id": 117,
+                "name": "Island",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "Flying, ward {1}\nThis creature's power is equal to the number of noncreature, nonland cards in your graveyard.\nWhen this creature dies, if there's a Lesson card in your graveyard, draw a card.",
+                "id": 123,
+                "name": "Dragonfly Swarm",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 6,
+                "toughness": 3,
+                "base_power": 0,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 124,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+                "id": 130,
+                "name": "Forecasting Fortune Teller",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 3,
+                "base_power": 1,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {R}.",
+                "id": 136,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              }
+            ]
+          },
+          "opponent": {
+            "player_index": 1,
+            "id": 1,
+            "is_active": false,
+            "is_agent": false,
+            "life": 20,
+            "zone_counts": {
+              "LIBRARY": 23,
+              "HAND": 5,
+              "BATTLEFIELD": 9,
+              "GRAVEYARD": 3,
+              "STACK": 0,
+              "EXILE": 0,
+              "COMMAND": 0
+            },
+            "library_count": 23,
+            "sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "remaining_sideboard_counts": {
+              "14": 1,
+              "28": 1
+            },
+            "hand_hidden_count": 5,
+            "hand": [],
+            "graveyard": [
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "id": 82,
+                "registry_key": 28,
+                "name": "Yip Yip!",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Vigilance\nOther Allies you control get +1/+1.",
+                "id": 80,
+                "registry_key": 27,
+                "name": "White Lotus Reinforcements",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 2,
+                "toughness": 3,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+                "id": 78,
+                "registry_key": 26,
+                "name": "Water Tribe Rallier",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 2,
+                "toughness": 2,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
+            "exile": [],
+            "stack": [],
+            "battlefield": [
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 91,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 94,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 2
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 100,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 105,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+                "id": 113,
+                "name": "Badgermole Cub",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {G}.",
+                "id": 115,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 126,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "{T}: Add {W}.",
+                "id": 139,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
+                "id": 141,
+                "name": "Earth Kingdom Jailer",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              }
+            ]
+          }
+        },
+        "offers": [
+          {
+            "id": 0,
+            "actor": 0,
+            "verb": "pay",
+            "source": null,
+            "label": "Pay the cost (Firebending Lesson)",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Pay the cost (Firebending Lesson)",
+            "action_type": "PAY_COST",
+            "focus": [
+              10
+            ]
+          },
+          {
+            "id": 1,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Decline",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Decline",
+            "action_type": "DECLINE_CHOICE",
+            "focus": [
+              10
+            ]
+          }
+        ],
+        "winner": null,
+        "action_space": "PAY_OR_NOT",
+        "stops": {
+          "my": [
+            "main1",
+            "main2"
+          ],
+          "opponent": [
+            "end_step"
+          ],
+          "stop_on_stack": true,
+          "auto_pass": false
+        },
+        "deck_names": {
+          "hero": "UR Lessons",
+          "villain": "GW Allies"
+        },
+        "asset_pack": {
+          "id": "tla-ur-lessons-vs-gw-allies",
+          "version": "2.0.0",
+          "manifest_sha256": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d"
+        }
+      }
+    }
+  }
+}

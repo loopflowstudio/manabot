@@ -31,6 +31,14 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 ## Index
 
+[ETU-106 pooling × advantage floor](pooling-filter-followup.md#result--completed-2026-10-06):
+2,400 replay-verified games; no demonstrated token or floor-removal strength
+benefit, no equivalence claim, and both floor changes remain unresolved.
+
+ETU-99's [remaining Ataraxos transfer protocols](ataraxos-transfer.md) map
+delivered instruments to unexecuted sampler, search, distillation and robustness
+studies. Proposed budgets are separate from ETU-91 and grant no execution authority.
+
 | exp | question | verdict |
 |---|---|---|
 | [00](exp-00-decision-profile.md) / [00-cost](exp-00-cost-basis.md) / [00c](exp-00c-seat-balanced-baselines.md) | calibrate the instrument | 194 decisions/game; single-init baselines meaningless; $0.44/1M steps. ~~Per-seat findings (94%/23.1% on-play)~~ deal artifacts per exp-06 — deal-averaged random mirrors are at parity (repro_06) |

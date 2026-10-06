@@ -50,18 +50,13 @@ and export. Continuation stages do not reset that clock. Stage deadlines remain
 independent bounds inside the same total allowance. Evaluation is outside the
 training execution and does not consume this clock.
 
-Architecture comparisons can be authored as Python functions returning regimes.
-`manabot.training.recipes` supplies an explicit Ataraxos baseline and validated
-model, value-output, pooling and width/depth variations. Each helper snapshots
-the full regime and rejects unsupported model/objective combinations; it does
-not allocate compute or run training. `AgentSpec` is the model type, while saved
-checkpoints retain the `agent_hypers` dictionary and its existing field meanings.
-The [value study](../experiments/runners/run_value_models.py) shows eight cells
-with an explicit evaluation protocol; the
-[capacity examples](../experiments/runners/model_capacity.py) only construct
-variants of a caller-supplied baseline. See the
-[accepted recipe design](plans/modular-architecture-recipes.md#11-delivery-cut-and-acceptance-after-review)
-for scope and compatibility.
+Training comparisons use [declarative typed-Python experiments](training-experiments.md):
+named components, frozen baselines/versioned presets, explicit overrides and ordered
+cases or matrices resolve to existing TrainingRegime values with setting provenance.
+The value-model and capacity examples preserve their previous configurations and
+identities. `manabot.training.recipes` retains internal composition helpers.
+`AgentSpec` remains the model type; checkpoints retain the `agent_hypers` dictionary
+and existing field meanings. Resolution never allocates compute or starts training.
 
 The policy stays on the acting viewer's tensor inputs; private teacher metadata
 is not a model input. Learner and behavior weights are raw; EMA is a separately
@@ -248,3 +243,85 @@ excluded rows within action/distance strata, separating lambda-target residuals
 from noisy terminal-outcome samples, with game-cluster uncertainty. These are
 frozen-policy associations, not causal filter benefits or ground-truth critic
 errors. Scientific technique dispositions remain unresolved.
+
+## Reuse a published policy without training
+
+`ImportPolicy` admits a frozen TrainingRun export and one raw or EMA checkpoint
+into the ordinary stage graph. It uses the existing VerifyStore and run export;
+no training stage, model registry or separate runner is needed. For example:
+
+```python
+from manabot.training.models import CollectBelief, ImportPolicy
+
+# References come from the retained publication manifest. Paths may relocate;
+# sha256 and bytes must identify the original published bytes.
+policy = ImportPolicy(
+    id="policy", operation="import_policy",
+    source_run={"path": "/artifacts/producer/run.json",
+                "sha256": published_run_sha256, "bytes": published_run_bytes},
+    source_stage="producer",
+    checkpoint={"path": "/artifacts/producer/producer-ema.pt",
+                "sha256": published_checkpoint_sha256,
+                "bytes": published_checkpoint_bytes},
+    weights="ema",
+)
+histories = CollectBelief(
+    id="histories", operation="collect_belief", policy="policy", weights="ema",
+    games=256,
+)
+# Use [policy, histories, ...] as TrainingRegime.stages or Pipeline's stages.
+# Resolution only declares work; execute_regime / manabot train --regime executes it.
+```
+
+The regime's AgentSpec, observation contract and world must match the producer
+and checkpoint. Ordinary checkpoint loading validates model weights, architecture,
+native world/content/input bindings and the actual execution setup. The selected
+producer stage must be completed; a later failure in the producer run does not
+erase its completed checkpoint. The producer export must retain source commit,
+training source digest and cumulative checkpoint cost. Checkpoint metadata must
+agree on run, stage, recipe digest, value units, raw/EMA selection and (for EMA)
+averaging clock/rate. Original serialized recipe bytes own the producer digest;
+current-schema defaults never rewrite frozen evidence. Missing, tampered or
+incompatible inputs fail and retain a failed TrainingRun attempt.
+
+Admission copies exact source bytes into the destination run before loading.
+The imported stage exposes only the selected `raw` or `ema` artifact and retains
+its `source_run` JSON artifact. Downstream stages recheck these hashes. Set
+`CollectBelief.weights` and `CollectLocalUpdate.weights` to that same selection;
+`TrainBelief` continues to consume the resulting dataset normally. Local-search
+samplers must still originate from that same policy and weight identity.
+
+`TrainSupervised(initial="policy", initial_weights="ema", ...)` can initialize
+from an imported EMA artifact; `initial_weights="raw"` remains the historical
+default and does not alter existing recipe digests. This starts fresh Adam,
+not producer optimizer or collector continuation. Local-target distillation
+requires signed-outcome producer value semantics. Imported compound policies
+can feed the existing belief/search collectors, but ordinary flat supervised
+training and compound EMA remain unsupported. Live self-play continuation and
+selection diagnostics retain their existing stage restrictions. An EMA import
+never masquerades as raw or changes `last-complete-raw` selection.
+
+Costs have two explicit meanings:
+
+- `StageRecord.producer_cost` identifies the source run/stage/weight and its
+  original cumulative seconds through checkpoint admission (including recorded
+  prior recovery cost). The unmodified source export retains detailed phase,
+  source/runtime, seed and failed-attempt evidence.
+- Imported-stage `seconds` / `export_seconds` measure fresh copying, hashing and
+  loading. Current TrainingRun and downstream stage costs exclude sunk producer
+  cost. Zero optimizer exposures on import do not mean free producer training.
+
+For standalone method accounting, include the original producer cost as well as
+fresh import/downstream costs. Repeated imports of the same run/stage share that
+producer expenditure; do not sum it once per consumer or once per raw/EMA sibling.
+Comparisons sharing a producer report its cost separately and charge it once.
+Producers whose source run itself imports policies are explicitly rejected:
+transitive producer cost aggregation and ancestor deduplication are not supported.
+Legacy checkpoints without TrainingRun metadata or recorded cost are also rejected.
+The term *published* means caller-supplied frozen evidence, not verified registry
+publication, scientific acceptance or demo promotion.
+
+ETU-112's fixed untrained fixtures exercise complete ordinary belief and local
+search collection, raw/EMA admission, historical receipt shape, immutable source
+bytes and rejection paths without optimizer training. ETU-99 owns actual producer
+selection, independent seeds, empirical cohorts and budgets.

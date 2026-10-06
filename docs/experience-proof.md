@@ -126,10 +126,10 @@ assistive-technology automation, or a new performance baseline.
 
 ## Versioned visual references
 
-The same two terminal trajectories compare 17 committed references under
-[`frontend/e2e/visual-references/v3`](../frontend/e2e/visual-references/v3):
+The same two terminal trajectories compare 18 committed references under
+[`frontend/e2e/visual-references/v6`](../frontend/e2e/visual-references/v6):
 
-- one Actions-panel reference for every one of the nine reachable prompt
+- one Actions-panel reference for every one of the ten reachable prompt
   families;
 - opening, combat, and developed board references;
 - disconnected, reconnecting, and recovered-connected header references; and
@@ -166,11 +166,11 @@ reconnects to uvicorn and must restore the same authoritative offer.
 Do not use a developer workstation capture as the reviewed baseline. Push the
 intentional visual change to its branch, dispatch the `CI` workflow for that
 branch with `update_visual_references` set to `true`, and download the
-`visual-references-v3` artifact. That job uses the named Linux profile, runs
+`visual-references-v6` artifact. That job uses the named Linux profile, runs
 Playwright with its explicit snapshot-update flag, reruns normal comparison,
 and continues to enforce every non-pixel assertion.
 
-Review all 17 images and the product diff, replace the versioned directory with
+Review all 18 images and the product diff, replace the versioned directory with
 the reviewed artifact, and commit the PNGs. A normal pull-request run must then
 pass without update mode. Snapshot updating must never be used to accept a
 changed prompt sequence, terminal result, authority response, asset source,
@@ -179,7 +179,9 @@ network request, console error, or page error.
 For a deliberate new product appearance, increment the matrix reference
 version and update the matrix directory, Playwright snapshot path, and CI
 artifact path together before dispatching. Git history retains the earlier
-set. A pure pinned-runner or browser recapture may keep the visual version only
+set. A screenshot-ignored local run does not validate an intentional appearance
+change: inspect the pinned Linux expected/actual/diff images and complete the
+versioned-reference workflow before arming delivery. A pure pinned-runner or browser recapture may keep the visual version only
 when review confirms that the intended appearance did not change.
 
 ## Boundaries and next evidence

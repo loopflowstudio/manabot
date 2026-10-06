@@ -1,4 +1,6 @@
-# Release visual references v5
+# Historical visual references v5
+
+The adjacent matrix and PNGs preserve the pre-filter appearance. Current CI uses v6.
 
 These references cover the w4 world, which adds the hand-size limit at
 cleanup (CR 514.1). The pinned GW Allies scenario (seed 62) now reaches the

@@ -110,6 +110,25 @@ class Stage(Strict):
     execution: Execution = Execution()
 
 
+class ImportPolicy(Stage):
+    """Admit one published producer export and exact raw or EMA checkpoint."""
+
+    operation: Literal["import_policy"]
+    source_run: ArtifactReference
+    source_stage: str
+    checkpoint: ArtifactReference
+    weights: Literal["raw", "ema"] = "raw"
+
+
+class ProducerCost(Strict):
+    """Sunk cost through the source checkpoint, never fresh execution cost."""
+
+    run_id: str
+    stage_id: str
+    weights: Literal["raw", "ema"]
+    cumulative_seconds: float = Field(ge=0)
+
+
 class CollectSearch(Stage):
     operation: Literal["collect_search"]
     policy: Literal["uniform-prior-determinized-puct"] = (
@@ -144,6 +163,10 @@ class TrainSupervised(Stage):
     ] = "visit_distribution"
     datasets: list[str] = Field(min_length=1)
     initial: str | None = None
+    # Omit the historical default so existing recipe identities stay unchanged.
+    initial_weights: Literal["raw", "ema"] = Field(
+        default="raw", exclude_if=lambda value: value == "raw"
+    )
     epochs: int = Field(default=10, ge=1)
     batch_size: int = Field(default=128, ge=1)
     learning_rate: float = Field(default=0.001, gt=0)
@@ -273,7 +296,8 @@ class TrainCompound(Stage):
 
 
 Operation = Annotated[
-    CollectSearch
+    ImportPolicy
+    | CollectSearch
     | CollectLocalUpdate
     | TrainSupervised
     | TrainSelfPlay
@@ -302,15 +326,37 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
-        if self.agent.compound_decisions != any(
-            isinstance(stage, TrainCompound) for stage in self.stages
+        if self.agent.recent_events and self.agent.semantic_pack is None:
+            raise ValueError(
+                "recent events require a semantic pack for public identities"
+            )
+        if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
+            raise ValueError("public history v1 requires 1..32 event rows")
+        # The model treatment owns this input contract; callers cannot silently
+        # train history-on against the historical drained event tensor.
+        self.observation = self.observation.model_copy(
+            update={"policy_history_version": 1 if self.agent.recent_events else 0}
+        )
+        has_compound = any(isinstance(stage, TrainCompound) for stage in self.stages)
+        has_import = any(isinstance(stage, ImportPolicy) for stage in self.stages)
+        if (
+            has_compound
+            and not self.agent.compound_decisions
+            or (self.agent.compound_decisions and not (has_compound or has_import))
         ):
             raise ValueError(
                 "compound stages and compound Agent must be selected together"
             )
         if self.agent.compound_decisions and any(
             not isinstance(
-                stage, (TrainCompound, CollectBelief, TrainBelief, CollectLocalUpdate)
+                stage,
+                (
+                    TrainCompound,
+                    ImportPolicy,
+                    CollectBelief,
+                    TrainBelief,
+                    CollectLocalUpdate,
+                ),
             )
             for stage in self.stages
         ):
@@ -339,13 +385,21 @@ class TrainingRegime(Strict):
             if isinstance(stage, (CollectBelief, CollectLocalUpdate)):
                 policy = previous.get(stage.policy)
                 if not isinstance(
-                    policy, (TrainSupervised, TrainSelfPlay, TrainCompound)
+                    policy,
+                    (TrainSupervised, TrainSelfPlay, TrainCompound, ImportPolicy),
                 ):
                     raise ValueError(
                         "belief policy must refer to an earlier policy stage"
                     )
-                if stage.weights == "ema" and (
-                    not isinstance(policy, TrainSelfPlay) or policy.learning.ema is None
+                if isinstance(policy, ImportPolicy) and stage.weights != policy.weights:
+                    raise ValueError("imported policy weights differ from consumer")
+                if (
+                    stage.weights == "ema"
+                    and not isinstance(policy, ImportPolicy)
+                    and (
+                        not isinstance(policy, TrainSelfPlay)
+                        or policy.learning.ema is None
+                    )
                 ):
                     raise ValueError(
                         "belief EMA dependency requires an EMA policy artifact"
@@ -391,15 +445,32 @@ class TrainingRegime(Strict):
                         )
             initial = getattr(stage, "initial", None)
             parent = previous.get(initial)
+            if isinstance(stage, TrainSupervised):
+                if isinstance(parent, ImportPolicy):
+                    if stage.initial_weights != parent.weights:
+                        raise ValueError(
+                            "imported initial weights differ from consumer"
+                        )
+                elif stage.initial_weights != "raw":
+                    raise ValueError("EMA initialization requires an imported policy")
             if isinstance(stage, TrainSupervised) and stage.target.startswith("local_"):
-                if not isinstance(parent, (TrainSelfPlay, TrainSupervised)) or (
+                if not isinstance(
+                    parent, (TrainSelfPlay, TrainSupervised, ImportPolicy)
+                ) or (
                     isinstance(parent, TrainSupervised)
                     and not parent.target.startswith("local_")
                 ):
                     raise ValueError(
                         "local distillation requires an earlier signed-value policy"
                     )
-            elif initial and type(parent) is not type(stage):
+            elif (
+                initial
+                and type(parent) is not type(stage)
+                and not (
+                    isinstance(stage, TrainSupervised)
+                    and isinstance(parent, ImportPolicy)
+                )
+            ):
                 raise ValueError(
                     "continuation requires an earlier stage of the same operation"
                 )
@@ -442,6 +513,7 @@ class StageRecord(Strict):
     # Cumulative across attempts for this stage; run costs remain attempt-local.
     watchdog_seconds: float = 0
     id: str
+    producer_cost: ProducerCost | None = None
     actual_device: str | None = None
     actual_threads: int | None = None
     status: Literal["running", "completed", "failed", "interrupted"] = "running"
@@ -462,6 +534,29 @@ class StageRecord(Strict):
     rejected_artifacts: dict[str, dict] = {}
     diagnostics: list[dict] = []
     error: str | None = None
+
+
+class TrainingCoordinates(Strict):
+    stage_id: str
+    updates: int = Field(ge=0)
+    training_seconds: float = Field(ge=0)
+    environment_decisions: int = Field(default=0, ge=0)
+    learner_transitions: int = Field(default=0, ge=0)
+    optimizer_exposures: int = Field(default=0, ge=0)
+    games: int = Field(default=0, ge=0)
+
+
+class MonitoringCheckpoint(TrainingCoordinates):
+    ordinal: int
+    artifact: ArtifactReference | None = None
+    error: str | None = None
+
+
+class FixedValidationCohort(Strict):
+    artifact: ArtifactReference
+    games: list[int]
+    policy_target_kind: str
+    source_inputs: dict[str, ArtifactReference]
 
 
 class TrainingRun(Strict):
@@ -490,3 +585,22 @@ class TrainingRun(Strict):
     prior_watchdog_seconds: float = 0
     selected_artifact: dict | None = None
     error: str | None = None
+    monitoring_checkpoints: list[MonitoringCheckpoint] = []
+    monitoring_export_seconds: float = 0
+    monitoring_checkpoint_seconds: float | None = None
+    fixed_validation: FixedValidationCohort | None = None
+
+    def updates_through(self, stage_id: str | None = None) -> int:
+        """Completed learner iterations/epochs; collection records are not updates."""
+        learning = {
+            s.id
+            for s in self.regime.stages
+            if isinstance(s, (TrainSelfPlay, TrainSupervised, TrainCompound))
+        }
+        total = 0
+        for stage in self.stages:
+            if stage.id in learning:
+                total += len(stage.diagnostics)
+            if stage.id == stage_id:
+                break
+        return total

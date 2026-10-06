@@ -110,8 +110,8 @@ def test_release_prompt_matrix_classifies_and_covers_selected_matchup():
         assert set(record["scenario_ids"]) == expected_ids
 
     visual = matrix["visual_references"]
-    assert visual["version"] == 5
-    assert visual["directory"] == "visual-references/v5"
+    assert visual["version"] == 6
+    assert visual["directory"] == "visual-references/v6"
     assert visual["profile"] == {
         "name": "ubuntu-24.04-chromium",
         "operating_system": "Ubuntu 24.04 x86-64",

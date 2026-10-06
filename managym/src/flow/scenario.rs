@@ -6,7 +6,8 @@
 // no costs). They mirror the Scenario helpers in managym/tests/rules/
 // helpers.rs so the Python competency harness (manabot/verify/competency.py)
 // can construct mid-game positions and score agents against known-correct
-// lines. Never call these from gameplay code paths.
+// lines. Injection clears derived history: there is no authentic transition
+// into an injected position. Never call these from gameplay code paths.
 
 use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
@@ -21,11 +22,13 @@ use crate::{
 impl Game {
     /// Set a player's life total directly.
     pub fn scenario_set_life(&mut self, player: PlayerId, life: i32) {
+        self.policy_history = Default::default();
         self.state.players[player.0].life = life;
     }
 
     /// Move every card in `player`'s hand to the bottom of their library.
     pub fn scenario_clear_hand(&mut self, player: PlayerId) {
+        self.policy_history = Default::default();
         let hand: Vec<CardId> = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
         for card in hand {
             self.state.zones.move_card(card, player, ZoneType::Library);
@@ -54,6 +57,7 @@ impl Game {
                 .copied()
                 .find(|card| self.state.cards[*card].name == name);
             if let Some(card) = found {
+                self.policy_history = Default::default();
                 self.state.zones.move_card(card, player, ZoneType::Hand);
                 return Ok(());
             }
@@ -91,6 +95,7 @@ impl Game {
             )));
         };
 
+        self.policy_history = Default::default();
         self.state
             .zones
             .move_card(card_id, player, ZoneType::Battlefield);

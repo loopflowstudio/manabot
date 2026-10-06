@@ -75,7 +75,7 @@ class SemanticCardEncoder(nn.Module):
             lookup[definition + 1] = row + 1
         self.register_buffer("definition_rows", lookup)
 
-    def _rows(self, ids):
+    def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         if (
             not torch.equal(ids, ids.floor())
             or bool((ids < 0).any())
@@ -87,13 +87,21 @@ class SemanticCardEncoder(nn.Module):
             raise ValueError("policy received an unadmitted semantic definition")
         return rows
 
-    def forward(self, obs):
+    def definitions(self) -> torch.Tensor:
+        """Encode the immutable catalog once for visible and historical references."""
         tokens = self.token_embedding(self.tokens)
         packed = nn.utils.rnn.pack_padded_sequence(
             tokens, self.lengths.cpu(), batch_first=True, enforce_sorted=False
         )
         _, state = self.encoder(packed)
         definitions = torch.cat((state.new_zeros((1, state.shape[-1])), state[0]))
+        return definitions
+
+    def forward(
+        self, obs: dict[str, torch.Tensor], definitions: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        if definitions is None:
+            definitions = self.definitions()
         cards = definitions[self._rows(obs["semantic_cards"])]
         knowledge = obs["known_hand"]
         known = definitions[self._rows(knowledge[..., 0])]

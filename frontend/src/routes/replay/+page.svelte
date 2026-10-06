@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import { recordFetch } from '$lib/records';
   import { page } from '$app/state';
   import Feedback from '$lib/components/Feedback.svelte';
@@ -654,6 +655,8 @@
                 />
               {/if}
             </div>
+
+            <PresentationHistory player={presentationPlayer} />
 
             {#if studyStore.phase === 'score'}
               <div class="mt-3 border-t border-line pt-4">

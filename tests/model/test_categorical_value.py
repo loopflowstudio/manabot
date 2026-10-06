@@ -146,7 +146,7 @@ def test_outcome_supervision_distinguishes_draw_from_balanced_win_loss() -> None
         ({"value_aggregation": "masked_mean"}, 'Unexpected key.*"value_token"'),
         ({"attention_layers": 1}, 'Unexpected key.*"extra_attention'),
         ({"value_kind": "scalar"}, "size mismatch for value_head"),
-        ({"attention_layers": 3}, "attention_layers"),
+        ({"attention_layers": 3}, "Missing key.*extra_attention"),
     ],
 )
 def test_checkpoint_rejects_incompatible_saved_architecture(

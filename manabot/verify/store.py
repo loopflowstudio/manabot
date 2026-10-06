@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from .util import EvaluationArtifacts
 
 if TYPE_CHECKING:
+    from manabot.training.experiment_execution import ExperimentRun
     from manabot.training.models import TrainingRun
 
 RUN_CONFIG_FIELDS = (
@@ -129,6 +130,24 @@ class VerifyStore:
     def close(self) -> None:
         self.con.close()
 
+    def save_experiment_run(self, run: ExperimentRun) -> None:
+        """Persist actual execution separately from the declarative Experiment."""
+        with self.con:
+            self.con.execute(
+                "INSERT INTO experiment_runs VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
+                (run.id, run.model_dump_json()),
+            )
+
+    def experiment_run(self, run_id: str) -> ExperimentRun:
+        from manabot.training.experiment_execution import ExperimentRun
+
+        row = self.con.execute(
+            "SELECT payload FROM experiment_runs WHERE id=?", (run_id,)
+        ).fetchone()
+        if row is None:
+            raise KeyError(run_id)
+        return ExperimentRun.model_validate_json(row[0])
+
     def save_training_run(self, run: TrainingRun) -> None:
         """Commit one canonical regime execution and its stage records atomically."""
         with self.con:
@@ -180,6 +199,10 @@ class VerifyStore:
     def _create_schema(self) -> None:
         self.con.executescript(
             """
+            CREATE TABLE IF NOT EXISTS experiment_runs (
+                id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS training_runs (
                 id TEXT PRIMARY KEY,
                 payload TEXT NOT NULL

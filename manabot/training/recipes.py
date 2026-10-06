@@ -19,7 +19,13 @@ from manabot.training.models import (
 
 ValueOutput = Literal["scalar", "categorical_wdl"]
 ValueAggregation = Literal["historical_mean", "masked_mean", "value_token"]
-AttentionDepth = Literal[1, 2]
+
+
+class _Unset:
+    pass
+
+
+_UNSET = _Unset()
 
 
 def with_agent(regime: TrainingRegime, *, id: str, agent: AgentSpec) -> TrainingRegime:
@@ -27,6 +33,16 @@ def with_agent(regime: TrainingRegime, *, id: str, agent: AgentSpec) -> Training
     return TrainingRegime.model_validate(
         {**regime.model_dump(), "id": id, "agent": agent.model_dump()}
     )
+
+
+def with_recent_events(
+    regime: TrainingRegime, *, id: str, enabled: bool
+) -> TrainingRegime:
+    """Select public recent-event context independently of model size and learning."""
+    agent = AgentSpec.model_validate(
+        {**regime.agent.model_dump(), "recent_events": enabled}
+    )
+    return with_agent(regime, id=id, agent=agent)
 
 
 def with_value_output(
@@ -54,16 +70,28 @@ def with_value_aggregation(
 
 
 def with_capacity(
-    regime: TrainingRegime, *, id: str, width: int, depth: AttentionDepth, heads: int
+    regime: TrainingRegime,
+    *,
+    id: str,
+    width: int,
+    depth: int,
+    heads: int,
+    feedforward_dim: int | None | _Unset = _UNSET,
 ) -> TrainingRegime:
     """Select delivered width/depth/head fields without changing information inputs.
 
-    The model owns its feedforward expansion and normalization. Unsupported depth,
-    head divisibility and compound combinations fail ordinary AgentSpec validation.
+    Omission preserves the baseline expansion; None restores heads × width.
+    Invalid head divisibility and compound combinations fail ordinary AgentSpec validation.
     """
+    expansion = (
+        {}
+        if isinstance(feedforward_dim, _Unset)
+        else {"attention_feedforward_dim": feedforward_dim}
+    )
     agent = AgentSpec.model_validate(
         {
             **regime.agent.model_dump(),
+            **expansion,
             "hidden_dim": width,
             "attention_layers": depth,
             "num_attention_heads": heads,

@@ -45,15 +45,34 @@
   let learnSelection = $state<{ key: string; mode: string } | null>(null);
   const learnMode = $derived(learnSelection?.key === focusKey ? learnSelection.mode : null);
   const isLearn = $derived(actionSpaceKind === 'LEARN');
-  const visibleActions = $derived(isLearn ? actions.filter(action => action.type === learnMode) : actions);
+  const modeActions = $derived(isLearn ? actions.filter(action => action.type === learnMode) : actions);
+  // Navigation belongs to one published view, including its board and Learn filters.
+  const filterKey = $derived(`${focusKey}:${learnMode ?? ''}`);
+  let filter = $state({ key: '', text: '' });
+  const query = $derived(filter.key === filterKey ? filter.text : '');
+  const searchable = $derived(modeActions.length >= 8);
+  const visibleActions = $derived(modeActions.filter(action =>
+    !searchable || action.description.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  ));
+  let searchInput: HTMLInputElement | null = $state(null);
+
+  function setQuery(text: string): void {
+    filter = { key: filterKey, text };
+    onHoverAction?.(null);
+  }
+
+  function clearQuery(): void {
+    setQuery('');
+    searchInput?.focus();
+  }
 
   async function chooseMode(mode: string | null): Promise<void> {
+    filter = { key: '', text: '' };
     learnSelection = mode ? { key: focusKey, mode } : null;
     onHoverAction?.(null);
     await tick();
     actionList?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
   }
-
 
   $effect(() => {
     const nextFocusKey = focusKey;
@@ -153,6 +172,39 @@
       {#if isLearn}
         <button class="btn btn-secondary" onclick={() => chooseMode(null)} {disabled}>Back</button>
         <p class="type-caption text-ink-2">{learnMode === 'LEARN_TAKE_LESSON' ? 'Choose a Lesson to take.' : 'Choose a card to discard.'}</p>
+      {/if}
+      {#if searchable}
+        <div class="space-y-2">
+          <label for="action-filter" class="type-caption text-ink">Find an action</label>
+          <div class="flex gap-2">
+            <input
+              bind:this={searchInput}
+              id="action-filter"
+              type="search"
+              value={query}
+              placeholder="Card or action name"
+              class="min-w-0 flex-1 rounded border border-line-strong bg-field px-3 py-2 text-ink focus-visible:outline-2 focus-visible:outline-action"
+              oninput={(event) => setQuery(event.currentTarget.value)}
+              onkeydown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  clearQuery();
+                }
+              }}
+              {disabled}
+            />
+            {#if query}
+              <button class="btn btn-secondary" onclick={clearQuery} {disabled}>Clear filter</button>
+            {/if}
+          </div>
+          <p role="status" aria-live="polite" class="type-caption text-ink-2">
+            {visibleActions.length} of {modeActions.length} actions
+          </p>
+          {#if visibleActions.length === 0}
+            <p class="type-caption text-ink">No matching actions. Clear the filter to see every choice.</p>
+          {/if}
+        </div>
       {/if}
       {#each visibleActions as action}
         <button

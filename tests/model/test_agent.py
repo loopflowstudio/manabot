@@ -152,12 +152,12 @@ def test_object_embeddings(
     agent: Agent,
     real_observation: Dict[str, torch.Tensor],
     observation_space: ObservationSpace,
-):
+) -> None:
     """
     Verify that object embeddings maintain proper dimensionality and masking.
     """
     obs = real_observation
-    objects, is_agent, validity = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity, _ = agent._gather_object_embeddings(obs)
 
     expected_objects = (
         2  # Two players
@@ -190,12 +190,14 @@ def test_object_embeddings(
         )
 
 
-def test_attention_mechanism(agent: Agent, real_observation: Dict[str, torch.Tensor]):
+def test_attention_mechanism(
+    agent: Agent, real_observation: Dict[str, torch.Tensor]
+) -> None:
     """
     Verify the attention mechanism's behavior and output properties.
     """
     obs = real_observation
-    objects, is_agent, validity = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity, _ = agent._gather_object_embeddings(obs)
     key_padding_mask = validity == 0
     attended = agent.attention(objects, is_agent, key_padding_mask=key_padding_mask)
 
@@ -214,12 +216,12 @@ def test_attention_mechanism(agent: Agent, real_observation: Dict[str, torch.Ten
 
 def test_focus_object_incorporation(
     agent: Agent, real_observation: Dict[str, torch.Tensor]
-):
+) -> None:
     """
     Verify that focus objects are correctly incorporated into action representations.
     """
     obs = real_observation
-    objects, is_agent, validity = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity, _ = agent._gather_object_embeddings(obs)
     key_padding_mask = validity == 0
     post_attention = agent.attention(
         objects, is_agent, key_padding_mask=key_padding_mask
@@ -328,12 +330,14 @@ def test_policy_head_initial_logits(agent: Agent):
     assert final_layer.weight.norm().item() < 0.1
 
 
-def test_attention_stability(agent: Agent, real_observation: Dict[str, torch.Tensor]):
+def test_attention_stability(
+    agent: Agent, real_observation: Dict[str, torch.Tensor]
+) -> None:
     """
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
     """
     obs = real_observation
-    objects, is_agent, validity = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity, _ = agent._gather_object_embeddings(obs)
     key_padding_mask = validity == 0
     outputs = []
     for _ in range(5):

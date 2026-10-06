@@ -35,6 +35,7 @@ from manabot.infra.hypers import (
     RewardHypers,
 )
 from manabot.model.agent import Agent
+from manabot.model.architecture import validate_architecture_receipt
 from manabot.sim.compound import CompoundPolicy
 from manabot.sim.search_runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.util import (
@@ -219,6 +220,8 @@ def load_checkpoint_agent(
     binding = None
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
+    if "architecture" in checkpoint:
+        validate_architecture_receipt(agent, checkpoint["architecture"])
     agent.load_state_dict(checkpoint["model_state_dict"])
     agent.eval()
     if include_belief_binding:

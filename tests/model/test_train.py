@@ -32,6 +32,7 @@ from manabot.infra import (
     TrainHypers,
 )
 from manabot.model import Agent, Trainer
+from manabot.model.architecture import architecture_receipt
 from manabot.model.train import build_training_components
 
 
@@ -104,13 +105,21 @@ def trainer(observation_space, experiment):
 
 
 class TestRollout:
-    def test_saved_checkpoint_round_trips_with_actual_setup(self, trainer):
+    def test_saved_checkpoint_round_trips_with_actual_setup(
+        self, trainer: Trainer
+    ) -> None:
         from manabot.sim.flat_mc import load_checkpoint_agent
 
         trainer.start_time = 0.0
         trainer.save()
         agent, space = load_checkpoint_agent(
             str(trainer.experiment.runs_dir / "step_0.pt")
+        )
+        checkpoint = torch.load(
+            trainer.experiment.runs_dir / "step_0.pt", weights_only=False
+        )
+        assert checkpoint["architecture"] == architecture_receipt(agent).model_dump(
+            mode="json"
         )
         assert space.shapes == trainer.env.observation_space.shapes
         assert agent.world_binding["setups"][0]["sideboard"] == {}

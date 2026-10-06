@@ -1,6 +1,15 @@
 # Follow-up mechanism protocols
 
-2026-10-04. These proposals belong to ETU-91's experiment design; no execution
+2026-10-05 ownership reconciliation: ETU-105 owns learning-rule, compound-credit
+and systems screens through the [source-checked inventory](ataraxos-technique-screen.md).
+Larger belief, search and exploiter studies remain ETU-99. Its
+[current coverage map and prospective protocols](ataraxos-transfer.md) supersede
+the search/belief launch ordering and allocations below. Production uses direct
+physical or learned sampling; exact enumeration is a small-pool reference, not
+a prerequisite. The proposals below retain their historical evidence and budget
+boundaries; none grants a new allocation.
+
+Historical proposal, 2026-10-04, from ETU-91's experiment design; no execution
 or expensive allocation is authorized by their presence. Each requires frozen
 inputs and predictions, a separately approved cost cap, fresh evaluation deals,
 and retained failed attempts before scoring. Compound training (ETU-94, below)
@@ -9,7 +18,7 @@ bounded implementations. See [the sampler guide](../docs/belief-sampler.md) for
 the latter; scientific allocations and acceptance comparisons remain unexecuted
 proposals.
 
-## Following the learned policy into search and belief experiments
+## Original proposal: following the learned policy into search and belief experiments
 
 Search remains a product capability, including belief-conditioned advice.
 Policy-only evaluation isolates the source of learned strength; it is not a
@@ -61,7 +70,7 @@ Training, validation, development and final deal families are disjoint.
 The strongest confound is recipe maturity: a negative result may reflect
 untuned self-play treatments, not a limit of direct RL.
 
-## Proposed run matrix and stopping rules
+## Original proposed run matrix and stopping rules
 
 These are draft allocations to review after the policy-only studies, not an
 extension of either smoke. For each study, freeze the exact world, raw or EMA
@@ -118,7 +127,8 @@ Before any scientific launch, freeze three independent producer checkpoints and
 all failed producer attempts; checkpoint native/setup/ABI hashes; alpha/beta,
 rollout depth and 50/200-ms envelopes; source policy identities; held-out paired
 deal subranges; training/validation/test whole-game membership; endpoint cohort;
-and calibrated storage/time estimates. Exact-history capability must pass first.
+and calibrated storage/time estimates. Exact-history capability must pass before
+the exact-reference comparison; direct sampling comparisons do not depend on it.
 The proposed B=.55 criterion uses a training-seed-level uncertainty interval
 whose lower bound exceeds .50; game-level paired uncertainty remains separate.
 Keep the original proposed caps and stop on deadline/support/provider failures,
@@ -144,7 +154,8 @@ MTG. No new scientific result is reported by this addition.
 
 ETU-94 implements a recurrent joint decoder, native lowering to canonical
 Commands, complete-game `train_compound`, ordinary checkpoint serving, and
-four `compound-decisions` study arms. The search/distillation/belief proposals above remain future work. See
+four `compound-decisions` study arms. Search/distillation/belief software now
+exists; their scientific comparisons remain future work. See
 [the execution contract](../docs/training-regimes.md#compound-decisions).
 
 The primary Ataraxos construction is now available in the
@@ -161,9 +172,10 @@ reference. Both sequential and grouped arms execute complete sampled native
 submissions. It isolates credit boundaries without changing the policy family;
 comparison against the historical flat policy would be a separate architecture
 ablation. Grouped attacker declarations and single-target casts are supported.
-Blockers and payments remain separate published observations, explicitly tested
-as boundaries; a general atomic blocker/payment representation remains Rules
-work rather than a Python grouping heuristic.
+The original implementation kept blockers and payments separate. ETU-94/100
+subsequently delivered independent blockers and fixed-economics payment subsets,
+including support-preserving search. Dependent choices retain sequential native
+fallback; see the current [compound contract](../docs/training-regimes.md#compound-decisions).
 
 Keep gamma=1 and all non-estimator settings fixed. Predeclare the measured
 number of complete games/updates that fits each arm's same wall cap, report

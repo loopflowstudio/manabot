@@ -3,8 +3,11 @@
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
+from experiments.runners.training_protocol import EvaluationProtocol
 from manabot.arena.models import file_sha256
+from manabot.training import capacity_analysis
 from manabot.training.models import CollectSelection, TrainingRun
 from manabot.training.selection_analysis import (
     analyze_selection,
@@ -25,7 +28,14 @@ def valid_game(row):
     )
 
 
-def cost_comparison(rows, anchor="random-smoke-anchor"):
+def cost_comparison(
+    rows: list[dict[str, Any]],
+    anchor: str = "random-smoke-anchor",
+    *,
+    end_seconds: float | None = None,
+) -> dict[str, Any]:
+    # Existing study JSON contains heterogeneous checkpoint/metric values.
+
     """Compare only observed checkpoints at a shared cost; never backfill."""
     groups = {}
     for row in rows:
@@ -46,6 +56,8 @@ def cost_comparison(rows, anchor="random-smoke-anchor"):
     }
     start = max(points[0]["training_seconds"] for points in groups.values())
     end = min(points[-1]["training_seconds"] for points in groups.values())
+    if end_seconds is not None:
+        end = min(end, end_seconds)
     if end < start:
         return {
             "status": "unavailable",
@@ -244,7 +256,13 @@ def report(out: Path | str) -> None:
     verify_saved_inputs(out, study)
     rows = study["measurements"]
     comparison = (
-        cost_comparison(rows)
+        cost_comparison(
+            rows,
+            "scripted-greedy-fixed-anchor"
+            if study["study"]
+            in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
+            else "random-smoke-anchor",
+        )
         if study["status"] == "completed"
         else {"status": "unavailable", "reason": "study cohort incomplete"}
     )
@@ -277,7 +295,7 @@ def report(out: Path | str) -> None:
         "",
         f"Status: {study['status']}. {study['limits']}",
         "",
-        "Playing score is measured against the named opponent. Cost curves use the fixed random anchor; paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
+        "Playing score is measured against the named opponent. Cost curves use the declared anchor (scripted for screening, random otherwise); paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
         "",
         "| Recipe | Seed | Variant | Phase | Cutoff | Opponent | Training seconds | Decisions | Complete games | Score |",
         "| --- | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
@@ -287,10 +305,16 @@ def report(out: Path | str) -> None:
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
-    if study["study"] == "value-models":
+    if study["study"] in {
+        "value-models",
+        "value-token-screen",
+        "pooling-filter",
+        "history-input",
+        "depth-screen",
+    }:
         lines += [
             "",
-            "Value-model disposition: all strength comparisons unresolved. The token "
+            "Value-model disposition: exploratory evidence only; no automatic promotion. The token "
             "changes the shared policy representation; one CPU thread is not equal inference cost.",
             "",
             "Resolved configurations: [recipes](recipes.json), [protocol](protocol.json), "
@@ -300,6 +324,9 @@ def report(out: Path | str) -> None:
             "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
         for entry in study["runs"]:
+            if not Path(entry["path"]).exists():
+                lines.append(f"Run export unavailable: {entry['path']}")
+                continue
             run = TrainingRun.model_validate_json(Path(entry["path"]).read_text())
             for stage in run.stages:
                 lines.append(
@@ -463,6 +490,20 @@ def report(out: Path | str) -> None:
             )
     (out / "report.md").write_text("\n".join(lines) + "\n")
     atomic_json(out / "metrics.json", rows)
+    if study["study"] == "model-capacity":
+        recipes = json.loads((out / "recipes.json").read_text())
+        with (out / "report.md").open("a") as stream:
+            stream.write(
+                f"\nTotal retained study seconds (including evaluation): {study.get('seconds', 'unavailable')}.\n"
+            )
+        capacity_analysis.write_capacity_report(
+            out,
+            [capacity_analysis.Measurement.model_validate(r) for r in rows],
+            EvaluationProtocol.model_validate(protocol),
+            tuple(r["id"] for r in recipes),
+            study["status"] == "completed",
+        )
+
     notebook = nbformat.read(
         Path(__file__).resolve().parents[2]
         / "experiments/study/training-regimes.ipynb",

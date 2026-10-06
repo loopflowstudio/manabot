@@ -98,6 +98,11 @@ R-NaD is not implemented here.
 
 ## Scientific comparison remains separate
 
+ETU-105's [source-checked technique inventory and ordered screens](../experiments/ataraxos-technique-screen.md)
+reuse the delivered mechanisms through declarative independent contrasts. Plan
+export runs no training; empirical acceptance and budgets remain open. Architecture
+and larger belief/search studies retain their separate ownership.
+
 Before expensive scoring, freeze a new protocol, independent seed cohort,
 training and evaluation budgets, immutable world/setup and code identities,
 held-out paired deals and both seat/deck assignments. Compare current PPO,

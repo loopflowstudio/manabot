@@ -39,6 +39,9 @@ class ObservationSpaceHypers(BaseHypersModel):
     max_actions: int = 64
     max_focus_objects: int = 2
     max_events: int = 32
+    policy_history_version: Literal[0, 1] = Field(
+        default=0, exclude_if=lambda value: value == 0
+    )
 
 
 class MatchHypers(BaseHypersModel):
@@ -114,13 +117,19 @@ class AgentSpec(BaseHypersModel):
     compound_features: Literal["labels", "objects"] = Field(
         default="labels", exclude_if=lambda value: value == "labels"
     )
+    # Public identity/history v1; false preserves historical receipt bytes.
+    recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
     semantic_pack: str | None = None
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
     value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
         "historical_mean"
     )
-    attention_layers: Literal[1, 2] = 1
+    attention_layers: int = Field(default=1, ge=1)
+    # Omitted defaults preserve historical recipe and checkpoint identities.
+    attention_feedforward_dim: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -143,7 +152,9 @@ class AgentSpec(BaseHypersModel):
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
             raise ValueError("embedding width must be divisible by attention heads")
         if not self.attention_on and (
-            self.value_aggregation == "value_token" or self.attention_layers != 1
+            self.value_aggregation == "value_token"
+            or self.attention_layers != 1
+            or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
         if self.compound_decisions and (

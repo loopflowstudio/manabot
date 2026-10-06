@@ -99,7 +99,9 @@ transfer. The generic PPO and teacher-shard trainers do not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical
 positional-condition checkpoints are rejected rather than reinterpreted.
 
-Training regimes can freeze a policy, collect private whole-game supervision,
+Training regimes can [import a published raw/EMA policy](../docs/training-regimes.md#reuse-a-published-policy-without-training)
+without retraining, preserving producer provenance and separate sunk costs.
+They can freeze a policy, collect private whole-game supervision,
 and fit a constrained autoregressive hand sampler without exact enumeration.
 See [frozen-policy belief sampling](../docs/belief-sampler.md). This separately
 admitted belief artifact does not change the policy's input contract or establish
@@ -110,6 +112,10 @@ Frozen-policy local search and same-root distillation run through
 compatible-prior recipe completes games; exact-history search rejects unsupported
 Rules likelihood events. Target receipts and arena replay retain this distinction.
 
+Declare training comparisons with [typed Python experiments](../docs/training-experiments.md).
+Versioned presets, named component overrides and variant matrices resolve to complete
+existing regimes with provenance; resolution never launches training.
+
 Experiment-specific driver scripts live in
 [experiments/runners/](../experiments/runners/), not here — `manabot/` keeps
 only reusable instruments. The experiment discipline and ledger are in
@@ -118,6 +124,10 @@ only reusable instruments. The experiment discipline and ledger are in
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
 custom-deck root requires its exact checkpoint setup binding.
+
+For capacity configuration, component counts, versioned architecture receipts and
+bounded CPU calibration, see [capacity accounting](model/agent.md#capacity-identity-and-accounting)
+and [the calibration command](../docs/training-calibration.md#capacity-ladder-software-calibration).
 
 ## Research program
 
@@ -158,3 +168,11 @@ boundaries and separate comparison recipes are documented under
 
 The shared [choice contract](../docs/choice-contract.md) documents typed object
 inputs, native prefix support and the schema-7 migration.
+
+TrainingRun diagnostics can be followed live or backfilled into W&B without
+retraining. The [dashboard guide](../docs/training-monitoring.md) covers offline
+operation, fixed distillation validation and separate checkpoint monitoring.
+
+Optional [public recent-event input](../docs/recent-events.md) uses the existing
+semantic catalog and a bounded native history suffix. Recipe history-on/off is
+independent of capacity and learning rules; comparison plans remain unexecuted.

@@ -10,7 +10,6 @@ import {
 
 const NORMAL_SPEED = 1;
 const FAST_SPEED = 4;
-const REDUCED_MOTION_BEAT_MS = 100;
 
 function emptyLabels(): PresentationLabels {
   return { objects: {}, players: {}, stacks: {} };
@@ -47,9 +46,6 @@ export class PresentationPlayer {
     if (!event) {
       return 0;
     }
-    if (this.reducedMotion) {
-      return REDUCED_MOTION_BEAT_MS;
-    }
     return Math.max(80, Math.round(event.suggested_ms / this.speed));
   }
 
@@ -81,9 +77,10 @@ export class PresentationPlayer {
       );
     }
 
+    const wasIdle = this.currentEvent === null;
     this.events = [...this.events, ...incoming];
     this.labels = mergePresentationLabels(this.labels, labels);
-    if (incoming.length > 0) {
+    if (incoming.length > 0 && wasIdle) {
       this.playing = true;
     }
   }
@@ -107,6 +104,10 @@ export class PresentationPlayer {
       this.playing = false;
       this.speed = NORMAL_SPEED;
     }
+  }
+
+  togglePlayback(): void {
+    if (this.currentEvent) this.playing = !this.playing;
   }
 
   skipCurrent(): void {

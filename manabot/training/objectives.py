@@ -180,6 +180,8 @@ def update_iteration(
             diagnostics["critic_exposures"] += len(indices)
             diagnostics.update(
                 loss=float(loss.detach()),
+                policy_loss=float(policy.detach()),
+                value_loss=float(value_loss.detach()),
                 entropy=float(dist.entropy().mean().detach()),
                 reference_kl=float(kl_ref.detach()),
                 collection_kl=float(kl_behavior.detach()),

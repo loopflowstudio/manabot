@@ -2,6 +2,23 @@
 
 Polish and validate only the current branch scope.
 
+## Required checks for new Python test modules
+
+Use unique test module basenames across unpackaged test directories. Collect new
+modules together with the existing tests in their CI invocation using
+`uv run pytest --collect-only`; isolated file runs miss import-name collisions.
+
+## Required checks for play layout changes
+
+Run `combat-presentation.spec.ts` for board/sidebar geometry and narration controls.
+Run the release visual gate on its pinned Linux profile for layout changes,
+including sidebar-only content changes: grid stretching can change board bounds
+without changing any cards. Keep visual references unchanged for layout bugs;
+local macOS geometry checks do not certify the Linux screenshot corpus.
+Settle JavaScript narration through `finishBoardNarration` before terminal as
+well as decision-board captures. Reduced motion and disabled CSS animations do
+not stop semantic beat timers; retain terminal focus and consequence history.
+
 ## Required checks for website work
 
 When `website/**` changes, run from `website/`:

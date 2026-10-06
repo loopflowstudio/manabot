@@ -36,6 +36,15 @@ from manabot.belief.sampling_data import SamplerDataset, SamplerExample
 
 
 @dataclass(frozen=True, slots=True)
+class CalibrationBin:
+    """Sufficient statistics for one fixed inclusion-probability bin."""
+
+    count: int
+    probability_sum: float
+    truth_sum: float
+
+
+@dataclass(frozen=True, slots=True)
 class SamplerArmMetrics:
     """Per-decision means; calibration pools card-presence forecasts, not games.
 
@@ -54,6 +63,7 @@ class SamplerArmMetrics:
     sampling_seconds: float
     peak_python_bytes: int
     largest_sample_tensor_bytes: int
+    calibration_bins: tuple[CalibrationBin, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,17 +111,27 @@ def _check(check: Callable[[], None] | None) -> None:
         check()
 
 
-def _ece(probabilities: torch.Tensor, truths: torch.Tensor) -> float:
-    # Ten fixed equal-width bins; each forecast contributes exactly once.
+def _calibration_bins(
+    probabilities: torch.Tensor, truths: torch.Tensor
+) -> tuple[CalibrationBin, ...]:
+    # Ten fixed equal-width bins; the last includes probability one.
     buckets = (probabilities * 10).long().clamp(max=9)
-    error = 0.0
-    for index in range(10):
-        selected = buckets == index
-        if bool(selected.any()):
-            error += float(selected.float().mean()) * abs(
-                float(probabilities[selected].mean() - truths[selected].mean())
-            )
-    return error
+    return tuple(
+        CalibrationBin(
+            int((buckets == index).sum()),
+            float(probabilities[buckets == index].sum()),
+            float(truths[buckets == index].sum()),
+        )
+        for index in range(10)
+    )
+
+
+def calibration_error(bins: Sequence[CalibrationBin]) -> float:
+    """Recompute pooled ECE; averaging subgroup ECE is a different estimand."""
+    total = sum(bin.count for bin in bins)
+    if total == 0:
+        raise ValueError("calibration needs forecasts")
+    return sum(abs(bin.probability_sum - bin.truth_sum) for bin in bins) / total
 
 
 @torch.no_grad()
@@ -172,10 +192,11 @@ def _evaluate_arm(
             tracemalloc.stop()
     probabilities = torch.cat(forecasts)
     truths = torch.cat(outcomes)
+    bins = _calibration_bins(probabilities, truths)
     return SamplerArmMetrics(
         joint_nll=nll / len(examples),
         inclusion_brier=float((probabilities - truths).square().mean()),
-        inclusion_ece=_ece(probabilities, truths),
+        inclusion_ece=calibration_error(bins),
         conjunction_brier=float(torch.cat(conjunction_errors).mean())
         if conjunction_errors
         else None,
@@ -184,6 +205,7 @@ def _evaluate_arm(
         sampling_seconds=elapsed,
         peak_python_bytes=peak_python,
         largest_sample_tensor_bytes=largest_tensor,
+        calibration_bins=bins,
     )
 
 

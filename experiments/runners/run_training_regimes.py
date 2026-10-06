@@ -10,6 +10,7 @@ import time
 
 import torch
 
+from experiments.runners.history_input import EVALUATION_SECONDS
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.match import SELECTED_SUITE, play_cell
 from manabot.arena.models import (
@@ -33,6 +34,9 @@ from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
 STUDIES = {
+    "history-input": [],
+    "depth-screen": [],
+    "model-capacity": [],
     "omitted-controls": [],
     "compound-decisions": [
         "compound-sequential-bootstrap",
@@ -158,12 +162,13 @@ def run_study(
     resume: bool = False,
     *,
     render_report: bool = True,
+    history_run_paths: tuple[Path, ...] = (),
 ) -> None:
     if "cumulative_seconds" not in StageRecord.model_fields:
         raise RuntimeError(
             "ETU-89 cumulative checkpoint clock must be integrated before study execution"
         )
-    if plan is not None and plan.protocol.purpose == "scientific":
+    if plan is not None and plan.protocol.purpose in {"scientific", "screening"}:
         free = shutil.disk_usage(out.parent).free
         if free < plan.projected_disk_bytes + plan.disk_reserve_bytes:
             raise RuntimeError(
@@ -172,10 +177,55 @@ def run_study(
     explicit_plan = study in {
         "omitted-controls",
         "training-calibration",
+        "capacity-calibration",
+        "model-capacity",
         "value-models",
+        "value-token-screen",
+        "pooling-filter",
+        "history-input",
+        "depth-screen",
     }
     if explicit_plan and plan is None:
         raise ValueError(f"{study} requires an explicit separately resolved plan")
+    if (
+        study
+        in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
+        and resume
+    ):
+        raise ValueError(
+            "screen retries require a new reviewed allocation; retain this attempt"
+        )
+    if plan is not None and plan.protocol.study != study:
+        raise ValueError("study differs from resolved protocol")
+    if study in {"history-input", "depth-screen"}:
+        if plan is None or len(history_run_paths) != 6 or render_report:
+            raise ValueError(
+                "history requires six supervised runs and separate reporting phase"
+            )
+        from experiments.runners.screen_spec import specification
+
+        spec = specification(study)
+        HISTORY_ORDER, HISTORY_SEEDS = spec.ORDER, spec.SEEDS
+        validate_run = spec.validate_run
+        from experiments.runners.run_history_input import verify_runtime
+
+        verify_runtime(plan)
+        expected_runs = [
+            (i, seed)
+            for order, seed in zip(HISTORY_ORDER, HISTORY_SEEDS, strict=True)
+            for i in order
+        ]
+        for path, (index, seed) in zip(history_run_paths, expected_runs, strict=True):
+            run = TrainingRun.model_validate_json(path.read_text())
+            validate_run(
+                run,
+                TrainingRegime.model_validate(plan.recipes[index]),
+                seed,
+                plan.input_bindings[index],
+                plan.runtime_identities,
+            )
+    elif history_run_paths:
+        raise ValueError("pretrained run admission is scoped to history-input")
     retained = None
     resumed_runs = []
     if resume:
@@ -196,7 +246,17 @@ def run_study(
             resumed_runs.append(run)
     else:
         out.mkdir(parents=True, exist_ok=False)
-    start = time.perf_counter() - (retained["seconds"] if retained else 0)
+    calibration_seconds = 0.0
+    if study == "pooling-filter":
+        from experiments.runners.pooling_filter import Calibration
+
+        assert plan is not None
+        calibration_seconds = Calibration.model_validate_json(
+            plan.calibration_evidence
+        ).seconds
+    start = time.perf_counter() - (
+        retained["seconds"] if retained else calibration_seconds
+    )
     if plan is None:
         recipes = [smoke_recipe(name) for name in STUDIES[study]]
         protocol = EvaluationProtocol(
@@ -214,7 +274,10 @@ def run_study(
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
-    if resume or (plan is not None and plan.protocol.purpose == "scientific"):
+    if study not in {"history-input", "depth-screen"} and (
+        resume
+        or (plan is not None and plan.protocol.purpose in {"scientific", "screening"})
+    ):
         from manabot.env import ObservationSpace
         from manabot.sim.teacher1_evidence import (
             runtime_fingerprints,
@@ -229,9 +292,18 @@ def run_study(
         current["training_source_sha256"] = source_bundle_sha256(
             sorted((ROOT / "manabot").rglob("*.py"))
         )
+        if protocol.purpose == "screening":
+            current["study_source_sha256"] = source_bundle_sha256(
+                sorted((ROOT / "experiments/runners").glob("*.py"))
+                + [
+                    ROOT / "experiments/study/training-regimes.ipynb",
+                    ROOT / "uv.lock",
+                    ROOT / "pyproject.toml",
+                ]
+            )
         expected = (
             plan.runtime_identities
-            if plan and plan.protocol.purpose == "scientific"
+            if plan and plan.protocol.purpose in {"scientific", "screening"}
             else {
                 k: resumed_runs[0].identities[k]
                 for k in (
@@ -275,6 +347,13 @@ def run_study(
         "limits": f"{protocol.process_seconds} seconds total; {len(protocol.training_seeds)} training seeds; {protocol.uncertainty}; purpose={protocol.purpose}",
     }
 
+    if study in {"history-input", "depth-screen"}:
+        result["limits"] = (
+            f"4,500 seconds evaluation; parent supervisor owns the {plan.allocation_seconds}-second campaign including calibration, training and reporting"
+        )
+        result["accounting"] = (
+            "study.seconds is evaluation time only; run costs are included once in supervisor.seconds"
+        )
     if retained:
         result = retained
         result.setdefault("interruptions", []).append(
@@ -284,7 +363,11 @@ def run_study(
             }
         )
         result["status"] = "running"
-    remaining = protocol.process_seconds - (time.perf_counter() - start)
+    remaining = (
+        EVALUATION_SECONDS
+        if study in {"history-input", "depth-screen"}
+        else protocol.process_seconds
+    ) - (time.perf_counter() - start)
     if remaining <= 0:
         raise TimeoutError("frozen study allocation is exhausted; cannot resume")
 
@@ -292,17 +375,68 @@ def run_study(
         result["seconds"] = time.perf_counter() - start
         atomic_json(out / "study.json", result)
 
+    screening = protocol.purpose == "screening"
+    legacy_screening = screening and study not in {"history-input", "depth-screen"}
+    training = True
+    diagnostic_done = False
+
+    def diagnostic(elapsed: float) -> None:
+        from experiments.runners.value_screen import screen_diagnostic
+
+        planned_updates = sum(
+            s.updates for r in recipes for s in r.stages if isinstance(s, TrainSelfPlay)
+        ) * len(protocol.training_seeds)
+        screen_diagnostic(
+            out, elapsed, training=training, planned_updates=planned_updates
+        )
+
     def deadline(*_: object) -> None:
-        raise TimeoutError("study exceeded its frozen process deadline")
+        nonlocal diagnostic_done
+        elapsed = time.perf_counter() - start
+        if legacy_screening and not diagnostic_done:
+            diagnostic_done = True
+            diagnostic(elapsed)
+            limit = 21600 if training else protocol.process_seconds
+            signal.setitimer(signal.ITIMER_REAL, max(0.001, limit - elapsed))
+            return
+        raise TimeoutError("study exceeded its frozen phase/process deadline")
 
     signal.signal(signal.SIGALRM, deadline)
-    signal.setitimer(signal.ITIMER_REAL, remaining)
+    signal.setitimer(
+        signal.ITIMER_REAL,
+        min(remaining, max(0.001, 7200 - calibration_seconds))
+        if legacy_screening
+        else remaining,
+    )
     save()
     try:
         runs = resumed_runs
+        if study in {"history-input", "depth-screen"}:
+            for path in history_run_paths:
+                run = TrainingRun.model_validate_json(path.read_text())
+                runs.append(run)
+                result["runs"].append(
+                    {
+                        "path": str(path),
+                        "regime": run.regime.id,
+                        "id": run.id,
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    }
+                )
+            save()
         with VerifyStore(out / "training.sqlite") as store:
-            for index, seed in enumerate(() if resume else protocol.training_seeds):
-                for recipe in recipes if index % 2 == 0 else list(reversed(recipes)):
+            for index, seed in enumerate(
+                ()
+                if resume or study in {"history-input", "depth-screen"}
+                else protocol.training_seeds
+            ):
+                if study == "pooling-filter":
+                    from experiments.runners.pooling_filter import ORDER
+
+                    ordered = [recipes[i] for i in ORDER[index]]
+                else:
+                    ordered = recipes if index % 2 == 0 else list(reversed(recipes))
+                for recipe in ordered:
                     entry = {
                         "path": str(out / f"{recipe.id}-seed-{seed}" / "run.json"),
                         "regime": recipe.id,
@@ -320,6 +454,40 @@ def run_study(
                         ).hexdigest(),
                     )
                     save()
+        training = False
+        if study == "pooling-filter":
+            atomic_json(
+                out / "phase.json",
+                {"evaluation_deadline_monotonic": time.monotonic() + 7200},
+            )
+        if legacy_screening:
+            # Evaluation and report share two hours; unused training time is not borrowed.
+            evaluation_limit = min(
+                protocol.process_seconds, time.perf_counter() - start + 7200
+            )
+
+            def evaluation_deadline(*_: object) -> None:
+                nonlocal diagnostic_done
+                elapsed = time.perf_counter() - start
+                if not diagnostic_done:
+                    diagnostic_done = True
+                    diagnostic(elapsed)
+                    signal.setitimer(
+                        signal.ITIMER_REAL, max(0.001, evaluation_limit - elapsed)
+                    )
+                    return
+                raise TimeoutError(
+                    "screen evaluation/report exceeded two-hour allocation"
+                )
+
+            signal.signal(signal.SIGALRM, evaluation_deadline)
+            next_limit = (
+                evaluation_limit if diagnostic_done else min(7200, evaluation_limit)
+            )
+            signal.setitimer(
+                signal.ITIMER_REAL,
+                max(0.001, next_limit - (time.perf_counter() - start)),
+            )
         checkpoints = {
             run.id: [s for s in run.stages if "raw" in s.artifacts] for run in runs
         }
@@ -518,6 +686,12 @@ def run_study(
                         learning_seconds=sum(s.learning_seconds for s in cumulative),
                         export_seconds=sum(s.export_seconds for s in cumulative),
                         decisions=sum(s.environment_decisions for s in cumulative),
+                        learner_transitions=sum(
+                            s.learner_transitions for s in cumulative
+                        ),
+                        optimizer_exposures=sum(
+                            s.optimizer_exposures for s in cumulative
+                        ),
                         games=sum(s.games for s in cumulative),
                         **(
                             {"compound_accounting": [s.diagnostics for s in cumulative]}
@@ -534,6 +708,8 @@ def run_study(
                     )
                 )
             save()
+            if screening and not valid:
+                raise RuntimeError("screen stopped on incomplete or invalid arena cell")
 
         def compare(
             a_run: TrainingRun,
@@ -567,7 +743,7 @@ def run_study(
                     next(r for r in runs if r.seed == seed and r.regime.id == recipe.id)
                     for recipe in recipes
                 ]
-                for candidate in paired[1:]:
+                for candidate in paired[1:] if protocol.paired_deals else ():
                     compare(
                         paired[0],
                         checkpoints[paired[0].id][cutoff],
@@ -715,11 +891,15 @@ def main():
     elif args.plan is not None:
         plan = ResolvedStudy.model_validate_json(args.plan.read_text())
         if (
-            args.study != "omitted-controls"
+            args.study not in {"omitted-controls", "model-capacity"}
             or plan.protocol.study != args.study
             or plan.protocol.purpose != "workflow-smoke"
         ):
-            parser.error("smoke accepts only an omitted-controls workflow plan")
+            parser.error(
+                "smoke accepts only an omitted-controls or model-capacity workflow plan"
+            )
+    if args.study == "model-capacity" and plan is None:
+        parser.error("model-capacity requires an explicit --plan")
     torch.set_num_threads(1)
     out = args.out.resolve()
     run_study(args.study, out, plan, resume=args.resume)

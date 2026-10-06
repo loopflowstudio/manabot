@@ -93,11 +93,18 @@ jobs:
 
       - name: Integration tests
         run: |
-          uv run --python 3.12 --extra dev pytest tests/env/ tests/agent/ tests/model/ \
+          uv run --python 3.12 --extra dev --extra notebook pytest tests/env/ tests/agent/ tests/model/ \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
+            tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
+            tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
+            tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
+            tests/training/test_technique_screen.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \
+            tests/training/test_value_models.py \
+            tests/training/test_history_input.py tests/training/test_history_arena.py \
+            tests/training/test_history_predecessor.py \
             tests/belief/test_sampling_report.py \
-            tests/bench/test_structured_policy_benchmark.py
+            tests/bench/test_structured_policy_benchmark.py tests/bench/test_distributed_recipe_workloads.py
 
       - name: Frozen-policy search fixtures
         run: |
@@ -284,8 +291,8 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_references }}
         uses: actions/upload-artifact@v4
         with:
-          name: visual-references-v5
-          path: frontend/e2e/visual-references/v5
+          name: visual-references-v6
+          path: frontend/e2e/visual-references/v6
           if-no-files-found: error
 
       - name: Upload visual failure evidence
