@@ -256,7 +256,12 @@ def report(out: Path | str) -> None:
     verify_saved_inputs(out, study)
     rows = study["measurements"]
     comparison = (
-        cost_comparison(rows)
+        cost_comparison(
+            rows,
+            "scripted-greedy-fixed-anchor"
+            if study["study"] == "value-token-screen"
+            else "random-smoke-anchor",
+        )
         if study["status"] == "completed"
         else {"status": "unavailable", "reason": "study cohort incomplete"}
     )
@@ -289,7 +294,7 @@ def report(out: Path | str) -> None:
         "",
         f"Status: {study['status']}. {study['limits']}",
         "",
-        "Playing score is measured against the named opponent. Cost curves use the fixed random anchor; paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
+        "Playing score is measured against the named opponent. Cost curves use the declared anchor (scripted for value-token-screen, random otherwise); paired-recipe matches are listed separately. Smoke points prove execution only. Scientific profiles report every seed separately; three seeds provide only exploratory uncertainty, not a confirmatory method claim.",
         "",
         "| Recipe | Seed | Variant | Phase | Cutoff | Opponent | Training seconds | Decisions | Complete games | Score |",
         "| --- | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
@@ -299,10 +304,10 @@ def report(out: Path | str) -> None:
         lines.append(
             f"| {row['regime']} | {row['seed']} | {row.get('variant', 'raw')} | {row.get('phase', 'development')} | {row['cutoff']} | {row['opponent']} | {row['training_seconds']:.2f} | {row['decisions']} | {row['games']} | {score} |"
         )
-    if study["study"] == "value-models":
+    if study["study"] in {"value-models", "value-token-screen"}:
         lines += [
             "",
-            "Value-model disposition: all strength comparisons unresolved. The token "
+            "Value-model disposition: exploratory evidence only; no automatic promotion. The token "
             "changes the shared policy representation; one CPU thread is not equal inference cost.",
             "",
             "Resolved configurations: [recipes](recipes.json), [protocol](protocol.json), "
@@ -312,6 +317,9 @@ def report(out: Path | str) -> None:
             "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
         ]
         for entry in study["runs"]:
+            if not Path(entry["path"]).exists():
+                lines.append(f"Run export unavailable: {entry['path']}")
+                continue
             run = TrainingRun.model_validate_json(Path(entry["path"]).read_text())
             for stage in run.stages:
                 lines.append(

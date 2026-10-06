@@ -164,7 +164,7 @@ def run_study(
         raise RuntimeError(
             "ETU-89 cumulative checkpoint clock must be integrated before study execution"
         )
-    if plan is not None and plan.protocol.purpose == "scientific":
+    if plan is not None and plan.protocol.purpose in {"scientific", "screening"}:
         free = shutil.disk_usage(out.parent).free
         if free < plan.projected_disk_bytes + plan.disk_reserve_bytes:
             raise RuntimeError(
@@ -176,9 +176,16 @@ def run_study(
         "capacity-calibration",
         "model-capacity",
         "value-models",
+        "value-token-screen",
     }
     if explicit_plan and plan is None:
         raise ValueError(f"{study} requires an explicit separately resolved plan")
+    if study == "value-token-screen" and resume:
+        raise ValueError(
+            "screen retries require a new reviewed allocation; retain this attempt"
+        )
+    if plan is not None and plan.protocol.study != study:
+        raise ValueError("study differs from resolved protocol")
     retained = None
     resumed_runs = []
     if resume:
@@ -217,7 +224,9 @@ def run_study(
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
-    if resume or (plan is not None and plan.protocol.purpose == "scientific"):
+    if resume or (
+        plan is not None and plan.protocol.purpose in {"scientific", "screening"}
+    ):
         from manabot.env import ObservationSpace
         from manabot.sim.teacher1_evidence import (
             runtime_fingerprints,
@@ -232,9 +241,18 @@ def run_study(
         current["training_source_sha256"] = source_bundle_sha256(
             sorted((ROOT / "manabot").rglob("*.py"))
         )
+        if protocol.purpose == "screening":
+            current["study_source_sha256"] = source_bundle_sha256(
+                sorted((ROOT / "experiments/runners").glob("*.py"))
+                + [
+                    ROOT / "experiments/study/training-regimes.ipynb",
+                    ROOT / "uv.lock",
+                    ROOT / "pyproject.toml",
+                ]
+            )
         expected = (
             plan.runtime_identities
-            if plan and plan.protocol.purpose == "scientific"
+            if plan and plan.protocol.purpose in {"scientific", "screening"}
             else {
                 k: resumed_runs[0].identities[k]
                 for k in (
@@ -295,11 +313,27 @@ def run_study(
         result["seconds"] = time.perf_counter() - start
         atomic_json(out / "study.json", result)
 
+    screening = protocol.purpose == "screening"
+    training = True
+    diagnostic_done = False
+
     def deadline(*_: object) -> None:
-        raise TimeoutError("study exceeded its frozen process deadline")
+        nonlocal diagnostic_done
+        elapsed = time.perf_counter() - start
+        if screening and not diagnostic_done:
+            from experiments.runners.value_screen import screen_diagnostic
+
+            diagnostic_done = True
+            screen_diagnostic(out, elapsed, training=training)
+            limit = 21600 if training else protocol.process_seconds
+            signal.setitimer(signal.ITIMER_REAL, max(0.001, limit - elapsed))
+            return
+        raise TimeoutError("study exceeded its frozen phase/process deadline")
 
     signal.signal(signal.SIGALRM, deadline)
-    signal.setitimer(signal.ITIMER_REAL, remaining)
+    signal.setitimer(
+        signal.ITIMER_REAL, min(remaining, 7200) if screening else remaining
+    )
     save()
     try:
         runs = resumed_runs
@@ -323,6 +357,37 @@ def run_study(
                         ).hexdigest(),
                     )
                     save()
+        training = False
+        if screening:
+            # Evaluation and report share two hours; unused training time is not borrowed.
+            evaluation_limit = min(
+                protocol.process_seconds, time.perf_counter() - start + 7200
+            )
+
+            def evaluation_deadline(*_: object) -> None:
+                nonlocal diagnostic_done
+                elapsed = time.perf_counter() - start
+                if not diagnostic_done:
+                    from experiments.runners.value_screen import screen_diagnostic
+
+                    diagnostic_done = True
+                    screen_diagnostic(out, elapsed, training=False)
+                    signal.setitimer(
+                        signal.ITIMER_REAL, max(0.001, evaluation_limit - elapsed)
+                    )
+                    return
+                raise TimeoutError(
+                    "screen evaluation/report exceeded two-hour allocation"
+                )
+
+            signal.signal(signal.SIGALRM, evaluation_deadline)
+            next_limit = (
+                evaluation_limit if diagnostic_done else min(7200, evaluation_limit)
+            )
+            signal.setitimer(
+                signal.ITIMER_REAL,
+                max(0.001, next_limit - (time.perf_counter() - start)),
+            )
         checkpoints = {
             run.id: [s for s in run.stages if "raw" in s.artifacts] for run in runs
         }
@@ -521,6 +586,9 @@ def run_study(
                         learning_seconds=sum(s.learning_seconds for s in cumulative),
                         export_seconds=sum(s.export_seconds for s in cumulative),
                         decisions=sum(s.environment_decisions for s in cumulative),
+                        learner_transitions=sum(
+                            s.learner_transitions for s in cumulative
+                        ),
                         optimizer_exposures=sum(
                             s.optimizer_exposures for s in cumulative
                         ),
@@ -540,6 +608,8 @@ def run_study(
                     )
                 )
             save()
+            if screening and not valid:
+                raise RuntimeError("screen stopped on incomplete or invalid arena cell")
 
         def compare(
             a_run: TrainingRun,
@@ -573,7 +643,7 @@ def run_study(
                     next(r for r in runs if r.seed == seed and r.regime.id == recipe.id)
                     for recipe in recipes
                 ]
-                for candidate in paired[1:]:
+                for candidate in paired[1:] if protocol.paired_deals else ():
                     compare(
                         paired[0],
                         checkpoints[paired[0].id][cutoff],

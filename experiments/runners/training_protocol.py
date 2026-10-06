@@ -17,8 +17,11 @@ class EvaluationProtocol(BaseModel):
         "capacity-calibration",
         "model-capacity",
         "value-models",
+        "value-token-screen",
     ]
-    purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
+    purpose: Literal["workflow-smoke", "calibration", "scientific", "screening"] = (
+        "workflow-smoke"
+    )
     evaluation_variants: tuple[Literal["raw", "ema"], ...] = ("raw",)
     regime_digests: tuple[str, ...]
     training_seeds: tuple[int, ...] = (197,)
@@ -53,6 +56,26 @@ class EvaluationProtocol(BaseModel):
 
     @model_validator(mode="after")
     def disjoint(self) -> "EvaluationProtocol":
+        if (self.study == "value-token-screen") != (self.purpose == "screening"):
+            raise ValueError(
+                "value-token-screen requires its distinct screening purpose"
+            )
+        if self.purpose == "screening" and (
+            len(self.training_seeds) != 3
+            or self.anchors != ("scripted-greedy",)
+            or self.checkpoint_count != 2
+            or len(self.anchor_deals) != 25
+            or self.paired_deals
+            or self.endpoint_paired_deals
+            or self.endpoint_anchor_deals
+            or self.endpoint_seed_pairs
+            or self.cost_cutoffs_seconds
+            or self.process_seconds != 28800
+            or self.uncertainty != "paired-seed-descriptive"
+        ):
+            raise ValueError(
+                "screen requires three seeds, two checkpoints, 25 four-leg scripted deals and eight hours"
+            )
         if self.study == "model-capacity" and (
             self.early_progress_seconds is None or self.progress_score is None
         ):
@@ -137,13 +160,16 @@ class EvaluationProtocol(BaseModel):
             "capacity-calibration": {3},
             "model-capacity": {3},
             "value-models": {8},
+            "value-token-screen": {3},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
             for digest in self.regime_digests
         ):
             raise ValueError("protocol must bind every resolved recipe digest")
-        if not self.paired_deals or not self.anchor_deals:
+        if (
+            not self.paired_deals and self.purpose != "screening"
+        ) or not self.anchor_deals:
             raise ValueError("evaluation deal families must be nonempty")
         return self
 
@@ -172,6 +198,27 @@ class ResolvedStudy(BaseModel):
             != self.protocol.regime_digests
         ):
             raise ValueError("resolved plan recipe digests do not match")
+        if self.protocol.purpose == "screening":
+            from experiments.runners.value_screen import validate_screen_recipes
+
+            validate_screen_recipes(recipes)
+            required = {
+                "engine_extension_sha256",
+                "engine_source_sha256",
+                "content_manifest_sha256",
+                "observation_abi_sha256",
+                "action_abi_sha256",
+                "matchup_sha256",
+                "training_source_sha256",
+                "study_source_sha256",
+            }
+            if set(self.runtime_identities) != required or any(
+                len(v) != 64 or any(c not in "0123456789abcdef" for c in v)
+                for v in self.runtime_identities.values()
+            ):
+                raise ValueError("screen must bind all runtime and study sources")
+            if self.allocation_seconds != 28800 or self.prior_campaign_seconds != 0:
+                raise ValueError("screen owns a separate eight-hour allocation")
         if "ema" in self.protocol.evaluation_variants and any(
             not isinstance(s, TrainSelfPlay) or s.learning.ema is None
             for r in recipes

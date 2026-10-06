@@ -1,5 +1,29 @@
 # Intelligence memory
 
+## Completed scalar value-token screen (ETU-106, 2026-10-06)
+
+Jack Heart requested delivery after the frozen screen completed. Nine runs over
+three seeds completed 18 evaluations of 100 games: all 1,800 terminal games passed
+exact replay with zero failures/truncations. Historical/masked/token endpoint
+means were 39.67/42.00/34.67%; paired differences were −2/+11/−2 and −13/+2/−4
+points. Neither promotion nor all-negative rejection criteria were met; both
+alternatives remain unresolved and no default changes. The common-cost comparison
+has a different ordering and only two sparse checkpoints. Three seeds and one
+scripted opponent do not establish general strength or a critic-only mechanism.
+
+Token optimizer exposures were 15,339–21,853 versus historical 50,441–50,718,
+with 31 empty-filter updates despite equal collection counts. The fixed 0.01
+advantage floor binds below the 64-row quantile quota and filters actor and critic
+alike. This explains exposure accounting, not why the advantages or scores differ;
+no counterfactual filter experiment establishes cause. The study charged 5.13
+hours within its eight-hour ceiling. Full 142-file evidence remains under this
+checkout's `.runs/etu106-value-token-screen`, with a hash-verified backup at
+`/Users/jack/etu106-evidence/value-token-screen-20261006`. Preserve this checkout
+and absolute artifact paths through delivery. The [result and frozen protocol](../../experiments/value-token-screen.md)
+own exact scores, identities, uncertainty, costs and limitations. Integration does
+not rebind the frozen plan to new sources. ETU-91 is untouched; ETU-106 remains
+open for remaining science. No new campaign or human review approval is implied.
+
 ## Optional public history contract (ETU-111, 2026-10-05)
 
 Jack Heart required visible card/object identity before shipping history-on and
