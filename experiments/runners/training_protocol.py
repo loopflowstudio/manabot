@@ -14,6 +14,7 @@ class EvaluationProtocol(BaseModel):
         "omitted-controls",
         "compound-decisions",
         "training-calibration",
+        "capacity-calibration",
         "value-models",
     ]
     purpose: Literal["workflow-smoke", "calibration", "scientific"] = "workflow-smoke"
@@ -122,6 +123,7 @@ class EvaluationProtocol(BaseModel):
             "compound-decisions": {4},
             "omitted-controls": {1, 2},
             "training-calibration": {1},
+            "capacity-calibration": {3},
             "value-models": {8},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(

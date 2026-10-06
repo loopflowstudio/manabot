@@ -147,3 +147,30 @@ This updated design document reflects both the current implementation and our st
 
 
 
+
+## Capacity identity and accounting
+
+`AgentSpec.hidden_dim`, `attention_layers` (1 or 2), and
+`num_attention_heads` own the capacity configuration. The recipe helper
+`with_capacity` and `experiments.runners.model_capacity.regimes` reuse those
+fields; they introduce no second model schema. Heads must divide width when
+attention is enabled. Feedforward expansion remains head-count times width,
+so changing heads can change parameter counts as well as attention semantics.
+The delivered ladder fixes four heads and compares 64/1, 64/2 and 128/2.
+
+`manabot.model.architecture.architecture_receipt(agent)` derives a versioned
+identity and total/trainable counts by the actual top-level parameter owner.
+It counts shared parameters once and excludes buffers. The receipt consumes no
+RNG and does not change initialization, weights or forward equations. Counts
+depend on semantic inputs, observation dimensions, output representation and
+optional modules; the historical 138,434 figure is not a universal baseline.
+
+The identity hashes resolved AgentSpec and observation settings under layout
+version 1. Equation/ownership changes require a new layout version even for equal
+shapes. World/content bindings, source/runtime digests and exact checkpoint bytes
+remain separate authorities. Run identities record the architecture hash; ordinary
+PPO and BC/regime exports record the receipt. Reload validates present receipts,
+including same-shaped metadata discrepancies. Old checkpoints without receipts
+retain strict world/input/state-dict admission; no weight transfer or metadata
+reinterpretation is performed. Trainability records export-time flags and is
+not an optimizer-exposure counter. See [bounded calibration](../../docs/training-calibration.md#capacity-ladder-software-calibration).

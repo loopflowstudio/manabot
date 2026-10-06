@@ -33,6 +33,7 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra import Experiment
 from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
 from manabot.model.agent import Agent
+from manabot.model.architecture import architecture_identity
 from manabot.model.world import validate_agent_setup
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -107,6 +108,7 @@ def _runtime_identities(
         seed, match_hypers=regime.match, observation_space=space
     )
     identities.update(
+        architecture=architecture_identity(regime.agent, space),
         hardware={
             "platform": platform.platform(),
             "processor": platform.processor(),

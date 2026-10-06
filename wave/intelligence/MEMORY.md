@@ -934,6 +934,37 @@ substitute for artifact or model identity. The delivered no-attention switch is
 remain design sketches; ordinary AgentSpec and checkpoint admission own the
 implemented path.
 
+## Capacity software receipt boundary (ETU-102, 2026-10-05)
+
+Jack Heart authorized independent software completion, publication and landing
+following the PR 222/223 audit. Their AgentSpec width/depth/head validation,
+baseline-preserving model and with_capacity ladder remain the sole configuration
+owner. ETU-102 adds derived versioned architecture identity, total/trainable
+parameter accounting by actual component, TrainingRun identity and ordinary
+checkpoint receipt admission. Present receipts reject contradictory equal-shaped
+pooling metadata; absent historical receipts retain existing world/weight checks.
+World/content, source/runtime and checkpoint bytes remain separate authorities.
+No weight port, forward-equation change or second recipe schema was introduced.
+
+The existing calibration runner now freezes a bounded three-capacity CPU workflow
+and measures model construction, loading, first call, warmed inference, collection,
+optimizer, sampled RSS and total time. At `90c55627` the single retained ladder
+attempt completed in 212.56 seconds with six admitted raw checkpoints and 40
+exact-replayed games. Exact counts were 138,434 / 188,418 / 712,706 parameters
+for 64/1, 64/2 and 128/2 with four heads and selected-match semantic input.
+Host load was high; timings establish tooling, not scaling or strength. An earlier
+default-calibration test retained one 10-second game timeout; a 30-second per-game
+allowance fixed the workflow without raising its total cap. The focused checks
+passed with one optional notebook skip. Full records and interpretation limits
+live in [calibration documentation](../../docs/training-calibration.md).
+ETU-91 remained untouched; no scientific capacity study, paid compute, demo or
+chapter acceptance follows. The declarative-recipe follow-up should continue to
+use AgentSpec and these derived receipts rather than add an architecture owner.
+Trainable counts describe export-time flags, not optimizer exposures. Calibration
+inference batches are identified per checkpoint but need not match across arms;
+their timings cannot isolate capacity alone. Cold measurements mean fresh model
+construction/loading in an initialized process, not cold imports or OS caches.
+
 ## Declarative experiment authoring (ETU-109, 2026-10-05)
 
 Jack Heart authorized the declarative follow-up to merged PR #223, including

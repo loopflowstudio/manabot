@@ -23,7 +23,6 @@ import torch
 import torch.nn as nn
 import wandb
 
-# Local imports
 from manabot.belief.encoding import (
     BeliefEncodingSchema,
     belief_checkpoint_fields,
@@ -36,6 +35,7 @@ from manabot.env import (
 )
 from manabot.infra import Experiment, Hypers, TrainHypers, getLogger
 from manabot.model.agent import Agent
+from manabot.model.architecture import architecture_receipt
 from manabot.model.world import checkpoint_world, validate_policy_input
 from manabot.verify.util import run_evaluation
 
@@ -874,6 +874,7 @@ class Trainer:
             "world_binding": checkpoint_world(
                 self.env._player_configs, self.env.observation_space
             ),
+            "architecture": architecture_receipt(self.agent).model_dump(mode="json"),
             "model_state_dict": self.agent.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "global_step": self.global_step,

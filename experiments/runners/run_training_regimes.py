@@ -172,6 +172,7 @@ def run_study(
     explicit_plan = study in {
         "omitted-controls",
         "training-calibration",
+        "capacity-calibration",
         "value-models",
     }
     if explicit_plan and plan is None:

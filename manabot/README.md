@@ -123,6 +123,10 @@ For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
 custom-deck root requires its exact checkpoint setup binding.
 
+For capacity configuration, component counts, versioned architecture receipts and
+bounded CPU calibration, see [capacity accounting](model/agent.md#capacity-identity-and-accounting)
+and [the calibration command](../docs/training-calibration.md#capacity-ladder-software-calibration).
+
 ## Research program
 
 [RESEARCH.md](RESEARCH.md) is the durable map from runnable manabots to a

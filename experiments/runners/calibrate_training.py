@@ -6,9 +6,11 @@ One fixed seed and concurrent smoke timings cannot project scientific throughput
 """
 
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import platform
+import signal
 import time
 from typing import Literal
 
@@ -16,12 +18,24 @@ import psutil
 from pydantic import BaseModel, Field
 import torch
 
+from experiments.runners.model_capacity import regimes as capacity_regimes
 from experiments.runners.run_training_regimes import run_study, smoke_recipe
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
-from manabot.arena.models import canonical_sha256
+from manabot.arena.models import canonical_sha256, file_sha256
+from manabot.env import Match, ObservationSpace, Reward
+from manabot.infra.hypers import RewardHypers
+from manabot.model.agent import Agent
+from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
+from manabot.sim.flat_mc import load_checkpoint_agent
+from manabot.sim.net_opponent import SeatRoutedCollector
 from manabot.training.clock import watchdog_seconds
 from manabot.training.execution import atomic_json
-from manabot.training.models import StageRecord, TrainingRun, TrainSelfPlay
+from manabot.training.models import (
+    StageRecord,
+    TrainingRegime,
+    TrainingRun,
+    TrainSelfPlay,
+)
 from manabot.verify.store import VerifyStore
 
 
@@ -79,6 +93,24 @@ class CalibrationRun(BaseModel):
     stages: list[StageRecord]
 
 
+class InferenceProbe(BaseModel):
+    """CPU checkpoint load and fixed native-observation batch; no optimizer work."""
+
+    run_id: str
+    checkpoint_sha256: str
+    observation_sha256: str
+    architecture: ArchitectureReceipt
+    initialization_seconds: float
+    cold_load_seconds: float
+    collection_seconds: float
+    first_forward_seconds: float
+    warmup_forwards: int
+    measured_forwards: int
+    batch_size: int
+    steady_forward_seconds: float
+    sampled_peak_rss_bytes: int
+
+
 class CalibrationReport(BaseModel):
     status: str
     error: str | None = None
@@ -91,6 +123,7 @@ class CalibrationReport(BaseModel):
     host_before: HostSample
     host_after: HostSample | None = None
     runs: list[CalibrationRun] = Field(default_factory=list)
+    inference: list[InferenceProbe] = Field(default_factory=list)
     evaluation_including_replay_seconds: float = 0
     replay_seconds: float | None = 0
     scheduled_evaluation_games: int = 0
@@ -131,7 +164,7 @@ def calibration_plan(device: str = "cpu") -> ResolvedStudy:
         study="training-calibration",
         regime_digests=(canonical_sha256(recipe.model_dump(mode="json")),),
         process_seconds=180,
-        game_seconds=10,
+        game_seconds=30,
     )
     return ResolvedStudy(
         protocol=protocol,
@@ -142,32 +175,129 @@ def calibration_plan(device: str = "cpu") -> ResolvedStudy:
     )
 
 
+def capacity_plan(device: str = "cpu") -> ResolvedStudy:
+    """Reuse the delivered ladder with a fixed tiny workload and shared arena."""
+    baseline = calibration_plan(device)
+    recipe = TrainingRegime.model_validate(baseline.recipes[0])
+    recipe.wall_seconds = 120
+    for stage in recipe.stages:
+        stage.execution.wall_seconds = 60
+    recipes = tuple(capacity_regimes(recipe).values())
+    protocol = EvaluationProtocol(
+        study="capacity-calibration",
+        regime_digests=tuple(
+            canonical_sha256(r.model_dump(mode="json")) for r in recipes
+        ),
+        process_seconds=780,
+        game_seconds=30,
+    )
+    return ResolvedStudy(
+        protocol=protocol,
+        recipes=tuple(r.model_dump(mode="json") for r in recipes),
+        allocation_seconds=900,
+        prior_campaign_seconds=0,
+        calibration_evidence="Bounded capacity software proof; concurrent timings do not rank hardware or models",
+    )
+
+
+def _inference_probe(run: TrainingRun) -> InferenceProbe:
+    """Measure reload/first call separately from repeated batch inference.
+
+    The native collector supplies real viewer-safe tensors. Its cost is a probe
+    overhead, not additional training. No action/value sampling occurs inside the
+    warmed timing loop. RSS samples are lower bounds, not exact allocator peaks.
+    """
+    checkpoint = Path(run.stages[-1].artifacts["raw"]["path"])
+    torch.set_num_threads(1)
+    space = ObservationSpace(run.regime.observation)
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(run.seed_streams["initialization"])
+        tick = time.perf_counter()
+        fresh = Agent(space, run.regime.agent)
+        initialization = time.perf_counter() - tick
+        del fresh
+    tick = time.perf_counter()
+    agent, space = load_checkpoint_agent(str(checkpoint))
+    cold = time.perf_counter() - tick
+    peak = psutil.Process().memory_info().rss
+    tick = time.perf_counter()
+    collector = SeatRoutedCollector(
+        space,
+        Match(run.regime.match),
+        Reward(RewardHypers()),
+        num_envs=4,
+        seed=run.seed_streams["collection"],
+    )
+    batch = collector.collect(agent, 1)
+    collection = time.perf_counter() - tick
+    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
+    digest = hashlib.sha256()
+    for key, tensor in sorted(obs.items()):
+        digest.update(f"{key}:{tensor.dtype}:{tuple(tensor.shape)}:".encode())
+        digest.update(tensor.numpy().tobytes())
+    # The collector has already called the model. Reload for a first-forward
+    # measurement on these same identified tensors; this is not cold OS cache.
+    agent, _ = load_checkpoint_agent(str(checkpoint))
+    warmup_forwards, measured_forwards = 3, 10
+    with torch.inference_mode():
+        tick = time.perf_counter()
+        agent(obs)
+        first = time.perf_counter() - tick
+        for _ in range(warmup_forwards):
+            agent(obs)
+        tick = time.perf_counter()
+        for _ in range(measured_forwards):
+            agent(obs)
+        steady = time.perf_counter() - tick
+    peak = max(peak, psutil.Process().memory_info().rss)
+    return InferenceProbe(
+        run_id=run.id,
+        checkpoint_sha256=file_sha256(checkpoint),
+        observation_sha256=digest.hexdigest(),
+        architecture=architecture_receipt(agent),
+        initialization_seconds=initialization,
+        cold_load_seconds=cold,
+        collection_seconds=collection,
+        first_forward_seconds=first,
+        warmup_forwards=warmup_forwards,
+        measured_forwards=measured_forwards,
+        batch_size=collector.num_envs,
+        steady_forward_seconds=steady,
+        sampled_peak_rss_bytes=peak,
+    )
+
+
+def _recorded_runs(out: Path) -> list[TrainingRun]:
+    """Include failed canonical attempts even when their JSON export failed."""
+    database = out / "training.sqlite"
+    if not database.exists():
+        return []
+    with VerifyStore(database) as store:
+        ids = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid"
+        ).fetchall()
+        return [store.training_run(run_id) for (run_id,) in ids]
+
+
 def _collect_records(out: Path, report: CalibrationReport) -> None:
     study_path = out / "study.json"
     if not study_path.exists():
         return
     study = _Study.model_validate_json(study_path.read_text())
-    report.status = study.status
-    database = out / "training.sqlite"
-    if database.exists():
-        with VerifyStore(database) as store:
-            # Include failed canonical attempts even when their JSON export failed.
-            ids = store.con.execute(
-                "SELECT id FROM training_runs ORDER BY rowid"
-            ).fetchall()
-            for (run_id,) in ids:
-                run: TrainingRun = store.training_run(run_id)
-                report.runs.append(
-                    CalibrationRun(
-                        run_id=run.id,
-                        seed=run.seed,
-                        status=run.status,
-                        run_seconds=run.seconds,
-                        watchdog_seconds=run.watchdog_seconds,
-                        setup_seconds=run.setup_seconds,
-                        stages=run.stages,
-                    )
-                )
+    if report.error is None:
+        report.status = study.status
+    report.runs = [
+        CalibrationRun(
+            run_id=run.id,
+            seed=run.seed,
+            status=run.status,
+            run_seconds=run.seconds,
+            watchdog_seconds=run.watchdog_seconds,
+            setup_seconds=run.setup_seconds,
+            stages=run.stages,
+        )
+        for run in _recorded_runs(out)
+    ]
     for cell in study.comparisons:
         report.evaluation_including_replay_seconds += cell.evaluation_seconds
         if report.replay_seconds is not None:
@@ -186,9 +316,11 @@ def _collect_records(out: Path, report: CalibrationReport) -> None:
         )
 
 
-def calibrate(out: Path, device: str = "cpu") -> CalibrationReport:
+def calibrate(
+    out: Path, device: str = "cpu", *, capacity: bool = False
+) -> CalibrationReport:
     """Run once in a new directory; preserve failures and never retry a seed."""
-    plan = calibration_plan(device)
+    plan = capacity_plan(device) if capacity else calibration_plan(device)
     out = out.resolve()
     if out.exists():
         raise FileExistsError(f"calibration output already exists: {out}")
@@ -199,14 +331,36 @@ def calibrate(out: Path, device: str = "cpu") -> CalibrationReport:
         watchdog_seconds(),
         time.process_time(),
     )
+    previous_threads = torch.get_num_threads()
+    previous_handler = signal.getsignal(signal.SIGALRM)
     try:
-        run_study("training-calibration", out, plan, render_report=False)
+        run_study(plan.protocol.study, out, plan, render_report=False)
+        if capacity:
+
+            def deadline(*_: object) -> None:
+                raise TimeoutError(
+                    f"capacity calibration exceeded {plan.allocation_seconds:g} seconds"
+                )
+
+            remaining = plan.allocation_seconds - (time.perf_counter() - start)
+            if remaining <= 0:
+                deadline()
+            signal.signal(signal.SIGALRM, deadline)
+            signal.setitimer(signal.ITIMER_REAL, remaining)
+            for run in _recorded_runs(out):
+                if run.status != "completed":
+                    raise ValueError("capacity probe requires completed training")
+                report.inference.append(_inference_probe(run))
+                atomic_json(out / "calibration.json", report.model_dump(mode="json"))
         report.status = "completed"
     except BaseException as error:
         report.status = "failed"
         report.error = f"{type(error).__name__}: {error}"
         raise
     finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        torch.set_num_threads(previous_threads)
         report.elapsed_seconds = time.perf_counter() - start
         report.sleep_inclusive_seconds = watchdog_seconds() - continuous
         report.process_cpu_seconds = time.process_time() - cpu
@@ -221,8 +375,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--capacity",
+        action="store_true",
+        help="Measure the three delivered capacities within 900 seconds",
+    )
     args = parser.parse_args()
-    calibrate(args.out, args.device)
+    calibrate(args.out, args.device, capacity=args.capacity)
 
 
 if __name__ == "__main__":

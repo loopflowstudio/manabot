@@ -42,6 +42,7 @@ from manabot.infra.hypers import (
     RewardHypers,
 )
 from manabot.model.agent import Agent
+from manabot.model.architecture import architecture_receipt
 from manabot.sim.flat_mc import make_player, spec_name
 from manabot.verify.util import INTERACTIVE_DECK, winner_from_info_or_obs
 from managym.decision import Command, DecisionFrame
@@ -717,6 +718,7 @@ def save_bc_checkpoint(
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
         "world_binding": checkpoint_world(player_configs, obs_space),
+        "architecture": architecture_receipt(agent).model_dump(mode="json"),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
