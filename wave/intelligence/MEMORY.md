@@ -114,22 +114,27 @@ No method benefit, challenger strength or chapter acceptance follows.
 
 ## Distributed RL research boundary (ETU-108, 2026-10-05)
 
-On 2026-10-06 Jack Heart reported a mini inference failure at `d154a4b` and
-authorized a focused repair and landing, with remote benchmark resumption left
-to the operator. `SeatRoutedCollector` owns an in-process native environment
-and has no `close()` API; inference now releases the collector reference in
-`finally`. Real inference/simulator probes and preservation of collection errors
-are integration regressions. The failed mini attempt is retained at
-`~/src/etude/.runs/etu108-mini-inference-1`; this repair does not touch it,
-ETU-106's live checkout or native extension. No new training budget follows.
+On 2026-10-06 Jack Heart requested delivery of the completed mini evidence.
+The [report](../../docs/distributed-rl.md) and compact evidence extract retain
+all five initial attempts plus representative training. Mini is M1/16 GiB, CPU
+one-thread. Initial inference failed on absent collector.close(); PR #237 fixed
+ownership cleanup and a fresh attempt succeeded. Tiny training filtered out both
+updates, so it supplies no gradient-throughput evidence. Representative masked
+mean/scalar width-64 training completed 20 updates, 5,120 learner transitions and
+1,280 optimizer exposures in 68.60 training / 70.73 process seconds, with six
+artifacts verified by the retained receipt. A separate tiny calibration replayed
+eight games; the representative checkpoint was not strength-evaluated. Its
+inherited 32 GiB execution budget exceeds actual RAM: sub-500 MB sampled RSS
+proves neither memory enforcement nor capacity. These are agent-inspected
+single-host receipts, not speedup, GPU, strength or distributed-training evidence.
 
 Jack Heart requested primary-source research and a disposable laptop/mini
 prototype where both hosts contribute to one model; speedup is not acceptance.
-The initial contribution prepares research and a bounded benchmark
-harness only. Value-token training remains the immediate priority; ETU-91 is
-untouched. No distributed training, hardware comparison or strength result
-exists from this pass. Mini access failed once on host name resolution; no
-access repair followed. Compute workloads remain unexecuted.
+Matched laptop and transfer measurements, concurrent contributions to one learner,
+and disconnect accounting remain open. ETU-108 stays open. The evidence-report
+pass runs no benchmarks and leaves ETU-106 and ETU-91 untouched; no paid compute
+or new training allocation follows. Original source/attempt identities remain
+frozen; the earlier name-resolution failure is historical.
 
 Actor/inference placement and stale-data admission are separate decisions.
 Current PPO and the Ataraxos move rule retain collection behavior but do not
