@@ -314,3 +314,67 @@ def test_self_play_continuation_keeps_adam_and_exports_each_stage(
         assert run.seconds >= admitted[1] + 5.0
         saved = store.training_run(run.id)
         assert [stage.cumulative_seconds for stage in saved.stages] == admitted
+
+
+def _fixture_run(updates: int) -> TrainingRun:
+    stage = StageRecord(id="policy-0")
+    stage.diagnostics = [
+        {"update": n, "loss": n / 7, "rows": [n] * 8} for n in range(updates)
+    ]
+    return TrainingRun(
+        id="fixture",
+        regime=recipe(),
+        regime_digest="test",
+        seed=1,
+        seed_streams={},
+        identities={},
+        stages=[stage],
+    )
+
+
+def test_update_save_work_does_not_grow_with_recorded_updates(tmp_path: Path) -> None:
+    """Saving after one more update writes the same rows at any history length."""
+
+    def writes_for_next_update(updates: int) -> int:
+        run = _fixture_run(updates)
+        with VerifyStore(tmp_path / f"{updates}.sqlite") as store:
+            store.save_training_run(run)
+            run.stages[0].diagnostics.append({"update": updates})
+            before = store.con.total_changes
+            store.save_training_run(run)
+            written = store.con.total_changes - before
+            assert store.training_run(run.id) == run
+            return written
+
+    assert writes_for_next_update(5) == writes_for_next_update(500)
+
+
+def test_saved_diagnostics_follow_rewrites_truncation_and_old_layout(
+    tmp_path: Path,
+) -> None:
+    run = _fixture_run(3)
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        store.save_training_run(run)
+        run.stages[0].diagnostics[-1]["coordinates"] = {"updates": 3}
+        store.save_training_run(run)
+        assert store.training_run(run.id) == run
+        # Search stages keep one summary row and replace it on every save.
+        run.stages[0].diagnostics = [{"games": 9}]
+        store.save_training_run(run)
+        assert store.training_run(run.id) == run
+
+        # A store written before diagnostics had their own table keeps them inline.
+        old = _fixture_run(4)
+        old.id = "old-layout"
+        store.con.execute(
+            "INSERT INTO training_runs VALUES (?, ?)",
+            (old.id, old.model_dump_json(exclude={"stages"})),
+        )
+        store.con.execute(
+            "INSERT INTO training_stages VALUES (?, ?, ?)",
+            (old.id, "policy-0", old.stages[0].model_dump_json()),
+        )
+        assert store.training_run(old.id) == old
+        old.stages[0].diagnostics.append({"update": 4})
+        store.save_training_run(old)
+        assert store.training_run(old.id) == old

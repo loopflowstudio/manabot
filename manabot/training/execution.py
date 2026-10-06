@@ -80,6 +80,12 @@ if TYPE_CHECKING:
     from manabot.verify.store import VerifyStore
 
 
+# Longest a run.json export may lag the store while a stage is making progress.
+PROGRESS_EXPORT_SECONDS = 30.0
+# Largest share of a stage's wall time that progress exports may consume.
+PROGRESS_EXPORT_SHARE = 0.02
+
+
 def atomic_json(path: str | Path, value: object) -> None:
     path = Path(path)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -267,12 +273,32 @@ def _execute_regime(
     fixed_validation_dataset: dict[str, np.ndarray] | None = None
     last_monitor_seconds = 0.0
 
-    def persist() -> None:
+    last_export = float("-inf")
+    export_wait = PROGRESS_EXPORT_SECONDS
+
+    def persist(*, progress: bool = False) -> None:
+        """Commit the run to the store and refresh its run.json export.
+
+        The store is the authority and is written every time. Rewriting the
+        export costs time proportional to the whole record, so saves made only
+        to record progress inside a stage refresh it at most once per
+        PROGRESS_EXPORT_SECONDS, and less often once one export takes more
+        than PROGRESS_EXPORT_SHARE of that interval. Stage boundaries,
+        completion and failure always export.
+        """
+        nonlocal last_export, export_wait
         run.seconds = time.perf_counter() - start
         run.watchdog_seconds = watchdog_seconds() - watchdog_start
         run.last_recorded_wall_seconds = time.time()
         store.save_training_run(run)
+        began = time.monotonic()
+        if progress and began - last_export < export_wait:
+            return
         export_training_run(run.id, store, out)
+        last_export = time.monotonic()
+        export_wait = max(
+            PROGRESS_EXPORT_SECONDS, (last_export - began) / PROGRESS_EXPORT_SHARE
+        )
 
     def artifact(path: Path) -> ArtifactReference:
         return {
@@ -560,7 +586,7 @@ def _execute_regime(
                     record.environment_decisions += summary["decisions"]
                     record.collection_seconds = time.perf_counter() - stage_start
                     summary["coordinates"] = coordinates()
-                    persist()
+                    persist(progress=True)
                     if not all(summary["terminated"]) or any(summary["truncated"]):
                         raise RuntimeError(
                             "teacher game lacks authoritative terminal outcome"
@@ -635,7 +661,7 @@ def _execute_regime(
                         game_index += 1
                         stats.collection_seconds = record.collection_seconds
                         record.diagnostics = [asdict(stats)]
-                        persist()
+                        persist(progress=True)
                     phase = "learning_seconds"
                     tick = time.perf_counter()
                     update = optimize_games(
@@ -655,7 +681,7 @@ def _execute_regime(
                     stats.optimizer_exposures += update.optimizer_exposures
                     stats.losses.extend(update.losses)
                     record.diagnostics = [asdict(stats)]
-                    persist()
+                    persist(progress=True)
                 outputs[stage.id] = (agent, optimizer)
                 optimizer_state = optimizer.state_dict()
             elif isinstance(stage, CollectSelection):
@@ -719,7 +745,7 @@ def _execute_regime(
                     record.games += 1
                     record.environment_decisions += len(game.rows)
                     games.append(game)
-                    persist()
+                    persist(progress=True)
                     phase = "collection_seconds"
                 dataset = SelectionDataset(
                     run_id=run.id,
@@ -998,7 +1024,7 @@ def _execute_regime(
                     diagnostic["coordinates"] = coordinates()
                     monitor_checkpoint(trainer.agent)
                     checkpoint(f"update-{iteration:08d}")
-                    persist()
+                    persist(progress=True)
                 self_play_session = (trainer, ema, iteration)
                 agent = trainer.agent
                 optimizer_state = trainer.optimizer.state_dict()
@@ -1054,7 +1080,7 @@ def _execute_regime(
                     record.diagnostics.append(row)
                     row["coordinates"] = coordinates()
                     monitor_checkpoint(model)
-                    persist()
+                    persist(progress=True)
 
                 agent, _, _, history = train_search_supervised(
                     dataset,

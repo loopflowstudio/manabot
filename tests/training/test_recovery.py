@@ -76,6 +76,13 @@ def assert_state_equal(left: Any, right: Any) -> None:
         assert left == right
 
 
+@pytest.fixture(autouse=True)
+def export_after_every_save(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests inject failures through the export, so it must follow each save."""
+    monkeypatch.setattr(execution, "PROGRESS_EXPORT_SECONDS", 0.0)
+    monkeypatch.setattr(execution, "PROGRESS_EXPORT_SHARE", float("inf"))
+
+
 def interrupt(
     value: TrainingRegime,
     out: Path,
@@ -231,6 +238,8 @@ from pathlib import Path
 from manabot.training import execution
 from manabot.training.models import TrainingRegime
 from manabot.verify.store import VerifyStore
+execution.PROGRESS_EXPORT_SECONDS = 0.0
+execution.PROGRESS_EXPORT_SHARE = float('inf')
 export = execution.export_training_run
 def terminate_after_commit(run_id, store, out):
     run = export(run_id, store, out)

@@ -24,6 +24,7 @@ from experiments.runners.history_input import (
 )
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.training.models import TrainingRun
+from manabot.verify.store import training_stage_payloads
 
 
 class Predecessor(BaseModel):
@@ -120,15 +121,14 @@ def admit_predecessor(path: Path, sha256: str) -> Predecessor:
         )
     ) as database:
         rows = database.execute("SELECT payload FROM training_runs").fetchall()
-        stages = database.execute(
-            "SELECT run_id, payload FROM training_stages"
-        ).fetchall()
+        owners = database.execute("SELECT run_id FROM training_stages").fetchall()
+        stages = training_stage_payloads(database, run.id)
         if (
             len(rows) != 1
             or json.loads(rows[0][0]) != run.model_dump(mode="json", exclude={"stages"})
             or len(stages) != len(run.stages)
-            or any(run_id != run.id for run_id, _ in stages)
-            or {json.loads(payload)["id"]: json.loads(payload) for _, payload in stages}
+            or any(run_id != run.id for (run_id,) in owners)
+            or {stage["id"]: stage for stage in stages}
             != {s.id: s.model_dump(mode="json") for s in run.stages}
         ):
             raise ValueError("predecessor store differs from calibration receipt")
