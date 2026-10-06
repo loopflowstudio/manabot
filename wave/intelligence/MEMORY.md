@@ -2,16 +2,17 @@
 
 ## History input (ETU-106, 2026-10-06)
 
-Jack Heart authorized [history-screen delivery](../../experiments/history-input.md)
-and the narrow calibration repair after PR243 merged. The first attempt failed
-at 91.156 s after history-off completed 40 updates: reload mistook an optimizer
-state dictionary for a policy. All exports now receive hash checks; only raw/EMA
-receive policy admission. Read-only reload checked six exports/four policies and
-left all 15 attempt files unchanged. No training or restart ran for the repair.
-The failed attempt/cost remain immutable and cannot admit a cohort; fresh
-calibration allocation is parent-owned after delivery. ETU-106 stays open.
-Off/on ABIs differ; history adds information and parameters. Fixed-update scores
-cannot establish common-cost superiority. No scientific history cohort ran.
+Jack Heart authorized [history-screen delivery and recovery](../../experiments/history-input.md).
+Calibration failed at 91.15643158298917 s: reload mistook Adam state for a
+policy. All exports receive hash checks; only raw/EMA receive policy admission.
+Optimizer exports admitted; 15 evidence files unchanged.
+
+Explicit path/hash admission verifies failed pre-admission evidence and exempts
+only that collision; live/admitted/ambiguous attempts fail. Fresh calibration deducts prior cost
+once from both six-hour total and 1800-second allowance. Fresh timings; unchanged
+seeds/deals. Serial software delivery preserves PR244's head; no campaign launched.
+ETU-106 stays open. Off/on ABIs/information/parameters differ; equal updates
+cannot establish common-cost superiority.
 
 ## Completed pooling × advantage-floor follow-up (ETU-106, 2026-10-06)
 

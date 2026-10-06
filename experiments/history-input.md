@@ -4,8 +4,8 @@ Prepared 2026-10-06 for Jack Heart. The original prospective protocol is retaine
 below. The first campaign failed during calibration after software delivery in
 PR243 (merge `d760a4baf3a082ed9a64d98e9f542135580ea222`). No scientific cohort
 ran or passed admission. PR241 and completed campaign artifacts remain unchanged.
-The failed attempt and its full cost remain retained; a fresh calibration allocation
-is parent-owned after this repair is delivered.
+The failed attempt and its full cost remain retained. The parent owns a fresh
+launch after software delivery within the original six-hour allocation.
 
 ## Failed calibration and reload repair (2026-10-06)
 
@@ -52,8 +52,8 @@ require its live PID; they are not independent execution or retry entry points.
 A new output directory and checkout lock retain every attempt. Calibration is
 charged once; training and evaluation cannot resume. Report-only recovery is not
 a public standalone command: a failed campaign stops and retains its evidence.
-The current implementation takes the simpler no-recovery path allowed by the
-protocol; a later recovery requires a separately reviewed remaining-time receipt.
+Only the explicitly selected failed pre-admission predecessor below is admitted.
+This is fresh calibration, not training/evaluation resume or generic retry.
 
 Combined fixture validation passed 50 checks with one unsupported-configuration
 skip; CI invocation collection passed all 376 tests without module-name collisions.
@@ -74,12 +74,16 @@ Model construction confirms totals 138,498 off / 161,410 on and the 22,912 incre
 These are software checks, not calibration or throughput measurements. Retained
 campaign bytes and their runtime receipts are unchanged.
 
-Only after a fresh parent-owned allocation, source delivery and the
+Only after parent review, source delivery and the
 exclusive-host/external-cohort audit below may a new attempt perform prospective
 cost admission before scientific work:
 
 ```bash
-uv run python -m experiments.runners.run_history_input --campaign <exact-clean-delivered-commit> --out .runs/<new-parent-approved-attempt>
+uv run python -m experiments.runners.run_history_input \
+  --campaign "$(git rev-parse HEAD)" \
+  --predecessor .runs/etu106-history-input \
+  --predecessor-sha256 9b27ec31c4e82979cee652ca1c9311fabf09f4615ce2c6bdcdd982caa32b6234 \
+  --out .runs/etu106-history-input-continuation
 ```
 
 This command **starts calibration and, if admitted, scientific work**; the original attempt failed as recorded above. Do not restart or overwrite it. It checks local frozen plans/attempts for seed collisions,
@@ -90,6 +94,39 @@ identities remain unknown. Preflight runs native history fixtures (including eig
 fixed-weight arena games on fixture deal 971811) inside the charged 1,800 seconds;
 these are separate from the 1,200 scientific games. Host resource receipts report
 the inherited unenforced 32 GiB declaration explicitly.
+
+## Explicit pre-admission continuation (2026-10-06)
+
+Jack Heart requested this software recovery under standing authorization; it does
+not launch a campaign. The continuation is a serial software delivery after
+PR244; its remote head remains untouched.
+
+The command above pins all 15 original files by canonical SHA-256 of relative
+names, byte counts and file SHA-256s. Admission reads the predecessor without
+writes, including immutable SQLite access. It requires a failed, nonlive supervisor,
+completed preflight, failed history-off calibration child, matching saved
+source/runtime/input identities, one complete 40-update calibration in JSON and
+VerifyStore, and all six original exports with matching hashes. Other files,
+scientific directories, admitted plans, non-calibration database rows, missing
+receipts, live/reused PIDs and completed/ambiguous attempts fail closed. Only that
+selected supervisor is exempt from collision detection; all other reservations
+remain effective. Continuation attempts cannot themselves be predecessors.
+
+Retain **91.15643158298917 seconds** exactly once. The new process has
+**21508.84356841701 seconds** left overall and **1708.8435684170108 seconds**
+for preflight plus both fresh calibration arms. The 14,400/4,500/900-second
+training/evaluation/report ceilings and reserves remain unchanged. Supervisor
+receipts distinguish current-attempt and cumulative seconds; the frozen plan
+records prior cost and remaining allocation. Calibration receipt time includes
+prior cost, but its rates and count admission use only fresh off/on runs. The
+calibration seed, scientific seeds, deals and order are unchanged. No previous
+calibration weights, timings or scores enter the new cohort.
+
+The ordinary calibration validator also admits the executor's optional optimizer
+export alongside required raw/EMA exports; unknown or missing policy exports
+still fail and reload hashes every artifact. This repairs the next admission
+barrier after the separate reload fix. Validation used fixtures and read-only
+retained evidence only. No training, calibration or scoring ran.
 
 ## Question, scope and retained baseline
 
@@ -213,7 +250,7 @@ admitted N, actual launch-host resource envelope, disk projection and finalized
 source/runtime identities remain unknown. Exclusive-host and external-cohort seed
 checks belong to the launch owner. The repair delivers software only;
 the failed calibration remains immutable and unadmitted. Fresh calibration requires
-a parent-owned allocation after delivery; no scientific results exist.
+parent-owned launch after delivery with the prior cost deducted as above; no scientific results exist.
 
 ## Sources inspected for this proposal
 

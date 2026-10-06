@@ -259,6 +259,6 @@ def validate_run(
             stage.status != "completed"
             or len(stage.diagnostics) != spec.updates
             or stage.learner_transitions != spec.updates * 256
-            or set(stage.artifacts) != {"raw", "ema"}
+            or set(stage.artifacts) not in ({"raw", "ema"}, {"raw", "ema", "optimizer"})
         ):
             raise ValueError("history run omitted updates, transitions or exports")

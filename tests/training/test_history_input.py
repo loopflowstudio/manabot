@@ -419,8 +419,12 @@ def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
 
 
 @pytest.mark.parametrize("fail_calibration", [False, True])
+@pytest.mark.parametrize("prior_seconds", [0, 91.15643158298917])
 def test_campaign_phase_accounting_and_failure_retention(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_calibration: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fail_calibration: bool,
+    prior_seconds: float,
 ) -> None:
 
     clock = [1000.0]
@@ -436,6 +440,20 @@ def test_campaign_phase_accounting_and_failure_retention(
         previous / "study.json",
         {"comparisons": [{"trace": {"path": str(trace), "games": 100}}]},
     )
+    predecessor = supervisor.Predecessor(
+        path=previous,
+        sha256="b" * 64,
+        seconds=prior_seconds or 1,
+        source_commit="c" * 40,
+    )
+    monkeypatch.setattr(
+        supervisor, "admit_predecessor", lambda path, sha256: predecessor
+    )
+    selection = (
+        {"predecessor_path": previous, "predecessor_sha256": "b" * 64}
+        if prior_seconds
+        else {}
+    )
     calls: list[tuple[str, float]] = []
     receipt = calibration()
 
@@ -443,6 +461,7 @@ def test_campaign_phase_accounting_and_failure_retention(
         arguments: list[str], root: Path, deadline: float, check: object = None
     ) -> float:
         phase = arguments[0]
+        assert deadline <= 1000 + history.TOTAL_SECONDS - prior_seconds
         calls.append((phase, deadline - clock[0]))
         if phase == "--preflight":
             atomic_json(
@@ -500,7 +519,7 @@ def test_campaign_phase_accounting_and_failure_retention(
     monkeypatch.setattr(supervisor, "_child", child)
     if fail_calibration:
         with pytest.raises(RuntimeError, match="fixture calibration"):
-            supervisor.campaign(out, "a" * 40)
+            supervisor.campaign(out, "a" * 40, **selection)
         assert [c[0] for c in calls] == [
             "--preflight",
             "--calibrate-arm",
@@ -509,9 +528,11 @@ def test_campaign_phase_accounting_and_failure_retention(
         assert not (out / "resolved-plan.json").exists()
         status = json.loads((out / "supervisor.json").read_text())
         assert status["status"] == "failed" and status["seconds"] == 170
+        assert status["cumulative_seconds"] == pytest.approx(170 + prior_seconds)
+        assert calls[0][1] == pytest.approx(1800 - prior_seconds)
         assert (out / "calibration/history-off/run.json").exists()
     else:
-        supervisor.campaign(out, "a" * 40)
+        supervisor.campaign(out, "a" * 40, **selection)
         assert [c[0] for c in calls] == [
             "--preflight",
             "--calibrate-arm",
@@ -533,10 +554,14 @@ def test_campaign_phase_accounting_and_failure_retention(
         plan = ResolvedStudy.model_validate_json(
             (out / "resolved-plan.json").read_text()
         )
-        assert (
-            history.Calibration.model_validate_json(plan.calibration_evidence).seconds
-            == 170
-        )
+        assert plan.prior_campaign_seconds == prior_seconds
+        assert plan.allocation_seconds == 21600 - prior_seconds
+        assert plan.protocol.process_seconds == 21600 - prior_seconds
+        assert status["cumulative_seconds"] == pytest.approx(7180 + prior_seconds)
+        assert calls[0][1] == pytest.approx(1800 - prior_seconds)
+        assert history.Calibration.model_validate_json(
+            plan.calibration_evidence
+        ).seconds == pytest.approx(170 + prior_seconds)
 
 
 @pytest.mark.parametrize("index", [0, 1])
@@ -635,3 +660,15 @@ def test_history_reload_checks_each_policy_configuration(
     artifact.update(sha256=file_sha256(path), bytes=path.stat().st_size)
     with pytest.raises(ValueError, match="configuration differs"):
         supervisor._reload(exported_history_run)
+
+
+def test_history_continuation_cannot_reset_allocation() -> None:
+    prior = 91.15643158298917
+    receipt = calibration().model_copy(
+        update={"seconds": calibration().seconds + prior}
+    )
+    plan = supervisor.history_plan(receipt, prior)
+    data = plan.model_dump(mode="json")
+    data["allocation_seconds"] = history.TOTAL_SECONDS
+    with pytest.raises(ValueError, match="original six-hour"):
+        ResolvedStudy.model_validate(data)

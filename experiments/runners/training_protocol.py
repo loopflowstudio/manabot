@@ -4,7 +4,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from experiments.runners.history_input import TOTAL_SECONDS, InputBinding
+from experiments.runners.history_input import (
+    CALIBRATION_SECONDS,
+    TOTAL_SECONDS,
+    InputBinding,
+)
 
 
 class EvaluationProtocol(BaseModel):
@@ -76,8 +80,13 @@ class EvaluationProtocol(BaseModel):
             or self.endpoint_anchor_deals
             or self.endpoint_seed_pairs
             or self.cost_cutoffs_seconds
-            or self.process_seconds
-            != (TOTAL_SECONDS if self.study == "history-input" else 28800)
+            or (
+                not TOTAL_SECONDS - CALIBRATION_SECONDS
+                < self.process_seconds
+                <= TOTAL_SECONDS
+                if self.study == "history-input"
+                else self.process_seconds != 28800
+            )
             or self.uncertainty != "paired-seed-descriptive"
         ):
             raise ValueError(
@@ -278,7 +287,17 @@ class ResolvedStudy(BaseModel):
             allocation = (
                 TOTAL_SECONDS if self.protocol.study == "history-input" else 28800
             )
-            if (
+            if self.protocol.study == "history-input":
+                if (
+                    self.allocation_seconds + self.prior_campaign_seconds != allocation
+                    or self.prior_campaign_seconds >= CALIBRATION_SECONDS
+                    or receipt.seconds < self.prior_campaign_seconds
+                    or self.protocol.process_seconds != self.allocation_seconds
+                ):
+                    raise ValueError(
+                        "history continuation must retain the original six-hour allocation"
+                    )
+            elif (
                 self.allocation_seconds != allocation
                 or self.prior_campaign_seconds != 0
             ):

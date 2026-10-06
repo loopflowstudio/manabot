@@ -101,6 +101,7 @@ jobs:
             tests/training/test_technique_screen.py tests/training/test_capacity_study.py \
             tests/training/test_value_models.py \
             tests/training/test_history_input.py tests/training/test_history_arena.py \
+            tests/training/test_history_predecessor.py \
             tests/belief/test_sampling_report.py \
             tests/bench/test_structured_policy_benchmark.py tests/bench/test_distributed_recipe_workloads.py
 

@@ -40,6 +40,7 @@ from experiments.runners.history_input import (
     runtime_bindings,
     validate_run,
 )
+from experiments.runners.history_predecessor import Predecessor, admit_predecessor
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
@@ -51,7 +52,7 @@ from manabot.training.models import TrainingRegime, TrainingRun
 from manabot.verify.store import VerifyStore
 
 
-def history_plan(calibration: Calibration) -> ResolvedStudy:
+def history_plan(calibration: Calibration, prior_seconds: float = 0) -> ResolvedStudy:
     values = recipes(calibration.admitted_updates())
     return ResolvedStudy(
         protocol=EvaluationProtocol(
@@ -64,12 +65,12 @@ def history_plan(calibration: Calibration) -> ResolvedStudy:
             paired_deals=(),
             anchor_deals=DEALS,
             anchors=("scripted-greedy",),
-            process_seconds=TOTAL_SECONDS,
+            process_seconds=TOTAL_SECONDS - prior_seconds,
             uncertainty="paired-seed-descriptive",
         ),
         recipes=tuple(r.model_dump(mode="json") for r in values),
-        allocation_seconds=TOTAL_SECONDS,
-        prior_campaign_seconds=0,
+        allocation_seconds=TOTAL_SECONDS - prior_seconds,
+        prior_campaign_seconds=prior_seconds,
         runtime_identities=calibration.runtime_identities,
         input_bindings=calibration.input_bindings,
         projected_disk_bytes=calibration.projected_disk_bytes,
@@ -164,6 +165,56 @@ def _clean_source(source: str) -> None:
         raise ValueError("history campaign requires exact clean delivered source")
 
 
+def _check_collisions(out: Path) -> None:
+    """Only the explicitly admitted predecessor releases its reserved families."""
+    state = json.loads((out / "supervisor.json").read_text())
+    predecessor = (
+        Predecessor.model_validate(state["predecessor"])
+        if state.get("predecessor")
+        else None
+    )
+    if predecessor is not None:
+        if admit_predecessor(predecessor.path, predecessor.sha256) != predecessor:
+            raise ValueError("predecessor receipt changed")
+    collisions: list[str] = []
+    for path in sorted((ROOT / "experiments/plans").glob("*.json")):
+        data = json.loads(path.read_text())
+        protocol = data.get("protocol", {})
+        if set(protocol.get("training_seeds", ())) & set(
+            (CALIBRATION_SEED, *SEEDS)
+        ) or any(
+            set(protocol.get(key, ())) & set(DEALS)
+            for key in (
+                "anchor_deals",
+                "paired_deals",
+                "endpoint_anchor_deals",
+                "endpoint_paired_deals",
+            )
+        ):
+            collisions.append(str(path))
+    # Existing attempts in this checkout also reserve their families.
+    for path in (ROOT / ".runs").rglob("resolved-plan.json"):
+        data = json.loads(path.read_text())
+        protocol = data.get("protocol", {})
+        if set(protocol.get("training_seeds", ())) & set(SEEDS) or set(
+            protocol.get("anchor_deals", ())
+        ) & set(DEALS):
+            collisions.append(str(path))
+    for path in (ROOT / ".runs").rglob("supervisor.json"):
+        if path.resolve() == (out / "supervisor.json").resolve():
+            continue
+        if (
+            predecessor is not None
+            and path.resolve() == predecessor.path / "supervisor.json"
+        ):
+            continue
+        previous = json.loads(path.read_text())
+        if previous.get("study") == "history-input":
+            collisions.append(str(path))
+    if collisions:
+        raise ValueError(f"history seed/deal collision: {collisions}")
+
+
 def _preflight(out: Path) -> None:
     """No optimizer: native fixtures, dependencies, RNGs, resources and weights."""
     from jupyter_client.kernelspec import KernelSpecManager
@@ -204,38 +255,7 @@ def _preflight(out: Path) -> None:
     ]
     if len(set(families)) != len(families) or set(families) & set(DEALS):
         raise ValueError("history seed families collide")
-    collisions: list[str] = []
-    for path in sorted((ROOT / "experiments/plans").glob("*.json")):
-        data = json.loads(path.read_text())
-        protocol = data.get("protocol", {})
-        if set(protocol.get("training_seeds", ())) & set(
-            (CALIBRATION_SEED, *SEEDS)
-        ) or any(
-            set(protocol.get(key, ())) & set(DEALS)
-            for key in (
-                "anchor_deals",
-                "paired_deals",
-                "endpoint_anchor_deals",
-                "endpoint_paired_deals",
-            )
-        ):
-            collisions.append(str(path))
-    # Existing attempts in this checkout also reserve their families.
-    for path in (ROOT / ".runs").rglob("resolved-plan.json"):
-        data = json.loads(path.read_text())
-        protocol = data.get("protocol", {})
-        if set(protocol.get("training_seeds", ())) & set(SEEDS) or set(
-            protocol.get("anchor_deals", ())
-        ) & set(DEALS):
-            collisions.append(str(path))
-    for path in (ROOT / ".runs").rglob("supervisor.json"):
-        if path.resolve() == (out / "supervisor.json").resolve():
-            continue
-        previous = json.loads(path.read_text())
-        if previous.get("study") == "history-input":
-            collisions.append(str(path))
-    if collisions:
-        raise ValueError(f"history seed/deal collision: {collisions}")
+    _check_collisions(out)
     counts: list[dict[str, object]] = []
     for seed in SEEDS:
         models = []
@@ -288,12 +308,25 @@ def _preflight(out: Path) -> None:
     )
 
 
-def campaign(out: Path, source: str) -> None:
+def campaign(
+    out: Path,
+    source: str,
+    predecessor_path: Path | None = None,
+    predecessor_sha256: str | None = None,
+) -> None:
     started = time.monotonic()  # Includes lock, source and all preflight work.
-    total_deadline = started + TOTAL_SECONDS
     (ROOT / ".runs").mkdir(exist_ok=True)
     with (ROOT / ".runs/history-input.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if (predecessor_path is None) != (predecessor_sha256 is None):
+            raise ValueError("predecessor path and hash must be selected together")
+        predecessor = (
+            admit_predecessor(predecessor_path, predecessor_sha256)
+            if predecessor_path is not None and predecessor_sha256 is not None
+            else None
+        )
+        prior_seconds = predecessor.seconds if predecessor is not None else 0
+        total_deadline = started + TOTAL_SECONDS - prior_seconds
         out.mkdir(parents=True, exist_ok=False)
         state: dict[str, object] = {
             "pid": os.getpid(),
@@ -304,8 +337,15 @@ def campaign(out: Path, source: str) -> None:
             "order": ORDER,
         }
 
+        if predecessor is not None:
+            state["predecessor"] = predecessor.model_dump(mode="json")
+            state["prior_seconds"] = prior_seconds
+            state["remaining_allocation_seconds"] = TOTAL_SECONDS - prior_seconds
+            state["remaining_calibration_seconds"] = CALIBRATION_SECONDS - prior_seconds
+
         def save() -> None:
             state["seconds"] = time.monotonic() - started
+            state["cumulative_seconds"] = prior_seconds + float(state["seconds"])
             atomic_json(out / "supervisor.json", state)
 
         save()
@@ -315,7 +355,7 @@ def campaign(out: Path, source: str) -> None:
                 raise RuntimeError("history requires 3 GiB evidence plus 4 GiB reserve")
             calibration_deadline = min(
                 total_deadline - TRAINING_SECONDS - EVALUATION_SECONDS - REPORT_SECONDS,
-                started + CALIBRATION_SECONDS,
+                started + CALIBRATION_SECONDS - prior_seconds,
             )
             _child(["--preflight", "--out", str(out)], out, calibration_deadline)
             runtime = json.loads((out / "runtime-bindings.json").read_text())
@@ -377,14 +417,14 @@ def campaign(out: Path, source: str) -> None:
                 )
             receipt = Calibration(
                 arms=tuple(arms),
-                seconds=time.monotonic() - started,
+                seconds=prior_seconds + time.monotonic() - started,
                 source_commit=source,
                 runtime_identities=common,
                 input_bindings=bindings,
                 projected_disk_bytes=projected,
             )
             atomic_json(out / "calibration.json", receipt.model_dump(mode="json"))
-            plan = history_plan(receipt)
+            plan = history_plan(receipt, prior_seconds)
             plan_path = out / "resolved-plan.json"
             atomic_json(plan_path, plan.model_dump(mode="json"))
             state["status"] = "training"
@@ -400,7 +440,10 @@ def campaign(out: Path, source: str) -> None:
 
             def progress() -> None:
                 nonlocal progress_checked
-                if not progress_checked and time.monotonic() - started >= 7200:
+                if (
+                    not progress_checked
+                    and prior_seconds + time.monotonic() - started >= 7200
+                ):
                     # Include the active run's completed durable updates; never scores.
                     active_runs = [
                         TrainingRun.model_validate_json(p.read_text())
@@ -492,10 +535,14 @@ def main() -> None:
     action.add_argument("--train-arm", type=int, choices=range(2))
     action.add_argument("--evaluate", action="store_true")
     action.add_argument("--report", action="store_true")
+    parser.add_argument("--predecessor", type=Path)
+    parser.add_argument("--predecessor-sha256")
     parser.add_argument("--plan", type=Path)
     parser.add_argument("--seed", type=int, choices=SEEDS)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if not args.campaign and (args.predecessor or args.predecessor_sha256):
+        parser.error("predecessor selection is only valid for --campaign")
     torch.set_num_threads(1)
     out = args.out.resolve()
     if not args.campaign:
@@ -505,7 +552,7 @@ def main() -> None:
                 "internal phases require the active campaign supervisor; no retries"
             )
     if args.campaign:
-        campaign(out, args.campaign)
+        campaign(out, args.campaign, args.predecessor, args.predecessor_sha256)
     elif args.preflight:
         _preflight(out)
     elif args.report:
