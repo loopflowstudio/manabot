@@ -243,3 +243,85 @@ excluded rows within action/distance strata, separating lambda-target residuals
 from noisy terminal-outcome samples, with game-cluster uncertainty. These are
 frozen-policy associations, not causal filter benefits or ground-truth critic
 errors. Scientific technique dispositions remain unresolved.
+
+## Reuse a published policy without training
+
+`ImportPolicy` admits a frozen TrainingRun export and one raw or EMA checkpoint
+into the ordinary stage graph. It uses the existing VerifyStore and run export;
+no training stage, model registry or separate runner is needed. For example:
+
+```python
+from manabot.training.models import CollectBelief, ImportPolicy
+
+# References come from the retained publication manifest. Paths may relocate;
+# sha256 and bytes must identify the original published bytes.
+policy = ImportPolicy(
+    id="policy", operation="import_policy",
+    source_run={"path": "/artifacts/producer/run.json",
+                "sha256": published_run_sha256, "bytes": published_run_bytes},
+    source_stage="producer",
+    checkpoint={"path": "/artifacts/producer/producer-ema.pt",
+                "sha256": published_checkpoint_sha256,
+                "bytes": published_checkpoint_bytes},
+    weights="ema",
+)
+histories = CollectBelief(
+    id="histories", operation="collect_belief", policy="policy", weights="ema",
+    games=256,
+)
+# Use [policy, histories, ...] as TrainingRegime.stages or Pipeline's stages.
+# Resolution only declares work; execute_regime / manabot train --regime executes it.
+```
+
+The regime's AgentSpec, observation contract and world must match the producer
+and checkpoint. Ordinary checkpoint loading validates model weights, architecture,
+native world/content/input bindings and the actual execution setup. The selected
+producer stage must be completed; a later failure in the producer run does not
+erase its completed checkpoint. The producer export must retain source commit,
+training source digest and cumulative checkpoint cost. Checkpoint metadata must
+agree on run, stage, recipe digest, value units, raw/EMA selection and (for EMA)
+averaging clock/rate. Original serialized recipe bytes own the producer digest;
+current-schema defaults never rewrite frozen evidence. Missing, tampered or
+incompatible inputs fail and retain a failed TrainingRun attempt.
+
+Admission copies exact source bytes into the destination run before loading.
+The imported stage exposes only the selected `raw` or `ema` artifact and retains
+its `source_run` JSON artifact. Downstream stages recheck these hashes. Set
+`CollectBelief.weights` and `CollectLocalUpdate.weights` to that same selection;
+`TrainBelief` continues to consume the resulting dataset normally. Local-search
+samplers must still originate from that same policy and weight identity.
+
+`TrainSupervised(initial="policy", initial_weights="ema", ...)` can initialize
+from an imported EMA artifact; `initial_weights="raw"` remains the historical
+default and does not alter existing recipe digests. This starts fresh Adam,
+not producer optimizer or collector continuation. Local-target distillation
+requires signed-outcome producer value semantics. Imported compound policies
+can feed the existing belief/search collectors, but ordinary flat supervised
+training and compound EMA remain unsupported. Live self-play continuation and
+selection diagnostics retain their existing stage restrictions. An EMA import
+never masquerades as raw or changes `last-complete-raw` selection.
+
+Costs have two explicit meanings:
+
+- `StageRecord.producer_cost` identifies the source run/stage/weight and its
+  original cumulative seconds through checkpoint admission (including recorded
+  prior recovery cost). The unmodified source export retains detailed phase,
+  source/runtime, seed and failed-attempt evidence.
+- Imported-stage `seconds` / `export_seconds` measure fresh copying, hashing and
+  loading. Current TrainingRun and downstream stage costs exclude sunk producer
+  cost. Zero optimizer exposures on import do not mean free producer training.
+
+For standalone method accounting, include the original producer cost as well as
+fresh import/downstream costs. Repeated imports of the same run/stage share that
+producer expenditure; do not sum it once per consumer or once per raw/EMA sibling.
+Comparisons sharing a producer report its cost separately and charge it once.
+Producers whose source run itself imports policies are explicitly rejected:
+transitive producer cost aggregation and ancestor deduplication are not supported.
+Legacy checkpoints without TrainingRun metadata or recorded cost are also rejected.
+The term *published* means caller-supplied frozen evidence, not verified registry
+publication, scientific acceptance or demo promotion.
+
+ETU-112's fixed untrained fixtures exercise complete ordinary belief and local
+search collection, raw/EMA admission, historical receipt shape, immutable source
+bytes and rejection paths without optimizer training. ETU-99 owns actual producer
+selection, independent seeds, empirical cohorts and budgets.

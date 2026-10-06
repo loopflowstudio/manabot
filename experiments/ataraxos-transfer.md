@@ -372,14 +372,20 @@ receipt = resolved.receipt()  # Configuration/provenance only; no model or run.
 `TrainBelief(dataset="histories", history_dropout=...)` can similarly reference
 one earlier `CollectBelief` for paired fits. Stage references preserve the exact
 generating policy/weights; a learned local collector requires its sampler to
-come from that same policy. The existing API has no external-checkpoint import
-stage for this chain. Reusing published producers without retraining therefore
-needs a narrow admitted-artifact orchestration adapter; do not insert a fake
-one-update producer or copy a checksum to bypass that boundary.
+come from that same policy. `ImportPolicy` now admits a published producer TrainingRun export and exact raw/EMA
+checkpoint into this chain without retraining (ETU-112). Replace the initial
+producer stage with that import, retaining the original policy stage ID and
+matching every consumer's weight selection. Both the export and checkpoint must
+be pinned to their published hash/size; regime/model/world admission remains
+mandatory. `TrainSupervised.initial_weights` selects imported EMA when intended.
+The [public contract](../docs/training-regimes.md#reuse-a-published-policy-without-training)
+separates sunk producer cost from fresh import and downstream costs. Nested
+published-producer ancestry remains explicitly unsupported; do not insert a fake
+one-update producer or rewrite frozen evidence to bypass admission.
 
 | API | Supported use | Gap before these scientific cohorts |
 | --- | --- | --- |
-| `TrainingRegime`, `TrainingRun`, VerifyStore | Collection, sampler fitting, local labels, shared-root hard/soft fits, frozen attackers; costs and failures | Published-artifact stage reuse and explicit separately seeded fitting cohorts need orchestration; implicit run seed offsets are not a crossed seed design |
+| `TrainingRegime`, `TrainingRun`, VerifyStore | Collection, sampler fitting, local labels, shared-root hard/soft fits, frozen attackers; costs and failures | Published-artifact reuse is available through ImportPolicy; explicit separately seeded fitting cohorts still need orchestration; implicit run seed offsets are not a crossed seed design |
 | `Experiment`, `Pipeline`, `ResolvedExperiment.receipt()` | Resolve and bind existing regimes with provenance without execution | A recipe receipt is neither a cohort nor budget authorization |
 | `EvaluationProtocol` / `ResolvedStudy` | Existing named policy-only studies | Restricted study IDs, player counts, policy-only inference and stage-count rules exclude B1/B2/D1 graphs; no fabricated `omitted-controls` wrapper |
 | `report_saved_sampler` | Immutable own/foreign datasets, exact sampler admission, samples {16,64,256}, descriptive metrics | Whole-game output and conditional-on-producer fit/game uncertainty available; cross-producer aggregation, arbitrary queries and native RSS unavailable; preserve original splits |

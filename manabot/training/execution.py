@@ -45,6 +45,7 @@ from manabot.sim.search_supervised import (
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
 import managym
 
+from .admission import admit_policy
 from .clock import watchdog_seconds
 from .compound import CompoundStatistics, collect_game, optimize_games, replay_game
 from .models import (
@@ -54,6 +55,7 @@ from .models import (
     CollectSearch,
     CollectSelection,
     FixedValidationCohort,
+    ImportPolicy,
     MonitoringCheckpoint,
     StageRecord,
     TrainBelief,
@@ -462,7 +464,20 @@ def _execute_regime(
                     record.inputs[f"{reference}/{name}"] = dict(item)
             persist()
             check()
-            if isinstance(stage, (CollectSearch, CollectLocalUpdate)):
+            if isinstance(stage, ImportPolicy):
+                phase = "export_seconds"
+                tick = time.perf_counter()
+                record.inputs = {
+                    "source_run": dict(stage.source_run),
+                    "checkpoint": dict(stage.checkpoint),
+                }
+                persist()
+                admitted = admit_policy(stage, regime, out)
+                record.artifacts[stage.weights] = admitted.checkpoint
+                record.artifacts["source_run"] = admitted.source_run
+                record.producer_cost = admitted.producer_cost
+                record.export_seconds = time.perf_counter() - tick
+            elif isinstance(stage, (CollectSearch, CollectLocalUpdate)):
                 if isinstance(stage, CollectLocalUpdate):
                     source = next(
                         item for item in run.stages if item.id == stage.policy
@@ -1020,7 +1035,7 @@ def _execute_regime(
                         item for item in run.stages if item.id == stage.initial
                     )
                     initial_agent, _ = load_checkpoint_agent(
-                        source.artifacts["raw"]["path"]
+                        source.artifacts[stage.initial_weights]["path"]
                     )
                     previous = {"agent": initial_agent}
                 continuation = {}

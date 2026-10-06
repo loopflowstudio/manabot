@@ -99,7 +99,9 @@ transfer. The generic PPO and teacher-shard trainers do not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical
 positional-condition checkpoints are rejected rather than reinterpreted.
 
-Training regimes can freeze a policy, collect private whole-game supervision,
+Training regimes can [import a published raw/EMA policy](../docs/training-regimes.md#reuse-a-published-policy-without-training)
+without retraining, preserving producer provenance and separate sunk costs.
+They can freeze a policy, collect private whole-game supervision,
 and fit a constrained autoregressive hand sampler without exact enumeration.
 See [frozen-policy belief sampling](../docs/belief-sampler.md). This separately
 admitted belief artifact does not change the policy's input contract or establish

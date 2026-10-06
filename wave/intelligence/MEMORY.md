@@ -1143,3 +1143,27 @@ owns commands, weighting and limitations. Synthetic and fixed-weight saved-artif
 checks are software evidence only. Cross-producer analysis, actual calibration,
 transfer and strength remain ETU-99; no scientific allocation, paid compute or
 ETU-91/106 checkout change occurred.
+
+## Published-policy admission (ETU-112, 2026-10-05)
+
+Jack Heart authorized software delivery independently of ETU-99 empirical work.
+`ImportPolicy` admits hash/size-pinned TrainingRun exports and exact raw/EMA
+checkpoints into existing regimes, execution and VerifyStore. Source metadata,
+model/observation/world/setup and ordinary loader admission must agree. Local
+copies retain original bytes; current schema defaults cannot redefine historical
+recipe digests. Consumers select the imported weight explicitly; imports never
+restore producer optimizer or collector state.
+
+Producer cumulative checkpoint cost is recorded separately from fresh import and
+downstream cost. Jack Heart relayed review findings on historical normalization
+and transitive cost loss; admission validates the original serialized digest and
+rejects source runs with imported ancestors rather than undercounting their cost.
+Legacy checkpoints lacking producer receipts/cost remain unsupported. Raw/EMA
+siblings share producer expenditure; per-method accounting must include it.
+
+Fixed untrained fixtures exercise ordinary belief and local-search consumers,
+source-byte preservation, historical supervised receipts and explicit rejection.
+No optimizer training, scientific campaign, paid compute or frozen ETU-91/106
+checkout change occurred. ETU-99 retains producer selection, empirical cohorts
+and budgets. The [regime guide](../../docs/training-regimes.md#reuse-a-published-policy-without-training)
+owns the public API and cost limitations; publication is not strength admission.
