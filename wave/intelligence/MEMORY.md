@@ -1,26 +1,42 @@
 # Intelligence memory
 
-## Structured decision design boundary (ETU-107, 2026-10-05)
+## Shared decision contract (ETU-107, 2026-10-06)
 
-Jack Heart requested a design review before broad decision-interface implementation.
-The bounded design contribution inspected native offers, ordinary/compound scoring,
-local search, GameSession/Trace and checkpoint admission at `338cccd5`. It proposes
-extending the existing offer owner with typed role/object features and native
-prefix support for currently safe groupings, keeping other choices sequential.
-This is a proposal, not approved architecture or completed software. Review remains
-in the existing repository conversation; no training or benchmark ran.
+Jack Heart approved the revised shared-choice design and implementation Flow
+through PR publication. Native offers now expose role subjects, source/target
+relationships, outside Learn addresses, program-bound ordinals and public payment
+requirements. managym owns constructive subset support and next-Command prefix
+partitions; manabot owns scores and probability marginalization. Typed Python
+records consume the same projection. Grouping remains restricted to certified
+independent forms; same actor or prompt kind is not a continuation certificate.
 
-Current native dependency fields do not provide a general continuation service:
-the ragged parser rejects dependent and ordered selections. Set-valued candidate
-scoring uses labels and pooled viewer context, without full runtime object joins.
-Canonical subset order gives one tape per subset; changing it changes the policy.
-ETU-100's retained-prefix exact zeros and next-Command marginalization must survive
-any interface migration. Engine legality and policy support remain distinct.
-ETU-104's merged AgentSpec/recipe helpers own configuration; its broader framework
-sketches do not authorize this Task. Preserve admitted flat/compound weight meanings,
-actual world/setup binding and existing trace ownership. The working design and
-specific review decisions live in `scratch/etu-107-unify-model-facing-decisions-with-engine-owned-legality-and.md`.
-ETU-107 remains open; no ETU-91 or frozen value-token checkout was changed.
+The explicit object GRU joins visible rows through the same native padded map as
+ordinary action focus. Physical addresses are routing, not learned embeddings.
+The label decoder retains its parameter meanings. Shared serialized additions
+use semantic schema 7/world w5 and canonical factorization order 1. Old checkpoints
+require their original runtime; world/setup admission is not relaxed. A new
+conformance corpus records four games/567 Commands without editing prior receipts.
+ETU-100's retained-prefix payment zeros and v3 positive-support update survive.
+
+The bounded workflow completed four two-game training arms, eight admitted raw
+exports and 56 exact-replayed arena games across 14 cells in 199.33 seconds.
+Offline report/metrics/cost comparison regenerated identically. Both failed
+predecessors remain retained: world-enum admission (68.24 seconds), then two games
+where native attacker lowering followed automatic steps into another actor's
+combat (277.71 seconds). Grouping must stop at its original role list even when
+automatic steps expose another prompt of the same kind; a directed debug
+regression now covers this boundary.
+
+The object decoder consumes native verb symbols independently of presentation
+labels. Label/object local search retains normalized next-Command distributions
+and exact payment zeros. At 3/35/65 candidates the bounded overhead screen found
+no >20% median complete-player slowdown; nine fixed-order samples and different
+untrained full-game trajectories do not establish a general speedup or default
+adoption. The first timing fixture's insufficient-card failure is retained.
+The [choice contract](../../docs/choice-contract.md) owns API details and evidence.
+Compression/gate/publication remain the authored delivery steps. No strength,
+human code review, merge or Task completion is claimed; ETU-91 and scientific
+allocations remain untouched.
 
 ## Distributed RL research boundary (ETU-108, 2026-10-05)
 

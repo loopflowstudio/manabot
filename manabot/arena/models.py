@@ -41,7 +41,7 @@ BASE_ANCHOR_IDS = (
 
 
 class ArenaKey(StrictModel):
-    world: Literal["w2", "w3", "w4"]
+    world: Literal["w2", "w3", "w4", "w5"]
     content_suite: str
     viewer_boundary: str
     arena_version: str
@@ -65,7 +65,7 @@ class PlayerRegistration(StrictModel):
     player_spec: dict[str, Any]
     compute_class_id: str
     information_boundary: str
-    world: Literal["w2", "w3", "w4"]
+    world: Literal["w2", "w3", "w4", "w5"]
     content_suite: str
     observation_abi_sha256: str = Field(pattern=SHA256_PATTERN)
     action_abi_sha256: str = Field(pattern=SHA256_PATTERN)

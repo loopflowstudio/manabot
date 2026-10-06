@@ -12,7 +12,7 @@ use managym::{
         },
     },
     flow::turn::StepKind,
-    state::game_object::PermanentId,
+    state::game_object::{PermanentId, PlayerId},
     Game,
 };
 
@@ -499,17 +499,22 @@ fn structured_attacker_offer_fixture_matches_typed_wire_shape() {
         })
         .collect();
     let projection = StructuredOfferProjection {
+        schema_version: managym::decision::SEMANTIC_DECISION_VERSION,
+        factorization_version: 1,
+        revision: 0,
         actor: 0,
         kind: PromptKind::DeclareAttackers,
         offers: vec![InteractionOffer {
             id: OfferId(0),
             actor: 0,
             verb: OfferVerb::DeclareAttackers,
+            details: Default::default(),
             public_commitment: None,
             source: None,
             label: "Declare attackers".to_string(),
             help: None,
             choices: vec![ChoiceStep::Select {
+                context: Default::default(),
                 role: RoleId(1),
                 label: "Attackers".to_string(),
                 candidates: CandidateSource {
@@ -526,7 +531,7 @@ fn structured_attacker_offer_fixture_matches_typed_wire_shape() {
         }],
     };
 
-    let fixture = include_str!("../fixtures/structured_declare_attackers_offer.json");
+    let fixture = include_str!("../fixtures/structured_declare_attackers_offer_v7.json");
     let fixture_value: serde_json::Value =
         serde_json::from_str(fixture).expect("fixture JSON should parse");
     assert_eq!(
@@ -573,4 +578,25 @@ fn compound_lowering_preserves_root_and_all_attacker_subsets() {
         )
         .unwrap()
     );
+}
+
+#[test]
+fn compound_attackers_stop_when_auto_steps_reach_the_next_actor_declaration() {
+    let deck = BTreeMap::from([("Gray Ogre".to_string(), 40)]);
+    let mut scenario = arranged_attack_scenario(deck.clone(), deck, &["Gray Ogre"], 107);
+    scenario.force_permanent_on_battlefield(1, "Gray Ogre");
+    let game = scenario.game_mut();
+    game.scenario_clear_hand(PlayerId(0));
+    game.scenario_clear_hand(PlayerId(1));
+    game.skip_trivial = true;
+    let offers = game.compound_offers().unwrap();
+    let offer = attacker_offer(&offers);
+    let (role, candidates) = attacker_candidates(offer);
+    let (submission, _) = submission_for_mask(offer, role, candidates, 0);
+    let commands = game.compound_commands(&offers, &submission).unwrap();
+    assert_eq!(commands.len(), 1);
+    game.execute_semantic_command(&commands[0]).unwrap();
+    let next = game.action_space().unwrap();
+    assert_eq!(next.kind, ActionSpaceKind::DeclareAttacker);
+    assert_eq!(next.player, Some(PlayerId(1)));
 }

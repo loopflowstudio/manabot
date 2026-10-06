@@ -351,25 +351,16 @@ pub fn encode_into(
         out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
     }
 
-    let mut object_to_index: HashMap<i32, i32> = HashMap::new();
-    let mut current_object_index: i32 = 0;
+    let object_to_index = object_row_indexes(
+        obs,
+        config.max_cards_per_player,
+        config.max_permanents_per_player,
+    )?;
 
-    encode_player_features(
-        &obs.agent,
-        &obs.turn,
-        out.agent_player,
-        &mut object_to_index,
-        &mut current_object_index,
-    );
+    encode_player_features(&obs.agent, &obs.turn, out.agent_player);
     out.agent_player_valid[0] = 1.0;
 
-    encode_player_features(
-        &obs.opponent,
-        &obs.turn,
-        out.opponent_player,
-        &mut object_to_index,
-        &mut current_object_index,
-    );
+    encode_player_features(&obs.opponent, &obs.turn, out.opponent_player);
     out.opponent_player_valid[0] = 1.0;
 
     encode_cards(
@@ -378,8 +369,6 @@ pub fn encode_into(
         config.max_cards_per_player,
         out.agent_cards,
         out.agent_cards_valid,
-        &mut object_to_index,
-        &mut current_object_index,
     );
     encode_cards(
         &obs.opponent_cards,
@@ -387,18 +376,15 @@ pub fn encode_into(
         config.max_cards_per_player,
         out.opponent_cards,
         out.opponent_cards_valid,
-        &mut object_to_index,
-        &mut current_object_index,
     );
 
-    for (offset, card) in obs.agent_sideboard.iter().enumerate() {
+    for offset in 0..obs.agent_sideboard.len() {
         let index = obs.agent_cards.len() + offset;
         let row = &mut out.agent_cards[index * CARD_DIM..(index + 1) * CARD_DIM];
         row[7] = 1.0;
         row[37] = 1.0; // outside inventory; all seven zone bits remain zero
         row[38] = 1.0;
         out.agent_cards_valid[index] = 1.0;
-        object_to_index.insert(card.candidate_id, 2 + index as i32);
     }
 
     encode_permanents(
@@ -407,8 +393,6 @@ pub fn encode_into(
         config.max_permanents_per_player,
         out.agent_permanents,
         out.agent_permanents_valid,
-        &mut object_to_index,
-        &mut current_object_index,
     );
     encode_permanents(
         &obs.opponent_permanents,
@@ -416,8 +400,6 @@ pub fn encode_into(
         config.max_permanents_per_player,
         out.opponent_permanents,
         out.opponent_permanents_valid,
-        &mut object_to_index,
-        &mut current_object_index,
     );
 
     encode_actions(
@@ -454,13 +436,70 @@ fn validate_buffer_len(
     Ok(())
 }
 
-fn encode_player_features(
-    player: &PlayerData,
-    turn: &TurnData,
-    out: &mut [f32],
-    object_to_index: &mut HashMap<i32, i32>,
-    current_object_index: &mut i32,
-) {
+/// Shared padded object layout for ordinary focus and structured references.
+/// Outside addresses occupy owner card rows; stack spell cards already occur
+/// in the visible card table. No hidden object is added to make a join succeed.
+pub fn object_row_indexes(
+    obs: &Observation,
+    max_cards: usize,
+    max_permanents: usize,
+) -> Result<HashMap<i32, i32>, ObservationEncodeError> {
+    let mut rows = HashMap::from([(obs.agent.id, 0), (obs.opponent.id, 1)]);
+    for (side, cards) in [&obs.agent_cards, &obs.opponent_cards]
+        .into_iter()
+        .enumerate()
+    {
+        if cards.len()
+            + if side == 0 {
+                obs.agent_sideboard.len()
+            } else {
+                0
+            }
+            > max_cards
+        {
+            return Err(ObservationEncodeError::Capacity {
+                field: "choice cards",
+                capacity: max_cards,
+                actual: cards.len()
+                    + if side == 0 {
+                        obs.agent_sideboard.len()
+                    } else {
+                        0
+                    },
+            });
+        }
+        for (index, card) in cards.iter().enumerate() {
+            rows.insert(card.id, (2 + side * max_cards + index) as i32);
+        }
+    }
+    for (index, card) in obs.agent_sideboard.iter().enumerate() {
+        rows.insert(
+            card.candidate_id,
+            (2 + obs.agent_cards.len() + index) as i32,
+        );
+    }
+    for (side, permanents) in [&obs.agent_permanents, &obs.opponent_permanents]
+        .into_iter()
+        .enumerate()
+    {
+        if permanents.len() > max_permanents {
+            return Err(ObservationEncodeError::Capacity {
+                field: "choice permanents",
+                capacity: max_permanents,
+                actual: permanents.len(),
+            });
+        }
+        for (index, permanent) in permanents.iter().enumerate() {
+            rows.insert(
+                permanent.id,
+                (2 + 2 * max_cards + side * max_permanents + index) as i32,
+            );
+        }
+    }
+    Ok(rows)
+}
+
+fn encode_player_features(player: &PlayerData, turn: &TurnData, out: &mut [f32]) {
     out[0] = player.life as f32 / 20.0;
     out[1] = bool_to_f32(player.is_active);
 
@@ -480,9 +519,6 @@ fn encode_player_features(
 
     out[26] = player.graveyard_lessons as f32 / 10.0;
     out[27] = player.combat_mana as f32 / 10.0;
-
-    object_to_index.insert(player.id, *current_object_index);
-    *current_object_index += 1;
 }
 
 fn encode_cards(
@@ -491,23 +527,15 @@ fn encode_cards(
     max_cards: usize,
     out: &mut [f32],
     out_valid: &mut [f32],
-    object_to_index: &mut HashMap<i32, i32>,
-    current_object_index: &mut i32,
 ) {
     let ordered_cards = cards.iter().take(max_cards);
-    let mut encoded_count = 0;
 
     for (i, card) in ordered_cards.enumerate() {
         let start = i * CARD_DIM;
         let end = start + CARD_DIM;
         encode_card_features(card, is_mine, &mut out[start..end]);
         out_valid[i] = 1.0;
-        object_to_index.insert(card.id, *current_object_index);
-        *current_object_index += 1;
-        encoded_count += 1;
     }
-
-    *current_object_index += (max_cards.saturating_sub(encoded_count)) as i32;
 }
 
 fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
@@ -554,23 +582,15 @@ fn encode_permanents(
     max_permanents: usize,
     out: &mut [f32],
     out_valid: &mut [f32],
-    object_to_index: &mut HashMap<i32, i32>,
-    current_object_index: &mut i32,
 ) {
     let ordered_permanents = permanents.iter().take(max_permanents);
-    let mut encoded_count = 0;
 
     for (i, permanent) in ordered_permanents.enumerate() {
         let start = i * PERMANENT_DIM;
         let end = start + PERMANENT_DIM;
         encode_permanent_features(permanent, is_mine, &mut out[start..end]);
         out_valid[i] = 1.0;
-        object_to_index.insert(permanent.id, *current_object_index);
-        *current_object_index += 1;
-        encoded_count += 1;
     }
-
-    *current_object_index += (max_permanents.saturating_sub(encoded_count)) as i32;
 }
 
 fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut [f32]) {

@@ -49,7 +49,7 @@ def test_match_hypers_candidate_finishes_with_complete_native_and_python_encodin
         match = match.swapped()
     space = ObservationSpace()
     assert space.encoder.permanent_dim == 25
-    assert managym.WORLD_VERSION == "w4"
+    assert managym.WORLD_VERSION == "w5"
     env = Env(match, space, Reward(RewardHypers()), seed=seed)
     obs, _ = env.reset(seed=seed)
     assert env.content_pack_manifest()["world_version"] == "w4"

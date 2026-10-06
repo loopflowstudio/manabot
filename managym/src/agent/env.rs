@@ -96,6 +96,7 @@ pub struct Env {
     pub hero_tracker: BehaviorTracker,
     pub villain_tracker: BehaviorTracker,
     possible_world_space_constructions: AtomicU64,
+    episode_generation: u64,
 }
 
 /// One canonical space prepared for bounded materialization against the same
@@ -178,6 +179,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
             villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
             possible_world_space_constructions: AtomicU64::new(0),
+            episode_generation: 0,
         }
     }
 
@@ -196,6 +198,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            episode_generation: self.episode_generation,
         }
     }
 
@@ -209,11 +212,16 @@ impl Env {
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
         let _scope = self.profiler.track("env_reset");
+        self.episode_generation += 1;
         let mut game = Game::new(player_configs, self.seed, self.skip_trivial);
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
+    }
+
+    pub fn episode_generation(&self) -> u64 {
+        self.episode_generation
     }
 
     pub fn set_seed(&mut self, seed: u64) {
@@ -281,6 +289,18 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("env not reset".into()))?
             .compound_offers()
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
+    pub fn compound_prefix_support(
+        &self,
+        offers: &StructuredOfferSet,
+        prefix: &[usize],
+    ) -> Result<crate::agent::choice_support::PrefixSupport, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env not reset".into()))?
+            .compound_prefix_support(offers, prefix)
             .map_err(|error| AgentError(error.to_string()))
     }
 
@@ -737,6 +757,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            episode_generation: self.episode_generation,
         })
     }
 
@@ -755,6 +776,7 @@ impl Env {
             hero_tracker: BehaviorTracker::new(false),
             villain_tracker: BehaviorTracker::new(false),
             possible_world_space_constructions: AtomicU64::new(0),
+            episode_generation: self.episode_generation,
         })
     }
 

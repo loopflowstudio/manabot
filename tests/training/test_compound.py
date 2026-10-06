@@ -1,8 +1,10 @@
 """Joint probability, native Command parity, and trained checkpoint acceptance."""
 
+from dataclasses import replace
 from itertools import product
 import json
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import torch
@@ -24,38 +26,77 @@ from manabot.training.execution import execute_regime
 from manabot.training.models import Learning, TrainingRegime
 from manabot.verify.store import VerifyStore
 import managym
+from managym.choice import OfferProjection
 
 
 def _projection(count: int, minimum: int, maximum: int) -> dict[str, object]:
     return {
+        "schema_version": 7,
+        "factorization_version": 1,
+        "revision": 0,
+        "actor": 0,
+        "kind": "declare_attackers",
         "offers": [
             {
                 "id": 4,
+                "actor": 0,
+                "details": {
+                    key: None
+                    for key in (
+                        "subject",
+                        "target",
+                        "outside_candidate",
+                        "program",
+                        "requirement",
+                        "attack",
+                        "mana",
+                    )
+                },
                 "verb": "declare_attackers",
                 "label": "Attack",
+                "source": None,
+                "help": None,
+                "confirm_label": "Attack",
                 "choices": [
                     {
                         "kind": "select",
+                        "context": {"kind": "selection"},
                         "role": 1,
+                        "label": "Attackers",
                         "min": minimum,
                         "max": maximum,
                         "distinct": True,
                         "ordered": False,
                         "candidates": {
+                            "id": 0,
                             "depends_on": [],
                             "initial": [
-                                {"id": index, "label": f"Creature {index}"}
+                                {
+                                    "id": index,
+                                    "label": f"Creature {index}",
+                                    "help": None,
+                                    "preview": None,
+                                    "value": {
+                                        "kind": "subject",
+                                        "subject": {
+                                            "kind": "object",
+                                            "id": {"entity": index, "incarnation": 0},
+                                        },
+                                    },
+                                }
                                 for index in range(count)
                             ],
                         },
                     }
                 ],
             }
-        ]
+        ],
     }
 
 
-def _agent(*, wide: bool = False) -> Agent:
+def _agent(
+    *, wide: bool = False, features: Literal["labels", "objects"] = "labels"
+) -> Agent:
     torch.set_num_threads(1)
     return Agent(
         ObservationSpace(
@@ -65,7 +106,12 @@ def _agent(*, wide: bool = False) -> Agent:
                 max_actions=128 if wide else 64,
             )
         ),
-        AgentSpec(compound_decisions=True, hidden_dim=16, num_attention_heads=2),
+        AgentSpec(
+            compound_decisions=True,
+            compound_features=features,
+            hidden_dim=16,
+            num_attention_heads=2,
+        ),
     )
 
 
@@ -279,8 +325,10 @@ def test_terminal_credit_and_replay_and_interrupted_attempt(tmp_path: Path) -> N
         replay_game(tmp_path / "partial.jsonl")
 
 
+@pytest.mark.parametrize("features", ["labels", "objects"])
 def test_regime_trains_reloads_and_ordinary_player_uses_compound(
     tmp_path: Path,
+    features: Literal["labels", "objects"],
 ) -> None:
     torch.set_num_threads(1)
     regime = TrainingRegime.model_validate(
@@ -290,6 +338,7 @@ def test_regime_trains_reloads_and_ordinary_player_uses_compound(
             "match": _match().hypers.model_dump(),
             "agent": {
                 "compound_decisions": True,
+                "compound_features": features,
                 "hidden_dim": 16,
                 "num_attention_heads": 2,
             },
@@ -574,7 +623,10 @@ def test_triggered_mana_payment_remains_sequential() -> None:
 
 
 @pytest.mark.parametrize("kind", ["priority", "blockers", "payment"])
-def test_hidden_world_swap_cannot_change_root_policy(kind: str) -> None:
+@pytest.mark.parametrize("features", ["labels", "objects"])
+def test_hidden_world_swap_cannot_change_root_policy(
+    kind: str, features: Literal["labels", "objects"]
+) -> None:
     if kind == "blockers":
         env, raw = _block_root(2, 2)
     elif kind == "payment":
@@ -589,7 +641,7 @@ def test_hidden_world_swap_cannot_change_root_policy(kind: str) -> None:
     fork.determinize(981, perspective=viewer)
     other = fork.observation_for_player(viewer)
     assert raw.toJSON() == other.toJSON()
-    agent = _agent()
+    agent = _agent(features=features)
     with torch.no_grad():
         original = sample_compound(agent, env, raw, deterministic=True)
         swapped = sample_compound(agent, fork, other, deterministic=True)
@@ -696,3 +748,131 @@ def test_terminal_game_without_choices_does_not_invent_optimizer_rows(
     assert update.optimizer_exposures == 0
     assert not update.losses
     assert replay_game(tmp_path / "forced.jsonl") == 0
+
+
+def test_native_prefix_support_rejects_stale_and_bad_order() -> None:
+    env, raw = _root("attack", 3)
+    offers = env.compound_offers()
+    assert env.compound_prefix_support(offers, []) == [True]
+    assert env.compound_prefix_support(offers, [0]) == [True, True]
+    with pytest.raises(managym.AgentError, match="illegal compound token"):
+        env.compound_prefix_support(offers, [0, 2])
+    projection = json.loads(offers.projection_json())
+    projection["factorization_version"] = 9
+    with pytest.raises(ValueError, match="factorization"):
+        managym.ChoiceSupport(json.dumps(projection))
+    env.step(0)
+    with pytest.raises(Exception, match="root changed"):
+        env.compound_prefix_support(offers, [0])
+
+
+def test_object_decoder_joins_same_name_blockers_and_rescores() -> None:
+    env, raw = _block_root(3, 2)
+    agent = _agent(features="objects")
+    decision = sample_compound(agent, env, raw)
+    roles = decision.offers.role_inputs
+    assert len(roles) == 2 and roles[0].objects != roles[1].objects
+    rescored = agent.compound(
+        decision.observation, decision.offers, tape=decision.output
+    )
+    torch.testing.assert_close(
+        decision.output.log_probs, rescored.log_probs, rtol=0, atol=0
+    )
+    (-rescored.log_prob + rescored.values.square().mean()).backward()
+    assert all(
+        torch.isfinite(p.grad).all() for p in agent.parameters() if p.grad is not None
+    )
+    assert agent.compound_decoder is not None
+    assert agent.compound_decoder.parameters_projection.weight.grad is not None
+    for command in decision.commands:
+        env.execute_semantic_command_json(command.to_json())
+
+
+@pytest.mark.parametrize("kind", ["attack", "blockers", "payment"])
+def test_wide_object_decoder_has_complete_native_support(kind: str) -> None:
+    if kind == "blockers":
+        env, raw = _block_root(35, 65)
+    elif kind == "payment":
+        env, raw = _waterbend_root(65)
+    else:
+        env, raw = _root("attack", 65)
+    with torch.no_grad():
+        decision = sample_compound(
+            _agent(wide=True, features="objects"), env, raw, deterministic=True
+        )
+    assert torch.isfinite(decision.output.log_prob)
+    assert decision.offers.max_candidate_count >= 35
+    for command in decision.commands:
+        env.execute_semantic_command_json(command.to_json())
+
+
+def test_native_offers_do_not_survive_same_seed_reset() -> None:
+    env = managym.Env(seed=91)
+    env.reset(_match().to_rust())
+    offers = env.compound_offers()
+    env.reset(_match().to_rust())
+    before = env.state_digest()
+    with pytest.raises(managym.AgentError, match="previous episode"):
+        env.compound_prefix_support(offers, [])
+    assert env.state_digest() == before
+
+
+def test_rescoring_rejects_another_viewer_root() -> None:
+    env, raw = _block_root(2, 2)
+    agent = _agent(features="objects")
+    decision = sample_compound(agent, env, raw)
+    changed = replace(decision.offers, fingerprint="another-root")
+    with pytest.raises(StructuredPolicyError, match="another root"):
+        agent.compound(decision.observation, changed, tape=decision.output)
+
+
+def test_compound_rejects_a_nonacting_viewer() -> None:
+    env, _ = _root("attack", 2)
+    actor = env.current_agent_index()
+    assert actor is not None
+    raw = env.observation_for_player(1 - actor)
+    with pytest.raises(ValueError, match="acting viewer"):
+        sample_compound(_agent(features="objects"), env, raw)
+
+
+def test_shared_payment_meaning_identifies_native_source_and_units() -> None:
+    env, _ = _waterbend_root(6, lands=2)
+    projection = OfferProjection.from_json(env.compound_offers().projection_json())
+    offer = projection.offers[0]
+    assert offer.source is not None
+    assert offer.details.program is not None
+    assert len(offer.details.program.digest) == 64
+    context = offer.choices[0].context
+    assert context.kind == "payment"
+    assert context.tap_generic_units == 1
+    assert sum(context.mana) == 5
+
+
+def test_object_decoder_distinguishes_verbs_without_presentation_labels() -> None:
+    torch.manual_seed(107)
+    decoder = CompoundDecoder(8, object_features=True)
+    projection = _projection(0, 0, 0)
+    # Two actions on the same source need different semantics even with no
+    # candidate factors. Labels may be localized without changing probabilities.
+    offers = json.loads(json.dumps(projection["offers"]))
+    offers[0].update(verb="scry_keep", choices=[])
+    offers.append({**offers[0], "id": 5, "verb": "scry_bottom"})
+    projection.update(kind="scry", offers=offers)
+    context = torch.randn(8)
+    objects = torch.zeros(1, 8)
+    original = decoder(
+        context,
+        flatten_projection(projection, object_rows={}),
+        objects=objects,
+        tokens=(0,),
+    )
+    assert original.probabilities[0][0] != original.probabilities[0][1]
+    for offer in offers:
+        offer["label"] = "Localized presentation"
+    localized = decoder(
+        context,
+        flatten_projection(projection, object_rows={}),
+        objects=objects,
+        tokens=(0,),
+    )
+    torch.testing.assert_close(original.log_probs, localized.log_probs, rtol=0, atol=0)

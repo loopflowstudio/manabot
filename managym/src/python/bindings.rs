@@ -27,6 +27,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
+        choice_support::{ChoiceSupport, PrefixSupport},
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, EventEntityKind,
@@ -1816,6 +1817,19 @@ impl From<PyObservation> for Observation {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyObservation {
+    fn object_row_indexes(
+        &self,
+        max_cards: usize,
+        max_permanents: usize,
+    ) -> PyResult<HashMap<i32, i32>> {
+        crate::agent::observation_encoder::object_row_indexes(
+            &Observation::from(self.clone()),
+            max_cards,
+            max_permanents,
+        )
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()
     }
@@ -2149,6 +2163,7 @@ impl PyEnv {
 #[derive(Clone)]
 pub struct PyStructuredOfferSet {
     inner: StructuredOfferSet,
+    episode_generation: u64,
 }
 
 #[cfg(feature = "python")]
@@ -2157,6 +2172,50 @@ impl PyStructuredOfferSet {
     fn projection_json(&self) -> PyResult<String> {
         serde_json::to_string(self.inner.projection())
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
+/// Native read-only support retained independently of a live match for scoring.
+#[cfg(feature = "python")]
+#[pyclass(name = "ChoiceSupport", frozen)]
+pub struct PyChoiceSupport {
+    inner: ChoiceSupport,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyChoiceSupport {
+    #[new]
+    fn new(projection_json: &str) -> PyResult<Self> {
+        let projection = serde_json::from_str(projection_json).map_err(|error| {
+            PyValueError::new_err(format!("invalid choice projection: {error}"))
+        })?;
+        Ok(Self {
+            inner: ChoiceSupport::new(projection).map_err(PyValueError::new_err)?,
+        })
+    }
+
+    fn command_prefixes(&self, prefix: Vec<usize>, executed: usize) -> PyResult<Vec<Vec<usize>>> {
+        self.inner
+            .command_prefixes(&prefix, executed)
+            .map_err(PyValueError::new_err)
+    }
+
+    fn alternatives(&self, prefix: Vec<usize>) -> PyResult<Vec<bool>> {
+        match self.inner.query(&prefix).map_err(PyValueError::new_err)? {
+            PrefixSupport::Alternatives(allowed) => Ok(allowed),
+            PrefixSupport::Complete(_) => Ok(Vec::new()),
+        }
+    }
+
+    fn submission_json(&self, tokens: Vec<usize>) -> PyResult<String> {
+        match self.inner.query(&tokens).map_err(PyValueError::new_err)? {
+            PrefixSupport::Complete(answer) => serde_json::to_string(&answer)
+                .map_err(|error| PyValueError::new_err(error.to_string())),
+            PrefixSupport::Alternatives(_) => {
+                Err(PyValueError::new_err("interrupted compound token tape"))
+            }
+        }
     }
 }
 
@@ -2545,8 +2604,41 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(PyStructuredOfferSet {
+            episode_generation: env.episode_generation(),
             inner: env.structured_offers().map_err(map_agent_err)?,
         })
+    }
+
+    #[getter]
+    fn episode_generation(&self) -> PyResult<u64> {
+        Ok(self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?
+            .episode_generation())
+    }
+
+    fn compound_prefix_support(
+        &self,
+        offers: &PyStructuredOfferSet,
+        prefix: Vec<usize>,
+    ) -> PyResult<Vec<bool>> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if offers.episode_generation != env.episode_generation() {
+            return Err(PyAgentError::new_err(
+                "structured offers belong to a previous episode",
+            ));
+        }
+        match env
+            .compound_prefix_support(&offers.inner, &prefix)
+            .map_err(map_agent_err)?
+        {
+            PrefixSupport::Alternatives(allowed) => Ok(allowed),
+            PrefixSupport::Complete(_) => Ok(Vec::new()),
+        }
     }
 
     fn compound_offers(&self) -> PyResult<PyStructuredOfferSet> {
@@ -2555,6 +2647,7 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(PyStructuredOfferSet {
+            episode_generation: env.episode_generation(),
             inner: env.compound_offers().map_err(map_agent_err)?,
         })
     }
@@ -2570,6 +2663,11 @@ impl PyEnv {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if offers.episode_generation != env.episode_generation() {
+            return Err(PyAgentError::new_err(
+                "structured offers belong to a previous episode",
+            ));
+        }
         let commands = env
             .compound_commands(&offers.inner, &submission)
             .map_err(map_agent_err)?;
@@ -2584,6 +2682,7 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         Ok(PyStructuredOfferSet {
+            episode_generation: env.episode_generation(),
             inner: env.structured_search_offers().map_err(map_agent_err)?,
         })
     }
@@ -2636,6 +2735,11 @@ impl PyEnv {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if offers.episode_generation != env.episode_generation() {
+            return Err(PyAgentError::new_err(
+                "structured offers belong to a previous episode",
+            ));
+        }
         let (obs, reward, terminated, truncated, info, legacy_equivalent_actions) = env
             .step_structured(&offers.inner, &submission)
             .map_err(map_agent_err)?;
@@ -2664,6 +2768,11 @@ impl PyEnv {
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        if offers.episode_generation != env.episode_generation() {
+            return Err(PyAgentError::new_err(
+                "structured offers belong to a previous episode",
+            ));
+        }
         let (obs, reward, terminated, truncated, info, legacy_actions) = env
             .step_legacy_submission(&offers.inner, &submission)
             .map_err(map_agent_err)?;
@@ -3361,6 +3470,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEventData>()?;
 
     m.add_class::<PyStructuredOfferSet>()?;
+    m.add_class::<PyChoiceSupport>()?;
     m.add_class::<PySelectedBranchRuntime>()?;
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyEnv>()?;

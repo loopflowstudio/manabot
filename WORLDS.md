@@ -14,9 +14,10 @@ was dead on arrival in exp-10.)
 | **w2** | rules stage 3–4 + conformance (`cb80331`..`a9f1f91`, max_actions 32 @ `55a0b4b`) | 28 / 38 / 24 / 14 | exp-10 V + BC student; exp-11 arms (incl. ported student_r0, validated 86.5%) | exp-06 PPO 60–77%; exp-10/11 (pending merge) |
 | **w3** | corrected Learn evidence, 2026-09-24–29 (certification unfinished) | 28 / 39 / 24 / 16 | frozen Learn/checkpoint evidence; see [Learn record](docs/rules/learn-lesson.md) | no completed new baseline certification |
 | **w4** | ETU-88, 2026-09-29 | 28 / 39 / 25 / 16; 13 decision kinds | Gran-Gran, Proft's Eidetic Memory, Combustion Technique and required base rules | no strength baseline yet |
+| **w5** | ETU-107, 2026-10-06 | unchanged tensor widths; semantic decision schema 7, typed choice contexts and canonical prefix order 1 | opt-in object compound decoder; no ported artifacts | pending; no strength claim |
 
-**Current world: w4.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w3) are **not comparable** to w4; do not reuse their
+**Current world: w5.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w4) are **not comparable** to w5; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -82,3 +83,18 @@ top of tensor dimensions:
 
 The full rationale and required controls are in
 [`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
+
+## w5: shared choice meaning
+
+ETU-107 extends the shared InteractionOffer with fixed public action parameters,
+program-bound mode/ability references and role contexts. Compound projections bind
+schema 7, revision and canonical factorization order 1. managym owns constructive
+prefix support and next-Command prefix partitions. Padded object layout and the
+historical flat/label-compound equations remain unchanged; object features are
+selected explicitly by AgentSpec and add their own parameters.
+
+The serialized semantic contract changes even though base tensor widths do not.
+Ordinary admission retains exact world/setup/input checks: historical w4 artifacts
+remain evidence and require their original runtime. No weights or measurements
+are ported. New workflow fixtures and the w5 conformance corpus are software
+acceptance only; headline strength baselines remain pending.

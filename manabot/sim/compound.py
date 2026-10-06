@@ -40,8 +40,9 @@ def sample_compound(
 ) -> CompoundDecision:
     """Read a root and lower its sampled submission without mutating the match."""
     start = perf_counter()
+    if raw.agent.player_index != engine.current_agent_index():
+        raise ValueError("compound root must belong to the acting viewer")
     offers = engine.compound_offers()
-    batch = flatten_projection(json.loads(offers.projection_json()))
     space = agent.observation_space
     if len(raw.action_space.actions) > space.encoder.max_actions:
         space = ObservationSpace(
@@ -51,6 +52,16 @@ def sample_compound(
                 }
             )
         )
+    batch = flatten_projection(
+        json.loads(offers.projection_json()),
+        viewer_json=raw.toJSON(),
+        object_rows=raw.object_row_indexes(
+            space.encoder.hypers.max_cards_per_player,
+            space.encoder.hypers.max_permanents_per_player,
+        )
+        if agent.hypers.compound_features == "objects"
+        else None,
+    )
     observation = {
         key: torch.as_tensor(value).unsqueeze(0)
         for key, value in space.encode(raw).items()
@@ -85,6 +96,8 @@ class CompoundPolicy:
         self.deterministic = deterministic
         self.pending: deque[Command] = deque()
         self.engine: managym.Env | None = None
+        self.episode_generation: int | None = None
+        self.policy_identity = id(agent)
         self.decisions = 0
         self.microchoices = 0
         self.seconds = 0.0
@@ -92,11 +105,21 @@ class CompoundPolicy:
     def reset(self) -> None:
         self.pending.clear()
         self.engine = None
+        self.episode_generation = None
 
     def act(self, engine: managym.Env, observation: managym.Observation) -> int:
-        if self.engine is not engine:
+        if (
+            self.engine is not engine
+            or self.episode_generation != engine.episode_generation
+            or self.policy_identity != id(self.agent)
+        ):
             self.reset()
             self.engine = engine
+            self.episode_generation = engine.episode_generation
+            self.policy_identity = id(self.agent)
+        if observation.game_over:
+            self.reset()
+            raise ValueError("compound policy cannot act after termination")
         frame = DecisionFrame.from_json(engine.semantic_decision_frame_json())
         if not self.pending:
             with torch.no_grad():
@@ -113,9 +136,13 @@ class CompoundPolicy:
         if command.expected_revision != frame.revision:
             self.reset()
             raise ValueError("compound sequence interrupted by another decision")
-        self.microchoices += 1
-        return next(
+        matches = [
             index
             for index, offer in enumerate(frame.offers)
             if offer["id"] == command.offer_id
-        )
+        ]
+        if len(matches) != 1:
+            self.reset()
+            raise ValueError("compound sequence interrupted by changed legal offers")
+        self.microchoices += 1
+        return matches[0]

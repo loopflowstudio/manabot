@@ -320,7 +320,8 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
     let replacement = root
         .structured_priority_offers()
         .expect("replacement structured priority offers");
-    assert_eq!(replacement.projection(), set.projection());
+    assert_ne!(replacement.projection().revision, set.projection().revision);
+    assert_eq!(replacement.projection().offers, set.projection().offers);
     let before = format!("{root:?}");
     assert!(matches!(
         root.apply_offer_submission(&set, &submission),
@@ -332,6 +333,9 @@ fn structured_offer_rejects_fabricated_and_stale_ids_without_mutation() {
 #[test]
 fn structured_offer_game_fixture_matches_typed_wire_shape() {
     let projection = StructuredOfferProjection {
+        schema_version: managym::decision::SEMANTIC_DECISION_VERSION,
+        factorization_version: 1,
+        revision: 0,
         actor: 0,
         kind: PromptKind::Priority,
         offers: vec![
@@ -339,6 +343,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 id: OfferId(0),
                 actor: 0,
                 verb: OfferVerb::Cast,
+                details: Default::default(),
                 public_commitment: None,
                 source: Some(SubjectRef::Object {
                     id: ObjectRenderId {
@@ -349,6 +354,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 label: "Cast Lightning Bolt".to_string(),
                 help: None,
                 choices: vec![ChoiceStep::Select {
+                    context: Default::default(),
                     role: RoleId(1),
                     label: "Target".to_string(),
                     candidates: CandidateSource {
@@ -380,6 +386,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
                 id: OfferId(1),
                 actor: 0,
                 verb: OfferVerb::PassPriority,
+                details: Default::default(),
                 public_commitment: None,
                 source: None,
                 label: "Pass priority".to_string(),
@@ -390,7 +397,7 @@ fn structured_offer_game_fixture_matches_typed_wire_shape() {
         ],
     };
 
-    let fixture = include_str!("../fixtures/structured_priority_bolt_offer.json");
+    let fixture = include_str!("../fixtures/structured_priority_bolt_offer_v7.json");
     let fixture_value: serde_json::Value =
         serde_json::from_str(fixture).expect("fixture JSON should parse");
     assert_eq!(

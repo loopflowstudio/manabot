@@ -11,8 +11,33 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
-import sys
 from typing import Any, Mapping, Sequence
+
+import managym
+from managym.choice import OfferProjection, Subject
+
+
+@dataclass(frozen=True)
+class ChoiceFeatures:
+    """Visible object rows and numeric public parameters for one choice row."""
+
+    objects: tuple[int, ...]
+    mana: tuple[int, ...] = ()
+    ordinal: int | None = None
+    attack: bool | None = None
+
+
+def _subject_row(subject: Subject, actor: int, rows: Mapping[int, int]) -> int:
+    if subject.kind == "player":
+        if subject.entity not in (0, 1):
+            raise ValueError("choice references an invalid player")
+        return 0 if subject.entity == actor else 1
+    try:
+        return rows[subject.entity]
+    except KeyError as error:
+        raise ValueError(
+            "choice references an object absent from the visible encoding"
+        ) from error
 
 
 class StructuredPolicyError(ValueError):
@@ -38,6 +63,11 @@ class RaggedOfferBatch:
     choices: tuple[ChoiceRow, ...]
     candidates: tuple[Mapping[str, Any], ...]
     choice_offsets: tuple[int, ...]
+    support: managym.ChoiceSupport
+    fingerprint: str
+    offer_inputs: tuple[ChoiceFeatures, ...] = ()
+    role_inputs: tuple[ChoiceFeatures, ...] = ()
+    candidate_inputs: tuple[ChoiceFeatures, ...] = ()
 
     @property
     def max_candidate_count(self) -> int:
@@ -84,102 +114,97 @@ def _integer(value: object, field: str) -> int:
     return value
 
 
-def flatten_projection(projection: Mapping[str, Any]) -> RaggedOfferBatch:
+def flatten_projection(
+    projection: Mapping[str, Any],
+    *,
+    object_rows: Mapping[int, int] | None = None,
+    viewer_json: str | None = None,
+) -> RaggedOfferBatch:
     """Validate and flatten a wire projection without fixed-width padding."""
 
-    raw_offers = projection.get("offers")
-    if not isinstance(raw_offers, list) or not raw_offers:
-        raise StructuredPolicyError("projection must contain at least one offer")
-    if len(raw_offers) > sys.maxsize:
-        raise StructuredPolicyError("offer count exceeds platform index range")
-
-    offers: list[Mapping[str, Any]] = []
+    try:
+        typed = OfferProjection.from_json(json.dumps(projection))
+        support = typed.support
+    except ValueError as error:
+        raise StructuredPolicyError(str(error)) from error
+    offers = tuple(projection["offers"])
     choices: list[ChoiceRow] = []
     candidates: list[Mapping[str, Any]] = []
-    choice_offsets = [0]
-    seen_offers: set[int] = set()
-
-    for offer_index, raw_offer in enumerate(raw_offers):
-        if not isinstance(raw_offer, Mapping):
-            raise StructuredPolicyError("offer row must be an object")
-        offer_id = _integer(raw_offer.get("id"), "offer.id")
-        if offer_id in seen_offers:
-            raise StructuredPolicyError(f"duplicate offer id {offer_id}")
-        seen_offers.add(offer_id)
-        offers.append(raw_offer)
-
-        raw_choices = raw_offer.get("choices")
-        if not isinstance(raw_choices, list):
-            raise StructuredPolicyError("offer.choices must be a list")
-        seen_roles: set[int] = set()
-        for raw_choice in raw_choices:
-            if (
-                not isinstance(raw_choice, Mapping)
-                or raw_choice.get("kind") != "select"
-            ):
-                raise StructuredPolicyError("only select choices are supported")
-            role = _integer(raw_choice.get("role"), "choice.role")
-            if role in seen_roles:
-                raise StructuredPolicyError(f"duplicate role id {role}")
-            seen_roles.add(role)
-            minimum = _integer(raw_choice.get("min"), "choice.min")
-            maximum = _integer(raw_choice.get("max"), "choice.max")
-            if maximum < minimum:
-                raise StructuredPolicyError("choice max is below min")
-            if raw_choice.get("ordered") is True:
-                raise StructuredPolicyError("ordered selections are unsupported")
-            if raw_choice.get("distinct") is not True:
-                raise StructuredPolicyError("decoder requires distinct candidates")
-
-            source = raw_choice.get("candidates")
-            if not isinstance(source, Mapping):
-                raise StructuredPolicyError("choice candidates must be an object")
-            if source.get("depends_on") not in ([], ()):
-                raise StructuredPolicyError(
-                    "dynamic candidate dependencies are unsupported"
-                )
-            initial = source.get("initial")
-            if not isinstance(initial, list):
-                raise StructuredPolicyError(
-                    "candidate source must contain an initial list"
-                )
-            if len(initial) > sys.maxsize - len(candidates):
-                raise StructuredPolicyError(
-                    "candidate count exceeds platform index range"
-                )
-            if maximum > len(initial):
-                raise StructuredPolicyError("choice max exceeds candidate count")
-
+    offsets = [0]
+    for offer_index, offer in enumerate(offers):
+        for choice in offer["choices"]:
             start = len(candidates)
-            seen_candidates: set[int] = set()
-            for raw_candidate in initial:
-                if not isinstance(raw_candidate, Mapping):
-                    raise StructuredPolicyError("candidate row must be an object")
-                candidate_id = _integer(raw_candidate.get("id"), "candidate.id")
-                if candidate_id in seen_candidates:
-                    raise StructuredPolicyError(
-                        f"duplicate candidate id {candidate_id} in role {role}"
-                    )
-                seen_candidates.add(candidate_id)
-                candidates.append(raw_candidate)
+            candidates.extend(choice["candidates"]["initial"])
             choices.append(
                 ChoiceRow(
-                    offer_index=offer_index,
-                    role=role,
-                    minimum=minimum,
-                    maximum=maximum,
-                    candidate_start=start,
-                    candidate_stop=len(candidates),
+                    offer_index,
+                    choice["role"],
+                    choice["min"],
+                    choice["max"],
+                    start,
+                    len(candidates),
                 )
             )
-        choice_offsets.append(len(choices))
-
+        offsets.append(len(choices))
+    offer_inputs: list[ChoiceFeatures] = []
+    role_inputs: list[ChoiceFeatures] = []
+    candidate_inputs: list[ChoiceFeatures] = []
+    if object_rows is not None:
+        actor = typed.actor
+        for offer in typed.offers:
+            details = offer.details
+            objects = tuple(
+                _subject_row(subject, actor, object_rows)
+                for subject in (offer.source, details.subject, details.target)
+                if subject is not None
+            )
+            if details.outside_candidate is not None:
+                try:
+                    objects += (object_rows[details.outside_candidate],)
+                except KeyError as error:
+                    raise StructuredPolicyError(
+                        "outside choice has no visible row"
+                    ) from error
+            offer_inputs.append(
+                ChoiceFeatures(
+                    objects,
+                    details.mana,
+                    None if details.program is None else details.program.ordinal,
+                    details.attack,
+                )
+            )
+            for choice in offer.choices:
+                context = choice.context
+                role_inputs.append(
+                    ChoiceFeatures(
+                        ()
+                        if context.subject is None
+                        else (_subject_row(context.subject, actor, object_rows),),
+                        context.mana,
+                        context.requirement,
+                    )
+                )
+                for candidate in choice.candidates:
+                    candidate_inputs.append(
+                        ChoiceFeatures(
+                            (_subject_row(candidate.subject, actor, object_rows),)
+                        )
+                    )
     return RaggedOfferBatch(
-        projection=projection,
-        offers=tuple(offers),
-        choices=tuple(choices),
-        candidates=tuple(candidates),
-        choice_offsets=tuple(choice_offsets),
+        projection,
+        offers,
+        tuple(choices),
+        tuple(candidates),
+        tuple(offsets),
+        support,
+        hashlib.sha256(
+            json.dumps(
+                [projection, viewer_json], sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest(),
+        tuple(offer_inputs),
+        tuple(role_inputs),
+        tuple(candidate_inputs),
     )
 
 

@@ -152,7 +152,16 @@ def compound_cursor(
     if int(encoded["actions_valid"].sum()) != len(raw.action_space.actions):
         raise ValueError("compound search exceeds checkpoint observation capacity")
     projection = engine.compound_offers().projection_json()
-    offers = flatten_projection(json.loads(projection))
+    offers = flatten_projection(
+        json.loads(projection),
+        viewer_json=raw.toJSON(),
+        object_rows=raw.object_row_indexes(
+            agent.observation_space.encoder.hypers.max_cards_per_player,
+            agent.observation_space.encoder.hypers.max_permanents_per_player,
+        )
+        if agent.hypers.compound_features == "objects"
+        else None,
+    )
     root = CompoundRoot(
         SelectedFullCloneBackend()
         .open_session(match_id="compound-root", audit=False)
@@ -211,77 +220,14 @@ def project_compound(
     ):
         raise ValueError("compound prefix belongs to another viewer state")
     offers = cursor.root.offers
-    prefixes: list[tuple[int, ...]] = []
-    tokens = cursor.tokens
     compound_kind = str(offers.offers[0]["verb"])
-    if not tokens and compound_kind not in {
-        "declare_attackers",
-        "declare_blockers",
-        "pay_waterbend",
-    }:
-        # Complete ordinary/priority offers keep canonical ordering. Cast target
-        # selection is a later Command from this same root, not a new forward root.
-        prefixes = [(index,) for index in range(len(offers.offers))]
-    else:
-        tokens = tokens or (0,)  # the sole compound offer is a forced factor
-        offer = offers.offers[tokens[0]]
-        start, stop = offers.choice_offsets[tokens[0] : tokens[0] + 2]
-        rows = offers.choices[start:stop]
-        if offer["verb"] == "declare_attackers":
-            if len(rows) != 1 or rows[0].minimum != 0:
-                raise ValueError("unsupported compound attacker role")
-            output = _decode(agent, cursor, tokens, check)
-            ordinal = len(tokens)
-            if ordinal >= len(output.tokens):
-                raise ValueError("compound attacker prefix is already complete")
-            prefixes = [
-                tokens + (bit,)
-                for bit in (0, 1)
-                if output.probabilities[ordinal][bit] > 0
-            ]
-        elif offer["verb"] == "pay_waterbend":
-            if len(rows) != 1:
-                raise ValueError("unsupported compound payment roles")
-            # The next Command is the first included candidate after this prefix,
-            # or mana completion after excluding the remainder. These disjoint
-            # prefix cylinders integrate over every unchosen suffix, without
-            # enumerating subsets or assigning mass to earlier excluded taps.
-            count = rows[0].candidate_stop - rows[0].candidate_start
-            tail = tokens
-            selected = sum(tokens[1:])
-            while len(tail) <= count:
-                check()
-                remaining = count - len(tail) + 1
-                if selected < rows[0].maximum:
-                    prefixes.append(tail + (1,))
-                if selected + remaining - 1 < rows[0].minimum:
-                    break
-                tail += (0,)
-            else:
-                prefixes.append(tail)
-        elif offer["verb"] == "declare_blockers" or offer["verb"] == "cast":
-            row_index = (
-                len(cursor.commands) if offer["verb"] == "declare_blockers" else 0
-            )
-            if row_index >= len(rows):
-                raise ValueError("compound role prefix is already complete")
-            row = rows[row_index]
-            if row.maximum > 1 or row.minimum not in (0, 1):
-                raise ValueError("unsupported compound target cardinality")
-            count = row.candidate_stop - row.candidate_start
-            expected_prefix = 1 + sum(
-                r.candidate_stop - r.candidate_start for r in rows[:row_index]
-            )
-            if len(tokens) != expected_prefix:
-                raise ValueError("compound tokens do not end at a role boundary")
-            prefixes = [
-                tokens + tuple(int(i == selected) for i in range(count))
-                for selected in range(count)
-            ]
-            if row.minimum == 0:
-                prefixes.append(tokens + (0,) * count)
-        else:
-            raise ValueError("unsupported compound prefix-to-Command boundary")
+    prefixes = [
+        tuple(route)
+        for route in offers.support.command_prefixes(
+            list(cursor.tokens),
+            len(cursor.commands),
+        )
+    ]
     choices: dict[int, CompoundChoice] = {}
     value: float | None = None
     for prefix in prefixes:

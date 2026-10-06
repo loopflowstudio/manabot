@@ -48,7 +48,11 @@ class Agent(nn.Module):
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = hypers.hidden_dim
         self.compound_decoder = (
-            CompoundDecoder(embed_dim) if hypers.compound_decisions else None
+            CompoundDecoder(
+                embed_dim, object_features=hypers.compound_features == "objects"
+            )
+            if hypers.compound_decisions
+            else None
         )
 
         self.semantic_cards = None
@@ -254,6 +258,7 @@ class Agent(nn.Module):
         batch: RaggedOfferBatch,
         *,
         tokens: tuple[int, ...] | None = None,
+        tape: CompoundOutput | None = None,
         prefix: tuple[int, ...] = (),
         generator: torch.Generator | None = None,
         deterministic: bool = False,
@@ -273,7 +278,7 @@ class Agent(nn.Module):
         # Complete declarations/payments instead have one set-valued offer;
         # its first row must not inherit an unrelated microchoice embedding.
         features = None
-        if not any(
+        if self.hypers.compound_features == "labels" and not any(
             offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
             for offer in batch.offers
         ):
@@ -284,7 +289,9 @@ class Agent(nn.Module):
             context[0],
             batch,
             offer_features=features,
+            objects=objects[0],
             tokens=tokens,
+            tape=tape,
             prefix=prefix,
             generator=generator,
             deterministic=deterministic,

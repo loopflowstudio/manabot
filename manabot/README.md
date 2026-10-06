@@ -56,9 +56,9 @@ its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current world is **w4** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current world is **w5** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including corrected-Learn w3 artifacts, are not comparable to w4. The local
+including w3 and w4 artifacts, retain their original runtime bindings. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
@@ -155,3 +155,6 @@ Compound checkpoints use an autoregressive legal-offer decoder and execute via
 ordinary checkpoint players. Their complete-game training stages, credit
 boundaries and separate comparison recipes are documented under
 [compound decisions](../docs/training-regimes.md#compound-decisions).
+
+The shared [choice contract](../docs/choice-contract.md) documents typed object
+inputs, native prefix support and the schema-7 migration.

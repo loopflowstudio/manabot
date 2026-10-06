@@ -1,4 +1,4 @@
-//! Experimental structured legal offers over the current positional action ABI.
+//! Shared legal offers, public choice meaning and revision-bound lowering.
 //!
 //! The current `ActionSpace` and target legality queries remain authoritative.
 //! This module projects a narrow, uncapped typed view for priority pass,
@@ -6,7 +6,7 @@
 //! commuting waterbend payments,
 //! then lowers accepted IDs through the existing rules executor. It
 //! intentionally does not own match revisions, prompt persistence, recovery,
-//! or policy decoding. `compound_offers` covers the full legal surface and
+//! or policy probabilities. `compound_offers` covers the full legal surface and
 //! `compound_commands` lowers its atomic selections to canonical Commands.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -138,11 +138,51 @@ pub struct CandidateSource {
     pub initial: Option<Vec<Candidate>>,
 }
 
+/// Meaning of a role, independent of its presentation label.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ChoiceContext {
+    #[default]
+    Selection,
+    Assignment {
+        subject: SubjectRef,
+    },
+    Target {
+        program: ProgramReference,
+        requirement: usize,
+    },
+    Payment {
+        mana: [u8; 7],
+        tap_generic_units: u8,
+    },
+}
+
+/// Exact public program bytes and local ordinal; never an ordinal-only identity.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProgramReference {
+    pub digest: String,
+    pub ordinal: usize,
+}
+
+/// Fixed parameters of an already selected atomic alternative. Roles describe
+/// parameters still to choose; these fields do not require an extra answer.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct OfferDetails {
+    pub subject: Option<SubjectRef>,
+    pub target: Option<SubjectRef>,
+    pub outside_candidate: Option<u32>,
+    pub program: Option<ProgramReference>,
+    pub requirement: Option<usize>,
+    pub attack: Option<bool>,
+    pub mana: Option<[u8; 7]>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ChoiceStep {
     Select {
         role: RoleId,
+        context: ChoiceContext,
         label: String,
         candidates: CandidateSource,
         min: u16,
@@ -160,6 +200,7 @@ pub struct InteractionOffer {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public_commitment: Option<PublicCommitment>,
     pub source: Option<SubjectRef>,
+    pub details: OfferDetails,
     pub label: String,
     pub help: Option<String>,
     pub choices: Vec<ChoiceStep>,
@@ -168,6 +209,9 @@ pub struct InteractionOffer {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StructuredOfferProjection {
+    pub schema_version: u16,
+    pub factorization_version: u16,
+    pub revision: u64,
     pub actor: u8,
     pub kind: PromptKind,
     pub offers: Vec<InteractionOffer>,
@@ -653,8 +697,9 @@ impl Game {
                 id,
                 actor: wire_actor,
                 verb: search_offer_verb(action),
+                details: self.action_details(action)?,
                 public_commitment,
-                source: None,
+                source: self.action_source(action)?,
                 label: label.clone(),
                 help: None,
                 choices: Vec::new(),
@@ -670,6 +715,9 @@ impl Game {
 
         Ok(StructuredOfferSet {
             projection: StructuredOfferProjection {
+                schema_version: crate::decision::SEMANTIC_DECISION_VERSION,
+                factorization_version: 1,
+                revision: self.decision_epoch,
                 actor: wire_actor,
                 kind: search_prompt_kind(action_space.kind)?,
                 offers,
@@ -677,6 +725,23 @@ impl Game {
             binding: OfferSetBinding(self.decision_epoch),
             internal,
         })
+    }
+
+    pub fn compound_prefix_support(
+        &self,
+        offers: &StructuredOfferSet,
+        prefix: &[usize],
+    ) -> Result<super::choice_support::PrefixSupport, StructuredOfferError> {
+        if offers.binding != OfferSetBinding(self.decision_epoch)
+            || self.compound_offers()?.projection != offers.projection
+        {
+            return Err(StructuredOfferError::StaleOrIllegal(
+                "compound prefix root changed".into(),
+            ));
+        }
+        super::choice_support::ChoiceSupport::new(offers.projection.clone())
+            .and_then(|support| support.query(prefix))
+            .map_err(StructuredOfferError::Invariant)
     }
 
     /// Complete legal policy surface. Only engine-owned atomic choices group;
@@ -799,6 +864,9 @@ impl Game {
             let max = u16::from(!candidates.is_empty());
             choices.push(ChoiceStep::Select {
                 role,
+                context: ChoiceContext::Assignment {
+                    subject: self.permanent_subject(blocker)?,
+                },
                 label: format!("Block with {name}"),
                 candidates: CandidateSource {
                     id: CandidateSourceId(u32::from(role.0)),
@@ -824,6 +892,7 @@ impl Game {
             id: OfferId(0),
             actor: wire_player_id(player)?,
             verb: OfferVerb::DeclareBlockers,
+            details: OfferDetails::default(),
             public_commitment: None,
             source: None,
             label: "Declare blockers".into(),
@@ -833,6 +902,9 @@ impl Game {
         };
         Ok(Some(StructuredOfferSet {
             projection: StructuredOfferProjection {
+                schema_version: crate::decision::SEMANTIC_DECISION_VERSION,
+                factorization_version: 1,
+                revision: self.decision_epoch,
                 actor: offer.actor,
                 kind: PromptKind::DeclareBlockers,
                 offers: vec![offer],
@@ -909,12 +981,21 @@ impl Game {
             id: OfferId(0),
             actor: wire_player_id(player)?,
             verb: OfferVerb::PayWaterbend,
+            details: self.action_details(&Action::ActivateAbility {
+                player,
+                permanent,
+                ability_index,
+            })?,
             public_commitment: None,
-            source: None,
+            source: Some(self.permanent_subject(permanent)?),
             label: "Pay waterbend".into(),
             help: None,
             choices: vec![ChoiceStep::Select {
                 role,
+                context: ChoiceContext::Payment {
+                    mana: cost.cost,
+                    tap_generic_units: 1,
+                },
                 label: "Tap for waterbend".into(),
                 candidates: CandidateSource {
                     id: CandidateSourceId(0),
@@ -930,6 +1011,9 @@ impl Game {
         };
         Ok(Some(StructuredOfferSet {
             projection: StructuredOfferProjection {
+                schema_version: crate::decision::SEMANTIC_DECISION_VERSION,
+                factorization_version: 1,
+                revision: self.decision_epoch,
                 actor: offer.actor,
                 kind: PromptKind::Waterbend,
                 offers: vec![offer],
@@ -947,6 +1031,175 @@ impl Game {
                 },
             )]),
         }))
+    }
+
+    fn card_subject(&self, card: CardId) -> Result<SubjectRef, StructuredOfferError> {
+        let object = self
+            .current_object_ref(card)
+            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        Ok(SubjectRef::Object {
+            id: object_render_id(self.state.cards[card].id, object.incarnation.0),
+        })
+    }
+
+    fn permanent_subject(
+        &self,
+        permanent: PermanentId,
+    ) -> Result<SubjectRef, StructuredOfferError> {
+        let CandidateValue::Subject { subject } = self
+            .compound_permanent_candidate(permanent, CandidateId(0))?
+            .value;
+        Ok(subject)
+    }
+
+    fn action_source(&self, action: &Action) -> Result<Option<SubjectRef>, StructuredOfferError> {
+        match action {
+            Action::CastSpell { card, .. }
+            | Action::PlayLand { card, .. }
+            | Action::ScryCard { card, .. }
+            | Action::SelectCard { card, .. }
+            | Action::LearnDiscard { card, .. } => self.card_subject(*card).map(Some),
+            Action::ActivateAbility { permanent, .. }
+            | Action::WaterbendTap { permanent, .. }
+            | Action::DeclareAttacker { permanent, .. } => {
+                self.permanent_subject(*permanent).map(Some)
+            }
+            Action::DeclareBlocker { blocker, .. } => self.permanent_subject(*blocker).map(Some),
+            Action::LearnTakeLesson { .. } | Action::PassPriority { .. } => Ok(None),
+            _ => {
+                if let Some(trigger) = &self.state.pending_trigger_choice {
+                    // A departed source has no current visible object row. Its
+                    // public program identity remains in OfferDetails; never
+                    // rebind the old source incarnation to a replacement.
+                    return trigger
+                        .source_ref
+                        .and_then(|source| self.lookup_current_permanent(source).ok())
+                        .map(|source| self.permanent_subject(source))
+                        .transpose();
+                }
+                let card = match &self.pending_choice {
+                    Some(
+                        PendingChoice::KickerChoice { card, .. }
+                        | PendingChoice::ChooseTargets { card, .. },
+                    ) => Some(*card),
+                    Some(PendingChoice::Waterbend { permanent, .. }) => {
+                        self.state.permanents[*permanent].as_ref().map(|p| p.card)
+                    }
+                    None => self
+                        .state
+                        .suspended_decision
+                        .as_ref()
+                        .and_then(|s| s.frame.source),
+                };
+                card.map(|id| self.card_subject(id)).transpose()
+            }
+        }
+    }
+
+    fn action_details(&self, action: &Action) -> Result<OfferDetails, StructuredOfferError> {
+        use crate::flow::decision::Decision;
+        let mut details = OfferDetails::default();
+        match action {
+            Action::DeclareAttacker { attack, .. } => details.attack = Some(*attack),
+            Action::DeclareBlocker {
+                blocker, attacker, ..
+            } => {
+                details.subject = Some(self.permanent_subject(*blocker)?);
+                details.target = attacker.map(|id| self.permanent_subject(id)).transpose()?;
+            }
+            Action::ChooseTarget { target, .. } => {
+                details.target = Some(match target {
+                    ActionTarget::StackSpell(card) => self.card_subject(*card)?,
+                    ActionTarget::Player(player) => SubjectRef::Player {
+                        id: wire_player_id(*player)?,
+                    },
+                    ActionTarget::Permanent(permanent) => self.permanent_subject(*permanent)?,
+                });
+                if let Some(PendingChoice::ChooseTargets {
+                    card,
+                    requirement_index,
+                    ..
+                }) = &self.pending_choice
+                {
+                    details.program = Some(program_reference(
+                        &self.state.cards[*card].target_requirements(),
+                        *requirement_index,
+                    ));
+                    details.requirement = Some(*requirement_index);
+                }
+            }
+            Action::LearnTakeLesson { card, .. } => {
+                details.outside_candidate = Some(self.state.cards[*card].id.0)
+            }
+            Action::ActivateAbility {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                let p = self.state.permanents[*permanent]
+                    .as_ref()
+                    .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+                let ability = &self.state.cards[p.card].activated_abilities[*ability_index];
+                details.program = Some(program_reference(ability, *ability_index));
+                details.mana = Some(ability.mana_cost.cost);
+            }
+            Action::ChooseMode { mode, .. } => {
+                if let Some(suspended) = &self.state.suspended_decision {
+                    if let Decision::Modal { modes, .. } = &suspended.decision {
+                        details.program = Some(program_reference(modes, *mode));
+                    }
+                }
+                if details.program.is_none() {
+                    return Err(StructuredOfferError::WrongDecision);
+                }
+            }
+            Action::PayCost { .. } | Action::WaterbendTap { .. } | Action::Decline { .. } => {
+                details.mana = match &self.pending_choice {
+                    Some(PendingChoice::KickerChoice { card, .. }) => {
+                        self.state.cards[*card].kicker.as_ref().map(|c| c.cost)
+                    }
+                    Some(PendingChoice::Waterbend {
+                        permanent,
+                        ability_index,
+                        remaining_generic,
+                        ..
+                    }) => {
+                        let p = self.state.permanents[*permanent]
+                            .as_ref()
+                            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+                        Some(
+                            self.state.cards[p.card].activated_abilities[*ability_index]
+                                .mana_cost
+                                .with_generic(*remaining_generic)
+                                .cost,
+                        )
+                    }
+                    _ => self
+                        .state
+                        .suspended_decision
+                        .as_ref()
+                        .and_then(|s| match &s.decision {
+                            Decision::PayOrNot { cost, .. } => Some(cost.cost),
+                            _ => None,
+                        }),
+                };
+            }
+            _ => {}
+        }
+        if matches!(action, Action::ChooseTarget { .. } | Action::Decline { .. }) {
+            if let Some(trigger) = &self.state.pending_trigger_choice {
+                details.program = Some(if let Some(effects) = &trigger.inline_effects {
+                    program_reference(effects, 0)
+                } else {
+                    let ability = self.state.cards[trigger.source_card]
+                        .abilities
+                        .get(trigger.ability_index)
+                        .ok_or(StructuredOfferError::WrongDecision)?;
+                    program_reference(ability, trigger.ability_index)
+                });
+            }
+        }
+        Ok(details)
     }
 
     fn compound_permanent_candidate(
@@ -1041,6 +1294,7 @@ impl Game {
                         id,
                         actor: wire_player_id(*player)?,
                         verb: OfferVerb::PassPriority,
+                        details: OfferDetails::default(),
                         public_commitment: None,
                         source: None,
                         label: "Pass priority".to_string(),
@@ -1098,6 +1352,7 @@ impl Game {
                         id,
                         actor: wire_player_id(*player)?,
                         verb: OfferVerb::Cast,
+                        details: OfferDetails::default(),
                         public_commitment: None,
                         source: Some(SubjectRef::Object {
                             id: object_render_id(
@@ -1112,6 +1367,10 @@ impl Game {
                         help: None,
                         choices: vec![ChoiceStep::Select {
                             role,
+                            context: ChoiceContext::Target {
+                                program: program_reference(&card_ref.target_requirements(), 0),
+                                requirement: 0,
+                            },
                             label: "Target".to_string(),
                             candidates: CandidateSource {
                                 id: CandidateSourceId(0),
@@ -1141,6 +1400,9 @@ impl Game {
 
         Ok(StructuredOfferSet {
             projection: StructuredOfferProjection {
+                schema_version: crate::decision::SEMANTIC_DECISION_VERSION,
+                factorization_version: 1,
+                revision: self.decision_epoch,
                 actor: wire_actor,
                 kind: PromptKind::Priority,
                 offers,
@@ -1199,12 +1461,14 @@ impl Game {
             id,
             actor: wire_actor,
             verb: OfferVerb::DeclareAttackers,
+            details: OfferDetails::default(),
             public_commitment: None,
             source: None,
             label: "Declare attackers".to_string(),
             help: None,
             choices: vec![ChoiceStep::Select {
                 role,
+                context: ChoiceContext::Selection,
                 label: "Attackers".to_string(),
                 candidates: CandidateSource {
                     id: CandidateSourceId(0),
@@ -1221,6 +1485,9 @@ impl Game {
 
         Ok(StructuredOfferSet {
             projection: StructuredOfferProjection {
+                schema_version: crate::decision::SEMANTIC_DECISION_VERSION,
+                factorization_version: 1,
+                revision: self.decision_epoch,
                 actor: wire_actor,
                 kind: PromptKind::DeclareAttackers,
                 offers: vec![offer],
@@ -1389,26 +1656,22 @@ impl Game {
                         })
                     })
                     .collect::<Result<_, _>>()?;
+                let (_, declaration_order) = self.current_attacker_declaration()?;
                 let mut actions = 0;
                 let mut done = false;
-                while self
-                    .action_space()
-                    .is_some_and(|space| space.kind == ActionSpaceKind::DeclareAttacker)
-                {
-                    let space = self.action_space().expect("checked attacker prompt");
-                    if space.player != Some(*player) {
-                        return Err(StructuredOfferError::WrongDecision);
-                    }
-                    let permanent = space
-                        .actions
-                        .iter()
-                        .find_map(|action| match action {
-                            Action::DeclareAttacker { permanent, .. } => Some(*permanent),
-                            _ => None,
+                // tick may skip the rest of this turn and publish the next
+                // actor's attacker prompt. Bound the tape to the original
+                // declaration, never to a repeated prompt kind.
+                for permanent in declaration_order {
+                    let space = self
+                        .action_space()
+                        .filter(|space| {
+                            space.kind == ActionSpaceKind::DeclareAttacker
+                                && space.player == Some(*player)
                         })
                         .ok_or_else(|| {
-                            StructuredOfferError::Invariant(
-                                "legacy attacker prompt is empty".to_string(),
+                            StructuredOfferError::StaleOrIllegal(
+                                "attacker declaration interrupted before its final role".into(),
                             )
                         })?;
                     let attack = selected.contains(&permanent);
@@ -1950,5 +2213,13 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
         Action::PayCost { .. } => OfferVerb::PayCost,
         Action::ChooseMode { .. } => OfferVerb::ChooseMode,
         Action::WaterbendTap { .. } => OfferVerb::WaterbendTap,
+    }
+}
+
+fn program_reference(value: &impl Serialize, ordinal: usize) -> ProgramReference {
+    let bytes = serde_json::to_vec(value).expect("public program is serializable");
+    ProgramReference {
+        digest: blake3::hash(&bytes).to_hex().to_string(),
+        ordinal,
     }
 }

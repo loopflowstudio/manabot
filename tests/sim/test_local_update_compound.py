@@ -4,6 +4,7 @@ from dataclasses import replace
 from itertools import product
 import json
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -43,10 +44,13 @@ def check() -> None:
     pass
 
 
+@pytest.mark.parametrize("features", ["labels", "objects"])
 @pytest.mark.parametrize("kind", ["attack", "cast", "blockers"])
-def test_native_prefix_projection(kind: str) -> None:
+def test_native_prefix_projection(
+    kind: str, features: Literal["labels", "objects"]
+) -> None:
     env, _ = _block_root(2, 2) if kind == "blockers" else _root(kind, 3)
-    agent = _agent()
+    agent = _agent(features=features)
     cursor = None
     for step in range(10):
         projection = project_compound(agent, env, cursor, check)
@@ -69,11 +73,14 @@ def test_native_prefix_projection(kind: str) -> None:
     assert step >= 1
 
 
+@pytest.mark.parametrize("features", ["labels", "objects"])
 @pytest.mark.parametrize("lands", [0, 2, 5])
-def test_payment_joint_parity(lands: int) -> None:
+def test_payment_joint_parity(
+    lands: int, features: Literal["labels", "objects"]
+) -> None:
     torch.set_num_threads(1)
     env, _ = _waterbend_root(6, lands=lands)
-    agent = _agent()
+    agent = _agent(features=features)
     root = project_compound(agent, env, None, check).cursor
     total = 0.0
     saw_zero = False

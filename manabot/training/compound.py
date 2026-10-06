@@ -75,13 +75,10 @@ class CompoundStatistics:
             self.prompt_kinds[kind] = self.prompt_kinds.get(kind, 0) + 1
             self.factors += len(decision.output.tokens)
             self.forced_factors += sum(
-                int((probs > 0).sum()) == 1
-                for probs in decision.output.probabilities
+                int((probs > 0).sum()) == 1 for probs in decision.output.probabilities
             )
             self.decision_seconds += decision.seconds
-            self.max_decision_seconds = max(
-                self.max_decision_seconds, decision.seconds
-            )
+            self.max_decision_seconds = max(self.max_decision_seconds, decision.seconds)
 
 
 def collect_game(
@@ -325,7 +322,7 @@ def optimize_games(
                 index = eligible[ordinal]
                 decision, credit = decisions[index], credits[index]
                 output = agent.compound(
-                    decision.observation, decision.offers, tokens=decision.output.tokens
+                    decision.observation, decision.offers, tape=decision.output
                 )
                 logs = output.log_prob.reshape(1) if grouped else output.log_probs
                 value = output.values[:1] if grouped else output.values

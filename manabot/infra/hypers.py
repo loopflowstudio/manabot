@@ -111,6 +111,9 @@ class AgentSpec(BaseHypersModel):
     """
 
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
+    compound_features: Literal["labels", "objects"] = Field(
+        default="labels", exclude_if=lambda value: value == "labels"
+    )
     semantic_pack: str | None = None
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
@@ -133,6 +136,8 @@ class AgentSpec(BaseHypersModel):
 
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "AgentSpec":
+        if self.compound_features == "objects" and not self.compound_decisions:
+            raise ValueError("object choice features require compound decisions")
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
             raise ValueError("embedding width and head count must be positive")
         if self.attention_on and self.hidden_dim % self.num_attention_heads:

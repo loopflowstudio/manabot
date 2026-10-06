@@ -27,12 +27,27 @@ def _candidate(candidate_id: int) -> dict[str, object]:
 
 def _projection(count: int, minimum: int = 1, maximum: int = 1) -> dict[str, object]:
     return {
+        "schema_version": 7,
+        "factorization_version": 1,
+        "revision": 0,
         "actor": 0,
         "kind": "priority",
         "offers": [
             {
                 "id": 7,
                 "actor": 0,
+                "details": {
+                    key: None
+                    for key in (
+                        "subject",
+                        "target",
+                        "outside_candidate",
+                        "program",
+                        "requirement",
+                        "attack",
+                        "mana",
+                    )
+                },
                 "verb": "cast",
                 "source": None,
                 "label": "fixture",
@@ -40,6 +55,7 @@ def _projection(count: int, minimum: int = 1, maximum: int = 1) -> dict[str, obj
                 "choices": [
                     {
                         "kind": "select",
+                        "context": {"kind": "selection"},
                         "role": 3,
                         "label": "target",
                         "candidates": {
