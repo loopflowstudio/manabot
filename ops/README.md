@@ -1,7 +1,9 @@
-# ops/ — parked (2026-07-10)
+# Remote hardware declarations
 
-AWS sandbox/job machinery (g5.xlarge specs, SSM, bootstrap). Untouched through
-the entire 2026-07 research arc — everything ran locally for under $15 total.
-Parked until a workload actually needs a second machine (the first candidate:
-overnight multi-crank expert iteration or a >8h datagen). Nothing here is
-maintained; verify against current AWS reality before reuse.
+Hardware mixes live in `mixes/`; deployment runs through `uv run manabot remote`.
+See [remote training](../docs/remote-training.md) for compilation, deadlines,
+retrieval, cleanup and the explicitly invoked paid gate.
+
+Current observed inventory, 2026-10-06: zero rented RunPod pods. Query `remote
+status` for a fresh observation. The parked AWS sandbox/job system was removed;
+it is retained in Git history, not maintained alongside the RunPod path.

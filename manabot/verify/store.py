@@ -142,14 +142,23 @@ def _clean_json(value: Any) -> Any:
 class VerifyStore:
     """Simple SQLite store for experiment runs, evals, and markdown reports."""
 
-    def __init__(self, path: Path | str | None = None):
+    def __init__(
+        self, path: Path | str | None = None, *, read_only: bool = False
+    ) -> None:
+        """Read-only admission skips schema creation and journal changes."""
         self.path = Path(path) if path else _default_db_path()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.con = sqlite3.connect(self.path)
+        if read_only:
+            self.con = sqlite3.connect(
+                f"{self.path.absolute().as_uri()}?mode=ro", uri=True
+            )
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.con = sqlite3.connect(self.path)
         self.con.row_factory = sqlite3.Row
-        self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA foreign_keys=ON")
-        self._create_schema()
+        if not read_only:
+            self.con.execute("PRAGMA journal_mode=WAL")
+            self._create_schema()
 
     def __enter__(self) -> VerifyStore:
         return self

@@ -49,7 +49,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          uv run --python 3.12 --extra dev pytest tests/infra/ tests/ops/ \
+          uv run --python 3.12 --extra dev pytest tests/infra/ \
             tests/etude/test_clean_machine_verifier.py
 
   integration:
@@ -93,7 +93,7 @@ jobs:
 
       - name: Integration tests
         run: |
-          uv run --python 3.12 --extra dev --extra notebook pytest tests/env/ tests/agent/ tests/model/ \
+          uv run --python 3.12 --extra dev --extra notebook pytest tests/env/ tests/agent/ tests/model/ tests/remote/ \
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
@@ -258,7 +258,7 @@ jobs:
           uv venv .venv --python 3.12
           uv export --quiet --frozen --extra dev --no-emit-project \
             --prune torch --prune pandas --prune typer --prune psutil \
-            --prune httpx --prune jsonschema --prune ruff --prune boto3 \
+            --prune httpx --prune jsonschema --prune ruff \
             --output-file /tmp/visual-requirements.txt
           uv pip install --python .venv/bin/python \
             --requirements /tmp/visual-requirements.txt maturin==1.11.5

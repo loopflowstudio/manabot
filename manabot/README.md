@@ -16,8 +16,8 @@ uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 The default `local` preset is the certified laptop path: it trains a small
 manabot on CPU in under a minute, needs no W&B account or CUDA, and saves
 checkpoints to `.runs/local/step_N.pt`. The `simple` and `attention` presets
-are real training runs: they expect a CUDA machine (in practice Ubuntu on
-AWS — see [ops/](../ops/README.md)) and track to the `manabot` Weights &
+are real training runs: they expect a CUDA machine (see
+[remote training](../docs/remote-training.md)) and track to the `manabot` Weights &
 Biases project. New checkpoints stay local until explicitly published to
 [S3 artifact storage](../docs/training-monitoring.md#s3-model-and-artifact-storage).
 W&B tracks metrics and S3 references; the historical W&B model reader remains

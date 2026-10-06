@@ -136,6 +136,18 @@ def _runtime_identities(
             ["git", "rev-parse", "HEAD"], text=True
         ).strip(),
     )
+    if any(stage.execution.device == "cuda" for stage in regime.stages):
+        if not torch.cuda.is_available():
+            raise ValueError(
+                "CUDA requested but unavailable; CPU fallback is forbidden"
+            )
+        gpu = torch.cuda.get_device_properties(0)
+        identities["cuda"] = {
+            "device": gpu.name,
+            "memory_bytes": gpu.total_memory,
+            "capability": list(torch.cuda.get_device_capability(0)),
+            "runtime": torch.version.cuda,
+        }
     return identities
 
 
@@ -370,7 +382,9 @@ def _execute_regime(
             os.replace(target.with_suffix(".tmp"), target)
             # Admission constructs a fresh model. Its initialization must not
             # consume the learner's action-sampling RNG stream.
-            with torch.random.fork_rng(devices=[]):
+            with torch.random.fork_rng(
+                devices=[0] if next(model.parameters()).is_cuda else []
+            ):
                 load_checkpoint_agent(str(target))
             receipt.artifact = artifact(target)
         except Exception as error:
@@ -440,6 +454,17 @@ def _execute_regime(
             )
             phase = "collection_seconds"
             torch.set_num_threads(stage.execution.threads)
+            cuda = stage.execution.device == "cuda"
+            if cuda and not torch.cuda.is_available():
+                raise ValueError(
+                    "CUDA requested but unavailable; CPU fallback is forbidden"
+                )
+
+            def synchronize() -> None:
+                if cuda:
+                    torch.cuda.synchronize()
+
+            synchronize()
             if not restoring_completed:
                 record.actual_threads = torch.get_num_threads()
 
@@ -872,7 +897,7 @@ def _execute_regime(
                     trainer, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = Agent(space, regime.agent)
+                    agent = Agent(space, regime.agent).to(stage.execution.device)
                     if stage.opponent is not None and snapshot is None:
                         phase = "export_seconds"
                         tick = time.perf_counter()
@@ -906,6 +931,7 @@ def _execute_regime(
                         else "self",
                         opponent_agent=opponent_agent,
                         recovery_max_microsteps=regime.recovery_max_microsteps,
+                        device=stage.execution.device,
                     )
                     experiment = Experiment(
                         ExperimentHypers(
@@ -913,6 +939,7 @@ def _execute_regime(
                             seed=seed,
                             runs_dir=out,
                             exp_name=stage.id,
+                            device=stage.execution.device,
                             log_level="WARNING",
                         )
                     )
@@ -985,6 +1012,7 @@ def _execute_regime(
                         if regime.recovery_max_microsteps is not None
                         else None,
                     )
+                    synchronize()
                     record.collection_seconds += time.perf_counter() - tick
                     check()
                     phase = "learning_seconds"
@@ -1010,6 +1038,7 @@ def _execute_regime(
                     iteration += 1
                     if ema is not None:
                         update_ema(ema, trainer.agent, stage.learning.ema)
+                    synchronize()
                     record.learning_seconds += time.perf_counter() - tick
                     record.diagnostics.append(diagnostic)
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]

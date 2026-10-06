@@ -34,17 +34,12 @@ dev = [
     "httpx>=0.28.0",
     "jsonschema>=4.23.0",
     "ruff>=0.9.0",
-    "boto3>=1.35.0",
 ]
 notebook = [
     "jupyterlab>=4.0",
     "nbclient>=0.10",
     "matplotlib>=3.9",
     "wandb-workspaces>=0.4.13",
-]
-ops = [
-    "boto3>=1.35.0",
-    "pyyaml>=6.0",
 ]
 
 [dependency-groups]

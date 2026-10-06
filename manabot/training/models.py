@@ -97,7 +97,7 @@ class AtaraxosMoveLearning(Strict):
 
 
 class Execution(Strict):
-    device: Literal["cpu"] = "cpu"
+    device: Literal["cpu", "cuda"] = "cpu"
     precision: Literal["float32"] = "float32"
     workers: Literal[1] = 1
     threads: int = Field(default=1, ge=1, le=4)
@@ -370,6 +370,14 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "recovery requires only self-play stages and iteration_fraction schedule"
             )
+        if any(stage.execution.device == "cuda" for stage in self.stages):
+            if self.recovery_max_microsteps is not None:
+                raise ValueError("CUDA process recovery is unsupported")
+            if self.agent.belief_count_buckets or any(
+                not isinstance(stage, TrainSelfPlay) or stage.opponent is not None
+                for stage in self.stages
+            ):
+                raise ValueError("CUDA requires self-contained ordinary self-play")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         latest_compound = None
@@ -480,7 +488,8 @@ class TrainingRegime(Strict):
                         "live self-play continuation cannot branch from an older collector"
                     )
                 if (
-                    parent.behavior != stage.behavior
+                    parent.execution.device != stage.execution.device
+                    or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.learning.ema != stage.learning.ema
                     or parent.opponent != stage.opponent

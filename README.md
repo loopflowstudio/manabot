@@ -194,7 +194,7 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 | `wave/` | Active research and product portfolios and their charters |
 | `docs/` | Architecture, research, rules, and benchmark documentation |
 | `paper/` | The paper |
-| `ops/` | AWS training infrastructure and container images |
+| `ops/` | Declared remote training hardware mixes |
 | `scripts/` | Entry points (`play`, `verify-clean-machine`) and benchmarks |
 
 ## Naming

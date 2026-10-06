@@ -28,10 +28,25 @@ completed monitoring rows; later checks were offline-only. Browser capture was
 blank; Jack Heart's shipping acceptance does not imply specific visual findings.
 No substantive campaign allocation follows.
 
-## Experiment execution and notebook boundary (ETU-113, 2026-10-06)
+## Remote proof (ETU-114, 2026-10-06)
 
-Jack Heart accepted Experiment as the declarative comparison interface, with one
-Python declaration per experiment and a shared explicit runner. History/depth
+Jack Heart authorized $50 and exact-source pushes, not PR review or landing.
+Two CUDA runs returned raw/EMA records and replayed arena games;
+rented CUDA checks passed.
+Local-disk setup cut the observed environment/build interval from 486 to 71 s;
+a two-seed worked example reused setup, returned both runs
+and deleted. No public reuse mode; ETU-120 folded, images remain ETU-121.
+Inventory empty; all attempts plus shakedown cost $1.6591 estimated/reported,
+not invoiced. [Remote contract](../../docs/remote-training.md) owns receipts.
+
+ETU-119's save fix is merged; frozen runs remain unchanged. Budget changes also
+change elapsed schedules. No strength/chapter claim. Preserve ignored evidence;
+ETU-108/larger models stay separate.
+
+## Experiments/notebooks (ETU-113, 2026-10-06)
+
+Jack Heart accepted declarative Experiment comparisons: one Python declaration
+per experiment and a shared explicit runner. History/depth
 consumers preserve calibrated regime identities, seed order and scientific deal
 reservations. Configured local CPU placement admits one learner plus one bounded
 evaluator; remote placement/provisioning and alternative trackers remain follow-ups.
@@ -39,19 +54,16 @@ TrainingRun and VerifyStore retain learning and execution authority. Monitoring
 reuses ETU-101, keeps original checkpoint coordinates, retains failures and charges
 evaluator process time separately. Resume grants no budget or silent retries.
 
-Jack Heart revised the viewing contract after the demo: one create-once editable
-notebook generates a concise read-only HTML dashboard. Graphs render in HTML,
-with progress/freshness, applicable loss, latest evaluation, costs and failures
-first; comparisons use shared milestones. Metric docs and reusable functions own
+Jack Heart revised the demo contract: one create-once editable notebook generates
+read-only HTML graphs/dashboard, leading with progress/freshness, applicable loss,
+latest evaluation, costs and failures; comparisons share milestones. Metric docs and reusable functions own
 deeper analysis. Notebook edits survive refresh; Jack Heart's original edited
 demo remains intact beside a separately named revised generator. Cells only read
 retained data. Interpretation, ledger updates and next-experiment choices belong
 to a skill. Landing and auto-merge remain forbidden pending Jack Heart's review.
 
-Tiny fixtures prove scheduling/reporting only; timeouts remain retained and
-incomplete cohorts never become rates. No strength claim or live ETU-103/106
-change follows. The [execution guide](../../docs/experiment-execution.md) owns
-launch, recovery, costs and reporting. 
+Tiny fixtures prove scheduling/reporting only; retain timeouts, omit incomplete-cohort
+rates. No strength claim or live ETU-103/106 change. [Execution guide](../../docs/experiment-execution.md): launch, recovery, costs and reporting.
 
 ## History input (ETU-106, 2026-10-06)
 
@@ -338,24 +350,11 @@ gate before integration.
 
 ## Architecture convergence (accepted 2026-07-17)
 
-- managym owns the authoritative match, semantic Commands, canonical viewer
-  Observation stream, replay/forks, possible-world meaning, typed `WorldQuery`
-  grammar, compatible-deal measure, and materialization. Intelligence must not
-  create parallel meanings for hands or actions.
-- manabot owns agent memory, conditional priors and learned beliefs over the
-  managym world domain, planning, policy/value learning, teacher evidence,
-  datasets, checkpoints, opponents, arena evaluation, and Study evidence.
-- The product proof is a complete play distribution changing under typed
-  conditions such as `Has(Bolt)` without revealing actual truth. A
-  `ConditionalStrategyResult`, not one best action, is the primary result.
-- The accepted student architecture conditions policy and value on the canonical
-  compatible-deal prior restricted by curriculum queries. Actual hidden truth
-  supervises the belief head separately; policy is not trained as a clairvoyant
-  one-world model.
-- The original delivery order was: authoritative `PlanningProblem`, conditional
-  teacher/result, conditional trajectories/shards/student, supervised belief
-  head plus INT-9 adaptation, immutable self-play populations plus INT-6, and
-  conditional Study evidence.
+[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) owns the world/belief/query
+boundary: managym owns world meaning; manabot owns normalized beliefs and
+conditional strategy. Students consume canonical restricted priors, never
+clairvoyant truth. Hidden truth supervises beliefs separately. The original
+I1–I6 ordering at `fd7437df` is superseded by later reprioritizations below.
 
 ## Results-first reprioritization (2026-07-18)
 
