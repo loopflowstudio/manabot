@@ -6,6 +6,12 @@ from ETU-91: its live checkout, frozen cohort, recipes and results are unchanged
 All techniques below remain **unresolved** scientifically. Existing ETU-91
 results cannot be silently reused as independent training replicates.
 
+2026-10-05 ownership: ETU-105's [technique inventory](ataraxos-technique-screen.md)
+owns subsequent learning-rule screens and reuses these instruments. The new
+primary pairs use the pinned categorical move preset; these historical PPO
+contrasts and receipts retain their original meaning. No new execution is
+authorized by the software delivery.
+
 ## Executable contrasts
 
 Generate a fully resolved, digest-bound workflow plan without executing it:

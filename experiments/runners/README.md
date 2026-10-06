@@ -12,3 +12,7 @@ historical provenance and were left as written.
 `distributed_workloads.py`. See [research and launch limits](../../docs/distributed-rl.md).
 Inventory and supervisor checks need only Python 3.12; Torch/native workloads
 remain untested and require a separately available project environment.
+
+`technique_screen.py` exports ETU-105's independent learning-rule plans through
+the landed declarative API. It never executes training or arena games. See the
+[technique inventory and launch boundary](../ataraxos-technique-screen.md).

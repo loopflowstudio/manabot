@@ -1,5 +1,40 @@
 # Intelligence memory
 
+## Technique-screen software boundary (ETU-105, 2026-10-05)
+
+Jack Heart authorized autonomous source research, declarative ablation plans,
+focused admission checks and software delivery, with ETU-105 left open for the
+empirical screen. The eight-hour value-token screen runs in its frozen checkout;
+ETU-91 is retained incomplete after its first seed. Earlier descriptions of its
+running campaign are historical. Neither checkout nor its evidence was changed.
+No new training, calibration, arena cohort or paid compute is authorized here.
+
+The final paper and supplement were rechecked, including S3.4 equations (5)–(6),
+Table S7 and Extended Data Figs. 5–6. Clipping is part of the source method;
+PPO versus move learning is a multi-setting package comparison. Lambda=1 on a
+batched collector still bootstraps unfinished tails; genuine terminal-return
+contrasts use the delivered complete-game compound instrument. EMA evaluation
+uses one training cohort; EMA behavior is a separate hypothesis. LR decay does
+not leave its upper clamp until roughly 2,306 iterations, so tiny smoke results
+cannot test its schedule effect.
+
+PR225's landed authoring API at `3a29e83c` supplies Experiment and the pinned
+Ataraxos preset. Eighteen independent or explicitly packaged contrasts export
+ordinary ResolvedStudy plans with provenance and an unexecuted admission report;
+the existing compound 2x2 stays separate. No competing authoring system or trainer
+was introduced. PR227 capacity is independent of these fixed-model contrasts.
+Learning-rule/credit/system research now belongs to ETU-105; larger belief,
+search and exploiter studies stay ETU-99. Architecture and W&B ownership are unchanged.
+
+The [inventory and ordered program](../../experiments/ataraxos-technique-screen.md)
+give every candidate a disposition, source, departure, cost and interaction,
+with exact commands and proposed budgets. The first 4.5-hour empirical cohort
+is a proposal awaiting scientific judgment, not an allocation. Prior tiny PPO
+timeouts and negative/ambiguous results remain evidence, not decisive verdicts.
+The plan-only notebook has no empirical outputs. All 18 plans exported, and
+63 focused admission/authoring/gradient checks passed without training or games.
+No method benefit, challenger strength or chapter acceptance follows.
+
 ## Distributed RL research boundary (ETU-108, 2026-10-05)
 
 Jack Heart requested primary-source research and a disposable laptop/mini

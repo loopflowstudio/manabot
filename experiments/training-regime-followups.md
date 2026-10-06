@@ -1,5 +1,10 @@
 # Follow-up mechanism protocols
 
+2026-10-05 ownership reconciliation: ETU-105 owns learning-rule, compound-credit
+and systems screens through the [source-checked inventory](ataraxos-technique-screen.md).
+Larger belief, search and exploiter studies remain ETU-99. The proposals below
+retain their evidence and budget boundaries; none grants a new allocation.
+
 2026-10-04. These proposals belong to ETU-91's experiment design; no execution
 or expensive allocation is authorized by their presence. Each requires frozen
 inputs and predictions, a separately approved cost cap, fresh evaluation deals,
