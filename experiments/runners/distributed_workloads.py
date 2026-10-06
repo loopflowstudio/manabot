@@ -100,7 +100,9 @@ def main() -> None:
                 agent, 16, deadline_monotonic=time.perf_counter() + 20
             )
         finally:
-            collector.close()
+            # The collector owns an in-process PyO3 environment, not workers.
+            # Releasing it drops native games/buffers; there is no close API.
+            del collector
         observations = {
             key: torch.from_numpy(value.reshape((-1, *value.shape[2:])).copy())
             for key, value in batch.obs.items()

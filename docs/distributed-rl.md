@@ -1,5 +1,26 @@
 # Distributed RL: research and benchmark preparation (ETU-108)
 
+## Benchmark cleanup follow-up (2026-10-06)
+
+Jack Heart reported that mini inference at `d154a4b` failed on
+`SeatRoutedCollector.close()`. The collector has no close API: it owns a PyO3
+VectorEnv containing native games and observation buffers, all released with
+their owning references. The inference workload now drops its collector in
+`finally`, allowing successful collection to reach measurement and preserving
+the original exception when collection fails. The simulator uses the distinct
+Python VectorEnv wrapper, whose `close()` exists. The train executor and complete
+calibration entry-point calls match the current APIs.
+
+The reported failed attempt remains at
+`jack@100.96.227.95:~/src/etude/.runs/etu108-mini-inference-1`; this follow-up
+does not access or rewrite it or launch remote workloads. Resume the declared
+budget from landed source using a fresh attempt directory. No local project
+environment is provisioned in this checkout, so real inference/simulator smoke
+coverage runs in native integration CI. Six dependency-free supervisor tests
+pass locally. Added regressions require both probes to retain nonempty
+measurements and ensure collection errors are not replaced by cleanup errors.
+Training and complete-evaluation runtime certification remain outside this fix.
+
 2026-10-05. Research contribution on base `be6260d9136e49069a12864514b849811f32b32d`.
 Jack Heart requested research and a disposable prototype in which laptop and mini
 contribute to one learner. This contribution prepares that work; it does not

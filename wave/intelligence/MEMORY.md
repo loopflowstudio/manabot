@@ -114,6 +114,15 @@ No method benefit, challenger strength or chapter acceptance follows.
 
 ## Distributed RL research boundary (ETU-108, 2026-10-05)
 
+On 2026-10-06 Jack Heart reported a mini inference failure at `d154a4b` and
+authorized a focused repair and landing, with remote benchmark resumption left
+to the operator. `SeatRoutedCollector` owns an in-process native environment
+and has no `close()` API; inference now releases the collector reference in
+`finally`. Real inference/simulator probes and preservation of collection errors
+are integration regressions. The failed mini attempt is retained at
+`~/src/etude/.runs/etu108-mini-inference-1`; this repair does not touch it,
+ETU-106's live checkout or native extension. No new training budget follows.
+
 Jack Heart requested primary-source research and a disposable laptop/mini
 prototype where both hosts contribute to one model; speedup is not acceptance.
 The initial contribution prepares research and a bounded benchmark
