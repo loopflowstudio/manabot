@@ -145,7 +145,8 @@ tensor bytes. Support violations count draws violating any pool capacity, known
 minimum or total hand-size constraint. These constraints are the saved managym
 projection; the report does not reconstruct a hidden-world authority. Calibration
 pools decision/card forecasts, so games with more decisions carry more weight;
-these are descriptive means, without game- or training-seed confidence intervals.
+these aggregate fields are descriptive means. The whole-game evidence and
+separate cohort intervals below retain their different weighting.
 The conjunction panel is O(vocabulary size), not all possible queries. Arbitrary
 typed queries, exact-posterior error, native peak memory and strength acceptance
 are explicitly unavailable. Joint NLL is an observed-label proper score, not KL
@@ -166,3 +167,95 @@ cohorts, CLI regeneration and a 40-definition, 80-copy count domain in
 `tests/belief/test_sampling_report.py`. They prove software functionality only.
 ETU-99 owns empirical calibration, dropout/foreign-policy comparisons and broader
 acceptance. ETU-91's frozen campaign and allocation remain unchanged.
+
+## Whole-game evidence and independent-fit uncertainty
+
+The v2 saved report retains each game's ID, deal seed, assignment, decision
+count, learned/prior metrics and ten calibration-bin counts, probability sums
+and truth sums. Both viewers stay in that game. Repeated `(viewer, revision)`
+rows fail rather than overweight a duplicated view. Different revisions remain
+correlated observations in one cluster. Aggregate fields remain decision-weighted;
+pooled ECE is reconstructed from bin totals, not averaged from game ECE.
+Sampling streams now derive from `(sampling seed, game ID)`, so reordering other
+games cannot perturb a game's draws. This is a versioned change from v1's
+split-wide stream; historical outputs are not rewritten.
+
+Generate one saved report per admitted sampler using the command above. Then
+create a `CohortSpec` JSON manifest and run the purely offline analysis:
+
+```bash
+uv run python -m manabot.belief.sampling_cohort \
+  --manifest /path/to/cohort/manifest.json \
+  --out .runs/sampler-cohort.json
+```
+
+The command writes JSON and a Markdown companion, refuses overwrites and resolves
+input report paths relative to the manifest. The [synthetic example generator](../experiments/runners/sampler_uncertainty_example.py)
+writes a complete manifest and hashed input reports; its [report](../experiments/data/sampler-uncertainty-synthetic/analysis.md)
+is **fabricated software evidence**, not measured calibration. Regenerate it in a
+fresh directory without training, games or hand sampling:
+
+```bash
+uv run python experiments/runners/sampler_uncertainty_example.py \
+  --out .runs/sampler-uncertainty-synthetic
+```
+
+Each attempt declares its treatment, independent training seed, fit receipt and
+configuration identities, immutable training dataset, status, and either a hashed
+saved report or a failure/missing reason. Copy provenance from the original
+TrainingRun/artifact receipts; names or seed integers alone cannot establish
+independence. The analyzer verifies the training seed retained in admitted
+checkpoint metadata, report bytes, producer/evaluation policy, datasets,
+world/schema, evaluator source, runtime, sampling seed and sample count. Historical
+checkpoints without fit-seed metadata still support descriptive saved reporting,
+but cannot enter independent-fit analysis. Receipt/configuration identities are
+explicit declarations, not automatic validation of an external TrainingRun store.
+Do not label a different architecture or optimizer setting as another seed of one
+treatment.
+
+The implemented estimands and limits are explicit:
+
+- NLL is the mean decision log loss within a game (nats), then the mean over
+  games, then the mean over fits. Presence/conjunction Brier follow the same
+  hierarchy. ECE here is **mean game ECE**, distinct from pooled forecast ECE
+  retained in the original report. Legality reports game-mean violation rate;
+  original game evidence retains violating counts and total draws.
+- Learned, physical-prior and learned-minus-prior panels use equal game weights,
+  regardless of game length. Paired treatment contrasts subtract at the same
+  fit seed and exact same games before aggregation. Unequal decision counts are
+  allowed; unequal game membership/counts across reports are rejected. There
+  is no silent intersection, imputation or length weighting.
+- A 95% percentile fit bootstrap resamples independent fits with replacement,
+  keeping all saved games fixed. A separate 95% game bootstrap resamples whole
+  games with replacement using the same indexes across fits and contrast arms,
+  keeping fitted models fixed. All decisions and both viewers stay together.
+  These are separate conditional intervals, **not a combined uncertainty
+  interval**. Very small fit cohorts give coarse, exploratory intervals.
+- One fit has no fit-seed interval; one game has no game interval. Repeated
+  sampling seeds, sample-count variants and repeated checkpoint bytes cannot
+  become independent fits. Fixed-panel sampling randomness is conditioned on,
+  not integrated out. All-zero observed violations yield a zero empirical
+  bootstrap interval; that is not an upper bound on unseen violations.
+- The cohort is conditional on **one frozen producer and training dataset**,
+  and one evaluation dataset/population. Cross-producer variance, unequal-data
+  comparisons, checkpoint selection and a combined producer/fit analysis remain
+  unsupported. Foreign evaluation retains a separate generating-policy identity;
+  it is not an independent producer fit. Run separate panels for other datasets,
+  sample counts or sampling seeds and do not pool them as independent models.
+- Every declared failed/missing fit remains in the output. An incomplete cohort
+  retains available per-fit descriptive means but suppresses all cohort means
+  and intervals, including contrasts. A declared complete report that is absent,
+  malformed or mismatched raises an error; amend its status explicitly, never
+  silently drop it. Unsupported metrics stay unavailable, never zero.
+- Train-split analysis remains in-sample. No arbitrary queries, posterior KL,
+  game generation or hidden-truth inference is added. NLL uses retrospective
+  labels only. No calibration, transfer or strength acceptance follows.
+
+The output binds the manifest, all saved-report hashes, evaluator and analysis
+source identities, bootstrap seed/count, analysis Python/NumPy and saved evaluation runtimes.
+Statistical regeneration reads these frozen reports and does no sampling; measured
+sampling time and Python allocations remain in the hashed inputs. New sampling
+reports measure fresh costs and must not be substituted as if only their intervals
+had changed. The synthetic and fixed-weight saved-artifact checks in
+`tests/belief/test_sampling_cohort.py` and `test_sampling_report.py` exercise this
+software contract. ETU-99 retains empirical cohorts and budget authorization.

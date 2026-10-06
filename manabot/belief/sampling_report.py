@@ -22,7 +22,9 @@ import torch
 from manabot.belief.learning import _deterministic_torch_cpu
 from manabot.belief.sampling_data import Split, read_dataset
 from manabot.belief.sampling_fit import (
+    CalibrationBin,
     SamplerArmMetrics,
+    calibration_error,
     evaluate_physical_sampler,
     evaluate_sampler,
     load_belief_sampler,
@@ -36,6 +38,18 @@ class UnavailableMetric:
 
 
 @dataclass(frozen=True, slots=True)
+class GameMeasurement:
+    """Both viewers and all saved decisions stay in one resampling cluster."""
+
+    game_id: str
+    seed: int
+    assignment: int
+    examples: int
+    physical_prior: SamplerArmMetrics
+    learned: SamplerArmMetrics | None
+
+
+@dataclass(frozen=True, slots=True)
 class SplitMeasurement:
     split: Split
     game_ids: tuple[str, ...]
@@ -43,6 +57,7 @@ class SplitMeasurement:
     samples_per_example: int
     physical_prior: SamplerArmMetrics
     learned: SamplerArmMetrics | None
+    games: tuple[GameMeasurement, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +80,43 @@ class SamplerQualityReport:
     parameter_bytes: int
     measurements: tuple[SplitMeasurement, ...]
     unavailable: tuple[UnavailableMetric, ...]
+    training_seed: int | None = None
+
+
+def _pool_games(
+    arms: Sequence[SamplerArmMetrics], sizes: Sequence[int]
+) -> SamplerArmMetrics:
+    """Preserve the historical decision-weighted aggregate beside game evidence."""
+    total = sum(sizes)
+    bins = tuple(
+        CalibrationBin(
+            sum(arm.calibration_bins[i].count for arm in arms),
+            sum(arm.calibration_bins[i].probability_sum for arm in arms),
+            sum(arm.calibration_bins[i].truth_sum for arm in arms),
+        )
+        for i in range(10)
+    )
+    return SamplerArmMetrics(
+        joint_nll=sum(a.joint_nll * n for a, n in zip(arms, sizes, strict=True))
+        / total,
+        inclusion_brier=sum(
+            a.inclusion_brier * n for a, n in zip(arms, sizes, strict=True)
+        )
+        / total,
+        inclusion_ece=calibration_error(bins),
+        conjunction_brier=None
+        if any(a.conjunction_brier is None for a in arms)
+        else sum(
+            (a.conjunction_brier or 0) * n for a, n in zip(arms, sizes, strict=True)
+        )
+        / total,
+        support_violations=sum(a.support_violations for a in arms),
+        sampled_hands=sum(a.sampled_hands for a in arms),
+        sampling_seconds=sum(a.sampling_seconds for a in arms),
+        peak_python_bytes=max(a.peak_python_bytes for a in arms),
+        largest_sample_tensor_bytes=max(a.largest_sample_tensor_bytes for a in arms),
+        calibration_bins=bins,
+    )
 
 
 def report_saved_sampler(
@@ -99,6 +151,7 @@ def report_saved_sampler(
         None if training_dataset_path is None else read_dataset(training_dataset_path)
     )
     model = None
+    training_seed: int | None = None
     if training is not None:
         if (
             training.world_identity != dataset.world_identity
@@ -122,31 +175,68 @@ def report_saved_sampler(
                 expected_world_identity=training.world_identity,
                 expected_checkpoint_identity=checkpoint_identity,
             )
+        # The admitted bytes own the fit seed when historical exports retained it.
+        # Missing metadata stays unavailable; a sampling seed cannot replace it.
+        payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
+        metrics = payload.get("metrics")
+        if isinstance(metrics, dict) and "seed" in metrics:
+            if type(metrics["seed"]) is not int:
+                raise ValueError("invalid checkpoint training seed")
+            training_seed = metrics["seed"]
     measurements: list[SplitMeasurement] = []
     splits: tuple[Split, ...] = ("train", "validation", "test")
     with _deterministic_torch_cpu():
         for split in splits:
             games = tuple(game for game in dataset.games if game.split == split)
-            rows = tuple(row for game in games for row in game.examples)
             for count in sample_counts:
-                if model is None:
-                    prior = evaluate_physical_sampler(rows, samples=count, seed=seed)
-                    learned = None
-                else:
-                    result = evaluate_sampler(model, rows, samples=count, seed=seed)
-                    prior, learned = result.physical_baseline, result.learned
+                evidence: list[GameMeasurement] = []
+                for game in games:
+                    # Stable per-game stream: ordering/size of other games cannot
+                    # change this game's Monte Carlo evidence. Counts share seeds.
+                    game_seed = int.from_bytes(
+                        hashlib.sha256(f"{seed}:{game.game_id}".encode()).digest()[:8],
+                        "big",
+                    )
+                    views = [(row.viewer, row.revision) for row in game.examples]
+                    if len(set(views)) != len(views):
+                        raise ValueError("duplicate saved observation within a game")
+                    if model is None:
+                        prior = evaluate_physical_sampler(
+                            game.examples, samples=count, seed=game_seed
+                        )
+                        learned = None
+                    else:
+                        result = evaluate_sampler(
+                            model, game.examples, samples=count, seed=game_seed
+                        )
+                        prior, learned = result.physical_baseline, result.learned
+                    evidence.append(
+                        GameMeasurement(
+                            game.game_id,
+                            game.seed,
+                            game.assignment,
+                            len(game.examples),
+                            prior,
+                            learned,
+                        )
+                    )
+                sizes = [game.examples for game in evidence]
+                learned_arms = [
+                    game.learned for game in evidence if game.learned is not None
+                ]
                 measurements.append(
                     SplitMeasurement(
                         split,
                         tuple(game.game_id for game in games),
-                        len(rows),
+                        sum(sizes),
                         count,
-                        prior,
-                        learned,
+                        _pool_games([game.physical_prior for game in evidence], sizes),
+                        _pool_games(learned_arms, sizes) if learned_arms else None,
+                        tuple(evidence),
                     )
                 )
     return SamplerQualityReport(
-        format="manabot.sampler-quality/v1",
+        format="manabot.sampler-quality/v2",
         evaluation_dataset_identity=dataset.identity,
         training_dataset_identity=None if training is None else training.identity,
         evaluation_policy_identity=dataset.policy_identity,
@@ -174,6 +264,7 @@ def report_saved_sampler(
             )
         ).hexdigest(),
         seed=seed,
+        training_seed=training_seed,
         torch_version=str(torch.__version__),
         python_version=platform.python_version(),
         device="cpu",

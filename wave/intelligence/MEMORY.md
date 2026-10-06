@@ -1086,3 +1086,27 @@ held-out endpoint deals. Incomplete cohorts retain diagnostics without comparati
 curves. Synthetic report regeneration establishes software behavior only. Fast
 experimental and promotion model choices remain unresolved; throughput is not
 terminal strength and the current default remains unchanged.
+
+## Saved sampler uncertainty software (ETU-110, 2026-10-05)
+
+Jack Heart authorized independent offline software delivery, not training or
+empirical cohorts. Saved sampler v2 reports retain whole-game learned/prior
+scores, legality counts and calibration-bin totals through the existing evaluator.
+Pooled aggregates retain decision weighting; cohort NLL/Brier use equal game
+then equal fit weights. Mean game ECE and pooled forecast ECE are distinct.
+Game-derived sampling streams and exact report hashes bind regeneration.
+
+The cohort command admits one frozen producer/training dataset and one evaluation
+population, with declared fit receipts/configurations and checkpoint-bound training
+seeds. Repeated sampling seeds/counts are panels, not fits. Separate percentile
+bootstraps vary independent fits or shared whole games; both viewers stay together,
+paired contrasts subtract before resampling, and single-fit seed uncertainty is
+unavailable. These are conditional intervals, not combined producer/fit uncertainty.
+Missing/failed attempts remain visible and suppress cohort estimates; mismatched
+identities or game membership fail instead of silently trimming evidence.
+
+The [sampler guide](../../docs/belief-sampler.md#whole-game-evidence-and-independent-fit-uncertainty)
+owns commands, weighting and limitations. Synthetic and fixed-weight saved-artifact
+checks are software evidence only. Cross-producer analysis, actual calibration,
+transfer and strength remain ETU-99; no scientific allocation, paid compute or
+ETU-91/106 checkout change occurred.

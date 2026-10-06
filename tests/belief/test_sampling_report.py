@@ -14,6 +14,7 @@ from manabot.belief.sampling import (
     SamplerInput,
     SamplerSchema,
 )
+from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -21,7 +22,8 @@ from manabot.belief.sampling_data import (
     Split,
     save_dataset,
 )
-from manabot.belief.sampling_report import main, report_saved_sampler
+from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
+from manabot.belief.sampling_report import _pool_games, main, report_saved_sampler
 
 
 def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
@@ -53,9 +55,9 @@ def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
     )
 
 
-def _checkpoint(path: Path, dataset: SamplerDataset) -> str:
+def _checkpoint(path: Path, dataset: SamplerDataset, seed: int = 19) -> str:
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(19)
+        torch.manual_seed(seed)
         model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
         # Fixed nonzero corrections exercise learned inference without training.
         with torch.no_grad():
@@ -73,6 +75,7 @@ def _checkpoint(path: Path, dataset: SamplerDataset) -> str:
             "hidden_size": 4,
             "history_dropout": 0.0,
             "state_dict": model.state_dict(),
+            "metrics": {"seed": seed},
         },
         path,
     )
@@ -290,3 +293,104 @@ def test_report_counts_invalid_draws(
     for row in report.measurements:
         assert row.learned is not None and row.learned.support_violations == 2
         assert row.physical_prior.support_violations == 0
+
+
+def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:
+    dataset = _dataset()
+    game = dataset.games[-1]
+    extra = replace(
+        game,
+        game_id="extra-test",
+        seed=77,
+        examples=(
+            replace(game.examples[0], revision=1, viewer=0),
+            replace(game.examples[0], revision=2, viewer=1, target_hand=(1, 1)),
+        ),
+    )
+    dataset = replace(dataset, games=(*dataset.games, extra))
+    data = tmp_path / "data.json"
+    save_dataset(dataset, data)
+    attempts: list[FitAttempt] = []
+    reports = []
+    for seed in (10, 11):
+        checkpoint = tmp_path / f"model-{seed}.pt"
+        digest = _checkpoint(checkpoint, dataset, seed)
+        report = report_saved_sampler(
+            data,
+            checkpoint=checkpoint,
+            checkpoint_identity=digest,
+            training_dataset_path=data,
+            sample_counts=(4,),
+            seed=7,
+        )
+        reports.append(report)
+        assert report.training_seed == seed
+        panel = next(m for m in report.measurements if m.split == "test")
+        assert [g.examples for g in panel.games] == [1, 2]
+        assert panel.examples == 3 and panel.learned is not None
+        assert panel.learned.sampled_hands == 12
+        assert len(panel.learned.calibration_bins) == 10
+        path = tmp_path / f"report-{seed}.json"
+        encoded = json.dumps(asdict(report), allow_nan=False).encode()
+        path.write_bytes(encoded)
+        attempts.append(
+            FitAttempt(
+                attempt_id=f"fixed-{seed}",
+                treatment="fixed",
+                training_seed=seed,
+                fit_receipt_identity=f"fixture-{seed}",
+                configuration_identity="fixed-untrained-weights",
+                training_dataset_identity=dataset.identity,
+                status="complete",
+                report=path,
+                report_sha256=hashlib.sha256(encoded).hexdigest(),
+            )
+        )
+    first = reports[0]
+    spec = CohortSpec(
+        description="Fixed-weight saved fixtures, not trained fits",
+        producer_policy_identity=dataset.policy_identity,
+        evaluation_policy_identity=dataset.policy_identity,
+        evaluation_dataset_identity=dataset.identity,
+        world_identity=dataset.world_identity,
+        schema_identity=dataset.schema.identity,
+        evaluator_identity=first.evaluator_identity,
+        samples_per_example=4,
+        sampling_seed=7,
+        bootstrap_replicates=100,
+        attempts=tuple(attempts),
+    )
+    result = report_sampler_cohort(spec)
+    assert result.complete
+    assert all(e.fit_seeds == (10, 11) for e in result.estimates)
+    assert result == report_sampler_cohort(spec)
+
+
+def test_duplicate_saved_views_rejected(tmp_path: Path) -> None:
+    dataset = _dataset()
+    dataset = replace(
+        dataset, games=tuple(replace(g, examples=g.examples * 2) for g in dataset.games)
+    )
+    path = tmp_path / "duplicates.json"
+    save_dataset(dataset, path)
+    with pytest.raises(ValueError, match="duplicate saved observation"):
+        report_saved_sampler(path, sample_counts=(2,))
+
+
+def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
+    # Same forecast bin, opposite errors: pooled calibration cancels although
+    # the mean game ECE is .5. Retain enough statistics to distinguish them.
+    bins_a = (
+        (CalibrationBin(0, 0, 0),) * 5
+        + (CalibrationBin(2, 1, 0),)
+        + (CalibrationBin(0, 0, 0),) * 4
+    )
+    bins_b = (
+        (CalibrationBin(0, 0, 0),) * 5
+        + (CalibrationBin(2, 1, 2),)
+        + (CalibrationBin(0, 0, 0),) * 4
+    )
+    arm = SamplerArmMetrics(1, 0.25, 0.5, None, 0, 4, 0, 0, 0, bins_a)
+    pooled = _pool_games([arm, replace(arm, calibration_bins=bins_b)], [1, 1])
+    assert pooled.inclusion_ece == 0
+    assert pooled.conjunction_brier is None

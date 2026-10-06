@@ -131,9 +131,10 @@ within a producer; pair learned-minus-prior at those same games. Resample games
 with both viewers together for conditional uncertainty. Report producer and
 sampler-fit seed variation separately; multiple fits on one producer do not
 create independent policy populations. Use game-mean NLL as B1's primary score;
-pooled decision/card Brier/ECE are descriptive secondaries. Existing aggregate
-report output cannot reconstruct these intervals; retain per-game scores from
-the same immutable rows before scientific analysis. Never derive an interval
+pooled decision/card Brier/ECE are descriptive secondaries. The saved sampler report now retains per-game scores; its offline cohort
+command supplies separate game and fit bootstrap intervals conditional on one
+producer. Cross-producer analysis for this protocol remains separate. Never
+substitute those conditional intervals for this protocol's producer-level analysis. Never derive an interval
 from an aggregate mean alone.
 
 An endpoint prediction below is a proposal to freeze, not an observed value.
@@ -381,7 +382,7 @@ one-update producer or copy a checksum to bypass that boundary.
 | `TrainingRegime`, `TrainingRun`, VerifyStore | Collection, sampler fitting, local labels, shared-root hard/soft fits, frozen attackers; costs and failures | Published-artifact stage reuse and explicit separately seeded fitting cohorts need orchestration; implicit run seed offsets are not a crossed seed design |
 | `Experiment`, `Pipeline`, `ResolvedExperiment.receipt()` | Resolve and bind existing regimes with provenance without execution | A recipe receipt is neither a cohort nor budget authorization |
 | `EvaluationProtocol` / `ResolvedStudy` | Existing named policy-only studies | Restricted study IDs, player counts, policy-only inference and stage-count rules exclude B1/B2/D1 graphs; no fabricated `omitted-controls` wrapper |
-| `report_saved_sampler` | Immutable own/foreign datasets, exact sampler admission, samples {16,64,256}, descriptive metrics | Per-game output/seed aggregation, arbitrary queries and native RSS unavailable; preserve original splits |
+| `report_saved_sampler` | Immutable own/foreign datasets, exact sampler admission, samples {16,64,256}, descriptive metrics | Whole-game output and conditional-on-producer fit/game uncertainty available; cross-producer aggregation, arbitrary queries and native RSS unavailable; preserve original splits |
 | `AttackPlan.regime_for`, `execute_attack_plan` | Exact target hashes, continued ladder, selected-match replay | No selected-world positive-control factory, anchor matrix or target-seed uncertainty; do not represent them as delivered |
 
 After authorization, save resolved declarations, actual artifact manifests,
