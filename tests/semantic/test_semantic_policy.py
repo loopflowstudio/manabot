@@ -90,7 +90,16 @@ def test_semantic_decision_binds_and_applies_real_35_target_command() -> None:
     assert frame["projection"]["opponent"]["hand_hidden_count"] > 0
     assert frame["revision"] == 7
     assert frame["prompt"]["kind"] == "priority"
-    assert frame["offers"] == list(decision.batch.offers)
+    for presented, native in zip(frame["offers"], decision.batch.offers, strict=True):
+        assert presented["id"] == native["id"]
+        assert presented["source"] == native["source"]
+        assert "details" in native and "details" not in presented
+        for shown_role, native_role in zip(
+            presented["choices"], native["choices"], strict=True
+        ):
+            assert shown_role["role"] == native_role["role"]
+            assert shown_role["candidates"] == native_role["candidates"]
+            assert "context" in native_role and "context" not in shown_role
     assert decision.batch.max_candidate_count == 35
 
     cast_index = next(

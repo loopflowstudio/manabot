@@ -20,6 +20,9 @@ immutable Python values after native validation. `ChoiceSupport` retains the
 certified independent support for scoring without a live match. Native
 `Env.compound_prefix_support(offers, prefix)` additionally checks the live root.
 The wire projection binds schema, revision and factorization order 1.
+The semantic-policy adapter retains all native fields for scoring and execution;
+its protocol-v1 Etude presentation omits `details` and choice `context`, which that
+older DTO does not admit. This does not change the presentation protocol.
 
 The first token selects an offer. Subsequent bits include or exclude candidates
 in native role/candidate order. Every allowed prefix has a completion; every

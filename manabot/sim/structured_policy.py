@@ -69,6 +69,11 @@ class RaggedOfferBatch:
     role_inputs: tuple[ChoiceFeatures, ...] = ()
     candidate_inputs: tuple[ChoiceFeatures, ...] = ()
 
+    def submission(self, tokens: Sequence[int]) -> DecodedSubmission:
+        """Use the native tape interpretation for both learned and fixture policies."""
+        payload = json.loads(self.support.submission_json(list(tokens)))
+        return DecodedSubmission(payload["offer_id"], tuple(payload["answers"]))
+
     @property
     def max_candidate_count(self) -> int:
         return max(
@@ -104,14 +109,6 @@ class DecodedSubmission:
 
     def to_json(self) -> str:
         return json.dumps(self.as_dict(), separators=(",", ":"), sort_keys=True)
-
-
-def _integer(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise StructuredPolicyError(f"{field} must be an integer")
-    if value < 0:
-        raise StructuredPolicyError(f"{field} must be non-negative")
-    return value
 
 
 def flatten_projection(
@@ -255,8 +252,7 @@ class RaggedPolicyDecoder:
             range(len(batch.offers)),
             key=lambda index: (scores.offer_scores[index], -index),
         )
-        offer = batch.offers[offer_index]
-        answers: list[Mapping[str, Any]] = []
+        tokens = [offer_index]
         start = batch.choice_offsets[offer_index]
         stop = batch.choice_offsets[offer_index + 1]
         for row in batch.choices[start:stop]:
@@ -274,18 +270,9 @@ class RaggedPolicyDecoder:
             elif len(selected) > row.maximum:
                 selected = ranked[: row.maximum]
             selected_set = set(selected)
-            selected_ids = [
-                _integer(batch.candidates[index].get("id"), "candidate.id")
-                for index in indexes
-                if index in selected_set
-            ]
-            answers.append(
-                {"kind": "candidates", "role": row.role, "candidates": selected_ids}
-            )
+            tokens.extend(int(index in selected_set) for index in indexes)
 
-        return DecodedSubmission(
-            offer_id=_integer(offer.get("id"), "offer.id"), answers=tuple(answers)
-        )
+        return batch.submission(tokens)
 
     @staticmethod
     def _validate_scores(scores: Sequence[float], expected: int, label: str) -> None:

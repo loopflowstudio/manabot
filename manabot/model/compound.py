@@ -170,7 +170,6 @@ class CompoundDecoder(nn.Module):
             self.offer_score(torch.tanh(offer_rows + state)).squeeze(-1)
         )
         state = self.prefix(offer_rows[offer_index], state)
-        answers: list[dict[str, object]] = []
         start, stop = batch.choice_offsets[offer_index : offer_index + 2]
         for role_index in range(start, stop):
             row = batch.choices[role_index]
@@ -179,7 +178,7 @@ class CompoundDecoder(nn.Module):
                 state = self.prefix(
                     self._features(batch.role_inputs[role_index], objects), state
                 )
-            selected: list[int] = []
+            selected_count = 0
             count = row.candidate_stop - row.candidate_start
             for ordinal, index in enumerate(
                 range(row.candidate_start, row.candidate_stop)
@@ -193,7 +192,7 @@ class CompoundDecoder(nn.Module):
                 position = context.new_tensor(
                     [
                         ordinal / max(1, count),
-                        len(selected) / max(1, count),
+                        selected_count / max(1, count),
                         math.log1p(count),
                     ]
                 )
@@ -204,19 +203,14 @@ class CompoundDecoder(nn.Module):
                     device=context.device,
                 )
                 take = choose(logits.masked_fill(~allowed, -torch.inf))
-                if take:
-                    selected.append(int(candidate["id"]))
+                selected_count += take
                 state = self.prefix(self.choice.weight[take], state)
-            answers.append(
-                {"kind": "candidates", "role": row.role, "candidates": selected}
-            )
         if len(prefix) > len(selected_tokens):
             raise StructuredPolicyError("compound prefix has trailing choices")
         if tokens is not None and len(tokens) != len(selected_tokens):
             raise StructuredPolicyError("compound token tape has trailing choices")
-        batch.support.submission_json(selected_tokens)
         return CompoundOutput(
-            DecodedSubmission(int(batch.offers[offer_index]["id"]), tuple(answers)),
+            batch.submission(selected_tokens),
             tuple(selected_tokens),
             torch.stack(log_probs),
             torch.stack(values),

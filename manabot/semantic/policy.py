@@ -518,7 +518,19 @@ class SemanticDecisionAdapter:
             content_hash=content_hash,
             asset_manifest_hash=asset_manifest_hash,
         )
-        frame["offers"] = list(projection["offers"])
+        # Protocol-v1 presentation predates native choice details and contexts.
+        # Keep its field set stable; the model's batch retains the full native
+        # projection for scoring, support and execution.
+        frame["offers"] = [
+            {
+                **{key: value for key, value in offer.items() if key != "details"},
+                "choices": [
+                    {key: value for key, value in choice.items() if key != "context"}
+                    for choice in offer["choices"]
+                ],
+            }
+            for offer in projection["offers"]
+        ]
         frame["prompt"]["actor"] = int(projection["actor"])
         frame["prompt"]["kind"] = str(projection["kind"])
         core = {field: frame[field] for field in cls._FRAME_CORE_FIELDS}

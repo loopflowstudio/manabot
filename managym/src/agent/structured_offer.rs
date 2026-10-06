@@ -1046,10 +1046,15 @@ impl Game {
         &self,
         permanent: PermanentId,
     ) -> Result<SubjectRef, StructuredOfferError> {
-        let CandidateValue::Subject { subject } = self
-            .compound_permanent_candidate(permanent, CandidateId(0))?
-            .value;
-        Ok(subject)
+        let object = self
+            .permanent_object_ref(permanent)
+            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        let permanent = self.state.permanents[permanent]
+            .as_ref()
+            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        Ok(SubjectRef::Object {
+            id: object_render_id(permanent.id, object.incarnation.0),
+        })
     }
 
     fn action_source(&self, action: &Action) -> Result<Option<SubjectRef>, StructuredOfferError> {
@@ -1207,19 +1212,13 @@ impl Game {
         permanent: PermanentId,
         id: CandidateId,
     ) -> Result<Candidate, StructuredOfferError> {
-        let object = self
-            .permanent_object_ref(permanent)
-            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
+        let subject = self.permanent_subject(permanent)?;
         let permanent = self.state.permanents[permanent]
             .as_ref()
             .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
         Ok(Candidate {
             id,
-            value: CandidateValue::Subject {
-                subject: SubjectRef::Object {
-                    id: object_render_id(permanent.id, object.incarnation.0),
-                },
-            },
+            value: CandidateValue::Subject { subject },
             label: self.state.cards[permanent.card].name.clone(),
             help: None,
             preview: None,
