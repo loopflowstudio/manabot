@@ -1,9 +1,42 @@
 # ETU-106: bounded identity-aware recent-history screen
 
 Prepared 2026-10-06 for Jack Heart. The original prospective protocol is retained
-below. Jack Heart authorized review and autonomous software delivery; no scientific
-campaign has launched. PR241 and all completed campaign artifacts remain unchanged. The six-hour allocation described
-here is an execution contract, not evidence that calibration or admission passed.
+below. The first campaign failed during calibration after software delivery in
+PR243 (merge `d760a4baf3a082ed9a64d98e9f542135580ea222`). No scientific cohort
+ran or passed admission. PR241 and completed campaign artifacts remain unchanged.
+The failed attempt and its full cost remain retained; a fresh calibration allocation
+is parent-owned after this repair is delivered.
+
+## Failed calibration and reload repair (2026-10-06)
+
+The immutable `.runs/etu106-history-input` attempt ended with supervisor status
+`failed` at **91.15643158298917 seconds** on source `ccb6538c`.
+History-off completed 40 updates across two linked stages before `_reload`
+passed the stage's optimizer export to `load_checkpoint_agent`, which raised
+`KeyError: hypers`. History-on, admission and scientific scoring did not run.
+The completed history-off TrainingRun is not a completed campaign or admissible
+calibration. Its timings must not be reused to freeze a new cohort.
+
+`TrainingRun` stage exports contain raw/EMA policy checkpoints and a plain Adam
+state dictionary. Reload now verifies every artifact digest and policy-loads
+only `raw`/`ema`, retaining model/observation configuration and finite-parameter
+checks. Optimizer bytes are integrity-checked; restoration belongs to the existing
+recovery snapshot/optimizer contract and is unnecessary for policy admission.
+No optimizer state is fed to a policy loader or restored by this check.
+
+Read-only verification of the retained run checked all six export hashes and
+loaded all four policies; SHA-256 comparison confirmed all 15 attempt files
+unchanged. The run export digest is
+`d2bc42ae62347d736b7cae34836bf06daf1dec982be57dddf10d542f74d54407`.
+No training, retry, evaluation or campaign restart occurred during repair.
+Audit of the other mixed-artifact loops found integrity checks only (value-model
+recovery, training recovery and selection reporting); ordinary study registration
+already selects raw/EMA explicitly. No analogous policy-loading defect was found.
+
+Evidence: `uv run pytest tests/training/test_history_input.py -q` — 32 passed,
+including mixed exports, corruption of raw/EMA/optimizer and mismatched policy
+configuration; retained-artifact reload passed read-only. These are software
+checks, not a successful calibration or campaign. ETU-106 remains open.
 
 ## Software preparation and next commands
 
@@ -41,15 +74,15 @@ Model construction confirms totals 138,498 off / 161,410 on and the 22,912 incre
 These are software checks, not calibration or throughput measurements. Retained
 campaign bytes and their runtime receipts are unchanged.
 
-After source delivery and the exclusive-host/external-cohort audit below, the
-complete entry point performs prospective cost admission before scientific work:
+Only after a fresh parent-owned allocation, source delivery and the
+exclusive-host/external-cohort audit below may a new attempt perform prospective
+cost admission before scientific work:
 
 ```bash
-uv run python -m experiments.runners.run_history_input --campaign <exact-clean-delivered-commit> --out .runs/etu106-history-input
+uv run python -m experiments.runners.run_history_input --campaign <exact-clean-delivered-commit> --out .runs/<new-parent-approved-attempt>
 ```
 
-This command **starts calibration and, if admitted, scientific work**; it was not
-run in this contribution. It checks local frozen plans/attempts for seed collisions,
+This command **starts calibration and, if admitted, scientific work**; the original attempt failed as recorded above. Do not restart or overwrite it. It checks local frozen plans/attempts for seed collisions,
 not other machines or checkouts. The launch owner must establish exclusive host
 use and check external proposed/retained cohorts before admission. Current-runtime
 calibration rate, admitted N, disk projection and finalized source/runtime/host
@@ -178,8 +211,9 @@ process-group cleanup, incomplete evidence, native history/reset/information saf
 ordinary checkpoint reload and full-game replay. Prospective calibration rate,
 admitted N, actual launch-host resource envelope, disk projection and finalized
 source/runtime identities remain unknown. Exclusive-host and external-cohort seed
-checks belong to the launch owner. This contribution delivers software only;
-calibration and the scientific campaign have not run.
+checks belong to the launch owner. The repair delivers software only;
+the failed calibration remains immutable and unadmitted. Fresh calibration requires
+a parent-owned allocation after delivery; no scientific results exist.
 
 ## Sources inspected for this proposal
 

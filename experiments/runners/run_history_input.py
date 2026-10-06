@@ -575,10 +575,17 @@ def main() -> None:
 
 
 def _reload(run: TrainingRun) -> None:
+    """Check every export's integrity and admit only raw/EMA as policies.
+
+    TrainingRun also exports an Adam state dictionary under ``optimizer``.
+    Its digest is checked here; optimizer restoration belongs to recovery.
+    """
     for stage in run.stages:
-        for artifact in stage.artifacts.values():
+        for name, artifact in stage.artifacts.items():
             if file_sha256(Path(artifact["path"])) != artifact["sha256"]:
                 raise ValueError("history checkpoint bytes changed")
+            if name not in {"raw", "ema"}:
+                continue
             agent, _ = load_checkpoint_agent(artifact["path"])
             if (
                 agent.hypers != run.regime.agent

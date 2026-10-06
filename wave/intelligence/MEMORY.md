@@ -2,12 +2,16 @@
 
 ## History input (ETU-106, 2026-10-06)
 
-Jack Heart authorized [history-screen delivery](../../experiments/history-input.md).
-Off/on ABIs differ. Native fixtures and eight fixed-weight replayed games pass; the old
-extension and campaign bytes remain preserved. No calibration or campaign ran; delivered source,
-exclusive-host/cohort audit and prospective cost admission precede execution.
-History adds information and parameters; fixed-update scores cannot establish
-common-cost superiority. ETU-106 stays open.
+Jack Heart authorized [history-screen delivery](../../experiments/history-input.md)
+and the narrow calibration repair after PR243 merged. The first attempt failed
+at 91.156 s after history-off completed 40 updates: reload mistook an optimizer
+state dictionary for a policy. All exports now receive hash checks; only raw/EMA
+receive policy admission. Read-only reload checked six exports/four policies and
+left all 15 attempt files unchanged. No training or restart ran for the repair.
+The failed attempt/cost remain immutable and cannot admit a cohort; fresh
+calibration allocation is parent-owned after delivery. ETU-106 stays open.
+Off/on ABIs differ; history adds information and parameters. Fixed-update scores
+cannot establish common-cost superiority. No scientific history cohort ran.
 
 ## Completed pooling × advantage-floor follow-up (ETU-106, 2026-10-06)
 
@@ -1043,12 +1047,7 @@ the landing pass reviewed the diff and retained evidence, with 64 focused checks
 passing. This is agent technical review, not human code review. Required CI and
 verified merge remain delivery conditions.
 
-Inspection at `db820056` separates semantic-program GRU, compound prefix GRU,
-explicit viewer/belief memory and the frozen-policy hand sampler. Current Agent
-ignores recent events; new history input is an explicit information treatment.
-History/sequence training and transfer tooling remain later interventions. Equal
-tensor shapes do not establish equal meaning or compatible weights. No architecture
-strength claim or scientific study follows from these software changes.
+Inspection at `ccb6538c`: equal shapes do not establish weight compatibility.
 
 Recipe composition uses regime IDs as the single cell-label source and rejects
 duplicates before crossing value outputs. Every variation snapshots and validates

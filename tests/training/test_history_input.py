@@ -563,3 +563,75 @@ def test_history_checkpoint_reload_rejects_swapped_input_metadata(
     torch.save(payload, path)
     with pytest.raises((ValueError, RuntimeError)):
         load_checkpoint_agent(str(path))
+
+
+@pytest.fixture
+def exported_history_run(tmp_path: Path) -> TrainingRun:
+    """Ordinary export payloads, including Adam state, without optimization."""
+    recipe = history.recipes(40, calibration=True)[0]
+    agent = Agent(ObservationSpace(recipe.observation), recipe.agent)
+    record = StageRecord(id=recipe.stages[0].id, status="completed")
+    for name in ("raw", "ema", "optimizer"):
+        path = tmp_path / f"{name}.pt"
+        if name == "optimizer":
+            torch.save(torch.optim.Adam(agent.parameters()).state_dict(), path)
+        else:
+            save_bc_checkpoint(
+                agent,
+                agent.observation_space,
+                path,
+                player_configs=Match(recipe.match).to_rust(),
+            )
+        record.artifacts[name] = {
+            "path": str(path),
+            "sha256": file_sha256(path),
+            "bytes": path.stat().st_size,
+        }
+    return TrainingRun(
+        id="history-export-fixture",
+        regime=recipe,
+        regime_digest=canonical_sha256(recipe.model_dump(mode="json")),
+        seed=history.CALIBRATION_SEED,
+        seed_streams={},
+        identities={},
+        stages=[record],
+        status="completed",
+    )
+
+
+def test_history_reload_accepts_mixed_stage_exports(
+    exported_history_run: TrainingRun,
+) -> None:
+    supervisor._reload(exported_history_run)
+
+
+@pytest.mark.parametrize("name", ["raw", "ema", "optimizer"])
+def test_history_reload_checks_every_artifact_digest(
+    exported_history_run: TrainingRun, name: str
+) -> None:
+    artifact = exported_history_run.stages[0].artifacts[name]
+    path = Path(artifact["path"])
+    path.write_bytes(path.read_bytes() + b"corruption")
+    with pytest.raises(ValueError, match="bytes changed"):
+        supervisor._reload(exported_history_run)
+
+
+@pytest.mark.parametrize("name", ["raw", "ema"])
+def test_history_reload_checks_each_policy_configuration(
+    exported_history_run: TrainingRun, name: str
+) -> None:
+    # A valid but different history contract must fail run-level admission,
+    # even with an internally consistent checkpoint and refreshed digest.
+    recipe = history.recipes(40, calibration=True)[1]
+    agent = Agent(ObservationSpace(recipe.observation), recipe.agent)
+    artifact = exported_history_run.stages[0].artifacts[name]
+    path = Path(artifact["path"])
+    save_bc_checkpoint(
+        agent,
+        agent.observation_space,
+        path,
+        player_configs=Match(recipe.match).to_rust(),
+    )
+    artifact.update(sha256=file_sha256(path), bytes=path.stat().st_size)
+    with pytest.raises(ValueError, match="configuration differs"):
+        supervisor._reload(exported_history_run)
