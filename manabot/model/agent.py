@@ -83,7 +83,11 @@ class Agent(nn.Module):
         # Global game state processor via attention.
         if self.hypers.attention_on:
             num_heads = self.hypers.num_attention_heads
-            self.attention = GameObjectAttention(embed_dim, num_heads=num_heads)
+            self.attention = GameObjectAttention(
+                embed_dim,
+                num_heads=num_heads,
+                feedforward_dim=hypers.attention_feedforward_dim,
+            )
             self.logger.info(
                 f"Attention: {embed_dim} -> {embed_dim} with {num_heads} heads"
             )
@@ -159,7 +163,12 @@ class Agent(nn.Module):
         # Construct optional parameters after the historical model to preserve
         # its initialization order and state-dict names.
         self.extra_attention = nn.ModuleList(
-            GameObjectAttention(embed_dim, hypers.num_attention_heads, ownership=False)
+            GameObjectAttention(
+                embed_dim,
+                hypers.num_attention_heads,
+                ownership=False,
+                feedforward_dim=hypers.attention_feedforward_dim,
+            )
             for _ in range(hypers.attention_layers - 1)
         )
         self.value_token = (
@@ -553,7 +562,12 @@ class GameObjectAttention(nn.Module):
     """
 
     def __init__(
-        self, embedding_dim: int, num_heads: int, *, ownership: bool = True
+        self,
+        embedding_dim: int,
+        num_heads: int,
+        *,
+        ownership: bool = True,
+        feedforward_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.embedding_dim = embedding_dim
@@ -568,10 +582,15 @@ class GameObjectAttention(nn.Module):
             embedding_dim, num_heads=num_heads, batch_first=True
         )
         self.norm1 = nn.LayerNorm(embedding_dim)
+        expansion = (
+            feedforward_dim
+            if feedforward_dim is not None
+            else num_heads * embedding_dim
+        )
         self.mlp = nn.Sequential(
-            layer_init(nn.Linear(embedding_dim, num_heads * embedding_dim)),
+            layer_init(nn.Linear(embedding_dim, expansion)),
             nn.ReLU(),
-            layer_init(nn.Linear(num_heads * embedding_dim, embedding_dim)),
+            layer_init(nn.Linear(expansion, embedding_dim)),
         )
         self.norm2 = nn.LayerNorm(embedding_dim)
 

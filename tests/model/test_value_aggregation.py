@@ -106,7 +106,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         {"value_aggregation": "masked_mean", "compound_decisions": True},
         {"attention_layers": 2, "compound_decisions": True},
         {"hidden_dim": 7, "num_attention_heads": 4},
-        {"attention_layers": 3},
+        {"attention_layers": 0},
     ],
 )
 def test_invalid_architecture_rejected(fields: dict[str, object]) -> None:

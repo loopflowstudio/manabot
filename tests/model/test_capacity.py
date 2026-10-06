@@ -99,3 +99,42 @@ def test_resolved_identity_and_accounting_follow_meaning() -> None:
     assert frozen.parameters.trainable == 0
     assert frozen.parameters.total == baseline.parameters.total
     assert frozen.identity == baseline.identity
+
+
+def test_deep_feedforward_identity_and_weights() -> None:
+    space = ObservationSpace()
+    default = AgentSpec(attention_layers=8, hidden_dim=384)
+    explicit = AgentSpec(
+        attention_layers=8, hidden_dim=384, attention_feedforward_dim=1536
+    )
+    assert architecture_identity(default, space) == architecture_identity(
+        explicit, space
+    )
+    narrow = AgentSpec(
+        attention_layers=8, hidden_dim=384, attention_feedforward_dim=768
+    )
+    assert architecture_identity(narrow, space) != architecture_identity(default, space)
+    torch.set_num_threads(1)
+    agent = Agent(space, narrow)
+    assert len(agent.extra_attention) == 7
+    assert all(
+        layer.mlp[0].out_features == 768
+        for layer in [agent.attention, *agent.extra_attention]
+    )
+    with pytest.raises(RuntimeError, match="size mismatch"):
+        Agent(space, default).load_state_dict(agent.state_dict())
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"attention_layers": 0},
+        {"attention_layers": -1},
+        {"attention_feedforward_dim": 0},
+        {"attention_feedforward_dim": -1},
+        {"attention_feedforward_dim": 256, "attention_on": False},
+    ],
+)
+def test_invalid_expansion(fields: dict[str, object]) -> None:
+    with pytest.raises(ValueError):
+        AgentSpec.model_validate(fields)

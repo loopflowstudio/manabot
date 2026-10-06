@@ -1,0 +1,313 @@
+{
+  "models": [
+    {
+      "depth": 1,
+      "pooling": "historical_mean",
+      "receipt": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "9abc285191b69a17beb10da4e8524b71b53062a4fbbdbc123c155fd2fb88e5ef",
+        "parameters": {
+          "total": 102978,
+          "trainable": 102978
+        },
+        "schema_version": 1
+      },
+      "weights": "5db5af3d7bae316266b2a452c0e92d8526f37009711062fdde360e02a8459c63"
+    },
+    {
+      "depth": 1,
+      "pooling": "masked_mean",
+      "receipt": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "1c6a1ccf34182512d8a8d7432e1ffa0fe9bf06003bd0a0154f2b883003247c5e",
+        "parameters": {
+          "total": 102978,
+          "trainable": 102978
+        },
+        "schema_version": 1
+      },
+      "weights": "5db5af3d7bae316266b2a452c0e92d8526f37009711062fdde360e02a8459c63"
+    },
+    {
+      "depth": 1,
+      "pooling": "value_token",
+      "receipt": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          },
+          "value_token": {
+            "total": 64,
+            "trainable": 64
+          }
+        },
+        "identity": "d4259aadca29b228aecdcc76902dc2200db7359efe00a59f74f997bfc34e3a4b",
+        "parameters": {
+          "total": 103042,
+          "trainable": 103042
+        },
+        "schema_version": 1
+      },
+      "weights": "dcfcebdaa7c6a48c6134f600dc47dda1fadcdd863c4b1abd3ae5ccc6e80402c2"
+    },
+    {
+      "depth": 2,
+      "pooling": "historical_mean",
+      "receipt": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "extra_attention": {
+            "total": 49984,
+            "trainable": 49984
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "274b39af534e99204b655be11abe7932b0d848ffcec672fa22d8d373ebd3ed9f",
+        "parameters": {
+          "total": 152962,
+          "trainable": 152962
+        },
+        "schema_version": 1
+      },
+      "weights": "9baf49ede9e820ca22516ef8829b364bc85e8e69837747297e54b623ece8b851"
+    },
+    {
+      "depth": 2,
+      "pooling": "masked_mean",
+      "receipt": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "extra_attention": {
+            "total": 49984,
+            "trainable": 49984
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e418771f4ae5f7fa43dbaf53ce1d4e56e8f88004ded1e0cd8484269ac6708605",
+        "parameters": {
+          "total": 152962,
+          "trainable": 152962
+        },
+        "schema_version": 1
+      },
+      "weights": "9baf49ede9e820ca22516ef8829b364bc85e8e69837747297e54b623ece8b851"
+    },
+    {
+      "depth": 2,
+      "pooling": "value_token",
+      "receipt": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "extra_attention": {
+            "total": 49984,
+            "trainable": 49984
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          },
+          "value_token": {
+            "total": 64,
+            "trainable": 64
+          }
+        },
+        "identity": "58d9cd8f27b81555bea977e26d1c51924bb142cf2a119c8a219b063385a54f34",
+        "parameters": {
+          "total": 153026,
+          "trainable": 153026
+        },
+        "schema_version": 1
+      },
+      "weights": "177548e26c4f8de2afcd2bd981858e95e464b53ea1da994e7a3e9496ec8a2e77"
+    }
+  ],
+  "source_commit": "fd7437dfd84cd1e24785a6d7febee78fceff3d80",
+  "plan_sha256": "99dc8b71238dca0a82f576c35ec79cad0f735423dbf063dd0fbd99e5942541e7",
+  "weight_runtime": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "torch": "2.10.0"
+  }
+}

@@ -20,6 +20,7 @@ import torch
 
 from experiments.runners.model_capacity import regimes as capacity_regimes
 from experiments.runners.run_training_regimes import run_study, smoke_recipe
+from experiments.runners.scale_probe import scale
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import Match, ObservationSpace, Reward
@@ -380,7 +381,17 @@ def main() -> None:
         action="store_true",
         help="Measure the three delivered capacities within 900 seconds",
     )
+    parser.add_argument(
+        "--scale",
+        action="store_true",
+        help="Measure four sizes on CPU/MPS and ordinary CPU training within 900 seconds",
+    )
     args = parser.parse_args()
+    if args.scale:
+        if args.capacity or args.device != "cpu":
+            parser.error("--scale cannot be combined with --capacity or --device")
+        scale(args.out)
+        return
     calibrate(args.out, args.device, capacity=args.capacity)
 
 

@@ -1,0 +1,2165 @@
+{
+  "date": "2026-10-06",
+  "hardware": "Apple M4 Max, 128 GiB unified memory",
+  "report": {
+    "attempts": [
+      {
+        "case": "w64-d1",
+        "error": "Command '['/Users/jack/src/etude.train-ataraxos-sized-models-through/.venv/bin/python', '-m', 'experiments.runners.scale_probe', '--out', '/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale', '--case', 'w64-d1', '--mode', 'fixture']' returned non-zero exit status 1.",
+        "mode": "fixture",
+        "result": null,
+        "seconds": 12.100556666002376,
+        "status": "failed"
+      },
+      {
+        "case": "w64-d1",
+        "error": null,
+        "mode": "cpu",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d1-cpu/result.json",
+        "seconds": 23.739123874984216,
+        "status": "completed"
+      },
+      {
+        "case": "w64-d1",
+        "error": null,
+        "mode": "mps",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d1-mps/result.json",
+        "seconds": 23.19615491697914,
+        "status": "completed"
+      },
+      {
+        "case": "w64-d2",
+        "error": "Command '['/Users/jack/src/etude.train-ataraxos-sized-models-through/.venv/bin/python', '-m', 'experiments.runners.scale_probe', '--out', '/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale', '--case', 'w64-d2', '--mode', 'fixture']' returned non-zero exit status 1.",
+        "mode": "fixture",
+        "result": null,
+        "seconds": 3.1887522919860203,
+        "status": "failed"
+      },
+      {
+        "case": "w64-d2",
+        "error": null,
+        "mode": "cpu",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d2-cpu/result.json",
+        "seconds": 14.57406600000104,
+        "status": "completed"
+      },
+      {
+        "case": "w64-d2",
+        "error": null,
+        "mode": "mps",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d2-mps/result.json",
+        "seconds": 17.33325299998978,
+        "status": "completed"
+      },
+      {
+        "case": "w128-d2",
+        "error": "Command '['/Users/jack/src/etude.train-ataraxos-sized-models-through/.venv/bin/python', '-m', 'experiments.runners.scale_probe', '--out', '/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale', '--case', 'w128-d2', '--mode', 'fixture']' returned non-zero exit status 1.",
+        "mode": "fixture",
+        "result": null,
+        "seconds": 4.634010792011395,
+        "status": "failed"
+      },
+      {
+        "case": "w128-d2",
+        "error": null,
+        "mode": "cpu",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w128-d2-cpu/result.json",
+        "seconds": 16.478938832995482,
+        "status": "completed"
+      },
+      {
+        "case": "w128-d2",
+        "error": null,
+        "mode": "mps",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w128-d2-mps/result.json",
+        "seconds": 21.361842167010764,
+        "status": "completed"
+      },
+      {
+        "case": "w384-d8",
+        "error": "Command '['/Users/jack/src/etude.train-ataraxos-sized-models-through/.venv/bin/python', '-m', 'experiments.runners.scale_probe', '--out', '/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale', '--case', 'w384-d8', '--mode', 'fixture']' returned non-zero exit status 1.",
+        "mode": "fixture",
+        "result": null,
+        "seconds": 7.673606374999508,
+        "status": "failed"
+      },
+      {
+        "case": "w384-d8",
+        "error": null,
+        "mode": "cpu",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w384-d8-cpu/result.json",
+        "seconds": 17.69047479101573,
+        "status": "completed"
+      },
+      {
+        "case": "w384-d8",
+        "error": null,
+        "mode": "mps",
+        "result": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w384-d8-mps/result.json",
+        "seconds": 22.389510042004986,
+        "status": "completed"
+      }
+    ],
+    "batch": 4,
+    "dtype": "float32",
+    "elapsed_seconds": 186.5085858340026,
+    "input_sha256": "f069f7d9816bb8632ac8ff83b3217cc873f4d8b4ef22bfe56be4881121463ed4",
+    "load_after": [
+      18.82763671875,
+      28.08203125,
+      27.27490234375
+    ],
+    "load_before": [
+      49.6025390625,
+      30.6591796875,
+      27.31982421875
+    ],
+    "machine": "arm64",
+    "platform_name": "macOS-26.0.1-arm64-arm-64bit",
+    "python_version": "3.12.12",
+    "seed": 115,
+    "threads": 1,
+    "torch_version": "2.10.0"
+  },
+  "source_manifest_sha256": "ae71bee338a7a97e0a4e25c0c903f07eeac12787fd099c80f65deaa3e1745f2f",
+  "original_report_sha256": "028c8989228bb27210f966723d701b80b53746de15a184034b47194e81198290",
+  "verification_recovery": {
+    "cause": "Original verifier compared eval-mode reload to train-mode model; both now eval.",
+    "results": [
+      ".runs/etu115-scale/w128-d2-fixture/verification-recovery/result.json",
+      ".runs/etu115-scale/w384-d8-fixture/verification-recovery/result.json",
+      ".runs/etu115-scale/w64-d1-fixture/verification-recovery/result.json",
+      ".runs/etu115-scale/w64-d2-fixture/verification-recovery/result.json"
+    ],
+    "retraining": false,
+    "seconds": 1.5777388330025133
+  },
+  "verification_source_sha256": "e4475db596a13810535db7f1deda6d13ccc118bf3223dff579ce09f90ceb1a47",
+  "probes": {
+    "w64-d1": {
+      "cpu": {
+        "sha256": "134377b71bb8a34a445d066ee3b69e4f7056defd7081fbe4f3ba76c7e6ae4e25",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 5248,
+                "trainable": 5248
+              },
+              "action_layer": {
+                "total": 16512,
+                "trainable": 16512
+              },
+              "attention": {
+                "total": 50048,
+                "trainable": 50048
+              },
+              "card_embedding": {
+                "total": 6720,
+                "trainable": 6720
+              },
+              "perm_embedding": {
+                "total": 5824,
+                "trainable": 5824
+              },
+              "player_embedding": {
+                "total": 6016,
+                "trainable": 6016
+              },
+              "policy_head": {
+                "total": 4225,
+                "trainable": 4225
+              },
+              "semantic_cards": {
+                "total": 35456,
+                "trainable": 35456
+              },
+              "value_head": {
+                "total": 8385,
+                "trainable": 8385
+              },
+              "value_token": {
+                "total": 64,
+                "trainable": 64
+              }
+            },
+            "identity": "72623cd1c84ce7831e23104cdf736e049ee2e1e354a7e08446c6d1fdec383be9",
+            "parameters": {
+              "total": 138498,
+              "trainable": 138498
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.19383345800451934,
+            0.01384924998274073
+          ],
+          "first_forward_seconds": [
+            0.024777958024060354,
+            0.07836250000400469
+          ],
+          "forward": [
+            {
+              "samples": 492,
+              "seconds": 2.097492750006495
+            },
+            {
+              "samples": 464,
+              "seconds": 2.005994290986564
+            },
+            {
+              "samples": 812,
+              "seconds": 2.009037832991453
+            }
+          ],
+          "gradient_adam_estimate_bytes": 1661976,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": null,
+          "mps_driver_bytes": null,
+          "parameter_bytes": 553992,
+          "sampled_rss_bytes": 388251648,
+          "update": [
+            {
+              "samples": 140,
+              "seconds": 2.0415142080164514
+            },
+            {
+              "samples": 164,
+              "seconds": 2.039350209000986
+            },
+            {
+              "samples": 156,
+              "seconds": 2.020916333014611
+            }
+          ]
+        }
+      },
+      "mps": {
+        "sha256": "0fec40b0edd80d56ff23d2ab532c14a2340a5c5009a32180c85447f53ddacc9d",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 5248,
+                "trainable": 5248
+              },
+              "action_layer": {
+                "total": 16512,
+                "trainable": 16512
+              },
+              "attention": {
+                "total": 50048,
+                "trainable": 50048
+              },
+              "card_embedding": {
+                "total": 6720,
+                "trainable": 6720
+              },
+              "perm_embedding": {
+                "total": 5824,
+                "trainable": 5824
+              },
+              "player_embedding": {
+                "total": 6016,
+                "trainable": 6016
+              },
+              "policy_head": {
+                "total": 4225,
+                "trainable": 4225
+              },
+              "semantic_cards": {
+                "total": 35456,
+                "trainable": 35456
+              },
+              "value_head": {
+                "total": 8385,
+                "trainable": 8385
+              },
+              "value_token": {
+                "total": 64,
+                "trainable": 64
+              }
+            },
+            "identity": "72623cd1c84ce7831e23104cdf736e049ee2e1e354a7e08446c6d1fdec383be9",
+            "parameters": {
+              "total": 138498,
+              "trainable": 138498
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.08594150000135414,
+            0.024155166000127792
+          ],
+          "first_forward_seconds": [
+            2.3170699999900535,
+            4.829697749984916
+          ],
+          "forward": [
+            {
+              "samples": 228,
+              "seconds": 2.0745382089808118
+            },
+            {
+              "samples": 276,
+              "seconds": 2.0139594590000343
+            },
+            {
+              "samples": 296,
+              "seconds": 2.0273446250066627
+            }
+          ],
+          "gradient_adam_estimate_bytes": 1661976,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": 17938688,
+          "mps_driver_bytes": 92192768,
+          "parameter_bytes": 553992,
+          "sampled_rss_bytes": 573505536,
+          "update": [
+            {
+              "samples": 48,
+              "seconds": 2.0516819590120576
+            },
+            {
+              "samples": 48,
+              "seconds": 2.1810485839960165
+            },
+            {
+              "samples": 44,
+              "seconds": 2.066453332983656
+            }
+          ]
+        }
+      }
+    },
+    "w64-d2": {
+      "cpu": {
+        "sha256": "721d9e53a24815aed55ed308be9022293193ce83e04050b5961155a16e826907",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 5248,
+                "trainable": 5248
+              },
+              "action_layer": {
+                "total": 16512,
+                "trainable": 16512
+              },
+              "attention": {
+                "total": 50048,
+                "trainable": 50048
+              },
+              "card_embedding": {
+                "total": 6720,
+                "trainable": 6720
+              },
+              "extra_attention": {
+                "total": 49984,
+                "trainable": 49984
+              },
+              "perm_embedding": {
+                "total": 5824,
+                "trainable": 5824
+              },
+              "player_embedding": {
+                "total": 6016,
+                "trainable": 6016
+              },
+              "policy_head": {
+                "total": 4225,
+                "trainable": 4225
+              },
+              "semantic_cards": {
+                "total": 35456,
+                "trainable": 35456
+              },
+              "value_head": {
+                "total": 8385,
+                "trainable": 8385
+              },
+              "value_token": {
+                "total": 64,
+                "trainable": 64
+              }
+            },
+            "identity": "808972cc2cb6a246cc371d92f5a7f6f054b29f8d579510621b2b5e70cd09a2e3",
+            "parameters": {
+              "total": 188482,
+              "trainable": 188482
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.0585763749841135,
+            0.010617208987241611
+          ],
+          "first_forward_seconds": [
+            0.007672250008909032,
+            0.055432708002626896
+          ],
+          "forward": [
+            {
+              "samples": 1152,
+              "seconds": 2.005790833005449
+            },
+            {
+              "samples": 1084,
+              "seconds": 2.005950708000455
+            },
+            {
+              "samples": 1116,
+              "seconds": 2.0040299170068465
+            }
+          ],
+          "gradient_adam_estimate_bytes": 2261784,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": null,
+          "mps_driver_bytes": null,
+          "parameter_bytes": 753928,
+          "sampled_rss_bytes": 388038656,
+          "update": [
+            {
+              "samples": 204,
+              "seconds": 2.030672124994453
+            },
+            {
+              "samples": 188,
+              "seconds": 2.0155802499793936
+            },
+            {
+              "samples": 156,
+              "seconds": 2.0074615000048652
+            }
+          ]
+        }
+      },
+      "mps": {
+        "sha256": "8c57db1dc58b3d72bd0403632b0cb1113afba7845b9e7a5beb57756b9201c1f9",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 5248,
+                "trainable": 5248
+              },
+              "action_layer": {
+                "total": 16512,
+                "trainable": 16512
+              },
+              "attention": {
+                "total": 50048,
+                "trainable": 50048
+              },
+              "card_embedding": {
+                "total": 6720,
+                "trainable": 6720
+              },
+              "extra_attention": {
+                "total": 49984,
+                "trainable": 49984
+              },
+              "perm_embedding": {
+                "total": 5824,
+                "trainable": 5824
+              },
+              "player_embedding": {
+                "total": 6016,
+                "trainable": 6016
+              },
+              "policy_head": {
+                "total": 4225,
+                "trainable": 4225
+              },
+              "semantic_cards": {
+                "total": 35456,
+                "trainable": 35456
+              },
+              "value_head": {
+                "total": 8385,
+                "trainable": 8385
+              },
+              "value_token": {
+                "total": 64,
+                "trainable": 64
+              }
+            },
+            "identity": "808972cc2cb6a246cc371d92f5a7f6f054b29f8d579510621b2b5e70cd09a2e3",
+            "parameters": {
+              "total": 188482,
+              "trainable": 188482
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.07929391600191593,
+            0.02384208401781507
+          ],
+          "first_forward_seconds": [
+            0.5205757500079926,
+            0.9534397500101477
+          ],
+          "forward": [
+            {
+              "samples": 280,
+              "seconds": 2.0173522499972023
+            },
+            {
+              "samples": 272,
+              "seconds": 2.0053611659968738
+            },
+            {
+              "samples": 304,
+              "seconds": 2.010139749996597
+            }
+          ],
+          "gradient_adam_estimate_bytes": 2261784,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": 25738240,
+          "mps_driver_bytes": 100581376,
+          "parameter_bytes": 753928,
+          "sampled_rss_bytes": 567328768,
+          "update": [
+            {
+              "samples": 32,
+              "seconds": 2.192549624975072
+            },
+            {
+              "samples": 32,
+              "seconds": 2.219462790992111
+            },
+            {
+              "samples": 24,
+              "seconds": 2.2571762500156183
+            }
+          ]
+        }
+      }
+    },
+    "w128-d2": {
+      "cpu": {
+        "sha256": "977089761a28ec44394fd5b625f12e96a8599a08a26db50034d2e47c6418cfa6",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 18688,
+                "trainable": 18688
+              },
+              "action_layer": {
+                "total": 65792,
+                "trainable": 65792
+              },
+              "attention": {
+                "total": 198400,
+                "trainable": 198400
+              },
+              "card_embedding": {
+                "total": 21632,
+                "trainable": 21632
+              },
+              "extra_attention": {
+                "total": 198272,
+                "trainable": 198272
+              },
+              "perm_embedding": {
+                "total": 19840,
+                "trainable": 19840
+              },
+              "player_embedding": {
+                "total": 20224,
+                "trainable": 20224
+              },
+              "policy_head": {
+                "total": 16641,
+                "trainable": 16641
+              },
+              "semantic_cards": {
+                "total": 120064,
+                "trainable": 120064
+              },
+              "value_head": {
+                "total": 33153,
+                "trainable": 33153
+              },
+              "value_token": {
+                "total": 128,
+                "trainable": 128
+              }
+            },
+            "identity": "b8628f96633950b5081594dc8250d7a69802a83d3cf2147040dc0ea10e200fb5",
+            "parameters": {
+              "total": 712834,
+              "trainable": 712834
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.10977095799171366,
+            0.03585337501135655
+          ],
+          "first_forward_seconds": [
+            0.01819987501949072,
+            0.11960075001115911
+          ],
+          "forward": [
+            {
+              "samples": 544,
+              "seconds": 2.002036041987594
+            },
+            {
+              "samples": 556,
+              "seconds": 2.004634625016479
+            },
+            {
+              "samples": 504,
+              "seconds": 2.012528833001852
+            }
+          ],
+          "gradient_adam_estimate_bytes": 8554008,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": null,
+          "mps_driver_bytes": null,
+          "parameter_bytes": 2851336,
+          "sampled_rss_bytes": 450871296,
+          "update": [
+            {
+              "samples": 92,
+              "seconds": 2.037454041012097
+            },
+            {
+              "samples": 84,
+              "seconds": 2.038549500022782
+            },
+            {
+              "samples": 96,
+              "seconds": 2.0415577499952633
+            }
+          ]
+        }
+      },
+      "mps": {
+        "sha256": "2b9b40a8c01e50b197fb6b27497021b9fa521a20b3829f47eaa357ef20e66b27",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 18688,
+                "trainable": 18688
+              },
+              "action_layer": {
+                "total": 65792,
+                "trainable": 65792
+              },
+              "attention": {
+                "total": 198400,
+                "trainable": 198400
+              },
+              "card_embedding": {
+                "total": 21632,
+                "trainable": 21632
+              },
+              "extra_attention": {
+                "total": 198272,
+                "trainable": 198272
+              },
+              "perm_embedding": {
+                "total": 19840,
+                "trainable": 19840
+              },
+              "player_embedding": {
+                "total": 20224,
+                "trainable": 20224
+              },
+              "policy_head": {
+                "total": 16641,
+                "trainable": 16641
+              },
+              "semantic_cards": {
+                "total": 120064,
+                "trainable": 120064
+              },
+              "value_head": {
+                "total": 33153,
+                "trainable": 33153
+              },
+              "value_token": {
+                "total": 128,
+                "trainable": 128
+              }
+            },
+            "identity": "b8628f96633950b5081594dc8250d7a69802a83d3cf2147040dc0ea10e200fb5",
+            "parameters": {
+              "total": 712834,
+              "trainable": 712834
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.12119079197873361,
+            0.032377000025007874
+          ],
+          "first_forward_seconds": [
+            3.5819917500193696,
+            1.9011252500058617
+          ],
+          "forward": [
+            {
+              "samples": 280,
+              "seconds": 2.008743250014959
+            },
+            {
+              "samples": 272,
+              "seconds": 2.0071235839859582
+            },
+            {
+              "samples": 320,
+              "seconds": 2.0018705000111368
+            }
+          ],
+          "gradient_adam_estimate_bytes": 8554008,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": 31107328,
+          "mps_driver_bytes": 1182760960,
+          "parameter_bytes": 2851336,
+          "sampled_rss_bytes": 579846144,
+          "update": [
+            {
+              "samples": 44,
+              "seconds": 2.106286000023829
+            },
+            {
+              "samples": 44,
+              "seconds": 2.074714832997415
+            },
+            {
+              "samples": 44,
+              "seconds": 2.0700352500134613
+            }
+          ]
+        }
+      }
+    },
+    "w384-d8": {
+      "cpu": {
+        "sha256": "7efad15dd21415df6a19010cfa50f93a0cbd5b158b5e73c539347872790def01",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 154368,
+                "trainable": 154368
+              },
+              "action_layer": {
+                "total": 590592,
+                "trainable": 590592
+              },
+              "attention": {
+                "total": 1774848,
+                "trainable": 1774848
+              },
+              "card_embedding": {
+                "total": 163200,
+                "trainable": 163200
+              },
+              "extra_attention": {
+                "total": 12421248,
+                "trainable": 12421248
+              },
+              "perm_embedding": {
+                "total": 157824,
+                "trainable": 157824
+              },
+              "player_embedding": {
+                "total": 158976,
+                "trainable": 158976
+              },
+              "policy_head": {
+                "total": 148225,
+                "trainable": 148225
+              },
+              "semantic_cards": {
+                "total": 950016,
+                "trainable": 950016
+              },
+              "value_head": {
+                "total": 296065,
+                "trainable": 296065
+              },
+              "value_token": {
+                "total": 384,
+                "trainable": 384
+              }
+            },
+            "identity": "701c8289e9511fd06f20fb4f1fe7d030a54ff7e9cc079ddf3f7e9c883eef0218",
+            "parameters": {
+              "total": 16815746,
+              "trainable": 16815746
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.5142143339908216,
+            0.4936165419931058
+          ],
+          "first_forward_seconds": [
+            0.0697534579958301,
+            0.5838059579837136
+          ],
+          "forward": [
+            {
+              "samples": 140,
+              "seconds": 2.022008416010067
+            },
+            {
+              "samples": 108,
+              "seconds": 2.0296295839943923
+            },
+            {
+              "samples": 100,
+              "seconds": 2.0529113749798853
+            }
+          ],
+          "gradient_adam_estimate_bytes": 201788952,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": null,
+          "mps_driver_bytes": null,
+          "parameter_bytes": 67262984,
+          "sampled_rss_bytes": 991395840,
+          "update": [
+            {
+              "samples": 24,
+              "seconds": 2.1862322090019006
+            },
+            {
+              "samples": 24,
+              "seconds": 2.0799641250050627
+            },
+            {
+              "samples": 24,
+              "seconds": 2.130986792006297
+            }
+          ]
+        }
+      },
+      "mps": {
+        "sha256": "dc28b5ffd6c2823057c1435dc56b998452fc255a12b43780682909b2e62e6903",
+        "data": {
+          "architecture": {
+            "components": {
+              "action_embedding": {
+                "total": 154368,
+                "trainable": 154368
+              },
+              "action_layer": {
+                "total": 590592,
+                "trainable": 590592
+              },
+              "attention": {
+                "total": 1774848,
+                "trainable": 1774848
+              },
+              "card_embedding": {
+                "total": 163200,
+                "trainable": 163200
+              },
+              "extra_attention": {
+                "total": 12421248,
+                "trainable": 12421248
+              },
+              "perm_embedding": {
+                "total": 157824,
+                "trainable": 157824
+              },
+              "player_embedding": {
+                "total": 158976,
+                "trainable": 158976
+              },
+              "policy_head": {
+                "total": 148225,
+                "trainable": 148225
+              },
+              "semantic_cards": {
+                "total": 950016,
+                "trainable": 950016
+              },
+              "value_head": {
+                "total": 296065,
+                "trainable": 296065
+              },
+              "value_token": {
+                "total": 384,
+                "trainable": 384
+              }
+            },
+            "identity": "701c8289e9511fd06f20fb4f1fe7d030a54ff7e9cc079ddf3f7e9c883eef0218",
+            "parameters": {
+              "total": 16815746,
+              "trainable": 16815746
+            },
+            "schema_version": 1
+          },
+          "attention_slots": 203,
+          "buffer_bytes": 37410,
+          "construction_seconds": [
+            0.45910991699201986,
+            0.4364177079987712
+          ],
+          "first_forward_seconds": [
+            2.7888909580069594,
+            3.241411875002086
+          ],
+          "forward": [
+            {
+              "samples": 236,
+              "seconds": 2.0161564579757396
+            },
+            {
+              "samples": 208,
+              "seconds": 2.040990708017489
+            },
+            {
+              "samples": 244,
+              "seconds": 2.005843332997756
+            }
+          ],
+          "gradient_adam_estimate_bytes": 201788952,
+          "input_bytes": 141344,
+          "mps_allocated_bytes": 369821440,
+          "mps_driver_bytes": 1543634944,
+          "parameter_bytes": 67262984,
+          "sampled_rss_bytes": 656097280,
+          "update": [
+            {
+              "samples": 36,
+              "seconds": 2.175664709007833
+            },
+            {
+              "samples": 32,
+              "seconds": 2.195219666988123
+            },
+            {
+              "samples": 32,
+              "seconds": 2.025548459001584
+            }
+          ]
+        }
+      }
+    }
+  },
+  "fixtures": {
+    "w64-d1": {
+      "verification": {
+        "architecture": {
+          "components": {
+            "action_embedding": {
+              "total": 5248,
+              "trainable": 5248
+            },
+            "action_layer": {
+              "total": 16512,
+              "trainable": 16512
+            },
+            "attention": {
+              "total": 50048,
+              "trainable": 50048
+            },
+            "card_embedding": {
+              "total": 6720,
+              "trainable": 6720
+            },
+            "perm_embedding": {
+              "total": 5824,
+              "trainable": 5824
+            },
+            "player_embedding": {
+              "total": 6016,
+              "trainable": 6016
+            },
+            "policy_head": {
+              "total": 4225,
+              "trainable": 4225
+            },
+            "semantic_cards": {
+              "total": 35456,
+              "trainable": 35456
+            },
+            "value_head": {
+              "total": 8385,
+              "trainable": 8385
+            },
+            "value_token": {
+              "total": 64,
+              "trainable": 64
+            }
+          },
+          "identity": "72623cd1c84ce7831e23104cdf736e049ee2e1e354a7e08446c6d1fdec383be9",
+          "parameters": {
+            "total": 138498,
+            "trainable": 138498
+          },
+          "schema_version": 1
+        },
+        "checkpoint": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d1-fixture/run/policy-0-raw.pt",
+        "optimizer_exposures": 4,
+        "reload_equal": true,
+        "run_id": "b05c8055b5a14d0784a5d800e66b4498",
+        "sha256": "f9c7a4790919955b19a7f2e9baf093c2389daecf0e9e61c241b1b99d1b53df76",
+        "weight_change": true
+      },
+      "verification_sha256": "6417b567f66785b89ccb3e43750e1f2539a2813f660498d0ebed2b849848058c",
+      "run_sha256": "150820d7acabf35104208e3690ee94246d802c7e5392269129fbbdc2f0a24a7a",
+      "regime": {
+        "agent": {
+          "attention_layers": 1,
+          "attention_on": true,
+          "belief_card_vocab_size": 0,
+          "belief_count_buckets": 0,
+          "belief_hidden_zone_vocab_size": 7,
+          "belief_owner_role_vocab_size": 2,
+          "hidden_dim": 64,
+          "num_attention_heads": 4,
+          "semantic_pack": "ur-lessons-vs-gw-allies",
+          "value_aggregation": "value_token",
+          "value_kind": "scalar"
+        },
+        "id": "w64-d1",
+        "match": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "observation": {
+          "max_actions": 64,
+          "max_cards_per_player": 60,
+          "max_events": 32,
+          "max_focus_objects": 2,
+          "max_permanents_per_player": 40
+        },
+        "recovery_max_microsteps": null,
+        "schedule_clock": "run_elapsed_budget",
+        "schema_version": 1,
+        "selection": "last-complete-raw",
+        "stages": [
+          {
+            "behavior": "current-self",
+            "execution": {
+              "device": "cpu",
+              "memory_bytes": 34359738368,
+              "precision": "float32",
+              "threads": 1,
+              "wall_seconds": 80.0,
+              "workers": 1
+            },
+            "id": "policy-0",
+            "initial": null,
+            "learning": {
+              "advantage_quantile": 0.75,
+              "clip": 0.2,
+              "collection_kl": 0.1,
+              "ema": 0.999,
+              "filter_kind": "quantile",
+              "filter_scope": "actor_critic",
+              "gradient": "ataraxos_move",
+              "learning_rate_max": 0.0001,
+              "learning_rate_min": 5e-06,
+              "learning_rate_power": 1.1,
+              "learning_rate_scale": 0.5,
+              "max_grad_norm": 0.267,
+              "min_advantage": 0.0,
+              "policy_lambda": 0.5,
+              "reference": "action_type_uniform",
+              "tau_power": 0.3,
+              "tau_scale": 0.05,
+              "value_lambda": 0.8
+            },
+            "operation": "train_self_play",
+            "opponent": null,
+            "optimizer": "adam",
+            "streams": 2,
+            "trainable": "policy_value",
+            "trainer": "net_opponent",
+            "transitions": 8,
+            "updates": 1
+          }
+        ],
+        "wall_seconds": 85.0,
+        "world": "w4"
+      },
+      "regime_digest": "17b6cc4eefbe9e5f8028d148d6ed625a2bc9ef5acb3cba42cd4f24d1c4b230ea",
+      "identities": {
+        "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+        "architecture": "72623cd1c84ce7831e23104cdf736e049ee2e1e354a7e08446c6d1fdec383be9",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+        "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+        "content_schema_version": 1,
+        "engine_extension_name": "_managym.cpython-312-darwin.so",
+        "engine_extension_sha256": "9e3be349db2e65780e5ee32061f0677e255357d5776bef77fcb234b6d90da677",
+        "engine_source_sha256": "ad14ccee1544cf5f091f5b825970f848177c9654be3295d83e348a17149e8134",
+        "experience_content_hash": "legacy-content-unversioned",
+        "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+        "hardware": {
+          "cpu_count": 16,
+          "memory_bytes": 137438953472,
+          "platform": "macOS-26.0.1-arm64-arm-64bit",
+          "processor": "arm"
+        },
+        "matchup": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+        "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+        "pilot_source_sha256": "95f40d0e218a0722825d324c310f5d110a4f0fab451765c1b67894066ef5c495",
+        "source_commit": "0c754675b331382e3f0f72cf5c9dd6ecba617fe1",
+        "torch": "2.10.0",
+        "training_source_sha256": "c1fa391b1a0d3ca73622f9269aa58486b92f707a402667eace2c5eb6cf28dbec",
+        "world": "w4"
+      },
+      "seconds": 7.480364708026173,
+      "stages": [
+        {
+          "actual_device": "cpu",
+          "actual_threads": 1,
+          "artifacts": {
+            "ema": {
+              "bytes": 618731,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d1-fixture/run/policy-0-ema.pt",
+              "sha256": "ea9c890a3a934c71acfc751015c7dcc4fe0b30a171a7b1934bedaa0f8446d060"
+            },
+            "optimizer": {
+              "bytes": 1149356,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d1-fixture/run/policy-0-optimizer.pt",
+              "sha256": "f89b71b895df1571f4fc1bb4998280a778720dabdebaf493d1b5c02b38120408"
+            },
+            "raw": {
+              "bytes": 618603,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d1-fixture/run/policy-0-raw.pt",
+              "sha256": "f9c7a4790919955b19a7f2e9baf093c2389daecf0e9e61c241b1b99d1b53df76"
+            }
+          },
+          "collection_seconds": 0.5968252499878872,
+          "cpu_seconds": 2.6837720000000003,
+          "cumulative_seconds": 7.478169125010027,
+          "diagnostic_seconds": 0.0,
+          "environment_decisions": 35,
+          "error": null,
+          "export_seconds": 0.08962658297969028,
+          "games": 0,
+          "id": "policy-0",
+          "inputs": {},
+          "learner_transitions": 16,
+          "learning_seconds": 0.50834508400294,
+          "optimizer_exposures": 4,
+          "producer_cost": null,
+          "rejected_artifacts": {},
+          "sampled_peak_rss_bytes": 394166272,
+          "seconds": 7.295694583008299,
+          "status": "completed",
+          "watchdog_seconds": 7.295693000021856
+        }
+      ]
+    },
+    "w64-d2": {
+      "verification": {
+        "architecture": {
+          "components": {
+            "action_embedding": {
+              "total": 5248,
+              "trainable": 5248
+            },
+            "action_layer": {
+              "total": 16512,
+              "trainable": 16512
+            },
+            "attention": {
+              "total": 50048,
+              "trainable": 50048
+            },
+            "card_embedding": {
+              "total": 6720,
+              "trainable": 6720
+            },
+            "extra_attention": {
+              "total": 49984,
+              "trainable": 49984
+            },
+            "perm_embedding": {
+              "total": 5824,
+              "trainable": 5824
+            },
+            "player_embedding": {
+              "total": 6016,
+              "trainable": 6016
+            },
+            "policy_head": {
+              "total": 4225,
+              "trainable": 4225
+            },
+            "semantic_cards": {
+              "total": 35456,
+              "trainable": 35456
+            },
+            "value_head": {
+              "total": 8385,
+              "trainable": 8385
+            },
+            "value_token": {
+              "total": 64,
+              "trainable": 64
+            }
+          },
+          "identity": "808972cc2cb6a246cc371d92f5a7f6f054b29f8d579510621b2b5e70cd09a2e3",
+          "parameters": {
+            "total": 188482,
+            "trainable": 188482
+          },
+          "schema_version": 1
+        },
+        "checkpoint": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d2-fixture/run/policy-0-raw.pt",
+        "optimizer_exposures": 4,
+        "reload_equal": true,
+        "run_id": "1ead7d2ffea048ba9f9e417dfe202377",
+        "sha256": "621a761a9b096baada1eda1eb5932572dc3de934dfb6bbb5a439d41bb9e7b415",
+        "weight_change": true
+      },
+      "verification_sha256": "9b579b6c38f051bdf54387288be20027cf99e991345c768544645e6ccffd04d4",
+      "run_sha256": "581974d2df2d05ca13ec45c15237bb61eb11b5d8486bf4ef7c46907c6a68b6a8",
+      "regime": {
+        "agent": {
+          "attention_layers": 2,
+          "attention_on": true,
+          "belief_card_vocab_size": 0,
+          "belief_count_buckets": 0,
+          "belief_hidden_zone_vocab_size": 7,
+          "belief_owner_role_vocab_size": 2,
+          "hidden_dim": 64,
+          "num_attention_heads": 4,
+          "semantic_pack": "ur-lessons-vs-gw-allies",
+          "value_aggregation": "value_token",
+          "value_kind": "scalar"
+        },
+        "id": "w64-d2",
+        "match": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "observation": {
+          "max_actions": 64,
+          "max_cards_per_player": 60,
+          "max_events": 32,
+          "max_focus_objects": 2,
+          "max_permanents_per_player": 40
+        },
+        "recovery_max_microsteps": null,
+        "schedule_clock": "run_elapsed_budget",
+        "schema_version": 1,
+        "selection": "last-complete-raw",
+        "stages": [
+          {
+            "behavior": "current-self",
+            "execution": {
+              "device": "cpu",
+              "memory_bytes": 34359738368,
+              "precision": "float32",
+              "threads": 1,
+              "wall_seconds": 80.0,
+              "workers": 1
+            },
+            "id": "policy-0",
+            "initial": null,
+            "learning": {
+              "advantage_quantile": 0.75,
+              "clip": 0.2,
+              "collection_kl": 0.1,
+              "ema": 0.999,
+              "filter_kind": "quantile",
+              "filter_scope": "actor_critic",
+              "gradient": "ataraxos_move",
+              "learning_rate_max": 0.0001,
+              "learning_rate_min": 5e-06,
+              "learning_rate_power": 1.1,
+              "learning_rate_scale": 0.5,
+              "max_grad_norm": 0.267,
+              "min_advantage": 0.0,
+              "policy_lambda": 0.5,
+              "reference": "action_type_uniform",
+              "tau_power": 0.3,
+              "tau_scale": 0.05,
+              "value_lambda": 0.8
+            },
+            "operation": "train_self_play",
+            "opponent": null,
+            "optimizer": "adam",
+            "streams": 2,
+            "trainable": "policy_value",
+            "trainer": "net_opponent",
+            "transitions": 8,
+            "updates": 1
+          }
+        ],
+        "wall_seconds": 85.0,
+        "world": "w4"
+      },
+      "regime_digest": "32278a5a663cc62e0f5c981594c0a11ea742d59eb960545224425482c512693b",
+      "identities": {
+        "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+        "architecture": "808972cc2cb6a246cc371d92f5a7f6f054b29f8d579510621b2b5e70cd09a2e3",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+        "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+        "content_schema_version": 1,
+        "engine_extension_name": "_managym.cpython-312-darwin.so",
+        "engine_extension_sha256": "9e3be349db2e65780e5ee32061f0677e255357d5776bef77fcb234b6d90da677",
+        "engine_source_sha256": "ad14ccee1544cf5f091f5b825970f848177c9654be3295d83e348a17149e8134",
+        "experience_content_hash": "legacy-content-unversioned",
+        "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+        "hardware": {
+          "cpu_count": 16,
+          "memory_bytes": 137438953472,
+          "platform": "macOS-26.0.1-arm64-arm-64bit",
+          "processor": "arm"
+        },
+        "matchup": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+        "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+        "pilot_source_sha256": "95f40d0e218a0722825d324c310f5d110a4f0fab451765c1b67894066ef5c495",
+        "source_commit": "0c754675b331382e3f0f72cf5c9dd6ecba617fe1",
+        "torch": "2.10.0",
+        "training_source_sha256": "c1fa391b1a0d3ca73622f9269aa58486b92f707a402667eace2c5eb6cf28dbec",
+        "world": "w4"
+      },
+      "seconds": 1.1022775420278776,
+      "stages": [
+        {
+          "actual_device": "cpu",
+          "actual_threads": 1,
+          "artifacts": {
+            "ema": {
+              "bytes": 823043,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d2-fixture/run/policy-0-ema.pt",
+              "sha256": "c99215ed8b34c6d926fca27b3142534fd215c29ed36c213e964cd2ae9d684f8c"
+            },
+            "optimizer": {
+              "bytes": 1559152,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d2-fixture/run/policy-0-optimizer.pt",
+              "sha256": "381c4dedd535e2482a36d3b31af00c97aaebd6a5114a564d4fd0998eb7f231f9"
+            },
+            "raw": {
+              "bytes": 822915,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w64-d2-fixture/run/policy-0-raw.pt",
+              "sha256": "621a761a9b096baada1eda1eb5932572dc3de934dfb6bbb5a439d41bb9e7b415"
+            }
+          },
+          "collection_seconds": 0.15872295800363645,
+          "cpu_seconds": 0.9853360000000002,
+          "cumulative_seconds": 1.1007687080127653,
+          "diagnostic_seconds": 0.0,
+          "environment_decisions": 35,
+          "error": null,
+          "export_seconds": 0.043394750013248995,
+          "games": 0,
+          "id": "policy-0",
+          "inputs": {},
+          "learner_transitions": 16,
+          "learning_seconds": 0.13545579198398627,
+          "optimizer_exposures": 4,
+          "producer_cost": null,
+          "rejected_artifacts": {},
+          "sampled_peak_rss_bytes": 381648896,
+          "seconds": 0.9926493749953806,
+          "status": "completed",
+          "watchdog_seconds": 0.9926497499982361
+        }
+      ]
+    },
+    "w128-d2": {
+      "verification": {
+        "architecture": {
+          "components": {
+            "action_embedding": {
+              "total": 18688,
+              "trainable": 18688
+            },
+            "action_layer": {
+              "total": 65792,
+              "trainable": 65792
+            },
+            "attention": {
+              "total": 198400,
+              "trainable": 198400
+            },
+            "card_embedding": {
+              "total": 21632,
+              "trainable": 21632
+            },
+            "extra_attention": {
+              "total": 198272,
+              "trainable": 198272
+            },
+            "perm_embedding": {
+              "total": 19840,
+              "trainable": 19840
+            },
+            "player_embedding": {
+              "total": 20224,
+              "trainable": 20224
+            },
+            "policy_head": {
+              "total": 16641,
+              "trainable": 16641
+            },
+            "semantic_cards": {
+              "total": 120064,
+              "trainable": 120064
+            },
+            "value_head": {
+              "total": 33153,
+              "trainable": 33153
+            },
+            "value_token": {
+              "total": 128,
+              "trainable": 128
+            }
+          },
+          "identity": "b8628f96633950b5081594dc8250d7a69802a83d3cf2147040dc0ea10e200fb5",
+          "parameters": {
+            "total": 712834,
+            "trainable": 712834
+          },
+          "schema_version": 1
+        },
+        "checkpoint": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w128-d2-fixture/run/policy-0-raw.pt",
+        "optimizer_exposures": 4,
+        "reload_equal": true,
+        "run_id": "2dcc42d8a15d469e95677ee570e5877a",
+        "sha256": "87ea402db87e95e237c651fbd37305b20215f284576e3138d6715af66019073e",
+        "weight_change": true
+      },
+      "verification_sha256": "bc196e3a5962461d76d33e831c9642c8a764b0302a304a0da84f3d2a5fe85050",
+      "run_sha256": "d66561a22daffcc7b979e882dc66af0767d4520f4362b772d20f602d1f4c1f98",
+      "regime": {
+        "agent": {
+          "attention_layers": 2,
+          "attention_on": true,
+          "belief_card_vocab_size": 0,
+          "belief_count_buckets": 0,
+          "belief_hidden_zone_vocab_size": 7,
+          "belief_owner_role_vocab_size": 2,
+          "hidden_dim": 128,
+          "num_attention_heads": 4,
+          "semantic_pack": "ur-lessons-vs-gw-allies",
+          "value_aggregation": "value_token",
+          "value_kind": "scalar"
+        },
+        "id": "w128-d2",
+        "match": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "observation": {
+          "max_actions": 64,
+          "max_cards_per_player": 60,
+          "max_events": 32,
+          "max_focus_objects": 2,
+          "max_permanents_per_player": 40
+        },
+        "recovery_max_microsteps": null,
+        "schedule_clock": "run_elapsed_budget",
+        "schema_version": 1,
+        "selection": "last-complete-raw",
+        "stages": [
+          {
+            "behavior": "current-self",
+            "execution": {
+              "device": "cpu",
+              "memory_bytes": 34359738368,
+              "precision": "float32",
+              "threads": 1,
+              "wall_seconds": 80.0,
+              "workers": 1
+            },
+            "id": "policy-0",
+            "initial": null,
+            "learning": {
+              "advantage_quantile": 0.75,
+              "clip": 0.2,
+              "collection_kl": 0.1,
+              "ema": 0.999,
+              "filter_kind": "quantile",
+              "filter_scope": "actor_critic",
+              "gradient": "ataraxos_move",
+              "learning_rate_max": 0.0001,
+              "learning_rate_min": 5e-06,
+              "learning_rate_power": 1.1,
+              "learning_rate_scale": 0.5,
+              "max_grad_norm": 0.267,
+              "min_advantage": 0.0,
+              "policy_lambda": 0.5,
+              "reference": "action_type_uniform",
+              "tau_power": 0.3,
+              "tau_scale": 0.05,
+              "value_lambda": 0.8
+            },
+            "operation": "train_self_play",
+            "opponent": null,
+            "optimizer": "adam",
+            "streams": 2,
+            "trainable": "policy_value",
+            "trainer": "net_opponent",
+            "transitions": 8,
+            "updates": 1
+          }
+        ],
+        "wall_seconds": 85.0,
+        "world": "w4"
+      },
+      "regime_digest": "85e842f7c5f1adcd482f1d9e0088b97cab4be8368b4e519bed865bb4e7d774dc",
+      "identities": {
+        "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+        "architecture": "b8628f96633950b5081594dc8250d7a69802a83d3cf2147040dc0ea10e200fb5",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+        "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+        "content_schema_version": 1,
+        "engine_extension_name": "_managym.cpython-312-darwin.so",
+        "engine_extension_sha256": "9e3be349db2e65780e5ee32061f0677e255357d5776bef77fcb234b6d90da677",
+        "engine_source_sha256": "ad14ccee1544cf5f091f5b825970f848177c9654be3295d83e348a17149e8134",
+        "experience_content_hash": "legacy-content-unversioned",
+        "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+        "hardware": {
+          "cpu_count": 16,
+          "memory_bytes": 137438953472,
+          "platform": "macOS-26.0.1-arm64-arm-64bit",
+          "processor": "arm"
+        },
+        "matchup": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+        "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+        "pilot_source_sha256": "95f40d0e218a0722825d324c310f5d110a4f0fab451765c1b67894066ef5c495",
+        "source_commit": "0c754675b331382e3f0f72cf5c9dd6ecba617fe1",
+        "torch": "2.10.0",
+        "training_source_sha256": "c1fa391b1a0d3ca73622f9269aa58486b92f707a402667eace2c5eb6cf28dbec",
+        "world": "w4"
+      },
+      "seconds": 1.8687372090062127,
+      "stages": [
+        {
+          "actual_device": "cpu",
+          "actual_threads": 1,
+          "artifacts": {
+            "ema": {
+              "bytes": 2920451,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w128-d2-fixture/run/policy-0-ema.pt",
+              "sha256": "28f5c592e6b51a34865d18454bd0a4dc38ad244ed99fec08f3577b21844476c7"
+            },
+            "optimizer": {
+              "bytes": 5754032,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w128-d2-fixture/run/policy-0-optimizer.pt",
+              "sha256": "5da5de9c4ea4b2df8f9d60e8d5df3c2f84dd1bdbd96d32d79f9b41ea0b9bae3c"
+            },
+            "raw": {
+              "bytes": 2920387,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w128-d2-fixture/run/policy-0-raw.pt",
+              "sha256": "87ea402db87e95e237c651fbd37305b20215f284576e3138d6715af66019073e"
+            }
+          },
+          "collection_seconds": 0.32917149999411777,
+          "cpu_seconds": 1.6924869999999999,
+          "cumulative_seconds": 1.8667152920097578,
+          "diagnostic_seconds": 0.0,
+          "environment_decisions": 35,
+          "error": null,
+          "export_seconds": 0.1138609999907203,
+          "games": 0,
+          "id": "policy-0",
+          "inputs": {},
+          "learner_transitions": 16,
+          "learning_seconds": 0.3195899579732213,
+          "optimizer_exposures": 4,
+          "producer_cost": null,
+          "rejected_artifacts": {},
+          "sampled_peak_rss_bytes": 397918208,
+          "seconds": 1.713694125006441,
+          "status": "completed",
+          "watchdog_seconds": 1.713693500001682
+        }
+      ]
+    },
+    "w384-d8": {
+      "verification": {
+        "architecture": {
+          "components": {
+            "action_embedding": {
+              "total": 154368,
+              "trainable": 154368
+            },
+            "action_layer": {
+              "total": 590592,
+              "trainable": 590592
+            },
+            "attention": {
+              "total": 1774848,
+              "trainable": 1774848
+            },
+            "card_embedding": {
+              "total": 163200,
+              "trainable": 163200
+            },
+            "extra_attention": {
+              "total": 12421248,
+              "trainable": 12421248
+            },
+            "perm_embedding": {
+              "total": 157824,
+              "trainable": 157824
+            },
+            "player_embedding": {
+              "total": 158976,
+              "trainable": 158976
+            },
+            "policy_head": {
+              "total": 148225,
+              "trainable": 148225
+            },
+            "semantic_cards": {
+              "total": 950016,
+              "trainable": 950016
+            },
+            "value_head": {
+              "total": 296065,
+              "trainable": 296065
+            },
+            "value_token": {
+              "total": 384,
+              "trainable": 384
+            }
+          },
+          "identity": "701c8289e9511fd06f20fb4f1fe7d030a54ff7e9cc079ddf3f7e9c883eef0218",
+          "parameters": {
+            "total": 16815746,
+            "trainable": 16815746
+          },
+          "schema_version": 1
+        },
+        "checkpoint": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w384-d8-fixture/run/policy-0-raw.pt",
+        "optimizer_exposures": 4,
+        "reload_equal": true,
+        "run_id": "20ce2114aea1447c8471696aa9a6f2f3",
+        "sha256": "5e24bad8d9aef04360aacb634cd872d70f676c97204cfcb2a214b372c3d27cd9",
+        "weight_change": true
+      },
+      "verification_sha256": "7a00e611b9b52809ee17af4509edbec611efa3f46b2b358cbfab9bea3c6c90ec",
+      "run_sha256": "fd8de799b524ecd9b25ff449f5726cbc0c7864b2d513e9b3526ccc3472ef39b7",
+      "regime": {
+        "agent": {
+          "attention_feedforward_dim": 1536,
+          "attention_layers": 8,
+          "attention_on": true,
+          "belief_card_vocab_size": 0,
+          "belief_count_buckets": 0,
+          "belief_hidden_zone_vocab_size": 7,
+          "belief_owner_role_vocab_size": 2,
+          "hidden_dim": 384,
+          "num_attention_heads": 4,
+          "semantic_pack": "ur-lessons-vs-gw-allies",
+          "value_aggregation": "value_token",
+          "value_kind": "scalar"
+        },
+        "id": "w384-d8",
+        "match": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "observation": {
+          "max_actions": 64,
+          "max_cards_per_player": 60,
+          "max_events": 32,
+          "max_focus_objects": 2,
+          "max_permanents_per_player": 40
+        },
+        "recovery_max_microsteps": null,
+        "schedule_clock": "run_elapsed_budget",
+        "schema_version": 1,
+        "selection": "last-complete-raw",
+        "stages": [
+          {
+            "behavior": "current-self",
+            "execution": {
+              "device": "cpu",
+              "memory_bytes": 34359738368,
+              "precision": "float32",
+              "threads": 1,
+              "wall_seconds": 80.0,
+              "workers": 1
+            },
+            "id": "policy-0",
+            "initial": null,
+            "learning": {
+              "advantage_quantile": 0.75,
+              "clip": 0.2,
+              "collection_kl": 0.1,
+              "ema": 0.999,
+              "filter_kind": "quantile",
+              "filter_scope": "actor_critic",
+              "gradient": "ataraxos_move",
+              "learning_rate_max": 0.0001,
+              "learning_rate_min": 5e-06,
+              "learning_rate_power": 1.1,
+              "learning_rate_scale": 0.5,
+              "max_grad_norm": 0.267,
+              "min_advantage": 0.0,
+              "policy_lambda": 0.5,
+              "reference": "action_type_uniform",
+              "tau_power": 0.3,
+              "tau_scale": 0.05,
+              "value_lambda": 0.8
+            },
+            "operation": "train_self_play",
+            "opponent": null,
+            "optimizer": "adam",
+            "streams": 2,
+            "trainable": "policy_value",
+            "trainer": "net_opponent",
+            "transitions": 8,
+            "updates": 1
+          }
+        ],
+        "wall_seconds": 85.0,
+        "world": "w4"
+      },
+      "regime_digest": "bb3c15ec098874b2a3173025db324be1c995ed3f99d37b35d6abceecea5ae71f",
+      "identities": {
+        "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+        "architecture": "701c8289e9511fd06f20fb4f1fe7d030a54ff7e9cc079ddf3f7e9c883eef0218",
+        "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+        "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+        "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+        "content_schema_version": 1,
+        "engine_extension_name": "_managym.cpython-312-darwin.so",
+        "engine_extension_sha256": "9e3be349db2e65780e5ee32061f0677e255357d5776bef77fcb234b6d90da677",
+        "engine_source_sha256": "ad14ccee1544cf5f091f5b825970f848177c9654be3295d83e348a17149e8134",
+        "experience_content_hash": "legacy-content-unversioned",
+        "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+        "hardware": {
+          "cpu_count": 16,
+          "memory_bytes": 137438953472,
+          "platform": "macOS-26.0.1-arm64-arm-64bit",
+          "processor": "arm"
+        },
+        "matchup": {
+          "hero": "arena-seat-0",
+          "hero_deck": {
+            "Accumulate Wisdom": 2,
+            "Divide by Zero": 2,
+            "Dragonfly Swarm": 1,
+            "Fire Nation Cadets": 2,
+            "Firebending Lesson": 4,
+            "First-Time Flyer": 2,
+            "Forecasting Fortune Teller": 1,
+            "Igneous Inspiration": 2,
+            "Island": 9,
+            "It'll Quench Ya!": 2,
+            "Mountain": 8,
+            "Otter-Penguin": 2,
+            "Pop Quiz": 2,
+            "Tiger-Seal": 2
+          },
+          "hero_sideboard": {
+            "Accumulate Wisdom": 1,
+            "Firebending Lesson": 1,
+            "It'll Quench Ya!": 1
+          },
+          "villain": "arena-seat-1",
+          "villain_deck": {
+            "Allies at Last": 2,
+            "Badgermole Cub": 2,
+            "Compassionate Healer": 2,
+            "Earth King's Lieutenant": 2,
+            "Earth Kingdom Jailer": 2,
+            "Fancy Footwork": 2,
+            "Forest": 8,
+            "Invasion Reinforcements": 2,
+            "Kyoshi Warriors": 2,
+            "Plains": 9,
+            "South Pole Voyager": 1,
+            "Suki, Kyoshi Warrior": 1,
+            "Water Tribe Rallier": 2,
+            "White Lotus Reinforcements": 2,
+            "Yip Yip!": 1
+          },
+          "villain_sideboard": {
+            "Fancy Footwork": 1,
+            "Yip Yip!": 1
+          }
+        },
+        "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+        "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+        "pilot_source_sha256": "95f40d0e218a0722825d324c310f5d110a4f0fab451765c1b67894066ef5c495",
+        "source_commit": "0c754675b331382e3f0f72cf5c9dd6ecba617fe1",
+        "torch": "2.10.0",
+        "training_source_sha256": "c1fa391b1a0d3ca73622f9269aa58486b92f707a402667eace2c5eb6cf28dbec",
+        "world": "w4"
+      },
+      "seconds": 5.013746083976002,
+      "stages": [
+        {
+          "actual_device": "cpu",
+          "actual_threads": 1,
+          "artifacts": {
+            "ema": {
+              "bytes": 67358392,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w384-d8-fixture/run/policy-0-ema.pt",
+              "sha256": "ccb4e9acd08be014e823abbb7e8db92c6cdc59a2c4331db1b4143b381406b107"
+            },
+            "optimizer": {
+              "bytes": 134637512,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w384-d8-fixture/run/policy-0-optimizer.pt",
+              "sha256": "0d6b8129383b0d452df11a0381e804ab058ba7a2ce205d93ebc5599f04d5cedc"
+            },
+            "raw": {
+              "bytes": 67358264,
+              "path": "/Users/jack/src/etude.train-ataraxos-sized-models-through/.runs/etu115-scale/w384-d8-fixture/run/policy-0-raw.pt",
+              "sha256": "5e24bad8d9aef04360aacb634cd872d70f676c97204cfcb2a214b372c3d27cd9"
+            }
+          },
+          "collection_seconds": 1.0559927499853075,
+          "cpu_seconds": 5.2528570000000006,
+          "cumulative_seconds": 5.01187312498223,
+          "diagnostic_seconds": 0.0,
+          "environment_decisions": 35,
+          "error": null,
+          "export_seconds": 1.7391583329881541,
+          "games": 0,
+          "id": "policy-0",
+          "inputs": {},
+          "learner_transitions": 16,
+          "learning_seconds": 1.0171419580001384,
+          "optimizer_exposures": 4,
+          "producer_cost": null,
+          "rejected_artifacts": {},
+          "sampled_peak_rss_bytes": 933150720,
+          "seconds": 4.89277750000474,
+          "status": "completed",
+          "watchdog_seconds": 4.892778375011403
+        }
+      ]
+    }
+  },
+  "measurement_and_verification_seconds": 188.0863246670051,
+  "elapsed_to_recovery_receipt_seconds": 208.08871006965637
+}

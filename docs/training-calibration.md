@@ -143,3 +143,59 @@ collection failed because this fresh checkout lacked its native extension; the
 local rebuild and a missing test-import repair preceded final verification.
 The focused/gate checks passed with one optional notebook-dependency skip. The
 single capacity attempt completed; no scientific capacity allocation was launched.
+
+## Ataraxos-scale laptop probe
+
+Declare larger ordinary models with `AgentSpec(attention_layers=8, hidden_dim=384,
+num_attention_heads=4, attention_feedforward_dim=1536)`, or pass
+`feedforward_dim=1536` to `with_capacity`. Depth and feedforward width must be
+positive. Omitting feedforward width retains heads × width; recipe variation
+preserves an existing setting unless explicitly reset to `None`. Attention-off
+rejects an explicit expansion. Compound models retain their one-block limit.
+Unset fields remain absent from saved metadata. An explicit historical expansion
+has the same architecture identity; recipe provenance retains the authored choice.
+
+`model_capacity.regimes(base, include_ataraxos=True)` adds the 384/8 rung. The
+three default cases and ETU-103's scientific cohort are unchanged. This is size
+parity with the requested move network, not architecture reproduction.
+
+```bash
+uv run -m experiments.runners.calibrate_training --scale --out .runs/scale-probe
+```
+
+The new-directory command allows 900 seconds total and at most 90 per child,
+retaining failures without automatic retries. Each rung has an ordinary CPU
+TrainingRegime fixture (one update, eight learner transitions, two streams,
+zero advantage floor, scalar value-token), and separate CPU/MPS float32 batch-4
+microbenchmarks. The executor requires at least two streams. No stage device
+handling changes; MPS is a standalone model probe with fallback disabled.
+
+Forward and Adam-update windows each have two warmups and three windows targeting
+two seconds (maximum 1,000 calls), with device synchronization. The diagnostic
+update uses uniform legal-action cross entropy plus squared scalar value, all
+samples, and Adam at 1e-4. It is not Ataraxos learner or complete collector
+throughput. Construction and first-step timings are separate. Each phase starts
+with fresh weights and optimizer; the two phases share a child process. RSS and
+MPS allocator readings are endpoint samples, not measured peaks. Parameters,
+buffers, input tensors and estimated gradient/Adam bytes are separate; activation
+memory is additional and backend/batch dependent. A small-batch success says
+nothing about fitting a large training batch.
+
+At the unchanged default capacity, attention receives **202 visible slots**:
+two players, 120 cards and 80 permanents. Value-token models receive **203**.
+Action rows and recent-event rows are not attention tokens; history is pooled.
+Belief models separately append their schema-bound rows and global row. The
+probe checks the actual attention input length on native selected-match tensors.
+
+Unused padding cannot simply be removed: historical pooling includes a biased
+projection and fixed denominator, and action focus and ownership use fixed
+positions. Packing could preserve semantics by remapping indexes and scattering
+back into the original layout before consumers (or preserving those contributions
+exactly); floating-point kernels may still differ. This change implements no
+packing or capacity/world-ABI changes.
+
+The [2026-10-06 retained attempt](evidence/ataraxos-scale-2026-10-06.md)
+reports all four parameter counts, CPU/MPS windows, memory and failure recovery.
+The 16.82M-parameter large model trained/exported; verification recovery checked
+those same bytes without retraining. Heavy changing host load prevents scaling
+or hardware-ranking claims.

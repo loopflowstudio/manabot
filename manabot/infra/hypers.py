@@ -122,7 +122,11 @@ class AgentSpec(BaseHypersModel):
     value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
         "historical_mean"
     )
-    attention_layers: Literal[1, 2] = 1
+    attention_layers: int = Field(default=1, ge=1)
+    # Omitted defaults preserve historical recipe and checkpoint identities.
+    attention_feedforward_dim: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -143,7 +147,9 @@ class AgentSpec(BaseHypersModel):
         if self.attention_on and self.hidden_dim % self.num_attention_heads:
             raise ValueError("embedding width must be divisible by attention heads")
         if not self.attention_on and (
-            self.value_aggregation == "value_token" or self.attention_layers != 1
+            self.value_aggregation == "value_token"
+            or self.attention_layers != 1
+            or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
         if self.compound_decisions and (

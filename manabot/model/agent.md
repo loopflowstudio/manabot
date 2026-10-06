@@ -150,13 +150,16 @@ This updated design document reflects both the current implementation and our st
 
 ## Capacity identity and accounting
 
-`AgentSpec.hidden_dim`, `attention_layers` (1 or 2), and
-`num_attention_heads` own the capacity configuration. The recipe helper
+`AgentSpec.hidden_dim`, positive `attention_layers`, optional
+`attention_feedforward_dim`, and `num_attention_heads` own the capacity configuration. The recipe helper
 `with_capacity` and `experiments.runners.model_capacity.regimes` reuse those
 fields; they introduce no second model schema. Heads must divide width when
-attention is enabled. Feedforward expansion remains head-count times width,
+attention is enabled. Unset feedforward expansion is head-count times width,
 so changing heads can change parameter counts as well as attention semantics.
-The delivered ladder fixes four heads and compares 64/1, 64/2 and 128/2.
+The default ladder fixes four heads and compares 64/1, 64/2 and 128/2.
+Explicit `include_ataraxos=True` adds 384/8 with feedforward width 1,536;
+[the scale probe](../../docs/training-calibration.md#ataraxos-scale-laptop-probe)
+measures that model without changing the scientific cohort.
 
 `manabot.model.architecture.architecture_receipt(agent)` derives a versioned
 identity and total/trainable counts by the actual top-level parameter owner.

@@ -465,12 +465,11 @@ separate evidence limits, regardless of Task completion status.
 
 ### Historical planning reconciliation (2026-09-24)
 
-Planning detail remains at `59f16e0d` and `60e2f897`. GOAL.md owns dispositions:
-ETU-21 abandoned, ETU-31 deferred, ETU-34 completed. Bounded demos establish
-neither conditional student flips, live advice, full-game calibration nor strength.
-The ed2 replay exists; fixture-backed advice and unavailable checkpoints remain
+Detail remains at `59f16e0d` / `60e2f897`; GOAL.md owns ETU-21's abandonment,
+ETU-31's deferral and ETU-34's completion. Bounded demos prove no strength or
+conditional student flips. ed2 survives; unavailable advice/checkpoints remain
 subject to [the live-advice plan](../../docs/plans/live-belief-advice.md).
-Check existing Tasks before overlapping work; Rules owns history semantics.
+Rules owns history semantics; check existing Tasks before overlapping work.
 
 ## Corrected-world training binding (2026-09-29)
 
@@ -1085,34 +1084,34 @@ The live W&B service was not exercised. These remain software fixtures.
 
 ## Capacity software receipt boundary (ETU-102, 2026-10-05)
 
-Jack Heart authorized independent software completion, publication and landing
-following the PR 222/223 audit. Their AgentSpec width/depth/head validation,
-baseline-preserving model and with_capacity ladder remain the sole configuration
-owner. ETU-102 adds derived versioned architecture identity, total/trainable
-parameter accounting by actual component, TrainingRun identity and ordinary
-checkpoint receipt admission. Present receipts reject contradictory equal-shaped
-pooling metadata; absent historical receipts retain existing world/weight checks.
-World/content, source/runtime and checkpoint bytes remain separate authorities.
-No weight port, forward-equation change or second recipe schema was introduced.
+Jack Heart authorized independent software delivery. AgentSpec and with_capacity
+remain configuration owners; derived architecture receipts bind resolved model
+meaning and actual component parameter totals. Absent historical receipts retain
+world/weight checks; present contradictory metadata fails admission. World,
+source/runtime and checkpoint bytes remain separate. No weight port or changed
+forward equation was introduced. Trainable counts are export flags, not exposures.
 
-The existing calibration runner now freezes a bounded three-capacity CPU workflow
-and measures model construction, loading, first call, warmed inference, collection,
-optimizer, sampled RSS and total time. At `90c55627` the single retained ladder
-attempt completed in 212.56 seconds with six admitted raw checkpoints and 40
-exact-replayed games. Exact counts were 138,434 / 188,418 / 712,706 parameters
-for 64/1, 64/2 and 128/2 with four heads and selected-match semantic input.
-Host load was high; timings establish tooling, not scaling or strength. An earlier
-default-calibration test retained one 10-second game timeout; a 30-second per-game
-allowance fixed the workflow without raising its total cap. The focused checks
-passed with one optional notebook skip. Full records and interpretation limits
-live in [calibration documentation](../../docs/training-calibration.md).
-ETU-91 remained untouched; no scientific capacity study, paid compute, demo or
-chapter acceptance follows. The declarative-recipe follow-up should continue to
-use AgentSpec and these derived receipts rather than add an architecture owner.
-Trainable counts describe export-time flags, not optimizer exposures. Calibration
-inference batches are identified per checkpoint but need not match across arms;
-their timings cannot isolate capacity alone. Cold measurements mean fresh model
-construction/loading in an initialized process, not cold imports or OS caches.
+The retained `90c55627` CPU ladder completed in 212.56 seconds: six admitted raw
+checkpoints and 40 exact-replayed games. Semantic 64/1, 64/2, 128/2 models had
+138,434 / 188,418 / 712,706 parameters. High host load and differing inference
+batches prevent capacity-only timing claims. A retained timeout was fixed within the original cap.
+Full timing definitions and integration evidence remain at `fd7437df` and in the
+[calibration guide](../../docs/training-calibration.md). These are software proofs;
+no scientific allocation, strength, demo or chapter acceptance follows. ETU-91
+remained untouched.
+
+## Larger ordinary models (ETU-115, 2026-10-06)
+
+Jack Heart authorized larger recipes and laptop probes. AgentSpec depth/expansion
+preserves default identities. Opt-in 384/8/1536 leaves ETU-103 unchanged:
+16,815,746 parameters, 203 slots rather than the estimated 270–300.
+Actions/events are not attention rows. Four sizes trained/exported; mode-mismatched verification failed. Read-only
+recovery proved changed weights and exact reload. Eight CPU/MPS probes completed.
+Contention prevents scaling claims; diagnostic Adam rates are not RL throughput. MPS model execution does not establish stage-device support (ETU-114).
+Padding removal changes pooling/focus; ABI/defaults remain unchanged.
+Preserve `.runs/etu115-scale`; the [report](../../docs/evidence/ataraxos-scale-2026-10-06.md)
+owns identities, failures, memory and limits. No scientific allocation, strength
+or chapter acceptance follows.
 
 ## Declarative experiment authoring (ETU-109, 2026-10-05)
 

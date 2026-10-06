@@ -42,10 +42,16 @@ def architecture_identity(spec: AgentSpec, space: ObservationSpace) -> str:
     if tensor shapes stay equal. Source/runtime receipts additionally bind code.
     """
     resolved = AgentSpec.model_validate(spec.model_dump())
+    payload = resolved.model_dump(mode="json")
+    if (
+        resolved.attention_feedforward_dim
+        == resolved.hidden_dim * resolved.num_attention_heads
+    ):
+        payload.pop("attention_feedforward_dim", None)
     return canonical_sha256(
         {
             "layout_version": 1,
-            "agent": resolved.model_dump(mode="json"),
+            "agent": payload,
             "observation": space.encoder.hypers.model_dump(mode="json"),
         }
     )
