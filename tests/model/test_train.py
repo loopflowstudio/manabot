@@ -16,6 +16,7 @@ import pytest
 import torch
 
 # Local imports
+from manabot.arena.models import file_sha256
 from manabot.env import (
     Match,
     ObservationSpace,
@@ -31,9 +32,11 @@ from manabot.infra import (
     RewardHypers,
     TrainHypers,
 )
+from manabot.infra.artifacts import StoredArtifact
 from manabot.model import Agent, Trainer
 from manabot.model.architecture import architecture_receipt
 from manabot.model.train import build_training_components
+from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 @contextmanager
@@ -106,12 +109,12 @@ def trainer(observation_space, experiment):
 
 class TestRollout:
     def test_saved_checkpoint_round_trips_with_actual_setup(
-        self, trainer: Trainer
+        self, trainer: Trainer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from manabot.sim.flat_mc import load_checkpoint_agent
-
         trainer.start_time = 0.0
+        trainer.wandb = MagicMock()
         trainer.save()
+        trainer.wandb.log_artifact.assert_not_called()
         agent, space = load_checkpoint_agent(
             str(trainer.experiment.runs_dir / "step_0.pt")
         )
@@ -123,6 +126,18 @@ class TestRollout:
         )
         assert space.shapes == trainer.env.observation_space.shapes
         assert agent.world_binding["setups"][0]["sideboard"] == {}
+        saved = trainer.experiment.runs_dir / "step_0.pt"
+        reference = StoredArtifact(
+            uri="s3://bucket/model",
+            sha256=file_sha256(saved),
+            bytes=saved.stat().st_size,
+        )
+        monkeypatch.setenv("MANABOT_ARTIFACT_CACHE", str(tmp_path))
+        shutil.copyfile(saved, tmp_path / reference.sha256)
+        cached_agent, cached_space = load_checkpoint_agent(reference)
+        assert cached_space.shapes == space.shapes
+        for name, weight in agent.state_dict().items():
+            assert torch.equal(weight, cached_agent.state_dict()[name])
         for name, tensor in trainer.agent.state_dict().items():
             assert torch.equal(tensor.cpu(), agent.state_dict()[name]), name
 

@@ -5,12 +5,14 @@ figures; write_dashboard only renders those choices. Matching requires every
 retained run in a compatible cohort at the same stage/update coordinate.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from html import escape
 from io import StringIO
 import json
+import math
 from pathlib import Path
+from statistics import mean
 from typing import Literal
 
 from matplotlib.figure import Figure
@@ -20,6 +22,7 @@ from manabot.training.experiment_execution import ExperimentRun
 from manabot.training.models import TrainingRun
 from manabot.training.monitor_evaluation import MonitorResult
 from manabot.training.monitoring import Scalar, training_dashboard
+from manabot.training.report_study import ScientificStudy
 
 
 @dataclass(frozen=True)
@@ -119,11 +122,29 @@ def matched_milestones(evidence: ReportEvidence) -> dict[str, list[MonitorResult
 
 
 def strength_figures(
-    evidence: ReportEvidence, axis: Literal["training_seconds", "environment_decisions"]
+    evidence: ReportEvidence,
+    axis: Literal["training_seconds", "environment_decisions"],
+    *,
+    per_run: bool = False,
 ) -> list[Figure]:
     """Plot matched milestones per seed; bands are saved deal uncertainty, not seed CIs."""
     figures: list[Figure] = []
-    for panel, results in matched_milestones(evidence).items():
+    panels = matched_milestones(evidence)
+    if per_run:
+        # Explicit within-run histories do not claim compatibility across variants.
+        panels = {
+            f"{panel}/{run.id}": results
+            for run in evidence.runs
+            for panel, results in matched_milestones(
+                replace(
+                    evidence,
+                    runs=(run,),
+                    executions=(),
+                    monitors=tuple(m for m in evidence.monitors if m.run_id == run.id),
+                )
+            ).items()
+        }
+    for panel, results in panels.items():
         fig = Figure(figsize=(9, 3.5), layout="constrained")
         ax = fig.subplots()
         for run_id in sorted({r.run_id for r in results}):
@@ -150,7 +171,12 @@ def strength_figures(
             else "Native environment decisions (work proxy)",
             ylabel="Win fraction",
             ylim=(-0.03, 1.03),
-            title=f"Matched stage/update milestones · cohort {panel[:8]}",
+            title=(
+                "Within-run monitoring history"
+                if per_run
+                else "Matched stage/update milestones"
+            )
+            + f" · cohort {panel[:8]}",
         )
         ax.legend(fontsize=8)
         figures.append(fig)
@@ -185,6 +211,122 @@ def metric_figure(evidence: ReportEvidence, metric: str) -> Figure:
     return fig
 
 
+def diagnostic_figures(evidence: ReportEvidence, *, window: int = 25) -> list[Figure]:
+    """One regime per figure; trailing means reset at missing values/stage boundaries.
+
+    A window counts retained diagnostic records, not games or minibatch samples.
+    Faint raw lines remain visible; no smoothing across unavailable observations.
+    """
+    if window < 1:
+        raise ValueError("smoothing window must be positive")
+    metrics = (
+        ("rl/policy_loss", "Policy objective (Ataraxos includes KL penalties)"),
+        ("rl/value_loss", "Value loss (recipe-specific units)"),
+        ("rl/entropy", "Last optimized minibatch entropy (nats)"),
+        ("rl/collection_kl", "Collection reverse KL (nats, unweighted)"),
+        ("rl/reference_kl", "Reference reverse KL (nats, unweighted)"),
+        ("rl/retained_fraction", "Filter retention (selected / collected rows)"),
+    )
+    figures: list[Figure] = []
+    saved = {r.id: evidence.metrics(r) for r in evidence.runs}
+    for regime in sorted({r.regime.id for r in evidence.runs}):
+        fig = Figure(figsize=(9, 10), layout="constrained")
+        axes = fig.subplots(3, 2).flat
+        for ax, (metric, title) in zip(axes, metrics, strict=True):
+            for run in (r for r in evidence.runs if r.regime.id == regime):
+                rows = saved[run.id]
+                x: list[float] = []
+                raw: list[float] = []
+                smooth: list[float] = []
+                history: list[float] = []
+                previous_stage: Scalar | None = None
+                previous_update: int | float | None = None
+                for row in rows:
+                    stage = row.get("stage/id")
+                    if stage != previous_stage:
+                        history.clear()
+                    previous_stage = stage
+                    update = row.get("progress/updates")
+                    if isinstance(update, (int, float)):
+                        if previous_update is not None and update > previous_update + 1:
+                            history.clear()
+                            x.append(math.nan)
+                            raw.append(math.nan)
+                            smooth.append(math.nan)
+                        previous_update = update
+                    time = row.get("progress/training_seconds")
+                    value = row.get(metric)
+                    if not isinstance(time, (int, float)):
+                        history.clear()
+                        x.append(math.nan)
+                        raw.append(math.nan)
+                        smooth.append(math.nan)
+                        continue
+                    x.append(float(time))
+                    if not isinstance(value, (int, float)) or not math.isfinite(value):
+                        history.clear()
+                        raw.append(math.nan)
+                        smooth.append(math.nan)
+                    else:
+                        raw.append(float(value))
+                        history.append(float(value))
+                        history = history[-window:]
+                        smooth.append(mean(history))
+                (line,) = ax.plot(x, smooth, label=f"seed {run.seed}")
+                ax.plot(x, raw, color=line.get_color(), alpha=0.16, linewidth=0.6)
+            if not any(math.isfinite(y) for line in ax.lines for y in line.get_ydata()):
+                ax.text(
+                    0.5,
+                    0.5,
+                    "Unavailable in retained records",
+                    ha="center",
+                    transform=ax.transAxes,
+                )
+            if metric == "rl/entropy":
+                ax.axhline(
+                    math.log(2),
+                    color="gray",
+                    linestyle=":",
+                    label="ln(2), not competence",
+                )
+            ax.set(title=title, xlabel="Recorded training seconds")
+            ax.legend(fontsize=7)
+        fig.suptitle(
+            f"{regime} · trailing mean ≤{window} records / faint raw · gaps stay missing"
+        )
+        figures.append(fig)
+    return figures
+
+
+def _sampling_rows(evidence: ReportEvidence) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for run in evidence.runs:
+        diagnostics = [d for stage in run.stages for d in stage.diagnostics]
+        entropy = [
+            float(d["entropy"])
+            for d in diagnostics
+            if isinstance(d.get("entropy"), (int, float))
+        ]
+        counts = [d for d in diagnostics if "rows" in d and "retained" in d]
+        collected = sum(float(d["rows"]) for d in counts)
+        retained = sum(float(d["retained"]) for d in counts)
+        rows.append(
+            [
+                evidence.label(run.id),
+                str(len(diagnostics)),
+                str(sum(bool(d.get("skipped")) for d in diagnostics)),
+                str(sum("loss" not in d for d in diagnostics)),
+                f"{retained:,.0f} / {collected:,.0f} ({retained / collected:.1%}); {len(counts)} records"
+                if collected
+                else "unavailable",
+                f"{sum(abs(e - math.log(2)) < 0.001 for e in entropy)} / {len(entropy)}"
+                if entropy
+                else "unavailable",
+            ]
+        )
+    return rows
+
+
 def _number(value: object) -> str:
     return f"{value:,.3g}" if isinstance(value, (float, int)) else "unavailable"
 
@@ -215,6 +357,8 @@ def write_dashboard(
     question: str,
     docs: str,
     sections: list[tuple[str, str, list[Figure]]],
+    notes: str = "",
+    study: ScientificStudy | None = None,
 ) -> Path:
     """Render notebook-selected figures and a concise status summary; never mutate inputs."""
     now = datetime.now(timezone.utc)
@@ -222,13 +366,52 @@ def write_dashboard(
     def link(text: str, anchor: str) -> str:
         return f'<a href="{escape(docs, quote=True)}#{anchor}">{escape(text)}</a>'
 
-    complete = bool(evidence.executions) and all(
-        e.status == "completed" for e in evidence.executions
+    complete = (
+        (bool(evidence.executions) or study is not None)
+        and all(e.status == "completed" for e in evidence.executions)
+        and (study is None or study.status == "completed")
+    )
+    state = (
+        "Final"
+        if complete
+        else "In-flight"
+        if evidence.executions or study
+        else "Saved"
     )
     parts = [
-        f"<h1>{'Final' if complete else 'In-flight'} experiment report</h1><p>{escape(question)}</p>",
+        f"<h1>{state} experiment report</h1><p>{escape(question)}</p>",
         f'<p class="muted">Rendered {now.isoformat(timespec="seconds")} · saved artifacts only · no automatic refresh</p>',
     ]
+    if study is not None:
+        parts.append(
+            f"<p>Scientific study {escape(study.study)}: {escape(study.status)} · "
+            f"{len(study.seeds)} independent training seeds. Thin lines show each seed; "
+            "black diamonds and intervals resample training seeds and common deals. "
+            "Three seeds give exploratory uncertainty, not a confirmatory claim. "
+            "Development and endpoint cohorts remain separate. Scientific heartbeat: unavailable in this export.</p>"
+        )
+    if notes:
+        parts.append(f"<p>{escape(notes)}</p>")
+    parts.append(
+        "<p>Pipeline and exact-replay smoke tests demonstrate software execution, "
+        "not a positive control showing learned behavior improves. Positive-control "
+        "training design is separate work. Entropy is not competence.</p>"
+    )
+
+    def section(title: str, anchor: str, figures: list[Figure]) -> str:
+        body = f"<section><h2>{link(title, anchor)}</h2>"
+        body += "".join(
+            '<div class="figure" tabindex="0" role="region" aria-label="'
+            + escape(title, quote=True)
+            + '">'
+            + _svg(f)
+            + "</div>"
+            for f in figures
+        )
+        if not figures:
+            body += "<p>Unavailable: no common completed milestone across all expected runs in a compatible cohort.</p>"
+        return body + "</section>"
+
     for execution in evidence.executions:
         as_of = (
             datetime.fromtimestamp(execution.last_seen_unix, timezone.utc).isoformat(
@@ -251,6 +434,19 @@ def write_dashboard(
             f"{statuses['completed']}/{len(execution.attempts)} regime-seed runs complete · {statuses['running']} running · {statuses['pending']} pending · {statuses['failed'] + statuses['interrupted']} failed/interrupted<br>"
             f"{link('Evidence freshness', 'freshness')}: {as_of} · {age} s old · status {execution.status}</p>"
         )
+    for title, anchor, figures in sections:
+        if anchor == "comparisons":
+            parts.append(section(title, anchor, figures))
+    initialization = [r for r in evidence.monitors if r.coordinates.updates == 0]
+    parts.append(
+        "<p>Monitoring initialization: "
+        + (
+            "retained; shown only where cohort matching permits."
+            if initialization
+            else "unavailable; no evaluated zero-update checkpoint retained."
+        )
+        + " No improvement from initialization can be inferred without that baseline.</p>"
+    )
     rows: list[list[str]] = []
     for run in evidence.runs:
         metrics = evidence.metrics(run)
@@ -321,23 +517,24 @@ def write_dashboard(
                 rate,
             ]
         )
-    parts.append(
-        f"<h2>{link('Latest evaluation · status, not a ranking', 'evaluation')}</h2>"
-    )
-    parts.append(
-        _table(
-            [
-                "Variant / seed",
-                "Checkpoint / age",
-                "Opponent / games",
-                "Win rate [95% interval]",
-            ],
-            eval_rows,
+    if evidence.monitors or study is None:
+        parts.append(
+            f"<h2>{link('Latest monitoring evaluation · status, not a ranking', 'evaluation')}</h2>"
         )
-    )
-    parts.append(
-        '<p class="muted">Intervals resample complete deals for one checkpoint, not training seeds. A one-deal fixture can have a zero-width interval; this is not precision or strength evidence.</p>'
-    )
+        parts.append(
+            _table(
+                [
+                    "Variant / seed",
+                    "Checkpoint / age",
+                    "Opponent / games",
+                    "Win rate [95% interval]",
+                ],
+                eval_rows,
+            )
+        )
+        parts.append(
+            '<p class="muted">Intervals resample complete deals for one checkpoint, not training seeds. A one-deal fixture can have a zero-width interval; this is not precision or strength evidence.</p>'
+        )
     parts.append(f"<h2>{link('Costs, resources and failures', 'costs')}</h2>")
     rss = [
         s.sampled_peak_rss_bytes
@@ -350,7 +547,44 @@ def write_dashboard(
         parts.append(
             f"<p>{e.elapsed_seconds:.2f} elapsed wall s · {e.process_seconds:.2f} additive worker-process s (includes {e.evaluator_seconds:.2f} evaluator s) · host cost {_number(e.host_dollars)} USD<br>Latest host load {escape(str(e.host_load))}; sampled training peak RSS {_number(peak_mib)} MiB (not a whole-host peak)</p>"
         )
+    if study is not None:
+        parts.append(
+            f"<p>Scientific evaluation: {study.seconds:.2f} s. {escape(study.accounting)}</p>"
+        )
+    parts.append(
+        _table(
+            [
+                "Regime / seed",
+                "Collection s",
+                "Learning s",
+                "Export s",
+                "Diagnostics s",
+            ],
+            [
+                [
+                    evidence.label(r.id),
+                    *[
+                        _number(sum(getattr(stage, field) for stage in r.stages))
+                        for field in (
+                            "collection_seconds",
+                            "learning_seconds",
+                            "export_seconds",
+                            "diagnostic_seconds",
+                        )
+                    ],
+                ]
+                for r in evidence.runs
+            ],
+        )
+    )
+    if not evidence.executions:
+        parts.append(
+            f"<p>Sampled training peak RSS {_number(peak_mib)} MiB. Host price and execution heartbeat unavailable.</p>"
+        )
     failures = [f"{e.id}: {e.error}" for e in evidence.executions if e.error]
+    failures += [
+        f"{r.id}/{s.id}: {s.error}" for r in evidence.runs for s in r.stages if s.error
+    ]
     failures += [
         f"{a.case}/{a.seed}: {a.status}: {a.error}"
         for e in evidence.executions
@@ -367,31 +601,65 @@ def write_dashboard(
         for r in evidence.monitors
         if r.status != "completed"
     ]
+    if study is not None:
+        failures += [
+            f"Scientific {c.a} seed {c.training_seed} cutoff {c.cutoff}: incomplete/replay failure"
+            for c in study.comparisons
+            if not c.complete
+        ]
     parts.append(
         "<p>"
         + escape(
             "; ".join(failures)
             if failures
-            else "No failures in selected saved records."
+            else "No additional failures in selected run/evaluation records."
         )
         + "</p>"
     )
     parts.append(
-        f"<p>{link('Comparison rules', 'comparisons')}: only common stage/update milestones across every retained run appear below. Work counts and time remain distinct; no unequal latest-checkpoint ranking.</p>"
+        f"<p>{link('Comparison rules', 'comparisons')}: Matched monitoring panels require common stage/update milestones across every retained run. Explicit within-run histories make no cross-regime comparison. Scientific panels use the declared study cohort. Work counts and time remain distinct; no unequal latest-checkpoint ranking.</p>"
+    )
+    parts.append(
+        f"<h2>{link('Diagnostic sampling and missing updates', 'sampling')}</h2>"
+    )
+    parts.append(
+        _table(
+            [
+                "Regime / seed",
+                "Saved records",
+                "Explicit skips",
+                "No loss",
+                "Selected / collected",
+                "Entropy within .001 of ln(2) / recorded",
+            ],
+            _sampling_rows(evidence),
+        )
+    )
+    parts.append(
+        "<p>Counts cover saved records only. No loss can mean a skip or unavailable diagnostics. "
+        "Missing historical updates cannot be reconstructed. Ataraxos loss, entropy and KL "
+        "retain the last optimized timestep minibatch, not an update-wide or fixed-position average. "
+        "The policy objective already includes KL penalties; unweighted KL panels are diagnostics, "
+        "not an additional loss to add. Legal-action counts for that last minibatch are unavailable. "
+        "Near ln(2) is consistent with nearly uniform binary choices, but does not identify their cause.</p>"
     )
     for title, anchor, figures in sections:
-        parts.append(f"<section><h2>{link(title, anchor)}</h2>")
-        parts.extend(
-            '<div class="figure" tabindex="0" role="region" aria-label="Chart; scroll horizontally on narrow screens">'
-            + _svg(f)
-            + "</div>"
-            for f in figures
-        )
-        if not figures:
+        if anchor != "comparisons":
             parts.append(
-                "<p>Unavailable: no common completed milestone across all expected runs in a compatible cohort.</p>"
+                "<details><summary>"
+                + escape(title)
+                + "</summary>"
+                + section(title, anchor, figures)
+                + "</details>"
             )
-        parts.append("</section>")
+    raw_path = output.with_name(output.stem + "-diagnostics.json")
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_path.write_text(
+        json.dumps({r.id: evidence.metrics(r) for r in evidence.runs}, indent=2)
+    )
+    parts.append(
+        f'<p><a href="{escape(raw_path.name, quote=True)}" download>Download all raw scalar diagnostics (JSON)</a></p>'
+    )
     hashes = [
         {"path": str(p.relative_to(evidence.root)), "sha256": file_sha256(p)}
         for p in evidence.paths

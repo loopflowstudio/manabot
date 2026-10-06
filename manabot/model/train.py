@@ -13,7 +13,6 @@ This version uses CleanRL-style flat rollout tensors with shape (num_steps, num_
 """
 
 import argparse
-import datetime
 import time
 from typing import Any, Dict, Sequence, Tuple
 
@@ -21,7 +20,6 @@ import numpy as np
 import psutil
 import torch
 import torch.nn as nn
-import wandb
 
 from manabot.belief.encoding import (
     BeliefEncodingSchema,
@@ -853,13 +851,6 @@ class Trainer:
             )
 
     def save(self) -> None:
-        name = self.experiment.exp_name
-
-        timestamp = datetime.datetime.fromtimestamp(self.start_time).strftime(
-            "%Y%m%d_%H%M%S"
-        )
-        version_tag = f"{timestamp}_{self.global_step}"
-
         # Save all relevant hyperparameters
         hypers_dict = {
             "agent_hypers": self.agent.hypers.model_dump(),
@@ -890,36 +881,9 @@ class Trainer:
         )
         torch.save(checkpoint, path)
 
-        if self.wandb is None:
-            return
-
-        # Create and log artifact with the version tag
-        artifact = wandb.Artifact(
-            name=name,
-            type="model",
-            description=f"Model checkpoint at step {self.global_step}",
-        )
-
-        # Add metadata for easier filtering/selection
-        artifact.metadata = {
-            "version": version_tag,
-            "timestamp": timestamp,
-            "step": self.global_step,
-            "model_type": self.agent.__class__.__name__,
-        }
-
-        # You can add additional tags to make it easier to filter
-        if self.agent.hypers.attention_on:
-            artifact.metadata["architecture"] = "attention"
-
-        artifact.add_file(path)
-
-        # Log the artifact with an alias that includes the version
-        self.wandb.log_artifact(
-            artifact, aliases=[f"step_{self.global_step}", version_tag]
-        )
-
-        self.logger.info(f"Saved model with version tag: {version_tag}")
+        # Model bytes stay local until explicitly published to S3. W&B receives
+        # metrics and storage references, never checkpoint uploads.
+        self.logger.info(f"Saved model at step {self.global_step}: {path}")
 
 
 def build_training_components(

@@ -18,8 +18,10 @@ manabot on CPU in under a minute, needs no W&B account or CUDA, and saves
 checkpoints to `.runs/local/step_N.pt`. The `simple` and `attention` presets
 are real training runs: they expect a CUDA machine (in practice Ubuntu on
 AWS — see [ops/](../ops/README.md)) and track to the `manabot` Weights &
-Biases project. Simulation pulls trained models from W&B and runs locally on
-CPU at small scales.
+Biases project. New checkpoints stay local until explicitly published to
+[S3 artifact storage](../docs/training-monitoring.md#s3-model-and-artifact-storage).
+W&B tracks metrics and S3 references; the historical W&B model reader remains
+available for previously published checkpoints.
 
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.

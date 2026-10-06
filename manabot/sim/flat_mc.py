@@ -28,6 +28,7 @@ import torch
 
 from manabot.belief.encoding import BeliefCheckpointBinding
 from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.infra.artifacts import StoredArtifact, materialize_artifact
 from manabot.infra.hypers import (
     AgentSpec,
     MatchHypers,
@@ -191,22 +192,27 @@ class AgentMatchupPlayer:
 
 
 @overload
-def load_checkpoint_agent(path: str) -> tuple[Agent, ObservationSpace]: ...
+def load_checkpoint_agent(
+    path: str | StoredArtifact,
+) -> tuple[Agent, ObservationSpace]: ...
 
 
 @overload
 def load_checkpoint_agent(
-    path: str, *, include_belief_binding: Literal[True]
+    path: str | StoredArtifact, *, include_belief_binding: Literal[True]
 ) -> tuple[Agent, ObservationSpace, BeliefCheckpointBinding | None]: ...
 
 
 def load_checkpoint_agent(
-    path: str, *, include_belief_binding: bool = False
+    path: str | StoredArtifact, *, include_belief_binding: bool = False
 ) -> (
     tuple[Agent, ObservationSpace]
     | tuple[Agent, ObservationSpace, BeliefCheckpointBinding | None]
 ):
-    """Load an Agent from a training checkpoint, using its saved hypers."""
+    """Load saved hypers and validate world/schema; verify S3 bytes before loading."""
+
+    if isinstance(path, StoredArtifact):
+        path = str(materialize_artifact(path))
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     hypers = checkpoint["hypers"]

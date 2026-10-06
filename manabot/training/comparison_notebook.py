@@ -29,15 +29,26 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
         ),
         nbformat.v4.new_code_cell(
             "from pathlib import Path\n"
+            "from dataclasses import replace\n"
             "from manabot.training.experiment_report import (\n"
-            "    load_evidence, metric_figure, strength_figures, write_dashboard,\n"
+            "    load_evidence, metric_figure, diagnostic_figures, strength_figures, write_dashboard,\n"
             ")\n\n"
+            "from manabot.training.report_study import load_study, study_strength_figures\n\n"
             f"DATA_ROOT = Path({relative!r}).resolve()\n"
             "OUTPUT = Path('comparison.html')\n"
             f"METRIC_DOCS = {docs!r}\n"
             "QUESTION = 'How do the declared variants progress at shared training milestones?'\n"
             "# Narrow DATA_ROOT to a retained execution; never combine incompatible studies.\n"
-            "evidence = load_evidence(DATA_ROOT)"
+            "evidence = load_evidence(DATA_ROOT)\n"
+            "STUDY_PATH = DATA_ROOT / 'study' / 'study.json'\n"
+            "study = load_study(STUDY_PATH) if STUDY_PATH.exists() else None\n"
+            "if study is not None:\n"
+            "    evidence = replace(evidence, paths=(*evidence.paths, STUDY_PATH))\n"
+            "NOTES = 'Scientific study: unavailable.' if study is None else (\n"
+            "    f'Scientific study: {study.status}; {len(study.seeds)} independent seeds. '\n"
+            "    + ('Initialization retained.' if any(m.learner_transitions == 0 for m in study.measurements)\n"
+            "       else 'Initialization unavailable: no zero-transition evaluation retained.')\n"
+            ")"
         ),
         nbformat.v4.new_markdown_cell(
             "## Choose the report\n\nChange metrics or axes here. `evidence.metrics(run)` exposes every "
@@ -46,16 +57,25 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
         ),
         nbformat.v4.new_code_cell(
             "# Editable plotting code. Keep the default report concise.\n"
-            "sections = [\n"
-            "    ('Strength versus time', 'comparisons', strength_figures(evidence, 'training_seconds')),\n"
-            "    ('Strength versus work', 'comparisons', strength_figures(evidence, 'environment_decisions')),\n"
-            "    ('RL objective', 'learning', [metric_figure(evidence, 'rl/loss')]),\n"
+            "sections = []\n"
+            "if study is not None:\n"
+            "    sections += [\n"
+            "        ('Scientific checkpoint strength', 'comparisons', study_strength_figures(study)),\n"
+            "        ('Scientific checkpoints at recorded cost', 'comparisons', study_strength_figures(study, 'training_seconds')),\n"
+            "    ]\n"
+            "if evidence.monitors or study is None:\n"
+            "    sections += [\n"
+            "        ('Monitoring strength versus time', 'comparisons', strength_figures(evidence, 'training_seconds')),\n"
+            "        ('Monitoring strength versus work', 'comparisons', strength_figures(evidence, 'environment_decisions')),\n"
+            "    ]\n"
+            "sections += [\n"
+            "    ('Policy, value, regularization and sample retention', 'sampling', diagnostic_figures(evidence)),\n"
             "    ('Sampled process memory', 'costs', [metric_figure(evidence, 'progress/rss_bytes')]),\n"
             "]\n"
             "# For deeper analysis, add e.g. metric_figure(evidence, 'rl/collection_kl')."
         ),
         nbformat.v4.new_code_cell(
-            "report = write_dashboard(evidence, OUTPUT, question=QUESTION, docs=METRIC_DOCS, sections=sections)\n"
+            "report = write_dashboard(evidence, OUTPUT, question=QUESTION, docs=METRIC_DOCS, sections=sections, notes=NOTES, study=study)\n"
             "print(f'Read-only report: {report.resolve()}')"
         ),
         nbformat.v4.new_markdown_cell(
