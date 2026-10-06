@@ -90,7 +90,7 @@ Larger pools need a newly pinned world and measured complete-loop cost. The
 INT-17 failure motivates avoiding enumeration, but neither a large synthetic
 vocabulary nor a fast sampler is evidence of wider-world strategic strength.
 The proposed scientific allocations in
-[training-regime follow-ups](../experiments/training-regime-followups.md) remain
+[ETU-99 transfer protocols](../experiments/ataraxos-transfer.md) remain
 proposals. Full evaluation, opponent transfer and challenger strength remain
 unmeasured until those separately authorized cohorts complete.
 
