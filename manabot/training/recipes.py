@@ -29,6 +29,16 @@ def with_agent(regime: TrainingRegime, *, id: str, agent: AgentSpec) -> Training
     )
 
 
+def with_recent_events(
+    regime: TrainingRegime, *, id: str, enabled: bool
+) -> TrainingRegime:
+    """Select public recent-event context independently of model size and learning."""
+    agent = AgentSpec.model_validate(
+        {**regime.agent.model_dump(), "recent_events": enabled}
+    )
+    return with_agent(regime, id=id, agent=agent)
+
+
 def with_value_output(
     regime: TrainingRegime, *, id: str, output: ValueOutput
 ) -> TrainingRegime:

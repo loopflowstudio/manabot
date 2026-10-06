@@ -408,6 +408,7 @@ pub struct ClonePlusUndoMark {
     permanents_len: usize,
     card_to_permanent_len: usize,
     incarnations_len: usize,
+    policy_history: crate::agent::policy_history::HistoryWindow,
 }
 
 impl Game {
@@ -439,6 +440,7 @@ impl Game {
             permanents_len: self.state.permanents.len(),
             card_to_permanent_len: self.state.card_to_permanent.len(),
             incarnations_len: self.state.object_incarnations.len(),
+            policy_history: self.policy_history.clone(),
         }
     }
 
@@ -469,6 +471,7 @@ impl Game {
         self.state
             .object_incarnations
             .truncate(mark.incarnations_len);
+        self.policy_history = mark.policy_history.clone();
         self.state.id_gen.restore(mark.id_watermark);
         let mut rng = ChaCha8Rng::from_seed(mark.rng_seed);
         rng.set_stream(mark.rng_stream);

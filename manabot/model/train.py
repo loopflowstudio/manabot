@@ -650,7 +650,7 @@ class Trainer:
 
         # Get original object embeddings and mask
         with torch.no_grad():
-            objects, is_agent, validity = self.agent._gather_object_embeddings(obs)
+            objects, is_agent, validity, _ = self.agent._gather_object_embeddings(obs)
             key_padding_mask = validity == 0
             original_output = self.agent.attention(objects, is_agent, key_padding_mask)
 

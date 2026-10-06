@@ -135,6 +135,7 @@ impl Game {
                 id_gen,
                 content,
             },
+            policy_history: Default::default(),
             skip_trivial,
             current_action_space: None,
             decision_epoch: 0,

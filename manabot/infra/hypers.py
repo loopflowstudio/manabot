@@ -39,6 +39,9 @@ class ObservationSpaceHypers(BaseHypersModel):
     max_actions: int = 64
     max_focus_objects: int = 2
     max_events: int = 32
+    policy_history_version: Literal[0, 1] = Field(
+        default=0, exclude_if=lambda value: value == 0
+    )
 
 
 class MatchHypers(BaseHypersModel):
@@ -111,6 +114,8 @@ class AgentSpec(BaseHypersModel):
     """
 
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Public identity/history v1; false preserves historical receipt bytes.
+    recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
     semantic_pack: str | None = None
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"

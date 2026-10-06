@@ -167,3 +167,7 @@ boundaries and separate comparison recipes are documented under
 TrainingRun diagnostics can be followed live or backfilled into W&B without
 retraining. The [dashboard guide](../docs/training-monitoring.md) covers offline
 operation, fixed distillation validation and separate checkpoint monitoring.
+
+Optional [public recent-event input](../docs/recent-events.md) uses the existing
+semantic catalog and a bounded native history suffix. Recipe history-on/off is
+independent of capacity and learning rules; comparison plans remain unexecuted.

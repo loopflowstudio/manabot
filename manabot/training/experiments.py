@@ -50,6 +50,8 @@ _ROOT_OWNERS: dict[str, ComponentName] = {
 
 def setting_owner(path: Path) -> ComponentName:
     """Every property has one owner; unknown schema roots fail closed."""
+    if path == ("observation", "policy_history_version"):
+        return "model"
     if path[0] == "stages" and len(path) > 2:
         if path[2] == "learning":
             return "learning"
@@ -252,21 +254,37 @@ class _Write:
 
 def _fields(prefix: Path, model: BaseModel, source: str) -> list[_Write]:
     values = _object(model, explicit=True)
-    # AgentSpec omits False compound_decisions from saved files, even when explicit.
-    if isinstance(model, AgentSpec) and "compound_decisions" in model.model_fields_set:
-        values["compound_decisions"] = model.compound_decisions
+    # Compatibility defaults may be omitted from saved files, but an explicit
+    # False remains an authored override (including switching a treatment off).
+    if isinstance(model, AgentSpec):
+        for field in ("compound_decisions", "recent_events"):
+            if field in model.model_fields_set:
+                values[field] = getattr(model, field)
     return [_Write((*prefix, key), value, source) for key, value in values.items()]
 
 
 def _writes(component: Component, base: TrainingRegime, source: str) -> list[_Write]:
     match component:
         case Model(settings):
-            return _fields(("agent",), settings, source)
+            writes = _fields(("agent",), settings, source)
+            if "recent_events" in settings.model_fields_set:
+                writes.append(
+                    _Write(
+                        ("observation", "policy_history_version"),
+                        int(settings.recent_events),
+                        source,
+                    )
+                )
+            return writes
         case Environment(world, match, observation):
             writes = [] if world is None else [_Write(("world",), world, source)]
             if match is not None:
                 writes.extend(_fields(("match",), match, source))
             if observation is not None:
+                if "policy_history_version" in observation.model_fields_set:
+                    raise ValueError(
+                        "history input is selected by Model(recent_events=...), not Environment"
+                    )
                 writes.extend(_fields(("observation",), observation, source))
             return writes
         case LearningRule(settings):
@@ -411,6 +429,13 @@ class Experiment:
                 agent = effective["agent"]
                 assert isinstance(agent, dict)
                 agent["compound_decisions"] = resolved.agent.compound_decisions
+                if any(write.path == ("agent", "recent_events") for write in writes):
+                    agent["recent_events"] = resolved.agent.recent_events
+                    observation = effective["observation"]
+                    assert isinstance(observation, dict)
+                    observation["policy_history_version"] = int(
+                        resolved.agent.recent_events
+                    )
                 for path, value in _leaves(effective):
                     origin: Origin = self.baseline.origin
                     source = self.baseline.name

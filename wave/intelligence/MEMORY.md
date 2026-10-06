@@ -1,5 +1,38 @@
 # Intelligence memory
 
+## Optional public history contract (ETU-111, 2026-10-05)
+
+Jack Heart required visible card/object identity before shipping history-on and
+nonempty multi-decision input through ordinary semantic training and checkpoint
+play. The coarse transition-window draft was rejected. Pre-delivery review also
+identified unbounded full-ledger replay on history-off observations; no throughput
+claim was measured. The replacement is a bounded derived public projection updated
+at Game::emit, shared by observations/forks and restored by undo. It captures native
+references at emission rather than reconstructing permanent slots. Public definitions
+survive departure, but every zone change expires old context links.
+
+AgentSpec/Model select the versioned observation contract independently of capacity,
+value output/aggregation and learning. Historical off configuration and tensor/weight
+contracts remain unchanged. Semantic definition IDs join the existing catalog;
+physical IDs only route exact visible links. The initial contract records public
+arrivals, damage, life and spell facts, owner and event-time zone. Historical
+controller attribution, private/unaudited event families and cross-event identity
+of departed duplicate copies remain unavailable. It is a bounded public suffix,
+not full history, beliefs or recurrence. The [history contract](../../docs/recent-events.md)
+owns data flow and exclusions. Frozen ETU-91/106 checkouts remain untouched; actual
+history comparisons follow the value-token priority under separate allocation.
+
+The software gate passed 264 affected Python checks (one unsupported configuration
+skip), native debug history/branch contracts, Clippy and focused lint/format checks.
+Ordinary semantic collector and checkpoint-player fixtures receive nonempty history
+across decisions with hidden-world invariance and reset. Base Agent comparison
+preserves four history-off weight/receipt/output sets. Empty history preserves off
+outputs with shared weights. Source payloads lacking an originating incarnation
+retain public definition/owner only; diagnostic injection clears history. These
+are bounded correctness fixtures, not scientific training, strength or chapter
+acceptance. Publication/merge remains a separate delivery condition.
+
+
 ## Technique-screen software boundary (ETU-105, 2026-10-05)
 
 Jack Heart authorized autonomous source research, declarative ablation plans,

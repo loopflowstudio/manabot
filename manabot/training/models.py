@@ -302,6 +302,17 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if self.agent.recent_events and self.agent.semantic_pack is None:
+            raise ValueError(
+                "recent events require a semantic pack for public identities"
+            )
+        if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
+            raise ValueError("public history v1 requires 1..32 event rows")
+        # The model treatment owns this input contract; callers cannot silently
+        # train history-on against the historical drained event tensor.
+        self.observation = self.observation.model_copy(
+            update={"policy_history_version": 1 if self.agent.recent_events else 0}
+        )
         if self.agent.compound_decisions != any(
             isinstance(stage, TrainCompound) for stage in self.stages
         ):

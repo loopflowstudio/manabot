@@ -19,7 +19,7 @@ use crate::{
         observation::Observation,
         observation_encoder::{
             encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
-            EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
+            PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
@@ -134,11 +134,10 @@ impl PyVectorEnv {
     }
 
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>) -> PyResult<()> {
-        self.buffers = Some(read_observation_buffers(
-            &buffers,
-            self.num_envs,
-            &self.config,
-        )?);
+        let config = event_buffer_config(&buffers, self.config)?;
+        let buffers = read_observation_buffers(&buffers, self.num_envs, &config)?;
+        self.config = config;
+        self.buffers = Some(buffers);
         Ok(())
     }
 
@@ -209,6 +208,32 @@ impl PyVectorEnv {
 }
 
 #[cfg(feature = "python")]
+fn event_buffer_config(
+    buffers: &Bound<'_, PyDict>,
+    mut config: ObservationEncoderConfig,
+) -> PyResult<ObservationEncoderConfig> {
+    let shape: Vec<usize> = buffers
+        .get_item("events")?
+        .ok_or_else(|| PyValueError::new_err("missing events"))?
+        .getattr("shape")?
+        .extract()?;
+    config.policy_history = shape.last() == Some(&crate::agent::policy_history::HISTORY_DIM);
+    if config.policy_history {
+        if shape.len() != 3
+            || !(1..=crate::agent::policy_history::HISTORY_LIMIT).contains(&shape[1])
+        {
+            return Err(PyValueError::new_err(
+                "public history v1 requires 1..32 rows",
+            ));
+        }
+        config.max_events = shape[1];
+    } else {
+        config.max_events = ObservationEncoderConfig::default().max_events;
+    }
+    Ok(config)
+}
+
+#[cfg(feature = "python")]
 fn read_observation_buffers(
     buffers: &Bound<'_, PyDict>,
     n: usize,
@@ -273,8 +298,13 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        events: require_numpy_array(buffers, "events", &[n, c.max_events, EVENT_DIM], "float32")?
-            .unbind(),
+        events: require_numpy_array(
+            buffers,
+            "events",
+            &[n, c.max_events, c.event_dim()],
+            "float32",
+        )?
+        .unbind(),
         action_focus: require_numpy_array(
             buffers,
             "action_focus",
@@ -455,13 +485,16 @@ impl PyRolloutPool {
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
+        let config = event_buffer_config(&buffers, self.config)?;
         if capacity < self.inner.num_slots() {
             return Err(PyValueError::new_err(format!(
                 "buffer capacity {capacity} < num_slots {}",
                 self.inner.num_slots()
             )));
         }
-        self.buffers = Some(read_observation_buffers(&buffers, capacity, &self.config)?);
+        let buffers = read_observation_buffers(&buffers, capacity, &config)?;
+        self.config = config;
+        self.buffers = Some(buffers);
         Ok(())
     }
 

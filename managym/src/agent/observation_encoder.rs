@@ -22,6 +22,7 @@ pub struct ObservationEncoderConfig {
     pub max_actions: usize,
     pub max_focus_objects: usize,
     pub max_events: usize,
+    pub policy_history: bool,
 }
 
 impl Default for ObservationEncoderConfig {
@@ -32,6 +33,7 @@ impl Default for ObservationEncoderConfig {
             max_actions: 64,
             max_focus_objects: 2,
             max_events: 32,
+            policy_history: false,
         }
     }
 }
@@ -53,8 +55,16 @@ impl ObservationEncoderConfig {
         self.max_actions * self.max_focus_objects
     }
 
+    pub fn event_dim(&self) -> usize {
+        if self.policy_history {
+            super::policy_history::HISTORY_DIM
+        } else {
+            EVENT_DIM
+        }
+    }
+
     pub fn events_len(&self) -> usize {
-        self.max_events * EVENT_DIM
+        self.max_events * self.event_dim()
     }
 }
 
@@ -429,12 +439,24 @@ pub fn encode_into(
         out.action_focus,
         &object_to_index,
     );
-    encode_events(
-        &obs.recent_events,
-        config.max_events,
-        out.events,
-        out.events_valid,
-    );
+    if config.policy_history {
+        for (index, row) in
+            super::policy_history::encode(obs, config.max_events, config.max_cards_per_player)
+                .iter()
+                .enumerate()
+        {
+            out.events[index * config.event_dim()..(index + 1) * config.event_dim()]
+                .copy_from_slice(row);
+            out.events_valid[index] = 1.0;
+        }
+    } else {
+        encode_events(
+            &obs.recent_events,
+            config.max_events,
+            out.events,
+            out.events_valid,
+        );
+    }
 
     Ok(())
 }
@@ -782,6 +804,7 @@ mod tests {
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
+            policy_history: Default::default(),
             recent_events: vec![
                 EventData {
                     event_type: 3,
@@ -897,6 +920,7 @@ mod tests {
             max_actions: 3,
             max_focus_objects: 2,
             max_events: 2,
+            policy_history: false,
         };
 
         let encoded = encode(&obs, &config).unwrap();
@@ -1006,6 +1030,7 @@ mod tests {
             max_actions: 2,
             max_focus_objects: 2,
             max_events: 1,
+            policy_history: false,
         };
 
         let mut agent_player = vec![0.0; 1];

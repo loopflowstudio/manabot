@@ -16,6 +16,7 @@ from manabot.env import ObservationSpace
 from manabot.infra import AgentSpec
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
+from manabot.model.recent_events import RecentEventEncoder
 from manabot.sim.structured_policy import RaggedOfferBatch
 
 
@@ -39,6 +40,16 @@ class Agent(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
+        if hypers.recent_events and (
+            hypers.semantic_pack is None or enc.hypers.policy_history_version != 1
+        ):
+            raise ValueError(
+                "recent events require semantic_pack and policy_history_version=1"
+            )
+        if not hypers.recent_events and enc.hypers.policy_history_version != 0:
+            raise ValueError(
+                "history observation contract requires recent_events Agent"
+            )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
         perm_dim = (
@@ -156,6 +167,9 @@ class Agent(nn.Module):
             if hypers.value_aggregation == "value_token"
             else None
         )
+        self.recent_events = (
+            RecentEventEncoder(embed_dim) if hypers.recent_events else None
+        )
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -190,13 +204,15 @@ class Agent(nn.Module):
             raise ValueError(
                 "compound checkpoint requires authoritative offers; use Agent.compound"
             )
-        objects, is_agent, validity = self._gather_object_embeddings(obs)
+        objects, is_agent, validity, history = self._gather_object_embeddings(obs)
 
         encoded = self._attend_objects(objects, is_agent, validity)
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : validity.shape[1]]
 
-        informed_actions = self._gather_informed_actions(obs, post_attention_objects)
+        informed_actions = self._gather_informed_actions(
+            obs, post_attention_objects, history
+        )
 
         logits_before_mask = self.policy_head(informed_actions).squeeze(-1)
         if self.debug:
@@ -261,7 +277,7 @@ class Agent(nn.Module):
         """One viewer-safe root, one ragged action; no intermediate observation."""
         if self.compound_decoder is None:
             raise ValueError("checkpoint has no compound policy")
-        objects, ownership, valid = self._gather_object_embeddings(obs)
+        objects, ownership, valid, history = self._gather_object_embeddings(obs)
         if objects.shape[0] != 1:
             raise ValueError("compound decoding requires one root")
         if self.hypers.attention_on:
@@ -277,7 +293,7 @@ class Agent(nn.Module):
             offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
             for offer in batch.offers
         ):
-            features = self._gather_informed_actions(obs, objects)[
+            features = self._gather_informed_actions(obs, objects, history)[
                 0, : len(batch.offers)
             ]
         return self.compound_decoder(
@@ -315,9 +331,15 @@ class Agent(nn.Module):
         return torch.cat([actions, focus_flat], dim=-1)
 
     def _gather_informed_actions(
-        self, obs: Dict[str, torch.Tensor], post_attention_objects: torch.Tensor
+        self,
+        obs: Dict[str, torch.Tensor],
+        post_attention_objects: torch.Tensor,
+        history: torch.Tensor | None,
     ) -> torch.Tensor:
         actions = self.action_embedding(obs["actions"][..., :-1])
+        if history is not None:
+            # Focus-free actions also receive the same context without attention.
+            actions = actions + history.unsqueeze(1)
         valid_mask = obs["actions_valid"].unsqueeze(-1)
         actions = actions * valid_mask
         actions_with_focus = self._add_focus(
@@ -327,13 +349,15 @@ class Agent(nn.Module):
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         enc_agent_player = self.player_embedding(obs["agent_player"])
         enc_opp_player = self.player_embedding(obs["opponent_player"])
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
+        definitions = None
         if self.semantic_cards is not None:
-            cards, known = self.semantic_cards(obs)
+            definitions = self.semantic_cards.definitions()
+            cards, known = self.semantic_cards(obs, definitions)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
@@ -374,6 +398,13 @@ class Agent(nn.Module):
             )
 
         objects = torch.cat(object_parts, dim=1)
+        history = None
+        if self.recent_events is not None:
+            assert self.semantic_cards is not None and definitions is not None
+            history = self.recent_events(
+                obs, objects, definitions, self.semantic_cards.definition_rows
+            )
+            objects = objects + history.unsqueeze(1)
 
         # The visible object layout is static, so its ownership mask is a
         # registered buffer. Explicit belief rows extend it below.
@@ -390,7 +421,7 @@ class Agent(nn.Module):
             )
 
         validity = torch.cat(validity_parts, dim=1)
-        return objects, is_agent, validity
+        return objects, is_agent, validity, history
 
     def _belief_rows(
         self, obs: Dict[str, torch.Tensor]

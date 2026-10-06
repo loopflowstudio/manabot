@@ -77,7 +77,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
     )
     batch = collector.collect(agent, 1)
     obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
-    objects, owners, valid = agent._gather_object_embeddings(obs)
+    objects, owners, valid, history = agent._gather_object_embeddings(obs)
     encoded = agent._attend_objects(objects, owners, valid)
     assert encoded.shape[1] == objects.shape[1] + 1
     # Probe each real-object index, including the final slot, and absent focus.
@@ -155,12 +155,12 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
     for left, right in zip(expected, actual, strict=True):
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     if aggregation == "historical_mean":
-        objects, owners, valid = agent._gather_object_embeddings(obs)
+        objects, owners, valid, history = agent._gather_object_embeddings(obs)
         post = agent.attention(objects, owners, valid == 0)
         value = agent.value_head(post)
-        logits = agent.policy_head(agent._gather_informed_actions(obs, post)).squeeze(
-            -1
-        )
+        logits = agent.policy_head(
+            agent._gather_informed_actions(obs, post, history)
+        ).squeeze(-1)
         logits = logits.masked_fill(obs["actions_valid"] == 0, -1e8)
         torch.testing.assert_close(expected[0], logits, rtol=0, atol=0)
         torch.testing.assert_close(expected[1], value, rtol=0, atol=0)

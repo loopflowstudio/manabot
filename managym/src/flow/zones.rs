@@ -169,6 +169,7 @@ impl Game {
     }
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
+        crate::agent::policy_history::record(self, &event);
         self.journal_pending_event_append();
         self.journal_observation_event_append();
         self.journal_event_append();

@@ -34,7 +34,7 @@ use crate::{
             StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{
-            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
+            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
     },
@@ -148,7 +148,12 @@ fn encoded_to_dict<'py>(
     )?;
     dict.set_item(
         "events",
-        to_numpy_array_f32(py, &np, &encoded.events, &[config.max_events, EVENT_DIM])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.events,
+            &[config.max_events, config.event_dim()],
+        )?,
     )?;
     dict.set_item(
         "action_focus",
@@ -1725,6 +1730,7 @@ pub struct PyObservation {
     pub stack_objects: Vec<PyStackObject>,
     #[pyo3(get, set)]
     pub recent_events: Vec<PyEventData>,
+    pub policy_history: crate::agent::policy_history::HistoryWindow,
 }
 
 #[cfg(feature = "python")]
@@ -1759,6 +1765,7 @@ impl From<Observation> for PyObservation {
                 .into_iter()
                 .map(PyStackObject::from)
                 .collect(),
+            policy_history: value.policy_history,
             recent_events: value
                 .recent_events
                 .into_iter()
@@ -1804,6 +1811,7 @@ impl From<PyObservation> for Observation {
                 .into_iter()
                 .map(StackObjectData::from)
                 .collect(),
+            policy_history: value.policy_history,
             recent_events: value
                 .recent_events
                 .into_iter()
@@ -1816,6 +1824,16 @@ impl From<PyObservation> for Observation {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyObservation {
+    fn encode_policy_history(&self, capacity: usize, cards_per_player: usize) -> Vec<Vec<f32>> {
+        crate::agent::policy_history::encode(
+            &Observation::from(self.clone()),
+            capacity,
+            cards_per_player,
+        )
+        .into_iter()
+        .map(|row| row.to_vec())
+        .collect()
+    }
     fn validate(&self) -> bool {
         Observation::from(self.clone()).validate()
     }

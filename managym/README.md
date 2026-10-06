@@ -92,3 +92,7 @@ current default has 64 action rows. Card, permanent, action and focus capacity
 excesses raise encoding errors; they must not be treated as a random-policy
 fallback. Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
+
+The optional [policy-history v1 projection](../docs/recent-events.md) is a bounded
+derived suffix updated at the native event append. Observation reads share it;
+clone/undo and diagnostic injection must preserve its documented lifecycle.
