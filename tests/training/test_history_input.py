@@ -15,6 +15,7 @@ from experiments.runners import (
     run_training_regimes as runner,
 )
 from experiments.runners.history_input_analysis import history_report, paired_effect
+from experiments.runners.screen_spec import ScreenSpec, specification
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import PlayerRegistration, canonical_sha256, file_sha256
 from manabot.env import Match, ObservationSpace
@@ -26,8 +27,8 @@ from manabot.training.execution import atomic_json
 from manabot.training.models import StageRecord, TrainingRun
 
 
-def calibration(rate: float = 2) -> history.Calibration:
-    return history.Calibration(
+def calibration(rate: float = 2, spec: ScreenSpec = history) -> history.Calibration:
+    return spec.Calibration(
         arms=tuple(
             history.CalibrationArm(
                 recipe_id=name,
@@ -36,7 +37,7 @@ def calibration(rate: float = 2) -> history.Calibration:
                 process_seconds=40 * rate,
                 stage_seconds=(19 * rate, 19 * rate),
             )
-            for name in history.ARMS
+            for name in spec.ARMS
         ),
         seconds=80 * rate + 10,
         source_commit="a" * 40,
@@ -44,12 +45,21 @@ def calibration(rate: float = 2) -> history.Calibration:
         input_bindings=tuple(
             history.InputBinding(
                 recipe_id=name,
-                observation_abi_sha256=str(index + 1) * 64,
-                input_schema_sha256=str(index + 3) * 64,
-                world_binding_sha256=str(index + 5) * 64,
-                policy_history_version=index,
+                observation_abi_sha256=str(
+                    index + 1 if spec.STUDY == "history-input" else 1
+                )
+                * 64,
+                input_schema_sha256=str(
+                    index + 3 if spec.STUDY == "history-input" else 3
+                )
+                * 64,
+                world_binding_sha256=str(
+                    index + 5 if spec.STUDY == "history-input" else 5
+                )
+                * 64,
+                policy_history_version=index if spec.STUDY == "history-input" else 0,
             )
-            for index, name in enumerate(history.ARMS)
+            for index, name in enumerate(spec.ARMS)
         ),
         projected_disk_bytes=3 * 1024**3,
     )
@@ -165,7 +175,7 @@ def test_second_arm_drift_checked_at_execution(monkeypatch: pytest.MonkeyPatch) 
         update={"observation_abi_sha256": "f" * 64}
     )
     monkeypatch.setattr(
-        supervisor,
+        history,
         "runtime_bindings",
         lambda values: (plan.runtime_identities, (plan.input_bindings[0], changed)),
     )
@@ -253,13 +263,16 @@ def test_old_protocol_serialization_has_no_history_binding() -> None:
         )
 
 
+@pytest.mark.parametrize("study", ["history-input", "depth-screen"])
 @pytest.mark.parametrize("invalid_cell", [False, True])
 def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid_cell: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid_cell: bool, study: str
 ) -> None:
 
-    plan = supervisor.history_plan(calibration())
-    values = history.recipes()
+    history = specification(study)
+    receipt = calibration(spec=history)
+    plan = supervisor.history_plan(receipt, spec=history)
+    values = history.recipes(receipt.admitted_updates())
     paths: list[Path] = []
     for order, seed in zip(history.ORDER, history.SEEDS, strict=True):
         for index in order:
@@ -275,8 +288,8 @@ def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
                     StageRecord(
                         id=spec.id,
                         status="completed",
-                        diagnostics=[{}] * 400,
-                        learner_transitions=102400,
+                        diagnostics=[{}] * spec.updates,
+                        learner_transitions=spec.updates * 256,
                         cumulative_seconds=(cutoff + 1) * 100 + index * 10,
                         optimizer_exposures=400,
                         artifacts={"raw": artifact, "ema": artifact},
@@ -346,7 +359,7 @@ def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
         }
         keys.append(canonical_sha256(kwargs["key"].model_dump()))
         inputs.add(candidate.observation_abi_sha256)
-        on = candidate.display_name == "history-on"
+        on = candidate.display_name == history.ARMS[1]
         rows = [
             dict(
                 deal_seed=d,
@@ -371,24 +384,28 @@ def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
     if invalid_cell:
         with pytest.raises(RuntimeError, match="invalid arena cell"):
             runner.run_study(
-                "history-input",
+                study,
                 out,
                 plan,
                 render_report=False,
                 history_run_paths=tuple(paths),
             )
         assert len(keys) == 1
-        history_report(out)
+        history_report(out, study=study)
         assert (
             json.loads((out / "history-contrast.json").read_text())["status"]
             == "unavailable"
         )
         return
     runner.run_study(
-        "history-input", out, plan, render_report=False, history_run_paths=tuple(paths)
+        study, out, plan, render_report=False, history_run_paths=tuple(paths)
     )
-    assert len(keys) == 12 and len(set(keys)) == 1 and len(inputs) == 2
-    history_report(out)
+    assert (
+        len(keys) == 12
+        and len(set(keys)) == 1
+        and len(inputs) == (2 if study == "history-input" else 1)
+    )
+    history_report(out, study=study)
     runner.report(out)
     assert (out / "history-optimizer_exposures.png").is_file()
     result = json.loads((out / "history-contrast.json").read_text())
@@ -396,15 +413,15 @@ def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
     cost = result["comparisons"]["training_seconds"]
     assert (cost["start_seconds"], cost["end_seconds"]) == (110, 200)
     assert {
-        r["checkpoint_seconds"] for r in cost["rows"] if r["regime"] == "history-on"
+        r["checkpoint_seconds"] for r in cost["rows"] if r["regime"] == history.ARMS[1]
     } == {110}
     assert result["disposition"] == "larger-confirmatory-allocation-merited"
     before = (out / "history-contrast.json").read_bytes()
-    history_report(out)
+    history_report(out, study=study)
     assert before == (out / "history-contrast.json").read_bytes()
     with pytest.raises(ValueError, match="retries require"):
         runner.run_study(
-            "history-input",
+            study,
             out,
             plan,
             resume=True,
@@ -415,9 +432,10 @@ def test_existing_arena_receives_six_runs_two_abis_and_fixed_key(
     data["comparisons"][0]["rows"][0]["leg"] = 1
     (out / "study.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="deal/leg"):
-        history_report(out)
+        history_report(out, study=study)
 
 
+@pytest.mark.parametrize("study", ["history-input", "depth-screen"])
 @pytest.mark.parametrize("fail_calibration", [False, True])
 @pytest.mark.parametrize("prior_seconds", [0, 91.15643158298917])
 def test_campaign_phase_accounting_and_failure_retention(
@@ -425,8 +443,12 @@ def test_campaign_phase_accounting_and_failure_retention(
     monkeypatch: pytest.MonkeyPatch,
     fail_calibration: bool,
     prior_seconds: float,
+    study: str,
 ) -> None:
 
+    if study == "depth-screen" and prior_seconds:
+        pytest.skip("depth does not admit a predecessor")
+    history = specification(study)
     clock = [1000.0]
     monkeypatch.setattr(supervisor.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(supervisor, "ROOT", tmp_path)
@@ -455,10 +477,15 @@ def test_campaign_phase_accounting_and_failure_retention(
         else {}
     )
     calls: list[tuple[str, float]] = []
-    receipt = calibration()
+    receipt = calibration(spec=history)
 
     def child(
-        arguments: list[str], root: Path, deadline: float, check: object = None
+        arguments: list[str],
+        root: Path,
+        deadline: float,
+        check: object = None,
+        *,
+        spec: ScreenSpec = history,
     ) -> float:
         phase = arguments[0]
         assert deadline <= 1000 + history.TOTAL_SECONDS - prior_seconds
@@ -519,7 +546,7 @@ def test_campaign_phase_accounting_and_failure_retention(
     monkeypatch.setattr(supervisor, "_child", child)
     if fail_calibration:
         with pytest.raises(RuntimeError, match="fixture calibration"):
-            supervisor.campaign(out, "a" * 40, **selection)
+            supervisor.campaign(out, "a" * 40, spec=history, **selection)
         assert [c[0] for c in calls] == [
             "--preflight",
             "--calibrate-arm",
@@ -530,9 +557,9 @@ def test_campaign_phase_accounting_and_failure_retention(
         assert status["status"] == "failed" and status["seconds"] == 170
         assert status["cumulative_seconds"] == pytest.approx(170 + prior_seconds)
         assert calls[0][1] == pytest.approx(1800 - prior_seconds)
-        assert (out / "calibration/history-off/run.json").exists()
+        assert (out / "calibration" / history.ARMS[0] / "run.json").exists()
     else:
-        supervisor.campaign(out, "a" * 40, **selection)
+        supervisor.campaign(out, "a" * 40, spec=history, **selection)
         assert [c[0] for c in calls] == [
             "--preflight",
             "--calibrate-arm",
@@ -544,7 +571,7 @@ def test_campaign_phase_accounting_and_failure_retention(
         caps = {
             "--preflight": 1800,
             "--calibrate-arm": 400,
-            "--train-arm": 2400,
+            "--train-arm": history.RUN_SECONDS,
             "--evaluate": 4500,
             "--report": 900,
         }
@@ -555,8 +582,8 @@ def test_campaign_phase_accounting_and_failure_retention(
             (out / "resolved-plan.json").read_text()
         )
         assert plan.prior_campaign_seconds == prior_seconds
-        assert plan.allocation_seconds == 21600 - prior_seconds
-        assert plan.protocol.process_seconds == 21600 - prior_seconds
+        assert plan.allocation_seconds == history.TOTAL_SECONDS - prior_seconds
+        assert plan.protocol.process_seconds == history.TOTAL_SECONDS - prior_seconds
         assert status["cumulative_seconds"] == pytest.approx(7180 + prior_seconds)
         assert calls[0][1] == pytest.approx(1800 - prior_seconds)
         assert history.Calibration.model_validate_json(

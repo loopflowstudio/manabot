@@ -35,6 +35,7 @@ from manabot.verify.store import VerifyStore
 ROOT = Path(__file__).resolve().parents[2]
 STUDIES = {
     "history-input": [],
+    "depth-screen": [],
     "model-capacity": [],
     "omitted-controls": [],
     "compound-decisions": [
@@ -182,25 +183,30 @@ def run_study(
         "value-token-screen",
         "pooling-filter",
         "history-input",
+        "depth-screen",
     }
     if explicit_plan and plan is None:
         raise ValueError(f"{study} requires an explicit separately resolved plan")
-    if study in {"value-token-screen", "pooling-filter", "history-input"} and resume:
+    if (
+        study
+        in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
+        and resume
+    ):
         raise ValueError(
             "screen retries require a new reviewed allocation; retain this attempt"
         )
     if plan is not None and plan.protocol.study != study:
         raise ValueError("study differs from resolved protocol")
-    if study == "history-input":
+    if study in {"history-input", "depth-screen"}:
         if plan is None or len(history_run_paths) != 6 or render_report:
             raise ValueError(
                 "history requires six supervised runs and separate reporting phase"
             )
-        from experiments.runners.history_input import (
-            ORDER as HISTORY_ORDER,
-            SEEDS as HISTORY_SEEDS,
-            validate_run,
-        )
+        from experiments.runners.screen_spec import specification
+
+        spec = specification(study)
+        HISTORY_ORDER, HISTORY_SEEDS = spec.ORDER, spec.SEEDS
+        validate_run = spec.validate_run
         from experiments.runners.run_history_input import verify_runtime
 
         verify_runtime(plan)
@@ -268,7 +274,7 @@ def run_study(
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
-    if study != "history-input" and (
+    if study not in {"history-input", "depth-screen"} and (
         resume
         or (plan is not None and plan.protocol.purpose in {"scientific", "screening"})
     ):
@@ -341,9 +347,9 @@ def run_study(
         "limits": f"{protocol.process_seconds} seconds total; {len(protocol.training_seeds)} training seeds; {protocol.uncertainty}; purpose={protocol.purpose}",
     }
 
-    if study == "history-input":
+    if study in {"history-input", "depth-screen"}:
         result["limits"] = (
-            "4,500 seconds evaluation; parent supervisor owns the 21,600-second campaign including calibration, training and reporting"
+            f"4,500 seconds evaluation; parent supervisor owns the {plan.allocation_seconds}-second campaign including calibration, training and reporting"
         )
         result["accounting"] = (
             "study.seconds is evaluation time only; run costs are included once in supervisor.seconds"
@@ -358,7 +364,9 @@ def run_study(
         )
         result["status"] = "running"
     remaining = (
-        EVALUATION_SECONDS if study == "history-input" else protocol.process_seconds
+        EVALUATION_SECONDS
+        if study in {"history-input", "depth-screen"}
+        else protocol.process_seconds
     ) - (time.perf_counter() - start)
     if remaining <= 0:
         raise TimeoutError("frozen study allocation is exhausted; cannot resume")
@@ -368,7 +376,7 @@ def run_study(
         atomic_json(out / "study.json", result)
 
     screening = protocol.purpose == "screening"
-    legacy_screening = screening and study != "history-input"
+    legacy_screening = screening and study not in {"history-input", "depth-screen"}
     training = True
     diagnostic_done = False
 
@@ -403,7 +411,7 @@ def run_study(
     save()
     try:
         runs = resumed_runs
-        if study == "history-input":
+        if study in {"history-input", "depth-screen"}:
             for path in history_run_paths:
                 run = TrainingRun.model_validate_json(path.read_text())
                 runs.append(run)
@@ -418,7 +426,9 @@ def run_study(
             save()
         with VerifyStore(out / "training.sqlite") as store:
             for index, seed in enumerate(
-                () if resume or study == "history-input" else protocol.training_seeds
+                ()
+                if resume or study in {"history-input", "depth-screen"}
+                else protocol.training_seeds
             ):
                 if study == "pooling-filter":
                     from experiments.runners.pooling_filter import ORDER

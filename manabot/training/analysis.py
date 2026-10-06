@@ -260,7 +260,7 @@ def report(out: Path | str) -> None:
             rows,
             "scripted-greedy-fixed-anchor"
             if study["study"]
-            in {"value-token-screen", "pooling-filter", "history-input"}
+            in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
             else "random-smoke-anchor",
         )
         if study["status"] == "completed"
@@ -310,6 +310,7 @@ def report(out: Path | str) -> None:
         "value-token-screen",
         "pooling-filter",
         "history-input",
+        "depth-screen",
     }:
         lines += [
             "",

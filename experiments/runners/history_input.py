@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 import platform
 import sys
-from typing import Literal
+from typing import Callable, ClassVar, Literal
 
 import numpy as np
 import psutil
@@ -30,6 +30,8 @@ CALIBRATION_SEED = 10630
 DEALS = tuple(range(961260, 961285))
 ARMS = ("history-off", "history-on")
 ORDER = ((0, 1), (1, 0), (0, 1))
+STUDY = "history-input"
+RUN_SECONDS = 2400
 TOTAL_SECONDS = 21600
 CALIBRATION_SECONDS = 1800
 TRAINING_SECONDS = 14400
@@ -49,7 +51,7 @@ COMMON_KEYS = {
 
 class InputBinding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    recipe_id: Literal["history-off", "history-on"]
+    recipe_id: Literal["history-off", "history-on", "depth-1", "depth-2"]
     observation_abi_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     input_schema_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     world_binding_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -58,7 +60,7 @@ class InputBinding(BaseModel):
 
 class CalibrationArm(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
-    recipe_id: Literal["history-off", "history-on"]
+    recipe_id: Literal["history-off", "history-on", "depth-1", "depth-2"]
     run_path: str
     run_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     process_seconds: float = Field(gt=0, le=400)
@@ -75,6 +77,10 @@ class CalibrationArm(BaseModel):
 
 
 class Calibration(BaseModel):
+    arm_names: ClassVar[tuple[str, str]] = ARMS
+    training_seconds: ClassVar[int] = TRAINING_SECONDS
+    maximum_updates: ClassVar[int] = 800
+
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
     arms: tuple[CalibrationArm, CalibrationArm]
     seconds: float = Field(gt=0, le=CALIBRATION_SECONDS)
@@ -86,14 +92,17 @@ class Calibration(BaseModel):
 
     @model_validator(mode="after")
     def complete(self) -> "Calibration":
-        if tuple(a.recipe_id for a in self.arms) != ARMS:
+        if tuple(a.recipe_id for a in self.arms) != self.arm_names:
             raise ValueError(
                 "calibration requires both arms exactly once in off/on order"
             )
         if sum(a.process_seconds for a in self.arms) > self.seconds:
             raise ValueError("calibration omits process costs")
-        validate_bindings(self.runtime_identities, self.input_bindings)
+        self.check_bindings()
         return self
+
+    def check_bindings(self) -> None:
+        validate_bindings(self.runtime_identities, self.input_bindings)
 
     def rate(self) -> float:
         return max(
@@ -103,7 +112,8 @@ class Calibration(BaseModel):
 
     def admitted_updates(self) -> int:
         count = min(
-            800, 100 * math.floor(TRAINING_SECONDS / (6 * 1.25 * self.rate() * 100))
+            self.maximum_updates,
+            100 * math.floor(self.training_seconds / (6 * 1.25 * self.rate() * 100)),
         )
         if count < 400:
             raise ValueError("minimum 400 updates cannot fit the training envelope")
@@ -156,6 +166,11 @@ def validate_bindings(
 
 def runtime_bindings(
     values: list[TrainingRegime],
+    *,
+    binding_validator: Callable[
+        [dict[str, str], tuple[InputBinding, ...]], None
+    ] = validate_bindings,
+    protocol_path: str = "experiments/history-input.md",
 ) -> tuple[dict[str, str], tuple[InputBinding, ...]]:
     common: dict[str, str] | None = None
     bindings: list[InputBinding] = []
@@ -174,7 +189,7 @@ def runtime_bindings(
                 ROOT / "uv.lock",
                 ROOT / "pyproject.toml",
                 ROOT / "experiments/regimes/value-model-baseline-v1.json",
-                ROOT / "experiments/history-input.md",
+                ROOT / protocol_path,
             ]
         )
         fingerprints["runtime_environment_sha256"] = canonical_sha256(
@@ -211,7 +226,7 @@ def runtime_bindings(
         )
     if common is None:
         raise ValueError("missing history arms")
-    validate_bindings(common, tuple(bindings))
+    binding_validator(common, tuple(bindings))
     return common, tuple(bindings)
 
 

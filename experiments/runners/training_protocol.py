@@ -26,6 +26,7 @@ class EvaluationProtocol(BaseModel):
         "value-token-screen",
         "pooling-filter",
         "history-input",
+        "depth-screen",
     ]
     purpose: Literal["workflow-smoke", "calibration", "scientific", "screening"] = (
         "workflow-smoke"
@@ -65,7 +66,8 @@ class EvaluationProtocol(BaseModel):
     @model_validator(mode="after")
     def disjoint(self) -> "EvaluationProtocol":
         if (
-            self.study in {"value-token-screen", "pooling-filter", "history-input"}
+            self.study
+            in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
         ) != (self.purpose == "screening"):
             raise ValueError(
                 "value-token-screen requires its distinct screening purpose"
@@ -179,6 +181,7 @@ class EvaluationProtocol(BaseModel):
             "value-token-screen": {3},
             "pooling-filter": {4},
             "history-input": {2},
+            "depth-screen": {2},
         }[self.study]
         if len(self.regime_digests) not in expected_counts or any(
             len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest)
@@ -222,12 +225,12 @@ class ResolvedStudy(BaseModel):
         if self.protocol.purpose == "screening":
             from experiments.runners.value_screen import validate_screen_recipes
 
-            if self.protocol.study == "history-input":
-                from experiments.runners.history_input import (
-                    DEALS,
-                    SEEDS,
-                    validate_plan_recipes,
-                )
+            if self.protocol.study in {"history-input", "depth-screen"}:
+                from experiments.runners.screen_spec import specification
+
+                spec = specification(self.protocol.study)
+                SEEDS, DEALS = spec.SEEDS, spec.DEALS
+                validate_plan_recipes = spec.validate_plan_recipes
 
                 receipt = validate_plan_recipes(
                     recipes,
@@ -236,7 +239,8 @@ class ResolvedStudy(BaseModel):
                     self.input_bindings,
                 )
                 if (
-                    self.protocol.training_seeds != SEEDS
+                    self.protocol.evaluation_variants != ("raw",)
+                    or self.protocol.training_seeds != SEEDS
                     or self.protocol.anchor_deals != DEALS
                     or self.protocol.game_seconds != 120
                     or self.protocol.max_commands != 10000
@@ -276,7 +280,7 @@ class ResolvedStudy(BaseModel):
                 "training_source_sha256",
                 "study_source_sha256",
             }
-            if self.protocol.study == "history-input":
+            if self.protocol.study in {"history-input", "depth-screen"}:
                 required.remove("observation_abi_sha256")
                 required.add("runtime_environment_sha256")
             if set(self.runtime_identities) != required or any(
@@ -302,7 +306,10 @@ class ResolvedStudy(BaseModel):
                 or self.prior_campaign_seconds != 0
             ):
                 raise ValueError("screen owns a separate eight-hour allocation")
-        if self.protocol.study != "history-input" and self.input_bindings:
+        if (
+            self.protocol.study not in {"history-input", "depth-screen"}
+            and self.input_bindings
+        ):
             raise ValueError("per-arm input bindings are scoped to history-input")
         if "ema" in self.protocol.evaluation_variants and any(
             not isinstance(s, TrainSelfPlay) or s.learning.ema is None

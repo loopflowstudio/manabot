@@ -13,7 +13,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, Field
 
-from experiments.runners.history_input import ARMS, DEALS, SEEDS
+from experiments.runners import history_input
+from experiments.runners.screen_spec import ScreenSpec, specification
 from manabot.training.analysis import cost_comparison, verify_saved_inputs
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRun
@@ -78,11 +79,13 @@ def paired_effect(values: NDArray[np.float64]) -> Effect:
 
 
 def _values(
-    cells: list[_Cell], cutoffs: dict[tuple[str, int], int]
+    cells: list[_Cell],
+    cutoffs: dict[tuple[str, int], int],
+    spec: ScreenSpec = history_input,
 ) -> NDArray[np.float64]:
     values = np.empty((2, 3, 25), dtype=np.float64)
-    for arm, name in enumerate(ARMS):
-        for seed_index, seed in enumerate(SEEDS):
+    for arm, name in enumerate(spec.ARMS):
+        for seed_index, seed in enumerate(spec.SEEDS):
             matches = [
                 c
                 for c in cells
@@ -92,23 +95,24 @@ def _values(
                 raise ValueError("missing or duplicate history cell")
             rows = matches[0].rows
             if len(rows) != 100 or {(r.deal_seed, r.leg) for r in rows} != {
-                (d, leg) for d in DEALS for leg in range(4)
+                (d, leg) for d in spec.DEALS for leg in range(4)
             }:
                 raise ValueError(
                     "history cell requires each frozen deal/leg exactly once"
                 )
-            for deal_index, deal in enumerate(DEALS):
+            for deal_index, deal in enumerate(spec.DEALS):
                 values[arm, seed_index, deal_index] = (
                     sum(r.score_a for r in rows if r.deal_seed == deal) / 4
                 )
     return values
 
 
-def history_report(out: Path) -> None:
+def history_report(out: Path, *, study: str = "history-input") -> None:
+    spec = specification(study)
     # Heterogeneous study exports are the existing boundary; typed cells narrow
     # all score, latency and schedule inputs before computing contrasts.
     data = json.loads((out / "study.json").read_text())
-    if data["study"] != "history-input":
+    if data["study"] != study:
         raise ValueError("requires history-input evidence")
     verify_saved_inputs(out, data)
     result: dict[str, object] = {
@@ -128,7 +132,11 @@ def history_report(out: Path) -> None:
         raise ValueError("history contrast requires twelve cells")
     checkpoints = [
         paired_effect(
-            _values(cells, {(arm, seed): cutoff for arm in ARMS for seed in SEEDS})
+            _values(
+                cells,
+                {(arm, seed): cutoff for arm in spec.ARMS for seed in spec.SEEDS},
+                spec,
+            )
         )
         for cutoff in range(2)
     ]
@@ -139,12 +147,12 @@ def history_report(out: Path) -> None:
     if (
         len(runs) != 6
         or {(r.regime.id, r.seed) for r in runs}
-        != {(a, s) for a in ARMS for s in SEEDS}
+        != {(a, s) for a in spec.ARMS for s in spec.SEEDS}
         or any(r.status != "completed" for r in runs)
     ):
         raise ValueError("history contrast requires all six unique completed runs")
     measurements = data["measurements"]
-    expected = {(a, s, c) for a in ARMS for s in SEEDS for c in range(2)}
+    expected = {(a, s, c) for a in spec.ARMS for s in spec.SEEDS for c in range(2)}
     if (
         len(measurements) != 12
         or {(m["regime"], m["seed"], m["cutoff"]) for m in measurements} != expected
@@ -155,7 +163,12 @@ def history_report(out: Path) -> None:
     ):
         raise ValueError("history measurements are incomplete or duplicated")
     comparisons: dict[str, object] = {}
-    for axis in ("training_seconds", "optimizer_exposures"):
+    for axis in (
+        "training_seconds",
+        "learner_transitions",
+        "decisions",
+        "optimizer_exposures",
+    ):
         # Reuse the existing integrator with the declared coordinate, retaining
         # its earlier-only selection and common observed-support contract.
         projected = [{**m, "training_seconds": m[axis]} for m in measurements]
@@ -174,11 +187,11 @@ def history_report(out: Path) -> None:
                     raise ValueError("ambiguous selected history checkpoint")
                 selections[selected["regime"], selected["seed"]] = matches[0]["cutoff"]
             comparison["effect"] = paired_effect(
-                _values(cells, selections)
+                _values(cells, selections, spec)
             ).model_dump()
         comparisons[axis] = comparison
     latency = []
-    for arm in ARMS:
+    for arm in spec.ARMS:
         observations = [
             r.latency[r.player_a] for c in cells if c.a == arm for r in c.rows
         ]
@@ -205,8 +218,8 @@ def history_report(out: Path) -> None:
             disposition = "reject-for-this-recipe-and-budget"
     result = {
         "status": "completed",
-        "arms": ARMS,
-        "seeds": SEEDS,
+        "arms": spec.ARMS,
+        "seeds": spec.SEEDS,
         "checkpoints": [c.model_dump() for c in checkpoints],
         "comparisons": comparisons,
         "inference_seconds_per_decision": latency,
@@ -216,6 +229,10 @@ def history_report(out: Path) -> None:
         "bootstrap_draws": 10000,
         "limit": "Additional information and 22,912 parameters change the coupled self-play recipe. Fixed-update endpoints are not cost-matched; two checkpoints cannot resolve learning-speed dynamics. Exposure comparisons are post-treatment accounting. Three paired seeds and one anchor are exploratory, not equivalence, general strength or default promotion.",
     }
+    if study == "depth-screen":
+        result["limit"] = (
+            "Depth 2 minus depth 1 with scalar value-token and no history. Same-update endpoints are not equal elapsed cost; two observations cannot resolve learning-speed dynamics. Three paired seeds against greedy are a bounded screen, not full-budget strength or model promotion. EMA is retained, not scored."
+        )
     atomic_json(out / "history-contrast.json", result)
     atomic_json(
         out / "history-diagnostics.json",

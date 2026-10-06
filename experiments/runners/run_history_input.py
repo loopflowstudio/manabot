@@ -1,4 +1,4 @@
-"""Six-hour history screen supervisor; execution is separate from software checks.
+"""Shared history/depth screen supervisor; execution is separate from software checks.
 
 One exclusive output and checkout lock own the attempt. The parent kills whole
 child groups on time/disk/progress failure. Calibration, training, evaluation and
@@ -21,26 +21,10 @@ from typing import Callable
 import numpy as np
 import torch
 
-from experiments.runners.history_input import (
-    ARMS,
-    CALIBRATION_SECONDS,
-    CALIBRATION_SEED,
-    DEALS,
-    EVALUATION_SECONDS,
-    ORDER,
-    REPORT_SECONDS,
-    ROOT,
-    SEEDS,
-    TOTAL_SECONDS,
-    TRAINING_SECONDS,
-    Calibration,
-    CalibrationArm,
-    InputBinding,
-    recipes,
-    runtime_bindings,
-    validate_run,
-)
+from experiments.runners import history_input
+from experiments.runners.history_input import ROOT, CalibrationArm, InputBinding
 from experiments.runners.history_predecessor import Predecessor, admit_predecessor
+from experiments.runners.screen_spec import ScreenSpec, specification
 from experiments.runners.training_protocol import EvaluationProtocol, ResolvedStudy
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.env import ObservationSpace
@@ -52,24 +36,29 @@ from manabot.training.models import TrainingRegime, TrainingRun
 from manabot.verify.store import VerifyStore
 
 
-def history_plan(calibration: Calibration, prior_seconds: float = 0) -> ResolvedStudy:
-    values = recipes(calibration.admitted_updates())
+def history_plan(
+    calibration: history_input.Calibration,
+    prior_seconds: float = 0,
+    *,
+    spec: ScreenSpec = history_input,
+) -> ResolvedStudy:
+    values = spec.recipes(calibration.admitted_updates())
     return ResolvedStudy(
         protocol=EvaluationProtocol(
-            study="history-input",
+            study=spec.STUDY,
             purpose="screening",
             regime_digests=tuple(
                 canonical_sha256(r.model_dump(mode="json")) for r in values
             ),
-            training_seeds=SEEDS,
+            training_seeds=spec.SEEDS,
             paired_deals=(),
-            anchor_deals=DEALS,
+            anchor_deals=spec.DEALS,
             anchors=("scripted-greedy",),
-            process_seconds=TOTAL_SECONDS - prior_seconds,
+            process_seconds=spec.TOTAL_SECONDS - prior_seconds,
             uncertainty="paired-seed-descriptive",
         ),
         recipes=tuple(r.model_dump(mode="json") for r in values),
-        allocation_seconds=TOTAL_SECONDS - prior_seconds,
+        allocation_seconds=spec.TOTAL_SECONDS - prior_seconds,
         prior_campaign_seconds=prior_seconds,
         runtime_identities=calibration.runtime_identities,
         input_bindings=calibration.input_bindings,
@@ -79,11 +68,12 @@ def history_plan(calibration: Calibration, prior_seconds: float = 0) -> Resolved
 
 
 def verify_runtime(plan: ResolvedStudy) -> None:
+    spec = specification(plan.protocol.study)
     values = [TrainingRegime.model_validate(r) for r in plan.recipes]
-    common, bindings = runtime_bindings(values)
+    common, bindings = spec.runtime_bindings(values)
     if common != plan.runtime_identities or bindings != plan.input_bindings:
         raise ValueError("history source/native/per-arm input drift since calibration")
-    receipt = Calibration.model_validate_json(plan.calibration_evidence)
+    receipt = spec.Calibration.model_validate_json(plan.calibration_evidence)
     _clean_source(receipt.source_commit)
     for arm in receipt.arms:
         if file_sha256(Path(arm.run_path)) != arm.run_sha256:
@@ -95,6 +85,8 @@ def _child(
     out: Path,
     deadline: float,
     check: Callable[[], None] | None = None,
+    *,
+    spec: ScreenSpec = history_input,
 ) -> float:
     """Return full process time; preserve a failure receipt and kill descendants."""
     started = time.monotonic()
@@ -107,7 +99,14 @@ def _child(
     handle = out / f"child-{time.time_ns()}.json"
     with (out / "children.log").open("ab") as log:
         process = subprocess.Popen(
-            [sys.executable, "-m", "experiments.runners.run_history_input", *arguments],
+            [
+                sys.executable,
+                "-m",
+                "experiments.runners.run_history_input",
+                "--study",
+                spec.STUDY,
+                *arguments,
+            ],
             cwd=ROOT,
             stdout=log,
             stderr=subprocess.STDOUT,
@@ -165,7 +164,7 @@ def _clean_source(source: str) -> None:
         raise ValueError("history campaign requires exact clean delivered source")
 
 
-def _check_collisions(out: Path) -> None:
+def _check_collisions(out: Path, spec: ScreenSpec = history_input) -> None:
     """Only the explicitly admitted predecessor releases its reserved families."""
     state = json.loads((out / "supervisor.json").read_text())
     predecessor = (
@@ -181,9 +180,9 @@ def _check_collisions(out: Path) -> None:
         data = json.loads(path.read_text())
         protocol = data.get("protocol", {})
         if set(protocol.get("training_seeds", ())) & set(
-            (CALIBRATION_SEED, *SEEDS)
+            (spec.CALIBRATION_SEED, *spec.SEEDS)
         ) or any(
-            set(protocol.get(key, ())) & set(DEALS)
+            set(protocol.get(key, ())) & set(spec.DEALS)
             for key in (
                 "anchor_deals",
                 "paired_deals",
@@ -196,9 +195,9 @@ def _check_collisions(out: Path) -> None:
     for path in (ROOT / ".runs").rglob("resolved-plan.json"):
         data = json.loads(path.read_text())
         protocol = data.get("protocol", {})
-        if set(protocol.get("training_seeds", ())) & set(SEEDS) or set(
+        if set(protocol.get("training_seeds", ())) & set(spec.SEEDS) or set(
             protocol.get("anchor_deals", ())
-        ) & set(DEALS):
+        ) & set(spec.DEALS):
             collisions.append(str(path))
     for path in (ROOT / ".runs").rglob("supervisor.json"):
         if path.resolve() == (out / "supervisor.json").resolve():
@@ -209,13 +208,13 @@ def _check_collisions(out: Path) -> None:
         ):
             continue
         previous = json.loads(path.read_text())
-        if previous.get("study") == "history-input":
+        if previous.get("study") == spec.STUDY:
             collisions.append(str(path))
     if collisions:
         raise ValueError(f"history seed/deal collision: {collisions}")
 
 
-def _preflight(out: Path) -> None:
+def _preflight(out: Path, spec: ScreenSpec = history_input) -> None:
     """No optimizer: native fixtures, dependencies, RNGs, resources and weights."""
     from jupyter_client.kernelspec import KernelSpecManager
     import nbclient
@@ -241,7 +240,7 @@ def _preflight(out: Path) -> None:
         cwd=ROOT,
         check=True,
     )
-    common, bindings = runtime_bindings(recipes())
+    common, bindings = spec.runtime_bindings(spec.recipes())
     atomic_json(
         out / "runtime-bindings.json",
         {"common": common, "bindings": [b.model_dump(mode="json") for b in bindings]},
@@ -250,16 +249,16 @@ def _preflight(out: Path) -> None:
     assert nbclient.NotebookClient
     families = [
         seed + offset
-        for seed in (CALIBRATION_SEED, *SEEDS)
+        for seed in (spec.CALIBRATION_SEED, *spec.SEEDS)
         for offset in (0, 10000, 20000, 30000)
     ]
-    if len(set(families)) != len(families) or set(families) & set(DEALS):
+    if len(set(families)) != len(families) or set(families) & set(spec.DEALS):
         raise ValueError("history seed families collide")
-    _check_collisions(out)
+    _check_collisions(out, spec)
     counts: list[dict[str, object]] = []
-    for seed in SEEDS:
+    for seed in spec.SEEDS:
         models = []
-        for recipe in recipes():
+        for recipe in spec.recipes():
             torch.manual_seed(seed)
             model = Agent(ObservationSpace(recipe.observation), recipe.agent)
             models.append(model)
@@ -270,18 +269,19 @@ def _preflight(out: Path) -> None:
                     "architecture": architecture_receipt(model).model_dump(mode="json"),
                 }
             )
-        off, on = (m.state_dict() for m in models)
-        if any(
-            name not in on or not torch.equal(value, on[name])
-            for name, value in off.items()
-        ):
-            raise ValueError("paired history shared initialization differs")
-        if (
-            sum(p.numel() for p in models[1].parameters())
-            - sum(p.numel() for p in models[0].parameters())
-            != 22912
-        ):
-            raise ValueError("history parameter increment differs from protocol")
+        if spec.STUDY == "history-input":
+            off, on = (m.state_dict() for m in models)
+            if any(
+                name not in on or not torch.equal(value, on[name])
+                for name, value in off.items()
+            ):
+                raise ValueError("paired history shared initialization differs")
+            if (
+                sum(p.numel() for p in models[1].parameters())
+                - sum(p.numel() for p in models[0].parameters())
+                != 22912
+            ):
+                raise ValueError("history parameter increment differs from protocol")
     ram = (
         int(subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True))
         if sys.platform == "darwin"
@@ -303,7 +303,7 @@ def _preflight(out: Path) -> None:
             "load": os.getloadavg(),
             "free_disk_bytes": shutil.disk_usage(out).free,
             "memory_limit": "inherited 32 GiB declaration is not enforced",
-            "rng_limit": "shared initialization matches; added initialization advances RNG; native vector resets use their stream RNG, not seed plus episode",
+            "rng_limit": "Paired seeds do not promise shared weight bytes or training deals across architecture changes; native streams retain their own RNG.",
         },
     )
 
@@ -313,10 +313,14 @@ def campaign(
     source: str,
     predecessor_path: Path | None = None,
     predecessor_sha256: str | None = None,
+    *,
+    spec: ScreenSpec = history_input,
 ) -> None:
+    if spec.STUDY == "depth-screen" and (predecessor_path or predecessor_sha256):
+        raise ValueError("depth screen does not admit predecessors or retries")
     started = time.monotonic()  # Includes lock, source and all preflight work.
     (ROOT / ".runs").mkdir(exist_ok=True)
-    with (ROOT / ".runs/history-input.lock").open("a") as lock:
+    with (ROOT / f".runs/{spec.STUDY}.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if (predecessor_path is None) != (predecessor_sha256 is None):
             raise ValueError("predecessor path and hash must be selected together")
@@ -326,22 +330,26 @@ def campaign(
             else None
         )
         prior_seconds = predecessor.seconds if predecessor is not None else 0
-        total_deadline = started + TOTAL_SECONDS - prior_seconds
+        total_deadline = started + spec.TOTAL_SECONDS - prior_seconds
         out.mkdir(parents=True, exist_ok=False)
         state: dict[str, object] = {
             "pid": os.getpid(),
-            "study": "history-input",
+            "study": spec.STUDY,
             "status": "preflight",
             "source_commit": source,
             "started_unix": time.time(),
-            "order": ORDER,
+            "order": spec.ORDER,
+            "allocation_seconds": spec.TOTAL_SECONDS,
+            "deadline_unix": time.time() + spec.TOTAL_SECONDS - prior_seconds,
         }
 
         if predecessor is not None:
             state["predecessor"] = predecessor.model_dump(mode="json")
             state["prior_seconds"] = prior_seconds
-            state["remaining_allocation_seconds"] = TOTAL_SECONDS - prior_seconds
-            state["remaining_calibration_seconds"] = CALIBRATION_SECONDS - prior_seconds
+            state["remaining_allocation_seconds"] = spec.TOTAL_SECONDS - prior_seconds
+            state["remaining_calibration_seconds"] = (
+                spec.CALIBRATION_SECONDS - prior_seconds
+            )
 
         def save() -> None:
             state["seconds"] = time.monotonic() - started
@@ -354,25 +362,33 @@ def campaign(
             if shutil.disk_usage(out).free < 7 * 1024**3:
                 raise RuntimeError("history requires 3 GiB evidence plus 4 GiB reserve")
             calibration_deadline = min(
-                total_deadline - TRAINING_SECONDS - EVALUATION_SECONDS - REPORT_SECONDS,
-                started + CALIBRATION_SECONDS - prior_seconds,
+                total_deadline
+                - spec.TRAINING_SECONDS
+                - spec.EVALUATION_SECONDS
+                - spec.REPORT_SECONDS,
+                started + spec.CALIBRATION_SECONDS - prior_seconds,
             )
-            _child(["--preflight", "--out", str(out)], out, calibration_deadline)
+            _child(
+                ["--preflight", "--out", str(out)], out, calibration_deadline, spec=spec
+            )
             runtime = json.loads((out / "runtime-bindings.json").read_text())
             common = runtime["common"]
             bindings = tuple(
                 InputBinding.model_validate(b) for b in runtime["bindings"]
             )
             arms: list[CalibrationArm] = []
-            for index, recipe in enumerate(recipes(40, calibration=True)):
+            for index, recipe in enumerate(spec.recipes(40, calibration=True)):
                 seconds = _child(
                     ["--calibrate-arm", str(index), "--out", str(out)],
                     out,
                     min(calibration_deadline, time.monotonic() + 400),
+                    spec=spec,
                 )
                 path = out / "calibration" / recipe.id / "run.json"
                 run = TrainingRun.model_validate_json(path.read_text())
-                validate_run(run, recipe, CALIBRATION_SEED, bindings[index], common)
+                spec.validate_run(
+                    run, recipe, spec.CALIBRATION_SEED, bindings[index], common
+                )
                 arms.append(
                     CalibrationArm(
                         recipe_id=recipe.id,
@@ -415,7 +431,7 @@ def campaign(
                 raise RuntimeError(
                     "calibrated evidence projection exceeds available disk"
                 )
-            receipt = Calibration(
+            receipt = spec.Calibration(
                 arms=tuple(arms),
                 seconds=prior_seconds + time.monotonic() - started,
                 source_commit=source,
@@ -424,14 +440,16 @@ def campaign(
                 projected_disk_bytes=projected,
             )
             atomic_json(out / "calibration.json", receipt.model_dump(mode="json"))
-            plan = history_plan(receipt, prior_seconds)
+            plan = history_plan(receipt, prior_seconds, spec=spec)
             plan_path = out / "resolved-plan.json"
             atomic_json(plan_path, plan.model_dump(mode="json"))
+            state["plan_sha256"] = file_sha256(plan_path)
+            state["updates_per_run"] = receipt.admitted_updates()
             state["status"] = "training"
             save()
             training_deadline = min(
-                time.monotonic() + TRAINING_SECONDS,
-                total_deadline - EVALUATION_SECONDS - REPORT_SECONDS,
+                time.monotonic() + spec.TRAINING_SECONDS,
+                total_deadline - spec.EVALUATION_SECONDS - spec.REPORT_SECONDS,
             )
             count = receipt.admitted_updates()
             rate = receipt.rate()
@@ -470,8 +488,8 @@ def campaign(
                     )
                     progress_checked = True
 
-            for seed_index, seed in enumerate(SEEDS):
-                for index in ORDER[seed_index]:
+            for seed_index, seed in enumerate(spec.SEEDS):
+                for index in spec.ORDER[seed_index]:
                     remaining_feasible(
                         deadline=training_deadline,
                         now=time.monotonic(),
@@ -490,8 +508,9 @@ def campaign(
                             str(out),
                         ],
                         out,
-                        min(training_deadline, time.monotonic() + 2400),
+                        min(training_deadline, time.monotonic() + spec.RUN_SECONDS),
                         progress,
+                        spec=spec,
                     )
                     rate = max(rate, seconds / count)
                     completed += 1
@@ -507,16 +526,18 @@ def campaign(
                 ["--evaluate", "--plan", str(plan_path), "--out", str(out)],
                 out,
                 min(
-                    time.monotonic() + EVALUATION_SECONDS,
-                    total_deadline - REPORT_SECONDS,
+                    time.monotonic() + spec.EVALUATION_SECONDS,
+                    total_deadline - spec.REPORT_SECONDS,
                 ),
+                spec=spec,
             )
             state["status"] = "reporting"
             save()
             _child(
                 ["--report", "--out", str(out)],
                 out,
-                min(time.monotonic() + REPORT_SECONDS, total_deadline),
+                min(time.monotonic() + spec.REPORT_SECONDS, total_deadline),
+                spec=spec,
             )
             state["status"] = "completed"
         except BaseException as error:
@@ -528,6 +549,9 @@ def campaign(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--study", choices=("history-input", "depth-screen"), default="history-input"
+    )
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--campaign", metavar="DELIVERED_COMMIT")
     action.add_argument("--preflight", action="store_true")
@@ -538,9 +562,14 @@ def main() -> None:
     parser.add_argument("--predecessor", type=Path)
     parser.add_argument("--predecessor-sha256")
     parser.add_argument("--plan", type=Path)
-    parser.add_argument("--seed", type=int, choices=SEEDS)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    spec = specification(args.study)
+    if args.seed is not None and args.seed not in spec.SEEDS:
+        parser.error("seed differs from frozen screen")
+    if args.study == "depth-screen" and args.predecessor:
+        parser.error("depth screen does not admit retries or predecessors")
     if not args.campaign and (args.predecessor or args.predecessor_sha256):
         parser.error("predecessor selection is only valid for --campaign")
     torch.set_num_threads(1)
@@ -552,14 +581,16 @@ def main() -> None:
                 "internal phases require the active campaign supervisor; no retries"
             )
     if args.campaign:
-        campaign(out, args.campaign, args.predecessor, args.predecessor_sha256)
+        campaign(
+            out, args.campaign, args.predecessor, args.predecessor_sha256, spec=spec
+        )
     elif args.preflight:
-        _preflight(out)
+        _preflight(out, spec)
     elif args.report:
         from experiments.runners.history_input_analysis import history_report
         from manabot.training.analysis import report
 
-        history_report(out / "study")
+        history_report(out / "study", study=spec.STUDY)
         report(out / "study")
         atomic_json(
             out / "manifest.json",
@@ -572,17 +603,17 @@ def main() -> None:
             },
         )
     elif args.calibrate_arm is not None:
-        recipe = recipes(40, calibration=True)[args.calibrate_arm]
+        recipe = spec.recipes(40, calibration=True)[args.calibrate_arm]
         with VerifyStore(out / "calibration.sqlite") as store:
             run = execute_regime(
-                recipe, CALIBRATION_SEED, out / "calibration" / recipe.id, store
+                recipe, spec.CALIBRATION_SEED, out / "calibration" / recipe.id, store
             )
             _reload(run)
     else:
         if args.plan is None:
             parser.error("child execution requires frozen --plan")
         plan = ResolvedStudy.model_validate_json(args.plan.read_text())
-        if plan.protocol.study != "history-input":
+        if plan.protocol.study != spec.STUDY:
             raise ValueError("requires history-input plan")
         verify_runtime(plan)
         if args.train_arm is not None:
@@ -596,7 +627,7 @@ def main() -> None:
                     out / "training" / f"{recipe.id}-seed-{args.seed}",
                     store,
                 )
-                validate_run(
+                spec.validate_run(
                     run,
                     recipe,
                     args.seed,
@@ -608,12 +639,12 @@ def main() -> None:
             from experiments.runners.run_training_regimes import run_study
 
             paths = tuple(
-                out / "training" / f"{ARMS[index]}-seed-{seed}" / "run.json"
-                for row, seed in zip(ORDER, SEEDS, strict=True)
+                out / "training" / f"{spec.ARMS[index]}-seed-{seed}" / "run.json"
+                for row, seed in zip(spec.ORDER, spec.SEEDS, strict=True)
                 for index in row
             )
             run_study(
-                "history-input",
+                spec.STUDY,
                 out / "study",
                 plan,
                 render_report=False,

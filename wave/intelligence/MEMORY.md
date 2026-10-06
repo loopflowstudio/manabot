@@ -442,14 +442,10 @@ require the acting policy at inference. Known-policy Bayes remains diagnostic.
 
 ### What the branch proves and what remains
 
-On 2026-09-24 the focused belief/state/runtime/learning and BC round-trip suite
-passed 27 tests in 20.74 s. It exercises the real keystone and population demos,
-exact generated/supplied output equality, semantic query effects, hidden-world
-swap invariance, and checkpoint binding failures. The prior compression check
-also preserved four reference/learned model, belief, and receipt identities
-and all existing checkpoint rejection messages. Reference receipt history
-ranges count opaque events; learned ranges count typed semantic commitments.
-Those coordinates deliberately differ even with one receipt constructor.
+The 2026-09-24 belief/state/runtime/learning and BC suite passed 27 checks;
+full receipt and historical implementation detail remains at `76afdb68`.
+Those bounded proofs do not establish strength or general calibration. Reference
+receipt ranges count opaque events; learned ranges count typed commitments.
 
 The next research proof remains paired conditional teacher measurements at
 real roots under a declared budget, then multi-seed policy-only distillation
@@ -462,16 +458,10 @@ Learned-belief continuation needs held-out NLL, query calibration and coverage,
 zero incompatible mass, pre-event equality to p0, hidden-truth invariance, and
 latency; then evaluate the full autonomous loop at matched compute.
 
-The historical evidence explains the gap: beliefs were proposed in July 9's
-PBS design (`dd66516`), diagnostic-gated on July 10 (`ede07b3`), split from
-teacher work on July 15 (`c562fe3`), and accepted as policy/value inputs on
-July 17 (`1f79603`, `04af5a1`). INT-14 (`8ca40e2`) used positional tags while
-citing a superseded dormant-beliefs premise; INT-9 (`3efd25b`) supplied a
-separate exact-range player. July 18's results-first closure (`823b0a3`) obscured
-the missing composition. INT-15 later froze a post-hoc curated flip, INT-17
-retained a systems failure (quadratic support enumeration, no calibration
-curves), and INT-18's rating omitted the exact-range comparison. These are
-separate claim boundaries, irrespective of a task's completion status.
+Historical lineage remains at `76afdb68`: INT-14's positional tags and INT-9's
+separate exact-range player left composition missing. INT-15's curated flip,
+INT-17's support-enumeration failure and INT-18's omitted tracker comparison remain
+separate evidence limits, regardless of Task completion status.
 
 ### Historical planning reconciliation (2026-09-24)
 
@@ -1225,3 +1215,17 @@ No optimizer training, scientific campaign, paid compute or frozen ETU-91/106
 checkout change occurred. ETU-99 retains producer selection, empirical cohorts
 and budgets. The [regime guide](../../docs/training-regimes.md#reuse-a-published-policy-without-training)
 owns the public API and cost limitations; publication is not strength admission.
+
+## Mini depth screen authorization (ETU-103, 2026-10-06)
+
+Jack Heart selected width64/depth1 versus width64/depth2, heads4, as the first
+mini experiment, superseding ETU-105 filter-scope selection. The eight-hour mini
+allocation includes calibration, training, raw midpoint/endpoint greedy scoring
+and report. Three paired seeds share a timing-only calibrated update count;
+scalar value-token/no-history and all learning controls stay fixed. This is a
+separate bounded screen, not the proposed WDL full-capacity study or permission
+to alter ETU-106's live laptop history run. Existing mini native and `.runs`
+evidence remain preserved. The shared history supervisor now accepts a typed
+depth specification; the existing regime/arena/report remain authoritative.
+See [the fixed protocol](../../experiments/model-capacity.md). No strength or
+default-model conclusion exists before the retained cohort completes.
