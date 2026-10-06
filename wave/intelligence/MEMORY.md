@@ -969,6 +969,39 @@ substitute for artifact or model identity. The delivered no-attention switch is
 remain design sketches; ordinary AgentSpec and checkpoint admission own the
 implemented path.
 
+## Training dashboard software (ETU-101, 2026-10-05)
+
+Jack Heart authorized dashboard implementation, publication and landing using
+saved evidence and tiny fixtures, without changing ETU-91's frozen checkout.
+TrainingRun/VerifyStore remain the metric authority. Epoch/update diagnostics
+now retain original counters, elapsed cost and resource observations; historical
+rows without those coordinates stay explicitly incomplete. W&B is a resumable
+projection with stable run/group identities, prefix checks, default panels and
+local JSON backfill. PPO's clipped objective is not teacher cross-entropy.
+
+The first distillation cohort freezes whole validation games and source bytes,
+remains excluded from later training, and is reported beside growing validation.
+Its first reference target stays fixed even when later stages change their
+training target; rejecting such changes would break existing local-update controls.
+TrainingRun's globally assigned game IDs survive shard composition. Optional
+hourly raw exports occur at learner boundaries, preserve RNG and Adam/collector
+state, and exclude their measured duration from the learning schedule while
+remaining charged to resource budgets. Monitoring is separate from recovery.
+
+The independent arena follower evaluates 25 reserved monitoring deals across all
+four seat/deck legs versus source-pinned scripted greedy. Incomplete cohorts have
+no aggregate rates; failed attempts, Commands/replay, costs and contention
+observations remain saved. Deal-cluster intervals condition on a checkpoint,
+not training seeds. These inspected deals are not scientific held-out evidence.
+The [dashboard contract](../../docs/training-monitoring.md) owns launch/backfill
+commands and limits. Software fixtures do not establish strength, live W&B
+service acceptance or chapter completion; no scientific campaign ran here.
+
+ETU-101's focused gate passed 78 checks; the final monitoring suite passed 22,
+including four complete games through an untrained checkpoint and native arena,
+retained timeout prefixes, fixed-reference isolation and idempotent backfill.
+The live W&B service was not exercised. These remain software fixtures.
+
 ## Capacity software receipt boundary (ETU-102, 2026-10-05)
 
 Jack Heart authorized independent software completion, publication and landing

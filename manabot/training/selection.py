@@ -169,3 +169,4 @@ class UpdateDiagnostics(TypedDict, total=False):
     collection_kl: float
     behavior: str
     behavior_iteration: int
+    coordinates: dict[str, int | float]

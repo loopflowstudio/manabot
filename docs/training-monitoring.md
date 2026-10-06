@@ -1,0 +1,160 @@
+# TrainingRun dashboards
+
+The training monitor projects existing TrainingRun diagnostics and arena receipts
+into the `manabot` W&B project. VerifyStore remains the training authority;
+`run.json`, `dashboard.json` and W&B are exports. No W&B account is needed to
+train or retain diagnostics. These commands do not modify a running trainer,
+its checkout, or its frozen recipe.
+
+## New training and live dashboards
+
+For an independently authorized run, request approximately hourly raw checkpoints:
+
+```bash
+uv run manabot train --regime experiments/regimes/direct-self-play.json \
+  --seed 197 --out .runs/example --checkpoint-seconds 3600
+```
+
+The interval is an executor option recorded in TrainingRun, not a new learning
+stage. Exports happen after a complete RL update or supervised epoch. Long updates
+can delay them; there is no mid-update snapshot. The ordinary stage-end raw/EMA
+exports remain available. Monitoring exports preserve Torch RNG, do not reset
+Adam or the collector, and their measured duration is excluded from the elapsed
+learning-rate schedule. Watchdog and total resource budgets still charge that
+work. Checkpoint admission failures remain in the run with rejected bytes; the
+learner can continue. Scientific recipes do not implicitly enable monitoring.
+
+Once `run.json` exists, launch the read-only dashboard follower separately:
+
+```bash
+uv run python -m manabot.training.monitoring \
+  --run .runs/example/run.json --out .runs/example-dashboard --watch-seconds 30
+```
+
+Add `--online --entity TEAM` to upload using existing W&B credentials. Alternatively
+read the authoritative store with `--store .runs/training.sqlite --run-id ID`.
+Default operation writes local `dashboard.json` only. W&B network/auth failures
+retain this file and a `delivery.json` failure type; they cannot stop training.
+Run the same command later with `--online` to sync. This is JSON backfill, not an
+assumption that the W&B SDK can resume an offline run.
+
+Each TrainingRun has a stable W&B ID, grouped by resolved regime digest. Run
+configuration retains regime/stages, seeds, resolved hyperparameters, hardware,
+source/runtime/world identities. Stage summaries retain status, admitted and
+rejected checkpoint digests, errors and actual device/thread counts. W&B resumes
+at its acknowledged next history step. A changed published prefix or an older,
+shorter export is rejected. Keep one publisher per run; the output directory has
+a local writer lease. Recovery attempts retain separate run identities rather
+than pretending an interrupted attempt never happened.
+
+The default workspace includes ready-made `dashboard/` panels for teacher CE/KL,
+RL objectives, regularization, entropy, retention, residuals and schedules.
+Scalar sections also provide `elapsed/` copies against original training seconds,
+`progress/` counters and `throughput/` rates. Missing metrics have explicit
+`availability/` flags and summary explanations, not fabricated zeros. W&B's
+[custom metric axes](https://docs.wandb.ai/ref/python/experiments/run/) and
+[line-series charts](https://docs.wandb.ai/guides/track/log/plots/) own rendering.
+
+## Reading the curves
+
+* Distillation records epoch-average training cross-entropy and teacher KL in
+  nats, growing-data validation CE/KL and fixed-cohort validation CE/KL. The first
+  supervised stage freezes whole validation games and exact dataset bytes in
+  `fixed-validation.npz`; its digest, source shards and game IDs are retained.
+  Every later stage excludes those games from training and evaluates the same
+  rows against the first stage's fixed reference targets. Later stages may change
+  their training/growing-validation targets; those identities are labeled separately. TrainingRun's globally
+  assigned game IDs are preserved when combining shards; generic historical
+  shard loading keeps its original per-round offset behavior.
+* RL policy loss is the clipped optimization objective, **not log loss**. PPO's
+  value loss is half squared lambda-target residual; categorical move learning
+  uses its own recorded value loss. Existing per-update loss, entropy and KL
+  observations describe the last optimized minibatch (Ataraxos KL/entropy use
+  its recorded post-update batch). Empty-filter updates label unavailable losses.
+  Advantage retention, absolute advantages, lambda-target residuals, learning
+  rate, reference regularization and collection-KL coefficient remain separate.
+* Progress distinguishes learner iterations (or supervised epochs), native
+  environment decisions, learner transitions, optimizer exposures, games and
+  elapsed run cost. Teacher generation remains on the cost axis. RSS, process CPU
+  time and host load are resource observations, not evidence of learning quality.
+  Throughput is cumulative work divided by observed elapsed cost. Checkpoint age
+  appears only when an earlier admitted monitoring export exists. W&B automatic
+  system charts describe the publisher process; use the recorded progress fields
+  for learner resource observations.
+
+## Fixed-competitor checkpoint monitoring
+
+Run evaluation in a separate process, explicitly accounting for its compute:
+
+```bash
+uv run python -m manabot.training.monitor_checkpoint \
+  --run .runs/example/run.json --out .runs/example-monitor --watch-seconds 30 \
+  --concurrent-activity 'training running concurrently' --online --entity TEAM
+```
+
+The follower evaluates each newly admitted monitoring export once, sequentially.
+It preserves existing attempt directories on restart; stopped/incomplete attempts
+are not automatically replaced. Saved results can be synced later. For an
+individual export or a stage-end checkpoint:
+
+```bash
+uv run python -m manabot.training.monitor_checkpoint \
+  --run .runs/example/run.json --checkpoint 0 --out .runs/checkpoint-0-monitor
+uv run python -m manabot.training.monitor_checkpoint \
+  --run .runs/example/run.json --stage policy-0 --out .runs/stage-0-monitor
+```
+
+Default monitoring is 100 games: 25 fixed deals (`1910101000`–`1910101024`), each
+with four seat/deck combinations, versus source-pinned scripted greedy. Reserve
+these deals for repeatedly inspected monitoring; exclude them from scientific
+held-out cohorts. A custom `--protocol protocol.json` accepts MonitorProtocol
+fields for bounded fixtures or an explicitly frozen monitoring cohort. No command
+here authorizes scientific scoring or paid compute. Selected Allies/Lessons
+checkpoint/setup admission is required; this runner does not relabel custom
+training worlds as compatible.
+
+Arena owns game execution, timeouts, legal Commands and exact replay. Each deal
+block keeps `rows.json`, command traces and replay receipts. A failed game, missing
+leg, admission failure or replay failure remains inspectable. Aggregate win/draw/
+score rates are unavailable for incomplete cohorts. Complete cohorts report 95%
+percentile bootstrap intervals resampling entire four-leg deals. These intervals
+measure uncertainty conditional on a checkpoint; they do not quantify variation
+across training seeds. The W&B monitoring stream has ready-made rate/interval
+panels against update count and training seconds, separate from training history.
+
+`monitor.json` records evaluation wall time, coordinator CPU/RSS, reaped-child CPU,
+host load before/after and declared concurrent activity. Replay is included in
+wall cost and retained separately in replay receipts. RSS is not native peak
+memory; host load cannot identify contention or correct throughput for it. Arena
+work does not advance the recorded training coordinates.
+
+## Historical backfill
+
+No retraining or new evaluation is needed to publish saved diagnostics:
+
+```bash
+uv run python -m manabot.training.monitoring \
+  --run /path/to/saved/run.json --out .runs/historical-dashboard --online
+uv run python -m manabot.training.monitoring \
+  --evaluations /path/to/checkpoint-0/monitor.json /path/to/checkpoint-1/monitor.json \
+  --out .runs/historical-monitor-dashboard --online
+```
+
+Supply evaluation attempts in immutable append order, including failures. Runs,
+protocols and opponents must agree within a curve. Existing arena rows can be
+imported against a saved MonitorResult manifest with original checkpoint,
+coordinates, registrations and protocol:
+
+```bash
+uv run python -m manabot.training.monitor_checkpoint \
+  --import-manifest /path/to/manifest.json --import-rows /path/to/rows.json \
+  --out .runs/imported-monitor
+```
+
+Import preserves source path/digest, original training coordinates and recorded
+costs, and validates every deal/leg and registration. It does not reload old model
+bytes or claim a new replay. Historical diagnostics without per-update timestamps
+retain their original stage/ordinal and are explicitly marked incomplete; final
+stage duration is never spread over earlier updates. Missing fixed validation,
+losses or resource observations cannot be recreated from aggregate results.
+Historical schemas still need to be readable by the ordinary TrainingRun model.

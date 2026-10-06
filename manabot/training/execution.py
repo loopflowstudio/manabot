@@ -38,7 +38,10 @@ from manabot.model.world import validate_agent_setup
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
-from manabot.sim.search_supervised import train_search_supervised
+from manabot.sim.search_supervised import (
+    SearchSupervisedEpochStats,
+    train_search_supervised,
+)
 from manabot.sim.teacher1_evidence import runtime_fingerprints, source_bundle_sha256
 import managym
 
@@ -50,6 +53,8 @@ from .models import (
     CollectLocalUpdate,
     CollectSearch,
     CollectSelection,
+    FixedValidationCohort,
+    MonitoringCheckpoint,
     StageRecord,
     TrainBelief,
     TrainCompound,
@@ -133,9 +138,14 @@ def execute_regime(
     store: "VerifyStore",
     *,
     resume_from: str | None = None,
+    checkpoint_seconds: float | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
+    if checkpoint_seconds is not None and (
+        not np.isfinite(checkpoint_seconds) or checkpoint_seconds <= 0
+    ):
+        raise ValueError("checkpoint_seconds must be positive and finite")
     destination = Path(out).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     lease = destination.with_name(destination.name + ".writer.lock")
@@ -163,7 +173,12 @@ def execute_regime(
                 # explains settlement, including the explicitly estimated cost.
                 store.save_training_run(settled)
         return _execute_regime(
-            regime, seed, destination, store, resume_from=resume_from
+            regime,
+            seed,
+            destination,
+            store,
+            resume_from=resume_from,
+            checkpoint_seconds=checkpoint_seconds,
         )
 
 
@@ -174,6 +189,7 @@ def _execute_regime(
     store: "VerifyStore",
     *,
     resume_from: str | None = None,
+    checkpoint_seconds: float | None = None,
 ) -> TrainingRun:
     regime = validate_regime(regime)
     parent = store.training_run(resume_from) if resume_from is not None else None
@@ -224,6 +240,7 @@ def _execute_regime(
         seed_streams=seeds,
         identities=deepcopy(parent.identities) if parent is not None else {},
         status="running",
+        monitoring_checkpoint_seconds=checkpoint_seconds,
         recovery_lock_path=str(out.with_name(out.name + ".writer.lock")),
         recovery_host=socket.gethostname(),
         last_recorded_wall_seconds=time.time(),
@@ -245,6 +262,8 @@ def _execute_regime(
     self_play_session = None
     resources = ExitStack()
     game_index = 0
+    fixed_validation_dataset: dict[str, np.ndarray] | None = None
+    last_monitor_seconds = 0.0
 
     def persist() -> None:
         run.seconds = time.perf_counter() - start
@@ -259,6 +278,79 @@ def _execute_regime(
             "sha256": file_sha256(path),
             "bytes": path.stat().st_size,
         }
+
+    def coordinates() -> dict[str, int | float]:
+        return {
+            "updates": run.updates_through(),
+            "training_seconds": run.prior_seconds + time.perf_counter() - start,
+            "environment_decisions": sum(s.environment_decisions for s in run.stages),
+            "learner_transitions": sum(s.learner_transitions for s in run.stages),
+            "optimizer_exposures": sum(s.optimizer_exposures for s in run.stages),
+            "games": sum(s.games for s in run.stages),
+            "rss_bytes": psutil.Process().memory_info().rss,
+            "host_load_1m": os.getloadavg()[0],
+            "process_cpu_seconds": time.process_time()
+            - cpu_start
+            + sum(s.cpu_seconds for s in run.stages[:-1]),
+        }
+
+    def monitor_checkpoint(model: Agent) -> None:
+        nonlocal last_monitor_seconds
+        elapsed = time.perf_counter() - start - run.monitoring_export_seconds
+        if (
+            checkpoint_seconds is None
+            or elapsed - last_monitor_seconds < checkpoint_seconds
+        ):
+            return
+        last_monitor_seconds = elapsed
+        point = coordinates()
+        receipt = MonitoringCheckpoint(
+            stage_id=record.id,
+            ordinal=len(run.monitoring_checkpoints),
+            **{
+                k: point[k]
+                for k in (
+                    "updates",
+                    "training_seconds",
+                    "environment_decisions",
+                    "learner_transitions",
+                    "optimizer_exposures",
+                    "games",
+                )
+            },
+        )
+        run.monitoring_checkpoints.append(receipt)
+        tick = time.perf_counter()
+        target = out / f"monitor-{receipt.ordinal:08d}.pt"
+        try:
+            save_bc_checkpoint(
+                model,
+                space,
+                target.with_suffix(".tmp"),
+                player_configs=Match(regime.match).to_rust(),
+                extra={
+                    "run_id": run.id,
+                    "stage_id": record.id,
+                    "regime_digest": run.regime_digest,
+                    "weights": "raw",
+                    "value_semantic": "win_logit"
+                    if isinstance(stage, TrainSupervised)
+                    and not stage.target.startswith("local_")
+                    else "signed_outcome",
+                },
+            )
+            os.replace(target.with_suffix(".tmp"), target)
+            # Admission constructs a fresh model. Its initialization must not
+            # consume the learner's action-sampling RNG stream.
+            with torch.random.fork_rng(devices=[]):
+                load_checkpoint_agent(str(target))
+            receipt.artifact = artifact(target)
+        except Exception as error:
+            receipt.error = f"{type(error).__name__}: {error}"
+            if target.exists():
+                record.rejected_artifacts[target.name] = artifact(target)
+        finally:
+            run.monitoring_export_seconds += time.perf_counter() - tick
 
     try:
         space = ObservationSpace(regime.observation)
@@ -452,6 +544,7 @@ def _execute_regime(
                     )
                     record.environment_decisions += summary["decisions"]
                     record.collection_seconds = time.perf_counter() - stage_start
+                    summary["coordinates"] = coordinates()
                     persist()
                     if not all(summary["terminated"]) or any(summary["truncated"]):
                         raise RuntimeError(
@@ -861,7 +954,10 @@ def _execute_regime(
                         stage.learning,
                         update_index / stage.updates
                         if regime.schedule_clock == "iteration_fraction"
-                        else (time.perf_counter() - start) / regime.wall_seconds,
+                        else (
+                            time.perf_counter() - start - run.monitoring_export_seconds
+                        )
+                        / regime.wall_seconds,
                         rng,
                         iteration=iteration + 1,
                         bootstrap_agent=behavior_agent,
@@ -884,6 +980,8 @@ def _execute_regime(
                         trainer.collector.stats.learner_transitions
                         - before.learner_transitions
                     )
+                    diagnostic["coordinates"] = coordinates()
+                    monitor_checkpoint(trainer.agent)
                     checkpoint(f"update-{iteration:08d}")
                     persist()
                 self_play_session = (trainer, ema, iteration)
@@ -891,11 +989,31 @@ def _execute_regime(
                 optimizer_state = trainer.optimizer.state_dict()
             else:
                 dataset = load_shards(
-                    [p for ref in stage.datasets for p in outputs[ref]]
+                    [p for ref in stage.datasets for p in outputs[ref]],
+                    globally_unique_games=True,
                 )
                 validation = {
                     int(g) for g in np.unique(dataset["game_index"]) if int(g) % 10 == 0
                 }
+                if fixed_validation_dataset is None:
+                    mask = np.isin(dataset["game_index"], list(validation))
+                    if not mask.any():
+                        raise ValueError("fixed validation cohort is empty")
+                    fixed_validation_dataset = {
+                        k: v[mask].copy() for k, v in dataset.items()
+                    }
+                    cohort = out / "fixed-validation.npz"
+                    np.savez_compressed(cohort, **fixed_validation_dataset)
+                    run.fixed_validation = FixedValidationCohort(
+                        artifact=artifact(cohort),
+                        games=sorted(validation),
+                        policy_target_kind=stage.target,
+                        source_inputs=deepcopy(record.inputs),
+                    )
+                assert run.fixed_validation is not None
+                validation.update(
+                    int(g) for g in fixed_validation_dataset["game_index"]
+                )
                 previous = outputs.get(stage.initial, {})
                 if stage.initial and not previous:
                     source = next(
@@ -908,6 +1026,21 @@ def _execute_regime(
                 continuation = {}
                 phase = "learning_seconds"
                 tick = time.perf_counter()
+
+                def report_epoch(
+                    stats: SearchSupervisedEpochStats, model: Agent
+                ) -> None:
+                    record.actual_device = str(next(model.parameters()).device)
+                    record.learning_seconds = time.perf_counter() - tick
+                    record.optimizer_exposures += int(
+                        (~np.isin(dataset["game_index"], list(validation))).sum()
+                    )
+                    row = asdict(stats)
+                    record.diagnostics.append(row)
+                    row["coordinates"] = coordinates()
+                    monitor_checkpoint(model)
+                    persist()
+
                 agent, _, _, history = train_search_supervised(
                     dataset,
                     policy_target_kind=stage.target,
@@ -926,12 +1059,14 @@ def _execute_regime(
                     optimizer_state=previous.get("optimizer_state"),
                     continuation=continuation,
                     deadline_monotonic=deadline,
+                    fixed_validation_dataset=fixed_validation_dataset,
+                    fixed_validation_target_kind=run.fixed_validation.policy_target_kind,
+                    on_epoch=report_epoch,
                 )
                 record.learning_seconds = time.perf_counter() - tick
                 record.optimizer_exposures = int(
                     (~np.isin(dataset["game_index"], list(validation))).sum()
                 ) * len(history)
-                record.diagnostics = [asdict(item) for item in history]
                 outputs[stage.id] = {"agent": agent, **deepcopy(continuation)}
                 optimizer_state = continuation["optimizer_state"]
             if isinstance(stage, (TrainSelfPlay, TrainSupervised, TrainCompound)):

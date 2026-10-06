@@ -464,6 +464,29 @@ class StageRecord(Strict):
     error: str | None = None
 
 
+class TrainingCoordinates(Strict):
+    stage_id: str
+    updates: int = Field(ge=0)
+    training_seconds: float = Field(ge=0)
+    environment_decisions: int = Field(default=0, ge=0)
+    learner_transitions: int = Field(default=0, ge=0)
+    optimizer_exposures: int = Field(default=0, ge=0)
+    games: int = Field(default=0, ge=0)
+
+
+class MonitoringCheckpoint(TrainingCoordinates):
+    ordinal: int
+    artifact: ArtifactReference | None = None
+    error: str | None = None
+
+
+class FixedValidationCohort(Strict):
+    artifact: ArtifactReference
+    games: list[int]
+    policy_target_kind: str
+    source_inputs: dict[str, ArtifactReference]
+
+
 class TrainingRun(Strict):
     schema_version: Literal[1] = 1
     id: str
@@ -490,3 +513,22 @@ class TrainingRun(Strict):
     prior_watchdog_seconds: float = 0
     selected_artifact: dict | None = None
     error: str | None = None
+    monitoring_checkpoints: list[MonitoringCheckpoint] = []
+    monitoring_export_seconds: float = 0
+    monitoring_checkpoint_seconds: float | None = None
+    fixed_validation: FixedValidationCohort | None = None
+
+    def updates_through(self, stage_id: str | None = None) -> int:
+        """Completed learner iterations/epochs; collection records are not updates."""
+        learning = {
+            s.id
+            for s in self.regime.stages
+            if isinstance(s, (TrainSelfPlay, TrainSupervised, TrainCompound))
+        }
+        total = 0
+        for stage in self.stages:
+            if stage.id in learning:
+                total += len(stage.diagnostics)
+            if stage.id == stage_id:
+                break
+        return total

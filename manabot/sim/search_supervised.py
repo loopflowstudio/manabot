@@ -9,6 +9,7 @@ outcome calibration.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import time
 from typing import Any
@@ -62,6 +63,8 @@ class SearchSupervisedEpochStats:
     train_value_loss: float
     train_total_loss: float
     validation: SearchSupervisedMetrics
+    train_policy_kl: float | None = None
+    fixed_validation: SearchSupervisedMetrics | None = None
 
 
 def outcome_targets(
@@ -405,6 +408,9 @@ def train_search_supervised(
     validation_games: set[int] | None = None,
     continuation: dict[str, Any] | None = None,
     deadline_monotonic: float | None = None,
+    fixed_validation_dataset: dict[str, np.ndarray] | None = None,
+    fixed_validation_target_kind: str | None = None,
+    on_epoch: Callable[[SearchSupervisedEpochStats, Agent], None] | None = None,
     log: bool = False,
 ) -> tuple[
     Agent,
@@ -459,6 +465,10 @@ def train_search_supervised(
                 "whole-game training and validation partitions must be nonempty"
             )
     value_usable, value_targets = value_targets_from_dataset(dataset, value_target_kind)
+    if fixed_validation_dataset is not None and set(
+        fixed_validation_dataset["game_index"].tolist()
+    ).intersection(dataset["game_index"][train_idx].tolist()):
+        raise ValueError("fixed validation games must be excluded from training")
     initial_validation = _evaluate_search_supervised(
         agent,
         dataset,
@@ -483,6 +493,7 @@ def train_search_supervised(
         value_loss_sum = 0.0
         value_rows = 0
         total_loss_sum = 0.0
+        policy_kl_sum = 0.0
         for start in range(0, len(order), batch_size):
             if (
                 deadline_monotonic is not None
@@ -527,6 +538,12 @@ def train_search_supervised(
             optimizer.step()
 
             policy_loss_sum += float(policy_loss.item()) * len(batch)
+            target_entropy = (
+                -(policy_target * policy_target.clamp_min(1e-12).log()).sum(-1).mean()
+            )
+            policy_kl_sum += float(
+                (policy_loss.detach() - target_entropy).item()
+            ) * len(batch)
             value_loss_sum += float(value_loss.item()) * batch_value_rows
             value_rows += batch_value_rows
             total_loss_sum += float(total_loss.item()) * len(batch)
@@ -548,8 +565,23 @@ def train_search_supervised(
             train_value_loss=value_loss_sum / max(1, value_rows),
             train_total_loss=total_loss_sum / max(1, len(order)),
             validation=validation,
+            train_policy_kl=policy_kl_sum / max(1, len(order)),
+            fixed_validation=evaluate_search_supervised(
+                agent,
+                fixed_validation_dataset,
+                np.arange(len(fixed_validation_dataset["game_index"])),
+                policy_temperature=policy_temperature,
+                policy_target_kind=fixed_validation_target_kind or policy_target_kind,
+                value_target_kind=value_target_kind,
+                batch_size=batch_size,
+                device=dev,
+            )
+            if fixed_validation_dataset is not None
+            else None,
         )
         history.append(stats)
+        if on_epoch is not None:
+            on_epoch(stats, agent)
         if log:
             print(
                 f"  epoch {epoch}: policy {stats.train_policy_loss:.4f}/"

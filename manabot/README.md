@@ -163,3 +163,7 @@ Compound checkpoints use an autoregressive legal-offer decoder and execute via
 ordinary checkpoint players. Their complete-game training stages, credit
 boundaries and separate comparison recipes are documented under
 [compound decisions](../docs/training-regimes.md#compound-decisions).
+
+TrainingRun diagnostics can be followed live or backfilled into W&B without
+retraining. The [dashboard guide](../docs/training-monitoring.md) covers offline
+operation, fixed distillation validation and separate checkpoint monitoring.

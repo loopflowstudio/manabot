@@ -12,6 +12,7 @@ import torch
 from manabot.training import execution
 from manabot.training.models import (
     AtaraxosMoveLearning,
+    StageRecord,
     TrainingRegime,
     TrainingRun,
     TrainSelfPlay,
@@ -20,6 +21,22 @@ from manabot.training.recovery import attempt_lock, load_update
 from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def assert_learning_diagnostics_equal(left: StageRecord, right: StageRecord) -> None:
+    """Recovery preserves learning facts, while elapsed cost and host samples vary."""
+    for a, b in zip(left.diagnostics, right.diagnostics, strict=True):
+        assert {k: v for k, v in a.items() if k != "coordinates"} == {
+            k: v for k, v in b.items() if k != "coordinates"
+        }
+        for name in (
+            "updates",
+            "environment_decisions",
+            "learner_transitions",
+            "optimizer_exposures",
+            "games",
+        ):
+            assert a["coordinates"][name] == b["coordinates"][name]
 
 
 def recipe() -> TrainingRegime:
@@ -131,7 +148,7 @@ def test_real_interruption_restores_complete_learning_state(
         assert_state_equal(a.collector.buffers, b.collector.buffers)
         assert_state_equal(a.collector.sampling_rng, b.collector.sampling_rng)
         assert a.iteration == b.iteration == 3
-        assert whole.stages[0].diagnostics == resumed.stages[0].diagnostics
+        assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
         assert whole.stages[0].games == resumed.stages[0].games
         assert whole.stages[0].games > 0
         assert whole.stages[0].learner_transitions == 192
@@ -372,7 +389,7 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
         assert a.collector.journal == b.collector.journal
         assert_state_equal(a.collector.buffers, b.collector.buffers)
         for left, right in zip(whole.stages, child.stages, strict=True):
-            assert left.diagnostics == right.diagnostics
+            assert_learning_diagnostics_equal(left, right)
             assert left.learner_transitions == right.learner_transitions
             assert left.environment_decisions == right.environment_decisions
             assert left.games == right.games

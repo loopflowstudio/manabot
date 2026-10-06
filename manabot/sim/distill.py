@@ -428,6 +428,7 @@ def load_shards(
     paths: list[str | Path],
     *,
     rounds: list[int] | None = None,
+    globally_unique_games: bool = False,
 ) -> dict[str, np.ndarray]:
     """Load and concatenate dataset shards.
 
@@ -466,7 +467,16 @@ def load_shards(
     # per round so the by-game train/val split never merges games across
     # rounds.
     unique_rounds = np.unique(out["round"])
-    if len(unique_rounds) > 1:
+    if globally_unique_games:
+        # TrainingRun assigns global game offsets when collecting each shard.
+        # Re-offsetting those IDs as datasets grow changes split membership.
+        seen: set[int] = set()
+        for shard in shards:
+            games = set(int(g) for g in shard["game_index"])
+            if seen.intersection(games):
+                raise ValueError("globally unique shard game IDs overlap")
+            seen.update(games)
+    elif len(unique_rounds) > 1:
         game_index = out["game_index"].astype(np.int64)
         offset = 0
         for r in unique_rounds:
