@@ -1,10 +1,9 @@
-# Distributed RL: research and mini feasibility evidence (ETU-108)
+# Distributed RL: research and matched CPU feasibility evidence (ETU-108)
 
 Research began 2026-10-05 on `be6260d9136e49069a12864514b849811f32b32d`;
 mini receipts were reviewed on 2026-10-06. Jack Heart requested research and a
-disposable prototype in which laptop and mini contribute to one learner. Mini
-single-host probes now demonstrate collection, inference, training and a separate
-replay-verified workflow. They do not implement that distributed prototype or
+disposable prototype in which laptop and mini contribute to one learner. Completed probes now include matched-recipe CPU inference/training on both hosts,
+a bounded SSH upload probe, and the earlier mini replay-verified workflow. They do not implement that distributed prototype or
 complete ETU-108. Speedup is an observation, not the acceptance condition.
 The evidence-report follow-up ran no benchmarks and accessed no ETU-106 checkout.
 
@@ -24,8 +23,11 @@ The old synchronous-round proposal is not an accepted decision. Zero-lag batches
 are the conservative compatibility baseline; bounded-lag PPO and a separately
 implemented V-trace learner remain competing experimental choices.
 
-Matched comparison remains unavailable: mini has completed feasibility probes,
-but laptop compute and transfer measurements remain outstanding. The original
+The matched-recipe probes completed once per host and mode. Laptop training took
+45.32 seconds versus mini 65.00 seconds, with equal transition and exposure counts.
+Different runtimes and uncontrolled host load prevent a controlled hardware ranking.
+The SSH upload probe includes connection startup; persistent RPC and serialized
+trajectory costs remain unmeasured. The original
 name-resolution failure is historical, not a current access diagnosis. The base
 already supported historical mean, masked mean and value-token aggregation plus
 extra attention layers. The initial fixed probe selected historical mean and one
@@ -190,7 +192,7 @@ Value-token training keeps priority. No ETU-91 files or running services changed
 | Laptop inventory, `sysctl` and `uname` | Apple M4 Max; arm64; 16 logical CPUs; 137,438,953,472 bytes RAM (128 GiB) |
 | `lf home ssh mini home id`, one attempt | Exit 1: `ssh: Could not resolve hostname mini: nodename nor servname provided, or not known`; then `failed to write preamble to ssh`, broken pipe |
 | Mini at initial research pass | Access failed before a remote result; superseded by the retained measurements below |
-| Tailscale RTT/bandwidth | Unmeasured; name-resolution failure is not a latency measurement |
+| Tailscale RTT/bandwidth at initial pass | Unmeasured then; later SSH upload timings below do not measure persistent RTT |
 | Local environment | `.venv/bin/python` absent; no install or native build attempted |
 | Inventory host load | One/five/fifteen-minute load averages 62.20 / 58.99 / 48.41; this is contention context, not attribution to a particular job |
 | Original research contribution | No compute workloads; subsequent mini results below remain single-host evidence |
@@ -282,10 +284,104 @@ stage resource receipts must not be substituted for those missing quantities.
 
 One short run per successful workload gives no cross-run uncertainty, hardware
 ranking, speedup, learning-strength, GPU or distributed-training result. Mini can
-execute this bounded local path. Matched laptop workloads, transfer costs and
-both machines contributing to one learner remain necessary before placement or
-synchronization is selected. The tiny empty-filter result is a reason to inspect
+execute this bounded local path. The subsequent matched probes below extend this
+evidence; neither separate training run contributes to a shared learner. Placement
+and synchronization remain unresolved. The tiny empty-filter result is a reason to inspect
 optimizer exposures rather than treat completed iterations as gradient work.
+
+### Matched CPU probes and SSH transfer (2026-10-06)
+
+The [compact matched evidence](../experiments/data/etu108/matched-20261006.json)
+retains the plan, recipe, four attempt receipts, shared world binding, per-host
+runtime identities, stage/resource/artifact summaries, transfer samples and hashes
+of all extracted source files. The primary `matched-comparison.json`,
+`matched-plan.json`, `ssh-transfer.json` and raw sibling attempts remain under the
+same absolute evidence directory cited above. All twelve raw/EMA/optimizer
+artifacts were checked for exact SHA-256 and byte length against stage receipts;
+these are eight policy exports and four optimizer artifacts, not twelve players.
+No new training, evaluation or transfer ran during this evidence integration.
+
+The frozen plan allowed one inference and one training attempt per host, each
+capped at 240 seconds (960 seconds aggregate ceiling), one CPU thread and a
+three-second forward window. Laptop compute was conditioned on the pooling/filter
+campaign and its evaluation having exited. Actual attempt wall time totaled
+127.056 seconds across the four probes. The separately retained SSH probe records
+that the laptop scientific campaign was active during transfer; its timings are
+not an uncontended network baseline. The transfer receipt does not record an
+advance aggregate cap; its nine timed commands total 19.470 seconds and send
+27,019,899 payload bytes. No additional allocation follows from these receipts.
+
+Both training runs use the representative masked-mean/scalar width-64, one-layer,
+four-head semantic Ataraxos recipe (138,434 parameters), seed 10831, authored
+Allies/Lessons w4 setup, four streams × 64 transitions per iteration and two linked
+10-iteration stages. Each completed **20 iterations, 5,120 learner transitions,
+1,280 optimizer exposures and zero empty-filter skips**. The matched recipe
+requests 16 GiB per stage, unlike the earlier representative run's 32 GiB request;
+neither request is enforced by the harness. Inference repeatedly forwards one
+256-observation batch collected with an untrained model; collection, initialization
+and warmup are outside its timed window.
+
+| Quantity | Laptop | Mini |
+| --- | ---: | ---: |
+| Training seconds | 45.32455 | 65.00472 |
+| Collection seconds | 20.73276 | 25.86815 |
+| Learning seconds (includes target/filter overhead) | 21.39697 | 38.10564 |
+| Export seconds | 0.05293 | 0.06364 |
+| Learner transitions / training second | 112.96 | 78.76 |
+| Inference observations / second | 2,396.22 | 1,160.53 |
+| Train attempt wall / child CPU seconds | 46.815 / 46.283 | 66.744 / 66.317 |
+| Train child max RSS bytes | 463,437,824 | 520,142,848 |
+| Inference attempt wall / child CPU seconds | 6.529 / 5.909 | 6.968 / 6.329 |
+| Inference child max RSS bytes | 1,004,584,960 | 977,584,128 |
+
+Training seconds include setup and other executor work beyond the listed phase
+clocks. Child max RSS is an OS child-process observation, not aggregate process-tree
+memory. No energy, throttling or pure gradient-kernel measurement is available.
+Neither inference observations/s nor optimizer exposures/s measures useful policy
+progress. These matched checkpoints have no arena or strength evaluation; the
+previous eight-game replay result belongs only to the separate tiny calibration.
+
+Laptop is M4 Max / 16 logical CPUs / 128 GiB, macOS 26.0.1, Python 3.12.12;
+mini is M1 / 8 logical CPUs / 16 GiB, macOS 15.5, Python 3.12.11. Both use Torch
+2.10.0, CPU float32 and one thread. Train-launch one-minute load averages were
+14.98 versus 1.55. This is a **single attempt per host/mode**, with no cross-run
+uncertainty, controlled hardware ranking, GPU, playing-strength or distributed
+speedup evidence. Elapsed-time learning schedules can yield different optimizer
+trajectories even with the same seed and update counts.
+
+Training source SHA-256 is shared:
+`095e9d1e78c8d3d30968b6e120d6852cf510c6616fdd5ba10da5f97093132271`;
+resolved regime digest is shared:
+`6b1f4ee9851a7ba9344c26b2c69885d6c4ec232565929738ea2835c1c44eecfd`.
+Input JSON byte hashes and resolved serialization hashes remain separate in the
+extract. World/setup/ABI bindings agree; native binary hashes differ and are
+retained. Laptop HEAD `57b6cefe` and mini HEAD `b43066d1` have identical Git tree
+`6e75e99b385b3a15d42a837dc4091c119126d394`: LF sync introduced a merge commit,
+not a different measured source tree. Matching source does not erase runtime or
+contention differences.
+
+The SSH probe sent synthetic bytes laptop → mini over the Tailscale address with
+compression disabled, three sequential trials per size:
+
+| Payload bytes | Command wall seconds, all trials | Median seconds |
+| ---: | --- | ---: |
+| 0 | 0.44829, 0.50285, 0.39642 | 0.44829 |
+| 618,025 | 1.30904, 1.09258, 0.69779 | 1.09258 |
+| 8,388,608 | 5.05165, 5.48369, 4.48764 | 5.05165 |
+
+Each timing includes SSH process startup, connection/authentication, transfer and
+remote process completion. The 618,025-byte payload matches a raw export's size
+but contains synthetic bytes; it is not checkpoint delivery/reload evidence.
+There is no download, persistent connection, application echo, serialized rollout,
+concurrent actor traffic or recorded direct/relay-route comparison. Do not subtract
+the empty-command median to manufacture bandwidth or call it network RTT.
+
+These observations establish that both hosts can run the same bounded training
+recipe and that coarse uploads complete. They support measuring batched payload
+transport before choosing per-decision remote inference. They do not choose
+synchronous rounds, asynchronous learning or a safe policy-lag bound. Concurrent
+admitted contributions to one learner and disconnect/retry accounting remain the
+prototype finish line; ETU-108 remains open.
 
 Harness modes and their scopes:
 
@@ -379,10 +475,11 @@ or infer the remote repository path. Do not launch another coding agent merely
 to obtain benchmark numbers. The local command above is the workload entry point,
 not a tested `lf` remote-execution recipe.
 
-### Remaining matched measurement plan
+### Remaining measurement plan
 
-Measure both hosts independently with identical code/runtime/content, AgentSpec,
-batch/stream sizes and seeds; preserve cold startup separately from warm timing.
+The completed probes match source, recipe, content, batch geometry and seed,
+but not runtime patches or host load. Any controlled repeated comparison must
+address those differences and preserve cold startup separately from warm timing.
 Repeat only under a separately declared aggregate budget. Report device and thread
 counts, memory and host load beside the counters. Select intended value-token/depth
 variants and PPO/Ataraxos contrasts through existing AgentSpec and TrainingRegime
@@ -395,7 +492,8 @@ rollout/weight payloads with digest checks. Separate connection startup,
 serialization, transfer and deserialization. Record direct versus relayed route
 where available; subtract nothing to manufacture an engine rate. Cap the later
 transfer diagnostic at 30 seconds and 64 MiB per direction, within its 110-second
-supervisor allowance. This protocol is prepared; no transfer worker is implemented.
+supervisor allowance. This richer protocol remains prepared but unexecuted; the completed SSH upload
+probe above does not satisfy it.
 
 Compare laptop-only, mini-only and two-host execution at the same unique learner
 sample quota and learning settings. Attribute collection, inference, waiting,

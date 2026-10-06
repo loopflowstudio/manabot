@@ -114,33 +114,35 @@ No method benefit, challenger strength or chapter acceptance follows.
 
 ## Distributed RL research and software boundary (ETU-108, 2026-10-06)
 
-Jack Heart requested delivery of completed mini evidence, then a software-only
-follow-up exposing explicit recipes through the existing benchmark harness.
-The [report](../../docs/distributed-rl.md) and compact extract retain all five
-initial attempts and representative training. Mini is M1/16 GiB, CPU one-thread.
-Initial inference failed on absent collector.close(); PR #237 corrected ownership
-cleanup and a fresh attempt succeeded. Tiny training filtered both iterations,
-so it provides no gradient-throughput evidence. Representative masked-mean/scalar
-width-64 training completed 20 iterations, 5,120 learner transitions and 1,280
-optimizer exposures in 68.60 training / 70.73 process seconds, with six artifacts
-verified by the retained receipt. Eight replayed games belong to separate tiny
-calibration, not representative strength evaluation. The inherited 32 GiB budget
-exceeds actual RAM; sub-500 MB sampled RSS proves neither enforcement nor capacity.
-These single-host receipts establish no speedup, GPU or distributed-training claim.
+Jack Heart authorized delivery of retained mini and matched CPU/SSH evidence,
+with no new training and ETU-108 kept open. The [report](../../docs/distributed-rl.md)
+and compact extracts retain failed initial inference, its successful retry, tiny
+empty-filter training and separate eight-game replay calibration. The earlier mini
+representative run took 68.60 training seconds; it is not the matched run below.
 
-The harness now accepts resolved TrainingRegime JSON for inference/train and
-preserves tiny smoke defaults. Input bytes, resolved recipe, source/runtime and
-world identities remain distinct. Train reuses execute_regime and reports actual
-iterations, transitions, exposures and empty-filter skips. Inference uses the
-first stage's batch geometry and an untrained model. Current-self self-play,
-CPU float32 and one thread are required; unsupported modes/configurations fail.
-The supervisor defaults to 110 seconds, admits explicit caps up to 240 seconds,
-and never expands its deadline from a recipe. Requested memory is not enforced.
-Fixture checks launch no training or benchmarks; frozen evidence remains unchanged.
+The matched recipe completed once per host: laptop 45.32455 versus mini 65.00472
+training seconds, each with 20 iterations, 5,120 transitions and 1,280 exposures.
+Inference was 2,396.22 versus 1,160.53 observations/s. All twelve raw/EMA/optimizer
+artifact hashes and sizes verified. Training source/recipe/world bindings match;
+HEADs differ after LF sync but Git trees agree. Python 3.12.12 versus 3.12.11,
+different macOS releases and train-launch load near 15 versus 1.55 prevent a
+controlled hardware ranking. These single attempts establish no GPU, strength,
+useful-learning-progress or distributed-speedup claim. Matched checkpoints were
+not evaluated; eight replayed games belong to the earlier tiny calibration.
 
-Matched laptop and transfer measurements, concurrent contributions to one learner,
-and disconnect accounting remain open. ETU-108 stays open. ETU-106 and ETU-91
-remain untouched; no paid compute or new scientific allocation follows.
+The SSH upload probe retains three trials each for zero, 618,025 and 8 MiB
+synthetic bytes; median command times were .448, 1.093 and 5.052 seconds.
+Startup/authentication and remote completion are included. This is not persistent
+RPC RTT, bidirectional bandwidth or real trajectory transfer. The transfer receipt
+records an active laptop campaign; the matched compute plan waited for its exit.
+No ETU-106 or ETU-91 checkout was changed. Raw evidence remains in the supplied
+agent checkout; durable extracts bind source files and original artifact paths.
+
+The recipe-aware harness reuses TrainingRegime and records input bytes, resolved
+recipe, runtime/world identities and actual work. CPU float32/current-self/one
+thread admission and 240-second maximum supervisor caps remain. Requested memory
+is not enforced. Concurrent contributions to one learner, persistent transport,
+and disconnect/retry accounting remain open; no new scientific allocation follows.
 Actor/inference placement and stale-data admission are separate decisions.
 Neither current PPO nor Ataraxos implements V-trace; clipped ratios and reverse
 KL do not authorize arbitrary lag. Preserve same-viewer terminal/bootstrap
