@@ -1,5 +1,27 @@
 # Intelligence memory
 
+## Structured decision design boundary (ETU-107, 2026-10-05)
+
+Jack Heart requested a design review before broad decision-interface implementation.
+The bounded design contribution inspected native offers, ordinary/compound scoring,
+local search, GameSession/Trace and checkpoint admission at `338cccd5`. It proposes
+extending the existing offer owner with typed role/object features and native
+prefix support for currently safe groupings, keeping other choices sequential.
+This is a proposal, not approved architecture or completed software. Review remains
+in the existing repository conversation; no training or benchmark ran.
+
+Current native dependency fields do not provide a general continuation service:
+the ragged parser rejects dependent and ordered selections. Set-valued candidate
+scoring uses labels and pooled viewer context, without full runtime object joins.
+Canonical subset order gives one tape per subset; changing it changes the policy.
+ETU-100's retained-prefix exact zeros and next-Command marginalization must survive
+any interface migration. Engine legality and policy support remain distinct.
+ETU-104's merged AgentSpec/recipe helpers own configuration; its broader framework
+sketches do not authorize this Task. Preserve admitted flat/compound weight meanings,
+actual world/setup binding and existing trace ownership. The working design and
+specific review decisions live in `scratch/etu-107-unify-model-facing-decisions-with-engine-owned-legality-and.md`.
+ETU-107 remains open; no ETU-91 or frozen value-token checkout was changed.
+
 ## Distributed RL research boundary (ETU-108, 2026-10-05)
 
 Jack Heart requested primary-source research and a disposable laptop/mini
