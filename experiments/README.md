@@ -31,6 +31,10 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 ## Index
 
+[ETU-106 pooling × advantage floor](pooling-filter-followup.md#result--completed-2026-10-06):
+2,400 replay-verified games; no demonstrated token or floor-removal strength
+benefit, no equivalence claim, and both floor changes remain unresolved.
+
 ETU-99's [remaining Ataraxos transfer protocols](ataraxos-transfer.md) map
 delivered instruments to unexecuted sampler, search, distillation and robustness
 studies. Proposed budgets are separate from ETU-91 and grant no execution authority.

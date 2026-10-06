@@ -1,24 +1,32 @@
 # Intelligence memory
 
-## Pooling × advantage-floor follow-up (ETU-106, 2026-10-06)
+## Completed pooling × advantage-floor follow-up (ETU-106, 2026-10-06)
 
-After PR #226 merged, Jack Heart authorized autonomous software delivery and one
-bounded laptop follow-up: masked mean/value token crossed with .01/zero advantage
-floor, preserving .75 quantile and actor_critic scope. The completed screen and
-ETU-91 remain immutable. Its equal-update endpoint ordering differs from common
-cost; exposure accounting does not causally explain its scores.
+Jack Heart authorized the bounded follow-up after PR #226 and requested evidence
+delivery with ETU-106 open. All four arms calibrated; the slowest rate admitted
+600 updates, not the 800 target. Twelve runs and 24 × 100-game comparisons
+completed with zero failures/truncations and exact replay throughout. Endpoint
+masked/.01, masked/0, token/.01, token/0 means were 39.33/39.67/37.33/36.33%.
+Paired floor effects were +0.33 [−4.00, 4.33] and −1.00 [−11.33, 10.33] points;
+interaction −1.33 [−12.67, 11.00]. No strength benefit or equivalence is
+established; neither floor change meets promotion or rejection rules.
 
-The [separate protocol](../../experiments/pooling-filter-followup.md) owns fresh
-seeds, 24 paired 100-game cells, calibration, counterbalanced order and analysis.
-All four arms must calibrate before strength is inspected. Eight hours includes
-six for calibration/training and two for evaluation/reporting; minimum 400 total
-updates, target 800, with shared counts frozen from the slowest measured rate and
-25% headroom. A failure to fit stops instead of shrinking the evaluation cohort.
-Software delivery precedes scientific source pinning. A single durable supervisor
-retains child handles, all failures, calibrated plans and actual costs. This is
-permission for the bounded follow-up, not paid compute, a default change, human
-review or Task completion. The value token changes shared policy representations;
-a floor interaction cannot isolate a critic-only mechanism.
+Equal 153,600-transition endpoints had unequal exposures: token/.01 retained
+15,102–19,028 versus 38,400 at floor zero, with 25 empty updates across seeds.
+The 726.97–947.41-second common-cost window has a positive token floor point
+difference despite its negative endpoint difference. Two checkpoints do not
+resolve that discrepancy. Shared policy representations prevent a critic-only
+interpretation; exposure accounting does not explain the prior cohort's scores.
+
+The [protocol/result](../../experiments/pooling-filter-followup.md) and compact
+hash-bound data retain seeds, uncertainty, configurations, identities and costs.
+The campaign charged 5.64 hours including calibration/evaluation. All 225 files
+remain in `.runs/etu106-pooling-filter` and the checksum-verified backup at
+`/Users/jack/etu106-evidence/pooling-filter-20261006`; preserve this checkout.
+Three seeds and one scripted opponent remain exploratory. No defaults changed;
+ETU-91 and the original screen remain immutable. Recent-event input is next;
+further science needs a separate bounded allocation, learned recurrence stays
+deferred, and this result does not establish chapter or human-play acceptance.
 
 ## Completed scalar value-token screen (ETU-106, 2026-10-06)
 
@@ -451,25 +459,15 @@ retained a systems failure (quadratic support enumeration, no calibration
 curves), and INT-18's rating omitted the exact-range comparison. These are
 separate claim boundaries, irrespective of a task's completion status.
 
-### Planning reconciliation blocked by repository migration
+### Historical planning reconciliation (2026-09-24)
 
-`lf pm show --wave intelligence` on 2026-09-24 refused refresh because legacy
-`pm.provider`/`pm.linear_team` bindings require repository-wide migration owned
-by PRD-44. `--no-sync` exposed an 11-day-old cache only. No Linear definitions,
-KRs, or task states were changed; that cache is not live authority. Refresh
-through `lf pm` after the migration before applying any reconciliation.
-
-The cached Search Teacher & Student Arena definition needs the explicit
-agent boundary and held-out conditional policy-only action-change proof above;
-Belief-Aware Play's blanket learned-head deferral no longer describes this
-branch. Its live-advice, multi-game calibration, and arena strength KRs remain
-unproven by the bounded demo. ETU-34 names only architecture mapping and needs
-its actual delivered scope reconciled after branch acceptance; ETU-31's
-production multi-seed teacher comparison is not completed here. Check existing
-work before filing the conditional atlas/distillation continuation or broader
-belief calibration/transfer work, to avoid duplicates. The semantic-history
-replay and shared card vocabulary gaps above are narrower provider follow-ups,
-not grounds for inventing parallel Rules meaning.
+The migration-blocked cache review is retained at `59f16e0d` in this file's
+history; it was not live planning authority. Its unresolved delivery limits
+remain: bounded belief demos do not satisfy conditional policy-only action-change,
+live advice, multi-game calibration or arena strength. ETU-31 remains deferred.
+Check current Tasks before creating conditional atlas/distillation, calibration,
+semantic-history replay or shared-vocabulary work; do not create parallel Rules
+meaning. ETU-34's later merged/completed disposition is in GOAL.md.
 
 ETU-21 and Game's ETU-14 already cover the live-advice continuation. The `ed2`
 address and posterior resolver now exist, so the claim that a live address is

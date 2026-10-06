@@ -118,4 +118,124 @@ this campaign runs. Offline regeneration after completion uses:
 uv run python -m experiments.runners.run_pooling_filter --report-only --out .runs/etu106-pooling-filter/study
 ```
 
-Software preparation is not empirical completion. ETU-106 remains open.
+The following result closes this bounded campaign; ETU-106 remains open.
+
+## Result — completed 2026-10-06
+
+**No value-token or floor-removal strength benefit was demonstrated. This is
+not evidence of equivalence.** Both floor interventions remain unresolved under
+the registered rule: neither reaches the five-point, all-seeds-nonnegative bar,
+and neither meets the all-negative rejection rule. No default changes.
+
+The supervisor admitted **600 total updates**, with checkpoints at 300/600,
+from the four-arm calibration; the target 800 did not fit its conservative
+projection. Twelve scientific runs completed with no replacements or retries.
+All 24 comparisons completed exactly 100 terminal, replay-verified games each:
+**2,400 games, zero failures or truncations**, and zero replay mismatches or
+private exposures. These are three training seeds, not 2,400 method replicates.
+
+Scores below are percentages against the frozen scripted-greedy anchor. Seed
+order is 10621/10622/10623. Each entry retains all three seeds.
+
+| Pooling / floor | 300 updates | 600 updates | Endpoint mean |
+| --- | --- | --- | ---: |
+| Masked / .01 | 36 / 43 / 40 | 40 / 40 / 38 | 39.33% |
+| Masked / 0 | 40 / 39 / 38 | 41 / 39 / 39 | 39.67% |
+| Token / .01 | 35 / 30 / 34 | 38 / 30 / 44 | 37.33% |
+| Token / 0 | 33 / 44 / 33 | 37 / 40 / 32 | 36.33% |
+
+The registered paired bootstrap resamples three training seeds and 25 common
+whole deal blocks together across arms (10,000 draws, seed 10624). Differences
+and 95% percentile intervals are in percentage points:
+
+| Contrast | Midpoint mean [interval] | Endpoint seed differences | Endpoint mean [interval] |
+| --- | --- | --- | --- |
+| Masked: zero − .01 | −0.67 [−5.67, 4.33] | +1 / −1 / +1 | +0.33 [−4.00, 4.33] |
+| Token: zero − .01 | +3.67 [−4.33, 13.33] | −1 / +10 / −12 | −1.00 [−11.33, 10.33] |
+| Token floor effect − masked floor effect | +4.33 [−7.00, 17.33] | −2 / +11 / −13 | −1.33 [−12.67, 11.00] |
+
+The predicted absolute endpoint interaction below five points occurred in the
+point estimate; its wide interval does not establish a small underlying effect.
+The token exposure prediction also held: floor zero increased endpoint exposures
+by 154.3%, 101.8% and 145.3%. That did not reliably improve playing score.
+
+### Collection, exposure and cost are different comparisons
+
+Every endpoint collected **153,600 learner transitions** over 600 updates
+(256 transitions/update). Native decisions and finished training games vary
+with behavior. Retained rows, optimizer exposures and actor/critic exposures
+coincide in this one-pass actor_critic recipe; equal update counts do not mean
+equal effective optimization work.
+
+| Pooling / floor | Endpoint exposures by seed | Empty-filter updates by seed | Cumulative training seconds by seed |
+| --- | --- | --- | --- |
+| Masked / .01 | 33,594 / 35,440 / 33,713 | 0 / 0 / 0 | 1,224.85 / 1,397.06 / 1,269.56 |
+| Masked / 0 | 38,400 / 38,400 / 38,400 | 0 / 0 / 0 | 1,295.80 / 1,472.26 / 1,335.00 |
+| Token / .01 | 15,102 / 19,028 / 15,652 | 14 / 2 / 9 | 947.41 / 1,060.02 / 1,210.48 |
+| Token / 0 | 38,400 / 38,400 / 38,400 | 0 / 0 / 0 | 1,313.64 / 1,330.75 / 1,345.56 |
+
+The saved common-cost window is only **726.97–947.41 seconds**, using the last
+available checkpoint without interpolation. Mean scores over that window are
+39.67 / 39.00 / 33.00 / 36.67% in the table's arm order. At its final instant,
+token/.01 seed 10621 advances to its endpoint, making that arm's common-horizon
+mean 34.00%; the other means stay unchanged. Thus token floor removal has a
+positive sparse common-cost point difference while its equal-update endpoint
+difference is negative. Neither comparison supports a consistent benefit.
+Two checkpoints cannot locate a learning curve between observations or establish
+an equal-exposure strength effect. The notebook retains both transition and
+training-hour plots; the compact data retains their exact coordinates.
+
+The campaign charged **20,303.74 seconds (5.64 hours)** within eight hours.
+Calibration cost 322.35 seconds; the four run costs were 84.10/86.87/61.13/84.60
+seconds in canonical arm order. Scientific TrainingRun totals were 15,206.05
+seconds; evaluation cost 4,757.99 seconds, including 301.03 seconds of replay.
+The remaining 17.36 seconds cover supervision/reporting/other overhead, not
+unaccounted free training. Stage collection, learning, export and diagnostic
+costs remain separately available. Observed candidate inference seconds per
+call, pooled over each arm's 600 evaluation games, were 7.40/7.35/6.91/6.93 ms.
+These include the recorded player call path and host conditions; one CPU thread
+does not match inference cost or isolate architectural throughput.
+
+### Reproduction, provenance and next decision
+
+The scientific source was `59f16e0df9b516f56858c73ad1be88716fc9401f`, after
+software PR #236. [Compact evidence](data/pooling-filter/evidence.json) binds
+all **225 retained files** by SHA-256 and size, exact resolved configurations,
+calibration, code/native/world/content/setup/observation/action identities,
+run seeds and receipts, all raw/EMA export identities, the 24 scored raw
+checkpoints, per-deal/per-leg scores, paired uncertainty, exposure diagnostics
+and timing coordinates. Raw and EMA siblings are not independent replicates;
+only raw checkpoints were scored. The native world is w4; exact digest bindings,
+not that short label alone, determine reproducibility.
+
+Full private receipts, per-update diagnostics, traces, VerifyStore databases,
+plots and executed `study/analysis.ipynb` remain in
+`/Users/jack/src/etude.test-ataraxos-inspired-model-representations/.runs/etu106-pooling-filter`.
+The backup at `/Users/jack/etu106-evidence/pooling-filter-20261006` was rechecked
+against every source file during this evidence export. Neither path is replaced
+by this compact public projection; preserve both. There were no failed attempts
+inside this campaign. The earlier screen and its failures remain separate,
+immutable evidence; no ETU-91 run was restarted or reinterpreted.
+
+Regenerate the compact evidence without training or rewriting source artifacts:
+
+```bash
+uv run python -m experiments.runners.export_pooling_filter --source .runs/etu106-pooling-filter --backup /Users/jack/etu106-evidence/pooling-filter-20261006 --output /tmp/pooling-filter-evidence.json
+cmp experiments/data/pooling-filter/evidence.json /tmp/pooling-filter-evidence.json
+```
+
+Three seeds, one scripted opponent, two checkpoints and shared encoder changes
+limit the conclusion. A value token changes policy representations as well as
+critic aggregation; the factorial cannot identify a critic-only mechanism.
+Exposure differences describe the intervention's work, not a causal explanation
+of the prior screen or a proof that advantages caused weak play. Neither this
+result nor the original screen establishes general strength, control competence,
+model equivalence or human-challenger acceptance.
+
+ETU-106 remains open. Explicit recent-event input is the next accepted feature
+priority, with categorical outcomes and capacity interactions still unmeasured
+here. Any further scored comparison needs its own bounded protocol/allocation;
+this closeout authorizes no new campaign. Learned recurrent memory remains
+deferred. Check: compact export/backup hashes and byte-identical regeneration passed;
+both paired bootstraps reproduced from compact scores; 14 focused tests and
+Ruff/format/diff checks passed.

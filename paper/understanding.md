@@ -107,3 +107,21 @@ outperforms search on the two hold-scenarios); batched-inference throughput;
 seat parity (F2). Two remain in flight (reward-shaping comparison;
 distillation vs matched-cost PPO). A claim without a passing reproduction
 script is provisional.
+
+## Pooling and filtering (ETU-106, 2026-10-06, w4)
+
+The [paired pooling/floor follow-up](../experiments/pooling-filter-followup.md#result--completed-2026-10-06)
+changed optimization work without demonstrating stronger play. At 600 collection
+updates every arm saw 153,600 learner transitions. Removing the .01 floor raised
+token exposures from 15,102–19,028 to 38,400, yet its three endpoint score changes
+were −1/+10/−12 points. The paired mean was −1.00 [−11.33, 10.33]; masked mean's
+floor effect was +0.33 [−4.00, 4.33]. These wide three-seed intervals do not prove
+equivalence. The sparse common-cost token difference points the other way.
+
+A collection-update budget fixes sampled transitions, not retained optimization
+work or elapsed cost. Removing the floor addresses that accounting difference;
+it does not establish the floor as the cause of the earlier token scores. The
+token also changes shared policy representations, so even an interaction would
+not isolate the critic. More seeds and denser cost-aligned observations could
+discriminate a repeatable effect; this completed allocation does not authorize
+them. Preserve both unresolved results and the unchanged defaults.
