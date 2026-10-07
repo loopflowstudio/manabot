@@ -12,6 +12,7 @@ from pathlib import Path
 from statistics import median
 from typing import Literal
 
+from matplotlib import rc_context
 from matplotlib.figure import Figure
 import nbformat
 import numpy as np
@@ -369,14 +370,55 @@ def build_report(root: Path, scientific_out: Path | None = None) -> Path:
     evidence = {
         str(p): file_sha256(p) for p in root.glob("calibration-*/deployment.json")
     }
+    for row in rows:
+        directory = Path(row.path)
+        for name in ("result.json", "run/run.json", "worker.log", "exit.txt"):
+            path = directory / name
+            if path.is_file():
+                evidence[str(path)] = file_sha256(path)
+    for path in root.glob("calibration-*/**/bundle.json"):
+        evidence[str(path)] = file_sha256(path)
+    model_protocols = []
+    for row in rows:
+        result = Path(row.path) / "result.json"
+        if row.kind == "model" and result.exists():
+            model = ModelResult.model_validate_json(result.read_text())
+            model_protocols.append(
+                {
+                    "card": row.card,
+                    "capacity": row.capacity,
+                    **model.model_dump(
+                        exclude={"inference", "optimizer", "architecture"}
+                    ),
+                }
+            )
+    science = scientific(out)
     report = dict(
+        model_protocols=model_protocols,
         hardware=[r.model_dump(mode="json") for r in rows],
         hardware_comparison=hardware_comparison(rows),
         calibration_receipts=[r.model_dump(mode="json") for r in receipts],
-        science=scientific(out),
+        science=science,
         evidence=evidence,
+        launch_boundary="Scientific comparison not started: ETU-123 disconnect-safe lifecycle requires integration; final live-workflow proof timed out during guardian bootstrap before training. L4 batch512 and collection profiler remain unmeasured."
+        if science["status"] == "unlaunched"
+        else "See the retained campaign receipt for execution status.",
+        shared_budget={
+            "ceiling_dollars": 15,
+            "etu123_reserved_dollars": 3,
+            "etu103_ceiling_dollars": 12,
+        },
     )
     atomic_json(root / "capacity-report.json", report)
+    return render_report(root / "capacity-report.json")
+
+
+def render_report(source: Path) -> Path:
+    """Render a portable compact extract without requiring original model bytes."""
+    root = source.resolve().parent
+    report = json.loads(source.read_text())
+    rows = [HardwareRow.model_validate(row) for row in report["hardware"]]
+    receipts = [Receipt.model_validate(row) for row in report["calibration_receipts"]]
     table = "<table><tr><th>Card / capacity</th><th>Kind / batch / streams</th><th>Status</th><th>Inference obs/s</th><th>Adam obs/s</th><th>Loop transitions/s</th><th>Peak allocated GiB</th></tr>"
     for r in rows:
         rate = (
@@ -418,9 +460,18 @@ def build_report(root: Path, scientific_out: Path | None = None) -> Path:
     )
     ax.legend()
     fig.tight_layout()
-    fig.savefig(root / "hardware-throughput.svg")
+    with rc_context({"svg.hashsalt": "etu103-cuda-capacity"}):
+        fig.savefig(root / "hardware-throughput.svg", metadata={"Date": None})
     dollars = sum(r.estimated_dollars or 0 for r in receipts)
-    body = f"""<!doctype html><meta charset="utf-8"><title>ETU-103 capacity</title><style>body{{font:16px system-ui;max-width:1200px;margin:40px auto;padding:0 24px}}table{{border-collapse:collapse;width:100%;font-size:13px}}td,th{{padding:6px;border-bottom:1px solid #ddd;text-align:right}}td:first-child,th:first-child{{text-align:left}}pre{{white-space:pre-wrap}}img{{width:100%}}</style><h1>CUDA capacity: hardware and learning</h1><p>Calibration rental estimate: ${dollars:.4f}. Provider billing may differ; intent-to-confirmed-deletion time includes setup, idle and storage allowance. Every failure and unvisited cell remains below.</p><p>Model-only Adam is a diagnostic loss on fixed real rows. Peaks cover completed phases; OOM logs retain failed-allocation details. Complete-loop cells use ordinary Ataraxos self-play. Three-update cells and three one-second windows measure short-run behavior, not strength or sustained throughput. Collection includes engine and inference; its share alone does not prove GPU starvation.</p><img src="hardware-throughput.svg" alt="Fixed real batch inference throughput"><h2>Hardware cells</h2>{table}<h2>Learning cohort</h2><p>{escape(str(report["science"]["status"]))}</p><details><summary>Resolved measurements, uncertainty and limits</summary><pre>{escape(json.dumps(report["science"], indent=2))}</pre></details>"""
+    summary = "<table><tr><th>Card / capacity / phase</th><th>Best observed cell</th><th>Rows or transitions/s</th></tr>"
+    for item in report["hardware_comparison"]["best_observed"]:
+        summary += f"<tr><td>{escape(item['card'] + ' / ' + item['capacity'] + ' / ' + item['phase'])}</td><td>{escape(item['cell'])}</td><td>{item['rate']:,.1f}</td></tr>"
+    summary += "</table>"
+    ledger = "<table><tr><th>Attempt</th><th>Outcome</th><th>Deleted</th><th>Estimated dollars</th></tr>"
+    for receipt in receipts:
+        ledger += f"<tr><td>{escape(receipt.plan_sha256[:12])}</td><td>{escape(receipt.error or ('complete' if receipt.complete else 'incomplete'))}</td><td>{escape(receipt.phase)}</td><td>{receipt.estimated_dollars or 0:.5f}</td></tr>"
+    ledger += "</table>"
+    body = f"""<!doctype html><meta charset="utf-8"><title>ETU-103 capacity</title><style>body{{font:16px system-ui;max-width:1200px;margin:40px auto;padding:0 24px}}table{{border-collapse:collapse;width:100%;font-size:13px}}td,th{{padding:6px;border-bottom:1px solid #ddd;text-align:right}}td:first-child,th:first-child{{text-align:left}}pre{{white-space:pre-wrap}}img{{width:100%}}</style><h1>CUDA capacity: hardware and learning</h1><p>Calibration rental estimate: ${dollars:.4f}. Provider billing may differ; intent-to-confirmed-deletion time includes setup, idle and storage allowance. Every failure and unvisited cell remains below.</p><p>Model-only Adam is a diagnostic loss on fixed real rows. Peaks cover completed phases; OOM logs retain failed-allocation details. Complete-loop cells use ordinary Ataraxos self-play. Three-update cells and three one-second windows measure short-run behavior, not strength or sustained throughput. Collection includes engine and inference; its share alone does not prove GPU starvation.</p><img src="hardware-throughput.svg" alt="Fixed real batch inference throughput"><h2>Best observed configurations</h2><p>Separate maxima over the declared short grid, not sustained operating points. Compare matched cells in the JSON extract before attributing differences to hardware.</p>{summary}<details><summary>All hardware cells</summary>{table}</details><h2>All rental attempts</h2>{ledger}<p>{escape(report.get("launch_boundary", ""))}</p><p>$3 remains reserved for ETU-123 within the same $15 ceiling.</p><h2>Learning cohort</h2><p>{escape(str(report["science"]["status"]))}</p><details><summary>Resolved measurements, uncertainty and limits</summary><pre>{escape(json.dumps(report["science"], indent=2))}</pre></details>"""
     target = root / "report.html"
     target.write_text(body)
     return target
@@ -433,10 +484,10 @@ def write_notebook(root: Path) -> Path:
                 "# CUDA capacity\nEdit the evidence path and analysis cells; this notebook generates the read-only HTML report. Hardware speed, fit and playing strength are separate outcomes."
             ),
             nbformat.v4.new_code_cell(
-                f"from pathlib import Path\nimport sys\nrepo = Path({str(Path.cwd())!r})\nsys.path.insert(0, str(repo))\nfrom experiments.runners.cuda_capacity_report import build_report, hardware\nroot = Path({str(root.resolve())!r})\nreport = build_report(root)\nreport"
+                f"from pathlib import Path\nimport sys\nrepo = Path({str(Path.cwd())!r})\nsys.path.insert(0, str(repo))\nfrom experiments.runners.cuda_capacity_report import render_report\nroot = Path({str(root.resolve())!r})\nreport = render_report(root / 'capacity-report.json')\nreport"
             ),
             nbformat.v4.new_code_cell(
-                "import pandas as pd\nframe = pd.DataFrame([row.model_dump() for row in hardware(root)])\nframe"
+                "import json\nimport pandas as pd\nevidence = json.loads((root / 'capacity-report.json').read_text())\nframe = pd.DataFrame(evidence['hardware'])\nframe"
             ),
         ]
     )

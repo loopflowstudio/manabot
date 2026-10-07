@@ -173,3 +173,22 @@ def test_cleanup_recovers_only_evidenced_cost(
     repeated = lifecycle.cleanup(path)
     assert repeated.estimated_dollars == recovered.estimated_dollars
     assert repeated.attempts[0].deleted_time == recovered.attempts[0].deleted_time
+
+
+def test_client_calibration_callbacks_reject_before_rental(tmp_path: Path) -> None:
+    plan = compile_plan(
+        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
+        HardwareMix.model_validate_json(
+            (ROOT / "ops/mixes/runpod-small.json").read_text()
+        ),
+        SOURCE,
+        197,
+    )
+
+    def callback(transport: lifecycle.Transport) -> None:
+        raise AssertionError("client callback must not run")
+
+    out = tmp_path / ".runs/deployment"
+    with pytest.raises(ValueError, match="client execution callbacks"):
+        lifecycle.deploy(plan, out, tmp_path, after_training=callback)
+    assert not out.exists()

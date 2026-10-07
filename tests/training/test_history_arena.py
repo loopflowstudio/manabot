@@ -110,7 +110,8 @@ def test_history_on_full_game_uses_own_abi_and_fixed_anchor(tmp_path: Path) -> N
             player_a=candidate,
             player_b=anchor,
             deal_seeds=(971811,),
-            game_seconds=30,
+            # This fixture checks ABI/serving/replay, not shared-runner latency.
+            game_seconds=120,
             max_commands=10000,
             out_dir=tmp_path / recipe.id,
             checkpoint_paths={candidate.player_id: str(path)},
@@ -120,7 +121,19 @@ def test_history_on_full_game_uses_own_abi_and_fixed_anchor(tmp_path: Path) -> N
         assert len(rows) == 4 and all(
             r["terminated"] and r["replay_passed"] and r["failure"] is None
             for r in rows
-        )
+        ), [
+            {
+                key: row.get(key)
+                for key in (
+                    "leg",
+                    "failure",
+                    "terminated",
+                    "game_seconds",
+                    "replay_passed",
+                )
+            }
+            for row in rows
+        ]
 
         games = read_trace(Path(trace["path"]))
         assert all(

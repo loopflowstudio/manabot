@@ -381,3 +381,46 @@ The additional time funds only live evaluation, collection profiling, the L4
 batch512 bracket and freeze. Another overrun stops execution. Six reduced rental
 limits absorb the reallocation; evaluation and reporting reserves stay unchanged.
 The immutable local amendment retains the original clock and completed attempts.
+
+### Retained hardware result and launch boundary (2026-10-06)
+
+Both pinned 48-cell grids completed 47 cells and retained the large-model
+optimizer OOM at fixed batch1024. A40’s separate batch512 optimizer completed
+with 26.159 GiB peak allocated memory. The corresponding L4 batch512 probe and
+collection profiler did not run: the final live-workflow attempt at `e052ac30`
+failed the existing 90-second guardian SSH bootstrap deadline before training.
+Its original TimeoutError and confirmed deletion remain retained; no retry ran.
+The A40 primary per-file return failed with scp exit255 after an independently
+verified bulk return. It was not deliberately stopped. Both recovered bundles
+retain 277 verified files, with original primary failure receipts unchanged.
+
+At the identical total-batch512/64-stream workload, three-update run times were
+L4 small/large 3.455/9.539 s and A40 4.576/10.990 s. L4 was faster in these
+short observations at the same admitted $0.49/hour GPU quote. The A40’s larger
+fixed optimizer batch fits memory unavailable on L4, but the missing L4 bracket
+prevents a measured batch512 comparison. These are short timing and fit results,
+not sustained throughput or playing strength. Wider existing streams improved
+collection throughput; no missing collection capability has been demonstrated.
+
+Five rental attempts have confirmed deletion. Intent-to-deletion estimates sum
+to $0.5359766177 including the failed final guardian probe ($0.0131126277).
+Provider billing reconciliation is not available. Private complete receipts,
+models, logs and bundles remain under `.runs/etu103-cuda-capacity`; preserve this
+checkout. The compact [extract](data/cuda-capacity/capacity-report.json), editable
+[notebook](data/cuda-capacity/report.ipynb) and read-only
+[HTML report](data/cuda-capacity/report.html) retain measurements, source hashes,
+all attempts and unavailable quantities. The compact notebook regenerates the
+report without model bytes; full extraction requires the retained private root.
+
+Jack Heart subsequently reserved $3 of the existing $15 for ETU-123’s bounded
+disconnect proof, leaving at most $12 for ETU-103. Jack Heart requires its
+delivered disconnect-safe lifecycle before the longer scientific comparison.
+PR253’s live-export callbacks and CPU queue remain client-owned; they cannot
+satisfy that requirement. The scientific CLI now fails explicitly at launch.
+No resolved scientific plan or scientific cohort was frozen or launched. The
+prospective schedule above remains a proposal requiring lifecycle integration,
+live-workflow proof and remaining-budget admission; the elapsed calibration
+clock must not silently reset. ETU-123 owns stable remote job identity, remote
+evaluation/upload, reconnection and remote shutdown; PR253 supplies bulk bundle
+admission, phase receipts and client-observed exports for reuse. No default or
+promotion model is selected from hardware throughput.

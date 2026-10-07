@@ -73,7 +73,7 @@ class CapacityPlan(Strict):
     evaluator_seconds: Literal[28800] = 28800
     cohort_seconds: Literal[1200] = 1200
     report_seconds: Literal[1800] = 1800
-    dollar_ceiling: Literal[15] = 15
+    dollar_ceiling: Literal[12] = 12
     storage_reserve_dollars: Literal[1] = 1
     checkpoint_seconds: Literal[3600] = 3600
     endpoint: str = (
@@ -696,7 +696,10 @@ def main() -> None:
             parser.error("freeze requires calibration root, GPU, streams and batch")
         freeze(args.calibration_root, args.out, args.gpu, args.streams, args.batch)
     else:
-        execute(args.out)
+        parser.error(
+            "scientific launch unavailable until ETU-123 disconnect-safe lifecycle "
+            "is integrated; $3 of the shared $15 is reserved for its proof"
+        )
 
 
 if __name__ == "__main__":
