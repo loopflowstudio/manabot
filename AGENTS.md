@@ -84,6 +84,9 @@ contracts, receipts, wandb history — is never renamed.
 
 ## Testing
 
+- Remote credential tests require the `artifacts` extra. Validate dependency
+  changes in an isolated environment so locally installed extras cannot hide
+  missing CI dependencies: `uv run --isolated --extra dev --extra artifacts pytest tests/remote/ -q`.
 - **CI runs `cargo test` in debug, so validate in debug before landing.**
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can

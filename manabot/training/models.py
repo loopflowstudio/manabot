@@ -189,12 +189,24 @@ class TrainSelfPlay(Stage):
     opponent: FrozenOpponent | None = None
     initial: str | None = None
     updates: int = Field(default=2, ge=1)
+    # An active-time endpoint completes after a whole collect/update iteration.
+    # updates remains a safety ceiling; reaching it early is a failed attempt.
+    active_seconds: float | None = Field(
+        default=None, gt=0, exclude_if=lambda value: value is None
+    )
     streams: int = Field(default=4, ge=2)
     transitions: int = Field(default=256, ge=1)
     learning: Learning | AtaraxosMoveLearning = Learning()
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.active_seconds is not None:
+            if self.active_seconds >= self.execution.wall_seconds:
+                raise ValueError("active endpoint requires additional watchdog reserve")
+            if not isinstance(self.learning, AtaraxosMoveLearning):
+                raise ValueError(
+                    "active endpoint currently requires iteration-based Ataraxos learning"
+                )
         if self.behavior == "ema-self" and self.learning.ema is None:
             raise ValueError("ema-self behavior requires an EMA rate")
         if (self.behavior == "frozen") != (self.opponent is not None):
@@ -370,6 +382,11 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "recovery requires only self-play stages and iteration_fraction schedule"
             )
+        if self.recovery_max_microsteps is not None and any(
+            isinstance(stage, TrainSelfPlay) and stage.active_seconds is not None
+            for stage in self.stages
+        ):
+            raise ValueError("active-time process recovery is unsupported")
         if any(stage.execution.device == "cuda" for stage in self.stages):
             if self.recovery_max_microsteps is not None:
                 raise ValueError("CUDA process recovery is unsupported")
@@ -549,6 +566,9 @@ class TrainingCoordinates(Strict):
     stage_id: str
     updates: int = Field(ge=0)
     training_seconds: float = Field(ge=0)
+    active_training_seconds: float | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
     environment_decisions: int = Field(default=0, ge=0)
     learner_transitions: int = Field(default=0, ge=0)
     optimizer_exposures: int = Field(default=0, ge=0)

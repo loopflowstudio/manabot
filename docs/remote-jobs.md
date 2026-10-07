@@ -38,6 +38,33 @@ rental if credentials cannot cover the absolute deadline. This is a current
 runtime limit, not portable credential renewal or long-job recovery. AWS documents
 the [one-hour role-chaining limit](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html).
 
+For a long job, an explicitly configured dedicated IAM issuer can assume the
+worker role directly. Set `MANABOT_REMOTE_ISSUER_PROFILE` to that local AWS profile
+and `MANABOT_REMOTE_ROLE_ARN` to the worker role. The profile may load its key
+from the approved secret manager through `credential_process`; never store a key
+in source or pass the issuer environment to the pod. Client S3 operations keep
+the ordinary AWS profile. Issuance requests the full remaining rental deadline
+plus a 60-second reserve, applies the same job-prefix session policy, and verifies
+returned expiration before provider creation. Role duration/trust/permissions
+remain enforced by AWS. A temporary-role source still fails above one hour.
+
+Issuer account setup remains an explicitly authorized operation. ETU-103's
+restricted issuer was configured on 2026-10-07, with its sole AssumeRole key in
+Doppler and the existing SSO trust preserved; no key enters source or workers.
+The runtime only consumes that configured profile and verifies delegated expiry.
+
+`MonitoringBudget.require_initial_admission` optionally holds a fresh single
+self-play stage after initial export. The supervisor releases the exact artifact
+only after its initialization cohort completes and the evidence generation is
+published. Failure prevents learning; upload failure keeps the gate closed.
+Waiting uses the stage watchdog/rental allowance, not active training time.
+This evaluates initialization on the training rental without another smoke job.
+
+A monitoring budget may also supply `terminal_protocols`. The last completed
+stage's raw export alone gets these disjoint cohorts; initialization and live
+exports use `protocol`. This permits untouched held-out final deals and a separate
+random diagnostic without putting an experiment callback inside the supervisor.
+
 Author an optional `MonitoringBudget` JSON using the existing contract. For a tiny
 workflow check, this declares two minutes per evaluation and a four-minute total:
 

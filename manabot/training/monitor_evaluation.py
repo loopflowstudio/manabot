@@ -103,6 +103,15 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
                 stage_id=stage.id,
                 updates=run.updates_through(stage.id),
                 training_seconds=stage.cumulative_seconds,
+                active_training_seconds=(
+                    float(
+                        stage.diagnostics[-1]["coordinates"]["active_training_seconds"]
+                    )
+                    if stage.diagnostics
+                    and "active_training_seconds"
+                    in stage.diagnostics[-1].get("coordinates", {})
+                    else None
+                ),
                 environment_decisions=sum(s.environment_decisions for s in prefix),
                 learner_transitions=sum(s.learner_transitions for s in prefix),
                 optimizer_exposures=sum(s.optimizer_exposures for s in prefix),

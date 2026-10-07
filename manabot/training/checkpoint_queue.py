@@ -19,7 +19,7 @@ import sys
 import time
 from typing import Callable, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 import torch
 
 from manabot.arena.models import canonical_sha256
@@ -47,6 +47,35 @@ class MonitoringBudget(Strict):
     attempt_seconds: float = Field(default=600, gt=0)
     protocol: MonitorProtocol = Field(default_factory=MonitorProtocol)
     include_initial: bool = Field(default=False, exclude_if=lambda value: not value)
+    require_initial_admission: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    terminal_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+
+    @model_validator(mode="after")
+    def separate_terminal_deals(self) -> "MonitoringBudget":
+        if self.require_initial_admission and not self.include_initial:
+            raise ValueError("initial admission requires initialization evaluation")
+        used = set(self.protocol.deal_seeds)
+        for protocol in self.terminal_protocols:
+            if used.intersection(protocol.deal_seeds):
+                raise ValueError(
+                    "terminal and monitoring deal cohorts must be disjoint"
+                )
+            used.update(protocol.deal_seeds)
+        return self
+
+    def protocols_for(
+        self, run: TrainingRun, checkpoint: Checkpoint
+    ) -> list[MonitorProtocol]:
+        """Select final cohorts only for the last completed stage's raw artifact."""
+        if self.terminal_protocols and run.stages:
+            final = stage_checkpoint(run, run.regime.stages[-1].id)
+            if final is not None and final.artifact == checkpoint.artifact:
+                return list(self.terminal_protocols)
+        return [self.protocol]
 
 
 def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Checkpoint]:
@@ -236,7 +265,7 @@ class CheckpointQueue:
                 protocols = (
                     self.protocols_for(run, checkpoint)
                     if self.protocols_for is not None
-                    else [self.config.protocol]
+                    else self.config.protocols_for(run, checkpoint)
                 )
                 for protocol in protocols:
                     identity = canonical_sha256(

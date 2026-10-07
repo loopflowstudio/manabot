@@ -201,27 +201,53 @@ def worker_credentials(spec: RemoteJobSpec) -> dict[str, str]:
     """
     import boto3
 
-    session = boto3.Session()
-    credentials = session.get_credentials()
-    if credentials is None:
-        raise RuntimeError("AWS credentials unavailable")
-    frozen = credentials.get_frozen_credentials()
+    # Issuance can use a dedicated IAM principal without replacing the client's
+    # ordinary SSO identity for control-plane reads/writes. Its credentials stay
+    # local; only the policy-restricted STS result enters the rental environment.
+    issuer_profile = os.environ.get("MANABOT_REMOTE_ISSUER_PROFILE")
+    role_arn = os.environ.get("MANABOT_REMOTE_ROLE_ARN")
+    if issuer_profile and not role_arn:
+        raise ValueError("a dedicated issuer requires an explicit worker role ARN")
+    try:
+        session = (
+            boto3.Session(profile_name=issuer_profile)
+            if issuer_profile
+            else boto3.Session()
+        )
+        credentials = session.get_credentials()
+        if credentials is None:
+            raise RuntimeError("missing credentials")
+        frozen = credentials.get_frozen_credentials()
+    except Exception:
+        # credential_process failures may include captured secret-bearing output.
+        raise RuntimeError(
+            "AWS issuer credentials unavailable; no rental created"
+        ) from None
     duration = max(900, math.ceil(spec.deadline - time.time()) + 60)
     policy = json.dumps(worker_policy(spec.prefix), separators=(",", ":"))
     try:
         sts = session.client("sts")
-        if frozen.token is None and not os.environ.get("MANABOT_REMOTE_ROLE_ARN"):
+        if frozen.token is None and duration > 3600:
+            principal = sts.get_caller_identity()["Arn"]
+            if ":user/" not in principal:
+                raise ValueError(
+                    "long worker sessions require a dedicated IAM-user issuer"
+                )
+        if frozen.token is None and role_arn is None:
             result = sts.get_federation_token(
                 Name=f"manabot-{spec.identity[:24]}",
                 DurationSeconds=duration,
                 Policy=policy,
             )
         else:
-            if duration > 3600:
+            # AWS applies the one-hour chaining cap to temporary-role sources.
+            # Direct IAM-user AssumeRole supports the role's configured duration;
+            # the service validates that limit and we independently admit expiry.
+            if frozen.token is not None and duration > 3600:
                 raise ValueError(
                     "SSO/role sessions require job wall time below 3540 seconds"
                 )
-            arn = os.environ.get("MANABOT_REMOTE_ROLE_ARN")
+            arn = role_arn
             if arn is None:
                 account = sts.get_caller_identity()["Account"]
                 arn = f"arn:aws:iam::{account}:role/{WORKER_ROLE}"

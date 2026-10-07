@@ -214,3 +214,76 @@ def test_freeze_binds_real_authoring_and_rejects_control_drift(
     altered["deployments"][0]["regime"]["stages"][0]["learning"]["min_advantage"] = 0
     with pytest.raises(ValueError):
         CapacityPlan.model_validate(altered)
+
+
+def test_four_hour_preparation_preserves_controls_and_shared_cost(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "calibration"
+    (root / "inputs").mkdir(parents=True)
+    base = ataraxos_mtg_v1().regime()
+    base.agent.value_kind = "scalar"
+    (root / "inputs/cuda-calibration-small.json").write_text(base.model_dump_json())
+    (root / "inputs/mix.json").write_bytes(
+        Path("ops/mixes/runpod-small.json").read_bytes()
+    )
+    source = Source(commit="a" * 40, tree="b" * 40, lock_sha256="c" * 64)
+    plan = capacity.prepare_four_hour(
+        root, tmp_path / "prepared", source, quote=0.49, quote_unix=1
+    )
+    assert plan.status == "prepared-not-admitted"
+    assert len(plan.deployments) == 6
+    assert plan.projected_dollars == pytest.approx(26.55597661771377)
+    assert plan.monitoring.include_initial
+    assert len(plan.monitoring.protocol.deal_seeds) * 4 == 100
+    assert [p.opponent for p in plan.monitoring.terminal_protocols] == [
+        "scripted_greedy",
+        "random",
+    ]
+    controls: list[dict[str, object]] = []
+    total = 0.0
+    for deployment in plan.deployments:
+        stage = deployment.regime.stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        assert stage.active_seconds == 14400
+        total += stage.active_seconds
+        payload = deployment.regime.model_dump()
+        payload.pop("id")
+        for field in ("hidden_dim", "attention_layers", "attention_feedforward_dim"):
+            payload["agent"].pop(field, None)
+        controls.append(payload)
+    assert total == 24 * 3600 and all(c == controls[0] for c in controls)
+    with pytest.raises(ValueError, match="at most"):
+        capacity.prepare_four_hour(
+            root, tmp_path / "expensive", source, quote=0.60, quote_unix=1
+        )
+
+
+def test_declarative_terminal_schedule_stays_off_monitoring(tmp_path: Path) -> None:
+    run = run_fixture(tmp_path / "run.json")
+    config = queue.MonitoringBudget(
+        seconds=100,
+        attempt_seconds=10,
+        include_initial=True,
+        protocol=MonitorProtocol(deal_seeds=(1,)),
+        terminal_protocols=(
+            MonitorProtocol(
+                deal_seeds=(2,),
+                purpose="frozen-study-evaluation",
+                study_protocol_sha256="a" * 64,
+            ),
+            MonitorProtocol(deal_seeds=(3,), opponent="random"),
+        ),
+    )
+    first = queue.checkpoints(run)[0]
+    assert config.protocols_for(run, first) == [config.protocol]
+    last = run.stages[-1]
+    last.status = "completed"
+    last.cumulative_seconds = 2
+    last.artifacts["raw"] = {"path": "final.pt", "sha256": "b" * 64, "bytes": 1}
+    final = queue.checkpoints(run)[-1]
+    assert config.protocols_for(run, final) == list(config.terminal_protocols)
+    with pytest.raises(ValueError, match="disjoint"):
+        queue.MonitoringBudget.model_validate(
+            config.model_dump() | {"terminal_protocols": [config.protocol.model_dump()]}
+        )

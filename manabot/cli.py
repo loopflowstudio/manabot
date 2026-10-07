@@ -41,6 +41,7 @@ def train_command(
         None,
         help="Monitoring raw checkpoint interval (3600 for hourly), at update/epoch boundaries",
     ),
+    initial_admission: Optional[str] = typer.Option(None, hidden=True),
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
@@ -69,6 +70,9 @@ def train_command(
                 store,
                 resume_from=resume_from,
                 checkpoint_seconds=checkpoint_seconds,
+                initial_admission=Path(initial_admission)
+                if initial_admission
+                else None,
             )
     else:
         if (
@@ -76,6 +80,7 @@ def train_command(
             or seed is not None
             or resume_from is not None
             or checkpoint_seconds is not None
+            or initial_admission is not None
         ):
             raise typer.BadParameter(
                 "--out, --seed, --resume-from and --checkpoint-seconds require --regime"

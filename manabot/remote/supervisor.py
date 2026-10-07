@@ -113,6 +113,10 @@ def supervise(
     recipe = root.parent / "regime.json"
     recipe.write_text(spec.plan.regime.model_dump_json(indent=2))
     run_path = root / "run/run.json"
+    admission = root / "initial-evaluation-admitted"
+    require_initial = bool(
+        spec.monitoring and spec.monitoring.require_initial_admission
+    )
     try:
         if cancellation_requested(store) is not None:
             record = record.model_copy(
@@ -140,6 +144,11 @@ def supervise(
                         str(root / "run"),
                         "--checkpoint-seconds",
                         str(spec.checkpoint_seconds),
+                        *(
+                            ["--initial-admission", str(admission)]
+                            if require_initial
+                            else []
+                        ),
                     ],
                     stdout=log,
                     stderr=subprocess.STDOUT,
@@ -173,7 +182,19 @@ def supervise(
                     record = record.model_copy(
                         update={"run_id": run.id, "updates": run.updates_through()}
                     )
+                waiting_initial = require_initial and not admission.exists()
+                if (
+                    waiting_initial
+                    and queue is not None
+                    and any(
+                        a.status in {"failed", "interrupted"} for a in queue.attempts
+                    )
+                ):
+                    raise RuntimeError(
+                        "initial evaluation failed; learning was not admitted"
+                    )
                 if time.time() - last_upload >= spec.publish_seconds:
+                    uploaded = False
                     try:
                         manifest = publish(
                             spec, root, record.generation + 1, complete=False
@@ -184,12 +205,26 @@ def supervise(
                                 "manifest": manifest,
                             }
                         )
+                        uploaded = True
                     except Exception as error:
                         record = record.model_copy(
                             update={
                                 "error": f"snapshot upload failed ({type(error).__name__})"
                             }
                         )
+                    if uploaded and waiting_initial and queue is not None:
+                        if queue.attempts and queue.attempts[0].status == "completed":
+                            initial_run = _training_run(root)
+                            assert initial_run is not None
+                            if initial_run.updates_through() != 0:
+                                raise RuntimeError(
+                                    "learning preceded initial admission"
+                                )
+                            checkpoint = initial_run.stages[0].artifacts["initial_raw"]
+                            # Publish the durable manifest pointer before releasing
+                            # this exact checkpoint; no client must stay connected.
+                            persist()
+                            admission.write_text(checkpoint["sha256"] + "\n")
                     last_upload = time.time()
                 if queue is not None:
                     record = record.model_copy(

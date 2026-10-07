@@ -39,14 +39,29 @@ and collection profiling remain unmeasured. No scientific plan/cohort launched.
 The [protocol and portable report](../../experiments/model-capacity.md) retain
 exact clocks, identities, all attempts and limits; preserve ignored private bundles.
 
-Jack Heart reserved $3 within the existing $15 for ETU-123's disconnect proof and
-requires its delivered lifecycle before science. ETU-103 is capped at the remaining
-$12; the scientific CLI rejects launch until integration. PR253's export callbacks,
-CPU queue and bulk returns remain client-owned. A reported 25-minute calibration
-reallocation preserved combined 14 hours; it does not reset the elapsed clock or
-authorize retries. ETU-118 retains baseline promotion/shared evaluator ownership;
-ETU-105/106/108 retain learning, representation and distributed work. No default
-or promotion model is selected from timing alone.
+Jack Heart replaced the twelve-hour total comparison with four active training
+hours per capacity per seed (24 hours plus overhead), retaining three paired
+seeds and initialization/hourly 100-game greedy monitoring with untouched final
+deals. Collection/update time counts; export/setup/evaluation does not. Ataraxos
+iteration schedules stay fixed. The existing $30 conditional cap applies; the
+$3 ETU-123 proof reservation and all historical charges stay inside it. A prepared
+six × seven-hour L4 plan projects $26.556 all-in at the observed $0.49/hour quote,
+including reserves. It is not launch admission or scientific evidence.
+
+PR254 supplies disconnect-safe jobs. Jack Heart authorized the restricted IAM
+issuer and renewed SSO on 2026-10-07. Setup now retains one Doppler key, only
+AssumeRole permission and the original SSO trust. A seven-hour job-scoped STS
+session passed expiry/identity admission; no issuer key reaches pods. The first
+trust update hit IAM propagation delay; retry reused the same user. No rental
+occurred during setup. Prior expired-login failure remains at `cf8c581f`.
+
+Each scheduled 100-game initialization cohort now gates learning on the same
+rental: completion and durable publication precede collector/optimizer work.
+Wait counts toward the unchanged watchdog/cost, not active training. Failure
+retains the attempt without a replacement. PR255 delivery and source freeze
+precede launch; this admission mechanism is not scientific evidence.
+ETU-118 owns baseline promotion; ETU-105/106/108 retain learning, representation
+and distributed work. No model is selected from timing alone.
 
 ## Reading learning trends (ETU-117, 2026-10-06)
 
@@ -1138,29 +1153,12 @@ training, calibration, demo admission or chapter outcomes.
 
 ## Capacity comparison software preparation (ETU-103, 2026-10-05)
 
-Jack Heart authorized independent software delivery and landing while leaving
-ETU-103 open for empirical work. Declarative capacity plans reuse ETU-102's
-64/1, 64/2 and 128/2 ladder and ETU-109's pinned token/WDL Ataraxos baseline.
-Only width/depth vary. Existing TrainingRun, EvaluationProtocol, arena and offline
-reporting retain execution, metrics, paired seed/deal uncertainty and provenance.
-No training, arena cohort, throughput benchmark or paid compute ran; frozen
-ETU-91/106 checkouts remain untouched.
-
-The [proposed protocol](../../experiments/model-capacity.md) distinguishes a
-20-minute scheduled-progress window from a calibrated fixed-update terminal
-checkpoint under a common roughly one-hour per-arm ceiling. Its three-seed,
-24-hour study proposal is unallocated and unexecuted; calibration, resource
-coordination and scientific judgment remain prerequisites. Export requires
-reviewed counts, evidence digest, runtime identities and resource projections.
-Concurrent historical-mean smoke timings cannot calibrate the token baseline.
-
-Offline analysis reuses the existing cost integrator on shared observed wall-time,
-native-decision and optimizer-exposure support. Scheduled threshold misses are
-right-censored, absent observations unavailable, and terminal evidence stays on
-held-out endpoint deals. Incomplete cohorts retain diagnostics without comparative
-curves. Synthetic report regeneration establishes software behavior only. Fast
-experimental and promotion model choices remain unresolved; throughput is not
-terminal strength and the current default remains unchanged.
+Historical software scope and the unallocated WDL proposal remain at `0145f77f`
+and in [the protocol](../../experiments/model-capacity.md). Declarative capacity
+plans reuse AgentSpec, Experiment, TrainingRun and the shared arena. Synthetic
+report regeneration establishes software behavior only; it selects no default.
+The later authorized mini/CUDA cohorts supersede this preparation's allocation
+status, preserving their distinct scalar recipes and frozen evidence.
 
 ## Saved sampler uncertainty software (ETU-110, 2026-10-05)
 

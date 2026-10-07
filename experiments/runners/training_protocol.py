@@ -39,6 +39,9 @@ class EvaluationProtocol(BaseModel):
     paired_deals: tuple[int, ...] = (910001,)
     anchor_deals: tuple[int, ...] = (920001,)
     checkpoint_count: int = Field(default=2, ge=2)
+    training_clock: Literal["elapsed", "active_collection_learning"] = Field(
+        default="elapsed", exclude_if=lambda value: value == "elapsed"
+    )
     cost_cutoffs_seconds: tuple[float, ...] = ()
     early_progress_seconds: float | None = Field(
         default=None, gt=0, exclude_if=lambda v: v is None
@@ -70,6 +73,11 @@ class EvaluationProtocol(BaseModel):
 
     @model_validator(mode="after")
     def disjoint(self) -> "EvaluationProtocol":
+        if (
+            self.training_clock == "active_collection_learning"
+            and self.study != "cuda-capacity"
+        ):
+            raise ValueError("active training clock currently belongs to CUDA capacity")
         if (
             self.study
             in {"value-token-screen", "pooling-filter", "history-input", "depth-screen"}
@@ -170,8 +178,17 @@ class EvaluationProtocol(BaseModel):
                 or self.paired_deals
                 or self.endpoint_paired_deals
                 or self.endpoint_seed_pairs
-                or self.checkpoint_count != 3
-                or self.process_seconds != 41700
+                or (
+                    (self.checkpoint_count != 3 or self.process_seconds != 41700)
+                    if self.training_clock == "elapsed"
+                    else (
+                        self.checkpoint_count != 5
+                        or self.process_seconds != 43 * 3600
+                        or self.training_seeds != (10351, 10352, 10353)
+                        or self.cost_cutoffs_seconds != (3600, 7200, 10800, 14400)
+                        or self.early_progress_seconds != 3600
+                    )
+                )
             ):
                 raise ValueError(
                     "CUDA capacity requires the declared 100-game greedy/development/endpoint and separate random cohorts"

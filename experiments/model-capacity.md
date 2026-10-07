@@ -198,13 +198,19 @@ No such follow-up or empirical default selection has run in this software pass.
 
 ## Authorized CUDA comparison — 2026-10-06
 
-Jack Heart authorized a separate pure-capacity CUDA cohort: at most two hours
-complete-loop calibration, then twelve hours total comparison across arms/seeds,
-including evaluation, transfers and reporting. The initial all-in ceiling is $15;
-a higher working ceiling up to $30 requires a retained calibration-based reason.
-Every individual deployment remains below $5 with pod/client deadlines and
-confirmed deletion. ETU-114's historical allowance is not transferred. The mini
-depth cohort and ETU-91 evidence remain unchanged.
+Jack Heart superseded the twelve-hour total comparison on 2026-10-06 with
+**four active training hours per capacity per seed**: two capacities, three
+paired seeds, at least 24 training hours plus overhead. Collection and learner
+updates count; setup, exports, evaluation-only time, transfer and reporting do
+not. A run stops after the first complete update crossing 14,400 active seconds.
+An exhausted update safety ceiling or watchdog records failure, never a shorter
+successful run. CUDA process restart remains unsupported.
+
+The shared initial $15 includes ETU-123's up-to-$3 proof reservation. Jack Heart
+permits a calibration-supported working cap of $30; the larger requested cohort
+requires it. Each rental stays below $5. Prior calibration charges, proof charges,
+setup, idle time, storage and deletion remain charged. ETU-114 and ETU-91 budgets
+are unavailable; historical mini evidence stays separate.
 
 Calibration first compares width64/depth2/heads4 to width384/depth8/heads4 with
 feedforward width1536, scalar value-token, no history, identical current-self
@@ -218,15 +224,13 @@ no strength aggregates. Allocation/VRAM/admission failure stops that attempt;
 a smaller width128/depth2 fallback needs explicit timing-based admission and
 retains the large-arm failure. No score-based capacity choice or retry.
 
-Three paired scientific seeds are 10351–10353 if complete-loop calibration admits
-them. Exact counts and clocks must be committed before scoring. Initialization
+Three paired scientific seeds are 10351–10353. Exact counts and clocks must be committed before scoring. Initialization
 and scored milestones each receive at least 100 balanced greedy games; random
 diagnostics have their own schedule, and final deals stay untouched until endpoint
 scoring. Evaluation must run during training. A flat curve prompts review, not an
 automatic failure verdict. Full-budget means the frozen affordable endpoint;
-it does not mean convergence. The current source's remote CLI returns artifacts
-only after training, so live-export/evaluator admission remains a prerequisite to
-the scientific cohort, alongside the calibration-derived allocation.
+it does not mean convergence. The original remote CLI returned artifacts only after training. Deploy lifecycle
+integration and live evaluator admission remain prerequisites to this cohort.
 
 ### Hardware sweep amendment, before the new probes
 
@@ -297,7 +301,12 @@ not a repeated measurement or a rewritten successful deployment. The A40 receive
 the identical grid/source. Bulk transfer and explicit phase timestamps are being
 added for later jobs; historical phase splits remain unavailable where not recorded.
 
-Timing-only selection will use one common measured GPU, batch and stream count
+### Superseded short comparison proposal (never launched)
+
+The fixed-count schedule below is historical. The four-active-hour amendment
+replaces its endpoints, clocks and allocation; retained calibration is unchanged.
+
+Timing-only selection would use one common measured GPU, batch and stream count
 for both scientific capacities. Width64/depth2 and width384/depth8 remain the
 comparison; the small model is scalar value-token, no history, with the same
 inputs, Ataraxos learning, filtering, schedules, Adam and current-self opponent.
@@ -412,11 +421,11 @@ checkout. The compact [extract](data/cuda-capacity/capacity-report.json), editab
 all attempts and unavailable quantities. The compact notebook regenerates the
 report without model bytes; full extraction requires the retained private root.
 
-Jack Heart subsequently reserved $3 of the existing $15 for ETU-123’s bounded
+At this historical software boundary, Jack Heart reserved $3 of the existing $15 for ETU-123’s bounded
 disconnect proof, leaving at most $12 for ETU-103. Jack Heart requires its
 delivered disconnect-safe lifecycle before the longer scientific comparison.
-PR253’s live-export callbacks and CPU queue remain client-owned; they cannot
-satisfy that requirement. The scientific CLI now fails explicitly at launch.
+PR253’s original live-export callbacks were client-owned. Integration now uses
+PR254’s remote supervisor and rejects those historical client callbacks. The scientific CLI now fails explicitly at launch.
 No resolved scientific plan or scientific cohort was frozen or launched. The
 prospective schedule above remains a proposal requiring lifecycle integration,
 live-workflow proof and remaining-budget admission; the elapsed calibration
@@ -424,3 +433,106 @@ clock must not silently reset. ETU-123 owns stable remote job identity, remote
 evaluation/upload, reconnection and remote shutdown; PR253 supplies bulk bundle
 admission, phase receipts and client-observed exports for reuse. No default or
 promotion model is selected from hardware throughput.
+
+
+### Four-hour preparation and admission — 2026-10-07
+
+`cuda_capacity --prepare-four-hour` exports ordinary DeploymentPlans from the
+existing Experiment baseline and retained calibration input. It prepares L4,
+512 transitions per update over 64 streams, width64/depth2 versus
+width384/depth8/feedforward1536, scalar value-token, no history. All learning,
+input, optimizer and opponent controls are identical. Ataraxos retains its
+one-based iteration schedules and clamps; active time determines the endpoint,
+not a new learning-rate denominator. One million updates is a safety ceiling,
+not the scientific endpoint. Full stage watchdog is five hours, with a one-minute
+run setup reserve. These are preparation outputs, not admitted scientific plans.
+
+Initialization and the first completed updates at approximately one, two and
+three active hours use 25 development deals × four seat/deck legs versus greedy.
+The final raw export at four active hours uses 25 untouched final deals × four
+legs, followed by 100 separately scheduled random diagnostic games. The final
+stage export suppresses a duplicate hourly monitoring export. EMA remains
+retained and unscored. Seeds 10351–10353 and the existing three disjoint CUDA deal
+namespaces remain unchanged because no scientific scoring has occurred. Early
+progress is the first observed 50% greedy score during the first active hour;
+non-crossings are right-censored. Hourly sampling cannot resolve faster crossings.
+Paired seed/deal uncertainty, active time, total elapsed cost, decisions and
+optimizer exposures remain separate axes; three seeds support exploratory claims.
+
+A fresh RunPod read at Unix 1791343703.70 quoted both L4 and A40 at $0.49/hour
+and returned zero pods. The proposed six seven-hour rentals cost at most $21.42
+including $0.02/hour storage. Add retained ETU-103 $0.5359766177, the full $3
+ETU-123 reservation, $0.60 guardian reserve and $1 durable-storage reserve:
+**$26.5559766177**, below $30. The six job caps remain $4.50 each. Seven hours
+includes 15 minutes setup, a five-hour learner watchdog, evaluation tail, ten
+minutes transfer and three minutes cleanup. Six serial rental ceilings plus one
+hour reporting bound the new allocation at 43 hours; prior attempts retain their
+own elapsed charges. Admission must re-read quotes, actual shared proof charges
+and guardian cost before rental, without treating unused reserves as retries.
+
+Each run budgets six 100-game cohorts, 1,800 seconds each, on one remote CPU
+alongside training. The earlier four-game process timings were 45.3175 and
+38.9487 seconds: linear 100-game projections are 1,133 and 974 seconds. The
+1,800-second allowance is a projection with margin, not a measured 100-game
+remote bound; CPU hardware, game length and replay can change it. Remote
+100-game timing/live publication admission remains required. The rented six-CPU,
+48-GiB declaration leaves a CPU for evaluation; shared memory/CPU contention
+must be reported. No laptop evaluator or mini worker is displaced.
+
+Read-only credential discovery found only the default AWS SSO profile, no AWS
+keys in Doppler `etude/prd`, no account OIDC provider, and no Roles Anywhere
+trust anchor in us-west-2. The `manabot-remote-jobs` role already permits 43,200
+seconds, but [AWS role chaining](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html)
+still caps a session obtained from SSO role credentials at one hour. Increasing
+that role limit or relaxing the local guard cannot authorize a seven-hour job.
+
+On 2026-10-07 Jack Heart authorized a dedicated IAM issuer with only
+`sts:AssumeRole` permission on the existing worker role, its key stored in
+Doppler `etude/prd`, and matching narrow additional trust preserving the original
+SSO trust and unrelated policies. A matching existing issuer/key must be
+reconciled before creation, without duplicate keys on retry. The dedicated
+profile uses `credential_process`; issuer keys never enter pods, artifacts,
+logs or chat. Each issued session retains the single-job-prefix restriction
+and must cover the full rental deadline before rental admission.
+
+The initial 2026-10-07 setup attempt stopped on expired SSO, before any IAM
+mutation or rental (`cf8c581f`). After Jack Heart renewed SSO, the dedicated
+`manabot-remote-issuer` was created with only AssumeRole on the existing worker
+role. One key was stored and read back in Doppler; the `manabot-issuer` profile
+uses credential_process. Original SSO trust and the worker storage policy remain.
+The initial trust update met IAM propagation delay; retry reconciled the same
+user and created no duplicate key. A 25,200-second worker session plus the issuer
+reserve passed expiry admission and STS identity verification on 2026-10-07.
+The private receipt is `.runs/etu103-issuer-admission-20261007.json` (no keys).
+
+A live read at Unix 1791394251.337 again quoted L4/A40 at $0.49/hour and found
+zero pods. The conservative $26.5559766177 plan remains valid, including the full
+$3 proof reservation rather than spending its unused balance. Actual historical
+shared spend remains $0.6518216. No new rental is part of credential verification.
+
+**Initialization admission amendment, fixed before scoring:** each real run's
+required 100-game initialization cohort also establishes its remote evaluation
+cost. The learner exports its exact initial checkpoint, then waits before creating
+the collector or taking an optimizer step. The remote supervisor releases it only
+after a complete cohort within 1,800 seconds and successful durable publication.
+A failed cohort stops that attempt without learning or a replacement rental.
+A failed upload leaves the gate closed under the original watchdog/deadline.
+This reuses the scheduled initialization cohort on the same rental; it adds no
+smoke rental or scored games. The earlier four-game timings justify the bounded
+initial admission attempt, not a claim of measured 100-game remote performance.
+
+Admission wait is excluded from active collection/learning, included in the
+five-hour stage watchdog and seven-hour billing deadline. The projected half-hour
+initial evaluation leaves four training hours and half an hour stage overhead;
+final evaluations retain the remaining rental tail. All six jobs use this same
+gate. Initialization scores never select capacity or alter learning/endpoints.
+If overhead exhausts a watchdog, preserve the failed attempt and stop the cohort;
+CUDA cannot resume. Initialization and final evaluation are serial with learning;
+hourly evaluation shares the allocated remote CPUs and memory without a throughput
+correction. Neither ETU-118 nor the mini gets a laptop evaluator.
+
+PR254's deploy supervisor owns execution, the evaluation gate, checkpoint queue,
+S3 generations and deletion. Reconnecting cannot restart training. PR255 delivery,
+the final exact source/protocol freeze and per-rental live admission precede
+submission. The old client-driven scientific launcher stays disabled. The editable
+hardware notebook and private bundles remain; no capacity winner exists.

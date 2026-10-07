@@ -47,6 +47,11 @@ class RemoteJobSpec(Frozen):
                 "remote job credential lifetime is bounded to twelve hours"
             )
         if self.monitoring is not None:
+            if self.monitoring.require_initial_admission and (
+                len(self.plan.regime.stages) != 1
+                or self.plan.regime.stages[0].operation != "train_self_play"
+            ):
+                raise ValueError("initial admission requires one self-play stage")
             if self.plan.mix.vcpus < 2:
                 raise ValueError("monitoring requires a separate allocated CPU")
             if any(

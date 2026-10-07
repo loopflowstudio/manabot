@@ -679,10 +679,183 @@ def execute(out: Path) -> None:
         save()
 
 
+class FourHourPreparation(Strict):
+    """Reviewable deployment inputs; credential and remote proof admission remains."""
+
+    status: Literal["prepared-not-admitted"] = "prepared-not-admitted"
+    source: Source
+    baseline_sha256: str
+    protocol: EvaluationProtocol
+    deployments: list[DeploymentPlan]
+    monitoring: MonitoringBudget
+    quote_unix: float
+    quoted_gpu_hourly: float
+    prior_capacity_dollars: float = 0.5359766177137693
+    shared_proof_reserve_dollars: float = 3
+    guardian_reserve_dollars: float = 0.60
+    durable_storage_reserve_dollars: float = 1
+    total_ceiling_dollars: Literal[30] = 30
+    prerequisites: tuple[str, ...] = (
+        "delivered deploy lifecycle and source",
+        "job-scoped credentials valid through each seven-hour rental deadline",
+        "remote 100-game evaluation cost admission and live publication proof",
+        "re-admitted live quote, shared charges and independent billing guard",
+    )
+
+    @property
+    def projected_dollars(self) -> float:
+        return (
+            sum(d.projected_dollars for d in self.deployments)
+            + self.prior_capacity_dollars
+            + self.shared_proof_reserve_dollars
+            + self.guardian_reserve_dollars
+            + self.durable_storage_reserve_dollars
+        )
+
+    @model_validator(mode="after")
+    def within_cap(self) -> "FourHourPreparation":
+        if self.projected_dollars > self.total_ceiling_dollars:
+            raise ValueError("four-hour cohort exceeds the shared thirty-dollar cap")
+        return self
+
+
+def prepare_four_hour(
+    root: Path, out: Path, source: Source, *, quote: float, quote_unix: float
+) -> FourHourPreparation:
+    """Export the six ordinary deploy inputs without renting or scoring.
+
+    The prior fixed-count proposal stays readable as historical evidence. This
+    preparation uses the completed common L4 batch512/64-stream measurement;
+    credentials and longer remote evaluator timing must still be admitted.
+    """
+    if out.exists():
+        raise ValueError("preparation output already exists")
+    if not 0 < quote <= 0.49:
+        raise ValueError("seven-hour cost plan requires an L4 quote at most $0.49/hour")
+    baseline_path = root / "inputs/cuda-calibration-small.json"
+    base = TrainingRegime.model_validate_json(baseline_path.read_text())
+    if (
+        base.agent.value_kind,
+        base.agent.value_aggregation,
+        base.agent.recent_events,
+    ) != ("scalar", "value_token", False):
+        raise ValueError("capacity baseline must retain scalar token/no-history inputs")
+    stage = base.stages[0].model_copy(deep=True)
+    assert isinstance(stage, TrainSelfPlay)
+    stage.id = "policy"
+    stage.initial = None
+    stage.active_seconds = 14400
+    stage.updates = 1_000_000
+    stage.streams, stage.transitions = 64, 8
+    stage.execution.device, stage.execution.threads = "cuda", 1
+    stage.execution.wall_seconds = 18000
+    base.stages = [stage]
+    base.wall_seconds = 18060
+    declaration = experiment(base, include_ataraxos=True)
+    resolved = Experiment(
+        name="cuda-four-hour",
+        baseline=declaration.baseline,
+        cases=tuple(
+            case for case in declaration.cases if case.name in ("w64-d2", "w384-d8")
+        ),
+    ).resolve()
+    chosen = {
+        name: resolved.regimes[f"cuda-four-hour-{name}"]
+        for name in ("w64-d2", "w384-d8")
+    }
+    mix = HardwareMix.model_validate_json((root / "inputs/mix.json").read_text())
+    mix = HardwareMix.model_validate(
+        mix.model_dump()
+        | {
+            "gpu_types": ("NVIDIA L4",),
+            "vcpus": 6,
+            "memory_gb": 48,
+            "wall_seconds": 25200,
+            "setup_seconds": 900,
+            "transfer_seconds": 600,
+            "cleanup_seconds": 180,
+            "hourly_ceiling": quote,
+            "storage_hourly_allowance": 0.02,
+            "dollar_cap": 4.50,
+        }
+    )
+    order = (
+        (10351, "w64-d2"),
+        (10351, "w384-d8"),
+        (10352, "w384-d8"),
+        (10352, "w64-d2"),
+        (10353, "w64-d2"),
+        (10353, "w384-d8"),
+    )
+    deployments = [
+        compile_plan(chosen[name].model_dump_json(), mix, source, seed)
+        for seed, name in order
+    ]
+    protocol = EvaluationProtocol(
+        study="cuda-capacity",
+        purpose="scientific",
+        training_clock="active_collection_learning",
+        regime_digests=tuple(
+            canonical_sha256(r.model_dump(mode="json")) for r in chosen.values()
+        ),
+        training_seeds=(10351, 10352, 10353),
+        paired_deals=(),
+        anchor_deals=tuple(range(1910103510, 1910103535)),
+        endpoint_anchor_deals=tuple(range(1910103610, 1910103635)),
+        random_diagnostic_deals=tuple(range(1910103710, 1910103735)),
+        anchors=("scripted-greedy", "random"),
+        checkpoint_count=5,
+        cost_cutoffs_seconds=(3600, 7200, 10800, 14400),
+        early_progress_seconds=3600,
+        progress_score=0.5,
+        process_seconds=43 * 3600,
+        uncertainty="paired-seed-descriptive",
+    )
+    monitoring = MonitoringBudget(
+        seconds=10800,
+        attempt_seconds=1800,
+        include_initial=True,
+        require_initial_admission=True,
+        protocol=MonitorProtocol(deal_seeds=protocol.anchor_deals),
+        terminal_protocols=(
+            MonitorProtocol(
+                deal_seeds=protocol.endpoint_anchor_deals,
+                purpose="frozen-study-evaluation",
+                study_protocol_sha256=canonical_sha256(
+                    protocol.model_dump(mode="json")
+                ),
+            ),
+            MonitorProtocol(
+                deal_seeds=protocol.random_diagnostic_deals, opponent="random"
+            ),
+        ),
+    )
+    result = FourHourPreparation(
+        source=source,
+        baseline_sha256=file_sha256(baseline_path),
+        protocol=protocol,
+        deployments=deployments,
+        monitoring=monitoring,
+        quote_unix=quote_unix,
+        quoted_gpu_hourly=quote,
+    )
+    out.mkdir(parents=True)
+    atomic_json(out / "preparation.json", result.model_dump(mode="json"))
+    atomic_json(out / "monitoring.json", monitoring.model_dump(mode="json"))
+    # The authoring receipt and deployment compiler bind identical recipe bytes.
+    atomic_json(out / "authoring.json", resolved.receipt())
+    for index, deployment in enumerate(deployments):
+        atomic_json(
+            out / f"deployment-{index}.json", deployment.model_dump(mode="json")
+        )
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--freeze", action="store_true")
+    parser.add_argument("--prepare-four-hour", action="store_true")
     parser.add_argument("--publish", type=Path)
     parser.add_argument("--calibration-root", type=Path)
     parser.add_argument("--gpu", choices=("NVIDIA L4", "NVIDIA A40"))
@@ -691,6 +864,14 @@ def main() -> None:
     args = parser.parse_args()
     if args.publish:
         publish(args.publish, args.out)
+    elif args.prepare_four_hour:
+        if args.calibration_root is None:
+            parser.error("preparation requires calibration root")
+        source = current_source(Path.cwd())
+        quote = RunPod().prices()["NVIDIA L4"]
+        prepare_four_hour(
+            args.calibration_root, args.out, source, quote=quote, quote_unix=time.time()
+        )
     elif args.freeze:
         if None in (args.calibration_root, args.gpu, args.streams, args.batch):
             parser.error("freeze requires calibration root, GPU, streams and batch")
@@ -698,7 +879,7 @@ def main() -> None:
     else:
         parser.error(
             "scientific launch unavailable until ETU-123 disconnect-safe lifecycle "
-            "is integrated; $3 of the shared $15 is reserved for its proof"
+            "and full-rental credentials are admitted; use --prepare-four-hour for the superseding cohort"
         )
 
 
