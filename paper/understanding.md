@@ -125,3 +125,20 @@ token also changes shared policy representations, so even an interaction would
 not isolate the critic. More seeds and denser cost-aligned observations could
 discriminate a repeatable effect; this completed allocation does not authorize
 them. Preserve both unresolved results and the unchanged defaults.
+
+## Critic coverage at fixed collection count (ETU-105, 2026-10-07, w4)
+
+The [mini filter-scope screen](../experiments/ataraxos-technique-screen.md#mini-result--completed-2026-10-07)
+kept quantile/floor, masked-mean scalar architecture, learning rule and schedules
+fixed across three paired seeds. Training the critic on every collected row raised
+mean wall cost by 45% at the same 317,440 transitions. Final held-out greedy changes
+were +7/+7/−4 points: mean +3.33 [−4.33, 11.33], with paired seed/shared-deal
+resampling. All 1,200 final/diagnostic and 2,400 monitoring games replayed exactly.
+This allocation does not demonstrate that the extra critic work earns its cost.
+
+The final endpoint and sparse common-cost monitoring contrasts point in different
+directions, both uncertain. Equal collection counts do not fix optimizer exposure
+or compute. Lower critic loss on differently selected rows does not establish better
+calibration; the shared encoder also changes the policy. Actor-only stays unpromoted,
+without an equivalence claim or extrapolation to sustained training. The notebook
+regenerates from retained evidence, with all failed calibration attempts visible.

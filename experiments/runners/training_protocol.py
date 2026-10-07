@@ -23,6 +23,7 @@ class EvaluationProtocol(BaseModel):
         "capacity-calibration",
         "model-capacity",
         "cuda-capacity",
+        "filter-scope-mini",
         "value-models",
         "value-token-screen",
         "pooling-filter",
@@ -142,7 +143,24 @@ class EvaluationProtocol(BaseModel):
             )
         if not self.anchors or len(set(self.anchors)) != len(self.anchors):
             raise ValueError("anchors must be nonempty and unique")
-        if self.study == "cuda-capacity":
+        if self.study == "filter-scope-mini":
+            if (
+                self.purpose != "scientific"
+                or self.training_seeds != (10501, 10502, 10503)
+                or self.anchors != ("scripted-greedy", "random")
+                or self.anchor_deals != tuple(range(1910105100, 1910105125))
+                or self.endpoint_anchor_deals != tuple(range(9305000, 9305025))
+                or self.random_diagnostic_deals != tuple(range(9205000, 9205025))
+                or self.paired_deals
+                or self.endpoint_paired_deals
+                or self.endpoint_seed_pairs
+                or self.checkpoint_count != 2
+                or self.process_seconds != 7200
+            ):
+                raise ValueError(
+                    "mini filter scope requires its frozen three-seed final/random cohorts"
+                )
+        elif self.study == "cuda-capacity":
             if (
                 self.purpose != "scientific"
                 or self.anchors != ("scripted-greedy", "random")
@@ -160,7 +178,10 @@ class EvaluationProtocol(BaseModel):
                 )
         elif self.random_diagnostic_deals:
             raise ValueError("separate random diagnostic belongs to CUDA capacity")
-        if self.purpose == "scientific" and self.study != "cuda-capacity":
+        if self.purpose == "scientific" and self.study not in {
+            "cuda-capacity",
+            "filter-scope-mini",
+        }:
             if not self.endpoint_paired_deals or not self.endpoint_anchor_deals:
                 raise ValueError("scientific profiles require untouched endpoint deals")
             if set(self.anchors) != {"random", "scripted-greedy", "puct-64"}:
@@ -201,6 +222,7 @@ class EvaluationProtocol(BaseModel):
             "capacity-calibration": {3},
             "model-capacity": {3},
             "cuda-capacity": {2},
+            "filter-scope-mini": {2},
             "value-models": {8},
             "value-token-screen": {3},
             "pooling-filter": {4},
@@ -215,7 +237,7 @@ class EvaluationProtocol(BaseModel):
         if (
             not self.paired_deals
             and self.purpose != "screening"
-            and self.study != "cuda-capacity"
+            and self.study not in {"cuda-capacity", "filter-scope-mini"}
         ) or not self.anchor_deals:
             raise ValueError("evaluation deal families must be nonempty")
         return self

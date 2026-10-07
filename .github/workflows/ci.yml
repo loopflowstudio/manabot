@@ -99,7 +99,7 @@ jobs:
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
             tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
             tests/training/test_experiments.py tests/training/test_architecture_recipes.py \
-            tests/training/test_technique_screen.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \
+            tests/training/test_technique_screen.py tests/training/test_filter_scope_mini.py tests/training/test_capacity_study.py tests/training/test_depth_screen.py \
             tests/training/test_value_models.py \
             tests/training/test_history_input.py tests/training/test_history_arena.py \
             tests/training/test_history_predecessor.py \

@@ -31,6 +31,10 @@ Run provenance lives in the verify store (`.runs/verify.sqlite`).
 
 ## Index
 
+[ETU-105 mini filter scope](ataraxos-technique-screen.md#mini-result--completed-2026-10-07):
+actor-only gained +3.33 [−4.33, 11.33] points against held-out greedy at 45% extra
+training cost; unpromoted. All 3,600 monitoring/final games replayed exactly.
+
 [ETU-106 pooling × advantage floor](pooling-filter-followup.md#result--completed-2026-10-06):
 2,400 replay-verified games; no demonstrated token or floor-removal strength
 benefit, no equivalence claim, and both floor changes remain unresolved.

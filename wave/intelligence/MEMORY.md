@@ -212,40 +212,36 @@ are bounded correctness fixtures, not scientific training, strength or chapter
 acceptance. Publication/merge remains a separate delivery condition.
 
 
-## Technique-screen software boundary (ETU-105, 2026-10-05)
+## Completed mini filter-scope screen (ETU-105, 2026-10-07)
 
-Jack Heart authorized autonomous source research, declarative ablation plans,
-focused admission checks and software delivery, with ETU-105 left open for the
-empirical screen. The eight-hour value-token screen runs in its frozen checkout;
-ETU-91 is retained incomplete after its first seed. Earlier descriptions of its
-running campaign are historical. Neither checkout nor its evidence was changed.
-No new training, calibration, arena cohort or paid compute is authorized here.
+Jack Heart authorized a separate 24-hour mini allocation and subsequent evaluation-only
+closeout. Six frozen runs completed 1,240 updates / 317,440 transitions each on the
+same masked-mean/scalar recipe. Actor-only versus actor-and-critic filtering changed
+only critic coverage. Final greedy scores were 47/47/42% versus 40/40/46%; paired
+effect +3.33 [−4.33, 11.33] points. Random diagnostic effect was +2.33 [−4.00, 9.67].
+Actor-only used 1.45× mean training wall time. No demonstrated payoff justifies that
+extra cost; it remains unpromoted, without equivalence or larger-budget claims.
+Sparse common-cost monitoring points the other way and cannot settle efficiency.
+Shared representations and different loss populations prevent a critic-only or
+value-calibration interpretation. Three seeds and two simple opponents remain exploratory.
 
-The final paper and supplement were rechecked, including S3.4 equations (5)–(6),
-Table S7 and Extended Data Figs. 5–6. Clipping is part of the source method;
-PPO versus move learning is a multi-setting package comparison. Lambda=1 on a
-batched collector still bootstraps unfinished tails; genuine terminal-return
-contrasts use the delivered complete-game compound instrument. EMA evaluation
-uses one training cohort; EMA behavior is a separate hypothesis. LR decay does
-not leave its upper clamp until roughly 2,306 iterations, so tiny smoke results
-cannot test its schedule effect.
+All 2,400 monitoring and 1,200 reserved final/random games terminated and replayed
+exactly. Earlier failed calibration attempts and the terminated supervisor's stale
+parent/completed child remain retained. Cost reserve omissions were disclosed;
+closeout consumed the original deadline, not another allocation. The exact exported
+source plus three repairs, rather than incidental parent Git discovery, owns source
+identity. No new training or ETU-91 mutation occurred. ETU-118 received CPU release
+only after all evaluator processes exited; its recipe was not selected from these scores.
 
-PR225's landed authoring API at `3a29e83c` supplies Experiment and the pinned
-Ataraxos preset. Eighteen independent or explicitly packaged contrasts export
-ordinary ResolvedStudy plans with provenance and an unexecuted admission report;
-the existing compound 2x2 stays separate. No competing authoring system or trainer
-was introduced. PR227 capacity is independent of these fixed-model contrasts.
-Learning-rule/credit/system research now belongs to ETU-105; larger belief,
-search and exploiter studies stay ETU-99. Architecture and W&B ownership are unchanged.
-
-The [inventory and ordered program](../../experiments/ataraxos-technique-screen.md)
-give every candidate a disposition, source, departure, cost and interaction,
-with exact commands and proposed budgets. The first 4.5-hour empirical cohort
-is a proposal awaiting scientific judgment, not an allocation. Prior tiny PPO
-timeouts and negative/ambiguous results remain evidence, not decisive verdicts.
-The plan-only notebook has no empirical outputs. All 18 plans exported, and
-63 focused admission/authoring/gradient checks passed without training or games.
-No method benefit, challenger strength or chapter acceptance follows.
+The [protocol/result and editable notebook](../../experiments/ataraxos-technique-screen.md)
+own per-seed evidence, identities, phase costs and reproducible analysis. Original
+mini source/evidence and verified local exports remain retained; W&B projections
+uploaded, but S3 archival is credential-blocked. Preserve this checkout until archival.
+Other technique cohorts need separate allocations. The source inventory retains
+clipped-ratio fidelity, unfinished-tail bootstrap, distinct EMA evaluation/behavior,
+and long schedule-clock cautions; prior software detail remains at `7962bd69`.
+Learning-rule/credit/system screens belong here; architecture is ETU-106/103 and
+larger belief/search/exploiter comparisons remain ETU-99. No chapter acceptance follows.
 
 ## Distributed RL research and software boundary (ETU-108, 2026-10-06)
 
