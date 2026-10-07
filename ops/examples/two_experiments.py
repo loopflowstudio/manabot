@@ -27,7 +27,7 @@ from manabot.remote.deploy import (
     save,
     verify_public_source,
 )
-from manabot.remote.plan import DeploymentPlan, HardwareMix, compile_plan, digest
+from manabot.remote.plan import DeploymentPlan, JobSpec, compile_plan, digest
 from manabot.remote.provider import RunPod
 from manabot.remote.transport import REPO_DIR, Transport, bootstrap
 from manabot.training.execution import atomic_json
@@ -97,7 +97,7 @@ uv run --no-sync python -m manabot.remote.bundle {remote}/evidence
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--regime", type=Path, required=True)
-    parser.add_argument("--mix", type=Path, required=True)
+    parser.add_argument("--spec", type=Path, required=True)
     args = parser.parse_args()
     root = Path.cwd()
     ledger = root / ".runs/remote-acceptance"
@@ -109,18 +109,22 @@ def main() -> None:
         if receipt.phase != "deleted" or receipt.estimated_dollars is None:
             raise ValueError("prior deletion/cost unresolved")
         spent += receipt.estimated_dollars
-    data = HardwareMix.model_validate_json(args.mix.read_text()).model_dump()
-    data["dollar_cap"] = min(data["dollar_cap"], 4.90 - spent)
+    data = JobSpec.model_validate_json(args.spec.read_text()).model_dump()
+    data["spending_limit"] = min(data["spending_limit"], 4.90 - spent)
     plan = compile_plan(
-        args.regime.read_text(), HardwareMix(**data), current_source(root), 197
+        args.regime.read_text(), JobSpec(**data), current_source(root), 197
     )
     # Both runs and transfers must fit the original hard deadline; never renew it.
     required = (
-        plan.mix.setup_seconds
-        + 2 * (plan.regime.wall_seconds + plan.mix.transfer_seconds)
-        + plan.mix.cleanup_seconds
+        plan.spec.setup_seconds
+        + 2
+        * (
+            plan.regime.wall_seconds
+            + (plan.spec.checkpoint_seconds + plan.spec.upload_seconds)
+        )
+        + plan.spec.cleanup_seconds
     )
-    if required > plan.mix.wall_seconds:
+    if required > plan.spec.lifetime_seconds:
         raise ValueError("two experiments and reserves exceed the rental allowance")
     verify_public_source(plan.source)
     provider = RunPod()
@@ -134,7 +138,7 @@ def main() -> None:
         receipt = Receipt(
             plan_sha256=digest(plan.model_dump_json().encode()),
             started=start,
-            deadline=start + plan.mix.wall_seconds,
+            deadline=start + plan.spec.lifetime_seconds,
         )
         save(path, receipt)
         (out / "plan.json").write_text(plan.model_dump_json(indent=2))
@@ -161,7 +165,7 @@ def main() -> None:
         previous_signal = signal.signal(signal.SIGTERM, _terminate_signal)
         timings: list[ExperimentTiming] = []
         try:
-            deadline = receipt.deadline - plan.mix.cleanup_seconds
+            deadline = receipt.deadline - plan.spec.cleanup_seconds
             pod = _create(
                 provider,
                 plan,
@@ -172,7 +176,7 @@ def main() -> None:
                 identity.with_suffix(".pub").read_text().strip(),
             )
             transport = _ready(
-                provider, pod, out, start + plan.mix.setup_seconds, identity
+                provider, pod, out, start + plan.spec.setup_seconds, identity
             )
             receipt.phase = "bootstrap"
             save(path, receipt)
@@ -190,7 +194,8 @@ def main() -> None:
                 idle = time.time() - last_finished
                 # Reserve the second run, its retrieval and cleanup while first runs.
                 transport.deadline = deadline - (1 - index) * (
-                    plan.regime.wall_seconds + plan.mix.transfer_seconds
+                    plan.regime.wall_seconds
+                    + (plan.spec.checkpoint_seconds + plan.spec.upload_seconds)
                 )
                 timing = _experiment(transport, plan, out, index)
                 timing.setup_seconds = setup_seconds if index == 0 else 0
@@ -205,7 +210,7 @@ def main() -> None:
         finally:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             previous_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            until = time.time() + plan.mix.cleanup_seconds
+            until = time.time() + plan.spec.cleanup_seconds
             settled = all(
                 confirm_delete(provider, a, until)
                 for a in receipt.attempts

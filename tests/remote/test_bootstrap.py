@@ -3,17 +3,15 @@
 from pathlib import Path
 import subprocess
 
-from manabot.remote.plan import HardwareMix, compile_plan
+from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.transport import REPO_DIR, UV_CACHE_DIR, bootstrap
 from tests.remote.test_compile import ROOT, SOURCE
 
 
 def test_local_install_and_timing_script() -> None:
     plan = compile_plan(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
-        HardwareMix.model_validate_json(
-            (ROOT / "ops/mixes/runpod-small.json").read_text()
-        ),
+        (ROOT / "ops/examples/step-target.json").read_text(),
+        JobSpec.model_validate_json((ROOT / "ops/jobs/runpod-small.json").read_text()),
         SOURCE,
         197,
     )

@@ -6,6 +6,7 @@ Only the worker's runtime prefix is writable with the delegated STS session.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import math
 import os
@@ -14,7 +15,7 @@ from typing import Any, Protocol
 
 from manabot.infra.artifacts import split_s3_uri
 
-from .jobs import Cancellation, RemoteJobSpec
+from .jobs import Cancellation, Job
 
 
 @dataclass(frozen=True)
@@ -106,29 +107,45 @@ class S3JobStore:
 WORKER_ROLE = "manabot-remote-jobs"
 
 
-def worker_policy(prefix_uri: str) -> dict[str, object]:
+def worker_policy(prefix_uri: str, deadline: float | None = None) -> dict[str, object]:
     """Only control reads and runtime evidence writes; no delete or account access."""
     bucket, prefix = split_s3_uri(prefix_uri)
     arn = f"arn:aws:s3:::{bucket}/{prefix.rstrip('/')}"
-    return {
-        "Version": "2012-10-17",
-        "Statement": [
+    statements: list[dict[str, object]] = [
+        {
+            "Effect": "Allow",
+            "Action": ["s3:GetObject"],
+            "Resource": [
+                f"{arn}/spec.json",
+                f"{arn}/cancel.json",
+                f"{arn}/training.json",
+            ],
+        },
+        {
+            "Effect": "Allow",
+            "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"],
+            "Resource": [f"{arn}/runtime/*"],
+        },
+    ]
+
+    if deadline is not None:
+        # Explicit deny also bounds resource-policy grants to this session. STS
+        # has a 900-second minimum and may issue tokens beyond a short allocation.
+        statements.append(
             {
-                "Effect": "Allow",
-                "Action": ["s3:GetObject"],
-                "Resource": [
-                    f"{arn}/spec.json",
-                    f"{arn}/cancel.json",
-                    f"{arn}/training.json",
-                ],
-            },
-            {
-                "Effect": "Allow",
-                "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"],
-                "Resource": [f"{arn}/runtime/*"],
-            },
-        ],
-    }
+                "Effect": "Deny",
+                "Action": "*",
+                "Resource": "*",
+                "Condition": {
+                    "DateGreaterThanEquals": {
+                        "aws:CurrentTime": datetime.fromtimestamp(
+                            deadline, timezone.utc
+                        ).isoformat()
+                    }
+                },
+            }
+        )
+    return {"Version": "2012-10-17", "Statement": statements}
 
 
 def configure_worker_role(destination: str) -> None:
@@ -193,7 +210,7 @@ def configure_worker_role(destination: str) -> None:
             )
 
 
-def worker_credentials(spec: RemoteJobSpec) -> dict[str, str]:
+def worker_credentials(spec: Job) -> dict[str, str]:
     """Use a job-scoped STS session; account keys never reach a rental.
 
     SSO/role chaining supports at most one hour. Longer jobs require IAM-user
@@ -223,8 +240,13 @@ def worker_credentials(spec: RemoteJobSpec) -> dict[str, str]:
         raise RuntimeError(
             "AWS issuer credentials unavailable; no rental created"
         ) from None
-    duration = max(900, math.ceil(spec.deadline - time.time()) + 60)
-    policy = json.dumps(worker_policy(spec.prefix), separators=(",", ":"))
+    remaining = spec.deadline - time.time()
+    if remaining <= 0:
+        raise ValueError("allocation has expired; worker issuance/renewal forbidden")
+    duration = max(900, math.ceil(remaining) + 60)
+    policy = json.dumps(
+        worker_policy(spec.prefix, spec.deadline), separators=(",", ":")
+    )
     try:
         sts = session.client("sts")
         if frozen.token is None and duration > 3600:

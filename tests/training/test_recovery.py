@@ -402,7 +402,7 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
             assert left.learner_transitions == right.learner_transitions
             assert left.environment_decisions == right.environment_decisions
             assert left.games == right.games
-        with pytest.raises(ValueError, match="stopped failed or interrupted"):
+        with pytest.raises(ValueError, match="stopped failed, interrupted or paused"):
             execution.execute_regime(
                 value, 197, tmp_path / "terminal", store, resume_from=child.id
             )

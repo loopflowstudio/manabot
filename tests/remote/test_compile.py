@@ -5,23 +5,25 @@ from pathlib import Path
 
 import pytest
 
-from manabot.remote.plan import DeploymentPlan, HardwareMix, Source, compile_plan
+from manabot.remote.plan import DeploymentPlan, JobSpec, Source, compile_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Source(commit="a" * 40, tree="b" * 40, lock_sha256="c" * 64)
 
 
 def test_placement_is_declared_and_input_is_preserved() -> None:
-    raw = (ROOT / "experiments/regimes/direct-self-play.json").read_text()
-    mix = HardwareMix.model_validate_json(
-        (ROOT / "ops/mixes/runpod-small.json").read_text()
+    raw = (ROOT / "ops/examples/step-target.json").read_text()
+    spec = JobSpec.model_validate_json(
+        (ROOT / "ops/jobs/runpod-small.json").read_text()
     )
-    mix = mix.model_copy(update={"vcpus": 2})
+    spec = spec.model_copy(
+        update={"machine": spec.machine.model_copy(update={"vcpus": 2})}
+    )
     data = json.loads(raw)
     for stage in data["stages"]:
         stage["execution"]["threads"] = 4
     raw = json.dumps(data)
-    plan = compile_plan(raw, mix, SOURCE, 197)
+    plan = compile_plan(raw, spec, SOURCE, 197)
     assert plan.input_json == raw
     assert all(
         s.execution.device == "cuda" and s.execution.threads == 2
@@ -36,13 +38,11 @@ def test_placement_is_declared_and_input_is_preserved() -> None:
 
 
 def test_cost_and_watchdog_admission() -> None:
-    data = json.loads((ROOT / "ops/mixes/runpod-small.json").read_text())
-    with pytest.raises(ValueError, match="dollar cap"):
-        HardwareMix(**(data | {"hourly_ceiling": 10}))
-    mix = HardwareMix(**(data | {"wall_seconds": 800}))
-    raw = (ROOT / "experiments/regimes/direct-self-play.json").read_text()
+    data = json.loads((ROOT / "ops/jobs/runpod-small.json").read_text())
+    with pytest.raises(ValueError, match="spending limit"):
+        JobSpec.model_validate(data | {"spending_limit": 0.01})
     with pytest.raises(ValueError, match="reserves"):
-        compile_plan(raw, mix, SOURCE, 1)
+        JobSpec.model_validate(data | {"lifetime_hours": 700 / 3600})
 
 
 def test_cuda_rejects_recovery_and_mixed_device_continuation() -> None:

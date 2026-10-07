@@ -71,7 +71,11 @@ class MonitoringBudget(Strict):
         self, run: TrainingRun, checkpoint: Checkpoint
     ) -> list[MonitorProtocol]:
         """Select final cohorts only for the last completed stage's raw artifact."""
-        if self.terminal_protocols and run.stages:
+        if (
+            self.terminal_protocols
+            and run.stages
+            and run.stages[-1].status == "completed"
+        ):
             final = stage_checkpoint(run, run.regime.stages[-1].id)
             if final is not None and final.artifact == checkpoint.artifact:
                 return list(self.terminal_protocols)

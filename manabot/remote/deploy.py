@@ -218,7 +218,7 @@ def _estimate_cost(receipt: Receipt, plan: DeploymentPlan) -> float | None:
             return None
         total += (
             (attempt.deleted_time - attempt.intent_time)
-            * (attempt.hourly_rate + plan.mix.storage_hourly_allowance)
+            * (attempt.hourly_rate + plan.spec.machine.storage_hourly_allowance)
             / 3600
         )
     return total
@@ -236,8 +236,8 @@ def _create(
     prices = provider.prices()
     candidates = [
         gpu
-        for gpu in plan.mix.gpu_types
-        if 0 < prices.get(gpu, float("inf")) <= plan.mix.hourly_ceiling
+        for gpu in plan.spec.machine.gpu_types
+        if 0 < prices.get(gpu, float("inf")) <= plan.spec.machine.hourly_ceiling
     ]
     if not candidates:
         raise ValueError("no declared GPU has an admitted price")
@@ -256,16 +256,16 @@ def _create(
     pod = provider.create(
         {
             "name": attempt.name,
-            "imageName": plan.mix.image,
+            "imageName": plan.spec.machine.image,
             "cloudType": "SECURE",
             "computeType": "GPU",
             "gpuCount": 1,
             "gpuTypeIds": candidates,
             "gpuTypePriority": "custom",
-            "minVCPUPerGPU": plan.mix.vcpus,
-            "minRAMPerGPU": plan.mix.memory_gb,
-            "containerDiskInGb": plan.mix.container_gb,
-            "volumeInGb": plan.mix.volume_gb,
+            "minVCPUPerGPU": plan.spec.machine.vcpus,
+            "minRAMPerGPU": plan.spec.machine.memory_gb,
+            "containerDiskInGb": plan.spec.machine.container_gb,
+            "volumeInGb": plan.spec.machine.volume_gb,
             "volumeMountPath": "/workspace",
             "ports": ["22/tcp"],
             "supportPublicIp": True,
@@ -282,10 +282,10 @@ def _create(
     if pod.name != attempt.name:
         raise ValueError("provider returned unexpected pod ownership")
     if (
-        pod.gpu_count != plan.mix.gpu_count
-        or pod.rate > plan.mix.hourly_ceiling
-        or pod.vcpus < plan.mix.vcpus
-        or pod.memory_gb < plan.mix.memory_gb
+        pod.gpu_count != plan.spec.machine.gpu_count
+        or pod.rate > plan.spec.machine.hourly_ceiling
+        or pod.vcpus < plan.spec.machine.vcpus
+        or pod.memory_gb < plan.spec.machine.memory_gb
     ):
         raise ValueError(
             "assigned rental exceeds price or undersupplies declared resources"
@@ -362,7 +362,7 @@ def deploy(
     )
     status = submit_job(spec)
     while status.cleanup is None:
-        if time.time() > spec.deadline + plan.mix.cleanup_seconds:
+        if time.time() > spec.deadline + plan.spec.cleanup_seconds:
             raise RuntimeError(f"CLEANUP UNCONFIRMED; reconcile job {spec.job_id}")
         time.sleep(5)
         status = job_status(spec)

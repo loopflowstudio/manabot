@@ -108,25 +108,27 @@ fetchable from this repository before renting. Push the exact commit to the Task
 does not require opening or readying a PR for review.
 
 ```bash
-uv run manabot deploy compile --regime experiments/regimes/direct-self-play.json \
-  --mix ops/mixes/runpod-small.json --seed 197 --out .runs/remote-plan.json
+uv run manabot deploy compile --regime ops/examples/step-target.json \
+  --spec ops/jobs/runpod-small.json --seed 197 --out .runs/remote-plan.json
 
 doppler run --project etude --config prd -- uv run manabot deploy run \
   --plan .runs/remote-plan.json --out .runs/remote-example
 ```
 
-The single-command form takes `--regime`, `--mix` and `--seed` in place of
+The single-command form takes `--regime`, `--spec` and `--seed` in place of
 `--plan`. It prints the complete plan before provisioning and saves it with the
 private deployment receipt. There is no interactive prompt. Use a fresh output
 directory for every attempt; never replace failed receipts.
 
-The hardware mix declares GPU alternatives in priority order, one worker, vCPUs,
-RAM, thread limit, image digest, disks, hourly ceiling, dollar cap, wall time and
-setup/transfer/cleanup reserves. Threads resolve to the smallest of requested
-threads, rental vCPUs, mix thread limit and the executor's four-thread maximum.
-The pod's reported host CPU count is telemetry only. GPU allocation and returned
-CPU/RAM/rate are admitted before bootstrap. The first implementation deliberately
-caps each deployment below $5; the larger weekly allocation is not a scheduler.
+`Machine` declares GPU alternatives, vCPUs, RAM, thread limit, image digest,
+disks and hourly price ceilings. `JobSpec` owns lifetime hours, total spending,
+artifact scope and setup/checkpoint/upload/cleanup reserves. Threads resolve to
+the smallest of requested threads, rental vCPUs, machine thread limit and the
+executor's four-thread maximum. The pod's host CPU count is telemetry only.
+GPU allocation and returned CPU/RAM/rate are admitted before bootstrap. The
+schema-1 reader preserves historical plans; new plans use only JobSpec. See
+[step targets and allocations](remote-jobs.md#step-targets-and-machine-allocations)
+for the single authority deadline and current provider limits.
 
 Bootstrap uses uv 0.8.22, Rust 1.98.1, locked dependencies and Python 3.12. The
 exact source tree binds bootstrap/guardian code. CUDA is passed to the model,
@@ -175,7 +177,7 @@ Prepare the small recipe, commit and non-force push any source edits, then run:
 uv run python - <<'PYCODE'
 import json
 from pathlib import Path
-recipe = json.loads(Path('experiments/regimes/direct-self-play.json').read_text())
+recipe = json.loads(Path('ops/examples/step-target.json').read_text())
 recipe['wall_seconds'] = 300
 for stage in recipe['stages']:
     stage['updates'] = 8
@@ -185,7 +187,7 @@ Path('.runs').mkdir(exist_ok=True)
 Path('.runs/two-experiments.json').write_text(json.dumps(recipe, indent=2))
 PYCODE
 doppler run --project etude --config prd -- uv run python ops/examples/two_experiments.py \
-  --regime .runs/two-experiments.json --mix ops/mixes/runpod-small.json
+  --regime .runs/two-experiments.json --spec ops/jobs/runpod-small.json
 ```
 
 Setup happens once. Both training commands use `uv run --no-sync`, assert the
@@ -285,14 +287,14 @@ recipe with EMA enabled, then invoke it after the source push:
 uv run python - <<'PY'
 import json
 from pathlib import Path
-recipe = json.loads(Path('experiments/regimes/direct-self-play.json').read_text())
+recipe = json.loads(Path('ops/examples/step-target.json').read_text())
 for stage in recipe['stages']:
     stage['learning']['ema'] = 0.9
 Path('.runs').mkdir(exist_ok=True)
 Path('.runs/remote-proof-regime.json').write_text(json.dumps(recipe, indent=2))
 PY
 doppler run --project etude --config prd -- uv run python -m tests.remote.live_acceptance \
-  --regime .runs/remote-proof-regime.json --mix ops/mixes/runpod-small.json
+  --regime .runs/remote-proof-regime.json --spec ops/jobs/runpod-small.json
 ```
 
 It conservatively limits retained deployments under `.runs/remote-acceptance` to

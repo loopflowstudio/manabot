@@ -21,17 +21,15 @@ def test_example_setup_once_and_finally_delete(
     monkeypatch.setattr(example.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(example, "current_source", lambda root: SOURCE)
     monkeypatch.setattr(example, "verify_public_source", lambda source: None)
-    recipe = json.loads(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text()
-    )
+    recipe = json.loads((ROOT / "ops/examples/step-target.json").read_text())
     recipe["wall_seconds"] = 300
     for stage in recipe["stages"]:
         stage["execution"]["wall_seconds"] = 150
     (tmp_path / "recipe.json").write_text(json.dumps(recipe))
-    mix = tmp_path / "mix.json"
-    mix.write_bytes((ROOT / "ops/mixes/runpod-small.json").read_bytes())
+    spec = tmp_path / "spec.json"
+    spec.write_bytes((ROOT / "ops/jobs/runpod-small.json").read_bytes())
     monkeypatch.setattr(
-        "sys.argv", ["example", "--regime", "recipe.json", "--mix", str(mix)]
+        "sys.argv", ["example", "--regime", "recipe.json", "--spec", str(spec)]
     )
     pods: list[Pod] = []
 

@@ -240,7 +240,7 @@ class VerifyStore:
                     "attempt already has a recovery child; continue that child"
                 )
             parent = self.training_run(parent_id)
-            if parent.status not in {"failed", "interrupted"}:
+            if parent.status not in {"failed", "interrupted", "paused"}:
                 raise ValueError("recovery parent is not stopped")
             self.con.execute(
                 "INSERT INTO training_runs VALUES (?, ?)",

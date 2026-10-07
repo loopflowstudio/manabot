@@ -42,6 +42,9 @@ def train_command(
         help="Monitoring raw checkpoint interval (3600 for hourly), at update/epoch boundaries",
     ),
     initial_admission: Optional[str] = typer.Option(None, hidden=True),
+    allocation: Optional[str] = typer.Option(
+        None, help="Admitted allocation JSON, with absolute deadline"
+    ),
     set_values: Optional[list[str]] = typer.Option(
         None,
         "--set",
@@ -57,6 +60,7 @@ def train_command(
             raise typer.BadParameter("--regime requires --out")
         from pathlib import Path
 
+        from manabot.remote.plan import Allocation
         from manabot.training.execution import execute_regime
         from manabot.training.models import TrainingRegime
         from manabot.verify.store import VerifyStore
@@ -69,6 +73,9 @@ def train_command(
                 out,
                 store,
                 resume_from=resume_from,
+                allocation=Allocation.model_validate_json(Path(allocation).read_text())
+                if allocation
+                else None,
                 checkpoint_seconds=checkpoint_seconds,
                 initial_admission=Path(initial_admission)
                 if initial_admission
@@ -81,6 +88,7 @@ def train_command(
             or resume_from is not None
             or checkpoint_seconds is not None
             or initial_admission is not None
+            or allocation is not None
         ):
             raise typer.BadParameter(
                 "--out, --seed, --resume-from and --checkpoint-seconds require --regime"

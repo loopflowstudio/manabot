@@ -20,7 +20,7 @@ from manabot.training.monitoring import training_dashboard
 from manabot.verify.store import VerifyStore
 
 from .bundle import Bundle, BundleFile
-from .jobs import RemoteJobSpec
+from .jobs import Job
 from .plan import Frozen, digest
 
 
@@ -110,7 +110,7 @@ def snapshot_evidence(root: Path, snapshot: Path) -> TrainingRun | None:
 
 
 def publish_snapshot(
-    spec: RemoteJobSpec,
+    spec: Job,
     root: Path,
     generation: int,
     *,

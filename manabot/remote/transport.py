@@ -9,7 +9,7 @@ import time
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from .jobs import RemoteJobSpec
+    from .jobs import Job
 
 from .plan import DeploymentPlan
 from .provider import Pod
@@ -184,7 +184,7 @@ printf '{{"bootstrap_seconds":%s,"uv_sync_seconds":%s,"native_build_seconds":%s,
 """
 
 
-def job_startup(spec: "RemoteJobSpec") -> str:
+def job_startup(spec: "Job") -> str:
     """Provider-owned bootstrap; neither SSH nor the submitter owns its lifetime."""
     guardian = Path(__file__).with_name("guardian.sh").read_text()
     setup = bootstrap(spec.plan).replace(
@@ -202,7 +202,7 @@ cat > /tmp/manabot-setup.sh <<'MANABOT_SETUP'
 {setup}
 MANABOT_SETUP
 # Keep PID 1 alive even on setup failure so the independent guardian can delete.
-if timeout {max(1, int(spec.created_at + spec.plan.mix.setup_seconds - time.time()))} bash /tmp/manabot-setup.sh >/workspace/evidence/bootstrap.log 2>&1; then
+if timeout {max(1, int(spec.created_at + spec.plan.spec.setup_seconds - time.time()))} bash /tmp/manabot-setup.sh >/workspace/evidence/bootstrap.log 2>&1; then
   export PATH=/root/.local/bin:/root/.cargo/bin:$PATH
   cd {REPO_DIR}
   uv run --no-sync python -m manabot.remote.supervisor >>/workspace/evidence/supervisor.log 2>&1 || true

@@ -189,6 +189,7 @@ class TrainSelfPlay(Stage):
     opponent: FrozenOpponent | None = None
     initial: str | None = None
     updates: int = Field(default=2, ge=1)
+    # Frozen v1 compatibility only; JobSpec rejects active-time endpoints.
     # An active-time endpoint completes after a whole collect/update iteration.
     # updates remains a safety ceiling; reaching it early is a failed attempt.
     active_seconds: float | None = Field(
@@ -542,7 +543,9 @@ class StageRecord(Strict):
     producer_cost: ProducerCost | None = None
     actual_device: str | None = None
     actual_threads: int | None = None
-    status: Literal["running", "completed", "failed", "interrupted"] = "running"
+    status: Literal["running", "completed", "failed", "interrupted", "paused"] = (
+        "running"
+    )
     seconds: float = 0
     cumulative_seconds: float | None = Field(default=None, ge=0)
     collection_seconds: float = 0
@@ -596,9 +599,9 @@ class TrainingRun(Strict):
     seed: int
     seed_streams: dict[str, int]
     identities: dict
-    status: Literal["pending", "running", "completed", "failed", "interrupted"] = (
-        "pending"
-    )
+    status: Literal[
+        "pending", "running", "completed", "failed", "interrupted", "paused"
+    ] = "pending"
     stages: list[StageRecord] = []
     seconds: float = 0
     setup_seconds: float = 0
@@ -617,6 +620,9 @@ class TrainingRun(Strict):
     monitoring_checkpoints: list[MonitoringCheckpoint] = []
     monitoring_export_seconds: float = 0
     monitoring_checkpoint_seconds: float | None = None
+    allocation_deadline: float | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     fixed_validation: FixedValidationCohort | None = None
 
     def updates_through(self, stage_id: str | None = None) -> int:

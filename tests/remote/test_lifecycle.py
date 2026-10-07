@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 import manabot.remote.deploy as lifecycle
-from manabot.remote.plan import HardwareMix, compile_plan
+from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import Pod, ProviderError
 from tests.remote.test_compile import ROOT, SOURCE
 
@@ -125,10 +125,8 @@ def test_cleanup_recovers_only_evidenced_cost(
     monkeypatch.setattr(lifecycle, "RunPod", lambda: provider)
     monkeypatch.setattr(lifecycle.Path, "home", lambda: tmp_path)
     plan = compile_plan(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
-        HardwareMix.model_validate_json(
-            (ROOT / "ops/mixes/runpod-small.json").read_text()
-        ),
+        (ROOT / "ops/examples/step-target.json").read_text(),
+        JobSpec.model_validate_json((ROOT / "ops/jobs/runpod-small.json").read_text()),
         SOURCE,
         197,
     )
@@ -164,7 +162,7 @@ def test_cleanup_recovers_only_evidenced_cost(
     if evidence in ("retained", "observed"):
         assert recovered.estimated_dollars == pytest.approx(
             (recovered.attempts[0].deleted_time - 900)
-            * (0.49 + plan.mix.storage_hourly_allowance)
+            * (0.49 + plan.spec.machine.storage_hourly_allowance)
             / 3600
         )
     else:
@@ -177,10 +175,8 @@ def test_cleanup_recovers_only_evidenced_cost(
 
 def test_client_calibration_callbacks_reject_before_rental(tmp_path: Path) -> None:
     plan = compile_plan(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
-        HardwareMix.model_validate_json(
-            (ROOT / "ops/mixes/runpod-small.json").read_text()
-        ),
+        (ROOT / "ops/examples/step-target.json").read_text(),
+        JobSpec.model_validate_json((ROOT / "ops/jobs/runpod-small.json").read_text()),
         SOURCE,
         197,
     )

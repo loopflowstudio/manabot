@@ -13,8 +13,8 @@ import pytest
 from manabot.infra.artifacts import StoredArtifact
 from manabot.remote import job_client, supervisor
 from manabot.remote.job_store import cancellation_requested
-from manabot.remote.jobs import CreateClaim, RemoteJobRecord, RemoteJobSpec, Resource
-from manabot.remote.plan import HardwareMix, compile_plan
+from manabot.remote.jobs import CreateClaim, Job, JobRecord, Resource
+from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import ProviderError
 from manabot.training.checkpoint_queue import Attempt, CheckpointQueue, MonitoringBudget
 from manabot.training.models import TrainingRun
@@ -30,19 +30,17 @@ def store(tmp_path: Path) -> FileStore:
     return FileStore(tmp_path / "control.sqlite")
 
 
-def specification(store: FileStore, *, job_id: str = "offline-test") -> RemoteJobSpec:
+def specification(store: FileStore, *, job_id: str = "offline-test") -> Job:
     plan = compile_plan(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
-        HardwareMix.model_validate_json(
-            (ROOT / "ops/mixes/runpod-small.json").read_text()
-        ),
+        (ROOT / "ops/examples/step-target.json").read_text(),
+        JobSpec.model_validate_json((ROOT / "ops/jobs/runpod-small.json").read_text()),
         SOURCE,
         197,
     )
     return job_client.prepare_job(plan, job_id, store=store)
 
 
-def admitted(spec: RemoteJobSpec, store: FileStore) -> Resource:
+def admitted(spec: Job, store: FileStore) -> Resource:
     provider = Provider(Clock())
     pod = provider.create({"name": "owned"})
     resource = Resource(
@@ -61,7 +59,7 @@ def admitted(spec: RemoteJobSpec, store: FileStore) -> Resource:
 
 
 def published(
-    spec: RemoteJobSpec, root: Path, generation: int, *, complete: bool
+    spec: Job, root: Path, generation: int, *, complete: bool
 ) -> StoredArtifact:
     return StoredArtifact(
         uri=f"{spec.prefix}/runtime/{generation}", sha256="f" * 64, bytes=0
@@ -113,7 +111,7 @@ def test_initial_admission_requires_completed_published_evaluation(
     seen: list[bool] = []
 
     def publish(
-        spec: RemoteJobSpec, root: Path, generation: int, *, complete: bool
+        spec: Job, root: Path, generation: int, *, complete: bool
     ) -> StoredArtifact:
         if not complete:
             seen.append((root / "initial-evaluation-admitted").exists())
@@ -195,7 +193,7 @@ def test_create_claim_before_provider_call_stays_ambiguous(store: FileStore) -> 
 
 def test_stale_heartbeat_does_not_mean_completed(store: FileStore) -> None:
     spec = specification(store)
-    record = RemoteJobRecord(
+    record = JobRecord(
         spec_sha256=spec.identity,
         pod_id="pod1",
         phase="running",
@@ -217,14 +215,14 @@ def test_supervisor_failures_retain_honest_terminal_state(
     spec = specification(store)
     if reason == "deadline":
         spec = spec.model_copy(
-            update={"created_at": 1, "deadline": 1 + spec.plan.mix.wall_seconds}
+            update={"created_at": 1, "deadline": 1 + spec.plan.spec.lifetime_seconds}
         )
     resource = admitted(spec, store)
     if reason == "cancel":
         job_client.cancel_job(spec, store=store)
 
     def publish(
-        spec: RemoteJobSpec, root: Path, generation: int, *, complete: bool
+        spec: Job, root: Path, generation: int, *, complete: bool
     ) -> StoredArtifact:
         if reason == "upload":
             raise OSError("storage unavailable")
@@ -270,11 +268,11 @@ def test_submitter_death_does_not_stop_accepted_supervisor(
     worker_code = """
 import sys
 from pathlib import Path
-from manabot.remote.jobs import RemoteJobSpec
+from manabot.remote.jobs import Job
 from manabot.remote.supervisor import supervise
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_jobs import published
-spec=RemoteJobSpec.model_validate_json(Path(sys.argv[1]).read_text())
+spec=Job.model_validate_json(Path(sys.argv[1]).read_text())
 learner_code = '''
 import sys, time
 from pathlib import Path
@@ -333,7 +331,7 @@ signal.pause()
             while time.monotonic() < until:
                 current = store.read("runtime/record.json")
                 assert current is not None
-                record = RemoteJobRecord.model_validate_json(current.data)
+                record = JobRecord.model_validate_json(current.data)
                 if record.terminal:
                     break
                 time.sleep(0.1)
@@ -355,10 +353,10 @@ def test_running_learner_is_stopped_at_original_deadline(
     store: FileStore, tmp_path: Path
 ) -> None:
     original = specification(store)
-    reserves = original.plan.mix.transfer_seconds + original.plan.mix.cleanup_seconds
-    start = time.time() + 2 + reserves - original.plan.mix.wall_seconds
+    reserves = original.plan.spec.upload_seconds + original.plan.spec.cleanup_seconds
+    start = time.time() + 2 + reserves - original.plan.spec.lifetime_seconds
     spec = original.model_copy(
-        update={"created_at": start, "deadline": start + original.plan.mix.wall_seconds}
+        update={"created_at": start, "deadline": original.plan.deadline_at(start)}
     )
     resource = admitted(spec, store)
     began = time.time()
@@ -451,7 +449,7 @@ def test_explicit_cancellation_stops_an_accepted_process(
             raw = store.read("runtime/record.json")
             if (
                 raw is not None
-                and RemoteJobRecord.model_validate_json(raw.data).phase == "running"
+                and JobRecord.model_validate_json(raw.data).phase == "running"
             ):
                 break
             time.sleep(0.02)
@@ -471,7 +469,7 @@ def test_failed_final_upload_keeps_previous_generation(
     final_attempts: list[int] = []
 
     def publish(
-        spec: RemoteJobSpec, root: Path, generation: int, *, complete: bool
+        spec: Job, root: Path, generation: int, *, complete: bool
     ) -> StoredArtifact:
         if complete:
             final_attempts.append(generation)
@@ -501,7 +499,7 @@ def test_failed_final_upload_keeps_previous_generation(
     assert final_attempts == [result.generation + 1]
     saved = store.read("runtime/record.json")
     assert saved is not None
-    assert RemoteJobRecord.model_validate_json(saved.data) == result
+    assert JobRecord.model_validate_json(saved.data) == result
     assert not result.artifacts_complete and result.error is not None
     assert "final upload" in result.error
 

@@ -34,9 +34,7 @@ def test_live_inventory_condition(
     monkeypatch.setattr(live, "RunPod", lambda: provider)
     monkeypatch.setattr(live, "current_source", lambda root: SOURCE)
     monkeypatch.chdir(tmp_path)
-    recipe = json.loads(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text()
-    )
+    recipe = json.loads((ROOT / "ops/examples/step-target.json").read_text())
     for stage in recipe["stages"]:
         stage["learning"]["ema"] = 0.9
     recipe_path = tmp_path / "regime.json"
@@ -48,8 +46,8 @@ def test_live_inventory_condition(
             "acceptance",
             "--regime",
             str(recipe_path),
-            "--mix",
-            str(ROOT / "ops/mixes/runpod-small.json"),
+            "--spec",
+            str(ROOT / "ops/jobs/runpod-small.json"),
         ],
     )
 

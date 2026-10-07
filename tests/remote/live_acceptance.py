@@ -11,7 +11,7 @@ import time
 
 from manabot.remote.bundle import Bundle, verify_training_bundle
 from manabot.remote.deploy import Receipt, current_source, deploy
-from manabot.remote.plan import HardwareMix, compile_plan
+from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import RunPod
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingCoordinates, TrainingRegime, TrainingRun
@@ -21,7 +21,7 @@ from manabot.training.monitor_evaluation import MonitorProtocol, evaluate_checkp
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--regime", type=Path, required=True)
-    parser.add_argument("--mix", type=Path, required=True)
+    parser.add_argument("--spec", type=Path, required=True)
     args = parser.parse_args()
     root = Path.cwd()
     out = root / ".runs/remote-acceptance"
@@ -33,16 +33,16 @@ def main() -> None:
         if receipt.phase != "deleted" or receipt.estimated_dollars is None:
             raise ValueError("prior cost/deletion unresolved; do not rent again")
         spent += receipt.estimated_dollars
-    mix_data = HardwareMix.model_validate_json(args.mix.read_text()).model_dump()
-    mix_data["dollar_cap"] = min(mix_data["dollar_cap"], 4.90 - spent)
-    mix = HardwareMix.model_validate(mix_data)
+    spec_data = JobSpec.model_validate_json(args.spec.read_text()).model_dump()
+    spec_data["spending_limit"] = min(spec_data["spending_limit"], 4.90 - spent)
+    spec = JobSpec.model_validate(spec_data)
     regime = TrainingRegime.model_validate_json(args.regime.read_text())
     if any(
         stage.operation != "train_self_play" or stage.learning.ema is None
         for stage in regime.stages
     ):
         raise ValueError("acceptance requires raw and EMA self-play exports")
-    plan = compile_plan(args.regime.read_text(), mix, current_source(root), 197)
+    plan = compile_plan(args.regime.read_text(), spec, current_source(root), 197)
     destination = out / f"attempt-{len(previous):03d}"
     initial_pods = RunPod().list()
     if any(p.name.startswith("manabot-") for p in initial_pods):

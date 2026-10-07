@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 
 from manabot.remote.deploy import Receipt, current_source, deploy
-from manabot.remote.plan import HardwareMix, compile_plan
+from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import RunPod
 from manabot.remote.transport import REPO_DIR, Transport
 from manabot.training.execution import atomic_json
@@ -39,23 +39,25 @@ def launch(root: Path, gpu: str) -> None:
         (root / "inputs/cuda-calibration-small.json").read_text()
     )
     base.stages = base.stages[:1]
+    base.schedule_clock = "iteration_fraction"
     stage = base.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.updates, stage.transitions, stage.execution.wall_seconds = 2, 64, 90
     base.wall_seconds = 100
     base = TrainingRegime.model_validate(base.model_dump())
-    template = HardwareMix.model_validate_json((root / "inputs/mix.json").read_text())
-    mix = HardwareMix.model_validate(
+    template = JobSpec.model_validate_json((root / "inputs/job.json").read_text())
+    spec = JobSpec.model_validate(
         template.model_dump()
         | {
-            "gpu_types": [gpu],
-            "wall_seconds": 2100,
+            "machine": template.machine.model_dump() | {"gpu_types": [gpu]},
+            "lifetime_hours": 2100 / 3600,
             "setup_seconds": 420,
-            "transfer_seconds": 480,
+            "checkpoint_seconds": 120,
+            "upload_seconds": 360,
             "cleanup_seconds": 120,
         }
     )
-    plan = compile_plan(base.model_dump_json(), mix, source, 10349)
+    plan = compile_plan(base.model_dump_json(), spec, source, 10349)
     suffix = "l4" if gpu == "NVIDIA L4" else "a40"
     out = root / f"calibration-{suffix}-sweep"
     quote = RunPod().prices().get(gpu)
@@ -66,7 +68,7 @@ def launch(root: Path, gpu: str) -> None:
             "calibration_remaining_seconds": remaining,
             "prior_rental_estimate_dollars": spent,
             "quote_dollars_per_hour": quote,
-            "projection_dollars": mix.projected_dollars,
+            "projection_dollars": spec.projected_dollars,
             "source": source.model_dump(mode="json"),
             "cell_deadline_seconds": 70,
             "sweep_deadline_seconds": 900,

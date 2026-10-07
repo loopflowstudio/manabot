@@ -21,9 +21,9 @@ from .jobs import (
     Cancellation,
     CreateClaim,
     Deletion,
-    RemoteJobRecord,
-    RemoteJobSpec,
-    RemoteJobStatus,
+    Job,
+    JobRecord,
+    JobStatus,
     Resource,
 )
 from .plan import DeploymentPlan
@@ -33,11 +33,11 @@ from .transport import job_startup, startup
 if TYPE_CHECKING:
     from manabot.training.experiments import ResolvedCase
 
-    from .plan import HardwareMix, Source
+    from .plan import JobSpec, Source
 
 
 def _provision(
-    spec: RemoteJobSpec,
+    spec: Job,
     store: JobStore,
     provider: RunPod,
     purpose: Literal["guardian", "training"],
@@ -64,11 +64,11 @@ def _provision(
             deadline=deadline,
         )
     prices = provider.prices() if stored_claim is None else {}
-    mix = spec.plan.mix
+    machine = spec.plan.spec.machine
     candidates = [
         g
-        for g in mix.gpu_types
-        if 0 < prices.get(g, float("inf")) <= mix.hourly_ceiling
+        for g in machine.gpu_types
+        if 0 < prices.get(g, float("inf")) <= machine.hourly_ceiling
     ]
     if stored_claim is None and not candidates:
         raise ValueError("no declared GPU has an admitted live price")
@@ -84,16 +84,16 @@ def _provision(
         pod = provider.create(
             {
                 "name": claim.name,
-                "imageName": mix.image,
+                "imageName": machine.image,
                 "cloudType": "SECURE",
                 "computeType": "GPU",
                 "gpuCount": 1,
                 "gpuTypeIds": candidates,
                 "gpuTypePriority": "custom",
-                "minVCPUPerGPU": mix.vcpus,
-                "minRAMPerGPU": mix.memory_gb,
-                "containerDiskInGb": mix.container_gb,
-                "volumeInGb": mix.volume_gb,
+                "minVCPUPerGPU": machine.vcpus,
+                "minRAMPerGPU": machine.memory_gb,
+                "containerDiskInGb": machine.container_gb,
+                "volumeInGb": machine.volume_gb,
                 "volumeMountPath": "/workspace",
                 "dockerEntrypoint": ["/bin/bash", "-c"],
                 "dockerStartCmd": [script],
@@ -140,21 +140,24 @@ def prepare_job(
     plan: DeploymentPlan,
     job_id: str,
     *,
-    destination: str = DEFAULT_JOBS,
+    destination: str | None = None,
     monitoring: MonitoringBudget | None = None,
     checkpoint_seconds: float = 60,
     publish_seconds: float = 30,
     experiment_json: str | None = None,
     store: JobStore | None = None,
-) -> RemoteJobSpec:
+) -> Job:
     """Persist intent before renting; repeated IDs retain the first absolute deadline."""
+    plan.allocation_at(time.time())
     now = time.time()
-    spec = RemoteJobSpec(
+    spec = Job(
         job_id=job_id,
         plan=plan,
         created_at=now,
-        deadline=now + plan.mix.wall_seconds,
-        destination=destination,
+        deadline=plan.deadline_at(now),
+        destination=destination
+        if destination is not None
+        else plan.spec.access.destination,
         monitoring=monitoring,
         checkpoint_seconds=checkpoint_seconds,
         publish_seconds=publish_seconds,
@@ -165,7 +168,7 @@ def prepare_job(
         existing = store.read("spec.json")
         if existing is None:
             raise RuntimeError("job intent unavailable; reconcile by ID")
-        previous = RemoteJobSpec.model_validate_json(existing.data)
+        previous = Job.model_validate_json(existing.data)
         if previous.model_dump(exclude={"created_at", "deadline"}) != spec.model_dump(
             exclude={"created_at", "deadline"}
         ):
@@ -179,29 +182,30 @@ def prepare_job(
 
 
 def submit_job(
-    spec: RemoteJobSpec,
+    spec: Job,
     *,
     store: JobStore | None = None,
     provider: RunPod | None = None,
-    credentials: Callable[[RemoteJobSpec], dict[str, str]] = worker_credentials,
-) -> RemoteJobStatus:
+    credentials: Callable[[Job], dict[str, str]] = worker_credentials,
+) -> JobStatus:
     """Provision up to acceptance; interruption is reconciled with the same spec.
 
     The worker starts from the provider's startup command, not a connected SSH
     process. The separate startup guardian bounds billing before any bootstrap.
     """
+    spec.plan.allocation_at(spec.created_at)
     store = store or S3JobStore(spec.prefix)
-    spec = RemoteJobSpec.model_validate_json(spec.model_dump_json())
+    spec = Job.model_validate_json(spec.model_dump_json())
     intent = store.read("spec.json")
-    if (
-        intent is None
-        or RemoteJobSpec.model_validate_json(intent.data).identity != spec.identity
-    ):
+    if intent is None or Job.model_validate_json(intent.data).identity != spec.identity:
         raise ValueError("submission differs from durable job intent")
     provider = provider or RunPod()
     if store.read("runtime/record.json") is not None:
         return job_status(spec, store=store, provider=provider)
-    if time.time() >= spec.work_deadline or cancellation_requested(store) is not None:
+    collection_cutoff = (
+        spec.allocation.pause_at if spec.allocation is not None else spec.work_deadline
+    )
+    if time.time() >= collection_cutoff or cancellation_requested(store) is not None:
         raise ValueError(
             "job deadline expired or cancellation requested; inspect/cancel this ID"
         )
@@ -247,7 +251,7 @@ def submit_job(
     )
     # Once launched, all setup/training/upload/deletion is remote-owned. A lost
     # acknowledgement is resolved by this same read; no finally block cancels it.
-    while time.time() < spec.created_at + spec.plan.mix.setup_seconds:
+    while time.time() < spec.created_at + spec.plan.spec.setup_seconds:
         status = job_status(spec, store=store, provider=provider)
         if status.record is not None:
             return status
@@ -261,7 +265,7 @@ def submit_job(
     )
 
 
-def load_job(job_id: str, destination: str = DEFAULT_JOBS) -> RemoteJobSpec:
+def load_job(job_id: str, destination: str = DEFAULT_JOBS) -> Job:
     # Validate path input before constructing an S3 key.
     import re
 
@@ -270,21 +274,21 @@ def load_job(job_id: str, destination: str = DEFAULT_JOBS) -> RemoteJobSpec:
     value = S3JobStore(f"{destination.rstrip('/')}/{job_id}").read("spec.json")
     if value is None:
         raise ValueError("remote job ID is unknown")
-    spec = RemoteJobSpec.model_validate_json(value.data)
+    spec = Job.model_validate_json(value.data)
     if spec.job_id != job_id or spec.destination != destination:
         raise ValueError("stored job location differs")
     return spec
 
 
 def job_status(
-    spec: RemoteJobSpec,
+    spec: Job,
     *,
     store: JobStore | None = None,
     provider: RunPod | None = None,
-) -> RemoteJobStatus:
+) -> JobStatus:
     store = store or S3JobStore(spec.prefix)
     raw = store.read("runtime/record.json")
-    record = RemoteJobRecord.model_validate_json(raw.data) if raw else None
+    record = JobRecord.model_validate_json(raw.data) if raw else None
     if record is not None and record.spec_sha256 != spec.identity:
         raise ValueError("supervisor record belongs to a different job")
     state = "not-created"
@@ -321,7 +325,7 @@ def job_status(
             deletion = Deletion(
                 confirmed_at=ended,
                 estimated_dollars=(ended - claim.intent_time)
-                * (resource.pod.rate + spec.plan.mix.storage_hourly_allowance)
+                * (resource.pod.rate + spec.plan.spec.machine.storage_hourly_allowance)
                 / 3600,
             )
             store.create(
@@ -339,7 +343,7 @@ def job_status(
         if unsettled or state == "not-created"
         else Deletion(confirmed_at=time.time(), estimated_dollars=costs)
     )
-    return RemoteJobStatus(
+    return JobStatus(
         spec=spec,
         record=record,
         provider_state=state,
@@ -348,7 +352,7 @@ def job_status(
     )
 
 
-def cancel_job(spec: RemoteJobSpec, *, store: JobStore | None = None) -> None:
+def cancel_job(spec: Job, *, store: JobStore | None = None) -> None:
     """Request cancellation once; concurrent callers preserve its first timestamp."""
     store = store or S3JobStore(spec.prefix)
     request = Cancellation(requested_at=time.time()).model_dump_json().encode()
@@ -363,13 +367,13 @@ def cancel_job(spec: RemoteJobSpec, *, store: JobStore | None = None) -> None:
             return
 
 
-def fetch_job(spec: RemoteJobSpec, output: Path) -> Path:
+def fetch_job(spec: Job, output: Path) -> Path:
     from .snapshots import JobManifest
 
     raw = S3JobStore(spec.prefix).read("runtime/record.json")
     if raw is None:
         raise ValueError("job has no published supervisor record")
-    record = RemoteJobRecord.model_validate_json(raw.data)
+    record = JobRecord.model_validate_json(raw.data)
     if record.spec_sha256 != spec.identity or record.manifest is None:
         raise ValueError("job has no committed artifact generation")
     artifacts = S3ArtifactStore()
@@ -397,15 +401,15 @@ def fetch_job(spec: RemoteJobSpec, output: Path) -> Path:
 
 def prepare_experiment_job(
     case: "ResolvedCase",
-    mix: "HardwareMix",
+    spec: "JobSpec",
     source: "Source",
     seed: int,
     job_id: str,
     *,
     monitoring: MonitoringBudget,
-    destination: str = DEFAULT_JOBS,
+    destination: str | None = None,
     checkpoint_seconds: float = 60,
-) -> RemoteJobSpec:
+) -> Job:
     """Compile one resolved Experiment case through the ordinary job lifecycle.
 
     The caller owns case/seed/cohort selection and cumulative campaign allocation;
@@ -413,18 +417,20 @@ def prepare_experiment_job(
     """
     from .plan import compile_plan
 
-    plan = compile_plan(case.configuration, mix, source, seed)
+    plan = compile_plan(case.configuration, spec, source, seed)
     return prepare_job(
         plan,
         job_id,
-        destination=destination,
+        destination=destination
+        if destination is not None
+        else plan.spec.access.destination,
         monitoring=monitoring,
         checkpoint_seconds=checkpoint_seconds,
         experiment_json=json.dumps(case.receipt(), sort_keys=True),
     )
 
 
-def reconcile_job(spec: RemoteJobSpec, *, delete: bool = False) -> RemoteJobStatus:
+def reconcile_job(spec: Job, *, delete: bool = False) -> JobStatus:
     """Discover uncertain creates; optionally delete only exact job-owned resources.
 
     Force deletion can discard an unpublished final generation. Normal cancel

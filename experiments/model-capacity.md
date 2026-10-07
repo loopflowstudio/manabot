@@ -437,7 +437,8 @@ promotion model is selected from hardware throughput.
 
 ### Four-hour preparation and admission — 2026-10-07
 
-`cuda_capacity --prepare-four-hour` exports ordinary DeploymentPlans from the
+At frozen source `68e0fbe9265a689891615274123587d653b5e66b`,
+`cuda_capacity --prepare-four-hour` exported ordinary DeploymentPlans from the
 existing Experiment baseline and retained calibration input. It prepares L4,
 512 transitions per update over 64 streams, width64/depth2 versus
 width384/depth8/feedforward1536, scalar value-token, no history. All learning,
@@ -536,3 +537,9 @@ S3 generations and deletion. Reconnecting cannot restart training. PR255 deliver
 the final exact source/protocol freeze and per-rental live admission precede
 submission. The old client-driven scientific launcher stays disabled. The editable
 hardware notebook and private bundles remain; no capacity winner exists.
+
+Current authoring uses `Experiment.jobs` with `PlannedRun(spec=JobSpec(...))`;
+see [machine allocations](../docs/remote-jobs.md#step-targets-and-machine-allocations).
+The calibration-era `cuda_capacity --freeze` authoring helper is retired; its
+source and two-stage protocol remain in Git at `33f68e07`. Saved schema-1 plans
+remain readable. This migration changes no frozen cohort or evidence.

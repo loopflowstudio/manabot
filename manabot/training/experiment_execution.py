@@ -12,8 +12,19 @@ from typing import Literal
 
 from pydantic import Field, JsonValue, model_validator
 
+from manabot.remote.plan import JobSpec
 from manabot.training.checkpoint_queue import MonitoringBudget
 from manabot.training.models import Strict
+
+
+class PlannedRun(Strict):
+    """Bind one resolved case and training seed to allocation and evaluation intent."""
+
+    case: str
+    seed: int = Field(ge=0)
+    spec: JobSpec
+    monitoring: MonitoringBudget
+    checkpoint_seconds: float = Field(default=3600, gt=0)
 
 
 class Hardware(Strict):

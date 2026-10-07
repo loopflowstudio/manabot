@@ -16,8 +16,11 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from manabot.arena.models import canonical_json, canonical_sha256
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
+from manabot.remote.job_client import prepare_experiment_job
+from manabot.remote.jobs import Job
+from manabot.remote.plan import DeploymentPlan, Source, compile_plan
 from manabot.training.execution import validate_regime
-from manabot.training.experiment_execution import ExperimentSchedule
+from manabot.training.experiment_execution import ExperimentSchedule, PlannedRun
 from manabot.training.models import (
     AtaraxosMoveLearning,
     Execution,
@@ -373,6 +376,37 @@ class Experiment:
     cases: tuple[Case, ...] = ()
     matrix: tuple[Axis, ...] = ()
     schedule: ExperimentSchedule | None = None
+    jobs: tuple[PlannedRun, ...] = ()
+
+    def compile_jobs(self, source: "Source") -> tuple["DeploymentPlan", ...]:
+        """Pure compilation; preserves cases, seed order and learning targets."""
+        if self.schedule is not None and self.jobs:
+            raise ValueError("choose local schedule or explicit launch allocations")
+        cases = {case.name: case for case in self.resolve().cases}
+        if len({(run.case, run.seed) for run in self.jobs}) != len(self.jobs):
+            raise ValueError("launch case/seed bindings must be unique")
+        if any(run.case not in cases for run in self.jobs):
+            raise ValueError("launch references an unresolved case")
+        return tuple(
+            compile_plan(cases[run.case].configuration, run.spec, source, run.seed)
+            for run in self.jobs
+        )
+
+    def prepare_job(self, index: int, source: "Source", job_id: str) -> "Job":
+        """Persist one selected run through the existing disconnected job owner."""
+        self.compile_jobs(source)
+        binding = self.jobs[index]
+        case = next(case for case in self.resolve().cases if case.name == binding.case)
+        return prepare_experiment_job(
+            case,
+            binding.spec,
+            source,
+            binding.seed,
+            job_id,
+            monitoring=binding.monitoring,
+            checkpoint_seconds=binding.checkpoint_seconds,
+            destination=binding.spec.access.destination,
+        )
 
     def resolve(self) -> ResolvedExperiment:
         if self.name:

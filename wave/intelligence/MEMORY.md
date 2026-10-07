@@ -1,5 +1,32 @@
 # Intelligence memory
 
+## Step targets and machine allocations (ETU-124, 2026-10-07)
+
+Jack Heart approved step-target TrainingRegimes and reusable JobSpecs.
+Machine owns hardware/provider shape;
+JobSpec owns lifetime, spending and scoped artifact authority; Job is admitted
+execution. Experiment PlannedRuns bind case/seed, JobSpec and evaluation. Current plans
+carry one spec; private schema-1 readers retain historical JSON, job digests and
+deadlines. Calibration-era
+capacity authoring is retired; frozen plans and their pinned runners remain evidence.
+
+Machine lifetime alone sets permissions and shutdown deadlines. Collection stops
+before checkpoint, upload and cleanup reserves. Paused exports remain incomplete
+targets outside completed-target final cohorts. CPU recovery permits explicit
+same-host continuation; CUDA policy/Adam exports do not restore collector/RNG.
+
+Jack Heart clarified that immediate revocation and future recovery must not block
+bounded submissions. Long allocations construct/compile but fail admission without
+renewable access and portable CUDA recovery. Cancellation stops compute but does
+not revoke copied STS credentials; an explicit policy deny bounds artifact access
+at the allocation deadline. In-place extensions fail; issuer secrets stay off
+workers and plans. Offline CLI/fake-provider and native CPU fixtures establish
+software behavior, not live IAM or long-duration operation.
+
+The [remote contract](../../docs/remote-jobs.md#step-targets-and-machine-allocations)
+owns API and limits. ETU-103's live source `68e0fbe9`, checkout and evidence remain
+untouched. No rental, scientific allocation or strength claim follows.
+
 ## Disconnected deployment proof (ETU-123, 2026-10-06)
 
 Jack Heart required `uv run manabot deploy` alone, without aliases. CLI and
@@ -649,56 +676,28 @@ ETU-91 retains ownership of final replayed study/notebook evidence.
 ## Compound decision implementation (2026-10-04)
 
 Jack Heart authorized ETU-94's bounded implementation and landing separately
-from the frozen ETU-91 campaign. `train_compound` now connects a trainable
-recurrent legal-offer decoder, complete-game collection, explicit sequential or
-grouped credit, outcome or bootstrapped estimators, and ordinary world-bound
-checkpoint reload/serving. The four-arm study uses the existing arena/report
-path. The sequential arm is a conditional-factor credit control with the same
-decoder, not the historical flat policy. No scientific allocation is inherited
-from ETU-91; the campaign plan generator rejects that reuse.
+from frozen ETU-91. `train_compound` connects a recurrent legal-offer decoder,
+complete-game collection, grouped joint versus sequential conditional credit,
+outcome/bootstrap estimators and ordinary world-bound exports. The sequential
+control uses the same decoder, not the historical flat policy. Native lowering
+owns legality and canonical Commands; consumers drain sampled suffixes without
+resampling and reject stale/interrupted continuations.
 
-Canonical DecisionFrames remain action-aligned. Native `compound_offers` and
-`compound_commands_json` reuse the existing structured bridge to lower one
-complete declaration on an exact fork into revision-bound Commands. Python does
-not reconstruct combat legality. Atomic attackers and eligible single-target
-casts group. The software completion below adds native independent blocker
-assignments and fixed-economics waterbend payments; dependent choices and other
-new information boundaries remain separate.
-Ordinary Etude and arena consumers drain the sampled suffix without resampling;
-stale/interrupted suffixes fail closed.
+Terminal rewards are per seat; updates never occur inside a game/declaration.
+Comparison recipes use gamma=1; grouping otherwise changes trace/discount clocks.
+Forced decoder factors and optionless native resolution are separately counted.
+Sampled-prefix reverse KL is not exact joint reverse KL. Prefix values are scalar;
+the GRU is not the paper's setup-network reproduction. Object representation in
+set-valued choices remains limited to public labels and pooled viewer state.
 
-The useful estimator boundary is explicit: terminal reward per seat, no update
-within a game/declaration, grouped joint log probability versus sequential
-conditional factors, detached targets/behavior, and gamma=1 in comparison
-recipes. Trace/discount clocks otherwise change with grouping. Forced decoder
-factors and native optionless auto-resolution have separate counters. Summed
-conditional reverse-KL terms at retained prefixes are sampled-prefix
-regularizers, not exact joint reverse KL. Prefix values are scalar and the
-policy uses a GRU; neither is an exact Ataraxos setup-network reproduction.
-
-Focused evidence includes normalized joint distributions, score-function and
-finite-difference gradients, 65-attacker/35-target native parity, payment/blocker
-boundaries, terminal and interrupted-game credit, hidden-world swap invariance,
-and ordinary learned checkpoint reload. Native debug comparison must account
-for canonical execution consuming its observation-event queue; comparing an
-undrained raw atomic bridge to a drained Command stream compares different
-ownership points. No physics change or frozen evidence rewrite was needed.
-
-Two retained one-thread workflow executions completed in 268 and 224 seconds;
-the latter followed integration with ETU-92 and ETU-96. Each trained four arms
-for two games apiece, exported eight admitted checkpoints, and exact-replayed
-56 arena games with no failed cells. Offline reports/metrics regenerated
-unchanged. These one-seed receipts are retained under this Task checkout's
-ignored `.runs/etu94-compound-smoke-{1,final}`; they are not method uncertainty
-or authorization for further scoring.
-
-Scientific outcome-versus-bootstrap and sequential-versus-grouped improvement
-remain unmeasured. Multi-seed, held-out, equal-cost complete-game scoring needs
-its own frozen protocol and budget. Candidate runtime-object representation in
-set-valued choices is still limited to public labels plus pooled viewer state;
-this is runnable mechanism evidence, not strategic-strength or challenger proof.
-The [compound contract](../../docs/training-regimes.md#compound-decisions) and
-[follow-up protocol](../../experiments/training-regime-followups.md) own details.
+Two retained one-thread executions completed four arms in 268/224 seconds with
+8 admitted exports and 56 exact-replayed arena games each; reports regenerated
+unchanged. Fixtures cover gradients, hidden-world invariance, large declarations
+and native parity. These establish software behavior, not scientific strength,
+calibration or challenger acceptance. No scientific allocation transfers from
+ETU-91. Preserve `.runs/etu94-compound-smoke-{1,final}`. Details remain at
+`388947de`; [compound contracts](../../docs/training-regimes.md#compound-decisions)
+and the later software-completion entry own supported grouping boundaries.
 
 ## Ataraxos source correction and move recipe (2026-10-04)
 

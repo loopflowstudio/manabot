@@ -86,12 +86,12 @@ class Checkpoint(Strict):
 
 
 def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
-    """Return a completed raw stage export with original cumulative coordinates."""
+    """Return an admitted completed or paused export with original coordinates."""
     for index, stage in enumerate(run.stages):
         if stage.id != stage_id:
             continue
         if (
-            stage.status != "completed"
+            stage.status not in {"completed", "paused"}
             or "raw" not in stage.artifacts
             or stage.cumulative_seconds is None
         ):

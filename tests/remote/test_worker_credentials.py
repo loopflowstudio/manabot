@@ -9,8 +9,8 @@ from botocore.credentials import Credentials
 import pytest
 
 from manabot.remote import job_store
-from manabot.remote.jobs import RemoteJobSpec
-from manabot.remote.plan import HardwareMix, compile_plan
+from manabot.remote.jobs import Job
+from manabot.remote.plan import JobSpec, compile_plan
 from tests.remote.test_compile import ROOT, SOURCE
 
 
@@ -57,27 +57,25 @@ class Session:
         return self.sts
 
 
-def specification() -> RemoteJobSpec:
-    mix = HardwareMix.model_validate_json(
-        (ROOT / "ops/mixes/runpod-small.json").read_text()
+def specification() -> Job:
+    spec = JobSpec.model_validate_json(
+        (ROOT / "ops/jobs/runpod-small.json").read_text()
     )
-    mix = HardwareMix.model_validate(
-        mix.model_dump()
+    spec = JobSpec.model_validate(
+        spec.model_dump()
         | {
-            "wall_seconds": 25200,
-            "hourly_ceiling": 0.49,
-            "dollar_cap": 4.5,
+            "lifetime_hours": 7,
+            "machine": spec.machine.model_dump() | {"hourly_ceiling": 0.49},
+            "spending_limit": 4.5,
         }
     )
     plan = compile_plan(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
-        mix,
+        (ROOT / "ops/examples/step-target.json").read_text(),
+        spec,
         SOURCE,
         10351,
     )
-    return RemoteJobSpec(
-        job_id="credential-test", plan=plan, created_at=1000, deadline=26200
-    )
+    return Job(job_id="credential-test", plan=plan, created_at=1000, deadline=26200)
 
 
 @pytest.mark.parametrize("token", [None, "sso-session"])
@@ -108,7 +106,9 @@ def test_direct_issuer_and_role_chaining_have_distinct_limits(
         assert result["AWS_SECRET_ACCESS_KEY"] == "delegated-secret"
         assert result["AWS_SESSION_TOKEN"] == "delegated-token"
         assert sts.calls[0].duration == 25260
-        assert sts.calls[0].policy == job_store.worker_policy(spec.prefix)
+        assert sts.calls[0].policy == job_store.worker_policy(
+            spec.prefix, spec.deadline
+        )
         assert "issuer-secret" not in json.dumps(result)
     assert profiles == ["manabot-issuer"]
 
@@ -145,3 +145,16 @@ def test_credential_provider_failure_is_redacted(
         job_store.worker_credentials(specification())
     assert "secret-bearing" not in str(caught.value)
     assert caught.value.__suppress_context__
+
+
+def test_expired_allocation_cannot_issue_another_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = specification()
+    sts = STS(spec.deadline + 3600)
+    monkeypatch.setattr(boto3, "Session", lambda **kwargs: Session(sts, None))
+    monkeypatch.setattr(job_store.time, "time", lambda: spec.deadline)
+    monkeypatch.delenv("MANABOT_REMOTE_ISSUER_PROFILE", raising=False)
+    with pytest.raises(ValueError, match="expired.*renewal forbidden"):
+        job_store.worker_credentials(spec)
+    assert not sts.calls

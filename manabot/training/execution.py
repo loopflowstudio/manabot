@@ -35,6 +35,7 @@ from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
 from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_identity
 from manabot.model.world import validate_agent_setup
+from manabot.remote.plan import Allocation
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
 from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
@@ -160,6 +161,7 @@ def execute_regime(
     resume_from: str | None = None,
     checkpoint_seconds: float | None = None,
     initial_admission: Path | None = None,
+    allocation: Allocation | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
@@ -175,6 +177,18 @@ def execute_regime(
         not np.isfinite(checkpoint_seconds) or checkpoint_seconds <= 0
     ):
         raise ValueError("checkpoint_seconds must be positive and finite")
+    if allocation is not None:
+        if (
+            len(regime.stages) != 1
+            or not isinstance(regime.stages[0], TrainSelfPlay)
+            or regime.stages[0].active_seconds is not None
+            or regime.schedule_clock != "iteration_fraction"
+        ):
+            raise ValueError(
+                "allocation execution requires a step-target self-play regime"
+            )
+        if time.time() >= allocation.pause_at:
+            raise ValueError("allocation reserves exhausted before training admission")
     destination = Path(out).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     lease = destination.with_name(destination.name + ".writer.lock")
@@ -209,6 +223,7 @@ def execute_regime(
             resume_from=resume_from,
             checkpoint_seconds=checkpoint_seconds,
             initial_admission=initial_admission,
+            allocation=allocation,
         )
 
 
@@ -221,13 +236,14 @@ def _execute_regime(
     resume_from: str | None = None,
     checkpoint_seconds: float | None = None,
     initial_admission: Path | None = None,
+    allocation: Allocation | None = None,
 ) -> TrainingRun:
     regime = validate_regime(regime)
     parent = store.training_run(resume_from) if resume_from is not None else None
     if parent is not None:
-        if parent.status not in {"failed", "interrupted"}:
+        if parent.status not in {"failed", "interrupted", "paused"}:
             raise ValueError(
-                "recovery requires a stopped failed or interrupted attempt"
+                "recovery requires a stopped failed, interrupted or paused attempt"
             )
         if (
             regime.recovery_max_microsteps is None
@@ -272,6 +288,7 @@ def _execute_regime(
         identities=deepcopy(parent.identities) if parent is not None else {},
         status="running",
         monitoring_checkpoint_seconds=checkpoint_seconds,
+        allocation_deadline=allocation.deadline if allocation is not None else None,
         recovery_lock_path=str(out.with_name(out.name + ".writer.lock")),
         recovery_host=socket.gethostname(),
         last_recorded_wall_seconds=time.time(),
@@ -474,7 +491,13 @@ def _execute_regime(
                 if restoring_completed
                 else stage_start + stage.execution.wall_seconds - prior_stage_watchdog,
             )
+            if allocation is not None:
+                deadline = (
+                    time.perf_counter() + allocation.checkpoint_deadline - time.time()
+                )
             phase = "collection_seconds"
+            paused = False
+            collection_interrupted = False
             torch.set_num_threads(stage.execution.threads)
             cuda = stage.execution.device == "cuda"
             if cuda and not torch.cuda.is_available():
@@ -496,9 +519,15 @@ def _execute_regime(
                 )
                 if (
                     time.perf_counter() >= deadline
-                    or charged >= regime.wall_seconds
                     or (
-                        regime.recovery_max_microsteps is not None
+                        allocation is not None
+                        and time.time() >= allocation.checkpoint_deadline
+                    )
+                    or allocation is None
+                    and charged >= regime.wall_seconds
+                    or (
+                        allocation is None
+                        and regime.recovery_max_microsteps is not None
                         and not restoring_completed
                         and prior_stage_watchdog
                         + watchdog_seconds()
@@ -1042,6 +1071,11 @@ def _execute_regime(
                     persist()
                 snapshot = None
                 for update_index in range(first_update, stage.updates):
+                    # Stop only at an exact collector/update boundary. The saved
+                    # snapshot includes Adam, EMA, RNGs and paused native streams.
+                    if allocation is not None and time.time() >= allocation.pause_at:
+                        paused = True
+                        break
                     if stage.active_seconds is not None and (
                         record.collection_seconds + record.learning_seconds
                         >= stage.active_seconds
@@ -1054,14 +1088,27 @@ def _execute_regime(
                         ema if stage.behavior == "ema-self" else trainer.agent
                     )
                     assert behavior_agent is not None
-                    batch = trainer.collector.collect(
-                        behavior_agent,
-                        stage.transitions,
-                        deadline_monotonic=deadline,
-                        check=check
-                        if regime.recovery_max_microsteps is not None
-                        else None,
-                    )
+                    try:
+                        batch = trainer.collector.collect(
+                            behavior_agent,
+                            stage.transitions,
+                            deadline_monotonic=min(
+                                deadline,
+                                time.perf_counter() + allocation.pause_at - time.time(),
+                            )
+                            if allocation is not None
+                            else deadline,
+                            check=check
+                            if regime.recovery_max_microsteps is not None
+                            else None,
+                        )
+                    except TimeoutError:
+                        if allocation is None or time.time() < allocation.pause_at:
+                            raise
+                        synchronize()
+                        record.collection_seconds += time.perf_counter() - tick
+                        paused = collection_interrupted = True
+                        break
                     synchronize()
                     record.collection_seconds += time.perf_counter() - tick
                     check()
@@ -1241,7 +1288,13 @@ def _execute_regime(
                     os.replace(temporary, target)
                     candidate = artifact(target)
                     try:
-                        load_checkpoint_agent(str(target))
+                        if allocation is not None:
+                            # Admission constructs a model; pause exports must not
+                            # perturb the RNG resumed by the next allocation.
+                            with torch.random.fork_rng(devices=[0] if cuda else []):
+                                load_checkpoint_agent(str(target))
+                        else:
+                            load_checkpoint_agent(str(target))
                     except Exception:
                         record.rejected_artifacts[name] = candidate
                         raise
@@ -1257,7 +1310,7 @@ def _execute_regime(
             check()
             record.seconds = time.perf_counter() - stage_start
             record.cpu_seconds = time.process_time() - cpu_start
-            record.status = "completed"
+            record.status = "paused" if paused else "completed"
             # Freeze the admission cost; later persistence belongs to later outputs.
             record.cumulative_seconds = run.prior_seconds + time.perf_counter() - start
             record.watchdog_seconds = (
@@ -1265,7 +1318,8 @@ def _execute_regime(
             )
             if isinstance(stage, TrainSelfPlay):
                 try:
-                    checkpoint("completed")
+                    if not collection_interrupted:
+                        checkpoint("paused" if paused else "completed")
                 except BaseException:
                     record.status = "running"
                     raise
@@ -1278,6 +1332,11 @@ def _execute_regime(
                     run.prior_seconds + time.perf_counter() - start
                 )
             persist()
+            if paused:
+                run.status = "paused"
+                run.error = "Allocation ended before the update target; explicit recovery required"
+                persist()
+                return run
         completed_models = [
             item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts
         ]

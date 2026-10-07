@@ -17,33 +17,31 @@ from .job_client import (
     submit_job,
 )
 from .jobs import DEFAULT_JOBS
-from .plan import DeploymentPlan, HardwareMix, compile_plan
+from .plan import DeploymentPlan, JobSpec, compile_plan
 from .provider import RunPod
 
 app = typer.Typer(help="Submit bounded training and reconnect to durable jobs")
 
 
-def _compile(regime: Path, mix: Path, seed: int) -> DeploymentPlan:
+def _compile(regime: Path, spec: Path, seed: int) -> DeploymentPlan:
     return compile_plan(
         regime.read_text(),
-        HardwareMix.model_validate_json(mix.read_text()),
+        JobSpec.model_validate_json(spec.read_text()),
         current_source(Path.cwd()),
         seed,
     )
 
 
 def _resolve_plan(
-    plan: Path | None, regime: Path | None, mix: Path | None, seed: int
+    plan: Path | None, regime: Path | None, spec: Path | None, seed: int
 ) -> DeploymentPlan:
     if plan is not None:
-        if regime is not None or mix is not None:
-            raise typer.BadParameter("use --plan or --regime and --mix")
-        value = DeploymentPlan.model_validate_json(plan.read_text())
-    elif regime is not None and mix is not None:
-        value = _compile(regime, mix, seed)
-    else:
-        raise typer.BadParameter("requires --plan or --regime and --mix")
-    return value
+        if regime is not None or spec is not None:
+            raise typer.BadParameter("use --plan or --regime and --spec")
+        return DeploymentPlan.model_validate_json(plan.read_text())
+    if regime is not None and spec is not None:
+        return _compile(regime, spec, seed)
+    raise typer.BadParameter("requires --plan or --regime and --spec")
 
 
 @app.callback(invoke_without_command=True)
@@ -51,23 +49,23 @@ def deploy_command(
     ctx: typer.Context,
     plan: Path | None = None,
     regime: Path | None = None,
-    mix: Path | None = None,
+    spec: Path | None = None,
     seed: int = 197,
     job_id: str | None = None,
     monitoring: Path | None = None,
     checkpoint_seconds: float = 60,
-    destination: str = DEFAULT_JOBS,
+    destination: str | None = None,
 ) -> None:
     """Submit directly, or select a job lifecycle command below."""
     submitting = any(
-        value is not None for value in (plan, regime, mix, job_id, monitoring)
+        value is not None for value in (plan, regime, spec, job_id, monitoring)
     )
     if ctx.invoked_subcommand is not None:
         if (
             submitting
             or seed != 197
             or checkpoint_seconds != 60
-            or destination != DEFAULT_JOBS
+            or destination is not None
         ):
             raise typer.BadParameter("put options after the selected lifecycle command")
         return
@@ -77,7 +75,7 @@ def deploy_command(
     if job_id is None:
         raise typer.BadParameter("submission requires --job-id for safe retries")
     _submit(
-        _resolve_plan(plan, regime, mix, seed),
+        _resolve_plan(plan, regime, spec, seed),
         job_id,
         monitoring,
         checkpoint_seconds,
@@ -88,12 +86,12 @@ def deploy_command(
 @app.command("compile")
 def compile_command(
     regime: Path = typer.Option(...),
-    mix: Path = typer.Option(...),
     out: Path = typer.Option(...),
+    spec: Path | None = None,
     seed: int = 197,
 ) -> None:
     """Resolve placement and projected cost without contacting RunPod."""
-    plan = _compile(regime, mix, seed)
+    plan = _resolve_plan(None, regime, spec, seed)
     if out.exists():
         raise typer.BadParameter("plan output already exists")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -108,13 +106,18 @@ def run_command(
     out: Path = typer.Option(...),
     plan: Path | None = None,
     regime: Path | None = None,
-    mix: Path | None = None,
+    spec: Path | None = None,
     seed: int = 197,
 ) -> None:
     """Prove the guardian, deploy training, retrieve evidence and confirm deletion."""
-    value = _resolve_plan(plan, regime, mix, seed)
+    value = _resolve_plan(plan, regime, spec, seed)
     typer.echo(value.model_dump_json(indent=2))
-    result = deploy(value, out, Path.cwd())
+    result = deploy(
+        value,
+        out,
+        Path.cwd(),
+        destination=value.spec.access.destination,
+    )
     typer.echo(
         f"Evidence: {out / 'evidence'}; deletion confirmed; estimated dollars: {result.estimated_dollars}"
     )
@@ -154,7 +157,7 @@ def submit_command(
     ),
     monitoring: Path | None = None,
     checkpoint_seconds: float = 60,
-    destination: str = DEFAULT_JOBS,
+    destination: str | None = None,
 ) -> None:
     """Submit a job; returns only after remote acceptance (or an explicit uncertainty)."""
     _submit(
@@ -171,8 +174,10 @@ def _submit(
     job_id: str,
     monitoring: Path | None,
     checkpoint_seconds: float,
-    destination: str,
+    destination: str | None,
 ) -> None:
+    if destination is None:
+        destination = plan.spec.access.destination
     spec = prepare_job(
         plan,
         job_id,
