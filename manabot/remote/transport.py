@@ -6,6 +6,10 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from .jobs import RemoteJobSpec
 
 from .plan import DeploymentPlan
 from .provider import Pod
@@ -71,11 +75,44 @@ class Transport:
             raise RuntimeError(f"remote command failed with exit {result.returncode}")
         return result.stdout
 
-    def shell(self, script: str) -> bytes:
-        return self._run(
-            ["ssh", *self.options, "-p", str(self.port), self.target, "bash -s"],
-            script.encode(),
+    def shell(self, script: str, *, observe: Callable[[], None] | None = None) -> bytes:
+        args = ["ssh", *self.options, "-p", str(self.port), self.target, "bash -s"]
+        if observe is None:
+            return self._run(args, script.encode())
+        # communicate drains pipes while callbacks retrieve immutable exports on
+        # separate SSH connections. Neither polling nor callbacks extend the lease.
+        process = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={
+                key: os.environ[key]
+                for key in ("PATH", "HOME", "SSH_AUTH_SOCK")
+                if key in os.environ
+            },
         )
+        payload: bytes | None = script.encode()
+        try:
+            while True:
+                remaining = self.deadline - time.time()
+                if remaining <= 0:
+                    raise TimeoutError("remote phase deadline exceeded")
+                try:
+                    stdout, _ = process.communicate(payload, timeout=min(15, remaining))
+                    if process.returncode:
+                        raise RuntimeError(
+                            f"remote command failed with exit {process.returncode}"
+                        )
+                    observe()
+                    return stdout
+                except subprocess.TimeoutExpired:
+                    payload = None
+                    observe()
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate()
 
     def put(self, local: Path, remote: str) -> None:
         self._copy(str(local), f"{self.target}:{remote}")
@@ -144,4 +181,31 @@ nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv >> /workspa
 env_start=$(stat -c %Y .venv/pyvenv.cfg)
 env_end=$(stat -c %Y /workspace/evidence/toolchain.txt)
 printf '{{"bootstrap_seconds":%s,"uv_sync_seconds":%s,"native_build_seconds":%s,"environment_to_toolchain_seconds":%s}}\\n' "$((SECONDS - bootstrap_start))" "$sync_seconds" "$build_seconds" "$((env_end - env_start))" > /workspace/evidence/bootstrap-timing.json
+"""
+
+
+def job_startup(spec: "RemoteJobSpec") -> str:
+    """Provider-owned bootstrap; neither SSH nor the submitter owns its lifetime."""
+    guardian = Path(__file__).with_name("guardian.sh").read_text()
+    setup = bootstrap(spec.plan).replace(
+        "--python 3.12 --extra play", "--python 3.12 --extra play --extra artifacts"
+    )
+    return f"""set -eu
+umask 077
+export MANABOT_DEADLINE={int(spec.deadline)}
+mkdir -p /workspace/evidence
+cat > /tmp/manabot-guardian.sh <<'MANABOT_GUARDIAN'
+{guardian}
+MANABOT_GUARDIAN
+nohup bash /tmp/manabot-guardian.sh >/tmp/manabot-guardian.log 2>&1 </dev/null &
+cat > /tmp/manabot-setup.sh <<'MANABOT_SETUP'
+{setup}
+MANABOT_SETUP
+# Keep PID 1 alive even on setup failure so the independent guardian can delete.
+if timeout {max(1, int(spec.created_at + spec.plan.mix.setup_seconds - time.time()))} bash /tmp/manabot-setup.sh >/workspace/evidence/bootstrap.log 2>&1; then
+  export PATH=/root/.local/bin:/root/.cargo/bin:$PATH
+  cd {REPO_DIR}
+  uv run --no-sync python -m manabot.remote.supervisor >>/workspace/evidence/supervisor.log 2>&1 || true
+fi
+while true; do sleep 5; done
 """

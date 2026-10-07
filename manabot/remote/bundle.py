@@ -6,7 +6,9 @@ metadata, not a rewritten TrainingRun or a portable recovery checkpoint.
 
 import json
 from pathlib import Path, PurePosixPath
+import shutil
 import sys
+import tarfile
 
 from pydantic import Field, model_validator
 
@@ -76,6 +78,37 @@ class Bundle(Frozen):
             if item.producer_path == producer_path:
                 return item.verify(root)
         raise ValueError("producer artifact missing")
+
+
+def unpack_bundle(archive: Path, root: Path, bundle: Bundle) -> None:
+    """Copy only manifest-listed regular files, then verify every byte receipt.
+
+    Never extract tar paths or links directly. Unexpected, missing and duplicate
+    members fail, while BundleFile.destination owns traversal/symlink admission.
+    """
+    expected = {item.relative_path: item for item in bundle.files}
+    seen: set[str] = set()
+    with tarfile.open(archive) as packed:
+        for member in packed:
+            if member.isdir():
+                continue
+            name = member.name.removeprefix("./")
+            if not member.isfile() or name not in expected or name in seen:
+                raise ValueError("archive member differs from bundle manifest")
+            item = expected[name]
+            if member.size != item.size:
+                raise ValueError("archive member size differs from manifest")
+            target = item.destination(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = packed.extractfile(member)
+            if source is None:
+                raise ValueError("archive file unavailable")
+            with source, target.open("xb") as output:
+                shutil.copyfileobj(source, output)
+            seen.add(name)
+    if seen != set(expected):
+        raise ValueError("archive is missing bundle files")
+    bundle.verify(root)
 
 
 def make_bundle(root: Path) -> Bundle:

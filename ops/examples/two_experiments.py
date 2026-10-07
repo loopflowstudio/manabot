@@ -219,7 +219,7 @@ def main() -> None:
             signal.signal(signal.SIGTERM, previous_signal)
             if not settled:
                 raise RuntimeError(
-                    f"CLEANUP UNCONFIRMED; run uv run manabot remote cleanup --deployment {path}"
+                    f"CLEANUP UNCONFIRMED; run uv run manabot deploy cleanup --deployment {path}"
                 )
         if provider.list():
             raise ValueError("final inventory is not empty")

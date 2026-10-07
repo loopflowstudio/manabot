@@ -7,13 +7,13 @@ import typer
 from manabot.config.load import load_sim_config, load_train_config
 from manabot.config.presets import DEFAULT_SIM_PRESET, DEFAULT_TRAIN_PRESET
 from manabot.model.train import run_training
-from manabot.remote.cli import app as remote_app
+from manabot.remote.cli import app as deploy_app
 from manabot.sim.sim import run_simulation
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
 )
-app.add_typer(remote_app, name="remote")
+app.add_typer(deploy_app, name="deploy")
 
 
 def _run_train(preset: str, set_values: list[str]) -> None:

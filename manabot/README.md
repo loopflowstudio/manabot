@@ -38,6 +38,12 @@ setup. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `Match.swapped()` moves both lists together;
 `Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
 
+
+Submit bounded cloud work and reconnect after the laptop disconnects with
+[`manabot deploy submit/status/fetch`](../docs/remote-jobs.md). Training, checkpoint
+evaluation, verified S3 snapshots and shutdown belong to the remote job; reconnecting
+does not restart the learner or promise CUDA process recovery.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from

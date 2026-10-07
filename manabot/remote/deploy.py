@@ -10,11 +10,13 @@ import fcntl
 import json
 import math
 from pathlib import Path
-import signal
 import subprocess
 import sys
 import time
-from typing import Iterator, Literal
+from typing import TYPE_CHECKING, Callable, Iterator, Literal
+
+if TYPE_CHECKING:
+    from manabot.training.checkpoint_queue import MonitoringBudget
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import uuid
@@ -24,7 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .bundle import Bundle, verify_training_bundle
 from .plan import DeploymentPlan, Source, digest
 from .provider import Pod, ProviderError, RunPod
-from .transport import REPO_DIR, Transport, bootstrap, startup
+from .transport import Transport, startup
 
 
 class Attempt(BaseModel):
@@ -44,8 +46,17 @@ class Attempt(BaseModel):
     cost_ambiguous: bool = False
 
 
+class PhaseStamp(BaseModel):
+    phase: str
+    unix: float
+
+
 class Receipt(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    job_id: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    job_destination: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     plan_sha256: str
     started: float
     deadline: float
@@ -54,10 +65,15 @@ class Receipt(BaseModel):
     error: str | None = None
     complete: bool = False
     policies: list[str] = Field(default_factory=list)
+    phase_events: list[PhaseStamp] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     estimated_dollars: float | None = None
 
 
 def save(path: Path, receipt: Receipt) -> None:
+    if not receipt.phase_events or receipt.phase_events[-1].phase != receipt.phase:
+        receipt.phase_events.append(PhaseStamp(phase=receipt.phase, unix=time.time()))
     temporary = path.with_suffix(".tmp")
     temporary.write_text(receipt.model_dump_json(indent=2) + "\n")
     temporary.chmod(0o600)
@@ -298,154 +314,106 @@ def _ready(
     raise TimeoutError("pod bootstrap deadline exceeded")
 
 
-def deploy(plan: DeploymentPlan, out: Path, root: Path) -> Receipt:
-    # Revalidate nested mutable Pydantic values before any provider operation.
-    plan = DeploymentPlan.model_validate_json(plan.model_dump_json())
+def deploy(
+    plan: DeploymentPlan,
+    out: Path,
+    root: Path,
+    *,
+    job_id: str | None = None,
+    checkpoint_seconds: float = 60,
+    monitoring: "MonitoringBudget | None" = None,
+    destination: str = "s3://etudefantasia/manabot/jobs",
+    observe: Callable[[Transport], None] | None = None,
+    after_training: Callable[[Transport], None] | None = None,
+    bulk_return: bool = False,
+) -> Receipt:
+    """Submit and observe the shared durable lifecycle; disconnect never cancels.
+
+    Arbitrary client callbacks cannot be transferred to a remote execution owner.
+    Retained calibration scripts using those callbacks must use their pinned source;
+    new callers supply the serializable monitoring contract instead.
+    """
+    from .job_client import fetch_job, job_status, prepare_job, submit_job
+
+    if observe is not None or after_training is not None:
+        raise ValueError(
+            "client execution callbacks are unsupported; declare remote monitoring"
+        )
     if current_source(root) != plan.source:
         raise ValueError("deployment source differs from compiled plan")
     out = out.resolve()
-    if ".runs" not in out.parts:
+    if ".runs" not in out.parts or out.exists():
         raise ValueError(
-            "private deployment output must be under an ignored .runs directory"
+            "use a new private .runs output directory, or reconnect by job ID"
         )
-    if out.exists():
-        raise ValueError(
-            "deployment directory already exists; use cleanup for prior attempts"
-        )
-    verify_public_source(plan.source)
-    provider = RunPod()
-    with deployment_lock(Path.home() / ".cache/manabot"):
-        if any(p.name.startswith("manabot-") for p in provider.list()):
-            raise ValueError(
-                "an owned pod already exists; reconcile it before another rental"
-            )
-        out.mkdir(parents=True, mode=0o700)
-        path = out / "deployment.json"
-        start = time.time()
-        receipt = Receipt(
-            plan_sha256=digest(plan.model_dump_json().encode()),
-            started=start,
-            deadline=start + plan.mix.wall_seconds,
-        )
-        save(path, receipt)
-        (out / "plan.json").write_text(plan.model_dump_json(indent=2))
-        identity = out / "ssh_key"
-        subprocess.run(
-            [
-                "ssh-keygen",
-                "-q",
-                "-t",
-                "ed25519",
-                "-N",
-                "",
-                "-C",
-                "manabot-deployment",
-                "-f",
-                str(identity),
-            ],
-            check=True,
-            timeout=15,
-            capture_output=True,
-        )
-        public_key = identity.with_suffix(".pub").read_text().strip()
-        previous_signal = signal.signal(signal.SIGTERM, _terminate_signal)
-        try:
-            receipt.phase = "guardian-probe"
-            # Both probe and training are charged against this same deadline/cap.
-            probe_deadline = min(
-                start + 90, receipt.deadline - plan.mix.cleanup_seconds
-            )
-            probe = _create(
-                provider, plan, receipt, path, "guardian", probe_deadline, public_key
-            )
-            transport = _ready(provider, probe, out, probe_deadline, identity)
-            transport.shell(
-                "test -f /tmp/manabot-guardian.sh; command -v runpodctl >/dev/null"
-            )
-            while time.time() < probe_deadline + 30:
-                if provider.get(probe.id) is None:
-                    if time.time() < probe_deadline - 2:
-                        raise ValueError(
-                            "probe disappeared before its guardian deadline"
-                        )
-                    receipt.attempts[-1].deleted_time = time.time()
-                    receipt.attempts[-1].guardian_proven = True
-                    save(path, receipt)
-                    break
-                time.sleep(2)
-            else:
-                raise ValueError("pod-scoped deadline deletion was not proven")
-            receipt.phase = "provisioning"
-            train_deadline = receipt.deadline - plan.mix.cleanup_seconds
-            pod = _create(
-                provider, plan, receipt, path, "training", train_deadline, public_key
-            )
-            transport = _ready(
-                provider, pod, out, start + plan.mix.setup_seconds, identity
-            )
-            receipt.phase = "bootstrap"
-            save(path, receipt)
-            transport.shell(bootstrap(plan))
-            recipe = out / "regime.json"
-            recipe.write_text(plan.regime.model_dump_json(indent=2))
-            transport.put(recipe, "/workspace/regime.json")
-            receipt.phase = "training"
-            save(path, receipt)
-            transport.deadline = train_deadline - plan.mix.transfer_seconds
-            # Training errors are retained, then the closed output is bundled.
-            transport.shell(f"""export PATH=/root/.local/bin:/root/.cargo/bin:$PATH
-cd {REPO_DIR}
-uv run manabot train --regime /workspace/regime.json --seed {plan.seed} --out /workspace/evidence/run > /workspace/evidence/training.log 2>&1
-status=$?
-printf '%s\\n' "$status" > /workspace/evidence/training-exit.txt
-uv run python -m manabot.remote.bundle /workspace/evidence
-exit 0
-""")
-            receipt.phase = "transfer"
-            save(path, receipt)
-            transport.deadline = train_deadline
-            transport.get("/workspace/bundle.json", out / "bundle.json")
-            bundle = Bundle.model_validate_json((out / "bundle.json").read_text())
-            destination = out / "evidence"
-            destination.mkdir()
-            for item in bundle.files:
-                target = item.destination(destination)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                transport.get(f"/workspace/evidence/{item.relative_path}", target)
-            policies = verify_training_bundle(destination, bundle)
-            receipt.policies = [str(p) for p in policies]
+    out.mkdir(parents=True, mode=0o700)
+    spec = prepare_job(
+        plan,
+        job_id or f"run-{uuid.uuid4().hex}",
+        destination=destination,
+        monitoring=monitoring,
+        checkpoint_seconds=checkpoint_seconds,
+    )
+    (out / "job.json").write_text(spec.model_dump_json(indent=2))
+    (out / "plan.json").write_text(plan.model_dump_json(indent=2))
+    print(
+        f"Job {spec.job_id}; reconnect: uv run manabot deploy status --job-id {spec.job_id}",
+        flush=True,
+    )
+    status = submit_job(spec)
+    while status.cleanup is None:
+        if time.time() > spec.deadline + plan.mix.cleanup_seconds:
+            raise RuntimeError(f"CLEANUP UNCONFIRMED; reconcile job {spec.job_id}")
+        time.sleep(5)
+        status = job_status(spec)
+    record = status.record
+    receipt = Receipt(
+        job_id=spec.job_id,
+        job_destination=spec.destination,
+        plan_sha256=digest(plan.model_dump_json().encode()),
+        started=spec.created_at,
+        deadline=spec.deadline,
+        phase="deleted",
+        estimated_dollars=status.cleanup.estimated_dollars,
+    )
+    if record is not None and record.manifest is not None:
+        generation = fetch_job(spec, out / "retrieved")
+        evidence = out / "evidence"
+        generation.replace(evidence)
+        (out / "bundle.json").write_bytes((evidence / "bundle.json").read_bytes())
+        bundle = Bundle.model_validate_json((evidence / "bundle.json").read_text())
+        if record.phase == "completed" and record.artifacts_complete:
+            receipt.policies = [
+                str(p) for p in verify_training_bundle(evidence, bundle)
+            ]
             receipt.complete = True
-        except BaseException as error:
-            # Do not serialize arbitrary exceptions carrying provider payloads.
-            receipt.error = type(error).__name__
-            raise
-        finally:
-            receipt.phase = "cleanup"
-            _save_cleanup(path, receipt)
-            signal.signal(signal.SIGTERM, signal.SIG_IGN)
-            previous_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            cleanup_until = time.time() + plan.mix.cleanup_seconds
-            unsettled = False
-            for attempt in receipt.attempts:
-                if attempt.deleted_time is None:
-                    if not confirm_delete(provider, attempt, cleanup_until):
-                        unsettled = True
-                    _save_cleanup(path, receipt)
-            receipt.phase = "cleanup-unconfirmed" if unsettled else "deleted"
-            receipt.complete = receipt.complete and not unsettled
-            receipt.estimated_dollars = _estimate_cost(receipt, plan)
-            _save_cleanup(path, receipt)
-            signal.signal(signal.SIGINT, previous_int)
-            signal.signal(signal.SIGTERM, previous_signal)
-            if unsettled:
-                raise RuntimeError(
-                    f"CLEANUP UNCONFIRMED; possible billing for {[(a.pod_id or a.name, a.hourly_rate) for a in receipt.attempts if a.deleted_time is None]}. Run: uv run manabot remote cleanup --deployment {path}"
-                )
-        return receipt
+        receipt.error = record.error
+    save(out / "deployment.json", receipt)
+    if not receipt.complete:
+        raise RuntimeError(
+            f"job {spec.job_id} did not return complete evidence; inspect by ID"
+        )
+    return receipt
 
 
 def cleanup(path: Path) -> Receipt:
     receipt = Receipt.model_validate_json(path.read_text())
+    if receipt.job_id is not None:
+        from .job_client import load_job, reconcile_job
+
+        status = reconcile_job(
+            load_job(
+                receipt.job_id,
+                receipt.job_destination or "s3://etudefantasia/manabot/jobs",
+            ),
+            delete=True,
+        )
+        if status.cleanup is None:
+            raise RuntimeError("CLEANUP UNCONFIRMED; inspect the durable job ID")
+        receipt.estimated_dollars = status.cleanup.estimated_dollars
+        receipt.phase = "deleted"
+        save(path, receipt)
+        return receipt
     provider = RunPod()
     with deployment_lock(Path.home() / ".cache/manabot"):
         for attempt in receipt.attempts:

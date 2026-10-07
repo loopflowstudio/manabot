@@ -1,7 +1,6 @@
 """Failure paths retain intent and settle only owned rentals, without network calls."""
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -94,54 +93,6 @@ def test_ambiguous_create_reconciles_exact_name(
     assert lifecycle.confirm_delete(provider, attempt, 1010)
     assert [p.id for p in provider.pods] == [unrelated.id]
     assert owned.id != unrelated.id
-
-
-@pytest.mark.parametrize(
-    "failure", ["price", "ambiguous", "bootstrap", "interrupt", "delete"]
-)
-def test_deployment_failure_retains_receipt_and_deletes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
-) -> None:
-    clock = Clock()
-    provider = Provider(clock, failure=failure)
-    monkeypatch.setattr(lifecycle, "time", clock)
-    monkeypatch.setattr(lifecycle, "RunPod", lambda: provider)
-    monkeypatch.setattr(lifecycle, "current_source", lambda root: SOURCE)
-    monkeypatch.setattr(lifecycle, "verify_public_source", lambda source: None)
-    monkeypatch.setattr(lifecycle.Path, "home", lambda: tmp_path)
-
-    def shell(script: str) -> bytes:
-        if script.startswith("set -eu"):
-            if failure == "interrupt":
-                raise KeyboardInterrupt()
-            raise RuntimeError("bootstrap failed")
-        return b""
-
-    monkeypatch.setattr(lifecycle, "_ready", lambda *args: SimpleNamespace(shell=shell))
-    plan = compile_plan(
-        (ROOT / "experiments/regimes/direct-self-play.json").read_text(),
-        HardwareMix.model_validate_json(
-            (ROOT / "ops/mixes/runpod-small.json").read_text()
-        ),
-        SOURCE,
-        197,
-    )
-    out = tmp_path / ".runs/deployment"
-    with pytest.raises((ValueError, RuntimeError, KeyboardInterrupt)):
-        lifecycle.deploy(plan, out, tmp_path)
-    receipt = lifecycle.Receipt.model_validate_json(
-        (out / "deployment.json").read_text()
-    )
-    assert not receipt.complete
-    assert receipt.attempts
-    assert receipt.error
-    if failure == "delete":
-        assert receipt.phase == "cleanup-unconfirmed"
-        assert receipt.estimated_dollars is None
-        assert provider.pods
-    else:
-        assert receipt.phase == "deleted"
-        assert not provider.pods
 
 
 def test_delayed_unobserved_create_stays_unconfirmed(

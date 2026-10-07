@@ -25,6 +25,7 @@ import torch
 from manabot.arena.models import canonical_sha256
 from manabot.training.execution import atomic_json
 from manabot.training.models import (
+    ArtifactReference,
     Strict,
     TrainingCoordinates,
     TrainingRun,
@@ -45,9 +46,10 @@ class MonitoringBudget(Strict):
     seconds: float = Field(gt=0)
     attempt_seconds: float = Field(default=600, gt=0)
     protocol: MonitorProtocol = Field(default_factory=MonitorProtocol)
+    include_initial: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
-def checkpoints(run: TrainingRun) -> list[Checkpoint]:
+def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Checkpoint]:
     """Admitted raw exports with their original cumulative training coordinates."""
     found = [
         Checkpoint(
@@ -60,6 +62,15 @@ def checkpoints(run: TrainingRun) -> list[Checkpoint]:
         if c.artifact is not None and c.error is None
     ]
     for stage in run.stages:
+        if include_initial and "initial_raw" in stage.artifacts:
+            found.append(
+                Checkpoint(
+                    artifact=stage.artifacts["initial_raw"],
+                    coordinates=TrainingCoordinates(
+                        stage_id=stage.id, updates=0, training_seconds=0
+                    ),
+                )
+            )
         checkpoint = stage_checkpoint(run, stage.id)
         if checkpoint is not None:
             found.append(checkpoint)
@@ -100,8 +111,14 @@ class CheckpointQueue:
         *,
         clock: Callable[[], float] = time.monotonic,
         lease: Path | None = None,
+        resolve_artifact: Callable[[ArtifactReference], ArtifactReference]
+        | None = None,
+        protocols_for: Callable[[TrainingRun, Checkpoint], list[MonitorProtocol]]
+        | None = None,
     ) -> None:
         self.out, self.config, self.clock = out, config, clock
+        self.resolve_artifact = resolve_artifact
+        self.protocols_for = protocols_for
         self.process: subprocess.Popen[bytes] | None = None
         self.active: Attempt | None = None
         self.started = 0.0
@@ -174,12 +191,12 @@ class CheckpointQueue:
     def tick(self, sources: list[Path], *, launch: bool = True) -> None:
         if self.process is not None:
             assert self.active is not None
-            if self.clock() - self.started >= self.active.reserved_seconds:
-                self._finish("monitoring allowance exhausted")
-            elif self.process.poll() is not None:
+            if self.process.poll() is not None:
                 self._finish()
+            elif self.clock() - self.started >= self.active.reserved_seconds:
+                self._finish("monitoring allowance exhausted")
         seen = {a.identity for a in self.attempts}
-        queue: list[tuple[str, TrainingRun, Checkpoint]] = []
+        queue: list[tuple[str, TrainingRun, Checkpoint, MonitorProtocol]] = []
         for source in sorted(sources):
             run = TrainingRun.model_validate_json(source.read_text())
             run_dir = self.out / f"run-{canonical_sha256(run.id)[:24]}"
@@ -201,7 +218,9 @@ class CheckpointQueue:
                 run_dir / "training-dashboard.json",
                 training_dashboard(run).model_dump(mode="json"),
             )
-            for checkpoint in checkpoints(run):
+            for checkpoint in checkpoints(
+                run, include_initial=self.config.include_initial
+            ):
                 artifact_binding = (
                     run_dir
                     / f"artifact-{canonical_sha256(checkpoint.artifact['path'])}.json"
@@ -214,16 +233,22 @@ class CheckpointQueue:
                         raise ValueError("checkpoint artifact or coordinates changed")
                 else:
                     atomic_json(artifact_binding, checkpoint.model_dump(mode="json"))
-                identity = canonical_sha256(
-                    {
-                        "run": run.id,
-                        "checkpoint": checkpoint.model_dump(mode="json"),
-                        "protocol": self.config.protocol.model_dump(mode="json"),
-                    }
+                protocols = (
+                    self.protocols_for(run, checkpoint)
+                    if self.protocols_for is not None
+                    else [self.config.protocol]
                 )
-                if identity not in seen:
-                    queue.append((identity, run, checkpoint))
-                    seen.add(identity)
+                for protocol in protocols:
+                    identity = canonical_sha256(
+                        {
+                            "run": run.id,
+                            "checkpoint": checkpoint.model_dump(mode="json"),
+                            "protocol": protocol.model_dump(mode="json"),
+                        }
+                    )
+                    if identity not in seen:
+                        queue.append((identity, run, checkpoint, protocol))
+                        seen.add(identity)
         self.pending = len(queue)
         remaining = self.config.seconds - self.charged_seconds
         # Do not start a cohort whose full declared allowance cannot fit.
@@ -233,11 +258,20 @@ class CheckpointQueue:
             and queue
             and remaining >= self.config.attempt_seconds
         ):
-            identity, run, checkpoint = queue[0]
+            identity, run, checkpoint, protocol = queue[0]
+            local_checkpoint = checkpoint
+            if self.resolve_artifact is not None:
+                local = self.resolve_artifact(checkpoint.artifact)
+                if any(
+                    local[key] != checkpoint.artifact[key]
+                    for key in ("sha256", "bytes")
+                ):
+                    raise ValueError("relocated checkpoint identity differs")
+                local_checkpoint = checkpoint.model_copy(update={"artifact": local})
             job = EvaluationJob(
                 run=run,
-                checkpoint=checkpoint,
-                protocol=self.config.protocol,
+                checkpoint=local_checkpoint,
+                protocol=protocol,
                 allowance_seconds=self.config.attempt_seconds,
                 deadline_unix=time.time() + self.config.attempt_seconds,
             )
@@ -286,7 +320,7 @@ class CheckpointQueue:
         self._publish()
 
     def _publish(self) -> None:
-        grouped: dict[str, list[MonitorResult]] = {}
+        grouped: dict[tuple[str, str], list[MonitorResult]] = {}
         for attempt in self.attempts:
             path = self._directory(attempt) / "evaluation/monitor.json"
             if path.exists():
@@ -296,18 +330,30 @@ class CheckpointQueue:
                     result.status = "incomplete"
                     result.score = result.win = result.draw = None
                     result.error = attempt.error
-                grouped.setdefault(result.run_id, []).append(result)
+                grouped.setdefault(
+                    (
+                        result.run_id,
+                        canonical_sha256(result.protocol.model_dump(mode="json")),
+                    ),
+                    [],
+                ).append(result)
         curves: list[str] = []
-        for run_id, results in grouped.items():
+        for (run_id, protocol_id), results in grouped.items():
             directory = self.out / f"run-{canonical_sha256(run_id)[:24]}"
             directory.mkdir(exist_ok=True)
-            path = directory / "dashboard.json"
+            path = directory / (
+                "dashboard.json"
+                if self.protocols_for is None
+                else f"dashboard-{protocol_id}.json"
+            )
             atomic_json(path, evaluation_dashboard(results).model_dump(mode="json"))
             curves.append(str(path))
         atomic_json(
             self.out / "dashboard.json",
             {
-                "purpose": "monitoring-not-scientific-evaluation",
+                "purpose": "checkpoint-evaluation"
+                if self.protocols_for is not None
+                else "monitoring-not-scientific-evaluation",
                 "allocation_seconds": self.config.seconds,
                 "charged_evaluator_process_seconds": self.charged_seconds,
                 "active_reserved_seconds": self.active.reserved_seconds

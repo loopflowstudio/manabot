@@ -43,8 +43,19 @@ from manabot.training.models import (
     TrainingRun,
 )
 
+EvaluationPurpose = Literal[
+    "monitoring-not-scientific-evaluation", "frozen-study-evaluation"
+]
+
 
 class MonitorProtocol(Strict):
+    purpose: EvaluationPurpose = Field(
+        default="monitoring-not-scientific-evaluation",
+        exclude_if=lambda v: v == "monitoring-not-scientific-evaluation",
+    )
+    study_protocol_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$", exclude_if=lambda v: v is None
+    )
     # Reserved monitoring namespace; callers must also exclude these from any
     # scientific cohort they construct. These deals are repeatedly inspected.
     deal_seeds: tuple[int, ...] = tuple(range(1_910_101_000, 1_910_101_025))
@@ -52,9 +63,18 @@ class MonitorProtocol(Strict):
     bootstrap_replicates: int = Field(default=2000, ge=1)
     game_seconds: float = Field(default=120, gt=0)
     max_commands: int = Field(default=10_000, ge=1)
+    opponent: Literal["scripted_greedy", "random"] = Field(
+        default="scripted_greedy", exclude_if=lambda value: value == "scripted_greedy"
+    )
 
     @model_validator(mode="after")
     def unique_deals(self) -> MonitorProtocol:
+        if (self.purpose == "frozen-study-evaluation") != (
+            self.study_protocol_sha256 is not None
+        ):
+            raise ValueError(
+                "held-out evaluation requires a frozen study protocol binding"
+            )
         if not self.deal_seeds or len(set(self.deal_seeds)) != len(self.deal_seeds):
             raise ValueError("monitoring deals must be nonempty and unique")
         return self
@@ -139,9 +159,7 @@ class RateInterval(Strict):
 
 class MonitorResult(Strict):
     schema_version: Literal[1] = 1
-    purpose: Literal["monitoring-not-scientific-evaluation"] = (
-        "monitoring-not-scientific-evaluation"
-    )
+    purpose: EvaluationPurpose = "monitoring-not-scientific-evaluation"
     run_id: str
     regime_digest: str
     training_seed: int
@@ -174,6 +192,14 @@ class MonitorResult(Strict):
     )
     error: str | None = None
     evaluation_identities: dict[str, JsonValue] = {}
+
+    @model_validator(mode="after")
+    def purpose_matches_protocol(self) -> "MonitorResult":
+        if self.purpose != self.protocol.purpose:
+            raise ValueError(
+                "evaluation result purpose differs from its frozen protocol"
+            )
+        return self
 
 
 def _summarize(result: MonitorResult) -> None:
@@ -292,12 +318,14 @@ def _manifest(
     )
     opponent = PlayerRegistration(
         **common,
-        player_id="monitor-scripted-greedy",
-        display_name="Frozen scripted greedy",
+        player_id="monitor-" + protocol.opponent.replace("_", "-"),
+        display_name="Frozen scripted greedy"
+        if protocol.opponent == "scripted_greedy"
+        else "Uniform legal random",
         role="anchor",
         runner_kind="code",
-        player_spec={"kind": "scripted_greedy"},
-        compute_class_id="scripted-greedy-cpu-v1",
+        player_spec={"kind": protocol.opponent},
+        compute_class_id=protocol.opponent.replace("_", "-") + "-cpu-v1",
         source_sha256=file_sha256(Path(players.__file__)),
     )
     key = ArenaKey(
@@ -311,6 +339,7 @@ def _manifest(
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     return MonitorResult(
+        purpose=protocol.purpose,
         run_id=run.id,
         regime_digest=run.regime_digest,
         training_seed=run.seed,

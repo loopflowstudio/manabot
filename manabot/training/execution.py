@@ -898,7 +898,9 @@ def _execute_regime(
                 else:
                     torch.manual_seed(seeds["initialization"])
                     agent = Agent(space, regime.agent).to(stage.execution.device)
-                    if stage.opponent is not None and snapshot is None:
+                    if (
+                        stage.opponent is not None or checkpoint_seconds is not None
+                    ) and snapshot is None:
                         phase = "export_seconds"
                         tick = time.perf_counter()
                         target = out / f"{stage.id}-initial-raw.pt"
@@ -916,7 +918,15 @@ def _execute_regime(
                             },
                         )
                         os.replace(temporary, target)
-                        load_checkpoint_agent(str(target))
+                        # New self-play monitoring must preserve initialization and
+                        # action-sampling streams compared with monitoring disabled.
+                        if stage.opponent is None:
+                            with torch.random.fork_rng(
+                                devices=[0] if next(agent.parameters()).is_cuda else []
+                            ):
+                                load_checkpoint_agent(str(target))
+                        else:
+                            load_checkpoint_agent(str(target))
                         record.artifacts["initial_raw"] = artifact(target)
                         record.export_seconds += time.perf_counter() - tick
                         persist()

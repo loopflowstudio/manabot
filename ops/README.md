@@ -1,6 +1,6 @@
 # Remote hardware declarations
 
-Hardware mixes live in `mixes/`; deployment runs through `uv run manabot remote`.
+Hardware mixes live in `mixes/`; deployment runs through `uv run manabot deploy`.
 See [remote training](../docs/remote-training.md) for compilation, deadlines,
 retrieval, cleanup and the explicitly invoked paid gate.
 

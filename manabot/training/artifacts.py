@@ -9,7 +9,7 @@ storage provenance, never policy admission or a portable training recovery claim
 import argparse
 import hashlib
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,7 +59,12 @@ def retained_artifacts(run: TrainingRun) -> dict[str, LocalArtifact]:
 
 
 def publish_run(
-    source: Path, destination: str, output: Path, store: S3ArtifactStore
+    source: Path,
+    destination: str,
+    output: Path,
+    store: S3ArtifactStore,
+    *,
+    resolve_artifact: Callable[[LocalArtifact], Path] | None = None,
 ) -> ArtifactManifest:
     """Preflight every local artifact before uploading; preserve exact run bytes."""
     payload = source.read_bytes()
@@ -67,8 +72,14 @@ def publish_run(
     if run.status in {"running", "pending"}:
         raise ValueError("publish a stopped or completed TrainingRun snapshot")
     references = retained_artifacts(run)
-    for reference in references.values():
-        verify_file(Path(reference.path), reference.sha256, reference.bytes)
+    local_paths = {
+        role: resolve_artifact(reference)
+        if resolve_artifact is not None
+        else Path(reference.path)
+        for role, reference in references.items()
+    }
+    for role, reference in references.items():
+        verify_file(local_paths[role], reference.sha256, reference.bytes)
     output.parent.mkdir(parents=True, exist_ok=True)
     source_sha = hashlib.sha256(payload).hexdigest()
     if output.exists():
@@ -80,7 +91,7 @@ def publish_run(
     for role, reference in references.items():
         if reference.sha256 not in by_digest:
             by_digest[reference.sha256] = store.publish(
-                Path(reference.path),
+                local_paths[role],
                 destination,
                 sha256=reference.sha256,
                 size=reference.bytes,

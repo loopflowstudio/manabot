@@ -22,6 +22,7 @@ class EvaluationProtocol(BaseModel):
         "training-calibration",
         "capacity-calibration",
         "model-capacity",
+        "cuda-capacity",
         "value-models",
         "value-token-screen",
         "pooling-filter",
@@ -45,6 +46,9 @@ class EvaluationProtocol(BaseModel):
         default=None, ge=0, le=1, exclude_if=lambda v: v is None
     )
     anchors: tuple[Literal["random", "scripted-greedy", "puct-64"], ...] = ("random",)
+    random_diagnostic_deals: tuple[int, ...] = Field(
+        default=(), exclude_if=lambda v: not v
+    )
     endpoint_paired_deals: tuple[int, ...] = ()
     endpoint_anchor_deals: tuple[int, ...] = ()
     endpoint_seed_pairs: tuple[tuple[int, int], ...] = ()
@@ -94,7 +98,7 @@ class EvaluationProtocol(BaseModel):
             raise ValueError(
                 "screen requires three seeds, two checkpoints, 25 four-leg scripted deals and eight hours"
             )
-        if self.study == "model-capacity" and (
+        if self.study in {"model-capacity", "cuda-capacity"} and (
             self.early_progress_seconds is None or self.progress_score is None
         ):
             raise ValueError("capacity requires an early window and threshold")
@@ -138,7 +142,25 @@ class EvaluationProtocol(BaseModel):
             )
         if not self.anchors or len(set(self.anchors)) != len(self.anchors):
             raise ValueError("anchors must be nonempty and unique")
-        if self.purpose == "scientific":
+        if self.study == "cuda-capacity":
+            if (
+                self.purpose != "scientific"
+                or self.anchors != ("scripted-greedy", "random")
+                or len(self.anchor_deals) != 25
+                or len(self.endpoint_anchor_deals) != 25
+                or len(self.random_diagnostic_deals) != 25
+                or self.paired_deals
+                or self.endpoint_paired_deals
+                or self.endpoint_seed_pairs
+                or self.checkpoint_count != 3
+                or self.process_seconds != 41700
+            ):
+                raise ValueError(
+                    "CUDA capacity requires the declared 100-game greedy/development/endpoint and separate random cohorts"
+                )
+        elif self.random_diagnostic_deals:
+            raise ValueError("separate random diagnostic belongs to CUDA capacity")
+        if self.purpose == "scientific" and self.study != "cuda-capacity":
             if not self.endpoint_paired_deals or not self.endpoint_anchor_deals:
                 raise ValueError("scientific profiles require untouched endpoint deals")
             if set(self.anchors) != {"random", "scripted-greedy", "puct-64"}:
@@ -161,6 +183,7 @@ class EvaluationProtocol(BaseModel):
             self.anchor_deals,
             self.endpoint_paired_deals,
             self.endpoint_anchor_deals,
+            self.random_diagnostic_deals,
         )
         flat = [s for family in families for s in family]
         if len(flat) != len(set(flat)):
@@ -177,6 +200,7 @@ class EvaluationProtocol(BaseModel):
             "training-calibration": {1},
             "capacity-calibration": {3},
             "model-capacity": {3},
+            "cuda-capacity": {2},
             "value-models": {8},
             "value-token-screen": {3},
             "pooling-filter": {4},
@@ -189,7 +213,9 @@ class EvaluationProtocol(BaseModel):
         ):
             raise ValueError("protocol must bind every resolved recipe digest")
         if (
-            not self.paired_deals and self.purpose != "screening"
+            not self.paired_deals
+            and self.purpose != "screening"
+            and self.study != "cuda-capacity"
         ) or not self.anchor_deals:
             raise ValueError("evaluation deal families must be nonempty")
         return self

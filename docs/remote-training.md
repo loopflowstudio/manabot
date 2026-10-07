@@ -1,19 +1,18 @@
 # Remote training on RunPod
 
-`manabot remote` compiles an existing self-play TrainingRegime onto a declared
-single-GPU rental. TrainingRun and VerifyStore still own training; deployment
-owns provisioning, deadlines, transport and deletion. This first capability is
-float32 ordinary PPO/Ataraxos self-play, including raw/EMA and live continuation.
-Compound, supervised, belief/search, external opponents and process recovery are
-rejected before rental. No distributed-learning or strength claim follows.
+The current submit/reconnect/cancel interface and remote-owned lifecycle are in
+[Remote jobs](remote-jobs.md). `deploy run` now observes that same durable job.
+The compiler, hardware admission, source pinning and Bundle verification below
+remain shared contracts. The ETU-114 measurements and client-owned execution
+instructions below are historical evidence, reproducible at their named source
+commits; they do not describe the current shutdown owner. PR253's custom SSH
+calibration callbacks also require their pinned source until their caller adopts
+a serializable remote workload.
 
-**Live status, 2026-10-06:** the complete 350-update-per-stage proof passed:
-CUDA self-play, raw/EMA return and reload, four terminal exact-replayed arena
-games, and confirmed empty inventory. The separately authorized 600-update-per-stage
-run with wider deadlines also completed: 42.96 minutes of CUDA training. Local-disk
-setup and the two-experiment reuse example also passed. **Current rental inventory:
-zero pods. Total Task cost: $1.6591 estimated/reported of the $50 allowance.**
-No PR review or landing was performed.
+ETU-114's eight retained attempts and shakedown total **$1.6591 estimated/reported**
+from its separate historic allowance. Those dollars are not available to ETU-123.
+Its disconnected CUDA proof uses the separately recorded reservation in the
+[current remote job contract](remote-jobs.md#etu-123-proof-allocation).
 
 ## Live attempts, 2026-10-06
 
@@ -109,10 +108,10 @@ fetchable from this repository before renting. Push the exact commit to the Task
 does not require opening or readying a PR for review.
 
 ```bash
-uv run manabot remote compile --regime experiments/regimes/direct-self-play.json \
+uv run manabot deploy compile --regime experiments/regimes/direct-self-play.json \
   --mix ops/mixes/runpod-small.json --seed 197 --out .runs/remote-plan.json
 
-doppler run --project etude --config prd -- uv run manabot remote run \
+doppler run --project etude --config prd -- uv run manabot deploy run \
   --plan .runs/remote-plan.json --out .runs/remote-example
 ```
 
@@ -204,7 +203,7 @@ TrainingRun retains training phase costs. `deployment.json` includes the entire
 rental, including setup and teardown. Records stay under the same ignored
 `.runs/remote-acceptance` ledger; unresolved prior costs/deletions prevent another
 rental and the example retains its conservative $4.90 ledger ceiling.
-Use `remote status` to inspect live count/hourly compute and `remote cleanup`
+Use `deploy status` to inspect live count/hourly compute and `deploy cleanup`
 with the recorded deployment receipt if cleanup is unconfirmed.
 
 The example ran on 2026-10-06 as attempt 007 at `f4189656`. Both experiments
@@ -247,8 +246,8 @@ Provider-ordered GPU alternatives use one create request. Unrelated rentals are
 never deleted.
 
 ```bash
-doppler run --project etude --config prd -- uv run manabot remote status
-doppler run --project etude --config prd -- uv run manabot remote cleanup \
+doppler run --project etude --config prd -- uv run manabot deploy status
+doppler run --project etude --config prd -- uv run manabot deploy cleanup \
   --deployment .runs/remote-example/deployment.json
 ```
 

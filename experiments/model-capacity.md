@@ -195,3 +195,189 @@ with no useful difference mean inconclusive, not a throughput-based winner.
 Repeat a promising or important-negative learning idea at the next capacity in
 a separately frozen follow-up, leaving its architecture-feature owner unchanged.
 No such follow-up or empirical default selection has run in this software pass.
+
+## Authorized CUDA comparison — 2026-10-06
+
+Jack Heart authorized a separate pure-capacity CUDA cohort: at most two hours
+complete-loop calibration, then twelve hours total comparison across arms/seeds,
+including evaluation, transfers and reporting. The initial all-in ceiling is $15;
+a higher working ceiling up to $30 requires a retained calibration-based reason.
+Every individual deployment remains below $5 with pod/client deadlines and
+confirmed deletion. ETU-114's historical allowance is not transferred. The mini
+depth cohort and ETU-91 evidence remain unchanged.
+
+Calibration first compares width64/depth2/heads4 to width384/depth8/heads4 with
+feedforward width1536, scalar value-token, no history, identical current-self
+Ataraxos learning and selected-match inputs. Sixteen updates per arm (two linked
+eight-update stages), seed10350, establish memory, end-to-end timing, artifact
+return and CPU arena feasibility. Predictions: the large arm fits 24 GiB GPU
+memory, costs at least twice as much per update, and scores no more than five
+percentage points above the small arm in the early window. The latter is a
+scientific prediction, not a calibration selection rule. Calibration inspects
+no strength aggregates. Allocation/VRAM/admission failure stops that attempt;
+a smaller width128/depth2 fallback needs explicit timing-based admission and
+retains the large-arm failure. No score-based capacity choice or retry.
+
+Three paired scientific seeds are 10351–10353 if complete-loop calibration admits
+them. Exact counts and clocks must be committed before scoring. Initialization
+and scored milestones each receive at least 100 balanced greedy games; random
+diagnostics have their own schedule, and final deals stay untouched until endpoint
+scoring. Evaluation must run during training. A flat curve prompts review, not an
+automatic failure verdict. Full-budget means the frozen affordable endpoint;
+it does not mean convergence. The current source's remote CLI returns artifacts
+only after training, so live-export/evaluator admission remains a prerequisite to
+the scientific cohort, alongside the calibration-derived allocation.
+
+### Hardware sweep amendment, before the new probes
+
+Jack Heart assigned the two-card performance sweep to ETU-103 on 2026-10-06.
+The initial L4 probes remain unchanged: at source `b6bbd1a4`, both capacities
+completed 16 updates / 16,384 learner transitions, returned verified exports,
+and completed four exact-replayed CPU arena games each. Rental deletion was
+confirmed for both; estimated rental costs were $0.0546896941 and $0.0747118629.
+Training times were 97.721 and 154.289 seconds. These are short feasibility
+observations; no strength aggregates were inspected. CPU evaluation process times
+were 45.318 and 38.949 seconds on one paired deal. Game length confounds that
+comparison. The configured 256 transitions are **per stream** (four streams),
+so the observed update batch is 1,024, unlike the historical mini screen.
+
+The next two jobs use NVIDIA L4 (24 GB class) and NVIDIA A40 (48 GB), in that
+order, each with a 2,100-second client allowance, existing pod deadline and
+$0.50 deployment cap. Current live quotes for both were $0.49/hour; each launch
+must re-admit price. The two-hour calibration clock began with the first retained
+rental at Unix 1791328605.990033 and includes this preparation and CPU work;
+a new job refuses admission if its full allowance no longer fits. The initial
+$15 aggregate ceiling retains a $1 storage/report reserve. No cap increase is
+currently justified. Unused allowance does not authorize retries.
+
+The shared 256-row real selected-match input was collected with seed10349 and
+four CPU streams, without optimizer work. Its exact serialized SHA256 is
+`719fc91a7eb69395303a5ba11cb560336b6c3fc81ae12e0e57e46f8d593cf7a3`.
+Both cards receive those same bytes. Model-only cells cross all four existing
+capacity rungs with batches 1, 4, 16, 64, 256 and 1024. Batches above 256 cycle
+the fixed real rows; no padding is removed. Record cold construction/first call,
+two warmup calls and three one-second timed windows for inference and diagnostic
+Adam (uniform legal-policy cross entropy plus squared scalar value, all rows).
+CUDA synchronization bounds timings; float32 and disabled TF32 are explicit.
+These optimizer probes are not Ataraxos updates or useful RL throughput.
+
+Complete-loop cells independently cross every capacity with 4/16/64 streams and
+128/512 total learner transitions per update, three ordinary updates each. The
+first update is cold; the following two expose steady update coordinates.
+Learning/filter/schedule settings remain the retained scalar-token recipe.
+TrainingRun/VerifyStore own phase times, actual exposures, skipped updates and
+exports. One worker and one CPU thread do not imply one stream. Both cards use
+identical cells; report each card's best observed feasible configuration separately,
+with these short-run and selection limits. No strength-based configuration choice.
+
+Each cell has a 70-second child cap; each full grid a 900-second cap within its
+rental. All OOMs, partial phases, timeouts and unvisited cells remain explicit.
+CUDA allocation/reservation peaks, attention slots, validity/padding, source,
+native/runtime and input identities are retained. Model-only improvements cannot
+stand in for complete-loop improvements. Collection includes both engine and
+inference, so its fraction alone does not establish engine starvation; relate it
+to fixed-batch inference and stream sweeps before proposing new collection code.
+No separate software Task is warranted without a demonstrated missing capability.
+
+CPU coordination: ETU-118's calibration subsequently acquired the shared lease;
+a fixed-input attempt declined it without collecting data. ETU-103 waited and
+preserved that owner. Both four-game checks and the final input collection used
+the shared lease. Concurrent sustained campaigns still require a tested handoff;
+no learner is displaced and no timing correction is invented.
+
+### Bounded CUDA learning schedule (before scoring)
+
+The two-card probes remain pinned to `7316da5d`. The L4 grid completed 47 cells
+and retained one optimizer OOM at width384/depth8, fixed batch1024. Its closed
+277-file, 1,735,865,605-byte bundle verified through an independent bulk return.
+The redundant per-file transfer was deliberately interrupted after verification;
+the original interrupted receipt remains, deletion was confirmed, and its
+intent-to-deletion rental estimate is $0.1903964333. This is transfer recovery,
+not a repeated measurement or a rewritten successful deployment. The A40 receives
+the identical grid/source. Bulk transfer and explicit phase timestamps are being
+added for later jobs; historical phase splits remain unavailable where not recorded.
+
+Timing-only selection will use one common measured GPU, batch and stream count
+for both scientific capacities. Width64/depth2 and width384/depth8 remain the
+comparison; the small model is scalar value-token, no history, with the same
+inputs, Ataraxos learning, filtering, schedules, Adam and current-self opponent.
+The fixed terminal count per capacity is
+`20 * floor(900 / (1.5 * measured_seconds_per_update * 20))`, split into two equal
+linked halves. The rate is the maximum of the selected three-update run/3,
+stage time/3, and either of its last two update intervals. Fewer than 20 admitted
+updates stops allocation. The 50% timing margin is conservative extrapolation,
+not a sustained timing proof. Unused time buys no extra updates. Different counts
+are declared cost-targeted endpoints; sample/exposure comparisons use overlapping
+observed support. Each run has a 1,000-second watchdog and 490 seconds per half.
+
+Three paired seeds 10351–10353 run small/large, large/small, small/large. Six
+1,850-second rental ceilings reserve 11,100 seconds. Each run has four separate
+100-game cohorts, each with a 1,200-second CPU process ceiling: initialization
+and midpoint versus greedy on development deals 1910103510–1910103534; terminal
+raw versus greedy on untouched deals 1910103610–1910103634; then a separately
+scheduled terminal random diagnostic on 1910103710–1910103734. Four deck/seat
+legs stay together. The 24 cohorts reserve 28,800 evaluator seconds; publication
+and reporting reserve 1,800 seconds. These sum to the revised 41,700-second
+comparison ceiling described below. Rental and evaluator occupied time are charged separately
+even when they overlap. Publication during a rental is a subset of its time;
+post-rental publication/reporting consumes the final reserve. Transfers, setup,
+idle and deletion stay inside rental time. The $15 ceiling includes all earlier
+calibration rentals and a $1 storage/report allowance; no increase is justified.
+
+Initialization is exported without advancing learner or sampling RNG state.
+Immutable exports become available to the ordinary CPU checkpoint queue while
+training continues. The existing shared evaluator lease is acquired before any
+scientific rental; an ETU-118 owner prevents admission without displacing its
+learner. W&B is a bounded projection and S3 retains original producer bytes with
+transport path resolution. Local evidence survives publication failures. A
+checkpoint-safe pause is between complete independent seed/arm rentals only;
+there is no remote process recovery or automatic retry. Any training, replay,
+legality, cohort deadline or required artifact failure retains the attempt and
+stops the comparison. A flat curve alone does not stop it.
+
+The early window is 600 training seconds and the descriptive progress threshold
+is 50% score versus greedy. Report first observed crossing intervals or censor
+at the last observed non-hit. Common-support step-function area uses development
+points only, without extrapolation; initialization and one midpoint give a sparse
+curve, not precise learning onset. Final deals are plotted distinctly and never
+reclassified as development evidence. Report raw terminal contrasts with separate
+seed, paired-deal and joint percentile intervals (10,000 resamples, seed1035106).
+Three training seeds remain a small method cohort. One CPU thread and one sampled
+policy pass fix the inference rule, not equal latency or FLOPs across capacities.
+Retain the current fast-model default unless consistent early gains justify a
+follow-up; a promotion-capacity recommendation needs a terminal gain of at least
+five points with positive paired-seed interval and no negative seed contrast.
+Such a recommendation is input to ETU-118, not automatic baseline or chapter
+promotion. Negative or inconclusive outcomes retain both scientific limits and
+all attempts.
+
+Before freezing this schedule, one final live-workflow calibration may use at most
+1,250 remaining seconds of the revised calibration clock: a 1,100-second rental,
+128 small-model updates, one four-game initialization timing cohort, and bounded
+collection profiling. The profiler compares the existing 4/64-stream settings
+at 512 total transitions for both capacities. It records actual inference batch
+sizes and the union of traced GPU kernel/copy intervals within collection;
+profiler overhead makes it diagnostic, separate from throughput. GPU gaps do
+not by themselves identify the engine as the cause. No collection software Task
+is justified merely by high collection share or one execution worker.
+
+A timing-only fit-bracketing amendment adds width384/depth8 at fixed model batch512
+on each card, using the same real input, two warmups and three timed windows.
+The original 48-cell grids remain unchanged. A40 runs this separate 70-second
+child after its grid has closed, within that rental's existing deadline; L4 runs
+it in the final live-workflow calibration. Supplemental manifests retain source,
+results, exit/OOM logs and costs. This closes the untested gap between batches256
+and1024 without changing a scientific model or examining strength scores.
+
+### Calibration time reallocation (2026-10-06, before original deadline)
+
+Following Jack Heart’s instruction to report a concrete revised time plan before
+exceeding calibration, Codex reported a 25-minute reallocation at Unix time
+1791335743: 8,700 calibration seconds and 41,700 comparison seconds. Combined
+time stays 50,400 seconds and the all-in ceiling stays $15. The calibration
+deadline is 1791337305.990033. This is an operator interpretation of that
+instruction, not a claim of separate approval of these exact phase numbers.
+The additional time funds only live evaluation, collection profiling, the L4
+batch512 bracket and freeze. Another overrun stops execution. Six reduced rental
+limits absorb the reallocation; evaluation and reporting reserves stay unchanged.
+The immutable local amendment retains the original clock and completed attempts.
