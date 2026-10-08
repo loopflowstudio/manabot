@@ -19,40 +19,43 @@ bounded failure state uses existing rejected-artifact publication. Failed active
 operations are timed directly; accumulated overhead cannot become learning time.
 ETU-126 owns lifecycle/upload. The [contract](../../docs/numerical-health.md)
 owns semantics, overhead and CUDA admission. CPU proofs
-and positive toy learning establish no CUDA validation, MTG strength or historical
-causal attribution. ETU-103/Mini source and artifacts remain untouched.
+and positive toy learning establish no MTG strength or historical causal attribution.
+ETU-126 supplies the later named CUDA admission below; ETU-103/Mini artifacts remain untouched.
 
 ## Durable cohort owner (ETU-126, 2026-10-08)
 
-Jack Heart authorized autonomous MLOps delivery, then raised the overall capacity
-ceiling from $30 to $100 including prior costs, storage, validation and new attempts.
-Jack Heart also authorized step-target preparation; ETU-126 is the single launch
-owner. Preserve per-job limits, failed evidence and Mini training/ordering.
+Jack Heart authorized autonomous MLOps delivery within $100 inclusive, then four
+active hours per small seed and eight per large seed, three paired seeds. ETU-126
+alone launches. Preserve original failures, job limits and Mini ordering. Compare
+common time/samples separately from unequal endpoints. Prepared targets are
+26,000 small / 15,600 large iterations; source/allocation admission remains open.
 
-ETU-103's controller died at agent-turn exit independently of its learner failure.
-Verified count 17,283 and active coordinate 9,884.38 seconds remain frozen;
-ETU-127 owns numerical semantics and failure accounting. PR258/259 supply the owner and numerical repair; CUDA acceptance remains open.
+Pilot `etu103-recovery-v2-pilot-1`, merged `2555c0e2`, passed 31 L4 numerical checks,
+100 initial games with exact replay, then 512 large updates / 262,144 transitions.
+Active time was 939.7533 seconds, with 11,404 optimizer exposures and five empty
+iterations. All 124 returned files verified; final raw/EMA reloaded; GPU/guardian
+deleted. Estimated pilot charge $0.435531379881 brings retained costs to
+$4.717918369190. This is workflow/timing, not strength or sustained throughput.
 
-Experiment.jobs freezes into deploy cohorts. S3 owns intent, attempts, cancellation
-and deadlines; launchd/systemd owns the process on an online host. Host binding
-and flock exclude competing owners. Reconnect retains create claims and inclusive
-reservations; failed, paused or uncertain attempts never spawn replacements.
-Final manifests/cleanup admit later jobs. Separate bounded reporting retains local
-Dashboard evidence before optional W&B; interrupted fetches resume verified bytes.
+The original completed record omitted endpoint evaluation: learning ended during
+upload after the queue scan. The repair rescans after exit and fails pending
+unevaluated checkpoints. CPU endpoint recovery stays separate; preserve the
+original defect. Dashboard parsing/W&B mutable-row fixes passed real projection.
+Intermediate uploads reuse verified S3 versions; final readback remains complete.
+No measured upload speedup follows from the frozen pilot. The
+[remote contract](../../docs/remote-jobs.md) and
+[capacity record](../../experiments/model-capacity.md) own outcomes and limits.
 
-Offline faults and native launchd restart completed two fake jobs without duplicates.
-The [remote contract](../../docs/remote-jobs.md) owns commands and limits. A named
-CUDA validation gate precedes learning within the same job, preserving logs and
-receipts through ordinary snapshots. CPU fixtures are not live CUDA acceptance.
-
-Retained costs are $4.282386989310 estimated; replace the old proof reservation
-with actual proof charges rather than double-counting. Live 2026-10-08 quotes were
-$0.49/hour for L4/A40 with empty inventory. Control-plane AWS SSO was expired;
-the restricted issuer authenticated but correctly denied control reads. Mini was
-online but lacked controller credentials. No rental or credential mutation followed.
-Versioned targets, final source, validated CUDA, renewable controller authority
-and fresh price/cost admission precede restart. No CUDA exact resume, automatic
-host takeover or six-run result follows from one repaired run.
+Jack Heart explicitly approved the separate controller identity and secure Mini
+installation. Its scope is one cohort/six jobs with 96-hour S3 expiry; conditional
+writes/readback and unrelated-prefix denial passed. The original issuer remains
+restricted. Selected private credentials and a dedicated Mini service checkout
+preserve learning/ordering. Revoke the controller identity and remove copied
+secrets/services after settlement; IAM expiry does not revoke the shared provider
+key. New large 11.95h/$6.20 JobSpecs implement eight hours within $100; existing
+caps remain unchanged. No six-run result, CUDA exact resume or automatic host
+takeover follows. Endpoint recovery passed 100 replayed games on local CPU;
+the original remote omission remains evidence.
 
 ## Step targets and machine allocations (ETU-124, 2026-10-07)
 
@@ -1087,14 +1090,11 @@ owns the support semantics and remaining limits.
 
 ## Architecture-recipe implementation boundary (ETU-104, 2026-10-05)
 
-Jack Heart approved implementation and landing. AgentSpec owns model configuration;
-helpers construct TrainingRegime values without registries, migrations or weight
-ports. Complete snapshots retain eight value-study digests; duplicate labels fail.
-The `486739d5` proof establishes composition/reload, not strength or chapter
-acceptance. ETU-91 stayed untouched. Merged PR223's detailed
-proof/history remains at `33bce999` and `64bdbca6`; the
-[design](../../docs/plans/modular-architecture-recipes.md) owns scope and deferrals.
-
+Jack Heart approved implementation and landing. AgentSpec owns configuration;
+helpers construct TrainingRegime without weight ports. PR223 composition/reload
+proof, preserved study digests and scope remain at `33bce999`, `64bdbca6` and the
+[design](../../docs/plans/modular-architecture-recipes.md). No strength or chapter
+acceptance follows; ETU-91 stayed untouched.
 
 ## Learning dashboard and monitoring (ETU-129, 2026-10-08)
 
@@ -1166,10 +1166,6 @@ packaged preset checks passed. The affected checks passed after rebuilding this
 checkout's stale native extension; one notebook-dependent check remains skipped.
 No scientific campaign or paid compute ran. Software acceptance does not establish
 training, calibration, demo admission or chapter outcomes.
-
-## Historical capacity preparation
-
-ETU-103 software scope, WDL proposal and evidence limits remain at `0145f77f`.
 
 ## Saved sampler uncertainty software (ETU-110, 2026-10-05)
 

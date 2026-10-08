@@ -309,6 +309,13 @@ def publish_dashboard(
     Network failure leaves local JSON intact. There is no offline W&B resume
     assumption: offline JSON is backfilled online using the remote step cursor.
     """
+    # Evaluation rows grow in place until their attempt settles. Retain that
+    # progress in the local Dashboard and remote summary, but publish only the
+    # settled prefix into append-only history. Failed attempts remain evidence.
+    for index, row in enumerate(dashboard.rows):
+        if row.get("monitor/status") == "running":
+            dashboard = dashboard.model_copy(update={"rows": dashboard.rows[:index]})
+            break
     tracked = wandb.init(
         project=project,
         entity=entity,

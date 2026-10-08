@@ -191,10 +191,13 @@ def project_once(
                 saved: list[str] = []
                 for entry in manifest.bundle.files:
                     if entry.relative_path != "training-dashboard.json" and not (
-                        entry.relative_path.startswith("monitoring/")
-                        and entry.relative_path.endswith("dashboard.json")
+                        entry.relative_path.startswith("monitoring/run-")
+                        and Path(entry.relative_path).name.startswith("dashboard")
+                        and entry.relative_path.endswith(".json")
                     ):
                         continue
+                    # monitoring/dashboard.json is the queue index, not a
+                    # Dashboard. Per-run files also include protocol suffixes.
                     source = fetch_job_file(
                         spec, record, entry.relative_path, directory / "cache"
                     )

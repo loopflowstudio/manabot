@@ -196,7 +196,132 @@ Repeat a promising or important-negative learning idea at the next capacity in
 a separately frozen follow-up, leaving its architecture-feature owner unchanged.
 No such follow-up or empirical default selection has run in this software pass.
 
+## Live CUDA recovery — 2026-10-08
+
+Jack Heart reconfirmed the paired three-seed comparison and subsequently requested
+approximately **four active training hours per small seed and eight per large
+seed**, within the inclusive **$100** ceiling. This supersedes the provisional
+9,000-update large target below. ETU-126 remains the sole launch owner; the old
+failed `68e0fbe9` attempt and Mini workloads/ordering remain unchanged.
+
+The direct supervised pilot `etu103-recovery-v2-pilot-1` actually ran on an L4 at
+$0.49/hour, plus the $0.02/hour storage allowance. Its immutable $1.75/2.5-hour
+JobSpec and 512-iteration target were unchanged by the later direction. Source
+`2555c0e2ab2fb01b1624b5f948a7b5813b0361d2` includes merged PR258–261. The submitter
+exited; the provider-owned supervisor continued validation, initial evaluation,
+learning, publication and deletion without an agent scheduler.
+
+The named CUDA gate passed **31 checks** and the optimizer-overhead command on
+L4 / Torch 2.10.0+cu128 / CUDA 12.8. The gate took 13.46 seconds; its small-model
+microprobe measured a 1.326 median guarded/plain ratio, not large-model RL
+throughput. The [compact receipt](data/etu126/cuda-admission-20261008.json) binds
+source/native bytes and measurements. The initial raw checkpoint completed
+**100 valid, exactly replayed games**, with zero failures/truncations, in
+1,365.29 evaluator seconds; its durable publication preceded learning.
+
+The large learner completed **512 iterations / 262,144 transitions**, with
+**939.7533 active seconds** (775.5884 collection + 164.1649 learning), 11,404
+optimizer exposures and five wholly empty-filter iterations. Recorded numerical
+diagnostics contain zero nonfinite values, underflows or rejected optimizer steps.
+The full TrainingRun elapsed coordinate also includes initialization/persistence;
+it is not the active-time denominator. Host RSS is recorded; GPU peak memory was
+not measured. A short run cannot establish sustained throughput or strength.
+
+The final bundle contains **124 verified files / 358,029,116 bytes**; ordinary
+admission loaded both final raw and EMA policies. The GPU and its guardian were
+confirmed absent. Their conservative combined charge is **$0.435531379881
+estimated**, not invoiced. This replaces the pilot's reservation once, bringing
+retained estimated GPU charges to **$4.717918369190** before storage/reporting.
+Full immutable originals remain in this checkout's
+`.runs/etu126-recovery/admitted-pilot-v2/` and the job's private versioned S3 prefix.
+
+The pilot exposed a lifecycle defect: its original job record says `completed`
+with one evaluation, because learning finished during an intermediate upload and
+the supervisor used an earlier empty queue scan. The endpoint checkpoint was
+returned but never evaluated remotely. The repaired supervisor scans again after
+learner exit and fails pending evaluation when allowance is exhausted. Real child
+process fixtures cover completion during publication and insufficient allowance;
+this does not retroactively validate the original job record. A bounded local CPU
+endpoint recovery used the exact returned checkpoint and original development
+deals, separately from the remote curve: **100 valid, exactly replayed games**
+completed in 624.30 seconds on local CPU. No learner or rental was started.
+A missing copied queue configuration prevented the first local launch; a second
+attempt stopped after 2.07 seconds with zero scored rows when the reporting layer
+correctly rejected combining different host/runtime identities. Both remain
+retained. The successful standalone endpoint keeps those identities separate;
+this recovers checkpoint evidence, not remote lifecycle acceptance.
+
+Two other live reporting defects are repaired: the queue index is excluded from
+Dashboard parsing, and W&B receives settled history rows while mutable running
+rows remain local/summary progress. Real private S3 reads and W&B publication
+succeeded; telemetry never schedules jobs. Intermediate publication now reuses
+this supervisor's previously verified S3 object versions; new/unversioned bytes
+and final delivery still get full readback. The frozen pilot ran the earlier
+publisher, so it provides no measured speedup for that optimization. Every planned
+scientific job now binds the numerical-admission flag through Experiment/Cohort.
+
+### Measured targets and remaining admission
+
+Targets are frozen prospectively from timing, without using pilot scores:
+
+| Arm | Iterations per seed | Transitions | Projected active hours | Proposed lease / hard cap |
+| --- | ---: | ---: | ---: | --- |
+| Small width64/depth2 | 26,000 | 13,312,000 | 4.13 | 9.5 h / $4.95 |
+| Large width384/depth8 | 15,600 | 7,987,200 | 7.95 | 11.95 h / $6.20 |
+
+Large uses `floor(28,800 / (939.7532508485019 / 512) / 100) * 100`.
+Small retains 17,283 iterations / 9,884.38 active seconds from the failed frozen
+run; it is an older timing basis, not a repaired small-model measurement.
+Keep 64 streams × 8 transitions, all original input/value/learning controls,
+Ataraxos iteration schedules, seeds 10351–10353 and alternating arm order.
+Compare common observed sample and active-time milestones separately from
+unequal-budget endpoints, with per-deck scores and both seat assignments.
+These targets do not promise the projected duration on every seed.
+
+The versioned preparation is retained in
+`.runs/etu126-recovery/prepared-science-v3/`. Exact control comparison and all six
+ordinary Experiment/JobSpec plans compile without provisioning. Large reserves
+9.5 hours for the stage, 45 minutes per evaluation attempt, 30 minutes for final
+upload and the existing setup/checkpoint/cleanup reserves. Its 11.95-hour lease
+fits the worker's 11h59m admission ceiling, leaving issuance margin below the
+12-hour STS limit. Small keeps its shorter allocation and 30-minute evaluation
+attempts. No long job is admitted until final source, prices and authority agree.
+
+At the observed quote, all six proposed caps total $33.45. Adding retained charges,
+$0.70 guardian reserve, $3 durable storage, $2 controller/reporting and $5
+unreconciled-cost reserve gives **$48.867918369190**, within $100. This is a
+conservative reservation, not additional invoices or automatic retry authority.
+The new large JobSpecs carry a $6.20 hard cap under Jack Heart's later eight-hour
+direction and inclusive $100 authorization. This prospectively replaces the
+historical below-$5 planning constraint for those new jobs; every existing job
+retains its original cap and deadline. No additional budget confirmation is needed.
+
+Jack Heart then explicitly authorized the separate restricted controller identity
+and secure Mini installation. `manabot-etu126-controller-v3` now has only the
+[prepared comparison scope](data/etu126/proposed-controller-policy.json), with an
+explicit deny after 96 hours: one cohort and six job prefixes, no deletion or IAM
+administration. Live admission verified missing-key reads, conditional create /
+replace, versioned readback and denial outside the selected prefix. The existing
+worker issuer's permissions remain unchanged. Only selected controller, worker
+issuer and RunPod credentials are installed privately; personal SSO state is never
+transferred. No separately scoped W&B credential was available on Mini; local
+reports remain independent, and retained projections can be published later.
+
+The dedicated Mini checkout and existing launchd cohort service own subsequent
+execution. A private credential launcher reads mode-0600 local secret material;
+plans and launchd configuration contain selectors/paths only. The account must
+remain logged in and online. Revoke by disabling/deleting the controller IAM key
+and inline policy/user, unloading the two named launchd services, then removing
+this experiment's credential files/profiles. Remove only the copied issuer/provider
+secrets; do not revoke shared original keys or alter Mini learning. The IAM expiry
+bounds S3 authority but not copied provider-key authority, so host cleanup remains
+required after settlement. Final source and service admission are retained with
+the versioned preparation. No six-run result follows from one advancing job.
+
 ## Step-target recovery preparation — 2026-10-08
+
+> Historical preparation: the live recovery and eight-hour large-arm direction
+> above supersede its provisional target/allocation. Retain these bytes as intent.
 
 Jack Heart raised the overall capacity-experiment ceiling to **$100**, including
 prior attempts, storage, validation and new allocations, and authorized autonomous

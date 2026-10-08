@@ -25,6 +25,7 @@ class PlannedRun(Strict):
     spec: JobSpec
     monitoring: MonitoringBudget
     checkpoint_seconds: float = Field(default=3600, gt=0)
+    validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class Hardware(Strict):

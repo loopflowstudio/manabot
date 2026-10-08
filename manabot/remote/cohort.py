@@ -28,6 +28,7 @@ class CohortEntry(Frozen):
     monitoring: MonitoringBudget | None = None
     checkpoint_seconds: float = Field(default=3600, gt=0)
     experiment_json: str | None = None
+    validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
 
     def job(self, now: float) -> Job:
         return Job(
@@ -39,6 +40,7 @@ class CohortEntry(Frozen):
             monitoring=self.monitoring,
             checkpoint_seconds=self.checkpoint_seconds,
             experiment_json=self.experiment_json,
+            validate_numerics=self.validate_numerics,
         )
 
 

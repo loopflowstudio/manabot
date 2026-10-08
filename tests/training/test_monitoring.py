@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -293,6 +294,57 @@ def test_publisher_uses_remote_prefix_and_rejects_rewritten_history(
     monitoring.publish_dashboard(dashboard, tmp_path)
     assert remote.step == 2
     dashboard.rows[0]["rl/entropy"] = 0.6
+    with pytest.raises(ValueError, match="published prefix"):
+        monitoring.publish_dashboard(dashboard, tmp_path)
+
+
+def test_publisher_waits_for_evaluation_completion_without_losing_local_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    remote = Mock(step=0, summary={}, url="https://wandb.invalid/evaluation")
+    published: list[dict[str, object]] = []
+
+    def log(row: dict[str, object], step: int) -> None:
+        assert step == remote.step
+        published.append(row)
+        remote.step += 1
+
+    remote.log.side_effect = log
+    monkeypatch.setattr(monitoring.wandb, "init", Mock(return_value=remote))
+    dashboard = Dashboard(
+        run_id="monitor-fixture",
+        config={},
+        summary={"attempted_games": 4},
+        rows=[
+            {
+                "progress/observation": 0,
+                "monitor/status": "running",
+                "monitor/attempted_games": 4,
+            }
+        ],
+    )
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    dashboard.rows[0]["monitor/attempted_games"] = 8
+    dashboard.summary["attempted_games"] = 8
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    assert not published
+    assert remote.summary["attempted_games"] == 8
+    assert dashboard.rows[0]["monitor/attempted_games"] == 8
+    dashboard.rows[0]["monitor/status"] = "completed"
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    dashboard.rows.append(
+        {
+            "progress/observation": 1,
+            "monitor/status": "running",
+            "monitor/attempted_games": 0,
+        }
+    )
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    assert len(published) == 1
+    dashboard.rows[1]["monitor/status"] = "incomplete"
+    monitoring.publish_dashboard(dashboard, tmp_path)
+    assert [row["monitor/status"] for row in published] == ["completed", "incomplete"]
+    dashboard.rows[0]["monitor/attempted_games"] = 7
     with pytest.raises(ValueError, match="published prefix"):
         monitoring.publish_dashboard(dashboard, tmp_path)
 

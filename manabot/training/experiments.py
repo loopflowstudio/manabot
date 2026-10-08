@@ -422,6 +422,7 @@ class Experiment:
                     plan=plan,
                     monitoring=binding.monitoring,
                     checkpoint_seconds=binding.checkpoint_seconds,
+                    validate_numerics=binding.validate_numerics,
                     experiment_json=json.dumps(
                         cases[binding.case].receipt(), sort_keys=True
                     ),
@@ -446,6 +447,7 @@ class Experiment:
             monitoring=binding.monitoring,
             checkpoint_seconds=binding.checkpoint_seconds,
             destination=binding.spec.access.destination,
+            validate_numerics=binding.validate_numerics,
         )
 
     def resolve(self) -> ResolvedExperiment:

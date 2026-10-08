@@ -128,8 +128,9 @@ def test_frozen_four_hour_deployment_keeps_exact_identity() -> None:
         compile_plan(old.input_json, job_spec(4), SOURCE, 1)
 
 
+@pytest.mark.parametrize("validate_numerics", [False, True])
 def test_experiment_binds_seeded_cases_without_changing_recipe(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, validate_numerics: bool
 ) -> None:
     bindings = tuple(
         PlannedRun(
@@ -137,6 +138,7 @@ def test_experiment_binds_seeded_cases_without_changing_recipe(
             seed=seed,
             spec=job_spec(hours),
             monitoring=MonitoringBudget(seconds=100, attempt_seconds=10),
+            validate_numerics=validate_numerics,
         )
         for seed, hours in ((1, 0.5), (2, 4))
     )
@@ -154,6 +156,8 @@ def test_experiment_binds_seeded_cases_without_changing_recipe(
     assert spec.monitoring == bindings[0].monitoring
     assert spec.checkpoint_seconds == bindings[0].checkpoint_seconds
     assert spec.experiment_json is not None
+    assert spec.validate_numerics == validate_numerics
+    assert ("validate_numerics" in bindings[0].model_dump()) == validate_numerics
 
 
 def test_cli_compile_and_submit_use_real_job_lifecycle(
@@ -318,7 +322,10 @@ def test_historical_reserves_require_explicit_new_authoring() -> None:
         compile_plan(recipe().model_dump_json(), old.spec, SOURCE, 1)
 
 
-def test_experiment_cohort_preserves_planned_order_and_receipts() -> None:
+@pytest.mark.parametrize("validate_numerics", [False, True])
+def test_experiment_cohort_preserves_planned_order_and_receipts(
+    validate_numerics: bool,
+) -> None:
     regime = recipe()
     spec = job_spec().model_copy(update={"spending_limit": 2})
     experiment = Experiment(
@@ -330,6 +337,7 @@ def test_experiment_cohort_preserves_planned_order_and_receipts() -> None:
                 seed=seed,
                 spec=spec,
                 monitoring=MonitoringBudget(seconds=120, attempt_seconds=30),
+                validate_numerics=validate_numerics,
             )
             for seed in (199, 197)
         ),
@@ -346,6 +354,14 @@ def test_experiment_cohort_preserves_planned_order_and_receipts() -> None:
     assert [entry.job_id for entry in cohort.entries] == ["ordered-0", "ordered-1"]
     assert cohort.reserved_dollars == 5
     assert all(entry.experiment_json is not None for entry in cohort.entries)
+    assert all(
+        entry.job(1000).validate_numerics == validate_numerics
+        for entry in cohort.entries
+    )
+    assert all(
+        ("validate_numerics" in entry.model_dump()) == validate_numerics
+        for entry in cohort.entries
+    )
     with pytest.raises(ValueError, match="inclusive spending"):
         experiment.cohort(
             SOURCE,

@@ -136,6 +136,12 @@ Full editable notebook analysis still uses the ordinary `deploy fetch/report` pa
 Unpublished data is unavailable, not a zero, and a saved timestamp is not a live
 heartbeat. A network outage retains the earlier local evidence.
 
+The queue index at `monitoring/dashboard.json` is not a Dashboard export. The
+projector reads the per-run files, including protocol-specific dashboard names.
+In-progress evaluation counts remain visible in local exports and W&B summaries;
+only settled evaluation rows enter W&B's append-only history. A later completed
+or failed attempt appends once, while rewriting a published result still fails.
+
 The report service has its own process/host lock and cannot submit training.
 It polls every five minutes by default, with 120-second child attempts and a
 cumulative 3,600-second allowance inside the declared controller allocation.
@@ -169,6 +175,10 @@ extra, then the supervised process runs the frozen numerical contract tests with
 `MANABOT_NUMERICS_DEVICE=cuda` and the CUDA optimizer-overhead probe before
 starting the declared TrainingRegime. A missing GPU or failed test blocks learning;
 there is no CPU fallback or automatic replacement.
+
+Experiment authors can set `PlannedRun(validate_numerics=True)` for the same
+gate through `prepare_job` or a frozen cohort. It stays attached to each admitted
+job across supervisor restarts; omitted/false flags preserve historical identities.
 
 ```bash
 uv run --extra artifacts manabot deploy submit --plan validation-plan.json \
@@ -276,6 +286,13 @@ weights or the database; a newer remote generation cannot change the observed
 log's identity mid-fetch. Report generation reuses the existing
 create-once editable notebook and offline HTML dashboard. It needs neither the
 rental nor SSH. Existing notebook edits survive refresh.
+
+Within one supervisor, intermediate snapshots reuse immutable S3 version receipts
+that this process has already verified by full readback. Local snapshot bytes still
+receive digest/size checks. New content and unversioned (`null`) objects always
+receive full readback; failed publications never populate this cache. Losing the
+process loses the cache. Final publication re-verifies every artifact remotely
+before declaring complete, including unchanged checkpoints and closed evaluations.
 
 `attach` follows published log prefixes like `logs --follow`; Ctrl-C stops
 observation only. Log freshness is limited by the declared publication interval.
@@ -510,3 +527,15 @@ absolute permission/shutdown bounds, paused artifact publication and native CPU
 pause/recovery equivalence. They do not establish live IAM enforcement, CUDA
 recovery, or month-long operation. No rental or scientific scoring is needed to
 run them.
+
+### Final checkpoint discovery
+
+A learner may finish while its supervisor uploads an intermediate snapshot.
+After observing learner exit, supervision scans the closed TrainingRun again
+before deciding evaluation is finished. Pending checkpoints with exhausted
+allowance make the job failed; they cannot become a completed job merely because
+no evaluator process is running. The CUDA recovery pilot exposed this race:
+its original record says completed despite omitting its endpoint evaluation.
+Keep that record as evidence; a separately recovered evaluation does not rewrite
+it or establish remote lifecycle acceptance. See the
+[capacity recovery record](../experiments/model-capacity.md#live-cuda-recovery--2026-10-08).

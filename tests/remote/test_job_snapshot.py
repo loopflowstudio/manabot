@@ -4,11 +4,98 @@ from pathlib import Path
 
 import pytest
 
+from manabot.infra.artifacts import S3ArtifactStore, StoredArtifact, verify_file
 from manabot.remote.plan import digest
-from manabot.remote.snapshots import snapshot_evidence
+from manabot.remote.snapshots import publish_snapshot, snapshot_evidence
 from manabot.training.models import TrainingRun
 from manabot.verify.store import VerifyStore
+from tests.remote.job_fixtures import FileStore
+from tests.remote.test_jobs import specification
 from tests.training.test_checkpoint_queue import run_fixture
+
+
+class PublicationStore(S3ArtifactStore):
+    def __init__(self, version: str | None = "v1") -> None:
+        self.version = version
+        self.published: list[str] = []
+        self.unavailable: str | None = None
+
+    def publish(
+        self, path: Path, destination: str, *, sha256: str, size: int
+    ) -> StoredArtifact:
+        verify_file(path, sha256, size)
+        self.published.append(path.name)
+        if self.unavailable == sha256:
+            raise ConnectionError("remote readback unavailable")
+        return StoredArtifact(
+            uri=f"{destination}/sha256/{sha256}",
+            sha256=sha256,
+            bytes=size,
+            version_id=self.version,
+        )
+
+
+@pytest.mark.parametrize("version", ["v1", None, "null"])
+def test_intermediate_publication_reuses_only_verified_versions_and_final_rechecks(
+    tmp_path: Path, version: str | None
+) -> None:
+    spec = specification(FileStore(tmp_path / "control.sqlite"))
+    root = tmp_path / "producer"
+    root.mkdir()
+    (root / "toolchain.txt").write_text("frozen native identity")
+    (root / "training.log").write_text("initial")
+    artifacts = PublicationStore(version)
+    verified: dict[str, StoredArtifact] = {}
+    publish_snapshot(
+        spec, root, 1, complete=False, artifacts=artifacts, verified=verified
+    )
+    assert artifacts.published == ["toolchain.txt", "training.log", "manifest.json"]
+    artifacts.published.clear()
+    (root / "training.log").write_text("advancing")
+    publish_snapshot(
+        spec, root, 2, complete=False, artifacts=artifacts, verified=verified
+    )
+    assert artifacts.published == (
+        ["training.log", "manifest.json"]
+        if version == "v1"
+        else ["toolchain.txt", "training.log", "manifest.json"]
+    )
+    artifacts.unavailable = digest((root / "toolchain.txt").read_bytes())
+    with pytest.raises(ConnectionError, match="readback unavailable"):
+        publish_snapshot(
+            spec, root, 3, complete=True, artifacts=artifacts, verified=verified
+        )
+    artifacts.unavailable = None
+    artifacts.published.clear()
+    publish_snapshot(
+        spec, root, 3, complete=True, artifacts=artifacts, verified=verified
+    )
+    assert artifacts.published == ["toolchain.txt", "training.log", "manifest.json"]
+    artifacts.published.clear()
+    # Losing process-local state requires another complete readback, never trust
+    # a new process's knowledge of the content-addressed key alone.
+    publish_snapshot(spec, root, 4, complete=False, artifacts=artifacts, verified={})
+    assert artifacts.published == ["toolchain.txt", "training.log", "manifest.json"]
+
+
+def test_failed_publication_never_populates_verified_cache(tmp_path: Path) -> None:
+    spec = specification(FileStore(tmp_path / "control.sqlite"))
+    root = tmp_path / "producer"
+    root.mkdir()
+    (root / "training.log").write_text("private failure evidence")
+    artifacts = PublicationStore()
+    artifacts.unavailable = digest((root / "training.log").read_bytes())
+    verified: dict[str, StoredArtifact] = {}
+    with pytest.raises(ConnectionError):
+        publish_snapshot(
+            spec, root, 1, complete=False, artifacts=artifacts, verified=verified
+        )
+    assert verified == {}
+    artifacts.unavailable = None
+    publish_snapshot(
+        spec, root, 1, complete=False, artifacts=artifacts, verified=verified
+    )
+    assert artifacts.published == ["training.log", "training.log", "manifest.json"]
 
 
 def test_snapshot_uses_database_authority_and_preserves_artifact_paths(

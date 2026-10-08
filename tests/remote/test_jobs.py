@@ -573,3 +573,89 @@ def test_failure_during_upload_refreshes_terminal_progress(
     assert result.phase == "failed"
     assert seen == [result.updates] == [7]
     assert result.error == "learner exited 1"
+
+
+@pytest.mark.parametrize("budget", [True, False])
+def test_final_export_during_publication_is_evaluated_before_completion(
+    tmp_path: Path, store: FileStore, monkeypatch: pytest.MonkeyPatch, budget: bool
+) -> None:
+    spec = specification(store).model_copy(
+        update={
+            "monitoring": MonitoringBudget(
+                seconds=30 if budget else 1, attempt_seconds=5
+            )
+        }
+    )
+    resource = admitted(spec, store)
+    root = tmp_path / "evidence"
+    root.mkdir()
+    run_path = root / "run/run.json"
+    run_path.parent.mkdir()
+    run_fixture(run_path)
+    release = root / "finish"
+    child_done = root / "child-done"
+    scanned_final: list[bool] = []
+
+    def retained(root: Path) -> TrainingRun:
+        return TrainingRun.model_validate_json(run_path.read_text())
+
+    def tick(
+        self: CheckpointQueue, sources: list[Path], *, launch: bool = True
+    ) -> None:
+        final = retained(root).status == "completed"
+        scanned_final.append(final)
+        if final:
+            self.pending = 1
+            if launch and self.config.seconds >= self.config.attempt_seconds:
+                self.attempts = [
+                    Attempt(
+                        ordinal=0,
+                        identity="endpoint",
+                        job_sha256="b" * 64,
+                        status="completed",
+                        reserved_seconds=5,
+                    )
+                ]
+                self.pending = 0
+
+    def publish(
+        spec: Job, root: Path, generation: int, *, complete: bool
+    ) -> StoredArtifact:
+        if not complete:
+            assert scanned_final == [False]
+            release.touch()
+            until = time.monotonic() + 10
+            while not child_done.exists() and time.monotonic() < until:
+                time.sleep(0.01)
+            assert child_done.exists()
+            # Reap readiness is intentionally after the final export appears.
+            time.sleep(0.1)
+        return published(spec, root, generation, complete=complete)
+
+    monkeypatch.setattr(supervisor, "_training_run", retained)
+    monkeypatch.setattr(CheckpointQueue, "tick", tick)
+    code = """import pathlib,sys,time
+release,source,done=map(pathlib.Path,sys.argv[1:])
+while not release.exists(): time.sleep(.01)
+source.write_text(source.read_text().replace('"status": "running"', '"status": "completed"'))
+done.touch()
+"""
+    result = supervisor.supervise(
+        spec,
+        store,
+        root,
+        resource.pod.id,
+        command=[
+            sys.executable,
+            "-c",
+            code,
+            str(release),
+            str(run_path),
+            str(child_done),
+        ],
+        publish=publish,
+    )
+    assert scanned_final == [False, True]
+    assert result.phase == ("completed" if budget else "failed")
+    assert result.evaluations_completed == int(budget)
+    assert result.error == (None if budget else "milestone evaluation incomplete")

@@ -149,7 +149,14 @@ regime tests exercise raw/EMA checkpoint export and ordinary reload.
 uv run pytest tests/training/test_numerical_health.py -q
 ```
 
-This host has no CUDA device. **CUDA validation remains required before restart**;
+The original local proof had no CUDA device. The later ETU-126 pilot
+`etu103-recovery-v2-pilot-1` ran the named CUDA gate on merged `2555c0e2`:
+31 checks passed on NVIDIA L4, Torch 2.10.0+cu128 / CUDA 12.8. The bounded
+188,418-parameter optimizer probe measured 0.04551 s plain versus 0.06035 s
+guarded per 100 steps (1.326×). This is not large-model RL throughput or evidence
+that the historical failure cannot recur. Exact source/native identities and
+measurements are in the [CUDA receipt](../experiments/data/etu126/cuda-admission-20261008.json).
+New source or numerical changes require their own admission;
 ETU-103/126 can run this bounded command on an already admitted capable host,
 inside the existing total allocation, with the repaired exact source/native build:
 

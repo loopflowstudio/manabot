@@ -120,7 +120,14 @@ def publish_snapshot(
     *,
     complete: bool,
     artifacts: S3ArtifactStore | None = None,
+    verified: dict[str, StoredArtifact] | None = None,
 ) -> StoredArtifact:
+    """Reuse this supervisor's verified immutable versions between snapshots.
+
+    New bytes, unversioned objects and the final snapshot retain full remote
+    readback. The optional cache dies with its supervisor; reconnect/retry does
+    not turn an unverified receipt into trusted publication state.
+    """
     artifacts = artifacts or S3ArtifactStore()
     destination = f"{spec.prefix}/runtime/artifacts"
     with tempfile.TemporaryDirectory(prefix="manabot-snapshot-") as directory:
@@ -138,9 +145,28 @@ def publish_snapshot(
                 size=path.stat().st_size,
                 sha256=digest(path.read_bytes()),
             )
-            references.append(
-                artifacts.publish(path, destination, sha256=item.sha256, size=item.size)
-            )
+            reference = verified.get(item.sha256) if verified is not None else None
+            if reference is not None and (
+                reference.uri != f"{destination}/sha256/{item.sha256}"
+                or reference.sha256 != item.sha256
+                or reference.bytes != item.size
+            ):
+                raise ValueError("cached publication differs from snapshot artifact")
+            if (
+                complete
+                or reference is None
+                or reference.version_id in (None, "", "null")
+            ):
+                reference = artifacts.publish(
+                    path, destination, sha256=item.sha256, size=item.size
+                )
+                if verified is not None and reference.version_id not in (
+                    None,
+                    "",
+                    "null",
+                ):
+                    verified[item.sha256] = reference
+            references.append(reference)
             entries.append(item)
         manifest = JobManifest(
             spec_sha256=spec.identity,

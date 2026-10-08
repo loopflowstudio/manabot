@@ -5,6 +5,7 @@ prevents container restart from silently restarting training. The shell guardian
 independent of this process and retains the original absolute billing deadline.
 """
 
+from functools import partial
 import json
 import os
 from pathlib import Path
@@ -73,6 +74,10 @@ def supervise(
     publish: SnapshotPublisher = publish_snapshot,
 ) -> JobRecord:
     """Execute once. Injection points support real-process offline lifecycle tests."""
+    if publish is publish_snapshot:
+        # Only this process's successful readbacks can skip repeat remote reads.
+        # Final publication rechecks every artifact before declaring completion.
+        publish = partial(publish_snapshot, verified={})
     resource_value = store.read("training.json")
     if resource_value is None:
         raise ValueError("client has not admitted this rental; reconcile submission")
@@ -256,6 +261,15 @@ def supervise(
                             }
                         )
                         break
+                    if queue is not None:
+                        # A learner can finish during publication, after the
+                        # preceding queue scan. Discover its final exports from
+                        # the now-closed run before deciding the queue is empty.
+                        queue.tick(
+                            [run_path] if run_path.exists() else [],
+                            launch=time.time() + queue.config.attempt_seconds
+                            < spec.work_deadline,
+                        )
                     if queue is None or (
                         queue.process is None
                         and (
@@ -281,8 +295,9 @@ def supervise(
                                     "error": "learner exited without completed TrainingRun",
                                 }
                             )
-                        elif queue is not None and any(
-                            a.status != "completed" for a in queue.attempts
+                        elif queue is not None and (
+                            queue.pending
+                            or any(a.status != "completed" for a in queue.attempts)
                         ):
                             record = record.model_copy(
                                 update={

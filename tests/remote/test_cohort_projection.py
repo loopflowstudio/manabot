@@ -19,9 +19,18 @@ from tests.remote.test_cohort_service import plan
 from tests.remote.test_job_fetch import Artifacts
 
 
+@pytest.mark.parametrize(
+    "dashboard_path",
+    [
+        "training-dashboard.json",
+        "monitoring/run-one/dashboard.json",
+        "monitoring/run-one/dashboard-protocol.json",
+    ],
+)
 def test_offline_report_survives_telemetry_outage_and_retries_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    dashboard_path: str,
 ) -> None:
     cohort = plan()
     spec = cohort.entries[0].job(time.time())
@@ -40,6 +49,8 @@ def test_offline_report_survives_telemetry_outage_and_retries_once(
         run_id="run-one", config={}, summary={}, rows=[{"rl/loss": 1.25}]
     )
     reference = artifacts.add(dashboard.model_dump_json().encode())
+    # Real snapshots contain this queue index before the per-run Dashboards.
+    queue = artifacts.add(b'{"attempts": [], "pending_checkpoints": 0}')
     manifest = JobManifest(
         spec_sha256=spec.identity,
         generation=1,
@@ -47,14 +58,20 @@ def test_offline_report_survives_telemetry_outage_and_retries_once(
         bundle=Bundle(
             files=(
                 BundleFile(
-                    producer_path="/worker/training-dashboard.json",
-                    relative_path="training-dashboard.json",
+                    producer_path="/worker/monitoring/dashboard.json",
+                    relative_path="monitoring/dashboard.json",
+                    size=queue.bytes,
+                    sha256=queue.sha256,
+                ),
+                BundleFile(
+                    producer_path=f"/worker/{dashboard_path}",
+                    relative_path=dashboard_path,
                     size=reference.bytes,
                     sha256=reference.sha256,
                 ),
             )
         ),
-        artifacts=(reference,),
+        artifacts=(queue, reference),
     )
     record = JobRecord(
         spec_sha256=spec.identity,
