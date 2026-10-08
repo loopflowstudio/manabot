@@ -109,7 +109,7 @@ def current_source(root: Path) -> Source:
 
 def verify_public_source(source: Source) -> None:
     request = Request(
-        f"https://api.github.com/repos/loopflowstudio/etude/git/commits/{source.commit}",
+        f"https://api.github.com/repos/loopflowstudio/fantasia/git/commits/{source.commit}",
         headers={"User-Agent": "manabot/0.1"},
     )
     try:

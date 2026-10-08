@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 from .plan import DeploymentPlan
 from .provider import Pod
 
-REPOSITORY = "https://github.com/loopflowstudio/etude.git"
+REPOSITORY = "https://github.com/loopflowstudio/fantasia.git"
 REPO_DIR = "/opt/manabot/repo"
 UV_CACHE_DIR = "/opt/manabot/uv-cache"
 

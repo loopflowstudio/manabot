@@ -322,7 +322,7 @@ def report_command(
         retained,
         out / "comparison.html",
         question="Remote job progress and checkpoint monitoring",
-        docs="https://github.com/loopflowstudio/etude/blob/main/docs/experiment-metrics.md",
+        docs="https://github.com/loopflowstudio/fantasia/blob/main/docs/experiment-metrics.md",
         sections=[
             (
                 "Checkpoint monitoring",
