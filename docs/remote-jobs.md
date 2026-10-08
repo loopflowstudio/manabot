@@ -71,8 +71,10 @@ Local `driver.json`, `status.json` and redacted `error.json` in the state direct
 retain process identity, observations and storage/network failures.
 
 S3 retains immutable cohort intent, attempts and sticky cancellation. Each job's
-identity and deadline are recorded before submission. A host/directory binding
-plus a process lock excludes concurrent supervisors. Another directory or host
+identity and deadline are recorded before submission. A stable OS machine identity/directory binding
+plus a process lock excludes concurrent supervisors. Hostnames alone are not identities;
+Linux controllers need `/etc/machine-id`, and macOS uses the platform UUID. Those
+identifiers are hashed before storage. Another directory or host
 cannot take over automatically; loss of that host requires explicit ownership
 recovery after proving the old owner cannot act. There is no expiring lease that
 could let a disconnected old owner resume alongside a replacement.
@@ -90,8 +92,8 @@ Only completed jobs with confirmed cleanup and a verified final manifest admit
 the next entry. The service reads small control records and final manifests; it
 never downloads checkpoint bundles or runs notebooks/W&B inside the scheduling
 loop. `deploy fetch/report` remain independent, reconnectable consumers of durable
-worker snapshots. Automatic offline-client W&B/report projection is still separate
-work; successful sequencing does not establish that projection's freshness.
+worker snapshots. An optional independent report service is described below; scheduling never
+waits for its downloads or W&B acknowledgements.
 Cancellation records the cohort request first and forwards it to the current job
 even if the supervisor is offline. A returning supervisor also forwards it before
 provider reads. Worker cancellation acknowledgement, final artifacts and provider
@@ -112,6 +114,49 @@ This proof rents nothing and establishes no live cloud cohort, systemd host
 acceptance, CUDA recovery or scientific result. ETU-103's failed frozen attempt
 remains unchanged; its recovery additionally requires the numerical-health fix,
 a versioned attempt, live-price admission and all earlier charges within $30.
+
+## Reports while clients are offline
+
+Add `--reports` when installing the cohort to create a separate OS-managed
+companion. Add both W&B selectors for native graphs in the declared workspace:
+
+```bash
+uv run --extra artifacts manabot deploy cohort start \
+  --plan cohort.json --state-dir /absolute/private/cohort-state --doppler \
+  --reports --wandb-project etude --wandb-entity loopflow-studio
+```
+
+The companion reads the current job's exact published generation and retrieves
+only existing training/monitoring Dashboard JSON exports. It saves those bytes and
+writes `projection/report.json` and a compact `projection/report.html` before
+attempting W&B. The report shows the intended versus admitted job count, phases,
+updates, evaluations, generations, heartbeat timestamps and charged/reserved
+cost. Its links expose the saved Dashboard exports; W&B owns the metric graphs.
+Full editable notebook analysis still uses the ordinary `deploy fetch/report` path.
+Unpublished data is unavailable, not a zero, and a saved timestamp is not a live
+heartbeat. A network outage retains the earlier local evidence.
+
+The report service has its own process/host lock and cannot submit training.
+It polls every five minutes by default, with 120-second child attempts and a
+cumulative 3,600-second allowance inside the declared controller allocation.
+Reservations are persisted before starting children; interruption cannot reset
+consumed allowance. Each child owns an absolute process-group deadline even if
+its parent disappears. A restart can conservatively charge the full reservation.
+Failed attempts and telemetry error types are retained; credential-bearing error
+responses are omitted. W&B retries use its existing acknowledged history cursor;
+a confirmed publication of unchanged Dashboard bytes is skipped.
+
+Both services stop after settled outcomes; reporting stops only after a successful
+final projection, or on allowance exhaustion. Unresolved observation/reporting is
+bounded to 30 minutes beyond the cohort deadline, inside the controller allowance.
+The training rentals retain their own earlier absolute deadlines. Service and
+projection configuration is frozen on installation; a different owner/configuration
+fails rather than creating competing publishers. Renewing a reporting allowance or
+moving a lost host requires explicit recovery, not deleting its ledger.
+
+Local fake-provider/telemetry checks cover retained reports during W&B failure,
+idempotent publication, interrupted allowance accounting and the child's deadline.
+No live W&B service or cloud cohort was exercised by those checks.
 
 ## Submit, disconnect and reconnect
 
@@ -192,7 +237,13 @@ uv run --extra artifacts --extra notebook manabot deploy report \
 `deploy submit` is the explicit equivalent. `deploy --regime ... --spec ... --job-id ...`
 compiles and submits in one invocation. No previous CLI namespace is registered.
 
-The generation number comes from `fetch`. Report generation reuses the existing
+The generation number comes from `fetch`. Repeating a fetch verifies and reuses
+completed files; interruption can be resumed into the same output directory.
+Files are installed atomically and the complete bundle marker is written last.
+Corrupt or conflicting retained bytes fail explicitly and are not overwritten.
+`logs`/`attach` retrieve only the pinned manifest and training log, never model
+weights or the database; a newer remote generation cannot change the observed
+log's identity mid-fetch. Report generation reuses the existing
 create-once editable notebook and offline HTML dashboard. It needs neither the
 rental nor SSH. Existing notebook edits survive refresh.
 

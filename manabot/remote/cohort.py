@@ -6,19 +6,18 @@ learners. No artifact download, notebook or telemetry runs in the scheduling loo
 """
 
 from pathlib import Path
+import re
 import time
 from typing import Callable, Literal
 
 from pydantic import Field, model_validator
 
-from manabot.infra.artifacts import S3ArtifactStore
 from manabot.training.checkpoint_queue import MonitoringBudget
 
-from .job_client import cancel_job, persist_job, reconcile_job, submit_job
+from .job_client import cancel_job, job_manifest, persist_job, reconcile_job, submit_job
 from .job_store import JobStore, S3JobStore, cancellation_requested
 from .jobs import Cancellation, Job, JobStatus
 from .plan import AccessScope, DeploymentPlan, Frozen, digest
-from .snapshots import JobManifest
 
 DEFAULT_COHORTS = "s3://etudefantasia/manabot/cohorts"
 
@@ -114,6 +113,27 @@ class CohortState(Frozen):
     attempts: tuple[CohortAttempt, ...] = ()
     error: str | None = None
 
+    @property
+    def settled(self) -> bool:
+        """No further autonomous observation can admit or clean up a job."""
+        if self.phase == "completed":
+            return True
+        if self.phase not in {
+            "failed",
+            "paused",
+            "cancelled",
+            "deadline",
+            "missing",
+            "budget-exhausted",
+        }:
+            return False
+        if not self.attempts:
+            return True
+        observed = self.attempts[-1].observation
+        return observed is not None and (
+            observed.cleanup is not None or observed.provider_state == "not-created"
+        )
+
     def charged_dollars(self, cohort: Cohort) -> float:
         """Unsettled jobs retain their entire reservation; settled charges count once."""
         return (
@@ -139,8 +159,6 @@ def prepare_cohort(cohort: Cohort, store: JobStore | None = None) -> None:
 
 
 def load_cohort(cohort_id: str, destination: str = DEFAULT_COHORTS) -> Cohort:
-    import re
-
     if re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", cohort_id) is None:
         raise ValueError("invalid cohort ID")
     AccessScope(destination=destination)
@@ -187,9 +205,7 @@ def verify_manifest(status: JobStatus, cache: Path) -> str:
     record = status.record
     if record is None or record.manifest is None or not record.artifacts_complete:
         raise ValueError("final artifact commit missing")
-    manifest = JobManifest.model_validate_json(
-        S3ArtifactStore().fetch(record.manifest, cache).read_bytes()
-    )
+    manifest = job_manifest(status.spec, record, cache)
     if (
         manifest.spec_sha256 != status.spec.identity
         or manifest.generation != record.generation

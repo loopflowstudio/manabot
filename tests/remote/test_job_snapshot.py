@@ -41,6 +41,33 @@ def test_snapshot_uses_database_authority_and_preserves_artifact_paths(
         snapshot_evidence(root, tmp_path / "bad-snapshot")
 
 
+def test_snapshot_retains_rejected_diagnostics_without_policy_admission(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "producer"
+    (root / "run").mkdir(parents=True)
+    run = run_fixture(root / "run/run.json")
+    run.stages[0].artifacts = {}
+    failed = root / "run/numerical-failure.pt"
+    failed.write_bytes(b"private failed tensors, not a loadable policy")
+    run.stages[0].rejected_artifacts["numerical_failure"] = {
+        "path": str(failed),
+        "sha256": digest(failed.read_bytes()),
+        "bytes": failed.stat().st_size,
+    }
+    with VerifyStore(root / "training.sqlite") as store:
+        store.save_training_run(run)
+    snapshot_evidence(root, tmp_path / "snapshot")
+    assert (
+        tmp_path / "snapshot/run/numerical-failure.pt"
+    ).read_bytes() == failed.read_bytes()
+    saved = TrainingRun.model_validate_json(
+        (tmp_path / "snapshot/run/run.json").read_bytes()
+    )
+    assert saved.stages[0].rejected_artifacts == run.stages[0].rejected_artifacts
+    assert "numerical_failure" not in saved.stages[0].artifacts
+
+
 def test_terminal_numerical_bundle_uses_existing_snapshot_contract(
     tmp_path: Path,
 ) -> None:

@@ -11,18 +11,40 @@ import fcntl
 import os
 from pathlib import Path
 import plistlib
+import re
 import shutil
-import socket
 import subprocess
 import sys
 import time
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
 from manabot.training.execution import atomic_json
 
 from .cohort import Cohort, CohortSupervisor
 from .deploy import current_source
 from .plan import digest
+
+if TYPE_CHECKING:
+    from .cohort_projection import ProjectionConfig
+
+
+def _machine_identity() -> str:
+    """Stable OS identity; hostnames can collide or change with the network."""
+    if sys.platform == "linux":
+        identity = Path("/etc/machine-id").read_text().strip()
+    elif sys.platform == "darwin":
+        payload = subprocess.check_output(
+            ["/usr/sbin/ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+            text=True,
+            timeout=10,
+        )
+        found = re.search(r'"IOPlatformUUID" = "([A-Fa-f0-9-]+)"', payload)
+        identity = found.group(1) if found is not None else ""
+    else:
+        raise ValueError("unsupported controller host")
+    if not identity:
+        raise ValueError("stable controller machine identity unavailable")
+    return identity
 
 
 @contextmanager
@@ -36,7 +58,7 @@ def owner_lock(directory: Path) -> Iterator[str]:
         # Canonical directory is part of ownership. Another host/directory cannot
         # take over by copying credentials or waiting for an expired heartbeat.
         owner = digest(
-            f"{socket.gethostname()}:{os.getuid()}:{directory.resolve()}".encode()
+            f"{_machine_identity()}:{os.getuid()}:{directory.resolve()}".encode()
         )
         yield owner
 
@@ -53,7 +75,8 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
                 "cohort_sha256": cohort.identity,
             },
         )
-        while True:
+        observation_deadline = cohort.deadline + 1800
+        while time.time() < observation_deadline:
             supervisor: CohortSupervisor | None = None
             try:
                 # Reload after every uncertain network write; CAS and the host lock
@@ -62,7 +85,7 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
                 state = supervisor.tick()
                 atomic_json(directory / "status.json", state.model_dump(mode="json"))
                 (directory / "error.json").unlink(missing_ok=True)
-                if state.phase == "completed":
+                if state.settled:
                     return
             except Exception as error:
                 if supervisor is not None:
@@ -81,7 +104,7 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
                         "pid": os.getpid(),
                     },
                 )
-            time.sleep(interval)
+            time.sleep(min(interval, max(0, observation_deadline - time.time())))
 
 
 def _systemd_quote(value: str, *, command: bool = False) -> str:
@@ -93,7 +116,13 @@ def _systemd_quote(value: str, *, command: bool = False) -> str:
     return '"' + value + '"'
 
 
-def install_service(cohort: Cohort, directory: Path, *, doppler: bool = False) -> str:
+def install_service(
+    cohort: Cohort,
+    directory: Path,
+    *,
+    doppler: bool = False,
+    projection: "ProjectionConfig | None" = None,
+) -> str:
     """Install/start the current user's service on this host, without renting.
 
     Linux requires an existing lingering user manager. A macOS LaunchAgent survives
@@ -128,6 +157,14 @@ def install_service(cohort: Cohort, directory: Path, *, doppler: bool = False) -
         "--state-dir",
         str(directory),
     ]
+    if projection is not None:
+        configuration = directory / "projection-config.json"
+        value = projection.model_dump_json(indent=2)
+        if configuration.exists() and configuration.read_text() != value:
+            raise ValueError("projection service already binds another allocation")
+        configuration.write_text(value)
+        command[6] = "project"
+        command.extend(["--config", str(configuration), "--follow"])
     if doppler:
         executable = shutil.which("doppler")
         if executable is None:
@@ -157,7 +194,9 @@ def install_service(cohort: Cohort, directory: Path, *, doppler: bool = False) -
     environment["PATH"] = (
         f"{Path(uv).parent}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
     )
-    label = f"manabot.cohort.{cohort.cohort_id}"
+    label = f"manabot.cohort.{cohort.cohort_id}" + (
+        ".projection" if projection is not None else ""
+    )
     if sys.platform == "darwin":
         target = Path.home() / "Library/LaunchAgents" / f"{label}.plist"
         target.parent.mkdir(parents=True, exist_ok=True)

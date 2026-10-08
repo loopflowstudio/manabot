@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from manabot.cli import app
 from manabot.infra.artifacts import StoredArtifact
-from manabot.remote import cohort_cli, job_client
+from manabot.remote import cohort_cli, cohort_service, job_client
 from manabot.remote.cohort import Cohort, CohortEntry, CohortSupervisor, cancel_cohort
 from manabot.remote.cohort_service import owner_lock
 from manabot.remote.jobs import Job, JobPhase, JobRecord, JobStatus, Resource
@@ -258,3 +258,18 @@ def test_second_owner_and_concurrent_local_driver_rejected(harness: Harness) -> 
         with ThreadPoolExecutor(max_workers=1) as pool:
             with pytest.raises(RuntimeError, match="already running"):
                 pool.submit(competing).result()
+
+
+def test_copied_hostname_and_directory_cannot_impersonate_controller_host(
+    harness: Harness,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = harness.root / "same-directory"
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "machine-one")
+    with owner_lock(directory) as first:
+        harness.restart(first)
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "machine-two")
+    with owner_lock(directory) as other:
+        assert first != other
+        with pytest.raises(ValueError, match="another owner"):
+            harness.restart(other)

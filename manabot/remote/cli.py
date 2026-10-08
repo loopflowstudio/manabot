@@ -12,6 +12,7 @@ from .deploy import cleanup, current_source, deploy
 from .job_client import (
     cancel_job,
     fetch_job,
+    fetch_job_file,
     job_status,
     load_job,
     prepare_job,
@@ -238,9 +239,8 @@ def logs_command(
                 and record.manifest is not None
                 and record.generation != generation
             ):
-                path = fetch_job(spec, Path(directory))
-                log = path / "training.log"
-                if log.exists():
+                log = fetch_job_file(spec, record, "training.log", Path(directory))
+                if log is not None:
                     data = log.read_bytes()
                     typer.echo(data[offset:].decode(errors="replace"), nl=False)
                     offset = len(data)

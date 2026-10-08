@@ -5,9 +5,11 @@ before receiving the response can only discover the uniquely named resource; it
 cannot rent a replacement. Observer disconnects never cancel remote work.
 """
 
+import fcntl
 import json
 from pathlib import Path
 import shutil
+import tempfile
 import time
 from typing import TYPE_CHECKING, Callable, Literal
 
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
     from manabot.training.experiments import ResolvedCase
 
     from .plan import JobSpec, Source
+    from .snapshots import JobManifest
 
 
 def _provision(
@@ -389,18 +392,21 @@ def cancel_job(spec: Job, *, store: JobStore | None = None) -> None:
             return
 
 
-def fetch_job(spec: Job, output: Path) -> Path:
+def job_manifest(
+    spec: Job,
+    record: JobRecord,
+    cache: Path,
+    *,
+    artifacts: S3ArtifactStore | None = None,
+) -> "JobManifest":
+    """Read one pinned manifest, without fetching its referenced model bundles."""
     from .snapshots import JobManifest
 
-    raw = S3JobStore(spec.prefix).read("runtime/record.json")
-    if raw is None:
-        raise ValueError("job has no published supervisor record")
-    record = JobRecord.model_validate_json(raw.data)
     if record.spec_sha256 != spec.identity or record.manifest is None:
         raise ValueError("job has no committed artifact generation")
-    artifacts = S3ArtifactStore()
-    output.mkdir(parents=True, exist_ok=True, mode=0o700)
-    cache = output / "cache"
+    if record.manifest.bytes > 16 * 1024**2:
+        raise ValueError("job manifest exceeds control-object limit")
+    artifacts = artifacts or S3ArtifactStore()
     manifest = JobManifest.model_validate_json(
         artifacts.fetch(record.manifest, cache).read_bytes()
     )
@@ -409,16 +415,101 @@ def fetch_job(spec: Job, output: Path) -> Path:
         or manifest.generation != record.generation
     ):
         raise ValueError("artifact generation differs from supervisor record")
-    destination = output / f"generation-{manifest.generation:06d}"
-    destination.mkdir(exist_ok=False, mode=0o700)
+    return manifest
+
+
+def fetch_job_file(
+    spec: Job,
+    record: JobRecord,
+    relative_path: str,
+    cache: Path,
+) -> Path | None:
+    """Return verified bytes for one manifest entry; None means it was not published.
+
+    The caller supplies the observed record, so a newer remote generation cannot
+    change what is fetched. This never claims to materialize a complete Bundle.
+    """
+    artifacts = S3ArtifactStore()
+    manifest = job_manifest(spec, record, cache, artifacts=artifacts)
     for entry, reference in zip(manifest.bundle.files, manifest.artifacts, strict=True):
-        target = entry.destination(destination)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(artifacts.fetch(reference, cache), target)
-    manifest.bundle.verify(destination)
-    (destination / "bundle.json").write_text(manifest.bundle.model_dump_json(indent=2))
-    (destination / "job.json").write_text(record.model_dump_json(indent=2))
-    return destination
+        if entry.relative_path == relative_path:
+            entry.destination(cache)  # Retain ordinary Bundle path admission.
+            return artifacts.fetch(reference, cache)
+    return None
+
+
+def fetch_job(spec: Job, output: Path) -> Path:
+    """Materialize a verified generation; retry resumes a partial fetch in place.
+
+    Complete files are installed atomically, and the bundle marker is written
+    last. Existing evidence is hash-checked, never overwritten on mismatch.
+    A local lock serializes clients sharing this output directory.
+    """
+    from .bundle import Bundle
+
+    output.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with (output / ".fetch.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        raw = S3JobStore(spec.prefix).read("runtime/record.json")
+        if raw is None:
+            raise ValueError("job has no published supervisor record")
+        record = JobRecord.model_validate_json(raw.data)
+        artifacts = S3ArtifactStore()
+        cache = output / "cache"
+        manifest = job_manifest(spec, record, cache, artifacts=artifacts)
+        destination = output / f"generation-{manifest.generation:06d}"
+        if destination.is_symlink():
+            raise ValueError("bundle root is a symlink")
+        destination.mkdir(exist_ok=True, mode=0o700)
+        metadata = {"bundle.json", "job.json"}
+        if any(entry.relative_path in metadata for entry in manifest.bundle.files):
+            raise ValueError("snapshot contains reserved transport metadata")
+        bundle_path, record_path = destination / "bundle.json", destination / "job.json"
+        if bundle_path.is_symlink() or record_path.is_symlink():
+            raise ValueError("bundle metadata is a symlink")
+        if bundle_path.exists():
+            if Bundle.model_validate_json(bundle_path.read_bytes()) != manifest.bundle:
+                raise ValueError("existing generation binds a different bundle")
+        if record_path.exists():
+            saved = JobRecord.model_validate_json(record_path.read_bytes())
+            if (
+                saved.spec_sha256 != spec.identity
+                or saved.generation != record.generation
+                or saved.manifest != record.manifest
+            ):
+                raise ValueError("existing generation binds a different job record")
+        for entry, reference in zip(
+            manifest.bundle.files, manifest.artifacts, strict=True
+        ):
+            target = entry.destination(destination)
+            if target.exists():
+                entry.verify(destination)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            source = artifacts.fetch(reference, cache)
+            # A killed copy leaves only a private temporary file, never a truncated
+            # destination that could masquerade as an immutable completed entry.
+            with tempfile.TemporaryDirectory(
+                dir=target.parent, prefix=".fetch-"
+            ) as temporary:
+                staged = Path(temporary) / "bytes"
+                shutil.copyfile(source, staged)
+                staged.replace(target)
+        manifest.bundle.verify(destination)
+        for path, data in (
+            (record_path, record.model_dump_json(indent=2)),
+            (bundle_path, manifest.bundle.model_dump_json(indent=2)),
+        ):
+            if path.is_symlink():
+                raise ValueError("bundle metadata is a symlink")
+            if not path.exists():
+                with tempfile.TemporaryDirectory(
+                    dir=destination, prefix=".fetch-"
+                ) as temporary:
+                    staged = Path(temporary) / "metadata.json"
+                    staged.write_text(data)
+                    staged.replace(path)
+        return destination
 
 
 def prepare_experiment_job(

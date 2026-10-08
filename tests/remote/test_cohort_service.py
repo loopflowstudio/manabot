@@ -49,6 +49,40 @@ def wait_path(path: Path, timeout: float = 20) -> None:
         time.sleep(0.05)
 
 
+def test_storage_outage_cannot_extend_observation_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = plan()
+    file = tmp_path / "cohort.json"
+    file.write_text(value.model_dump_json())
+    now = value.deadline + 1799
+    attempts = 0
+
+    def unavailable(*args: object) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise ConnectionError("private transport detail")
+
+    def sleep(seconds: float) -> None:
+        nonlocal now
+        assert seconds == 1
+        now += seconds
+
+    monkeypatch.setattr(cohort_service, "CohortSupervisor", unavailable)
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "test-machine")
+    monkeypatch.setattr(cohort_service.time, "time", lambda: now)
+    monkeypatch.setattr(cohort_service.time, "sleep", sleep)
+    directory = tmp_path / "service"
+    cohort_service.supervise_cohort(file, directory)
+    assert attempts == 1
+    error = json.loads((directory / "error.json").read_text())
+    assert error["error_type"] == "ConnectionError"
+    assert "private transport detail" not in (directory / "error.json").read_text()
+    # Restart at the same absolute deadline cannot reset the observation window.
+    cohort_service.supervise_cohort(file, directory)
+    assert attempts == 1
+
+
 def test_launcher_exit_and_forced_supervisor_restart(tmp_path: Path) -> None:
     (tmp_path / "cohort.json").write_text(plan().model_dump_json())
     pid: int | None = None
@@ -94,8 +128,12 @@ with (root/'service.log').open('ab') as log:
 
 
 @pytest.mark.parametrize("platform", ["darwin", "linux"])
+@pytest.mark.parametrize("reports", [False, True])
 def test_start_cli_installs_restartable_service_without_secrets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, platform: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    platform: str,
+    reports: bool,
 ) -> None:
     value = plan()
     file = tmp_path / "input.json"
@@ -126,21 +164,28 @@ def test_start_cli_installs_restartable_service_without_secrets(
             str(file),
             "--state-dir",
             str(tmp_path / "state"),
+            *(["--reports"] if reports else []),
         ],
     )
     assert result.exit_code == 0, result.output
     if platform == "darwin":
-        target = next(tmp_path.glob("Library/LaunchAgents/*.plist"))
+        target = tmp_path / "Library/LaunchAgents/manabot.cohort.process-proof.plist"
         unit = plistlib.loads(target.read_bytes())
         assert unit["KeepAlive"] == {"SuccessfulExit": False}
         assert "supervise" in unit["ProgramArguments"]
         assert commands[-1][:2] == ["launchctl", "bootstrap"]
     else:
-        target = next(tmp_path.glob(".config/systemd/user/*.service"))
+        target = tmp_path / ".config/systemd/user/manabot.cohort.process-proof.service"
         assert "Restart=on-failure" in target.read_text()
         assert commands[-1][:4] == ["systemctl", "--user", "enable", "--now"]
     assert "do-not-copy" not in target.read_text()
     assert "named-profile" in target.read_text()
+    companion = target.with_name(target.stem + ".projection" + target.suffix)
+    assert companion.exists() == reports
+    if reports:
+        content = companion.read_text()
+        assert "project" in content and "--follow" in content
+        assert "do-not-copy" not in content
 
 
 @pytest.mark.skipif(

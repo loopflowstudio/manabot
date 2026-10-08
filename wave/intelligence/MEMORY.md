@@ -41,8 +41,9 @@ refreshes after stopping writers.
 Offline faults and native launchd SIGKILL/restart completed two fake jobs without
 duplicates. No live cloud cohort, Linux host acceptance, CUDA continuation, rental
 or Mini mutation follows. [Remote contracts](../../docs/remote-jobs.md#cohorts-need-an-independent-owner)
-own commands/limits. Offline-client W&B projection and lost-host recovery remain
-open. ETU-103 restart needs both fixes landed, an online credentialed host, frozen
+own commands/limits. A separate bounded companion now retains Dashboard exports,
+refreshes reports and optionally projects W&B. Telemetry faults never block scheduling;
+live service acceptance and lost-host recovery remain open. ETU-103 restart needs both fixes landed, an online credentialed host, frozen
 new attempt/protocol and live prices; all earlier charges, including the failed
 $3.63056534815828 estimate, stay inside $30. Retain four active hours unless
 explicitly superseded; one repaired run is not six-run acceptance. Preserve Mini order.
@@ -1163,11 +1164,10 @@ training, calibration, demo admission or chapter outcomes.
 ## Capacity comparison software preparation (ETU-103, 2026-10-05)
 
 Historical software scope and the unallocated WDL proposal remain at `0145f77f`
-and in [the protocol](../../experiments/model-capacity.md). Declarative capacity
-plans reuse AgentSpec, Experiment, TrainingRun and the shared arena. Synthetic
-report regeneration establishes software behavior only; it selects no default.
-The later authorized mini/CUDA cohorts supersede this preparation's allocation
-status, preserving their distinct scalar recipes and frozen evidence.
+and [the protocol](../../experiments/model-capacity.md). Later authorized mini/CUDA
+cohorts supersede its allocation status, preserving distinct recipes and evidence.
+Synthetic reporting selected no default.
+
 
 ## Saved sampler uncertainty software (ETU-110, 2026-10-05)
 
