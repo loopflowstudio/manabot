@@ -251,11 +251,28 @@ def install_service(
                 raise ValueError("existing service differs; no replacement performed")
             # Stop only the controller/companion, never its independently running
             # rental. The permanent owner directory and all remote claims survive.
-            subprocess.run(
-                ["launchctl", "bootout", f"gui/{os.getuid()}/{label}"], check=True
+            domain = f"gui/{os.getuid()}"
+            loaded = subprocess.run(
+                ["launchctl", "print", f"{domain}/{label}"], capture_output=True
             )
-            with owner_lock(directory):
-                pass
+            if loaded.returncode == 0:
+                subprocess.run(
+                    ["launchctl", "bootout", f"{domain}/{label}"], check=True
+                )
+            # bootout acknowledges removal before the Python child necessarily
+            # exits. Retrying a previously interrupted handoff may find no job.
+            lock_directory = (
+                directory / "service" if projection is not None else directory
+            )
+            until = time.monotonic() + 15
+            while True:
+                try:
+                    with owner_lock(lock_directory):
+                        break
+                except RuntimeError:
+                    if time.monotonic() >= until:
+                        raise
+                    time.sleep(0.1)
         target.write_bytes(payload)
         domain = f"gui/{os.getuid()}"
         loaded = subprocess.run(

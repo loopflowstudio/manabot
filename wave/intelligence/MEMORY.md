@@ -30,33 +30,33 @@ Cohort `etu103-recovery-v3-science` pins merged `45940fe3`, 26,000 small / 15,60
 large iterations and $48.867918369190 inclusive reservation. Compare common
 time/samples separately from unequal endpoints. Preserve old failures and Mini order.
 
-The verified `2555c0e2` pilot passed CUDA admission; GPU/guardian were deleted.
-Retained estimated cost is &#36;4.717918369190 including the pilot. Its missed endpoint
-was recovered separately on CPU (100 replayed games); PR263 repairs that exit
-race. Original failures remain. Pilot timing establishes neither sustained
-throughput nor strength/upload speedup. The [remote contract](../../docs/remote-jobs.md)
-and [capacity record](../../experiments/model-capacity.md) own full receipts;
-pre-continuation detail remains at `2a4fd419`.
+The `2555c0e2` pilot passed CUDA admission and cleanup. Estimated cost is $4.717918369190 inclusive. Its omitted endpoint was recovered on
+CPU; PR263 repairs the exit race. Original failures remain; timing proves neither
+strength nor sustained throughput. The [remote contract](../../docs/remote-jobs.md)
+and [capacity record](../../experiments/model-capacity.md) own receipts and limits;
+Earlier detail: `2a4fd419`.
 
 Jack Heart approved the separate restricted controller and secure Mini installation.
-One cohort/six job prefixes have 96-hour S3 expiry; live conditional writes/readback,
-outside-prefix denial and worker session admission passed. Existing issuer stays
-restricted; no personal SSO moved. Mini launchd owns scheduling and local projection
-in a dedicated checkout. Owner SIGKILL restarted in 2.2 seconds with one attempt
-and the same pod; a second controller was rejected. Job0 completed 26,000 updates,
+The 96-hour restricted S3 grant and worker admission passed; `69594494` retains
+original provisioning/restart proofs. Mini launchd owns scheduling and reports;
+no personal SSO moved. Job0 completed 26,000 updates,
 seven evaluations, final publication and cleanup (estimated $2.9223462573).
 Job1 subsequently started; jobs2–5 remain queued.
 Verified Adam contains 61 states at step 208,000; EMA binds iteration 26,000.
 Raw/EMA/optimizer match run `c2b8c6e731ee4126a2c2d18514dea4d1`. Collector/RNG
 state is absent; continuation resets streams. The 526MB run JSON adds transfer cost.
 
-Jack Heart authorized 100k-total exploratory continuation after job1, retaining
-paired jobs and the &#36;100 ceiling. Actual small throughput projects 12.54 more
-active hours, requiring segments. Jack Heart corrected the assistant's denominator
-mistake on 2026-10-08: retain existing absolute-iteration rates from 26,001, as if
-100k were planned initially. No schedule decision remains. Implementation and
-queue admission are open; preserve Adam/EMA/counters and explicitly reset game
-streams. Original science source/protocol at `45940fe3` remain unchanged.
+Jack Heart corrected the denominator mistake: keep absolute-iteration rates from
+26,001. PR266 (`69594494`) retains raw/Adam/EMA/counters with fresh streams.
+Mini durably queues 63k then 100k after job1 and before unchanged jobs2–5.
+Two 11.95h/$6.20 segments raise conservative reservations to $61.267918369190;
+settled cost plus remaining reservations is $59.24026462648922. Cohort expiry
+extends within the existing 96-hour grant; job deadlines stay fixed. SIGKILL
+restarted the upgraded owner in 7.70s with two attempts and the same job1 pod;
+competing ownership was rejected. An asynchronous launchd handoff failed first,
+then recovered without touching training; the follow-up fixes lock-release waits.
+The capacity record owns receipts. CUDA continuation admission, 100k completion
+and final scientific results remain pending. Original science stays at `45940fe3`.
 
 Mini needs its account online/logged in; W&B credentials are absent there, while
 local reports refresh. New large 11.95h/$6.20 JobSpecs implement eight hours within

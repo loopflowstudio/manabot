@@ -573,7 +573,10 @@ run `cohort start` from the new clean controller checkout with the same plan and
 state directory, `--source-root /absolute/original-worker-checkout`, and
 `--replace-service` (plus the original `--reports` options). It stops only the
 local service, reuses its permanent owner binding, and restarts under launchd;
-the active rental continues independently. Source paths are recorded locally and
+the active rental continues independently. Replacement waits up to 15 seconds for
+the old process to release its owner lock after launchd unloads it. A retry also
+handles a service already unloaded by an interrupted handoff; the report companion
+uses its own service lock. Source paths are recorded locally and
 checked against each frozen Source before new submissions. Upgrade before inserting
 entries, so an older controller never receives state it cannot parse. Keep original
 source checkouts and credentials until every dependent allocation settles.

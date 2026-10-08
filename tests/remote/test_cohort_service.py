@@ -1,5 +1,7 @@
 """Independent process lifetime and OS service installation, without live rentals."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -17,7 +19,7 @@ from typer.testing import CliRunner
 from manabot.cli import app
 from manabot.remote import cohort_cli, cohort_service
 from manabot.remote.cohort import Cohort, CohortEntry, CohortState
-from manabot.remote.plan import JobSpec, compile_plan
+from manabot.remote.plan import JobSpec, Source, compile_plan
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import ROOT, SOURCE
 
@@ -251,11 +253,10 @@ def test_launchd_restarts_killed_cohort_without_launcher(tmp_path: Path) -> None
         )
 
 
+@pytest.mark.parametrize("loaded", [True, False])
 def test_controller_upgrade_retains_frozen_worker_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, loaded: bool
 ) -> None:
-    from manabot.remote.plan import Source
-
     cohort = plan()
     old = tmp_path / "old"
     old.mkdir()
@@ -270,14 +271,33 @@ def test_controller_upgrade_retains_frozen_worker_source(
     monkeypatch.setattr(cohort_service.sys, "platform", "darwin")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     commands: list[list[str]] = []
+    initially_loaded = loaded
 
     def command(
         args: list[str], **kwargs: object
     ) -> subprocess.CompletedProcess[bytes]:
+        nonlocal loaded
         commands.append(args)
-        return subprocess.CompletedProcess(args, 0 if args[1] == "bootout" else 1)
+        if args[1] == "print":
+            return subprocess.CompletedProcess(args, 0 if loaded else 1)
+        if args[1] == "bootout":
+            loaded = False
+        return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(cohort_service.subprocess, "run", command)
+    original_lock = cohort_service.owner_lock
+    lock_attempts = 0
+
+    @contextmanager
+    def delayed_release(path: Path) -> Iterator[None]:
+        nonlocal lock_attempts
+        lock_attempts += 1
+        if lock_attempts < 3:
+            raise RuntimeError("cohort supervisor is already running")
+        with original_lock(path):
+            yield
+
+    monkeypatch.setattr(cohort_service, "owner_lock", delayed_release)
     target = tmp_path / "Library/LaunchAgents/manabot.cohort.process-proof.plist"
     target.parent.mkdir(parents=True)
     target.write_bytes(b"old service")
@@ -291,6 +311,7 @@ def test_controller_upgrade_retains_frozen_worker_source(
         SOURCE.commit: str(old),
         source.commit: str(new),
     }
-    assert any(args[1] == "bootout" for args in commands)
+    assert any(args[1] == "bootout" for args in commands) == initially_loaded
     assert any(args[1] == "bootstrap" for args in commands)
+    assert lock_attempts == 3
     assert (directory / "cohort.json").read_text() == cohort.model_dump_json(indent=2)
