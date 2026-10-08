@@ -14,7 +14,19 @@ from torch import Tensor
 from torch.nn import functional as F
 
 from manabot.model.agent import Agent
+from manabot.model.policy_distribution import (
+    NumericalError,
+    check_behavior,
+    check_logs,
+    check_probabilities,
+    clipped_surrogate,
+    legal_mask,
+    policy_logs,
+    require,
+    reverse_kl,
+)
 from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
+from manabot.training.health import OptimizerHealth, batch_health
 from manabot.training.models import AtaraxosMoveLearning
 from manabot.training.references import reference_distribution
 from manabot.training.selection import (
@@ -25,30 +37,11 @@ from manabot.training.selection import (
 )
 
 
-def _check_distribution(probabilities: Tensor, valid: Tensor) -> None:
-    if probabilities.shape != valid.shape or probabilities.ndim < 2:
-        raise ValueError("distribution and legal support shapes differ")
-    if not valid.any(-1).all():
-        raise ValueError("distribution requires nonempty legal support")
-    if (
-        not torch.isfinite(probabilities).all()
-        or (probabilities[valid] <= 0).any()
-        or (probabilities[~valid] != 0).any()
-        or not torch.allclose(
-            probabilities.sum(-1),
-            torch.ones_like(probabilities.sum(-1)),
-            atol=1e-5,
-            rtol=1e-5,
-        )
-    ):
-        raise ValueError("distribution must normalize with positive legal support")
-
-
 def damped_policy_loss(
     logits: Tensor,
     actions: Tensor,
     advantages: Tensor,
-    behavior: Tensor,
+    behavior_logs: Tensor,
     reference: Tensor,
     valid: Tensor,
     *,
@@ -69,33 +62,28 @@ def damped_policy_loss(
         raise ValueError("actions and advantages require [B]")
     if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
         raise ValueError("invalid damping coefficients")
-    _check_distribution(behavior, valid)
-    _check_distribution(reference, valid)
-    if not torch.isfinite(logits[valid]).all() or not torch.isfinite(advantages).all():
-        raise ValueError("nonfinite policy logits or advantages")
+    check_logs(behavior_logs, valid)
+    check_probabilities(reference, valid, positive=True)
+    require(
+        torch.isfinite(advantages),
+        "nonfinite_advantages",
+        advantages=advantages,
+        valid=valid,
+    )
     if ((actions < 0) | (actions >= logits.shape[-1])).any():
         raise ValueError("action index outside legal support")
     if not valid.gather(-1, actions[:, None]).all():
         raise ValueError("sampled action is not legal")
-    behavior, reference, advantages = (
-        behavior.detach(),
-        reference.detach(),
-        advantages.detach(),
+    logs = policy_logs(logits, valid)
+    reference_logs = reference.detach().masked_fill(~valid, 1).log()
+    ratio_logs = (
+        (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
     )
-    # Mask log terms as well as probabilities, avoiding 0 * -inf in KL.
-    logs = logits.masked_fill(~valid, -torch.inf).log_softmax(-1)
-    probabilities = logs.exp()
-    logs = logs.masked_fill(~valid, 0)
-    behavior_logs = behavior.masked_fill(~valid, 1).log()
-    reference_logs = reference.masked_fill(~valid, 1).log()
-    ratio = (logs - behavior_logs).gather(-1, actions[:, None]).squeeze(-1).exp()
-    surrogate = -torch.minimum(
-        ratio * advantages, ratio.clamp(1 - clip, 1 + clip) * advantages
-    )
+    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
     return (
         surrogate
-        + collection_kl * (probabilities * (logs - behavior_logs)).sum(-1)
-        + tau * (probabilities * (logs - reference_logs)).sum(-1)
+        + collection_kl * reverse_kl(logs, behavior_logs, valid)
+        + tau * reverse_kl(logs, reference_logs, valid)
     )
 
 
@@ -176,8 +164,11 @@ def _targets(
     rewards = torch.as_tensor(batch.rewards, device=device)
     ends = torch.as_tensor(batch.dones, device=device)
     values = torch.as_tensor(batch.values, device=device)
+    require(torch.isfinite(values), "nonfinite_collection_values", values=values)
+    require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
     next_obs = trainer._obs_to_tensors(batch.next_obs, device)
     _, next_raw = (bootstrap_agent or trainer.agent).forward_distribution(next_obs)
+    require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
     if trainer.agent.hypers.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
             raise ValueError(
@@ -203,6 +194,10 @@ def _targets(
     advantages, _ = transition_gae(
         rewards, values, ends, next_value, 1.0, learning.policy_lambda
     )
+    require(torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages)
+    require(
+        torch.isfinite(value_targets), "nonfinite_value_targets", targets=value_targets
+    )
     # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
     selected = selection_mask(
         advantages,
@@ -227,19 +222,15 @@ def update_move_iteration(
     filter. No batch shuffling, advantage normalization, replay or hidden truth.
     Scalar value is an explicit MSE ablation; categorical uses equation (5).
     """
-    targets = _targets(trainer, batch, learning, bootstrap_agent)
     device = trainer.experiment.device
     observations = trainer._obs_to_tensors(batch.obs, device)
     actions = torch.as_tensor(batch.actions, device=device)
     behavior = torch.as_tensor(batch.probabilities, device=device)
     old_logs = torch.as_tensor(batch.logprobs, device=device)
-    valid = observations["actions_valid"] > 0
-    _check_distribution(behavior, valid)
-    sampled = behavior.gather(-1, actions[..., None]).squeeze(-1)
-    if (sampled <= 0).any() or not torch.allclose(
-        sampled.log(), old_logs, atol=1e-5, rtol=1e-5
-    ):
-        raise ValueError("saved action likelihood differs from collection distribution")
+    behavior_logs = torch.as_tensor(batch.log_probabilities, device=device)
+    valid = legal_mask(observations["actions_valid"])
+    check_behavior(behavior_logs, behavior, actions, old_logs, valid)
+    targets = _targets(trainer, batch, learning, bootstrap_agent)
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
@@ -257,6 +248,16 @@ def update_move_iteration(
             (~torch.as_tensor(batch.dones[-1])).float().mean()
         ),
     }
+    health = batch_health(
+        behavior_logs,
+        behavior,
+        valid,
+        targets.advantages,
+        targets.selected,
+        actor_only=learning.filter_scope == "actor",
+    )
+    diagnostics["numerical"] = health
+    observer = OptimizerHealth(trainer.agent, trainer.optimizer, health, iteration)
     expected_targets = (
         targets.values[..., 2] - targets.values[..., 0]
         if trainer.agent.hypers.value_kind == "categorical_wdl"
@@ -286,6 +287,7 @@ def update_move_iteration(
         group["lr"] = rate
     if not targets.selected.any() and learning.filter_scope == "actor_critic":
         diagnostics["skipped"] = "empty advantage filter"
+        health["skipped_steps"] = len(targets.selected)
         return diagnostics
     # Each learner timestep is one minibatch, preserving the paper's grouping
     # in MTG learner-decision units rather than Stratego simulator plies.
@@ -296,6 +298,7 @@ def update_move_iteration(
             else torch.ones_like(actor_selected)
         )
         if not selected.any():
+            health["skipped_steps"] += 1
             continue
         obs = {key: value[step, selected] for key, value in observations.items()}
         logits, value_logits = trainer.agent.forward_distribution(obs)
@@ -304,7 +307,7 @@ def update_move_iteration(
             logits,
             actions[step, selected],
             targets.advantages[step, selected],
-            behavior[step, selected],
+            behavior_logs[step, selected],
             reference,
             valid[step, selected],
             clip=learning.clip,
@@ -327,33 +330,59 @@ def update_move_iteration(
                 .mean()
             )
         loss = policy_loss + value_loss
-        if not torch.isfinite(loss):
-            raise RuntimeError("nonfinite Ataraxos move objective")
-        trainer.optimizer.zero_grad()
-        loss.backward()
-        norm = torch.nn.utils.clip_grad_norm_(
-            trainer.agent.parameters(), learning.max_grad_norm, error_if_nonfinite=True
-        )
-        trainer.optimizer.step()
+        try:
+            norm = observer.step(loss, learning.max_grad_norm)
+        except NumericalError as error:
+            error.tensors.update(
+                {
+                    "logits": logits.detach(),
+                    "value_logits": value_logits.detach(),
+                    "valid": valid[step, selected],
+                    "actions": actions[step, selected],
+                    "behavior_logs": behavior_logs[step, selected],
+                    "reference": reference,
+                    "advantages": targets.advantages[step, selected],
+                    "value_targets": targets.values[step, selected],
+                    "actor_selected": actor_mask,
+                    "minibatch_indexes": step * actions.shape[1]
+                    + selected.nonzero().flatten(),
+                    **{
+                        f"minibatch_observation/{key}": value
+                        for key, value in obs.items()
+                    },
+                }
+            )
+            raise
         diagnostics["optimizer_exposures"] += int(selected.sum())
         diagnostics["actor_exposures"] += int(actor_mask.sum())
         diagnostics["critic_exposures"] += int(selected.sum())
         with torch.no_grad():
-            probabilities = logits.softmax(-1)
-            logs = probabilities.clamp_min(1e-30).log()
-            diagnostics["entropy"] = float(-(probabilities * logs).sum(-1).mean())
-            diagnostics["collection_kl"] = float(
-                (
-                    probabilities
-                    * (logs - behavior[step, selected].clamp_min(1e-30).log())
-                )
+            logs = policy_logs(logits, valid[step, selected])
+            probabilities = logs.exp()
+            diagnostics["entropy"] = float(
+                -(probabilities * logs.masked_fill(~valid[step, selected], 0))
                 .sum(-1)
                 .mean()
             )
+            diagnostics["collection_kl"] = float(
+                reverse_kl(
+                    logs, behavior_logs[step, selected], valid[step, selected]
+                ).mean()
+            )
             diagnostics["reference_kl"] = float(
-                (probabilities * (logs - reference.clamp_min(1e-30).log()))
-                .sum(-1)
-                .mean()
+                reverse_kl(
+                    logs,
+                    reference.masked_fill(~valid[step, selected], 1).log(),
+                    valid[step, selected],
+                ).mean()
+            )
+            ratio_logs = (
+                (logs - behavior_logs[step, selected])
+                .gather(-1, actions[step, selected, None])
+                .squeeze(-1)
+            )
+            health["clip_fraction"] = float(
+                ((ratio_logs.double().exp() - 1).abs() > learning.clip).float().mean()
             )
         diagnostics.update(
             loss=float(loss.detach()),

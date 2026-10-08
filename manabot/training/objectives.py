@@ -6,8 +6,18 @@ import numpy as np
 import torch
 
 from manabot.model.agent import Agent
+from manabot.model.policy_distribution import (
+    NumericalError,
+    check_behavior,
+    clipped_surrogate,
+    legal_mask,
+    policy_logs,
+    require,
+    reverse_kl,
+)
 from manabot.sim.net_opponent import NetOpponentTrainer, RolloutBatch, transition_gae
 from manabot.training.ataraxos import update_move_iteration
+from manabot.training.health import OptimizerHealth, batch_health
 from manabot.training.models import AtaraxosMoveLearning, Learning
 from manabot.training.references import reference_distribution
 from manabot.training.selection import (
@@ -72,6 +82,11 @@ def update_iteration(
     actions = torch.as_tensor(batch.actions, device=dev).flatten()
     old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
     behavior = torch.as_tensor(batch.probabilities, device=dev).flatten(0, 1)
+    behavior_logs = torch.as_tensor(batch.log_probabilities, device=dev).flatten(0, 1)
+    valid = legal_mask(obs["actions_valid"])
+    check_behavior(behavior_logs, behavior, actions, old_logs, valid)
+    require(torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages)
+    require(torch.isfinite(returns), "nonfinite_value_targets", targets=returns)
     selected = selected_rows(
         advantages,
         learning.retained_fraction,
@@ -120,10 +135,21 @@ def update_iteration(
         ends,
         chosen_types.reshape_as(ends),
     )
+    health = batch_health(
+        behavior_logs,
+        behavior,
+        valid,
+        advantages,
+        mask,
+        actor_only=learning.filter_scope == "actor",
+    )
+    diagnostics["numerical"] = health
+    observer = OptimizerHealth(trainer.agent, trainer.optimizer, health, iteration)
     diagnostics["actor_exposures"] = 0
     diagnostics["critic_exposures"] = 0
     if not len(training_rows):
         diagnostics["skipped"] = "empty advantage filter"
+        health["skipped_steps"] = learning.epochs * learning.minibatches
         return diagnostics
     if len(selected):
         advantages = (advantages - advantages[selected].mean()) / advantages[
@@ -139,26 +165,25 @@ def update_iteration(
         ]
         for indices in order.split(size):
             logits, value = trainer.agent({k: v[indices] for k, v in obs.items()})
-            dist = torch.distributions.Categorical(logits=logits)
-            ratio = (dist.log_prob(actions[indices]) - old_logs[indices]).exp()
-            adv = advantages[indices]
+            logs = policy_logs(logits, valid[indices])
+            log_ratio = (
+                logs.gather(-1, actions[indices, None]).squeeze(-1) - old_logs[indices]
+            )
             actor_mask = mask[indices]
             policy = selected_mean(
-                torch.maximum(
-                    -adv * ratio,
-                    -adv * ratio.clamp(1 - learning.clip, 1 + learning.clip),
+                clipped_surrogate(log_ratio, advantages[indices], learning.clip),
+                actor_mask,
+            )
+            kl_ref = selected_mean(
+                reverse_kl(
+                    logs,
+                    reference[indices].masked_fill(~valid[indices], 1).log(),
+                    valid[indices],
                 ),
                 actor_mask,
             )
-            probs = dist.probs
-            logs = probs.clamp_min(1e-12).log()
-            kl_ref = selected_mean(
-                (probs * (logs - reference[indices].clamp_min(1e-12).log())).sum(-1),
-                actor_mask,
-            )
             kl_behavior = selected_mean(
-                (probs * (logs - behavior[indices].clamp_min(1e-12).log())).sum(-1),
-                actor_mask,
+                reverse_kl(logs, behavior_logs[indices], valid[indices]), actor_mask
             )
             value_loss = 0.5 * (value.flatten() - returns[indices]).square().mean()
             loss = (
@@ -167,14 +192,33 @@ def update_iteration(
                 + diagnostics["tau"] * kl_ref
                 + learning.collection_kl * kl_behavior
             )
-            if not torch.isfinite(loss):
-                raise RuntimeError("nonfinite self-play objective")
-            trainer.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(
-                trainer.agent.parameters(), learning.max_grad_norm
+            try:
+                norm = observer.step(loss, learning.max_grad_norm)
+            except NumericalError as error:
+                error.tensors.update(
+                    {
+                        "logits": logits.detach(),
+                        "value_logits": value.detach(),
+                        "valid": valid[indices],
+                        "actions": actions[indices],
+                        "behavior_logs": behavior_logs[indices],
+                        "reference": reference[indices],
+                        "advantages": advantages[indices],
+                        "value_targets": returns[indices],
+                        "actor_selected": actor_mask,
+                        "minibatch_indexes": indices,
+                        **{
+                            f"minibatch_observation/{key}": value[indices]
+                            for key, value in obs.items()
+                        },
+                    }
+                )
+                raise
+            health["clip_fraction"] = float(
+                ((log_ratio.detach().double().exp() - 1).abs() > learning.clip)
+                .float()
+                .mean()
             )
-            trainer.optimizer.step()
             diagnostics["optimizer_exposures"] += len(indices)
             diagnostics["actor_exposures"] += int(actor_mask.sum())
             diagnostics["critic_exposures"] += len(indices)
@@ -182,7 +226,13 @@ def update_iteration(
                 loss=float(loss.detach()),
                 policy_loss=float(policy.detach()),
                 value_loss=float(value_loss.detach()),
-                entropy=float(dist.entropy().mean().detach()),
+                entropy=float(
+                    -(logs.exp() * logs.masked_fill(~valid[indices], 0))
+                    .sum(-1)
+                    .mean()
+                    .detach()
+                ),
+                gradient_norm=float(norm),
                 reference_kl=float(kl_ref.detach()),
                 collection_kl=float(kl_behavior.detach()),
             )

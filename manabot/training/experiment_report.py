@@ -43,8 +43,13 @@ class ReportEvidence:
     def metrics(self, run: TrainingRun) -> list[dict[str, Scalar]]:
         """Expose all saved diagnostics for notebook-selected deeper analysis."""
         rows = training_dashboard(run).rows
-        diagnostics = [d for s in run.stages for d in s.diagnostics]
-        for row, diagnostic in zip(rows, diagnostics, strict=True):
+        diagnostics = {
+            (s.id, i): d for s in run.stages for i, d in enumerate(s.diagnostics)
+        }
+        for row in rows:
+            diagnostic = diagnostics.get(
+                (row.get("stage/id"), row.get("stage/ordinal")), {}
+            )
             for key, value in diagnostic.items():
                 if isinstance(value, (int, float)) and not isinstance(value, bool):
                     row.setdefault(f"diagnostic/{key}", value)
@@ -209,6 +214,48 @@ def metric_figure(evidence: ReportEvidence, metric: str) -> Figure:
             transform=ax.transAxes,
         )
     return fig
+
+
+def numerical_figures(evidence: ReportEvidence) -> list[Figure]:
+    """Compact health views. Missing cadence samples remain gaps, never zeros."""
+    groups = (
+        ("Collection concentration", ("legal_logit_gap_max",)),
+        ("Rounded legal zeros", ("legal_underflow_count",)),
+        ("Gradient norm", ("gradient_norm_before", "gradient_norm_after")),
+        ("Measured parameter movement", ("parameter_delta_l2",)),
+        ("Gradient tensors", ("gradient_missing_tensors", "gradient_zero_tensors")),
+        (
+            "Optimizer steps",
+            ("optimizer_steps", "skipped_steps", "rejected_steps", "rejected_updates"),
+        ),
+    )
+    figures: list[Figure] = []
+    for run in evidence.runs:
+        rows = evidence.metrics(run)
+        if not any(any(key.startswith("numerical/") for key in row) for row in rows):
+            continue
+        fig = Figure(figsize=(9, 8), layout="constrained")
+        for ax, (title, names) in zip(fig.subplots(3, 2).flat, groups, strict=True):
+            for name in names:
+                points = [
+                    (r.get("progress/updates", i), r.get(f"numerical/{name}"))
+                    for i, r in enumerate(rows)
+                ]
+                ax.plot(
+                    [x for x, _ in points],
+                    [
+                        float(y) if isinstance(y, (float, int)) else float("nan")
+                        for _, y in points
+                    ],
+                    marker=".",
+                    label=name.replace("_", " "),
+                )
+            ax.set_title(title)
+            ax.set_xlabel("Completed updates")
+            ax.legend(fontsize=7)
+        fig.suptitle(f"{run.regime.id} / seed {run.seed}: numerical health")
+        figures.append(fig)
+    return figures
 
 
 def diagnostic_figures(evidence: ReportEvidence, *, window: int = 25) -> list[Figure]:
@@ -643,6 +690,16 @@ def write_dashboard(
         "not an additional loss to add. Legal-action counts for that last minibatch are unavailable. "
         "Near ln(2) is consistent with nearly uniform binary choices, but does not identify their cause.</p>"
     )
+    health_figures = numerical_figures(evidence)
+    if health_figures:
+        parts.append(
+            "<details><summary>Numerical health: concentration, gradients and optimizer effect</summary>"
+            + section("Numerical health", "numerical-health", health_figures)
+            + "</details>"
+        )
+        parts.append(
+            '<p>Batch counts cover collected rows; gradient and parameter effect sample the first step at iteration 1 and every 25th iteration. Missing samples are unavailable. Forced choices and filtering can explain zeros; missing gradients or zero parameter movement need investigation. <a href="https://github.com/loopflowstudio/etude/blob/main/docs/numerical-health.md">Metric definitions and failure investigation</a>.</p>'
+        )
     for title, anchor, figures in sections:
         if anchor != "comparisons":
             parts.append(

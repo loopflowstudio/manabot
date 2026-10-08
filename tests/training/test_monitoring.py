@@ -319,3 +319,73 @@ def test_fixed_reference_target_does_not_change_training_objective() -> None:
         policy_target_kind=CHOSEN_ACTION_TARGET,
     )
     assert history[0].fixed_validation == expected
+
+
+def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
+    tmp_path: Path,
+) -> None:
+    from manabot.training.experiment_report import ReportEvidence, write_dashboard
+    from manabot.training.models import NumericalFailure
+
+    run = TrainingRun(
+        id="numerical-fixture",
+        regime=_recipe(),
+        regime_digest="fixture",
+        seed=1,
+        seed_streams={},
+        identities={},
+        status="failed",
+        stages=[
+            StageRecord(
+                id="policy-0",
+                diagnostics=[
+                    {
+                        "numerical": {
+                            "legal_logit_gap_max": 104.0,
+                            "legal_underflow_count": 2,
+                            "parameter_delta_l2": 0.01,
+                            "sampled_steps": 1,
+                        },
+                        "coordinates": {"updates": 1},
+                    },
+                    {
+                        "numerical": {
+                            "legal_logit_gap_max": 105.0,
+                            "legal_underflow_count": 3,
+                            "sampled_steps": 0,
+                        },
+                        "coordinates": {"updates": 2},
+                    },
+                ],
+                numerical_failure=NumericalFailure(
+                    invariant="nonfinite_gradients",
+                    iteration=3,
+                    health={"rejected_steps": 1, "rejected_updates": 1},
+                ),
+            )
+        ],
+    )
+    dashboard = training_dashboard(run)
+    assert len(dashboard.rows) == 3
+    assert dashboard.rows[0]["numerical/parameter_delta_l2"] == 0.01
+    assert "numerical/parameter_delta_l2" not in dashboard.rows[1]
+    assert dashboard.rows[-1]["progress/updates"] == 2
+    assert dashboard.rows[-1]["numerical/rejected_steps"] == 1
+    assert dashboard.rows[-1]["failure/invariant"] == "nonfinite_gradients"
+    panels = default_panels(dashboard)
+    assert "dashboard/Probability underflow" in panels
+    assert "dashboard/Optimizer steps" in panels
+    evidence = ReportEvidence(tmp_path, (run,), (), (), (), ())
+    path = write_dashboard(
+        evidence,
+        tmp_path / "health.html",
+        question="Numerical controls",
+        docs="metrics.md",
+        sections=[],
+    )
+    html = path.read_text()
+    assert "Numerical health" in html and "numerical-health.md" in html
+    assert "Measured parameter movement" in html
+    assert (
+        "nonfinite_gradients" in path.with_name("health-diagnostics.json").read_text()
+    )

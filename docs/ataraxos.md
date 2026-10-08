@@ -42,7 +42,7 @@ human games, strength, or equilibrium.
 retained observation the policy loss is the negative clipped-ratio advantage
 surrogate plus `collection_kl * KL(current || behavior)` and
 `tau * KL(current || magnet)`. All legal offers enter both KL terms. Actual
-collection probabilities are retained per row; saved selected-action likelihoods
+collection probabilities and normalized log probabilities are retained per row; saved selected-action likelihoods
 must agree with them. Invalid support or nonfinite values fail explicitly.
 
 Advantages use signed expected outcomes and a separate lambda from value
@@ -74,7 +74,7 @@ decisions, not assigned learner policy gradients.
 | Technique / source | Implementation and proof | Boundary |
 | --- | --- | --- |
 | S3.4 eq. (6), clipped surrogate | `damped_policy_loss`; independently enumerated mixed-policy gradients include both clipping branches | Same mathematical loss; not a new gradient formula |
-| Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and chosen magnet; zero-advantage gradient tests | Positive legal support required; no smoothed fallback |
+| Both reverse KLs, S3.4 | Exact legal-support sums against saved behavior and chosen magnet; zero-advantage gradient tests | Finite legal log support required; rounded sampling zeros counted, no smoothed fallback |
 | Magnet, S3.4 | `reference_distribution`, action-type uniform by default; uniform-offer control available | MTG types replace Stratego piece-then-move groups; not semantic equivalence |
 | Scalar advantage, S3.4 | Transition-end GAE, gamma=1, lambda=.5; detached collection values | Learner decisions replace Stratego same-player positions |
 | Outcome estimator and eq. (5) | Vector lambda=.8, terminal one-hot, paused-tail bootstrap; terminal/reset/mixture tests | Signed loss/draw/win storage order is a permutation only |
@@ -144,3 +144,6 @@ The paper recipe defaults above remain unchanged. `filter_scope="actor"` keeps
 all critic rows; `behavior="ema-self"` collects and bootstraps with averaged
 weights before updating raw weights. These are named hypotheses. Their bounded
 proofs do not accept a technique or alter the frozen ETU-91 campaign.
+
+The [numerical-health contract](numerical-health.md) defines finite precision
+sampling, stable reverse KL, named failure invariants and bounded incident state.

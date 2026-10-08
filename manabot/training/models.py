@@ -536,7 +536,18 @@ class TrainingRegime(Strict):
         return self
 
 
+class NumericalFailure(Strict):
+    """A rejected update is not a completed training diagnostic coordinate."""
+
+    invariant: str
+    iteration: int
+    health: dict[str, int | float] = {}
+
+
 class StageRecord(Strict):
+    numerical_failure: NumericalFailure | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     # Cumulative across attempts for this stage; run costs remain attempt-local.
     watchdog_seconds: float = 0
     id: str

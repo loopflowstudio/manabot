@@ -39,3 +39,28 @@ def test_snapshot_uses_database_authority_and_preserves_artifact_paths(
     policy.write_bytes(b"corruption")
     with pytest.raises(ValueError, match="bytes differ"):
         snapshot_evidence(root, tmp_path / "bad-snapshot")
+
+
+def test_terminal_numerical_bundle_uses_existing_snapshot_contract(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "producer"
+    (root / "run/incident").mkdir(parents=True)
+    run = run_fixture(root / "run/run.json")
+    run.status = "failed"
+    run.stages[0].artifacts = {}
+    for name in ("incident.json", "tensors.pt", "state.pt"):
+        path = root / "run/incident" / name
+        path.write_bytes(f"private fixture {name}".encode())
+        run.stages[0].rejected_artifacts[f"numerical/{name}"] = {
+            "path": str(path),
+            "sha256": digest(path.read_bytes()),
+            "bytes": path.stat().st_size,
+        }
+    with VerifyStore(root / "training.sqlite") as store:
+        store.save_training_run(run)
+    snapshot = tmp_path / "snapshot"
+    snapshot_evidence(root, snapshot)
+    for reference in run.stages[0].rejected_artifacts.values():
+        relative = Path(reference["path"]).relative_to(root)
+        assert digest((snapshot / relative).read_bytes()) == reference["sha256"]

@@ -34,6 +34,7 @@ from manabot.infra import Experiment
 from manabot.infra.hypers import ExperimentHypers, RewardHypers, TrainHypers
 from manabot.model.agent import Agent
 from manabot.model.architecture import architecture_identity
+from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.remote.plan import Allocation
 from manabot.sim.distill import generate_selfplay_shard, load_shards, save_bc_checkpoint
@@ -49,6 +50,7 @@ import managym
 from .admission import admit_policy
 from .clock import watchdog_seconds
 from .compound import CompoundStatistics, collect_game, optimize_games, replay_game
+from .incidents import save_incident
 from .models import (
     ArtifactReference,
     CollectBelief,
@@ -58,6 +60,7 @@ from .models import (
     FixedValidationCohort,
     ImportPolicy,
     MonitoringCheckpoint,
+    NumericalFailure,
     StageRecord,
     TrainBelief,
     TrainCompound,
@@ -133,6 +136,7 @@ def _runtime_identities(
             sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
         ),
         torch=torch.__version__,
+        policy_numerics="masked-log-softmax-v1",
         source_commit=subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True
         ).strip(),
@@ -495,7 +499,8 @@ def _execute_regime(
                 deadline = (
                     time.perf_counter() + allocation.checkpoint_deadline - time.time()
                 )
-            phase = "collection_seconds"
+            incident_trainer = None
+            batch = None
             paused = False
             collection_interrupted = False
             torch.set_num_threads(stage.execution.threads)
@@ -567,7 +572,6 @@ def _execute_regime(
             persist()
             check()
             if isinstance(stage, ImportPolicy):
-                phase = "export_seconds"
                 tick = time.perf_counter()
                 record.inputs = {
                     "source_run": dict(stage.source_run),
@@ -690,7 +694,6 @@ def _execute_regime(
                 for _ in range(stage.updates):
                     games = []
                     for _ in range(stage.games_per_update):
-                        phase = "collection_seconds"
                         target = out / f"{stage.id}-game-{game_index}.jsonl"
                         match = Match(regime.match)
                         if game_index % 2:
@@ -738,7 +741,6 @@ def _execute_regime(
                         stats.collection_seconds = record.collection_seconds
                         record.diagnostics = [asdict(stats)]
                         persist(progress=True)
-                    phase = "learning_seconds"
                     tick = time.perf_counter()
                     update = optimize_games(
                         agent,
@@ -812,7 +814,6 @@ def _execute_regime(
                         check=check,
                     )
                     record.collection_seconds += time.perf_counter() - tick
-                    phase = "diagnostic_seconds"
                     tick = time.perf_counter()
                     if replay_game(target) != len(game.rows):
                         raise ValueError("selection replay decision count mismatch")
@@ -822,7 +823,6 @@ def _execute_regime(
                     record.environment_decisions += len(game.rows)
                     games.append(game)
                     persist(progress=True)
-                    phase = "collection_seconds"
                 dataset = SelectionDataset(
                     run_id=run.id,
                     stage_id=stage.id,
@@ -837,7 +837,6 @@ def _execute_regime(
                 target = out / f"{stage.id}-dataset.json"
                 atomic_json(target, dataset.model_dump(mode="json"))
                 record.artifacts["dataset"] = artifact(target)
-                phase = "diagnostic_seconds"
                 tick = time.perf_counter()
                 report = analyze_selection(dataset, stage, check=check)
                 target = out / f"{stage.id}-analysis.json"
@@ -872,7 +871,6 @@ def _execute_regime(
                     len(game.examples) // 2 for game in dataset.games
                 )
                 game_index += len(dataset.games)
-                phase = "export_seconds"
                 tick = time.perf_counter()
                 target = out / f"{stage.id}-dataset.json"
                 save_dataset(dataset, target)
@@ -881,7 +879,6 @@ def _execute_regime(
             elif isinstance(stage, TrainBelief):
                 source = next(item for item in run.stages if item.id == stage.dataset)
                 dataset = read_dataset(Path(source.artifacts["dataset"]["path"]))
-                phase = "learning_seconds"
                 tick = time.perf_counter()
                 result = fit_belief_sampler(
                     dataset,
@@ -897,7 +894,6 @@ def _execute_regime(
                 record.learning_seconds = time.perf_counter() - tick
                 record.optimizer_exposures = result.optimizer_exposures
                 record.diagnostics = [asdict(result.metrics)]
-                phase = "export_seconds"
                 tick = time.perf_counter()
                 target = out / f"{stage.id}-sampler.pt"
                 checkpoint_identity = save_belief_sampler(target, result, dataset)
@@ -952,7 +948,6 @@ def _execute_regime(
                     if (
                         stage.opponent is not None or checkpoint_seconds is not None
                     ) and snapshot is None:
-                        phase = "export_seconds"
                         tick = time.perf_counter()
                         target = out / f"{stage.id}-initial-raw.pt"
                         temporary = target.with_suffix(".tmp")
@@ -1051,10 +1046,8 @@ def _execute_regime(
                     continue
 
                 def checkpoint(label: str) -> None:
-                    nonlocal phase
                     if regime.recovery_max_microsteps is None:
                         return
-                    phase = "export_seconds"
                     tick = time.perf_counter()
                     record.watchdog_seconds = (
                         prior_stage_watchdog + watchdog_seconds() - stage_watchdog_start
@@ -1070,6 +1063,7 @@ def _execute_regime(
                     checkpoint("start")
                     persist()
                 snapshot = None
+                incident_trainer = trainer
                 for update_index in range(first_update, stage.updates):
                     # Stop only at an exact collector/update boundary. The saved
                     # snapshot includes Adam, EMA, RNGs and paused native streams.
@@ -1083,11 +1077,11 @@ def _execute_regime(
                         break
                     check()
                     tick = time.perf_counter()
-                    phase = "collection_seconds"
                     behavior_agent = (
                         ema if stage.behavior == "ema-self" else trainer.agent
                     )
                     assert behavior_agent is not None
+                    batch = None
                     try:
                         batch = trainer.collector.collect(
                             behavior_agent,
@@ -1105,42 +1099,40 @@ def _execute_regime(
                     except TimeoutError:
                         if allocation is None or time.time() < allocation.pause_at:
                             raise
-                        synchronize()
-                        record.collection_seconds += time.perf_counter() - tick
                         paused = collection_interrupted = True
                         break
-                    synchronize()
-                    record.collection_seconds += time.perf_counter() - tick
+                    finally:
+                        synchronize()
+                        record.collection_seconds += time.perf_counter() - tick
                     check()
-                    phase = "learning_seconds"
                     tick = time.perf_counter()
-                    diagnostic = update_iteration(
-                        trainer,
-                        batch,
-                        stage.learning,
-                        update_index / stage.updates
-                        if regime.schedule_clock == "iteration_fraction"
-                        else (
-                            time.perf_counter() - start - run.monitoring_export_seconds
+                    try:
+                        diagnostic = update_iteration(
+                            trainer,
+                            batch,
+                            stage.learning,
+                            update_index / stage.updates
+                            if regime.schedule_clock == "iteration_fraction"
+                            else (
+                                time.perf_counter()
+                                - start
+                                - run.monitoring_export_seconds
+                            )
+                            / regime.wall_seconds,
+                            rng,
+                            iteration=iteration + 1,
+                            bootstrap_agent=behavior_agent,
                         )
-                        / regime.wall_seconds,
-                        rng,
-                        iteration=iteration + 1,
-                        bootstrap_agent=behavior_agent,
-                    )
-                    diagnostic["behavior"] = stage.behavior
-                    diagnostic["behavior_iteration"] = iteration
-                    if stage.learning.gradient != "ataraxos_move":
-                        diagnostic["schedule_clock"] = regime.schedule_clock
-                    iteration += 1
-                    if ema is not None:
-                        update_ema(ema, trainer.agent, stage.learning.ema)
-                    synchronize()
-                    record.learning_seconds += time.perf_counter() - tick
-                    if stage.active_seconds is not None:
-                        # A failure in persistence/export after a completed update
-                        # must not charge that overhead to the active-time clock.
-                        phase = "diagnostic_seconds"
+                        diagnostic["behavior"] = stage.behavior
+                        diagnostic["behavior_iteration"] = iteration
+                        if stage.learning.gradient != "ataraxos_move":
+                            diagnostic["schedule_clock"] = regime.schedule_clock
+                        iteration += 1
+                        if ema is not None:
+                            update_ema(ema, trainer.agent, stage.learning.ema)
+                    finally:
+                        synchronize()
+                        record.learning_seconds += time.perf_counter() - tick
                     record.diagnostics.append(diagnostic)
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     record.games = trainer.collector.stats.games - before.games
@@ -1208,7 +1200,6 @@ def _execute_regime(
                     )
                     previous = {"agent": initial_agent}
                 continuation = {}
-                phase = "learning_seconds"
                 tick = time.perf_counter()
 
                 def report_epoch(
@@ -1254,7 +1245,6 @@ def _execute_regime(
                 outputs[stage.id] = {"agent": agent, **deepcopy(continuation)}
                 optimizer_state = continuation["optimizer_state"]
             if isinstance(stage, (TrainSelfPlay, TrainSupervised, TrainCompound)):
-                phase = "export_seconds"
                 tick = time.perf_counter()
                 variants = {"raw": agent}
                 if isinstance(stage, TrainSelfPlay) and ema is not None:
@@ -1371,15 +1361,61 @@ def _execute_regime(
                 - record.export_seconds
                 - record.diagnostic_seconds,
             )
-            setattr(record, phase, getattr(record, phase) + unaccounted)
+            # Unmeasured setup, persistence and waits are never active training.
+            # Self-play operation timers settle in finally, including failed work.
+            record.diagnostic_seconds += unaccounted
+            if isinstance(error, NumericalError) and incident_trainer is not None:
+                record.numerical_failure = NumericalFailure(
+                    invariant=error.invariant,
+                    iteration=iteration + 1,
+                    health={
+                        **error.health,
+                        "rejected_updates": 1,
+                        "nonfinite_failure": int(
+                            error.invariant.startswith("nonfinite")
+                        ),
+                    },
+                )
+                capture_start = time.perf_counter()
+                try:
+                    paths = save_incident(
+                        out / f"{record.id}-numerical-incident",
+                        error,
+                        incident_trainer,
+                        batch,
+                        run,
+                        iteration + 1,
+                        ema,
+                        rng,
+                    )
+                    for path in paths:
+                        record.rejected_artifacts[f"numerical/{path.name}"] = artifact(
+                            path
+                        )
+                except Exception as capture_error:
+                    # Failure capture cannot replace the primary training error.
+                    run.error += (
+                        f"; incident capture failed: {type(capture_error).__name__}"
+                    )
+                    record.error = run.error
+                record.diagnostic_seconds += time.perf_counter() - capture_start
+                record.seconds = time.perf_counter() - stage_start
         run.seconds = time.perf_counter() - start
         run.watchdog_seconds = watchdog_seconds() - watchdog_start
         run.last_recorded_wall_seconds = time.time()
-        store.save_training_run(run)
         try:
+            store.save_training_run(run)
             export_training_run(run.id, store, out)
-        except OSError:
-            pass
+        except Exception as telemetry_error:
+            error.add_note(
+                f"terminal telemetry failed: {type(telemetry_error).__name__}"
+            )
+            try:
+                atomic_json(
+                    out / "terminal-error.json", {"error": run.error, "run": run.id}
+                )
+            except OSError:
+                pass
         raise
     finally:
         resources.close()

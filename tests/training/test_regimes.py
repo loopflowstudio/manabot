@@ -121,6 +121,11 @@ def test_named_treatments_execute_real_optimizer_batches():
         next_obs={k: v[:1] for k, v in obs.items()},
         next_done=np.ones(1, dtype=bool),
         probabilities=probs[:, None],
+        log_probabilities=logits.masked_fill(
+            torch.as_tensor(obs["actions_valid"]) == 0, -torch.inf
+        )
+        .log_softmax(-1)
+        .numpy()[:, None],
     )
     from manabot.sim.net_opponent import NetOpponentTrainer
 

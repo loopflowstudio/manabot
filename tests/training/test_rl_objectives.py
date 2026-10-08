@@ -56,6 +56,7 @@ def fixture():
         next_obs={k: v[:1] for k, v in obs.items()},
         next_done=np.array([True]),
         probabilities=probabilities[:, None],
+        log_probabilities=logits.log_softmax(-1).numpy()[:, None],
     )
     trainer = SimpleNamespace(
         agent=agent,

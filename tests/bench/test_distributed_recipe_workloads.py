@@ -162,6 +162,7 @@ def test_inference_uses_recipe_model_and_collection_geometry(
         next_obs={},
         next_done=values[-1],
         probabilities=values,
+        log_probabilities=values,
     )
     collection = MagicMock(return_value=collector)
     monkeypatch.setattr(workloads, "Agent", constructor)

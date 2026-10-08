@@ -231,3 +231,9 @@ an S3 version ID. One separately downloaded trained checkpoint passed the ordina
 loader without training or games. All six W&B training runs expose matching S3
 metadata; scientific scores remain in the separate scientific report. Local
 receipts are under `.runs/etu117-demo/s3/` in the reporting checkout.
+
+## Numerical health
+
+Ordinary self-play now retains stable collection logs, bounded private failure
+state and sampled gradient/parameter effects. See [numerical health](numerical-health.md)
+for metric populations, expected zeros, overhead and bounded CUDA admission.

@@ -184,3 +184,7 @@ operation, fixed distillation validation and separate checkpoint monitoring.
 Optional [public recent-event input](../docs/recent-events.md) uses the existing
 semantic catalog and a bounded native history suffix. Recipe history-on/off is
 independent of capacity and learning rules; comparison plans remain unexecuted.
+
+Self-play [numerical health](../docs/numerical-health.md) records policy support,
+selection, gradients and actual optimizer effects, with bounded private failure
+artifacts. CPU correctness does not imply CUDA validation or improved play.

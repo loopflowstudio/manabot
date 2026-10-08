@@ -40,6 +40,12 @@ import torch
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.observation import ActionEnum
 from manabot.model.agent import Agent
+from manabot.model.policy_distribution import (
+    NumericalError,
+    legal_mask,
+    policy_logs,
+    require,
+)
 from manabot.model.train import Trainer
 from manabot.sim.rollout import (
     OBS_KEYS,
@@ -66,6 +72,7 @@ class _Pending:
     logprob: float
     value: float
     probabilities: np.ndarray
+    log_probabilities: np.ndarray
     outcome_probabilities: np.ndarray | None = None
 
 
@@ -91,6 +98,7 @@ class RolloutBatch:
     next_obs: Dict[str, np.ndarray]
     next_done: np.ndarray
     probabilities: np.ndarray
+    log_probabilities: np.ndarray
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
     outcome_probabilities: np.ndarray | None = None
 
@@ -234,7 +242,10 @@ class SeatRoutedCollector:
         """Replay into a fresh collector; reject divergence before any learning."""
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
-        if self._recovery_limit is None or state.stats.micro_steps > self._recovery_limit:
+        if (
+            self._recovery_limit is None
+            or state.stats.micro_steps > self._recovery_limit
+        ):
             raise ValueError("collector replay exceeds recovery bound")
         for actions, active in state.journal:
             check()
@@ -253,12 +264,24 @@ class SeatRoutedCollector:
             obs = self._slice_obs_tensors(rows)
             with torch.inference_mode():
                 logits, _ = agent.forward(obs)
-                probs = torch.softmax(logits, dim=-1)
+                probs = self._policy_logs(logits, obs).exp()
                 actions = torch.multinomial(probs, 1, generator=self._self_rng).squeeze(
                     -1
                 )
             return actions.cpu().numpy().astype(np.int64)
         return self._opponent.select(self._buffers, rows)
+
+    @staticmethod
+    def _policy_logs(
+        logits: torch.Tensor, obs: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        try:
+            return policy_logs(logits, legal_mask(obs["actions_valid"]))
+        except NumericalError as error:
+            error.tensors.update(
+                {f"observation/{key}": value.detach() for key, value in obs.items()}
+            )
+            raise
 
     def _slice_obs_tensors(self, rows: np.ndarray) -> Dict[str, torch.Tensor]:
         obs = {}
@@ -285,8 +308,12 @@ class SeatRoutedCollector:
     # -- collection loop ------------------------------------------------------
 
     def collect(
-        self, agent: Agent, num_steps: int, *, deadline_monotonic: float | None = None,
-        check: Callable[[], None] | None = None
+        self,
+        agent: Agent,
+        num_steps: int,
+        *,
+        deadline_monotonic: float | None = None,
+        check: Callable[[], None] | None = None,
     ) -> RolloutBatch:
         """Advance all streams until every env has ``num_steps`` finalized
         learner transitions, stopping before the bootstrap action is sampled."""
@@ -331,12 +358,20 @@ class SeatRoutedCollector:
                         outcomes = outcome_t.cpu().numpy()
                     else:
                         logits, value_t = agent(obs_t)
-                    distribution = torch.distributions.Categorical(logits=logits)
+                    logs = self._policy_logs(logits, obs_t)
+                    require(
+                        torch.isfinite(value_t),
+                        "nonfinite_collection_values",
+                        values=value_t,
+                        valid=obs_t["actions_valid"] > 0,
+                    )
+                    weights = logs.exp()
                     action_t = torch.multinomial(
-                        distribution.probs, 1, generator=self._self_rng
+                        weights, 1, generator=self._self_rng
                     ).squeeze(-1)
-                    logprob_t = distribution.log_prob(action_t)
-                    probabilities = distribution.probs.cpu().numpy()
+                    logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
+                    probabilities = weights.cpu().numpy()
+                    log_probabilities = logs.cpu().numpy()
                 acts = action_t.cpu().numpy().astype(np.int64)
                 logprobs = logprob_t.cpu().numpy()
                 values = value_t.view(-1).cpu().numpy()
@@ -349,6 +384,7 @@ class SeatRoutedCollector:
                         logprob=float(logprobs[j]),
                         value=float(values[j]),
                         probabilities=probabilities[j].copy(),
+                        log_probabilities=log_probabilities[j].copy(),
                         outcome_probabilities=(
                             None if outcomes is None else outcomes[j].copy()
                         ),
@@ -424,6 +460,7 @@ class SeatRoutedCollector:
         }
         next_done = np.zeros((num_envs,), dtype=bool)
         probabilities = np.zeros_like(obs["actions_valid"])
+        log_probabilities = np.full_like(probabilities, -np.inf)
         outcome_probabilities = (
             np.zeros((num_steps, num_envs, 3), dtype=np.float32)
             if self._streams[0][0].pending.outcome_probabilities is not None
@@ -436,6 +473,7 @@ class SeatRoutedCollector:
                 transition = stream[step]
                 pending = transition.pending
                 probabilities[step, env_index] = pending.probabilities
+                log_probabilities[step, env_index] = pending.log_probabilities
                 if outcome_probabilities is not None:
                     assert pending.outcome_probabilities is not None
                     outcome_probabilities[step, env_index] = (
@@ -464,6 +502,7 @@ class SeatRoutedCollector:
             next_obs=next_obs,
             next_done=next_done,
             probabilities=probabilities,
+            log_probabilities=log_probabilities,
             outcome_probabilities=outcome_probabilities,
         )
 

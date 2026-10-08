@@ -97,6 +97,8 @@ jobs:
             tests/sim/test_structured_policy.py \
             tests/verify/test_checkpoint_scenarios.py tests/training/test_scenario_validation.py \
             tests/training/test_allocation.py \
+            tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
+            tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/sim/test_net_opponent.py \
             tests/training/test_monitoring.py tests/training/test_monitor_evaluation.py \
             tests/training/test_checkpoint_queue.py tests/training/test_experiment_runner.py \
             tests/training/test_experiments.py tests/training/test_architecture_recipes.py \

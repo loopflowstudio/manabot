@@ -1,5 +1,27 @@
 # Intelligence memory
 
+## Numerical policy contract (ETU-127, 2026-10-07)
+
+Jack Heart authorized autonomous numerical repairs and ineffective-update
+instrumentation, not another paid cohort. Final ETU-103 analysis still lacks the
+failed batch: underflow is demonstrated, not proven as its historical trigger.
+
+Ordinary self-play retains normalized legal logs beside sampling weights; reverse
+KL no longer reconstructs logs from rounded zeros. PPO's clamped KL approximation
+also changes. No floor or corrupt-batch skip is introduced. Rounded-zero actions
+remain unsampleable; numerical repair does not restore exploration. New runs need
+a new source freeze, not reinterpretation of frozen evidence.
+
+Local health separates forced/filtered zeros, absent/zero gradients and actual
+parameter movement. Detailed effect measurements sample one step every 25
+iterations; rejected updates remain separate from completed counts. Private,
+bounded failure state uses existing rejected-artifact publication. Failed active
+operations are timed directly; accumulated overhead cannot become learning time.
+ETU-126 owns lifecycle/upload. The [contract](../../docs/numerical-health.md)
+owns semantics, overhead and CUDA admission. CPU proofs
+and positive toy learning establish no CUDA validation, MTG strength or historical
+causal attribution. ETU-103/Mini source and artifacts remain untouched.
+
 ## Durable cohort owner (ETU-126, 2026-10-07)
 
 Jack Heart authorized autonomous MLOps delivery within the inclusive $30 GPU cap.
@@ -345,17 +367,9 @@ so this is not a critic-only intervention. Historical initialization/equations
 remain intact; equal-shaped pooling variants require saved architecture metadata.
 Later empirical dispositions above supersede this software-only stage.
 
-The eight-recipe smoke completed training and 32 raw/EMA export admissions, then
-failed on underscore-containing arena IDs after 36.12 seconds. Jack Heart approved
-evaluation-only recovery and landing. Aliases changed without retraining or
-rewriting artifacts; all 16 raw checkpoints played 120 exact-replayed games in
-382.86 cumulative seconds, within 900. Offline metrics/reports regenerated
-identically. EMA exports were not scored. PR #222 merged at `a371af46` and was
-integrated into ETU-104. The 108-test integrated suite, 15 focused fix checks and
-base-byte comparison establish software behavior, not strength, demo/chapter
-acceptance or human review. The [value-model protocol](../../experiments/value-models.md)
-owns recovery details; full historical account remains in this file at `7316da5d`.
-ETU-91's frozen checkout/evidence were untouched.
+Jack Heart approved evaluation-only recovery and landing. PR222 proved software,
+not strength/chapter acceptance; ETU-91 stayed untouched. Failure/recovery and
+validation: [protocol](../../experiments/value-models.md) and memory at `7316da5d`.
 
 ## Operating principle
 
@@ -1097,21 +1111,13 @@ software proofs remain at `64bdbca6`; ETU-91's frozen checkout stays unchanged.
 
 ## Capacity software receipt boundary (ETU-102, 2026-10-05)
 
-Jack Heart authorized independent software delivery. AgentSpec and with_capacity
-remain configuration owners; derived architecture receipts bind resolved model
-meaning and actual component parameter totals. Absent historical receipts retain
-world/weight checks; present contradictory metadata fails admission. World,
-source/runtime and checkpoint bytes remain separate. No weight port or changed
-forward equation was introduced. Trainable counts are export flags, not exposures.
-
-The retained `90c55627` CPU ladder completed in 212.56 seconds: six admitted raw
-checkpoints and 40 exact-replayed games. Semantic 64/1, 64/2, 128/2 models had
-138,434 / 188,418 / 712,706 parameters. High host load and differing inference
-batches prevent capacity-only timing claims. A retained timeout was fixed within the original cap.
-Full timing definitions and integration evidence remain at `fd7437df` and in the
-[calibration guide](../../docs/training-calibration.md). These are software proofs;
-no scientific allocation, strength, demo or chapter acceptance follows. ETU-91
-remained untouched.
+Jack Heart authorized independent software delivery. AgentSpec/with_capacity own
+configuration; derived receipts validate architecture meaning and parameter totals
+without porting weights. The 212.56-second CPU ladder admitted six raw policies
+and replayed 40 games; contention and unequal batches prevent capacity timing or
+strength claims. ETU-91 stayed untouched. Exact counts, admission limits and
+recovery remain in the [calibration guide](../../docs/training-calibration.md)
+and this memory at `64bdbca6`.
 
 ## Larger ordinary models (ETU-115, 2026-10-06)
 
