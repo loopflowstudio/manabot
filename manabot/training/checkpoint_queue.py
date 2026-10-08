@@ -110,6 +110,14 @@ def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Chec
                     coordinates=TrainingCoordinates(
                         stage_id=stage.id,
                         updates=origin.iteration if origin is not None else 0,
+                        segment_updates=0
+                        if stage.optimizer_updates is not None
+                        else None,
+                        optimizer_updates=(
+                            origin.optimizer_updates if origin is not None else 0
+                        )
+                        if stage.optimizer_updates is not None
+                        else None,
                         training_seconds=origin.cumulative_seconds
                         if origin is not None
                         else 0,

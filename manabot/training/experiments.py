@@ -149,7 +149,9 @@ class Pipeline:
 
 @dataclass(frozen=True)
 class RunControl:
-    schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"]
+    schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (
+        "iteration_fraction"
+    )
     recovery_max_microsteps: int | None = None
     selection: Literal["last-complete-raw"] = "last-complete-raw"
 

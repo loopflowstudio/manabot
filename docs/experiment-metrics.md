@@ -65,13 +65,19 @@ protocol before making a method claim; never pool games as independent fits.
 
 ## Comparisons
 
-The optional `strength_figures` cross-run comparison includes only stage/update
+The `strength_figures` cross-run comparison includes only stage/update
 coordinates present exactly once for every expected run in a compatible cohort. Protocol, opponent, world,
 ABI and inference envelope must agree. Missing runs or unmatched milestones
 produce unavailable panels. No interpolation, cherry-picked best checkpoint,
 or unequal-latest ranking is performed. Points and intervals remain per seed. The default dashboard instead makes each
 retained seed’s monitoring history available independently, so an unrun seed
 does not hide the ongoing run; this is not a matched multi-seed comparison.
+
+New notebooks lead with `strength_figures(evidence)`, using completed self-play
+steps, followed by learner transitions and active training time. Other training
+units are not combined on this step axis. Optional optimizer-call and exposure
+axes retain their measured units; a missing historical counter suppresses that
+panel instead of plotting zero. Edited existing notebooks remain unchanged.
 
 The time axis is original checkpoint cumulative recorded training seconds. The
 work axis is cumulative native environment decisions, explicitly a work proxy,

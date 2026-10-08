@@ -398,6 +398,16 @@ def _execute_regime(
         ]
         return {
             "updates": run.updates_through(),
+            **(
+                {"segment_updates": len(record.diagnostics)}
+                if isinstance(stage, TrainSelfPlay)
+                else {}
+            ),
+            **(
+                {"optimizer_updates": count}
+                if (count := run.optimizer_updates_through()) is not None
+                else {}
+            ),
             "training_seconds": run.prior_seconds
             + time.perf_counter()
             - start
@@ -446,6 +456,11 @@ def _execute_regime(
         receipt = MonitoringCheckpoint(
             stage_id=record.id,
             ordinal=len(run.monitoring_checkpoints),
+            **{
+                key: point[key]
+                for key in ("segment_updates", "optimizer_updates")
+                if key in point
+            },
             **{
                 k: point[k]
                 for k in (
@@ -522,6 +537,10 @@ def _execute_regime(
                     run.stages.append(record)
                     snapshot = None
                     continue
+            if isinstance(stage, TrainSelfPlay):
+                record.optimizer_updates = (
+                    record.observed_optimizer_updates() if snapshot is not None else 0
+                )
             if not restoring_completed:
                 record.status = "running"
                 record.error = None
@@ -1226,6 +1245,7 @@ def _execute_regime(
                         if stage.learning.gradient != "ataraxos_move":
                             diagnostic["schedule_clock"] = regime.schedule_clock
                         iteration += 1
+                        diagnostic["iteration"] = iteration
                         if ema is not None:
                             update_ema(ema, trainer.agent, stage.learning.ema)
                     finally:
@@ -1233,6 +1253,10 @@ def _execute_regime(
                         record.learning_seconds += time.perf_counter() - tick
                     record.diagnostics.append(diagnostic)
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
+                    if record.optimizer_updates is not None:
+                        record.optimizer_updates += diagnostic["numerical"][
+                            "optimizer_steps"
+                        ]
                     record.games = trainer.collector.stats.games - before.games
                     record.environment_decisions = (
                         trainer.collector.stats.micro_steps - before.micro_steps

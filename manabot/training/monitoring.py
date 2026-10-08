@@ -176,6 +176,7 @@ def training_dashboard(run: TrainingRun) -> Dashboard:
                         "environment_decisions",
                         "learner_transitions",
                         "optimizer_exposures",
+                        "optimizer_updates",
                         "games",
                     ):
                         count = coordinate.get(counter)
@@ -282,6 +283,7 @@ def training_dashboard(run: TrainingRun) -> Dashboard:
             if run.fixed_validation
             else None,
             "checkpoint_interval_seconds": run.monitoring_checkpoint_seconds,
+            "checkpoint_interval_updates": run.monitoring_checkpoint_updates,
             "stages": [
                 s.model_dump(mode="json", exclude={"diagnostics"}) for s in run.stages
             ],

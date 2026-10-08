@@ -10,7 +10,13 @@ from manabot.training.checkpoint_queue import (
     MonitoringBudget,
     checkpoints,
 )
-from manabot.training.models import CheckpointCadence, TrainingRun, TrainSelfPlay
+from manabot.training.experiment_execution import StepCalibration
+from manabot.training.models import (
+    CheckpointCadence,
+    StageRecord,
+    TrainingRun,
+    TrainSelfPlay,
+)
 from manabot.verify.store import VerifyStore
 from tests.training import (
     test_checkpoint_queue as queue_fixtures,
@@ -49,6 +55,17 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
             recipe, 197, tmp_path / "run", store, checkpoint_updates=2
         )
     assert run.status == "completed", run.error
+    assert run.stages[0].optimizer_updates == sum(
+        d["numerical"]["optimizer_steps"] for d in run.stages[0].diagnostics
+    )
+    assert run.optimizer_updates_through() > 0
+    assert [
+        c.coordinates.segment_updates for c in checkpoints(run, include_initial=True)
+    ] == [0, 2, 4, 6]
+    assert (
+        checkpoints(run)[-1].coordinates.optimizer_updates
+        == run.optimizer_updates_through()
+    )
     assert [c.updates for c in run.monitoring_checkpoints] == [2, 4]
     assert [c.coordinates.updates for c in checkpoints(run, include_initial=True)] == [
         0,
@@ -62,23 +79,28 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
     )
 
 
+@pytest.mark.parametrize("interval, milestones", [(3, [3, 6, 7]), (2, [4, 6, 7])])
 def test_continuation_anchors_after_inherited_step(
-    tmp_path: Path, producer: TrainingRun
+    tmp_path: Path, producer: TrainingRun, interval: int, milestones: list[int]
 ) -> None:
     recipe = portable.continuation(producer, tmp_path / "producer/run.json", 7)
     with VerifyStore(tmp_path / "segments.sqlite") as store:
         run = execution.execute_regime(
-            recipe, 197, tmp_path / "segment", store, checkpoint_updates=3
+            recipe, 197, tmp_path / "segment", store, checkpoint_updates=interval
         )
     assert run.status == "completed", run.error
     assert run.updates_through() == 7
     assert len(run.stages[0].diagnostics) == 5
-    assert [c.coordinates.updates for c in checkpoints(run, include_initial=True)] == [
-        3,
-        6,
-        7,
-    ]
+    assert [
+        c.coordinates.updates for c in checkpoints(run, include_initial=True)
+    ] == milestones
     assert run.stages[0].diagnostics[0]["iteration"] == 3
+    assert [c.coordinates.segment_updates for c in checkpoints(run)] == [
+        step - 2 for step in milestones
+    ]
+    assert run.optimizer_updates_through() == (
+        producer.optimizer_updates_through() + run.stages[0].optimizer_updates
+    )
 
 
 def test_recovery_preserves_prior_exports_and_cadence(
@@ -128,6 +150,9 @@ def test_recovery_preserves_prior_exports_and_cadence(
             checkpoint_updates=2,
         )
     assert resumed.status == "completed", resumed.error
+    assert resumed.optimizer_updates_through() == sum(
+        d["numerical"]["optimizer_steps"] for d in resumed.stages[0].diagnostics
+    )
     assert resumed.monitoring_checkpoints[0].model_dump() == original
     assert [c.coordinates.updates for c in checkpoints(resumed)] == [2, 4, 6]
 
@@ -168,3 +193,61 @@ def test_step_admission_rejects_ambiguous_stage_clocks() -> None:
     with pytest.raises(ValueError, match="one step-target self-play stage"):
         CheckpointCadence().admit_regime(recipe)
     CheckpointCadence(checkpoint_seconds=60).admit_regime(recipe)
+
+
+def test_empty_filter_still_advances_steps_without_optimizer_calls(
+    tmp_path: Path,
+) -> None:
+    recipe = _recipe()
+    stage = recipe.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.learning.min_advantage = 1e20
+    with VerifyStore(tmp_path / "empty.sqlite") as store:
+        run = execution.execute_regime(
+            recipe, 197, tmp_path / "empty", store, checkpoint_updates=1
+        )
+    assert run.status == "completed", run.error
+    assert run.updates_through() == 2
+    assert run.stages[0].learner_transitions == 64
+    assert run.stages[0].optimizer_exposures == run.optimizer_updates_through() == 0
+    assert [c.coordinates.updates for c in checkpoints(run)] == [1, 2]
+    assert all(c.coordinates.optimizer_updates == 0 for c in checkpoints(run))
+
+
+def test_historical_optimizer_counts_are_never_inferred_from_exposures() -> None:
+    old = StageRecord(id="old", optimizer_exposures=100, diagnostics=[{"loss": 1}])
+    assert old.observed_optimizer_updates() is None
+    assert "optimizer_updates" not in old.model_dump()
+    old.diagnostics = [
+        {"numerical": {"optimizer_steps": 3}},
+        {"numerical": {"optimizer_steps": 0}},
+    ]
+    assert old.observed_optimizer_updates() == 3
+
+
+def test_saved_calibration_freezes_counts_without_reinterpreting_time(
+    tmp_path: Path, producer: TrainingRun
+) -> None:
+    path = tmp_path / "producer/run.json"
+    receipt = StepCalibration.from_export(path)
+    assert receipt.completed_updates == 2
+    assert receipt.learner_transitions == producer.stages[0].learner_transitions
+    assert receipt.active_seconds == (
+        producer.stages[0].collection_seconds + producer.stages[0].learning_seconds
+    )
+    # Fixed arithmetic fixture is not a throughput measurement.
+    fixed = receipt.model_copy(update={"completed_updates": 10, "active_seconds": 36})
+    assert fixed.updates_for(4) == 4000
+    assert fixed.updates_for(0.5) == 500
+    for invalid in (0, -1, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="positive and finite"):
+            fixed.updates_for(invalid)
+    with pytest.raises(ValueError, match="fewer than one"):
+        fixed.updates_for(1e-9)
+    with pytest.raises(ValueError, match="frozen"):
+        fixed.active_seconds = 1
+    failed = producer.model_copy(update={"status": "failed"})
+    failed_path = tmp_path / "failed.json"
+    failed_path.write_text(failed.model_dump_json())
+    with pytest.raises(ValueError, match="completed fresh"):
+        StepCalibration.from_export(failed_path)

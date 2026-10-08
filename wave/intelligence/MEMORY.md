@@ -58,17 +58,21 @@ then recovered without touching training; the follow-up fixes lock-release waits
 CUDA continuation admission, 100k completion and final results remain pending;
 original science stays at `45940fe3`.
 
-Mini needs its account online/logged in; W&B credentials are absent there, while
-local reports refresh. New large 11.95h/$6.20 JobSpecs implement eight hours within
-$100; existing caps stay fixed. Final evaluation/artifacts/cleanup gate successors.
+Mini requires login; local reports refresh without W&B credentials. Large
+11.95h/$6.20 JobSpecs retain fixed caps. Final evaluation/artifacts/cleanup
+gate successors.
 After settlement revoke the controller identity and remove copied secrets/services;
 IAM expiry does not revoke shared provider keys. Preserve original shared keys and
 Mini workloads. Cohort completion, final analysis and cost settlement remain open.
 
 Jack Heart requested prospective step cadence after PR268. The live science and
-queued continuation retain their frozen hourly cadence. New work uses absolute
-completed collect/learn iterations, shared checkpoint intervals and explicit
-segment offsets; operational clocks remain time-based. Cadence/recovery checks passed; counter/report/calibration work follows.
+queued continuation retain their frozen hourly cadence. Prospective single-stage self-play uses exact absolute update milestones;
+legacy/multi-stage clocks remain explicit. PR270 merged; cadence/recovery passed.
+The follow-up retains segment counts, optimizer calls and sample exposures;
+missing historical counts stay unavailable. Reports lead with matched steps;
+equal steps are not equal samples. Saved pilot receipts freeze targets/intervals
+before launch; operational clocks remain time-based. CPU/software checks prove
+behavior only. Edited notebooks, original science and queued continuation stay fixed.
 PR269 merged at `01fd9029`: startup phases now stream within the unchanged 90s
 clean-play limit. Exact main-job rerun passed 50.726s; original cause is unknown.
 
@@ -605,12 +609,9 @@ Unavailable ed2 advice/checkpoints follow the [live-advice plan](../../docs/plan
 
 ## Corrected-world training binding (2026-09-29)
 
-`scripts/train_challenger.py` owns training-to-demo admission with authored
-sideboards and exact world/setup/ABI bindings. Two bounded executions proved the
-pipeline, not improvement: held-out KL stayed near initialization. Full observations
-and unresolved label/optimizer limits remain in
-[the dated record](../../docs/evidence/corrected-world-training-2026-09-29.md) and
-this memory at `fd7437df`. Regime execution does not replace demo admission.
+The [dated record](../../docs/evidence/corrected-world-training-2026-09-29.md) and
+`01fd9029` retain two pipeline-only executions, near-initial held-out KL and
+unresolved optimizer/label limits. TrainingRegime never replaces demo admission.
 
 ## Training regime reconciliation (2026-10-04)
 

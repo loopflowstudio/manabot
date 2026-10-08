@@ -58,7 +58,11 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
         ),
         nbformat.v4.new_code_cell(
             "# Editable plotting code. Keep the default report concise.\n"
-            "sections = []\n"
+            "sections = [\n"
+            "    ('Matched training steps', 'comparisons', strength_figures(evidence)),\n"
+            "    ('Matched milestones: learner sample exposure', 'comparisons', strength_figures(evidence, 'learner_transitions')),\n"
+            "    ('Matched milestones: active training cost', 'costs', strength_figures(evidence, 'active_training_seconds')),\n"
+            "]\n"
             "if study is not None:\n"
             "    sections += [\n"
             "        ('Scientific checkpoint strength', 'comparisons', study_strength_figures(study)),\n"

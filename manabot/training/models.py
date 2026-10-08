@@ -286,6 +286,9 @@ class LearningStateOrigin(Strict):
     active_training_seconds: float = Field(ge=0)
     cumulative_seconds: float = Field(ge=0)
     streams: Literal["fresh"] = "fresh"
+    optimizer_updates: int | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
 
 
 class TrainSelfPlay(Stage):
@@ -701,6 +704,10 @@ class StageRecord(Strict):
     environment_decisions: int = 0
     learner_transitions: int = 0
     optimizer_exposures: int = 0
+    # Completed optimizer.step calls; unknown in older or unsupported learners.
+    optimizer_updates: int | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
     sampled_peak_rss_bytes: int = 0
     cpu_seconds: float = 0
     inputs: dict[str, dict] = {}
@@ -709,8 +716,28 @@ class StageRecord(Strict):
     diagnostics: list[dict] = []
     error: str | None = None
 
+    def observed_optimizer_updates(self) -> int | None:
+        """Read saved counters once at import/recovery, never infer from exposures."""
+        if self.optimizer_updates is not None:
+            return self.optimizer_updates
+        total = 0
+        for diagnostic in self.diagnostics:
+            health = diagnostic.get("numerical")
+            count = health.get("optimizer_steps") if isinstance(health, dict) else None
+            if type(count) is not int or count < 0:
+                return None
+            total += count
+        return total if self.diagnostics else None
+
 
 class TrainingCoordinates(Strict):
+    # Segment-local completed iterations; updates includes inherited absolute offsets.
+    segment_updates: int | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
+    optimizer_updates: int | None = Field(
+        default=None, ge=0, exclude_if=lambda value: value is None
+    )
     stage_id: str
     updates: int = Field(ge=0)
     training_seconds: float = Field(ge=0)
@@ -786,6 +813,22 @@ class TrainingRun(Strict):
                 total += len(stage.diagnostics)
                 if stage.learning_state_origin is not None:
                     total += stage.learning_state_origin.iteration
+            if stage.id == stage_id:
+                break
+        return total
+
+    def optimizer_updates_through(self, stage_id: str | None = None) -> int | None:
+        """Cumulative measured calls; any missing stage/ancestor remains unavailable."""
+        total = 0
+        for stage in self.stages:
+            if stage.optimizer_updates is None:
+                return None
+            total += stage.optimizer_updates
+            origin = stage.learning_state_origin
+            if origin is not None:
+                if origin.optimizer_updates is None:
+                    return None
+                total += origin.optimizer_updates
             if stage.id == stage_id:
                 break
         return total

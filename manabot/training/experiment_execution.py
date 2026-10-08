@@ -5,16 +5,82 @@ is explicitly configured, never provisioned. ExperimentRun records every actual
 process attempt; VerifyStore is its persistence owner.
 """
 
+import hashlib
+import math
 import os
 from pathlib import Path
 import socket
 from typing import Literal
 
-from pydantic import Field, JsonValue, model_validator
+from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.remote.plan import JobSpec
 from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.models import CheckpointCadence, Strict
+from manabot.training.models import (
+    ArtifactReference,
+    CheckpointCadence,
+    Strict,
+    TrainingRun,
+    TrainSelfPlay,
+)
+
+
+class StepCalibration(Strict):
+    """Frozen throughput from an admitted completed pilot, not launch authority.
+
+    Convert requested active hours once before authoring targets. Preserve this
+    receipt beside the declaration; execution never consults it or retunes steps.
+    Pilot representativeness and runtime reserves remain experimental judgments.
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, frozen=True)
+    source_run: ArtifactReference
+    completed_updates: int = Field(gt=0, strict=True)
+    active_seconds: float = Field(gt=0)
+    learner_transitions: int = Field(gt=0, strict=True)
+
+    @classmethod
+    def from_export(cls, path: Path) -> "StepCalibration":
+        path = path.resolve()
+        payload = path.read_bytes()
+        run = TrainingRun.model_validate_json(payload)
+        if (
+            run.status != "completed"
+            or run.parent_run_id is not None
+            or len(run.stages) != 1
+            or len(run.regime.stages) != 1
+            or not isinstance(run.regime.stages[0], TrainSelfPlay)
+            or run.stages[0].status != "completed"
+            or run.stages[0].learning_state_origin is not None
+        ):
+            raise ValueError("calibration requires one completed fresh self-play stage")
+        stage = run.stages[0]
+        if (
+            not run.identities.get("training_source_sha256")
+            or "raw" not in stage.artifacts
+        ):
+            raise ValueError("calibration requires source and checkpoint receipts")
+        return cls(
+            source_run={
+                "path": str(path),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "bytes": len(payload),
+            },
+            completed_updates=len(stage.diagnostics),
+            active_seconds=stage.collection_seconds + stage.learning_seconds,
+            learner_transitions=stage.learner_transitions,
+        )
+
+    def updates_for(self, active_hours: float) -> int:
+        """Floor measured throughput to a positive count; no runtime hour trigger."""
+        if not math.isfinite(active_hours) or active_hours <= 0:
+            raise ValueError("requested active hours must be positive and finite")
+        updates = math.floor(
+            active_hours * 3600 * self.completed_updates / self.active_seconds
+        )
+        if updates < 1:
+            raise ValueError("requested active hours project fewer than one update")
+        return updates
 
 
 class PlannedRun(CheckpointCadence):

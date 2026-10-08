@@ -50,10 +50,18 @@ def _origin(source: TrainingRun, record: StageRecord) -> LearningStateOrigin:
         raise ValueError("learning-state parent lacks contiguous absolute iterations")
     if record.cumulative_seconds is None:
         raise ValueError("learning-state parent cost is unavailable")
+    optimizer_updates = record.observed_optimizer_updates()
+    if previous is not None:
+        optimizer_updates = (
+            optimizer_updates + previous.optimizer_updates
+            if optimizer_updates is not None and previous.optimizer_updates is not None
+            else None
+        )
     return LearningStateOrigin(
         run_id=source.id,
         stage_id=record.id,
         iteration=start + len(record.diagnostics),
+        optimizer_updates=optimizer_updates,
         **{
             name: getattr(record, name)
             + (getattr(previous, name) if previous is not None else 0)

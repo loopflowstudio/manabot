@@ -107,6 +107,11 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
             coordinates=TrainingCoordinates(
                 stage_id=stage.id,
                 updates=run.updates_through(stage.id),
+                segment_updates=len(stage.diagnostics)
+                if run.regime.stages[index].operation == "train_self_play"
+                and stage.optimizer_updates is not None
+                else None,
+                optimizer_updates=run.optimizer_updates_through(stage.id),
                 training_seconds=stage.cumulative_seconds
                 + sum(origin.cumulative_seconds for origin in origins),
                 active_training_seconds=(

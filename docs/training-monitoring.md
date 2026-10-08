@@ -41,6 +41,23 @@ Multi-stage recipes, active-time endpoints, supervised epochs and compound-game
 training retain their explicit legacy cadence; their differing iteration/epoch
 clocks are not silently combined into one step schedule.
 
+New self-play receipts distinguish `updates` (absolute completed iterations),
+`segment_updates` (completed iterations in this stage, including a recovered
+prefix), `learner_transitions` (collected samples), `optimizer_updates` (completed
+`optimizer.step()` calls), and `optimizer_exposures` (sample uses across repeated
+minibatches). Empty-filter iterations advance steps and EMA, with zero optimizer
+calls. A rejected iteration is not a completed step; partial work stays in its separate
+numerical-failure receipt rather than the completed trajectory counters. Import adds the ancestor's
+measured counters; unavailable historical optimizer counts stay unavailable,
+never inferred from batch sizes or exposures. Admission can sum complete saved
+numerical step counts once without rewriting the producer's bytes.
+
+See [freezing targets from calibration](training-calibration.md#freeze-prospective-step-targets).
+New comparison notebooks lead with exact matched steps, then sample exposure
+and recorded active time. Existing edited notebooks remain unchanged. W&B is a
+projection of these same recorded coordinates; tracker arrival time is not the
+learning clock.
+
 Explicit `checkpoint_seconds` / `--checkpoint-seconds` preserves historical
 elapsed-time cadence at update/epoch boundaries. Frozen launch JSON and historical
 receipts retain their original meaning. Do not migrate live runs in place.

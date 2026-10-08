@@ -166,13 +166,27 @@ def matched_milestones(evidence: ReportEvidence) -> dict[str, list[MonitorResult
 
 def strength_figures(
     evidence: ReportEvidence,
-    axis: Literal["training_seconds", "environment_decisions"],
+    axis: Literal[
+        "updates",
+        "learner_transitions",
+        "optimizer_updates",
+        "optimizer_exposures",
+        "active_training_seconds",
+        "training_seconds",
+        "environment_decisions",
+    ] = "updates",
     *,
     per_run: bool = False,
 ) -> list[Figure]:
     """Plot matched milestones per seed; bands are saved deal uncertainty, not seed CIs."""
     figures: list[Figure] = []
     panels = matched_milestones(evidence)
+    if axis == "updates" and any(
+        stage.operation != "train_self_play"
+        for run in evidence.runs
+        for stage in run.regime.stages
+    ):
+        return []
     if per_run:
         # Explicit within-run histories do not claim compatibility across variants.
         panels = {
@@ -188,6 +202,9 @@ def strength_figures(
             ).items()
         }
     for panel, results in panels.items():
+        # Missing historical counters cannot become zero-valued comparison points.
+        if any(getattr(row.coordinates, axis) is None for row in results):
+            continue
         fig = Figure(figsize=(9, 3.5), layout="constrained")
         ax = fig.subplots()
         for run_id in sorted({r.run_id for r in results}):
@@ -209,9 +226,15 @@ def strength_figures(
                 label=evidence.label(run_id),
             )
         ax.set(
-            xlabel="Recorded training seconds"
-            if axis == "training_seconds"
-            else "Native environment decisions (work proxy)",
+            xlabel={
+                "updates": "Completed training steps (not equal sample exposure)",
+                "learner_transitions": "Learner transitions",
+                "optimizer_updates": "Completed optimizer updates",
+                "optimizer_exposures": "Optimizer sample exposures",
+                "active_training_seconds": "Recorded active training seconds",
+                "training_seconds": "Recorded training wall seconds",
+                "environment_decisions": "Native environment decisions (work proxy)",
+            }[axis],
             ylabel="Win fraction",
             ylim=(-0.03, 1.03),
             title=(

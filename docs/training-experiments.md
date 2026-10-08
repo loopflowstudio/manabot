@@ -49,7 +49,7 @@ are presentation, never substitutes for configuration or checkpoint identity.
 | `LearningRule(Learning(...) or AtaraxosMoveLearning(...))` | Replace the complete learning rule on every self-play stage, including the selected rule's defaults. |
 | `Resources(execution=Execution(...), wall_seconds=...)` | Explicit execution fields on every stage plus the total run deadline. |
 | `Pipeline(stages=(...))` | Replace the complete ordered stage list, including stage-local learning/resources. Use existing typed operation models for heterogeneous stages. |
-| `RunControl(schedule_clock=..., recovery_max_microsteps=..., selection=...)` | Replace these three run controls together. `None` explicitly disables recovery. |
+| `RunControl(schedule_clock=..., recovery_max_microsteps=..., selection=...)` | Replace these three run controls together. New authoring defaults to `iteration_fraction`; `None` explicitly disables recovery. |
 | Generated identity | `id` derives from the declaration; `schema_version` stays with TrainingRegime. |
 
 All effective settings have exactly one semantic owner. Stage learning belongs
@@ -199,3 +199,14 @@ milestones during learning and creates one editable comparison notebook.
 [Execution, continuation and notebook contracts](experiment-execution.md) describe
 the supported local CPU placement, history/depth consumers and evidence limits.
 Interpretation and repository knowledge updates belong to an experiment skill.
+
+Prospective self-play monitoring uses positive `checkpoint_updates`, shared across
+capacity cases. Use `RunControl()` for iteration-based PPO schedules; Ataraxos
+already consumes absolute iterations independently of the target count. Existing
+baseline snapshots retain their serialized meaning; this authoring default does
+not rewrite them. Freeze targets and intervals from an admitted pilot before
+launch as described in [calibration](training-calibration.md#freeze-prospective-step-targets).
+
+`TrainingRegime.schedule_clock` retains its historical reader default. New PPO
+step declarations must select `iteration_fraction` through `RunControl()` or the
+recipe field; cadence admission rejects elapsed-budget recipes before launch.
