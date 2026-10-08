@@ -526,3 +526,50 @@ def test_terminal_progress_uses_database_not_lagging_export(
     )
     assert result.phase == "completed"
     assert result.updates == run.updates_through() == 160
+
+
+def test_failure_during_upload_refreshes_terminal_progress(
+    store: FileStore, tmp_path: Path
+) -> None:
+    spec = specification(store)
+    resource = admitted(spec, store)
+    root = tmp_path / "evidence"
+    (root / "run").mkdir(parents=True)
+    run = run_fixture(root / "run/run.json")
+    run.stages[0].diagnostics = [{}]
+    with VerifyStore(root / "training.sqlite") as database:
+        database.save_training_run(run)
+    release = root / "release"
+    seen: list[int] = []
+
+    def slow_upload(
+        spec: Job, root: Path, generation: int, *, complete: bool
+    ) -> StoredArtifact:
+        if not complete:
+            run.status = "failed"
+            run.stages[0].diagnostics = [{} for _ in range(7)]
+            with VerifyStore(root / "training.sqlite") as database:
+                database.save_training_run(run)
+            release.touch()
+            time.sleep(0.1)
+        else:
+            with VerifyStore(root / "training.sqlite", read_only=True) as database:
+                seen.append(database.training_run(run.id).updates_through())
+        return published(spec, root, generation, complete=complete)
+
+    result = supervisor.supervise(
+        spec,
+        store,
+        root,
+        resource.pod.id,
+        command=[
+            sys.executable,
+            "-c",
+            "import pathlib,sys,time\np=pathlib.Path(sys.argv[1])\nwhile not p.exists(): time.sleep(.01)\nsys.exit(1)",
+            str(release),
+        ],
+        publish=slow_upload,
+    )
+    assert result.phase == "failed"
+    assert seen == [result.updates] == [7]
+    assert result.error == "learner exited 1"

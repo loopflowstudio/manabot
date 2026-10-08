@@ -163,15 +163,25 @@ def prepare_job(
         publish_seconds=publish_seconds,
         experiment_json=experiment_json,
     )
+    return persist_job(spec, store=store, retain_existing_deadline=True)
+
+
+def persist_job(
+    spec: Job,
+    *,
+    store: JobStore | None = None,
+    retain_existing_deadline: bool = False,
+) -> Job:
+    """Persist a pre-admitted intent; cohorts require its exact original deadline."""
+    spec.plan.allocation_at(spec.created_at)
     store = store or S3JobStore(spec.prefix)
     if not store.create("spec.json", spec.model_dump_json().encode()):
         existing = store.read("spec.json")
         if existing is None:
             raise RuntimeError("job intent unavailable; reconcile by ID")
         previous = Job.model_validate_json(existing.data)
-        if previous.model_dump(exclude={"created_at", "deadline"}) != spec.model_dump(
-            exclude={"created_at", "deadline"}
-        ):
+        excluded = {"created_at", "deadline"} if retain_existing_deadline else set()
+        if previous.model_dump(exclude=excluded) != spec.model_dump(exclude=excluded):
             raise ValueError("job ID already binds different immutable content")
         spec = previous
     # S3 returns 403, not 404, for missing keys to a role without ListBucket.
@@ -293,6 +303,7 @@ def job_status(
         raise ValueError("supervisor record belongs to a different job")
     state = "not-created"
     unsettled = False
+    training_claimed = False
     costs = 0.0
     for purpose in ("guardian", "training"):
         claim_raw, resource_raw = (
@@ -302,12 +313,23 @@ def job_status(
         if claim_raw is None:
             continue
         claim = CreateClaim.model_validate_json(claim_raw.data)
+        if claim.spec_sha256 != spec.identity or claim.purpose != purpose:
+            raise ValueError("creation claim belongs to a different job or purpose")
+        training_claimed |= purpose == "training"
         resource = (
             Resource.model_validate_json(resource_raw.data) if resource_raw else None
         )
         if resource is None:
             unsettled, state = True, "ambiguous"
             continue
+        if resource.claim != claim or resource.pod.name != claim.name:
+            raise ValueError("resource receipt differs from creation claim")
+        if (
+            purpose == "training"
+            and record is not None
+            and record.pod_id != resource.pod.id
+        ):
+            raise ValueError("supervisor record belongs to a different rental")
         deletion_raw = store.read(f"{purpose}-deletion.json")
         if deletion_raw is not None:
             costs += Deletion.model_validate_json(deletion_raw.data).estimated_dollars
@@ -340,7 +362,7 @@ def job_status(
             unsettled, state = True, "unknown"
     cleanup = (
         None
-        if unsettled or state == "not-created"
+        if unsettled or not training_claimed or state == "not-created"
         else Deletion(confirmed_at=time.time(), estimated_dollars=costs)
     )
     return JobStatus(
@@ -430,13 +452,19 @@ def prepare_experiment_job(
     )
 
 
-def reconcile_job(spec: Job, *, delete: bool = False) -> JobStatus:
+def reconcile_job(
+    spec: Job,
+    *,
+    delete: bool = False,
+    store: JobStore | None = None,
+    provider: RunPod | None = None,
+) -> JobStatus:
     """Discover uncertain creates; optionally delete only exact job-owned resources.
 
     Force deletion can discard an unpublished final generation. Normal cancel
     leaves finalization to the worker; this path settles failed bootstrap/outages.
     """
-    store, provider = S3JobStore(spec.prefix), RunPod()
+    store, provider = store or S3JobStore(spec.prefix), provider or RunPod()
     for purpose in ("guardian", "training"):
         raw = store.read(f"{purpose}-claim.json")
         if raw is None:
@@ -444,6 +472,9 @@ def reconcile_job(spec: Job, *, delete: bool = False) -> JobStatus:
         claim = CreateClaim.model_validate_json(raw.data)
         if claim.spec_sha256 != spec.identity:
             raise ValueError("creation claim belongs to another job")
+        saved = store.read(f"{purpose}.json")
+        if saved is not None and not delete:
+            continue
         pods = [p for p in provider.list() if p.name == claim.name]
         if len(pods) > 1:
             raise ValueError(

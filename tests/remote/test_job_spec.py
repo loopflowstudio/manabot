@@ -316,3 +316,42 @@ def test_historical_reserves_require_explicit_new_authoring() -> None:
     old = DeploymentPlan.model_validate_json(path.read_text())
     with pytest.raises(ValueError, match="checkpoint_seconds"):
         compile_plan(recipe().model_dump_json(), old.spec, SOURCE, 1)
+
+
+def test_experiment_cohort_preserves_planned_order_and_receipts() -> None:
+    regime = recipe()
+    spec = job_spec().model_copy(update={"spending_limit": 2})
+    experiment = Experiment(
+        name="ordered",
+        baseline=Baseline.capture("baseline", regime),
+        jobs=tuple(
+            PlannedRun(
+                case="ordered",
+                seed=seed,
+                spec=spec,
+                monitoring=MonitoringBudget(seconds=120, attempt_seconds=30),
+            )
+            for seed in (199, 197)
+        ),
+    )
+    cohort = experiment.cohort(
+        SOURCE,
+        "ordered",
+        deadline=100000,
+        spending_limit=5,
+        prior_dollars=0.75,
+        controller_dollars=0.25,
+    )
+    assert [entry.plan.seed for entry in cohort.entries] == [199, 197]
+    assert [entry.job_id for entry in cohort.entries] == ["ordered-0", "ordered-1"]
+    assert cohort.reserved_dollars == 5
+    assert all(entry.experiment_json is not None for entry in cohort.entries)
+    with pytest.raises(ValueError, match="inclusive spending"):
+        experiment.cohort(
+            SOURCE,
+            "ordered",
+            deadline=100000,
+            spending_limit=4.99,
+            prior_dollars=0.75,
+            controller_dollars=0.25,
+        )

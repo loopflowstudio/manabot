@@ -5,13 +5,113 @@ and shutdown on RunPod. After `deploy submit` reports remote acceptance, the
 submitting process can exit. Reconnect from another machine using the job ID and
 ordinary AWS/RunPod authentication. `run` observes this same lifecycle.
 
-The implementation builds on PR #253's initial/raw checkpoints, CheckpointQueue,
-Bundle and reporting APIs. It does not add a learner or experiment scheduler.
-Experiment callers select an existing resolved case with `prepare_experiment_job`,
-then call the same `submit_job`; case/seed selection and campaign budgets remain
-with the experiment owner. Arbitrary SSH execution callbacks cannot survive a
+The implementation builds on TrainingRun, CheckpointQueue, Bundle and reporting
+APIs. Experiment callers can submit one resolved case with
+`prepare_experiment_job` and `submit_job`, or run the frozen `Experiment.jobs`
+order through the cohort service below. Experiment declarations retain case/seed
+and evaluation authority; the service sequences the existing job lifecycle. Arbitrary SSH execution callbacks cannot survive a
 client disconnect and are rejected before rental. Historical calibration scripts
 requiring them must run at their original pinned source.
+
+## Cohorts need an independent owner
+
+`Experiment.cohort(...)` freezes the existing `jobs` order and compiled plans,
+including original case receipts, seeds, monitoring and checkpoint cadence. It
+requires an absolute cohort deadline, inclusive dollar ceiling, prior charges
+and an allowance for the controller host. Construction does not submit anything.
+For an existing Experiment declaration and pinned `Source`:
+
+```python
+cohort = experiment.cohort(
+    source,
+    "comparison-attempt-002",
+    deadline=admitted_deadline_unix,
+    spending_limit=approved_total_dollars,
+    prior_dollars=all_prior_attempt_charges,
+    controller_dollars=controller_host_allowance,
+)
+Path("cohort.json").write_text(cohort.model_dump_json(indent=2))
+```
+
+The full **JobSpec spending limits**, prior charges and controller allowance must
+fit the ceiling. Every newly admitted job must also fit within the remaining
+cohort deadline. The service admits live GPU prices through ordinary `submit_job`.
+It retains original job deadlines across restart and charges confirmed cleanup
+receipts once. An unresolved attempt retains its full reservation. Late provider
+absence observations can conservatively exceed that reservation; further admission
+then stops. Provider outages can prevent timely deletion, so this is an admission
+bound and cost ledger, not a provider billing guarantee.
+
+Run `start` **on the chosen always-on controller host**, in the exact clean source
+checkout used to compile the plans, with the artifacts dependencies installed:
+
+```bash
+uv run --extra artifacts manabot deploy cohort start \
+  --plan cohort.json --state-dir /absolute/private/cohort-state --doppler
+
+# Reconnect from another authenticated machine; no original local directory needed:
+uv run --extra artifacts manabot deploy cohort status --cohort-id comparison-attempt-002
+uv run --extra artifacts manabot deploy cohort cancel --cohort-id comparison-attempt-002
+```
+
+`--doppler` resolves the repository's etude/prd secrets when the service starts;
+without it, use the service account's configured provider credential chain. The
+service copies only AWS profile/region and issuer role/profile selectors, never
+credential values. The host must have renewable credentials for S3, RunPod and the
+worker issuer. An expired SSO login cannot be repaired by restarting a service.
+Issuer credentials stay on this controller; workers receive ordinary job-scoped
+STS sessions with their original permission deadline.
+
+On macOS this installs a launchd LaunchAgent; the account must remain logged in.
+On Linux it installs a systemd user service and requires preconfigured lingering.
+Both restart a crashed worker and survive the invoking terminal/agent exiting.
+Neither keeps a sleeping/offline laptop available. This command does not provision
+an always-on host, change login/lingering policy or claim a chat is a service.
+Local `driver.json`, `status.json` and redacted `error.json` in the state directory
+retain process identity, observations and storage/network failures.
+
+S3 retains immutable cohort intent, attempts and sticky cancellation. Each job's
+identity and deadline are recorded before submission. A host/directory binding
+plus a process lock excludes concurrent supervisors. Another directory or host
+cannot take over automatically; loss of that host requires explicit ownership
+recovery after proving the old owner cannot act. There is no expiring lease that
+could let a disconnected old owner resume alongside a replacement.
+
+Restart reconciles existing job, provider and artifact identities. A lost create
+response uses the same ID and permanent creation claim. Empty inventory cannot
+prove an uncertain request never created a rental. Transient observation failures
+retry; failed training, paused targets, cancellation, missing evidence and
+uncertain creation never create replacement jobs. Failed attempts and their costs
+remain visible. Paused CUDA exports do not provide exact process continuation.
+A numerical change or replacement scientific attempt needs its own frozen protocol
+and allocation, including the earlier dollars.
+
+Only completed jobs with confirmed cleanup and a verified final manifest admit
+the next entry. The service reads small control records and final manifests; it
+never downloads checkpoint bundles or runs notebooks/W&B inside the scheduling
+loop. `deploy fetch/report` remain independent, reconnectable consumers of durable
+worker snapshots. Automatic offline-client W&B/report projection is still separate
+work; successful sequencing does not establish that projection's freshness.
+Cancellation records the cohort request first and forwards it to the current job
+even if the supervisor is offline. A returning supervisor also forwards it before
+provider reads. Worker cancellation acknowledgement, final artifacts and provider
+absence remain separate observations.
+
+The offline suite drives the actual deploy entry point with persistent fake
+provider/storage adapters: launcher exit, SIGKILL after provider creation, restart,
+no duplicate submission, failure/pause stops, cancellation, competing owners and
+inclusive cost accounting. On 2026-10-07 the explicit native launchd check also
+completed two fake jobs after a killed supervisor was automatically restarted:
+
+```bash
+MANABOT_TEST_LAUNCHD=1 uv run --extra dev --extra artifacts pytest \
+  tests/remote/test_cohort_service.py::test_launchd_restarts_killed_cohort_without_launcher -q
+```
+
+This proof rents nothing and establishes no live cloud cohort, systemd host
+acceptance, CUDA recovery or scientific result. ETU-103's failed frozen attempt
+remains unchanged; its recovery additionally requires the numerical-health fix,
+a versioned attempt, live-price admission and all earlier charges within $30.
 
 ## Submit, disconnect and reconnect
 
@@ -257,8 +357,8 @@ CPU threads/vCPUs, memory/storage, digest-pinned image, hourly compute ceiling a
 storage allowance. It has no lifetime, credential duration or secrets.
 `experiment.prepare_job(index, source, job_id)` persists the selected run's
 monitoring and original authoring receipt through the existing job client;
-`submit_job(job)` performs the explicit submission. Neither method loops through
-or schedules the rest of the experiment.
+`submit_job(job)` performs the explicit submission. Neither method schedules the rest of the experiment. Use `experiment.cohort(...)`
+and the independently managed deploy service for that order.
 
 The same compiler is available directly:
 

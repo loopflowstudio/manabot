@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from itertools import product
 import json
 import re
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
@@ -29,6 +29,9 @@ from manabot.training.models import (
     TrainingRegime,
     TrainSelfPlay,
 )
+
+if TYPE_CHECKING:
+    from manabot.remote.cohort import Cohort
 
 ComponentName = Literal[
     "model", "environment", "learning", "resources", "pipeline", "run", "identity"
@@ -390,6 +393,43 @@ class Experiment:
         return tuple(
             compile_plan(cases[run.case].configuration, run.spec, source, run.seed)
             for run in self.jobs
+        )
+
+    def cohort(
+        self,
+        source: "Source",
+        cohort_id: str,
+        *,
+        deadline: float,
+        spending_limit: float,
+        prior_dollars: float,
+        controller_dollars: float,
+    ) -> "Cohort":
+        """Freeze the existing job order for deployment by an independent service."""
+        from manabot.remote.cohort import Cohort, CohortEntry
+
+        plans = self.compile_jobs(source)
+        cases = {case.name: case for case in self.resolve().cases}
+        return Cohort(
+            cohort_id=cohort_id,
+            deadline=deadline,
+            spending_limit=spending_limit,
+            prior_dollars=prior_dollars,
+            controller_dollars=controller_dollars,
+            entries=tuple(
+                CohortEntry(
+                    job_id=f"{cohort_id}-{index}",
+                    plan=plan,
+                    monitoring=binding.monitoring,
+                    checkpoint_seconds=binding.checkpoint_seconds,
+                    experiment_json=json.dumps(
+                        cases[binding.case].receipt(), sort_keys=True
+                    ),
+                )
+                for index, (binding, plan) in enumerate(
+                    zip(self.jobs, plans, strict=True)
+                )
+            ),
         )
 
     def prepare_job(self, index: int, source: "Source", job_id: str) -> "Job":

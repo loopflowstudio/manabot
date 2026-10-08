@@ -7,6 +7,7 @@ import typer
 
 from manabot.training.checkpoint_queue import MonitoringBudget
 
+from .cohort_cli import app as cohort_app
 from .deploy import cleanup, current_source, deploy
 from .job_client import (
     cancel_job,
@@ -21,6 +22,7 @@ from .plan import DeploymentPlan, JobSpec, compile_plan
 from .provider import RunPod
 
 app = typer.Typer(help="Submit bounded training and reconnect to durable jobs")
+app.add_typer(cohort_app, name="cohort")
 
 
 def _compile(regime: Path, spec: Path, seed: int) -> DeploymentPlan:

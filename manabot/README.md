@@ -43,6 +43,9 @@ Submit bounded cloud work and reconnect after the laptop disconnects with
 [`manabot deploy submit/status/fetch`](../docs/remote-jobs.md). Training, checkpoint
 evaluation, verified S3 snapshots and shutdown belong to the remote job; reconnecting
 does not restart the learner or promise CUDA process recovery.
+Use `Experiment.cohort` and `manabot deploy cohort start` on an always-on host to
+sequence a frozen cohort independently of the submitting terminal or chat.
+Cohort status/cancellation reconnect through the same private control storage.
 
 ## World identity
 

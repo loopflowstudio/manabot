@@ -322,6 +322,30 @@ def supervise(
             (root / "training-exit.txt").write_text(str(learner.returncode))
         if queue is not None:
             queue.close()
+            record = record.model_copy(
+                update={
+                    "evaluations_completed": sum(
+                        a.status == "completed" for a in queue.attempts
+                    ),
+                    "evaluator_seconds": queue.charged_seconds,
+                }
+            )
+        # The learner may advance or fail during a slow periodic upload. Refresh
+        # every terminal path after stopping writers, from the same database that
+        # the final snapshot exports; failure must not freeze an earlier heartbeat.
+        try:
+            final_run = _training_run(root)
+            if final_run is not None:
+                record = record.model_copy(
+                    update={
+                        "run_id": final_run.id,
+                        "updates": final_run.updates_through(),
+                    }
+                )
+        except Exception as error:
+            (root / "terminal-progress-error.json").write_text(
+                json.dumps({"error_type": type(error).__name__})
+            )
         terminal = record.phase
         record = record.model_copy(update={"phase": "finalizing"})
         try:
