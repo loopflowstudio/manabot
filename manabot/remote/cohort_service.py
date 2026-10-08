@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, Iterator, TypedDict
 
 from manabot.training.execution import atomic_json
 
@@ -29,6 +29,29 @@ from .plan import digest
 
 if TYPE_CHECKING:
     from .cohort_projection import ProjectionConfig
+
+
+class ErrorLocation(TypedDict):
+    file: str
+    function: str
+    line: int
+
+
+def _error_locations(error: Exception) -> list[ErrorLocation]:
+    """Retain code coordinates, never exception text, locals or source lines."""
+    locations: list[ErrorLocation] = []
+    trace = error.__traceback__
+    while trace is not None:
+        code = trace.tb_frame.f_code
+        locations.append(
+            {
+                "file": Path(code.co_filename).name,
+                "function": code.co_name,
+                "line": trace.tb_lineno,
+            }
+        )
+        trace = trace.tb_next
+    return locations
 
 
 def _machine_identity() -> str:
@@ -115,12 +138,13 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
                     except Exception:
                         pass  # Preserve local evidence when S3 is unavailable too.
                 # Exception text can contain credential_process output. Retain only
-                # a type and freshness; keep the previous successful observation.
+                # code coordinates and freshness; keep the last successful observation.
                 atomic_json(
                     directory / "error.json",
                     {
                         "at": time.time(),
                         "error_type": type(error).__name__,
+                        "error_location": _error_locations(error),
                         "state": "uncertain",
                         "pid": os.getpid(),
                     },

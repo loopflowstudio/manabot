@@ -833,3 +833,81 @@ Local verification: `uv run pytest tests/remote/test_cohort_service.py -q` passe
 8 tests with one platform skip; focused Ruff checks passed. The retained live
 proof establishes queue ownership/restart behavior, not completion of 100k updates,
 CUDA continuation learning, the remaining science cohort, or a strength result.
+
+### Queued price admission recovery (2026-10-08)
+
+Jack Heart requested immediate continuation within the existing $100 inclusive
+ceiling. Job1 completed all 15,600 updates, final publication and cleanup, with
+estimated rental/storage cost $5.0351287061433. The queued 63k continuation had
+persisted intent but no provider create claims or rentals. L4 had risen from
+$0.49 to $0.59/hour; the original ceiling correctly refused admission.
+
+An explicit offline operational migration repriced only the six unstarted entries:
+$7.30 per 11.95-hour allocation, $5.80 per 9.5-hour allocation, retaining the
+$0.02/hour storage allowance. Original full caps plus revised future reservations
+are $67.36791836919004; settled charges plus remaining reservations are
+$64.17539333263252. Both include prior/controller allowances and remain below $100;
+these are conservative estimates, not final invoiced costs.
+
+The same Mini launchd owner and report companion were unloaded, its owner lock
+acquired, empty provider inventory and absent guardian/training claims verified,
+and the exact before/after cohort, state and pending Job archived before CAS
+writes. The create-only audit is `migrations/price-admission-20261008-v1.json` under
+the existing cohort and pending-job prefixes; the journal SHA-256 is
+`b939d71dabebb5ae2f73d6e241d8a0c4a05c4b9d0c31f36cc8df1209f6812518`.
+Mini retains the journal, old local files and completion receipt under
+`~/.local/state/manabot/etu103-recovery-v3-science/price-admission-20261008-v1/`.
+The original no-create rejection remains evidence, not an erased failed rental.
+No existing provider or learning attempt was replaced.
+
+The operational cohort digest changed from `1e14b164…` to `21574a8e…`; the pending
+Job digest changed from `db983a1a…` to `f7181151…`. This is not a claim of immutable
+operational bytes: their originals are archived. Scientific sources `45940fe3`,
+continuation source `69594494`, exact recipes, seeds, update targets, continuation
+inputs, schedules, cadence, job IDs, admitted deadline and consumed costs did not
+change. Jobs2–5 remain ordered after the 63k and 100k segments. No credential scope,
+allocation lifetime or overall dollar ceiling increased.
+
+Inspection also caught a second queued-clock defect before the training rental:
+bootstrap still counted its setup allowance from queue admission and would have
+received a one-second timeout. The operational launcher now uses a fresh bounded
+setup cutoff at submission without extending the original job deadline; guardian
+reconnect and training acceptance retain their claim clocks. The existing Mini
+controller received this repair before the training create. No frozen worker
+source was edited. The guardian proof passed and a single L4 training rental
+`f1591g22k1rpcg` was created at $0.59/hour. Bootstrap alone does not establish
+CUDA continuation or advancing learning; that requires the saved runtime counters.
+
+The [saved continuation/restart receipt](data/etu126/queued-admission-20261008.json)
+binds successful CUDA admission (16.15 seconds), initial evaluation completion
+(401.15 evaluator seconds), run `109eaf87193c42a9acb3f03be27d936b`, and advancing
+absolute counters: 26,128, then 26,203 before a controller SIGKILL and 26,207 after
+its independent restart. Launchd restored the same owner in 9.79 seconds, retained
+three attempts, the same single rental and the entire eight-entry queue, and
+rejected a competing owner. The learner was not restarted. The report companion's
+local plan was also refreshed from the audited intent, retaining its old copy.
+This proves running learner-state continuation, not completion of 63k/100k or the
+six-member comparison. Original and resumed sources/artifact identities remain
+separate. The deployed operational controller overlay has retained file digests.
+
+Checks: `uv run --extra dev --extra artifacts pytest tests/remote/ -q` passed
+171 tests with two skips; focused Ruff passed. The original guardian fixture
+failed twice because its freshly created executable dispatch stalled locally;
+sourced shell-function fakes passed with the same five-second deadline. Two
+isolated dependency environments stalled before Python startup (sampled at
+`dyld_start`) and were terminated, not counted as passing. CI owns isolated
+clean-environment coverage. No learner, experiment or provider state was changed
+by these test repairs.
+
+The companion report also needed explicit identity rebinding and an allowance
+renewal: its old ledger had charged 3,481.21 of 3,600 seconds, leaving less than
+one 120-second attempt. Owner/config and ledger originals are archived under the
+same migration prefix. All 163 attempts and consumed seconds remain; the new
+cumulative limit is 14,400 seconds, with 120-second attempts and a 15-minute poll
+interval. At the declared $1/controller-active-hour accounting assumption, $4
+reporting plus $3 unreconciled-cost reserve replaces $2 plus $5 inside the same
+$10.70 combined reserve. No overall reservation, rental or credential scope grew.
+This operational report clock changes no scientific checkpoint/evaluation cadence.
+The refreshed report shows eight intended jobs, three admitted, completed
+26,000/15,600-update originals (seven/eleven evaluations), and the running
+continuation at 26,609 with one evaluation and no per-job projection errors.

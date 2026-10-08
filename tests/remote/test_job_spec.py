@@ -8,9 +8,9 @@ import pytest
 from typer.testing import CliRunner
 
 from manabot.cli import app
-from manabot.remote import cli, job_client, supervisor
+from manabot.remote import cli, job_client, supervisor, transport
 from manabot.remote.job_store import worker_policy
-from manabot.remote.jobs import Job, JobRecord, JobStatus
+from manabot.remote.jobs import Job, JobRecord, JobStatus, Resource
 from manabot.remote.plan import (
     AccessScope,
     DeploymentPlan,
@@ -394,3 +394,75 @@ def test_comparison_requires_shared_step_interval() -> None:
     assert len(experiment((10, 10)).compile_jobs(SOURCE)) == 2
     with pytest.raises(ValueError, match="one shared checkpoint_updates"):
         experiment((10, 20)).compile_jobs(SOURCE)
+
+
+@pytest.mark.parametrize("reconnect", [False, True])
+def test_queued_job_bootstrap_uses_admission_not_queue_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reconnect: bool
+) -> None:
+
+    clock = Clock()
+    monkeypatch.setattr(job_client, "time", clock)
+    monkeypatch.setattr(transport, "time", clock)
+    monkeypatch.setattr(job_client, "current_source", lambda root: SOURCE)
+    monkeypatch.setattr(job_client, "verify_public_source", lambda source: None)
+    store = FileStore(tmp_path / "queued.sqlite")
+    plan = compile_plan(recipe().model_dump_json(), job_spec(4), SOURCE, 1)
+    spec = job_client.prepare_job(plan, "queued", store=store)
+    clock.now += 600  # Original setup window is over, allocation is still valid.
+    scripts: list[str] = []
+    guardian_deadline = clock.now + 90
+
+    class QueuedProvider(Provider):
+        def get(self, pod_id: str) -> Pod | None:
+            if pod_id == "pod1" and self.clock.now >= guardian_deadline:
+                self.pods = [p for p in self.pods if p.id != pod_id]
+            return next((p for p in self.pods if p.id == pod_id), None)
+
+        def create(self, payload: dict[str, object]) -> Pod:
+            pod = super().create(payload)
+            scripts.append(str(payload["dockerStartCmd"]))
+            if self.created == 2:
+                record = JobRecord(
+                    spec_sha256=spec.identity,
+                    pod_id=pod.id,
+                    phase="running",
+                    accepted_at=clock.time(),
+                    heartbeat_at=clock.time(),
+                )
+                store.create("runtime/record.json", record.model_dump_json().encode())
+            return pod
+
+    provider = QueuedProvider(clock)
+    if reconnect:
+        job_client._provision(
+            spec, store, provider, "guardian", guardian_deadline, "original probe", {}
+        )
+        clock.now += 20
+    status = job_client.submit_job(
+        spec, store=store, provider=provider, credentials=lambda _: {}
+    )
+    assert status.record is not None and status.record.phase == "running"
+    assert provider.created == 2
+    raw = store.read("guardian.json")
+    assert raw is not None
+    assert Resource.model_validate_json(raw.data).claim.deadline == guardian_deadline
+    assert (
+        f"setup_remaining=$(({int(guardian_deadline + plan.spec.setup_seconds)}"
+        in scripts[-1]
+    )
+    assert f"MANABOT_DEADLINE={int(spec.deadline)}" in scripts[-1]
+    assert job_client.submit_job(spec, store=store, provider=provider).spec == spec
+    assert provider.created == 2
+
+
+def test_setup_never_extends_the_absolute_worker_cutoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    plan = compile_plan(recipe().model_dump_json(), job_spec(4), SOURCE, 1)
+    spec = Job(job_id="near-cutoff", plan=plan, created_at=1000, deadline=15400)
+    monkeypatch.setattr(transport.time, "time", lambda: spec.work_deadline - 10)
+    script = job_startup(spec)
+    assert f"setup_remaining=$(({int(spec.work_deadline)}" in script
+    assert 'timeout "$setup_remaining" bash' in script

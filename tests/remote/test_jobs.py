@@ -401,19 +401,19 @@ def test_running_learner_is_stopped_at_original_deadline(
 
 
 def test_guardian_deletes_without_supervisor(tmp_path: Path) -> None:
-    executable = tmp_path / "runpodctl"
     receipt = tmp_path / "deleted"
-    executable.write_text(f'#!/bin/sh\nprintf "%s" "$*" > "{receipt}"\n')
-    executable.chmod(0o700)
-    # macOS has no GNU timeout; emulate only its command dispatch for this fixture.
-    timeout = tmp_path / "timeout"
-    timeout.write_text('#!/bin/sh\nshift\nexec "$@"\n')
-    timeout.chmod(0o700)
+    # Only command dispatch is faked. Sourcing functions avoids observed macOS
+    # startup stalls on fresh temporary executables, without relaxing the deadline.
+    commands = tmp_path / "commands.sh"
+    commands.write_text(
+        'timeout() { shift; "$@"; }\n'
+        f'runpodctl() {{ printf "%s" "$*" > "{receipt}"; }}\n'
+    )
     process = subprocess.Popen(
         ["bash", str(ROOT / "manabot/remote/guardian.sh")],
         env={
             **os.environ,
-            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "BASH_ENV": str(commands),
             "MANABOT_DEADLINE": str(int(time.time()) + 1),
             "RUNPOD_POD_ID": "owned-fixture",
         },

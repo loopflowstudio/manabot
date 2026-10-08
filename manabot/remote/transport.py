@@ -192,6 +192,9 @@ def job_startup(spec: "Job") -> str:
     )
     if spec.validate_numerics:
         setup = setup.replace("--extra artifacts", "--extra artifacts --extra dev")
+    # Queue delay consumes the allocation, not the bootstrap allowance. The
+    # absolute worker cutoff still bounds setup and cannot move on reconnect.
+    setup_deadline = min(time.time() + spec.plan.spec.setup_seconds, spec.work_deadline)
     return f"""set -eu
 umask 077
 export MANABOT_DEADLINE={int(spec.deadline)}
@@ -204,7 +207,8 @@ cat > /tmp/manabot-setup.sh <<'MANABOT_SETUP'
 {setup}
 MANABOT_SETUP
 # Keep PID 1 alive even on setup failure so the independent guardian can delete.
-if timeout {max(1, int(spec.created_at + spec.plan.spec.setup_seconds - time.time()))} bash /tmp/manabot-setup.sh >/workspace/evidence/bootstrap.log 2>&1; then
+setup_remaining=$(({int(setup_deadline)} - $(date +%s)))
+if [ "$setup_remaining" -gt 0 ] && timeout "$setup_remaining" bash /tmp/manabot-setup.sh >/workspace/evidence/bootstrap.log 2>&1; then
   export PATH=/root/.local/bin:/root/.cargo/bin:$PATH
   cd {REPO_DIR}
   uv run --no-sync python -m manabot.remote.supervisor >>/workspace/evidence/supervisor.log 2>&1 || true

@@ -79,6 +79,9 @@ def test_storage_outage_cannot_extend_observation_deadline(
     assert attempts == 1
     error = json.loads((directory / "error.json").read_text())
     assert error["error_type"] == "ConnectionError"
+    assert error["error_location"][-1]["function"] == "unavailable"
+    assert error["error_location"][-1]["file"] == "test_cohort_service.py"
+    assert set(error["error_location"][-1]) == {"file", "function", "line"}
     assert "private transport detail" not in (directory / "error.json").read_text()
     # Restart at the same absolute deadline cannot reset the observation window.
     cohort_service.supervise_cohort(file, directory)
