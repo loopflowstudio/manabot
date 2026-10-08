@@ -76,6 +76,7 @@ def _checks() -> tuple[tuple[str, list[str]], ...]:
                 "--no-sync",
                 "pytest",
                 "tests/training/test_numerical_health.py",
+                "tests/training/test_learning_state.py::test_segments_keep_adam_ema_and_absolute_coordinates",
                 "-q",
             ],
         ),

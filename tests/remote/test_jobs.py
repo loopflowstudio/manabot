@@ -1,6 +1,7 @@
 """Durable identity, uncertain creation and independent runtime behavior, offline."""
 
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 import os
 from pathlib import Path
 import signal
@@ -17,12 +18,22 @@ from manabot.remote.jobs import CreateClaim, Job, JobRecord, Resource
 from manabot.remote.plan import JobSpec, compile_plan
 from manabot.remote.provider import ProviderError
 from manabot.training.checkpoint_queue import Attempt, CheckpointQueue, MonitoringBudget
-from manabot.training.models import TrainingRun
+from manabot.training.models import LearningStateOrigin, TrainingRun
 from manabot.verify.store import VerifyStore
 from tests.remote.job_fixtures import FileStore
 from tests.remote.test_compile import ROOT, SOURCE
 from tests.remote.test_lifecycle import Clock, Provider
 from tests.training.test_checkpoint_queue import run_fixture
+
+
+@pytest.fixture(autouse=True)
+def isolated_evaluator_lease(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Offline fake rentals must not contend with a real host evaluator."""
+    monkeypatch.setattr(
+        supervisor,
+        "CheckpointQueue",
+        partial(CheckpointQueue, lease=tmp_path / "evaluator.lock"),
+    )
 
 
 @pytest.fixture
@@ -67,8 +78,13 @@ def published(
 
 
 @pytest.mark.parametrize("success", [True, False])
+@pytest.mark.parametrize("inherited", [0, 26000])
 def test_initial_admission_requires_completed_published_evaluation(
-    tmp_path: Path, store: FileStore, monkeypatch: pytest.MonkeyPatch, success: bool
+    tmp_path: Path,
+    store: FileStore,
+    monkeypatch: pytest.MonkeyPatch,
+    success: bool,
+    inherited: int,
 ) -> None:
     spec = specification(store).model_copy(
         update={
@@ -86,6 +102,18 @@ def test_initial_admission_requires_completed_published_evaluation(
     run.status = "completed"
     for stage in run.stages:
         stage.diagnostics = []
+    if inherited:
+        run.stages[0].learning_state_origin = LearningStateOrigin(
+            run_id="parent",
+            stage_id=run.stages[0].id,
+            iteration=inherited,
+            games=0,
+            environment_decisions=0,
+            learner_transitions=0,
+            optimizer_exposures=0,
+            active_training_seconds=0,
+            cumulative_seconds=0,
+        )
     run.stages[0].artifacts["initial_raw"] = {
         "path": "initial.pt",
         "sha256": "a" * 64,

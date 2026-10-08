@@ -539,3 +539,41 @@ its original record says completed despite omitting its endpoint evaluation.
 Keep that record as evidence; a separately recovered evaluation does not rewrite
 it or establish remote lifecycle acceptance. See the
 [capacity recovery record](../experiments/model-capacity.md#live-cuda-recovery--2026-10-08).
+
+## Segmented learner continuation
+
+`manabot deploy cohort insert --cohort-id ID --plan insertion.json` atomically
+adds a `CohortInsertion` after one original job. Original cohort bytes, scientific
+entries, attempts and spending ceiling remain unchanged. The operation
+rejects an already admitted successor, excess aggregate reservations, duplicate
+IDs and allocations that cannot fit the remaining deadline. An explicit insertion
+may extend the cohort deadline within a separately admitted access expiry; it
+never changes an existing job deadline or resets consumed money. A lost response is
+reconciled by rereading the same insertion; it never admits a replacement job.
+
+Each added `CohortEntry.continuation` names an earlier job, its stage and expected
+absolute iteration. After that job completes, publishes its final manifest and
+confirms cleanup, the existing controller binds its exact raw/EMA/Adam and
+TrainingRun artifacts into the new allocation. Only manifests cross the scheduler;
+the worker retrieves and verifies the four versioned objects. Its expiring STS
+policy grants read-only access to those exact inputs, alongside the ordinary
+job-scoped runtime permissions. No issuer/account credentials reach workers.
+A failed, paused or missing predecessor blocks dependent admission.
+
+Self-play `updates` is the absolute endpoint for these entries. For example,
+26,000 → 63,000 → 100,000 uses two separate allocations; the second cannot start
+without the first segment's completed exports. Ataraxos rates retain their existing
+absolute-iteration formulas. Raw policy, Adam moments, EMA and counters survive;
+collector/game/RNG streams explicitly restart. This is learner-state continuation,
+not exact CUDA process recovery. Each segment charges its own allocation, setup,
+evaluation, downloads and final publication, preserving inherited cost separately.
+
+A controller upgrade may retain multiple exact worker-source checkouts. On macOS,
+run `cohort start` from the new clean controller checkout with the same plan and
+state directory, `--source-root /absolute/original-worker-checkout`, and
+`--replace-service` (plus the original `--reports` options). It stops only the
+local service, reuses its permanent owner binding, and restarts under launchd;
+the active rental continues independently. Source paths are recorded locally and
+checked against each frozen Source before new submissions. Upgrade before inserting
+entries, so an older controller never receives state it cannot parse. Keep original
+source checkouts and credentials until every dependent allocation settles.

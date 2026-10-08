@@ -51,6 +51,7 @@ from .admission import admit_policy
 from .clock import watchdog_seconds
 from .compound import CompoundStatistics, collect_game, optimize_games, replay_game
 from .incidents import save_incident
+from .learning_state import admit_learning_state, validate_adam
 from .models import (
     ArtifactReference,
     CollectBelief,
@@ -352,16 +353,31 @@ def _execute_regime(
         }
 
     def coordinates() -> dict[str, int | float]:
+        origins = [
+            s.learning_state_origin
+            for s in run.stages
+            if s.learning_state_origin is not None
+        ]
         return {
             "updates": run.updates_through(),
-            "training_seconds": run.prior_seconds + time.perf_counter() - start,
+            "training_seconds": run.prior_seconds
+            + time.perf_counter()
+            - start
+            + sum(origin.cumulative_seconds for origin in origins),
             "active_training_seconds": sum(
                 s.collection_seconds + s.learning_seconds for s in run.stages
-            ),
-            "environment_decisions": sum(s.environment_decisions for s in run.stages),
-            "learner_transitions": sum(s.learner_transitions for s in run.stages),
-            "optimizer_exposures": sum(s.optimizer_exposures for s in run.stages),
-            "games": sum(s.games for s in run.stages),
+            )
+            + sum(origin.active_training_seconds for origin in origins),
+            **{
+                name: sum(getattr(s, name) for s in run.stages)
+                + sum(getattr(origin, name) for origin in origins)
+                for name in (
+                    "environment_decisions",
+                    "learner_transitions",
+                    "optimizer_exposures",
+                    "games",
+                )
+            },
             "rss_bytes": psutil.Process().memory_info().rss,
             "host_load_1m": os.getloadavg()[0],
             "process_cpu_seconds": time.process_time()
@@ -913,6 +929,32 @@ def _execute_regime(
                 record.artifacts["sampler"] = candidate
                 record.export_seconds = time.perf_counter() - tick
             elif isinstance(stage, TrainSelfPlay):
+                imported = None
+                if stage.learning_state is not None:
+                    record.inputs.update(
+                        {
+                            f"learning_state/{role}": dict(
+                                getattr(stage.learning_state, role)
+                            )
+                            for role in ("source_run", "raw", "ema", "optimizer")
+                        }
+                    )
+                    persist()
+                    tick = time.perf_counter()
+                    imported = admit_learning_state(stage, regime, out)
+                    if imported.seed != seed:
+                        raise ValueError(
+                            "learning-state continuation must retain training seed"
+                        )
+                    record.artifacts.update(imported.artifacts)
+                    record.learning_state_origin = imported.origin
+                    record.export_seconds += time.perf_counter() - tick
+                    # A segment has new stochastic streams, deterministically
+                    # separated from the producer by its absolute boundary.
+                    for name in ("initialization", "collection", "minibatches"):
+                        seeds[name] += imported.origin.iteration
+                    run.seed_streams = dict(seeds)
+                    persist()
                 opponent_agent = None
                 if stage.opponent is not None:
                     # Validate before every stage, even when retaining the live
@@ -945,6 +987,8 @@ def _execute_regime(
                 else:
                     torch.manual_seed(seeds["initialization"])
                     agent = Agent(space, regime.agent).to(stage.execution.device)
+                    if imported is not None:
+                        agent.load_state_dict(imported.raw.state_dict())
                     if (
                         stage.opponent is not None or checkpoint_seconds is not None
                     ) and snapshot is None:
@@ -1005,7 +1049,9 @@ def _execute_regime(
                     experiment = Experiment(
                         ExperimentHypers(
                             wandb=False,
-                            seed=seed,
+                            seed=seeds["initialization"]
+                            if imported is not None
+                            else seed,
                             runs_dir=out,
                             exp_name=stage.id,
                             device=stage.execution.device,
@@ -1023,11 +1069,20 @@ def _execute_regime(
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
+                    if imported is not None:
+                        trainer.optimizer.load_state_dict(imported.optimizer)
+                        validate_adam(trainer.optimizer)
+                        assert ema is not None
+                        ema.load_state_dict(imported.ema.state_dict())
+                        iteration = imported.origin.iteration
+                        imported = None
                 if not restoring_completed:
                     record.actual_device = str(next(trainer.agent.parameters()).device)
                 before = deepcopy(trainer.collector.stats)
                 rng = np.random.default_rng(seeds["minibatches"] + iteration)
                 first_update = 0
+                if record.learning_state_origin is not None:
+                    first_update = record.learning_state_origin.iteration
                 if snapshot is not None:
                     tick = time.perf_counter()
                     try:

@@ -58,7 +58,7 @@ def test_storage_outage_cannot_extend_observation_deadline(
     now = value.deadline + 1799
     attempts = 0
 
-    def unavailable(*args: object) -> None:
+    def unavailable(*args: object, **kwargs: object) -> None:
         nonlocal attempts
         attempts += 1
         raise ConnectionError("private transport detail")
@@ -249,3 +249,48 @@ def test_launchd_restarts_killed_cohort_without_launcher(tmp_path: Path) -> None
             capture_output=True,
             timeout=10,
         )
+
+
+def test_controller_upgrade_retains_frozen_worker_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from manabot.remote.plan import Source
+
+    cohort = plan()
+    old = tmp_path / "old"
+    old.mkdir()
+    new = tmp_path / "new"
+    new.mkdir()
+    source = Source(commit="d" * 40, tree="e" * 40, lock_sha256="f" * 64)
+    monkeypatch.chdir(new)
+    monkeypatch.setattr(
+        cohort_service, "current_source", lambda root: SOURCE if root == old else source
+    )
+    monkeypatch.setattr(cohort_service, "_machine_identity", lambda: "test")
+    monkeypatch.setattr(cohort_service.sys, "platform", "darwin")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    commands: list[list[str]] = []
+
+    def command(
+        args: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        commands.append(args)
+        return subprocess.CompletedProcess(args, 0 if args[1] == "bootout" else 1)
+
+    monkeypatch.setattr(cohort_service.subprocess, "run", command)
+    target = tmp_path / "Library/LaunchAgents/manabot.cohort.process-proof.plist"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"old service")
+    directory = tmp_path / "state"
+    with pytest.raises(ValueError, match="exact clean source"):
+        cohort_service.install_service(cohort, directory)
+    cohort_service.install_service(
+        cohort, directory, source_roots=(old,), replace_service=True
+    )
+    assert json.loads((directory / "sources.json").read_text()) == {
+        SOURCE.commit: str(old),
+        source.commit: str(new),
+    }
+    assert any(args[1] == "bootout" for args in commands)
+    assert any(args[1] == "bootstrap" for args in commands)
+    assert (directory / "cohort.json").read_text() == cohort.model_dump_json(indent=2)

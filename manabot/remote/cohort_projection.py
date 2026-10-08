@@ -126,7 +126,7 @@ def _write_report(
             "cohort_sha256": cohort.identity,
             "observed_at": time.time(),
             "cohort_phase": state.phase,
-            "intended_jobs": len(cohort.entries),
+            "intended_jobs": len(state.entries(cohort)),
             "admitted_jobs": len(state.attempts),
             "supervisor_heartbeat_at": state.heartbeat_at,
             "charged_or_reserved_dollars": state.charged_dollars(cohort),
@@ -135,7 +135,7 @@ def _write_report(
     )
     body = [
         f"<h1>{escape(cohort.cohort_id)}</h1>",
-        f"<p>Admitted {len(state.attempts)} of {len(cohort.entries)} intended jobs.</p>",
+        f"<p>Admitted {len(state.attempts)} of {len(state.entries(cohort))} intended jobs.</p>",
         f"<p>Saved at {time.time():.0f} Unix seconds. Cohort: {escape(state.phase)}. "
         f"Supervisor heartbeat: {state.heartbeat_at:.0f}. Charged/reserved: ${state.charged_dollars(cohort):.4f}.</p>",
         "<p>Reload to see refreshed saved observations. Development monitoring is not a completed scientific comparison.</p>",
@@ -304,7 +304,19 @@ def follow_projection(
                 raise ValueError(
                     "projection allocation already binds different content"
                 )
-        while time.time() < cohort.deadline + 1800:
+        deadline = cohort.deadline
+        while True:
+            try:
+                raw = S3JobStore(cohort.prefix).read("state.json")
+                if raw is not None:
+                    state = CohortState.model_validate_json(raw.data)
+                    if state.cohort_sha256 != cohort.identity:
+                        raise ValueError("projection cohort identity differs")
+                    deadline = state.effective_deadline(cohort)
+            except Exception:
+                pass  # Retain the last bounded cutoff across storage outages.
+            if time.time() >= deadline + 1800:
+                return
             remaining = config.total_seconds - ledger.charged_seconds
             if remaining < config.attempt_seconds:
                 return
@@ -323,7 +335,7 @@ def follow_projection(
                         str(
                             min(
                                 attempt.started_at + config.attempt_seconds,
-                                cohort.deadline + 1800,
+                                deadline + 1800,
                             )
                             - 10
                         ),
@@ -336,7 +348,7 @@ def follow_projection(
                     code = child.wait(
                         timeout=min(
                             config.attempt_seconds,
-                            max(1, cohort.deadline + 1800 - time.time()),
+                            max(1, deadline + 1800 - time.time()),
                         )
                     )
                 except subprocess.TimeoutExpired:

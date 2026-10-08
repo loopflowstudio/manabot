@@ -30,29 +30,33 @@ Cohort `etu103-recovery-v3-science` pins merged `45940fe3`, 26,000 small / 15,60
 large iterations and $48.867918369190 inclusive reservation. Compare common
 time/samples separately from unequal endpoints. Preserve old failures and Mini order.
 
-Pilot `etu103-recovery-v2-pilot-1` at `2555c0e2` passed 31 L4 numerical checks,
-100 initial replayed games and 512 large updates in 939.7533 active seconds.
-Pilot timing does not establish sustained throughput or strength. All files
-verified, raw/EMA reloaded and GPU/guardian deleted.
-Estimated retained GPU costs are $4.717918369190, including the $0.435531379881 pilot.
-
-The original completed pilot record omitted endpoint evaluation when learning
-ended during upload after the queue scan. PR263 rescans after exit and fails
-pending unevaluated checkpoints. Separate CPU recovery completed 100 replayed
-games; the original omission and failed recovery attempts remain evidence.
-Dashboard/W&B fixes exclude queue indexes and mutable history rows. Intermediate
-uploads reuse verified S3 versions; final readback stays complete. The pilot
-establishes no upload speedup. The [remote contract](../../docs/remote-jobs.md)
-and [capacity record](../../experiments/model-capacity.md) own receipts and limits.
+The verified `2555c0e2` pilot passed CUDA admission; GPU/guardian were deleted.
+Retained estimated cost is &#36;4.717918369190 including the pilot. Its missed endpoint
+was recovered separately on CPU (100 replayed games); PR263 repairs that exit
+race. Original failures remain. Pilot timing establishes neither sustained
+throughput nor strength/upload speedup. The [remote contract](../../docs/remote-jobs.md)
+and [capacity record](../../experiments/model-capacity.md) own full receipts;
+pre-continuation detail remains at `2a4fd419`.
 
 Jack Heart approved the separate restricted controller and secure Mini installation.
 One cohort/six job prefixes have 96-hour S3 expiry; live conditional writes/readback,
 outside-prefix denial and worker session admission passed. Existing issuer stays
 restricted; no personal SSO moved. Mini launchd owns scheduling and local projection
 in a dedicated checkout. Owner SIGKILL restarted in 2.2 seconds with one attempt
-and the same pod; a second controller was rejected. The first small seed saved
-100 valid initialization games and advanced 146 to 242 updates. Remaining jobs
-are queued; no six-run result, CUDA exact resume or automatic host takeover follows.
+and the same pod; a second controller was rejected. Job0 completed 26,000 updates,
+seven evaluations, final publication and cleanup (estimated $2.9223462573).
+Job1 subsequently started; jobs2–5 remain queued.
+Verified Adam contains 61 states at step 208,000; EMA binds iteration 26,000.
+Raw/EMA/optimizer match run `c2b8c6e731ee4126a2c2d18514dea4d1`. Collector/RNG
+state is absent; continuation resets streams. The 526MB run JSON adds transfer cost.
+
+Jack Heart authorized 100k-total exploratory continuation after job1, retaining
+paired jobs and the &#36;100 ceiling. Actual small throughput projects 12.54 more
+active hours, requiring segments. Jack Heart corrected the assistant's denominator
+mistake on 2026-10-08: retain existing absolute-iteration rates from 26,001, as if
+100k were planned initially. No schedule decision remains. Implementation and
+queue admission are open; preserve Adam/EMA/counters and explicitly reset game
+streams. Original science source/protocol at `45940fe3` remain unchanged.
 
 Mini needs its account online/logged in; W&B credentials are absent there, while
 local reports refresh. New large 11.95h/$6.20 JobSpecs implement eight hours within
@@ -304,15 +308,11 @@ not full history, beliefs or recurrence. The [history contract](../../docs/recen
 owns data flow and exclusions. Frozen ETU-91/106 checkouts remain untouched; actual
 history comparisons follow the value-token priority under separate allocation.
 
-The software gate passed 264 affected Python checks (one unsupported configuration
-skip), native debug history/branch contracts, Clippy and focused lint/format checks.
-Ordinary semantic collector and checkpoint-player fixtures receive nonempty history
-across decisions with hidden-world invariance and reset. Base Agent comparison
-preserves four history-off weight/receipt/output sets. Empty history preserves off
-outputs with shared weights. Source payloads lacking an originating incarnation
-retain public definition/owner only; diagnostic injection clears history. These
-are bounded correctness fixtures, not scientific training, strength or chapter
-acceptance. Publication/merge remains a separate delivery condition.
+The bounded gate covered Python/native debug, ordinary nonempty-history collection,
+reload, hidden-world invariance and preserved history-off outputs. Details remain
+at `2a4fd419`; these establish correctness only. Diagnostic injection clears history;
+missing incarnations retain definition/owner only. Publication/merge remained a
+separate delivery condition.
 
 
 ## Completed mini filter-scope screen (ETU-105, 2026-10-07)
@@ -371,12 +371,8 @@ compatibility remains a proposal. No scientific allocation follows.
 
 ## Historical value-model software (ETU-106)
 
-Jack Heart approved PR222's software and evaluation-only recovery; later empirical
-dispositions supersede that stage. Shared attention prevents critic-only claims;
-equal-shaped pooling requires saved architecture metadata. Learned recurrence
-stays deferred and ETU-91 remains untouched. The [protocol](../../experiments/value-models.md)
-and memory at `7316da5d` retain implementation, failures and bounded validation;
-none establishes strength or chapter acceptance.
+PR222 software evidence and Jack Heart's delivery authorization remain at
+`2a4fd419` / `7316da5d`; the later empirical dispositions above govern.
 
 ## Operating principle
 

@@ -9,8 +9,10 @@ import typer
 from .cohort import (
     DEFAULT_COHORTS,
     Cohort,
+    CohortInsertion,
     CohortState,
     cancel_cohort,
+    insert_cohort,
     load_cohort,
     prepare_cohort,
 )
@@ -26,6 +28,21 @@ from .job_store import S3JobStore, cancellation_requested
 app = typer.Typer(help="Run frozen Experiment jobs under an independent host service")
 
 
+@app.command("insert")
+def insert_command(
+    cohort_id: str = typer.Option(...),
+    plan: Path = typer.Option(..., help="Immutable insertion after an original job"),
+    destination: str = DEFAULT_COHORTS,
+) -> None:
+    """Add bounded continuation allocations without changing original science jobs."""
+    cohort = load_cohort(cohort_id, destination)
+    insertion = CohortInsertion.model_validate_json(plan.read_bytes())
+    state = insert_cohort(cohort, insertion)
+    typer.echo(
+        f"Verified durable order: {', '.join(e.job_id for e in state.entries(cohort))}"
+    )
+
+
 @app.command("start")
 def start_command(
     plan: Path = typer.Option(...),
@@ -34,6 +51,10 @@ def start_command(
     reports: bool = False,
     wandb_project: str | None = None,
     wandb_entity: str | None = None,
+    source_root: list[Path] = typer.Option(
+        [], help="Retained exact worker source checkout"
+    ),
+    replace_service: bool = False,
 ) -> None:
     """Persist the cohort and install its service on this selected controller host."""
     cohort = Cohort.model_validate_json(plan.read_bytes())
@@ -41,11 +62,22 @@ def start_command(
     if wandb_project is not None:
         reports = True
     prepare_cohort(cohort)
-    label = install_service(cohort, state_dir, doppler=doppler)
+    label = install_service(
+        cohort,
+        state_dir,
+        doppler=doppler,
+        source_roots=tuple(source_root),
+        replace_service=replace_service,
+    )
     typer.echo(f"Service {label} installed; status reports actual owner heartbeat.")
     if reports:
         companion = install_service(
-            cohort, state_dir / "projection", doppler=doppler, projection=projection
+            cohort,
+            state_dir / "projection",
+            doppler=doppler,
+            projection=projection,
+            source_roots=tuple(source_root),
+            replace_service=replace_service,
         )
         typer.echo(f"Independent report service {companion} installed.")
 

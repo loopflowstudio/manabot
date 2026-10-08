@@ -180,6 +180,35 @@ class FrozenOpponent(Strict):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class LearningStateImport(Strict):
+    """Portable learner state; source bytes retain historical paths and identity.
+
+    Paths here locate staged copies. Their hashes/sizes must match the parent
+    TrainingRun. Game streams and all RNGs explicitly start afresh.
+    """
+
+    source_run: ArtifactReference
+    source_stage: str
+    raw: ArtifactReference
+    ema: ArtifactReference
+    optimizer: ArtifactReference
+
+
+class LearningStateOrigin(Strict):
+    """Absolute parent coordinates, separate from this segment's work/cost."""
+
+    run_id: str
+    stage_id: str
+    iteration: int = Field(ge=1)
+    games: int = Field(ge=0)
+    environment_decisions: int = Field(ge=0)
+    learner_transitions: int = Field(ge=0)
+    optimizer_exposures: int = Field(ge=0)
+    active_training_seconds: float = Field(ge=0)
+    cumulative_seconds: float = Field(ge=0)
+    streams: Literal["fresh"] = "fresh"
+
+
 class TrainSelfPlay(Stage):
     operation: Literal["train_self_play"]
     trainer: Literal["net_opponent"] = "net_opponent"
@@ -188,6 +217,9 @@ class TrainSelfPlay(Stage):
     behavior: Literal["current-self", "ema-self", "frozen"] = "current-self"
     opponent: FrozenOpponent | None = None
     initial: str | None = None
+    learning_state: LearningStateImport | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     updates: int = Field(default=2, ge=1)
     # Frozen v1 compatibility only; JobSpec rejects active-time endpoints.
     # An active-time endpoint completes after a whole collect/update iteration.
@@ -201,6 +233,15 @@ class TrainSelfPlay(Stage):
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.learning_state is not None and (
+            self.initial is not None
+            or self.active_seconds is not None
+            or not isinstance(self.learning, AtaraxosMoveLearning)
+            or self.learning.ema is None
+        ):
+            raise ValueError(
+                "learning-state continuation requires absolute-step Ataraxos with EMA"
+            )
         if self.active_seconds is not None:
             if self.active_seconds >= self.execution.wall_seconds:
                 raise ValueError("active endpoint requires additional watchdog reserve")
@@ -339,6 +380,17 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if any(
+            isinstance(stage, TrainSelfPlay) and stage.learning_state is not None
+            for stage in self.stages
+        ) and (
+            len(self.stages) != 1
+            or self.recovery_max_microsteps is not None
+            or self.schedule_clock != "iteration_fraction"
+        ):
+            raise ValueError(
+                "learning-state continuation requires one step-target stage without process recovery"
+            )
         if self.agent.recent_events and self.agent.semantic_pack is None:
             raise ValueError(
                 "recent events require a semantic pack for public identities"
@@ -545,6 +597,9 @@ class NumericalFailure(Strict):
 
 
 class StageRecord(Strict):
+    learning_state_origin: LearningStateOrigin | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     numerical_failure: NumericalFailure | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -647,6 +702,8 @@ class TrainingRun(Strict):
         for stage in self.stages:
             if stage.id in learning:
                 total += len(stage.diagnostics)
+                if stage.learning_state_origin is not None:
+                    total += stage.learning_state_origin.iteration
             if stage.id == stage_id:
                 break
         return total

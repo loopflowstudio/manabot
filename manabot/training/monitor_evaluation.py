@@ -97,12 +97,18 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
         ):
             return None
         prefix = run.stages[: index + 1]
+        origins = [
+            s.learning_state_origin
+            for s in prefix
+            if s.learning_state_origin is not None
+        ]
         return Checkpoint(
             artifact=stage.artifacts["raw"],
             coordinates=TrainingCoordinates(
                 stage_id=stage.id,
                 updates=run.updates_through(stage.id),
-                training_seconds=stage.cumulative_seconds,
+                training_seconds=stage.cumulative_seconds
+                + sum(origin.cumulative_seconds for origin in origins),
                 active_training_seconds=(
                     float(
                         stage.diagnostics[-1]["coordinates"]["active_training_seconds"]
@@ -112,10 +118,16 @@ def stage_checkpoint(run: TrainingRun, stage_id: str) -> Checkpoint | None:
                     in stage.diagnostics[-1].get("coordinates", {})
                     else None
                 ),
-                environment_decisions=sum(s.environment_decisions for s in prefix),
-                learner_transitions=sum(s.learner_transitions for s in prefix),
-                optimizer_exposures=sum(s.optimizer_exposures for s in prefix),
-                games=sum(s.games for s in prefix),
+                **{
+                    name: sum(getattr(s, name) for s in prefix)
+                    + sum(getattr(origin, name) for origin in origins)
+                    for name in (
+                        "environment_decisions",
+                        "learner_transitions",
+                        "optimizer_exposures",
+                        "games",
+                    )
+                },
             ),
         )
     return None

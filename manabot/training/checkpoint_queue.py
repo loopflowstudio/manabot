@@ -96,11 +96,28 @@ def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Chec
     ]
     for stage in run.stages:
         if include_initial and "initial_raw" in stage.artifacts:
+            origin = stage.learning_state_origin
             found.append(
                 Checkpoint(
                     artifact=stage.artifacts["initial_raw"],
                     coordinates=TrainingCoordinates(
-                        stage_id=stage.id, updates=0, training_seconds=0
+                        stage_id=stage.id,
+                        updates=origin.iteration if origin is not None else 0,
+                        training_seconds=origin.cumulative_seconds
+                        if origin is not None
+                        else 0,
+                        **{
+                            name: getattr(origin, name)
+                            for name in (
+                                "active_training_seconds",
+                                "environment_decisions",
+                                "learner_transitions",
+                                "optimizer_exposures",
+                                "games",
+                            )
+                        }
+                        if origin is not None
+                        else {},
                     ),
                 )
             )

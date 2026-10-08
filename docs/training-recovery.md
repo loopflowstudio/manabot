@@ -1,5 +1,57 @@
 # Recovering bounded manabot training
 
+## Portable learner continuation
+
+`TrainSelfPlay.learning_state` starts a new bounded segment from a retained
+TrainingRun export and separately saved raw, EMA and Adam artifacts. It supports
+ordinary Ataraxos self-play on CPU or CUDA. It preserves model parameters and
+buffers, populated Adam moments/step counters, EMA, absolute update coordinates
+and inherited sample/game/cost coordinates. It **resets game streams and RNGs**;
+it is not exact process recovery. Completed or allocation-paused producers with
+complete exports are supported; an incomplete upload or a failed learner cannot
+silently become a weights-only restart.
+
+The staging API is `LearningStateImport(source_run=..., source_stage=...,
+raw=..., ema=..., optimizer=...)`. Each artifact uses the existing
+`ArtifactReference` shape: `path`, `sha256`, `bytes`. Paths locate trusted local
+copies; hash and size must match the unmodified producer export, whose original
+paths remain provenance. Remote transport must stage and verify these four files
+before execution. Admission retains copies in the child TrainingRun artifact
+graph, validates ordinary checkpoint world/setup/architecture and producer
+metadata, and rejects missing/empty/corrupt Adam or inconsistent EMA identity.
+The producer's original serialized recipe digest is checked before applying
+current model defaults, including for historical separately saved artifacts.
+
+For imported stages, `updates` is an **absolute endpoint**, not an additional
+count. Set `schedule_clock="iteration_fraction"` and use a single self-play
+stage without `recovery_max_microsteps`, `initial`, or an active-time endpoint.
+Keep the parent's training seed, learning settings, model, observation, match,
+stream count and transition batch unchanged. Placement and bounded execution
+allowances may differ. For example, a parent at 26,000 can produce a segment
+ending at 63,000, then another ending at 100,000. Each segment consumes the
+previous segment's exported TrainingRun/raw/EMA/optimizer files, including a
+valid paused export if its allocation ended before its target.
+
+Ataraxos rates keep their absolute iteration formulas. The first resumed update
+is 26,001, with LR `6.957944302072213e-6` and tau
+`0.0023684978179155515` for the default recipe. A 100,000 endpoint introduces no
+new denominator or rate rescaling. Fresh streams are seeded from the run seed
+and imported iteration boundary; no restored collector/RNG state is implied.
+
+`StageRecord.learning_state_origin` retains inherited coordinates and cost;
+ordinary stage counters, diagnostics and timings describe only newly completed
+work. `TrainingRun.updates_through()` and monitoring coordinates are absolute.
+`prior_seconds` and the new segment's watchdog do not inherit the parent's
+allocation. Cohort admission must separately charge all segment allocations and
+failed attempts to the shared ceiling. Origin cost measures the producer's
+cumulative time through checkpoint export, not remote upload/provider lifetime.
+Counters cover committed batches; unfinished games are not resumed and these
+counts do not reconstruct a continuous trajectory. Source exports and their
+scientific interpretation remain unchanged; continuation is separately
+attributable exploratory work.
+
+## Exact CPU process recovery
+
 Recovery is opt-in for bounded CPU self-play stages, including multistage chains
 that retain the latest collector or start a fresh learner. Set `schedule_clock`
 to `iteration_fraction` and `recovery_max_microsteps` to an explicit journal

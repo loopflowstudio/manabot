@@ -45,9 +45,30 @@ class Job(Frozen):
     experiment_json: str | None = None
     # Omit the absent gate so historical job identities remain byte-for-byte stable.
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
+    learning_inputs: dict[str, StoredArtifact] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def valid(self) -> "Job":
+        if self.learning_inputs:
+            from manabot.training.models import TrainSelfPlay
+
+            stage = self.plan.regime.stages[0]
+            if not isinstance(stage, TrainSelfPlay) or stage.learning_state is None:
+                raise ValueError(
+                    "learning inputs require an explicit learning-state import"
+                )
+            if set(self.learning_inputs) != {"source_run", "raw", "ema", "optimizer"}:
+                raise ValueError("incomplete learning-state inputs")
+            for role, artifact in self.learning_inputs.items():
+                reference = getattr(stage.learning_state, role)
+                if reference != {
+                    "path": f"/opt/manabot/learning-inputs/{role}",
+                    "sha256": artifact.sha256,
+                    "bytes": artifact.bytes,
+                }:
+                    raise ValueError("learning input differs from the frozen recipe")
         bucket, prefix = split_s3_uri(self.destination)
         if not prefix or any(c in prefix for c in "*?[]") or ".." in prefix.split("/"):
             raise ValueError("job destination requires a literal private S3 prefix")

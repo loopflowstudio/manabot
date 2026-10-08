@@ -8,6 +8,7 @@ secret is embedded in the plan, unit, plist or worker environment.
 
 from contextlib import contextmanager
 import fcntl
+import json
 import os
 from pathlib import Path
 import plistlib
@@ -20,8 +21,10 @@ from typing import TYPE_CHECKING, Iterator
 
 from manabot.training.execution import atomic_json
 
-from .cohort import Cohort, CohortSupervisor
+from .cohort import Cohort, CohortState, CohortSupervisor
 from .deploy import current_source
+from .job_client import submit_job
+from .jobs import Job, JobStatus
 from .plan import digest
 
 if TYPE_CHECKING:
@@ -76,13 +79,31 @@ def supervise_cohort(plan: Path, directory: Path, *, interval: float = 30) -> No
             },
         )
         observation_deadline = cohort.deadline + 1800
+        retained = directory / "status.json"
+        if retained.exists():
+            state = CohortState.model_validate_json(retained.read_bytes())
+            if state.cohort_sha256 != cohort.identity or state.owner != owner:
+                raise ValueError("retained state belongs to a different cohort owner")
+            observation_deadline = state.effective_deadline(cohort) + 1800
+
+        def submit(spec: Job) -> JobStatus:
+            # A controller upgrade does not rewrite frozen worker sources. Paths
+            # are local placement, revalidated against each exact Source at submit.
+            registry = directory / "sources.json"
+            roots = json.loads(registry.read_text()) if registry.exists() else {}
+            source_root = Path(roots.get(spec.plan.source.commit, str(Path.cwd())))
+            return submit_job(spec, source_root=source_root)
+
         while time.time() < observation_deadline:
             supervisor: CohortSupervisor | None = None
             try:
                 # Reload after every uncertain network write; CAS and the host lock
                 # remain authoritative, never an in-memory guess at remote state.
-                supervisor = CohortSupervisor(cohort, owner, directory / "cache")
+                supervisor = CohortSupervisor(
+                    cohort, owner, directory / "cache", submit=submit
+                )
                 state = supervisor.tick()
+                observation_deadline = state.effective_deadline(cohort) + 1800
                 atomic_json(directory / "status.json", state.model_dump(mode="json"))
                 (directory / "error.json").unlink(missing_ok=True)
                 if state.settled:
@@ -122,6 +143,8 @@ def install_service(
     *,
     doppler: bool = False,
     projection: "ProjectionConfig | None" = None,
+    source_roots: tuple[Path, ...] = (),
+    replace_service: bool = False,
 ) -> str:
     """Install/start the current user's service on this host, without renting.
 
@@ -132,7 +155,10 @@ def install_service(
     if sys.platform not in {"darwin", "linux"}:
         raise ValueError("cohort services require launchd or systemd")
     repo = Path.cwd().resolve()
-    if any(entry.plan.source != current_source(repo) for entry in cohort.entries):
+    sources = {
+        current_source(root): str(root.resolve()) for root in (repo, *source_roots)
+    }
+    if any(entry.plan.source not in sources for entry in cohort.entries):
         raise ValueError("service requires the cohort's exact clean source checkout")
     uv = shutil.which("uv")
     if uv is None:
@@ -144,6 +170,13 @@ def install_service(
     if plan.exists() and plan.read_text() != data:
         raise ValueError("service directory already contains another cohort")
     plan.write_text(data)
+    registry = directory / "sources.json"
+    previous_roots = json.loads(registry.read_text()) if registry.exists() else {}
+    for source, path in sources.items():
+        if source.commit in previous_roots and previous_roots[source.commit] != path:
+            raise ValueError("registered source placement differs")
+        previous_roots[source.commit] = path
+    atomic_json(registry, previous_roots)
     command = [
         uv,
         "run",
@@ -214,7 +247,15 @@ def install_service(
             }
         )
         if target.exists() and target.read_bytes() != payload:
-            raise ValueError("existing service differs; no replacement performed")
+            if not replace_service:
+                raise ValueError("existing service differs; no replacement performed")
+            # Stop only the controller/companion, never its independently running
+            # rental. The permanent owner directory and all remote claims survive.
+            subprocess.run(
+                ["launchctl", "bootout", f"gui/{os.getuid()}/{label}"], check=True
+            )
+            with owner_lock(directory):
+                pass
         target.write_bytes(payload)
         domain = f"gui/{os.getuid()}"
         loaded = subprocess.run(
@@ -225,6 +266,8 @@ def install_service(
         if loaded.returncode != 0:
             subprocess.run(["launchctl", "bootstrap", domain, str(target)], check=True)
     else:
+        if replace_service:
+            raise ValueError("service replacement currently requires macOS launchd")
         lingering = subprocess.run(
             ["loginctl", "show-user", str(os.getuid()), "--property=Linger", "--value"],
             capture_output=True,

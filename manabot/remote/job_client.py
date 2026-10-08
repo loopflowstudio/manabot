@@ -202,6 +202,7 @@ def submit_job(
     store: JobStore | None = None,
     provider: RunPod | None = None,
     credentials: Callable[[Job], dict[str, str]] = worker_credentials,
+    source_root: Path | None = None,
 ) -> JobStatus:
     """Provision up to acceptance; interruption is reconciled with the same spec.
 
@@ -226,7 +227,7 @@ def submit_job(
         )
     if (
         store.read("training-claim.json") is None
-        and current_source(Path.cwd()) != spec.plan.source
+        and current_source(source_root or Path.cwd()) != spec.plan.source
     ):
         raise ValueError(
             "new submission requires the exact clean source of the compiled plan"

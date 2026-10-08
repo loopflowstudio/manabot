@@ -104,7 +104,9 @@ def verify(status: JobStatus, cache: Path) -> str:
     return status.record.manifest.sha256
 
 
-def factory(cohort: Cohort, owner: str, cache: Path) -> CohortSupervisor:
+def factory(
+    cohort: Cohort, owner: str, cache: Path, **kwargs: object
+) -> CohortSupervisor:
     return CohortSupervisor(
         cohort,
         owner,

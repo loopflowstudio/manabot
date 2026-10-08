@@ -107,7 +107,9 @@ class S3JobStore:
 WORKER_ROLE = "manabot-remote-jobs"
 
 
-def worker_policy(prefix_uri: str, deadline: float | None = None) -> dict[str, object]:
+def worker_policy(
+    prefix_uri: str, deadline: float | None = None, *, inputs: tuple[str, ...] = ()
+) -> dict[str, object]:
     """Only control reads and runtime evidence writes; no delete or account access."""
     bucket, prefix = split_s3_uri(prefix_uri)
     arn = f"arn:aws:s3:::{bucket}/{prefix.rstrip('/')}"
@@ -127,6 +129,20 @@ def worker_policy(prefix_uri: str, deadline: float | None = None) -> dict[str, o
             "Resource": [f"{arn}/runtime/*"],
         },
     ]
+    if inputs:
+        resources = []
+        for uri in inputs:
+            input_bucket, key = split_s3_uri(uri)
+            if input_bucket != bucket or not key or any(c in key for c in "*?[]"):
+                raise ValueError("learning inputs require literal same-bucket objects")
+            resources.append(f"arn:aws:s3:::{input_bucket}/{key}")
+        statements.append(
+            {
+                "Effect": "Allow",
+                "Action": ["s3:GetObject", "s3:GetObjectVersion"],
+                "Resource": resources,
+            }
+        )
 
     if deadline is not None:
         # Explicit deny also bounds resource-policy grants to this session. STS
@@ -245,7 +261,12 @@ def worker_credentials(spec: Job) -> dict[str, str]:
         raise ValueError("allocation has expired; worker issuance/renewal forbidden")
     duration = max(900, math.ceil(remaining) + 60)
     policy = json.dumps(
-        worker_policy(spec.prefix, spec.deadline), separators=(",", ":")
+        worker_policy(
+            spec.prefix,
+            spec.deadline,
+            inputs=tuple(artifact.uri for artifact in spec.learning_inputs.values()),
+        ),
+        separators=(",", ":"),
     )
     try:
         sts = session.client("sts")

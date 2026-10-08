@@ -37,7 +37,9 @@ class AdmittedPolicy:
     producer_cost: ProducerCost
 
 
-def _copy_verified(source: ArtifactReference, target: Path) -> ArtifactReference:
+def copy_verified_artifact(
+    source: ArtifactReference, target: Path
+) -> ArtifactReference:
     """Pin copied bytes rather than trusting a mutable source pathname."""
     if target.exists():
         raise ValueError(f"import destination already exists: {target}")
@@ -60,7 +62,9 @@ def admit_policy(
     cannot be replaced by a zero-cost synthetic producer. Legacy checkpoints
     without TrainingRun provenance are deliberately unsupported.
     """
-    receipt = _copy_verified(stage.source_run, out / f"{stage.id}-source-run.json")
+    receipt = copy_verified_artifact(
+        stage.source_run, out / f"{stage.id}-source-run.json"
+    )
     serialized = json.loads(Path(receipt["path"]).read_bytes())
     if not isinstance(serialized, dict) or serialized.get(
         "regime_digest"
@@ -101,7 +105,9 @@ def admit_policy(
         raise ValueError(
             "published producer model/observation/world differs from regime"
         )
-    admitted = _copy_verified(stage.checkpoint, out / f"{stage.id}-{stage.weights}.pt")
+    admitted = copy_verified_artifact(
+        stage.checkpoint, out / f"{stage.id}-{stage.weights}.pt"
+    )
     # Ordinary admission owns architecture, state keys and native world meaning.
     # Fork RNG so validation never shifts downstream initialization streams.
     with torch.random.fork_rng(devices=[]):
