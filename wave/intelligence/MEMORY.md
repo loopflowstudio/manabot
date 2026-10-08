@@ -24,38 +24,42 @@ ETU-126 supplies the later named CUDA admission below; ETU-103/Mini artifacts re
 
 ## Durable cohort owner (ETU-126, 2026-10-08)
 
-Jack Heart authorized autonomous MLOps delivery within $100 inclusive, then four
-active hours per small seed and eight per large seed, three paired seeds. ETU-126
-alone launches. Preserve original failures, job limits and Mini ordering. Compare
-common time/samples separately from unequal endpoints. Prepared targets are
-26,000 small / 15,600 large iterations; source/allocation admission remains open.
+Jack Heart authorized autonomous MLOps within $100 inclusive, four active hours
+per small seed and eight per large seed, three paired seeds. ETU-126 alone launches.
+Cohort `etu103-recovery-v3-science` pins merged `45940fe3`, 26,000 small / 15,600
+large iterations and $48.867918369190 inclusive reservation. Compare common
+time/samples separately from unequal endpoints. Preserve old failures and Mini order.
 
-Pilot `etu103-recovery-v2-pilot-1`, merged `2555c0e2`, passed 31 L4 numerical checks,
-100 initial games with exact replay, then 512 large updates / 262,144 transitions.
-Active time was 939.7533 seconds, with 11,404 optimizer exposures and five empty
-iterations. All 124 returned files verified; final raw/EMA reloaded; GPU/guardian
-deleted. Estimated pilot charge $0.435531379881 brings retained costs to
-$4.717918369190. This is workflow/timing, not strength or sustained throughput.
+Pilot `etu103-recovery-v2-pilot-1` at `2555c0e2` passed 31 L4 numerical checks,
+100 initial replayed games and 512 large updates in 939.7533 active seconds.
+Pilot timing does not establish sustained throughput or strength. All files
+verified, raw/EMA reloaded and GPU/guardian deleted.
+Estimated retained GPU costs are $4.717918369190, including the $0.435531379881 pilot.
 
-The original completed record omitted endpoint evaluation: learning ended during
-upload after the queue scan. The repair rescans after exit and fails pending
-unevaluated checkpoints. CPU endpoint recovery stays separate; preserve the
-original defect. Dashboard parsing/W&B mutable-row fixes passed real projection.
-Intermediate uploads reuse verified S3 versions; final readback remains complete.
-No measured upload speedup follows from the frozen pilot. The
-[remote contract](../../docs/remote-jobs.md) and
-[capacity record](../../experiments/model-capacity.md) own outcomes and limits.
+The original completed pilot record omitted endpoint evaluation when learning
+ended during upload after the queue scan. PR263 rescans after exit and fails
+pending unevaluated checkpoints. Separate CPU recovery completed 100 replayed
+games; the original omission and failed recovery attempts remain evidence.
+Dashboard/W&B fixes exclude queue indexes and mutable history rows. Intermediate
+uploads reuse verified S3 versions; final readback stays complete. The pilot
+establishes no upload speedup. The [remote contract](../../docs/remote-jobs.md)
+and [capacity record](../../experiments/model-capacity.md) own receipts and limits.
 
-Jack Heart explicitly approved the separate controller identity and secure Mini
-installation. Its scope is one cohort/six jobs with 96-hour S3 expiry; conditional
-writes/readback and unrelated-prefix denial passed. The original issuer remains
-restricted. Selected private credentials and a dedicated Mini service checkout
-preserve learning/ordering. Revoke the controller identity and remove copied
-secrets/services after settlement; IAM expiry does not revoke the shared provider
-key. New large 11.95h/$6.20 JobSpecs implement eight hours within $100; existing
-caps remain unchanged. No six-run result, CUDA exact resume or automatic host
-takeover follows. Endpoint recovery passed 100 replayed games on local CPU;
-the original remote omission remains evidence.
+Jack Heart approved the separate restricted controller and secure Mini installation.
+One cohort/six job prefixes have 96-hour S3 expiry; live conditional writes/readback,
+outside-prefix denial and worker session admission passed. Existing issuer stays
+restricted; no personal SSO moved. Mini launchd owns scheduling and local projection
+in a dedicated checkout. Owner SIGKILL restarted in 2.2 seconds with one attempt
+and the same pod; a second controller was rejected. The first small seed saved
+100 valid initialization games and advanced 146 to 242 updates. Remaining jobs
+are queued; no six-run result, CUDA exact resume or automatic host takeover follows.
+
+Mini needs its account online/logged in; W&B credentials are absent there, while
+local reports refresh. New large 11.95h/$6.20 JobSpecs implement eight hours within
+$100; existing caps stay fixed. Final evaluation/artifacts/cleanup gate successors.
+After settlement revoke the controller identity and remove copied secrets/services;
+IAM expiry does not revoke shared provider keys. Preserve original shared keys and
+Mini workloads. Cohort completion, final analysis and cost settlement remain open.
 
 ## Step targets and machine allocations (ETU-124, 2026-10-07)
 
@@ -365,20 +369,14 @@ arbitrary lag. Preserve same-viewer terminal/bootstrap boundaries, full behavior
 distributions, opponent versions, unique samples and one optimizer owner. Zero-lag
 compatibility remains a proposal. No scientific allocation follows.
 
-## Focused value-model software (ETU-106, 2026-10-05)
+## Historical value-model software (ETU-106)
 
-Jack Heart authorized historical/masked means and one-/two-layer width64 value
-tokens crossed with scalar/WDL heads; history follows and learned recurrence
-remains deferred. The compound decoder owns a separate critic. Attention masks
-padded outputs, but biased projection before fixed-slot averaging creates a
-padding dependency. Tokens share attention and change policy representations,
-so this is not a critic-only intervention. Historical initialization/equations
-remain intact; equal-shaped pooling variants require saved architecture metadata.
-Later empirical dispositions above supersede this software-only stage.
-
-Jack Heart approved evaluation-only recovery and landing. PR222 proved software,
-not strength/chapter acceptance; ETU-91 stayed untouched. Failure/recovery and
-validation: [protocol](../../experiments/value-models.md) and memory at `7316da5d`.
+Jack Heart approved PR222's software and evaluation-only recovery; later empirical
+dispositions supersede that stage. Shared attention prevents critic-only claims;
+equal-shaped pooling requires saved architecture metadata. Learned recurrence
+stays deferred and ETU-91 remains untouched. The [protocol](../../experiments/value-models.md)
+and memory at `7316da5d` retain implementation, failures and bounded validation;
+none establishes strength or chapter acceptance.
 
 ## Operating principle
 

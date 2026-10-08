@@ -260,11 +260,11 @@ and final delivery still get full readback. The frozen pilot ran the earlier
 publisher, so it provides no measured speedup for that optimization. Every planned
 scientific job now binds the numerical-admission flag through Experiment/Cohort.
 
-### Measured targets and remaining admission
+### Measured targets and admitted cohort
 
 Targets are frozen prospectively from timing, without using pilot scores:
 
-| Arm | Iterations per seed | Transitions | Projected active hours | Proposed lease / hard cap |
+| Arm | Iterations per seed | Transitions | Projected active hours | Admitted lease / hard cap |
 | --- | ---: | ---: | ---: | --- |
 | Small width64/depth2 | 26,000 | 13,312,000 | 4.13 | 9.5 h / $4.95 |
 | Large width384/depth8 | 15,600 | 7,987,200 | 7.95 | 11.95 h / $6.20 |
@@ -285,9 +285,9 @@ ordinary Experiment/JobSpec plans compile without provisioning. Large reserves
 upload and the existing setup/checkpoint/cleanup reserves. Its 11.95-hour lease
 fits the worker's 11h59m admission ceiling, leaving issuance margin below the
 12-hour STS limit. Small keeps its shorter allocation and 30-minute evaluation
-attempts. No long job is admitted until final source, prices and authority agree.
+attempts. Final source, live prices and Mini authority were admitted before launch.
 
-At the observed quote, all six proposed caps total $33.45. Adding retained charges,
+At the admitted quote, all six caps total $33.45. Adding retained charges,
 $0.70 guardian reserve, $3 durable storage, $2 controller/reporting and $5
 unreconciled-cost reserve gives **$48.867918369190**, within $100. This is a
 conservative reservation, not additional invoices or automatic retry authority.
@@ -317,6 +317,36 @@ secrets; do not revoke shared original keys or alter Mini learning. The IAM expi
 bounds S3 authority but not copied provider-key authority, so host cleanup remains
 required after settlement. Final source and service admission are retained with
 the versioned preparation. No six-run result follows from one advancing job.
+
+### Independent controller launch
+
+Merged PR263 source `45940fe3587fe37851267d0c903c6030a3a64a92` owns the
+[frozen v3 protocol](data/etu126/capacity-recovery-v3.json) and
+[six-job admission](data/etu126/cohort-admission-20261008.json).
+The protocol was committed before initialization scoring. Cohort
+`etu103-recovery-v3-science` runs under Mini launchd with a separate projection
+service and the [admitted restricted identity](data/etu126/controller-admission-20261008.json).
+The launcher exited. Mini's dedicated source checkout leaves existing training
+checkouts and learners unchanged. A Loopflow sync push failed on Mini's absent
+GitHub HTTPS credentials; exact clean runtime source verification succeeded,
+and no unrelated GitHub credential was installed.
+
+The [live launch receipt](data/etu126/controller-launch-20261008.json) records a
+forced owner SIGKILL followed by launchd restart after 2.2 seconds, the same
+host binding and one admitted job on the same pod. A concurrent ordinary
+`deploy cohort supervise` invocation was rejected by the owner lock. The first
+small seed passed its own named CUDA gate, saved all 100 initialization games
+with zero invalid games, then advanced from 146 to 242 updates on successive
+observations. Game validity requires terminal completion and exact replay.
+Mini's local report refreshed after restart; no agent or laptop schedules later
+jobs. The account must stay online and logged in. Five jobs remain queued;
+this is launch/restart evidence, not a completed comparison or strength result.
+
+Final checkpoint evaluation, full artifact verification and confirmed provider
+cleanup still gate each successor. The remaining work is to retain every attempt,
+settle costs and compare the complete paired cohort at common sample/time support
+and its explicitly unequal endpoints, then revoke the experiment's controller
+access and remove its service/credential copies as specified above.
 
 ## Step-target recovery preparation — 2026-10-08
 
