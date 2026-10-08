@@ -12,17 +12,55 @@ from io import StringIO
 import json
 import math
 from pathlib import Path
+import re
 from statistics import mean
 from typing import Literal
 
 from matplotlib.figure import Figure
+from pydantic import ConfigDict, JsonValue
 
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.training.experiment_execution import ExperimentRun
-from manabot.training.models import TrainingRun
+from manabot.training.learning_dashboard import DASHBOARD_CSS, learning_story
+from manabot.training.models import TrainingRegime, TrainingRun
 from manabot.training.monitor_evaluation import MonitorResult
 from manabot.training.monitoring import Scalar, training_dashboard
 from manabot.training.report_study import ScientificStudy
+
+
+class RetainedRegime(TrainingRegime):
+    """Read-only report admission preserves additional frozen recipe metadata.
+
+    This projection is never passed to execution. Known fields still validate;
+    later recovery/configuration extensions survive raw exports unchanged.
+    """
+
+    model_config = ConfigDict(extra="allow")
+    __pydantic_extra__: dict[str, JsonValue]
+
+
+class RetainedRun(TrainingRun):
+    """Reporting projection, not admission for training or checkpoint serving."""
+
+    model_config = ConfigDict(extra="allow")
+    __pydantic_extra__: dict[str, JsonValue]
+    regime: RetainedRegime
+
+
+class RetainedExecution(ExperimentRun):
+    """Preserve newer lifecycle metadata without giving the report execution authority."""
+
+    model_config = ConfigDict(extra="allow")
+    __pydantic_extra__: dict[str, JsonValue]
+
+
+class RetainedMonitor(MonitorResult):
+    """Keep producer timestamps and extension metadata on immutable monitor exports."""
+
+    model_config = ConfigDict(extra="allow")
+    __pydantic_extra__: dict[str, JsonValue]
+    started_unix: float | None = None
+    finished_unix: float | None = None
 
 
 @dataclass(frozen=True)
@@ -70,15 +108,15 @@ def load_evidence(root: Path) -> ReportEvidence:
     )
     return ReportEvidence(
         root,
-        tuple(TrainingRun.model_validate_json(p.read_text()) for p in runs),
+        tuple(RetainedRun.model_validate_json(p.read_text()) for p in runs),
         tuple(
-            MonitorResult.model_validate_json(p.read_text())
+            RetainedMonitor.model_validate_json(p.read_text())
             for p in monitors
             if not any(parent in failed for parent in p.parents)
         ),
-        tuple(ExperimentRun.model_validate_json(p.read_text()) for p in executions),
+        tuple(RetainedExecution.model_validate_json(p.read_text()) for p in executions),
         failed,
-        (*runs, *monitors, *executions, *attempts),
+        (*runs, *monitors, *executions, *attempts, *tuple(root.glob("snapshot.json"))),
     )
 
 
@@ -406,9 +444,40 @@ def write_dashboard(
     sections: list[tuple[str, str, list[Figure]]],
     notes: str = "",
     study: ScientificStudy | None = None,
+    notebook: Path | None = None,
 ) -> Path:
     """Render notebook-selected figures and a concise status summary; never mutate inputs."""
     now = datetime.now(timezone.utc)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    guide = output.parent / docs
+    if not guide.is_file():
+        guide = Path(__file__).resolve().parents[2] / "docs/experiment-metrics.md"
+    if guide.exists():
+        from nbconvert.filters import markdown2html
+
+        guide_path = output.with_name(output.stem + "-metrics.html")
+        guide_html = str(markdown2html(guide.read_text()))
+        guide_html = re.sub(
+            r'(id|href)="(#?)([^" ]+)"',
+            lambda m: (
+                f'{m[1]}="{m[2]}{m[3].lower()}"' if m[1] == "id" or m[2] else m[0]
+            ),
+            guide_html,
+        )
+        guide_html = guide_html.replace(
+            'href="evidence/',
+            'href="https://github.com/loopflowstudio/etude/blob/main/docs/evidence/',
+        )
+        guide_path.write_text(
+            '<!doctype html><html lang="en"><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            "<title>Experiment metric guide</title><style>"
+            + DASHBOARD_CSS
+            + "</style><main>"
+            + guide_html
+            + "</main></html>"
+        )
+        docs = guide_path.name
 
     def link(text: str, anchor: str) -> str:
         return f'<a href="{escape(docs, quote=True)}#{anchor}">{escape(text)}</a>'
@@ -481,9 +550,11 @@ def write_dashboard(
             f"{statuses['completed']}/{len(execution.attempts)} regime-seed runs complete · {statuses['running']} running · {statuses['pending']} pending · {statuses['failed'] + statuses['interrupted']} failed/interrupted<br>"
             f"{link('Evidence freshness', 'freshness')}: {as_of} · {age} s old · status {execution.status}</p>"
         )
-    for title, anchor, figures in sections:
-        if anchor == "comparisons":
-            parts.append(section(title, anchor, figures))
+    scientific_sections = "".join(
+        section(title, anchor, figures)
+        for title, anchor, figures in sections
+        if anchor == "comparisons"
+    )
     initialization = [r for r in evidence.monitors if r.coordinates.updates == 0]
     parts.append(
         "<p>Monitoring initialization: "
@@ -726,10 +797,31 @@ def write_dashboard(
         + escape(json.dumps(hashes, indent=2))
         + "</pre></details>"
     )
+    if notebook is not None:
+        import os
+
+        parts.insert(
+            0,
+            f'<p><a href="{escape(os.path.relpath(notebook.resolve(), output.parent.resolve()))}">Editable notebook generator</a></p>',
+        )
+    monitoring_path = output.with_name(output.stem + "-monitoring.json")
+    monitoring_path.write_text(
+        json.dumps([r.model_dump(mode="json") for r in evidence.monitors], indent=2)
+    )
+    parts.append(
+        f'<p><a href="{monitoring_path.name}">Raw monitoring rows and saved intervals</a></p>'
+    )
     html = (
-        '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Experiment report</title><style>body{font:16px/1.5 system-ui;color:#202d35;background:#fafbf9;max-width:1080px;margin:40px auto;padding:0 24px}h1{font-size:30px}h2{font-size:20px;margin:24px 0 10px}a{color:#146a76;text-underline-offset:3px}.muted{color:#55646b;font-size:14px}table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;vertical-align:top;padding:9px;border-bottom:1px solid #ccd6d7}svg{width:100%;height:auto}.figure{overflow-x:auto}.figure svg{min-width:740px}section{margin-top:40px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.table{overflow-x:auto}@media(max-width:600px){body{margin:20px auto;padding:0 14px}table{font-size:12px}td,th{padding:6px}h1{font-size:25px}}@media print{body{max-width:none}section{break-inside:avoid}}</style><main>'
+        '<!doctype html><html lang="en"><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        "<title>Learning progress · manabot</title><style>"
+        + DASHBOARD_CSS
+        + "</style><main>"
+        + learning_story(evidence, docs)
+        + scientific_sections
+        + '<details id="details"><summary>03 / Diagnostics, costs, failures &amp; source evidence</summary>'
         + "".join(parts)
-        + "</main></html>"
+        + "</details></main></html>"
     )
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(html)

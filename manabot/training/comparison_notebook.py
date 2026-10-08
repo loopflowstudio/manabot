@@ -25,7 +25,7 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
             "# Experiment report generator\n\nRun All reads saved evidence and writes `comparison.html`, "
             "the default viewing surface. No training, evaluation games or tracker access. "
             "Edit discovery, question and plotting code below; report refresh never overwrites this notebook. "
-            "Figures render only in HTML. Interpretation and research-ledger updates belong to the experiment skill."
+            "Figures render only in HTML. A reproducible descriptive reading is derived from saved rows; research decisions remain separate."
         ),
         nbformat.v4.new_code_cell(
             "from pathlib import Path\n"
@@ -36,6 +36,7 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
             "from manabot.training.report_study import load_study, study_strength_figures\n\n"
             f"DATA_ROOT = Path({relative!r}).resolve()\n"
             "OUTPUT = Path('comparison.html')\n"
+            f"NOTEBOOK = Path({output.name!r})\n"
             f"METRIC_DOCS = {docs!r}\n"
             "QUESTION = 'How do the declared variants progress at shared training milestones?'\n"
             "# Narrow DATA_ROOT to a retained execution; never combine incompatible studies.\n"
@@ -52,7 +53,7 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
         ),
         nbformat.v4.new_markdown_cell(
             "## Choose the report\n\nChange metrics or axes here. `evidence.metrics(run)` exposes every "
-            "saved scalar; `metric_figure` plots any of them. Strength panels require matched milestones. "
+            "saved scalar; `metric_figure` plots any of them. The default dashboard shows each seed separately; cross-run comparisons require matched milestones. "
             "No notebook cell displays or launches a figure inline."
         ),
         nbformat.v4.new_code_cell(
@@ -63,11 +64,6 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
             "        ('Scientific checkpoint strength', 'comparisons', study_strength_figures(study)),\n"
             "        ('Scientific checkpoints at recorded cost', 'comparisons', study_strength_figures(study, 'training_seconds')),\n"
             "    ]\n"
-            "if evidence.monitors or study is None:\n"
-            "    sections += [\n"
-            "        ('Monitoring strength versus time', 'comparisons', strength_figures(evidence, 'training_seconds')),\n"
-            "        ('Monitoring strength versus work', 'comparisons', strength_figures(evidence, 'environment_decisions')),\n"
-            "    ]\n"
             "sections += [\n"
             "    ('Policy, value, regularization and sample retention', 'sampling', diagnostic_figures(evidence)),\n"
             "    ('Sampled process memory', 'costs', [metric_figure(evidence, 'progress/rss_bytes')]),\n"
@@ -75,7 +71,7 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
             "# For deeper analysis, add e.g. metric_figure(evidence, 'rl/collection_kl')."
         ),
         nbformat.v4.new_code_cell(
-            "report = write_dashboard(evidence, OUTPUT, question=QUESTION, docs=METRIC_DOCS, sections=sections, notes=NOTES, study=study)\n"
+            "report = write_dashboard(evidence, OUTPUT, question=QUESTION, docs=METRIC_DOCS, sections=sections, notes=NOTES, study=study, notebook=NOTEBOOK)\n"
             "print(f'Read-only report: {report.resolve()}')"
         ),
         nbformat.v4.new_markdown_cell(

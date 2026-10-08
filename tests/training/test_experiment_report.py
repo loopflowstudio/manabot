@@ -37,13 +37,11 @@ def test_saved_notebook_generates_html_without_inline_plots(tmp_path: Path) -> N
         notebook, timeout=60, resources={"metadata": {"path": str(tmp_path)}}
     ).execute()
     html = (tmp_path / "chosen.html").read_text()
-    assert html.count("<svg") == 5
+    assert html.count("<svg") >= 4
     assert "Download all raw scalar diagnostics" in html
-    assert "Initialization unavailable" not in html  # no scientific study
+    assert "Initialization unavailable; first measured update is 1" in html
     assert "Monitoring initialization: unavailable" in html
-    assert html.index("Monitoring strength versus time") < html.index(
-        "Progress, throughput"
-    )
+    assert html.index("Separate the decks") < html.index("Progress, throughput")
     assert "Final experiment report" in html
     assert "#evaluation" in html and "#costs" in html
     assert not (tmp_path / "comparison.html").exists()

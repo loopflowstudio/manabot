@@ -1096,23 +1096,24 @@ proof/history remains at `33bce999` and `64bdbca6`; the
 [design](../../docs/plans/modular-architecture-recipes.md) owns scope and deferrals.
 
 
-## Training dashboard software (ETU-101, 2026-10-05)
+## Learning dashboard and monitoring (ETU-129, 2026-10-08)
 
-Jack Heart authorized software delivery with tiny fixtures and preserved ETU-91.
-TrainingRun/VerifyStore own diagnostics and original coordinates; W&B is a
-resumable projection, not an authority or learning dependency. Missing historical
-coordinates remain incomplete. Fixed whole-game teacher validation remains separate
-from growing validation; its first targets survive later treatment changes.
-Hourly raw exports preserve live RNG/Adam/collector state and exclude export time
-from learning schedules while charging resource budgets. Monitoring is not recovery.
+Jack Heart authorized autonomous implementation, real Mini demonstration and
+landing. The shared notebook leads with progress, freshness and deck/opponent strength. Existing
+notebooks remain create-once. Per-seed panels do not pool pending seeds;
+whole-deal intervals retain both seats. Deck identity follows
+`seat_decks[player_a_seat]`. Greedy deck competence remains a hypothesis,
+not a strategic explanation established by scores.
 
-The independent bounded arena follower evaluates reserved development deals across
-all four seat/deck legs. Failed/incomplete cohorts retain replay/cost evidence and
-have no aggregate rate; deal-cluster intervals do not measure training-seed
-uncertainty. The [dashboard contract](../../docs/training-monitoring.md) owns
-commands and limits. The local gate and real untrained four-game fixture passed;
-no live W&B service, strength, chapter or scientific acceptance followed. Detailed
-software proofs remain at `64bdbca6`; ETU-91's frozen checkout stays unchanged.
+The 05:08 UTC Mini snapshot retains one running seed and two pending seeds.
+No cohort or learning change ran. SQLite/source hashes bind the local demo;
+copied status is not live state. [Metric guidance](../../docs/experiment-metrics.md)
+owns semantics and snapshots; [demo evidence](../../docs/evidence/learning-dashboard-2026-10-08.md)
+owns measured values and limits.
+
+TrainingRun/VerifyStore remain authoritative; W&B is optional projection.
+ETU-101 contracts remain in [monitoring](../../docs/training-monitoring.md),
+with original software proof at `2555c0e2`. No strength or chapter acceptance.
 
 
 ## Capacity software receipt boundary (ETU-102, 2026-10-05)
