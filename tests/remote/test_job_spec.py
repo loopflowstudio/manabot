@@ -155,6 +155,7 @@ def test_experiment_binds_seeded_cases_without_changing_recipe(
     assert spec.plan == plans[0]
     assert spec.monitoring == bindings[0].monitoring
     assert spec.checkpoint_seconds == bindings[0].checkpoint_seconds
+    assert spec.checkpoint_updates == 1000
     assert spec.experiment_json is not None
     assert spec.validate_numerics == validate_numerics
     assert ("validate_numerics" in bindings[0].model_dump()) == validate_numerics
@@ -371,3 +372,25 @@ def test_experiment_cohort_preserves_planned_order_and_receipts(
             prior_dollars=0.75,
             controller_dollars=0.25,
         )
+
+
+def test_comparison_requires_shared_step_interval() -> None:
+    def experiment(intervals: tuple[int, ...]) -> Experiment:
+        return Experiment(
+            name="steps",
+            baseline=Baseline.capture("baseline", recipe()),
+            jobs=tuple(
+                PlannedRun(
+                    case="steps",
+                    seed=i,
+                    spec=job_spec(),
+                    monitoring=MonitoringBudget(seconds=100, attempt_seconds=10),
+                    checkpoint_updates=interval,
+                )
+                for i, interval in enumerate(intervals)
+            ),
+        )
+
+    assert len(experiment((10, 10)).compile_jobs(SOURCE)) == 2
+    with pytest.raises(ValueError, match="one shared checkpoint_updates"):
+        experiment((10, 20)).compile_jobs(SOURCE)

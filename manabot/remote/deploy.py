@@ -320,7 +320,8 @@ def deploy(
     root: Path,
     *,
     job_id: str | None = None,
-    checkpoint_seconds: float = 60,
+    checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     monitoring: "MonitoringBudget | None" = None,
     destination: str = "s3://etudefantasia/manabot/jobs",
     observe: Callable[[Transport], None] | None = None,
@@ -353,6 +354,7 @@ def deploy(
         destination=destination,
         monitoring=monitoring,
         checkpoint_seconds=checkpoint_seconds,
+        checkpoint_updates=checkpoint_updates,
     )
     (out / "job.json").write_text(spec.model_dump_json(indent=2))
     (out / "plan.json").write_text(plan.model_dump_json(indent=2))

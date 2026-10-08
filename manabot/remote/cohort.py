@@ -13,6 +13,7 @@ from typing import Callable, Literal
 from pydantic import Field, model_validator
 
 from manabot.training.checkpoint_queue import MonitoringBudget
+from manabot.training.models import CheckpointCadence
 
 from .continuation import Continuation, bind_continuation
 from .job_client import cancel_job, job_manifest, persist_job, reconcile_job, submit_job
@@ -23,11 +24,10 @@ from .plan import AccessScope, DeploymentPlan, Frozen, digest
 DEFAULT_COHORTS = "s3://etudefantasia/manabot/cohorts"
 
 
-class CohortEntry(Frozen):
+class CohortEntry(CheckpointCadence, Frozen):
     job_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
     plan: DeploymentPlan
     monitoring: MonitoringBudget | None = None
-    checkpoint_seconds: float = Field(default=3600, gt=0)
     experiment_json: str | None = None
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
     continuation: Continuation | None = Field(
@@ -35,6 +35,13 @@ class CohortEntry(Frozen):
     )
 
     def job(self, now: float) -> Job:
+        if (
+            self.continuation is not None
+            and self.checkpoint_updates is not None
+            and self.monitoring is not None
+            and self.monitoring.require_initial_admission
+        ):
+            raise ValueError("step continuation cannot repeat initialization admission")
         return Job(
             job_id=self.job_id,
             plan=self.plan,
@@ -43,6 +50,7 @@ class CohortEntry(Frozen):
             destination=self.plan.spec.access.destination,
             monitoring=self.monitoring,
             checkpoint_seconds=self.checkpoint_seconds,
+            checkpoint_updates=self.checkpoint_updates,
             experiment_json=self.experiment_json,
             validate_numerics=self.validate_numerics,
         )

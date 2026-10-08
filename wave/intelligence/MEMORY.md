@@ -55,8 +55,8 @@ extends within the existing 96-hour grant; job deadlines stay fixed. SIGKILL
 restarted the upgraded owner in 7.70s with two attempts and the same job1 pod;
 competing ownership was rejected. An asynchronous launchd handoff failed first,
 then recovered without touching training; the follow-up fixes lock-release waits.
-The capacity record owns receipts. CUDA continuation admission, 100k completion
-and final scientific results remain pending. Original science stays at `45940fe3`.
+CUDA continuation admission, 100k completion and final results remain pending;
+original science stays at `45940fe3`.
 
 Mini needs its account online/logged in; W&B credentials are absent there, while
 local reports refresh. New large 11.95h/$6.20 JobSpecs implement eight hours within
@@ -64,6 +64,13 @@ $100; existing caps stay fixed. Final evaluation/artifacts/cleanup gate successo
 After settlement revoke the controller identity and remove copied secrets/services;
 IAM expiry does not revoke shared provider keys. Preserve original shared keys and
 Mini workloads. Cohort completion, final analysis and cost settlement remain open.
+
+Jack Heart requested prospective step cadence after PR268. The live science and
+queued continuation retain their frozen hourly cadence. New work uses absolute
+completed collect/learn iterations, shared checkpoint intervals and explicit
+segment offsets; operational clocks remain time-based. Cadence/recovery checks passed; counter/report/calibration work follows.
+PR269 merged at `01fd9029`: startup phases now stream within the unchanged 90s
+clean-play limit. Exact main-job rerun passed 50.726s; original cause is unknown.
 
 ## Step targets and machine allocations (ETU-124, 2026-10-07)
 
@@ -368,11 +375,6 @@ Neither PPO nor Ataraxos implements V-trace; clipping/reverse KL do not authoriz
 arbitrary lag. Preserve same-viewer terminal/bootstrap boundaries, full behavior
 distributions, opponent versions, unique samples and one optimizer owner. Zero-lag
 compatibility remains a proposal. No scientific allocation follows.
-
-## Historical value-model software (ETU-106)
-
-PR222 software evidence and Jack Heart's delivery authorization remain at
-`2a4fd419` / `7316da5d`; the later empirical dispositions above govern.
 
 ## Operating principle
 
@@ -792,13 +794,10 @@ preserve the exact tracker as a tractable reference. Wider pools still require
 new world-bound complete-loop measurements. See the
 [sampler guide](../../docs/belief-sampler.md).
 
-The bounded compound follow-up admits `train_compound` raw exports into the
-same belief dependency chain and resets queued Commands at game boundaries.
-Ataraxos raw/EMA already has end-to-end coverage. Compound EMA and mixing flat
-policy training into compound recipes remain rejected. Both collector paths
-enforce the saved observation capacity, even though standalone compound play
-can expand action encoding. This is compatibility evidence, not wider-pool or
-scientific acceptance; ETU-96 remains open for those comparisons.
+Compound raw imports share the sampler dependency chain; compound EMA and mixed
+flat-policy recipes remain rejected. Saved observation capacity remains binding.
+Detailed bounded proof is retained at `01fd9029` and in the sampler guide; no
+scientific or wider-pool acceptance follows.
 
 ## Frozen-policy local update boundary (ETU-95, 2026-10-04)
 

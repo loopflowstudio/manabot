@@ -28,6 +28,12 @@ from manabot.verify.store import VerifyStore
 from tests.training.test_history_input import calibration
 
 
+@pytest.fixture(autouse=True)
+def isolated_account_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fixtures must not acquire a real experiment's host/evaluator leases."""
+    monkeypatch.setattr(Path, "home", lambda: tmp_path / "test-account")
+
+
 def hardware() -> HardwareInventory:
     return HardwareInventory(
         resources=(Hardware(name="fixture", host=socket.gethostname(), cpu_threads=2),)

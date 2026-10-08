@@ -390,10 +390,18 @@ class Experiment:
             raise ValueError("launch case/seed bindings must be unique")
         if any(run.case not in cases for run in self.jobs):
             raise ValueError("launch references an unresolved case")
-        return tuple(
+        plans = tuple(
             compile_plan(cases[run.case].configuration, run.spec, source, run.seed)
             for run in self.jobs
         )
+        for binding, plan in zip(self.jobs, plans, strict=True):
+            binding.admit_regime(plan.regime)
+        intervals = {binding.checkpoint_updates for binding in self.jobs}
+        if any(interval is not None for interval in intervals) and len(intervals) != 1:
+            raise ValueError(
+                "comparison jobs require one shared checkpoint_updates interval"
+            )
+        return plans
 
     def cohort(
         self,
@@ -422,6 +430,7 @@ class Experiment:
                     plan=plan,
                     monitoring=binding.monitoring,
                     checkpoint_seconds=binding.checkpoint_seconds,
+                    checkpoint_updates=binding.checkpoint_updates,
                     validate_numerics=binding.validate_numerics,
                     experiment_json=json.dumps(
                         cases[binding.case].receipt(), sort_keys=True
@@ -446,6 +455,7 @@ class Experiment:
             job_id,
             monitoring=binding.monitoring,
             checkpoint_seconds=binding.checkpoint_seconds,
+            checkpoint_updates=binding.checkpoint_updates,
             destination=binding.spec.access.destination,
             validate_numerics=binding.validate_numerics,
         )

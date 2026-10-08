@@ -8,21 +8,46 @@ its checkout, or its frozen recipe.
 
 ## New training and live dashboards
 
-For an independently authorized run, request approximately hourly raw checkpoints:
+For an independently authorized step-target run, freeze a positive update interval:
 
 ```bash
-uv run manabot train --regime experiments/regimes/direct-self-play.json \
-  --seed 197 --out .runs/example --checkpoint-seconds 3600
+uv run manabot train --regime ops/examples/step-target.json \
+  --seed 197 --out .runs/example --checkpoint-updates 1000
 ```
 
-The interval is an executor option recorded in TrainingRun, not a new learning
-stage. Exports happen after a complete RL update or supervised epoch. Long updates
-can delay them; there is no mid-update snapshot. The ordinary stage-end raw/EMA
-exports remain available. Monitoring exports preserve Torch RNG, do not reset
-Adam or the collector, and their measured duration is excluded from the elapsed
-learning-rate schedule. Watchdog and total resource budgets still charge that
-work. Checkpoint admission failures remain in the run with rejected bytes; the
-learner can continue. Scientific recipes do not implicitly enable monitoring.
+A step is one completed self-play collection/learning iteration, including an
+empty-filter skip. It is not an optimizer call or a fixed number of samples.
+The interval is recorded as `TrainingRun.monitoring_checkpoint_updates`; every
+exact absolute multiple exports a raw checkpoint. The final raw export owns the
+endpoint, including an endpoint on that grid. Exports preserve Torch RNG and do
+not reset Adam or the collector. Export failures retain rejected bytes and an
+explicit missing milestone; they do not invent a replacement evaluation.
+
+Portable continuation preserves the absolute offset: resuming at 26,000 with
+interval 1,000 first exports at 27,000. It does not re-evaluate the inherited
+boundary. Step continuation rejects `require_initial_admission`; that separate
+initialization gate is for fresh runs. Exact CPU recovery requires the unchanged
+cadence and retains the committed monitoring prefix and artifact bytes. The
+existing evaluator deduplicates those artifacts across attempts/restarts, charges
+failed attempts and never retries them silently. Retain every attempt directory.
+
+`ExperimentSchedule`, `PlannedRun`, and deploy jobs default to 1,000 updates when
+no interval is supplied. This is an authoring default, not an hourly estimate.
+Calibrate throughput before launch, freeze the target and shared interval, then
+keep them fixed regardless of observed runtime. Ataraxos keeps its absolute
+iteration formulas; PPO step recipes select `schedule_clock="iteration_fraction"`.
+Step cadence currently requires one ordinary step-target self-play stage.
+Multi-stage recipes, active-time endpoints, supervised epochs and compound-game
+training retain their explicit legacy cadence; their differing iteration/epoch
+clocks are not silently combined into one step schedule.
+
+Explicit `checkpoint_seconds` / `--checkpoint-seconds` preserves historical
+elapsed-time cadence at update/epoch boundaries. Frozen launch JSON and historical
+receipts retain their original meaning. Do not migrate live runs in place.
+Monitoring allocation, leases, watchdogs, credentials, upload/freshness timers
+and actual cost remain time-based; `JobSpec.checkpoint_seconds` is an export
+reserve, not a monitoring interval. Stage-end raw/EMA exports remain available
+when monitoring is disabled. Watchdog/resource budgets charge all export work.
 
 Once `run.json` exists, launch the read-only dashboard follower separately:
 

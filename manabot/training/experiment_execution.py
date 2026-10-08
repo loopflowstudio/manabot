@@ -14,17 +14,16 @@ from pydantic import Field, JsonValue, model_validator
 
 from manabot.remote.plan import JobSpec
 from manabot.training.checkpoint_queue import MonitoringBudget
-from manabot.training.models import Strict
+from manabot.training.models import CheckpointCadence, Strict
 
 
-class PlannedRun(Strict):
+class PlannedRun(CheckpointCadence):
     """Bind one resolved case and training seed to allocation and evaluation intent."""
 
     case: str
     seed: int = Field(ge=0)
     spec: JobSpec
     monitoring: MonitoringBudget
-    checkpoint_seconds: float = Field(default=3600, gt=0)
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
@@ -62,7 +61,7 @@ class HardwareInventory(Strict):
         raise ValueError(f"hardware is not configured: {name}")
 
 
-class ExperimentSchedule(Strict):
+class ExperimentSchedule(CheckpointCadence):
     """Frozen launch intent. Monitoring is exploratory and has its own deals."""
 
     seeds: tuple[int, ...]
@@ -71,7 +70,6 @@ class ExperimentSchedule(Strict):
     # Additive learner + evaluator process seconds, including overlap.
     process_seconds: float = Field(gt=0)
     monitoring: MonitoringBudget
-    checkpoint_seconds: float = Field(default=3600, gt=0)
     # Reserve existing scientific deal families without redefining their protocol.
     scientific_deal_seeds: tuple[int, ...] = ()
     # Case indexes per seed; empty means declaration order for every seed.

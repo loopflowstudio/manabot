@@ -161,8 +161,11 @@ def supervise(
                 str(spec.plan.seed),
                 "--out",
                 str(root / "run"),
-                "--checkpoint-seconds",
-                str(spec.checkpoint_seconds),
+                *(
+                    ["--checkpoint-updates", str(spec.checkpoint_updates)]
+                    if spec.checkpoint_updates is not None
+                    else ["--checkpoint-seconds", str(spec.checkpoint_seconds)]
+                ),
                 *(
                     ["--allocation", str(allocation_path)]
                     if spec.allocation is not None

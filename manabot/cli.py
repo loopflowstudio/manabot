@@ -37,9 +37,12 @@ def train_command(
     resume_from: Optional[str] = typer.Option(
         None, help="Stopped TrainingRun ID in the same store"
     ),
+    checkpoint_updates: int | None = typer.Option(
+        None, min=1, help="Raw monitoring export every N absolute self-play iterations"
+    ),
     checkpoint_seconds: Optional[float] = typer.Option(
         None,
-        help="Monitoring raw checkpoint interval (3600 for hourly), at update/epoch boundaries",
+        help="Legacy elapsed-time monitoring interval for an explicitly frozen recipe",
     ),
     initial_admission: Optional[str] = typer.Option(None, hidden=True),
     allocation: Optional[str] = typer.Option(
@@ -77,6 +80,7 @@ def train_command(
                 if allocation
                 else None,
                 checkpoint_seconds=checkpoint_seconds,
+                checkpoint_updates=checkpoint_updates,
                 initial_admission=Path(initial_admission)
                 if initial_admission
                 else None,
@@ -87,11 +91,12 @@ def train_command(
             or seed is not None
             or resume_from is not None
             or checkpoint_seconds is not None
+            or checkpoint_updates is not None
             or initial_admission is not None
             or allocation is not None
         ):
             raise typer.BadParameter(
-                "--out, --seed, --resume-from and --checkpoint-seconds require --regime"
+                "--out, --seed, --resume-from and checkpoint cadence require --regime"
             )
         _run_train(preset or DEFAULT_TRAIN_PRESET, set_values or [])
 

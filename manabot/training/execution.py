@@ -54,6 +54,7 @@ from .incidents import save_incident
 from .learning_state import admit_learning_state, validate_adam
 from .models import (
     ArtifactReference,
+    CheckpointCadence,
     CollectBelief,
     CollectLocalUpdate,
     CollectSearch,
@@ -165,23 +166,33 @@ def execute_regime(
     *,
     resume_from: str | None = None,
     checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     initial_admission: Path | None = None,
     allocation: Allocation | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
     if initial_admission is not None and (
-        checkpoint_seconds is None
+        (checkpoint_seconds is None and checkpoint_updates is None)
         or resume_from is not None
         or len(regime.stages) != 1
         or not isinstance(regime.stages[0], TrainSelfPlay)
         or initial_admission.exists()
     ):
         raise ValueError("initial admission requires a fresh single self-play stage")
-    if checkpoint_seconds is not None and (
-        not np.isfinite(checkpoint_seconds) or checkpoint_seconds <= 0
+    if checkpoint_seconds is not None or checkpoint_updates is not None:
+        CheckpointCadence(
+            checkpoint_updates=checkpoint_updates, checkpoint_seconds=checkpoint_seconds
+        ).admit_regime(regime)
+    if (
+        checkpoint_updates is not None
+        and initial_admission is not None
+        and any(
+            isinstance(stage, TrainSelfPlay) and stage.learning_state is not None
+            for stage in regime.stages
+        )
     ):
-        raise ValueError("checkpoint_seconds must be positive and finite")
+        raise ValueError("step continuation cannot repeat initialization admission")
     if allocation is not None:
         if (
             len(regime.stages) != 1
@@ -210,6 +221,11 @@ def execute_regime(
                 regime.model_dump(mode="json")
             ):
                 raise ValueError("recovery recipe or seed mismatch")
+            if (checkpoint_updates, checkpoint_seconds) != (
+                parent.monitoring_checkpoint_updates,
+                parent.monitoring_checkpoint_seconds,
+            ):
+                raise ValueError("recovery checkpoint cadence differs from parent")
             load_update(parent)
             if parent.identities != _runtime_identities(
                 seed, regime, ObservationSpace(regime.observation)
@@ -227,6 +243,7 @@ def execute_regime(
             store,
             resume_from=resume_from,
             checkpoint_seconds=checkpoint_seconds,
+            checkpoint_updates=checkpoint_updates,
             initial_admission=initial_admission,
             allocation=allocation,
         )
@@ -240,6 +257,7 @@ def _execute_regime(
     *,
     resume_from: str | None = None,
     checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     initial_admission: Path | None = None,
     allocation: Allocation | None = None,
 ) -> TrainingRun:
@@ -293,6 +311,7 @@ def _execute_regime(
         identities=deepcopy(parent.identities) if parent is not None else {},
         status="running",
         monitoring_checkpoint_seconds=checkpoint_seconds,
+        monitoring_checkpoint_updates=checkpoint_updates,
         allocation_deadline=allocation.deadline if allocation is not None else None,
         recovery_lock_path=str(out.with_name(out.name + ".writer.lock")),
         recovery_host=socket.gethostname(),
@@ -307,6 +326,25 @@ def _execute_regime(
         recovery_artifact=parent.recovery_artifact if parent is not None else None,
         stages=deepcopy(snapshot.completed_stages) if snapshot is not None else [],
     )
+    if parent is not None and checkpoint_updates is not None:
+        assert snapshot is not None
+        restored_updates = sum(
+            len(s.diagnostics) for s in (*snapshot.completed_stages, snapshot.record)
+        )
+        # Retain admitted exports from the committed prefix. Their artifact paths,
+        # original costs and coordinates remain unchanged across process attempts.
+        run.monitoring_checkpoints = [
+            c.model_copy(deep=True)
+            for c in parent.monitoring_checkpoints
+            if c.updates <= restored_updates
+        ]
+        for receipt in run.monitoring_checkpoints:
+            if receipt.artifact is not None and (
+                file_sha256(receipt.artifact["path"]) != receipt.artifact["sha256"]
+                or Path(receipt.artifact["path"]).stat().st_size
+                != receipt.artifact["bytes"]
+            ):
+                raise ValueError("recovery monitoring artifact differs")
     if parent is None:
         store.save_training_run(run)
     else:
@@ -395,13 +433,16 @@ def _execute_regime(
             if active_endpoint
             else time.perf_counter() - start - run.monitoring_export_seconds
         )
-        if (
+        point = coordinates()
+        if checkpoint_updates is not None:
+            if point["updates"] == 0 or point["updates"] % checkpoint_updates:
+                return
+        elif (
             checkpoint_seconds is None
             or elapsed - last_monitor_seconds < checkpoint_seconds
         ):
             return
         last_monitor_seconds = elapsed
-        point = coordinates()
         receipt = MonitoringCheckpoint(
             stage_id=record.id,
             ordinal=len(run.monitoring_checkpoints),
@@ -990,7 +1031,9 @@ def _execute_regime(
                     if imported is not None:
                         agent.load_state_dict(imported.raw.state_dict())
                     if (
-                        stage.opponent is not None or checkpoint_seconds is not None
+                        stage.opponent is not None
+                        or checkpoint_seconds is not None
+                        or (checkpoint_updates is not None and imported is None)
                     ) and snapshot is None:
                         tick = time.perf_counter()
                         target = out / f"{stage.id}-initial-raw.pt"
@@ -1201,7 +1244,12 @@ def _execute_regime(
                     diagnostic["coordinates"] = coordinates()
                     # The completed stage export owns an active-time endpoint;
                     # do not enqueue a duplicate monitoring cohort at that point.
-                    if stage.active_seconds is None or (
+                    if checkpoint_updates is not None:
+                        # The final raw export owns an exact endpoint, including
+                        # one that also lies on the regular cadence grid.
+                        if update_index + 1 < stage.updates:
+                            monitor_checkpoint(trainer.agent)
+                    elif stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds
                         < stage.active_seconds
                     ):

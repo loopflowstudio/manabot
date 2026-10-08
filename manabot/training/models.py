@@ -2,7 +2,14 @@
 
 from typing import Annotated, Literal, TypedDict
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 from manabot.infra.hypers import AgentSpec, MatchHypers, ObservationSpaceHypers
 from manabot.sim.local_update import LocalSearchConfig
@@ -18,6 +25,78 @@ class ArtifactReference(TypedDict):
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+
+class CheckpointCadence(Strict):
+    """Prospective exports use absolute completed iterations, anchored at zero.
+
+    Explicit seconds preserve frozen launch records. Omitting both fields chooses
+    1,000 updates; this is an authoring default, never a throughput estimate.
+    """
+
+    checkpoint_updates: int | None = Field(
+        default=1000, gt=0, strict=True, exclude_if=lambda value: value is None
+    )
+    checkpoint_seconds: float | None = Field(
+        default=None, gt=0, exclude_if=lambda value: value is None
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def select_clock(cls, value: object) -> object:
+        if isinstance(value, dict):
+            if value.get("checkpoint_seconds") is not None:
+                if "checkpoint_updates" not in value:
+                    return {**value, "checkpoint_updates": None}
+            elif value.get("checkpoint_updates") is None:
+                return {**value, "checkpoint_updates": 1000}
+        return value
+
+    @model_validator(mode="after")
+    def one_clock(self) -> "CheckpointCadence":
+        if self.checkpoint_updates is not None and self.checkpoint_seconds is not None:
+            raise ValueError(
+                "choose checkpoint_updates or checkpoint_seconds, not both"
+            )
+        return self
+
+    @model_serializer(mode="wrap")
+    def retain_legacy_field_order(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        # Job/cohort identities hash serialized bytes, including field order.
+        # All existing cadence owners placed seconds directly after monitoring.
+        values: dict[str, object] = handler(self)
+        if self.checkpoint_updates is None and "monitoring" in values:
+            seconds = values.pop("checkpoint_seconds", None)
+            if seconds is not None:
+                ordered: dict[str, object] = {}
+                for key, value in values.items():
+                    ordered[key] = value
+                    if key == "monitoring":
+                        ordered["checkpoint_seconds"] = seconds
+                return ordered
+        return values
+
+    def admit_regime(self, regime: "TrainingRegime") -> None:
+        if self.checkpoint_updates is not None and (
+            len(regime.stages) != 1
+            or (
+                regime.schedule_clock != "iteration_fraction"
+                and any(
+                    not isinstance(stage, TrainSelfPlay)
+                    or stage.learning.gradient != "ataraxos_move"
+                    for stage in regime.stages
+                )
+            )
+            or any(
+                not isinstance(stage, TrainSelfPlay) or stage.active_seconds is not None
+                for stage in regime.stages
+            )
+        ):
+            raise ValueError(
+                "step cadence requires one step-target self-play stage with iteration schedules"
+            )
 
 
 class Schedule(Strict):
@@ -686,6 +765,9 @@ class TrainingRun(Strict):
     monitoring_checkpoints: list[MonitoringCheckpoint] = []
     monitoring_export_seconds: float = 0
     monitoring_checkpoint_seconds: float | None = None
+    monitoring_checkpoint_updates: int | None = Field(
+        default=None, gt=0, strict=True, exclude_if=lambda value: value is None
+    )
     allocation_deadline: float | None = Field(
         default=None, exclude_if=lambda value: value is None
     )

@@ -42,7 +42,7 @@ def declaration() -> Experiment:
                     deal_seeds=(1910101000,), game_seconds=30, bootstrap_replicates=20
                 ),
             ),
-            checkpoint_seconds=3600,
+            checkpoint_updates=1000,
             disk_reserve_bytes=0,
         ),
     )

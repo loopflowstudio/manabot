@@ -95,7 +95,14 @@ def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Chec
         if c.artifact is not None and c.error is None
     ]
     for stage in run.stages:
-        if include_initial and "initial_raw" in stage.artifacts:
+        if (
+            include_initial
+            and "initial_raw" in stage.artifacts
+            and not (
+                run.monitoring_checkpoint_updates is not None
+                and stage.learning_state_origin is not None
+            )
+        ):
             origin = stage.learning_state_origin
             found.append(
                 Checkpoint(
@@ -122,7 +129,14 @@ def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Chec
                 )
             )
         checkpoint = stage_checkpoint(run, stage.id)
-        if checkpoint is not None:
+        if checkpoint is not None and not (
+            run.monitoring_checkpoint_updates is not None
+            and any(
+                c.coordinates.stage_id == stage.id
+                and c.coordinates.updates == checkpoint.coordinates.updates
+                for c in found
+            )
+        ):
             found.append(checkpoint)
     return sorted(found, key=lambda c: c.coordinates.training_seconds or 0)
 
@@ -258,6 +272,8 @@ class CheckpointQueue:
                 "regime": run.regime.model_dump(mode="json"),
                 "identities": run.identities,
             }
+            if run.monitoring_checkpoint_updates is not None:
+                binding["checkpoint_updates"] = run.monitoring_checkpoint_updates
             binding_path = run_dir / "binding.json"
             if binding_path.exists():
                 if json.loads(binding_path.read_text()) != binding:
@@ -291,7 +307,11 @@ class CheckpointQueue:
                 for protocol in protocols:
                     identity = canonical_sha256(
                         {
-                            "run": run.id,
+                            **(
+                                {"run": run.id}
+                                if run.monitoring_checkpoint_updates is None
+                                else {}
+                            ),
                             "checkpoint": checkpoint.model_dump(mode="json"),
                             "protocol": protocol.model_dump(mode="json"),
                         }

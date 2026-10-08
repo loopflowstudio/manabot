@@ -13,6 +13,7 @@ from pydantic import Field, model_validator
 
 from manabot.infra.artifacts import StoredArtifact, split_s3_uri
 from manabot.training.checkpoint_queue import MonitoringBudget
+from manabot.training.models import CheckpointCadence
 
 from .plan import MAX_JOB_SECONDS, Allocation, DeploymentPlan, Frozen, digest
 from .provider import Pod
@@ -30,7 +31,7 @@ JobPhase = Literal[
 ]
 
 
-class Job(Frozen):
+class Job(CheckpointCadence, Frozen):
     """Admitted execution intent: exact plan, identity and absolute deadline."""
 
     job_id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -39,7 +40,6 @@ class Job(Frozen):
     deadline: float
     destination: str = DEFAULT_JOBS
     monitoring: MonitoringBudget | None = None
-    checkpoint_seconds: float = Field(default=60, gt=0)
     publish_seconds: float = Field(default=30, ge=5)
     # Optional original Experiment authoring receipt; not a second recipe owner.
     experiment_json: str | None = None
@@ -51,6 +51,7 @@ class Job(Frozen):
 
     @model_validator(mode="after")
     def valid(self) -> "Job":
+        self.admit_regime(self.plan.regime)
         if self.learning_inputs:
             from manabot.training.models import TrainSelfPlay
 
@@ -83,6 +84,17 @@ class Job(Frozen):
             if self.destination != self.plan.spec.access.destination:
                 raise ValueError("job destination differs from JobSpec access scope")
         if self.monitoring is not None:
+            if (
+                self.checkpoint_updates is not None
+                and self.monitoring.require_initial_admission
+                and any(
+                    getattr(s, "learning_state", None) is not None
+                    for s in self.plan.regime.stages
+                )
+            ):
+                raise ValueError(
+                    "step continuation cannot repeat initialization admission"
+                )
             if self.monitoring.require_initial_admission and (
                 len(self.plan.regime.stages) != 1
                 or self.plan.regime.stages[0].operation != "train_self_play"

@@ -145,7 +145,8 @@ def prepare_job(
     *,
     destination: str | None = None,
     monitoring: MonitoringBudget | None = None,
-    checkpoint_seconds: float = 60,
+    checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     publish_seconds: float = 30,
     experiment_json: str | None = None,
     validate_numerics: bool = False,
@@ -164,6 +165,7 @@ def prepare_job(
         else plan.spec.access.destination,
         monitoring=monitoring,
         checkpoint_seconds=checkpoint_seconds,
+        checkpoint_updates=checkpoint_updates,
         publish_seconds=publish_seconds,
         experiment_json=experiment_json,
         validate_numerics=validate_numerics,
@@ -524,7 +526,8 @@ def prepare_experiment_job(
     *,
     monitoring: MonitoringBudget,
     destination: str | None = None,
-    checkpoint_seconds: float = 60,
+    checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     validate_numerics: bool = False,
 ) -> Job:
     """Compile one resolved Experiment case through the ordinary job lifecycle.
@@ -541,6 +544,7 @@ def prepare_experiment_job(
         else plan.spec.access.destination,
         monitoring=monitoring,
         checkpoint_seconds=checkpoint_seconds,
+        checkpoint_updates=checkpoint_updates,
         experiment_json=json.dumps(case.receipt(), sort_keys=True),
         validate_numerics=validate_numerics,
     )

@@ -442,7 +442,7 @@ experiment = Experiment(
     jobs=(PlannedRun(
         case="step-comparison", seed=197, spec=spec,
         monitoring=MonitoringBudget(seconds=600, attempt_seconds=120),
-        checkpoint_seconds=3600,   # monitoring cadence
+        checkpoint_updates=1000,   # frozen absolute iteration cadence
     ),),
 )
 source = Source.model_validate_json(Path("source.json").read_text())

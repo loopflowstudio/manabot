@@ -31,7 +31,7 @@ def follow_checkpoints(
     project: str = "manabot",
     entity: str | None = None,
 ) -> None:
-    """Evaluate every admitted hourly export once; stopped attempts are never replaced."""
+    """Evaluate every admitted checkpoint export once; stopped attempts are never replaced."""
     out.mkdir(parents=True, exist_ok=True)
     with attempt_lock(out / "evaluator.lock"):
         while True:

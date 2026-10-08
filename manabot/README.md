@@ -46,6 +46,9 @@ does not restart the learner or promise CUDA process recovery.
 Use `Experiment.cohort` and `manabot deploy cohort start` on an always-on host to
 sequence a frozen cohort independently of the submitting terminal or chat.
 Cohort status/cancellation reconnect through the same private control storage.
+New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
+default 1,000); freeze targets and shared intervals before launch. Operational
+lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training-monitoring.md#new-training-and-live-dashboards).
 
 ## World identity
 

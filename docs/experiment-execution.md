@@ -37,7 +37,7 @@ experiment = Experiment(
         wall_seconds=900,
         process_seconds=900,
         monitoring=MonitoringBudget(seconds=360, attempt_seconds=180),
-        checkpoint_seconds=3600,
+        checkpoint_updates=1000,
     ),
 )
 # Reading configured resources does not provision hardware or authorize science.

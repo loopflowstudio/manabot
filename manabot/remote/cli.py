@@ -56,7 +56,8 @@ def deploy_command(
     seed: int = 197,
     job_id: str | None = None,
     monitoring: Path | None = None,
-    checkpoint_seconds: float = 60,
+    checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     destination: str | None = None,
     validate_numerics: bool = False,
 ) -> None:
@@ -68,7 +69,8 @@ def deploy_command(
         if (
             submitting
             or seed != 197
-            or checkpoint_seconds != 60
+            or checkpoint_seconds is not None
+            or checkpoint_updates is not None
             or destination is not None
             or validate_numerics
         ):
@@ -84,6 +86,7 @@ def deploy_command(
         job_id,
         monitoring,
         checkpoint_seconds,
+        checkpoint_updates,
         destination,
         validate_numerics,
     )
@@ -162,7 +165,8 @@ def submit_command(
         ..., help="Stable ID; retry this exact ID after interruption"
     ),
     monitoring: Path | None = None,
-    checkpoint_seconds: float = 60,
+    checkpoint_seconds: float | None = None,
+    checkpoint_updates: int | None = None,
     destination: str | None = None,
     validate_numerics: bool = False,
 ) -> None:
@@ -172,6 +176,7 @@ def submit_command(
         job_id,
         monitoring,
         checkpoint_seconds,
+        checkpoint_updates,
         destination,
         validate_numerics,
     )
@@ -181,7 +186,8 @@ def _submit(
     plan: DeploymentPlan,
     job_id: str,
     monitoring: Path | None,
-    checkpoint_seconds: float,
+    checkpoint_seconds: float | None,
+    checkpoint_updates: int | None,
     destination: str | None,
     validate_numerics: bool = False,
 ) -> None:
@@ -192,6 +198,7 @@ def _submit(
         job_id,
         destination=destination,
         checkpoint_seconds=checkpoint_seconds,
+        checkpoint_updates=checkpoint_updates,
         validate_numerics=validate_numerics,
         monitoring=MonitoringBudget.model_validate_json(monitoring.read_text())
         if monitoring

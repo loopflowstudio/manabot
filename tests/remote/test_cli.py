@@ -61,11 +61,13 @@ def test_submit_uses_same_plan_and_job(
         value: DeploymentPlan,
         job_id: str,
         monitoring: Path | None,
-        checkpoint_seconds: float,
+        checkpoint_seconds: float | None,
+        checkpoint_updates: int | None,
         destination: str | None,
         validate_numerics: bool,
     ) -> None:
-        assert monitoring is None and checkpoint_seconds == 60 and destination is None
+        assert monitoring is None and checkpoint_seconds is None and destination is None
+        assert checkpoint_updates is None  # Job admission chooses the step default.
         assert validate_numerics == validation
         called.append((value, job_id))
 
