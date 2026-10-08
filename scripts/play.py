@@ -98,14 +98,54 @@ def run_text(
     *,
     cwd: Path = ROOT,
     runner: Runner = subprocess.run,
+    phase: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    return runner(
-        argv,
-        cwd=cwd,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    """Capture probes; stream installation/build output before a cold-start timeout."""
+    started = time.monotonic()
+    returncode: int | None = None
+    if phase is not None:
+        _phase_record(phase, "started")
+    try:
+        result = runner(
+            argv,
+            cwd=cwd,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE if phase is None else None,
+            stderr=subprocess.PIPE if phase is None else None,
+        )
+        returncode = result.returncode
+        return result
+    finally:
+        if phase is not None:
+            _phase_record(
+                phase,
+                "completed" if returncode == 0 else "failed",
+                elapsed_ms=round((time.monotonic() - started) * 1000, 1),
+                returncode=returncode,
+            )
+
+
+def _phase_record(
+    phase: str,
+    event: str,
+    *,
+    elapsed_ms: float | None = None,
+    returncode: int | None = None,
+) -> None:
+    print(
+        "ETUDE_PLAY_PHASE "
+        + json.dumps(
+            {
+                "phase": phase,
+                "event": event,
+                "at_unix_ms": time.time_ns() // 1_000_000,
+                "elapsed_ms": elapsed_ms,
+                "returncode": returncode,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
     )
 
 
@@ -205,23 +245,29 @@ def ensure_frontend(npm: str, *, runner: Runner = subprocess.run) -> None:
         [npm, "ci", "--no-audit", "--no-fund"],
         cwd=FRONTEND,
         runner=runner,
+        phase="frontend_install",
     )
     if result.returncode != 0:
         raise PlayError(
             "frontend.install",
             "npm ci failed",
-            (result.stderr or result.stdout).strip(),
+            (
+                result.stderr or result.stdout or "see preceding installation output"
+            ).strip(),
         )
     result = run_text(
         [npm, "exec", "--", "svelte-kit", "sync"],
         cwd=FRONTEND,
         runner=runner,
+        phase="frontend_sync",
     )
     if result.returncode != 0:
         raise PlayError(
             "frontend.install",
             "the installed SvelteKit application could not be prepared",
-            (result.stderr or result.stdout).strip(),
+            (
+                result.stderr or result.stdout or "see preceding installation output"
+            ).strip(),
         )
     try:
         FRONTEND_INSTALL_MARKER.write_text(lock_sha256() + "\n", encoding="utf-8")
@@ -272,12 +318,15 @@ def ensure_native(*, runner: Runner = subprocess.run) -> dict[str, str]:
             "python",
         ],
         runner=runner,
+        phase="native_build",
     )
     if result.returncode != 0:
         raise PlayError(
             "native.build",
             "the CPython 3.12 managym extension build failed",
-            (result.stderr or result.stdout).strip(),
+            (
+                result.stderr or result.stdout or "see preceding native build output"
+            ).strip(),
         )
     imported = native_import(runner=runner)
     if imported is None:
@@ -520,6 +569,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def run_launcher(args: argparse.Namespace) -> int:
     started_at = time.monotonic()
+    # The verifier's external clock already includes uv's locked dependency sync.
+    # This timestamp marks that boundary without resetting the playable-time gate.
+    _phase_record("python_runtime", "ready")
     python_version = validate_python_version()
 
     npm: str | None = None

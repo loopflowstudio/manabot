@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import socket
@@ -13,6 +14,27 @@ from types import SimpleNamespace
 import pytest
 
 from scripts import play
+
+
+@pytest.mark.parametrize("returncode", [0, 1])
+def test_build_output_and_phase_start_survive_an_unfinished_command(
+    capsys: pytest.CaptureFixture[str], returncode: int
+) -> None:
+    def runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        started = json.loads(capsys.readouterr().out.removeprefix("ETUDE_PLAY_PHASE "))
+        assert started["phase"] == "native_build"
+        assert started["event"] == "started"
+        assert started["at_unix_ms"] > 0
+        assert started["elapsed_ms"] is None
+        assert kwargs["stdout"] is None and kwargs["stderr"] is None
+        return subprocess.CompletedProcess(argv, returncode)
+
+    result = play.run_text(["cargo", "build"], runner=runner, phase="native_build")
+    assert result.returncode == returncode
+    finished = json.loads(capsys.readouterr().out.removeprefix("ETUDE_PLAY_PHASE "))
+    assert finished["event"] == ("completed" if returncode == 0 else "failed")
+    assert finished["elapsed_ms"] >= 0
+    assert finished["returncode"] == returncode
 
 
 def test_gui_wire_enum_mirrors_match_the_native_engine():
@@ -219,7 +241,9 @@ def test_native_import_reports_the_extension_abi_and_path():
 def test_locked_play_runtime_covers_and_imports_live_advice_dependencies():
     project = tomllib.loads((play.ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     group = project["dependency-groups"]["play-runtime"]
-    names = {re.split(r"[<>=!~; ]", requirement, maxsplit=1)[0] for requirement in group}
+    names = {
+        re.split(r"[<>=!~; ]", requirement, maxsplit=1)[0] for requirement in group
+    }
     assert {"numpy", "torch"} <= names
 
     uv = project["tool"]["uv"]
@@ -284,10 +308,7 @@ def test_locked_play_closure_is_cpu_only_and_training_retains_cuda():
     assert any(
         line.startswith("torch==")
         and "+cpu" in line
-        and (
-            "sys_platform == 'linux'" in line
-            or "sys_platform != 'darwin'" in line
-        )
+        and ("sys_platform == 'linux'" in line or "sys_platform != 'darwin'" in line)
         for line in play_export.splitlines()
     )
 
@@ -435,7 +456,9 @@ def test_backend_only_startup_does_not_prepare_frontend(monkeypatch):
     )
 
 
-def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(monkeypatch):
+def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(
+    monkeypatch,
+):
     backend = FakeProcess()
     processes = [("backend", backend)]
     cleaned = []
@@ -452,7 +475,9 @@ def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(mon
     monkeypatch.setattr(play, "validate_pack", lambda: SimpleNamespace(reference={}))
     monkeypatch.setattr(play, "start_processes", prepare)
     monkeypatch.setattr(play, "wait_for_readiness", unexpected_readiness)
-    monkeypatch.setattr(play, "terminate_processes", lambda items: cleaned.extend(items))
+    monkeypatch.setattr(
+        play, "terminate_processes", lambda items: cleaned.extend(items)
+    )
 
     assert play.run_launcher(play.parse_args(["--no-frontend"])) == 0
     assert cleaned == processes
@@ -478,7 +503,9 @@ def test_pack_validation_waits_for_native_preparation_and_failure_reaps_services
 
     monkeypatch.setattr(play, "start_processes", prepare)
     monkeypatch.setattr(play, "validate_pack", validate_pack)
-    monkeypatch.setattr(play, "terminate_processes", lambda items: cleaned.extend(items))
+    monkeypatch.setattr(
+        play, "terminate_processes", lambda items: cleaned.extend(items)
+    )
 
     with pytest.raises(play.PlayError) as raised:
         play.run_launcher(play.parse_args(["--no-frontend"]))
@@ -561,7 +588,7 @@ def test_wrapper_no_frontend_does_not_require_node_or_npm(tmp_path):
         if command == "uv":
             body = (
                 "#!/bin/sh\n"
-                "if [ \"$1\" = export ]; then\n"
+                'if [ "$1" = export ]; then\n'
                 "  echo \"torch==2.10.0+cpu ; sys_platform != 'darwin'\"\n"
                 "fi\n"
                 "exit 0\n"

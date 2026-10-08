@@ -80,6 +80,29 @@ browser waits for `ETUDE_PLAY_READY` before navigating. This overlaps proof
 setup with installation without moving the external start time or relaxing
 the ninety-second playable-state assertion.
 
+### Startup phase evidence
+
+The launcher emits timestamped `ETUDE_PLAY_PHASE` records when the locked Python
+runtime is ready and around frontend installation/sync and the native build.
+Installation and compiler output streams directly to the launcher log, including
+while a subprocess is still running. A missing completion record therefore leaves
+its start timestamp and live output available after a timeout. Completed phases
+report their duration and exit code. These are diagnostics; the external playable
+clock and its 90,000 ms assertion remain unchanged.
+
+On 2026-10-08, [main run 37798764116](https://github.com/loopflowstudio/etude/actions/runs/37798764116)
+at `69594494` timed out after Vite was ready and native compilation had started.
+Its launcher buffered compiler output until process exit, so the retained log
+cannot distinguish slow compilation from an intervening download or tool failure.
+The same launcher/native source passed PR268's clean proof in 36,846 ms. That
+difference establishes timing variation, not a confirmed cause or permission to
+raise the accepted limit. Phase records close the diagnostic gap without changing
+the installation, release profile, readiness checks, or offline-play assertions.
+The [local clean proof](../experiments/data/etu126/clean-startup-20261008.json)
+with phase logging reached playable state in 26,151 ms on an M4 Max, including
+15,865.3 ms for the native build, and passed offline reload plus another action.
+This verifies the modified path, not the failed Linux runner's cause.
+
 ## Offline reload boundary
 
 Package registry access is allowed while the first command installs locked
