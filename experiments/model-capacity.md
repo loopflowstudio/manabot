@@ -196,6 +196,70 @@ Repeat a promising or important-negative learning idea at the next capacity in
 a separately frozen follow-up, leaving its architecture-feature owner unchanged.
 No such follow-up or empirical default selection has run in this software pass.
 
+## Step-target recovery preparation — 2026-10-08
+
+Jack Heart raised the overall capacity-experiment ceiling to **$100**, including
+prior attempts, storage, validation and new allocations, and authorized autonomous
+step-target protocol preparation. This supersedes the historical $30 ceiling.
+ETU-126 remains the single launch owner. Frozen source `68e0fbe9`, its failed
+attempt, and Mini training/ordering remain unchanged. New numerical semantics
+require a new source and attempt; no CUDA process continuation is available.
+
+ETU-103's read-only contribution prepared seven ordinary Experiment/JobSpec
+declarations in ETU-126's retained `.runs/etu126-recovery/proposal/`, including
+`protocol-v2.json`, `declaration.py`, source/input hashes and copied frozen
+controls. All seven compile without training or provisioning; exact control
+comparison permits only declared endpoint, identity, clock and allocation changes.
+They remain **proposals, not admitted jobs**. Final source/protocol and timing-based
+targets must be frozen before any scientific scoring; compiled proposal bytes
+must not be submitted as final plans.
+
+| Declaration | Proposed target | Allocation | Per-job cap |
+| --- | ---: | ---: | ---: |
+| Large validation, seed 10350 | 512 iterations | 2.5 rental hours | $1.75 |
+| Small, each of three paired seeds | 26,000 iterations | 9.5 rental hours | $4.95 |
+| Large, each of three paired seeds | 9,000 iterations | 9.5 rental hours | $4.95 |
+
+An iteration includes collection and any empty-filter optimizer skip. Each retains
+64 streams × 8 transitions; counts are not optimizer exposures. The small target
+projects 4.13 active hours from 17,283 completed updates / 9,884.38 seconds. The
+large target projects 4.23 hours from three retained L4 updates, **two of which
+skipped optimization**; charging the observed optimization time on every update
+instead projects 5.76 hours. These are weak timing projections, not promises of
+four hours or equivalent realized cost. Preserve iteration-based Ataraxos rates
+and measured exposures; do not rescale schedules to the new targets.
+
+The 512-iteration large pilot must pass the named CUDA numerical gate, ordinary
+raw/EMA reload, initial and final development cohorts (100 replayed games each),
+source/native identity, artifact publication and confirmed deletion. Its scores
+cannot choose targets. Inspect timing, memory and optimizer exposure before
+prospectively finalizing the six-run targets; do not infer sustained performance
+from mostly skipped updates. A failed pilot retains its costs and stops admission.
+
+The six scientific jobs keep seeds 10351–10353, alternating arm order, original
+monitoring/final/random deal reservations and both deck/seat assignments. Stage
+watchdogs are 7.5 hours; final cohorts and persistence have separate lease reserves.
+Hourly exports now use elapsed run time less export time, including initial waits;
+they are not historical active-hour checkpoints. Report both clocks, samples,
+exposures and costs. Compare paired seeds and complete deal blocks, use observed
+common cost support without extrapolation, and suppress complete-method results
+when any intended run or required cohort is missing.
+
+The provisional inclusive reservation is **$46.432386989310**: $4.282386989310
+retained estimated costs, $1.75 validation, $29.70 scientific job caps, $0.70
+extra guardian reserve, $3 durable storage, $2 controller/reporting and $5 for
+unreconciled validation costs. The original proof's $3 reservation is replaced by
+its actual $0.115845 charge. Conservative reserves are not additional invoices;
+charge every actual attempt once. The remainder is not automatic retry authority.
+
+Read-only live admission on 2026-10-08 observed empty RunPod inventory and L4/A40
+quotes of $0.49/hour. These expire as admission evidence and must be queried again.
+AWS control-plane SSO was expired; the restricted issuer authenticated but denied
+control reads, as intended. Mini was online without ready controller credentials.
+No credential was broadened, service installed, or rental started. Renewable
+controller authority, final source, fresh prices and successful CUDA validation
+remain launch gates. The earlier protocol below remains frozen historical intent.
+
 ## Authorized CUDA comparison — 2026-10-06
 
 Jack Heart superseded the twelve-hour total comparison on 2026-10-06 with

@@ -58,6 +58,7 @@ def deploy_command(
     monitoring: Path | None = None,
     checkpoint_seconds: float = 60,
     destination: str | None = None,
+    validate_numerics: bool = False,
 ) -> None:
     """Submit directly, or select a job lifecycle command below."""
     submitting = any(
@@ -69,6 +70,7 @@ def deploy_command(
             or seed != 197
             or checkpoint_seconds != 60
             or destination is not None
+            or validate_numerics
         ):
             raise typer.BadParameter("put options after the selected lifecycle command")
         return
@@ -83,6 +85,7 @@ def deploy_command(
         monitoring,
         checkpoint_seconds,
         destination,
+        validate_numerics,
     )
 
 
@@ -161,6 +164,7 @@ def submit_command(
     monitoring: Path | None = None,
     checkpoint_seconds: float = 60,
     destination: str | None = None,
+    validate_numerics: bool = False,
 ) -> None:
     """Submit a job; returns only after remote acceptance (or an explicit uncertainty)."""
     _submit(
@@ -169,6 +173,7 @@ def submit_command(
         monitoring,
         checkpoint_seconds,
         destination,
+        validate_numerics,
     )
 
 
@@ -178,6 +183,7 @@ def _submit(
     monitoring: Path | None,
     checkpoint_seconds: float,
     destination: str | None,
+    validate_numerics: bool = False,
 ) -> None:
     if destination is None:
         destination = plan.spec.access.destination
@@ -186,6 +192,7 @@ def _submit(
         job_id,
         destination=destination,
         checkpoint_seconds=checkpoint_seconds,
+        validate_numerics=validate_numerics,
         monitoring=MonitoringBudget.model_validate_json(monitoring.read_text())
         if monitoring
         else None,

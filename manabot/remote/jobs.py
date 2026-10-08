@@ -43,6 +43,8 @@ class Job(Frozen):
     publish_seconds: float = Field(default=30, ge=5)
     # Optional original Experiment authoring receipt; not a second recipe owner.
     experiment_json: str | None = None
+    # Omit the absent gate so historical job identities remain byte-for-byte stable.
+    validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def valid(self) -> "Job":

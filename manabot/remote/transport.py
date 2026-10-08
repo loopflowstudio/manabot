@@ -190,6 +190,8 @@ def job_startup(spec: "Job") -> str:
     setup = bootstrap(spec.plan).replace(
         "--python 3.12 --extra play", "--python 3.12 --extra play --extra artifacts"
     )
+    if spec.validate_numerics:
+        setup = setup.replace("--extra artifacts", "--extra artifacts --extra dev")
     return f"""set -eu
 umask 077
 export MANABOT_DEADLINE={int(spec.deadline)}

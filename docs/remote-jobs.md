@@ -113,7 +113,7 @@ MANABOT_TEST_LAUNCHD=1 uv run --extra dev --extra artifacts pytest \
 This proof rents nothing and establishes no live cloud cohort, systemd host
 acceptance, CUDA recovery or scientific result. ETU-103's failed frozen attempt
 remains unchanged; its recovery additionally requires the numerical-health fix,
-a versioned attempt, live-price admission and all earlier charges within $30.
+a versioned attempt, live-price admission and all earlier charges within $100.
 
 ## Reports while clients are offline
 
@@ -159,6 +159,36 @@ idempotent publication, interrupted allowance accounting and the child's deadlin
 No live W&B service or cloud cohort was exercised by those checks.
 
 ## Submit, disconnect and reconnect
+
+### Bounded CUDA numerical admission
+
+Add `--validate-numerics` to `deploy submit` (or direct `deploy --plan ...`) for
+an explicitly allocated validation job. The flag is immutable job intent; jobs
+without it retain their historical identity. Bootstrap installs the development
+extra, then the supervised process runs the frozen numerical contract tests with
+`MANABOT_NUMERICS_DEVICE=cuda` and the CUDA optimizer-overhead probe before
+starting the declared TrainingRegime. A missing GPU or failed test blocks learning;
+there is no CPU fallback or automatic replacement.
+
+```bash
+uv run --extra artifacts manabot deploy submit --plan validation-plan.json \
+  --job-id capacity-validation-v2 --validate-numerics
+```
+
+The gate has a five-minute ceiling within the existing work deadline, plus one
+second for timeout receipt cleanup. Its private process group remains owned by
+the job supervisor and guardian. Cancellation stops validation and descendants.
+`numerical-validation.json` and `numerical-validation.log` enter the ordinary
+artifact snapshots, including failure before TrainingRun creation. The receipt
+binds exact source/native bytes, Torch/CUDA/device identity, exit codes and elapsed
+time. An interrupted receipt stays incomplete. The small declared training and
+replayed evaluation that follow establish lifecycle feasibility separately.
+
+This flag grants no allocation or CUDA recovery. Include validation, bootstrap,
+evaluation, artifact delivery and deletion in the admitted JobSpec and shared
+cohort ceiling. ETU-103's current overall ceiling is **$100**, superseding the
+earlier $30 ceiling and including all historical attempts. Original proof-era
+budgets below remain historical records.
 
 Use the [existing compiler](remote-training.md#compile-and-deploy) to create a
 source-pinned deployment plan. The exact commit must be publicly fetchable.

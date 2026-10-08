@@ -28,7 +28,7 @@ from .jobs import (
     JobStatus,
     Resource,
 )
-from .plan import DeploymentPlan
+from .plan import DeploymentPlan, compile_plan
 from .provider import ProviderError, RunPod
 from .transport import job_startup, startup
 
@@ -148,6 +148,7 @@ def prepare_job(
     checkpoint_seconds: float = 60,
     publish_seconds: float = 30,
     experiment_json: str | None = None,
+    validate_numerics: bool = False,
     store: JobStore | None = None,
 ) -> Job:
     """Persist intent before renting; repeated IDs retain the first absolute deadline."""
@@ -165,6 +166,7 @@ def prepare_job(
         checkpoint_seconds=checkpoint_seconds,
         publish_seconds=publish_seconds,
         experiment_json=experiment_json,
+        validate_numerics=validate_numerics,
     )
     return persist_job(spec, store=store, retain_existing_deadline=True)
 
@@ -522,14 +524,13 @@ def prepare_experiment_job(
     monitoring: MonitoringBudget,
     destination: str | None = None,
     checkpoint_seconds: float = 60,
+    validate_numerics: bool = False,
 ) -> Job:
     """Compile one resolved Experiment case through the ordinary job lifecycle.
 
     The caller owns case/seed/cohort selection and cumulative campaign allocation;
     this API never starts a hidden experiment scheduler or revises the declaration.
     """
-    from .plan import compile_plan
-
     plan = compile_plan(case.configuration, spec, source, seed)
     return prepare_job(
         plan,
@@ -540,6 +541,7 @@ def prepare_experiment_job(
         monitoring=monitoring,
         checkpoint_seconds=checkpoint_seconds,
         experiment_json=json.dumps(case.receipt(), sort_keys=True),
+        validate_numerics=validate_numerics,
     )
 
 

@@ -43,8 +43,9 @@ def test_deploy_help(command: str) -> None:
 
 
 @pytest.mark.parametrize("explicit", [False, True])
+@pytest.mark.parametrize("validation", [False, True])
 def test_submit_uses_same_plan_and_job(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, explicit: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, explicit: bool, validation: bool
 ) -> None:
     plan = compile_plan(
         (ROOT / "ops/examples/step-target.json").read_text(),
@@ -62,8 +63,10 @@ def test_submit_uses_same_plan_and_job(
         monitoring: Path | None,
         checkpoint_seconds: float,
         destination: str | None,
+        validate_numerics: bool,
     ) -> None:
         assert monitoring is None and checkpoint_seconds == 60 and destination is None
+        assert validate_numerics == validation
         called.append((value, job_id))
 
     monkeypatch.setattr(cli, "_submit", submit)
@@ -76,6 +79,7 @@ def test_submit_uses_same_plan_and_job(
             str(path),
             "--job-id",
             "same-job",
+            *(["--validate-numerics"] if validation else []),
         ],
     )
     assert result.exit_code == 0, result.output

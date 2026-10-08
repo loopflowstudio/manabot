@@ -88,6 +88,8 @@ def snapshot_evidence(root: Path, snapshot: Path) -> TrainingRun | None:
         "supervisor-error.json",
         "terminal-progress-error.json",
         "supervisor.log",
+        "numerical-validation.json",
+        "numerical-validation.log",
     ):
         path = root / name
         if path.exists():

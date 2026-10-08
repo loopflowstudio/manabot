@@ -22,6 +22,7 @@ from manabot.verify.store import VerifyStore
 from .job_store import JobStore, S3JobStore, StoredValue, cancellation_requested
 from .jobs import Job, JobRecord, Resource
 from .snapshots import publish_snapshot
+from .validation import validation_command
 
 
 class SnapshotPublisher(Protocol):
@@ -130,34 +131,32 @@ def supervise(
         else:
             if spec.monitoring is not None:
                 queue = CheckpointQueue(root / "monitoring", spec.monitoring)
+            training_command = command or [
+                "uv",
+                "run",
+                "--no-sync",
+                "manabot",
+                "train",
+                "--regime",
+                str(recipe),
+                "--seed",
+                str(spec.plan.seed),
+                "--out",
+                str(root / "run"),
+                "--checkpoint-seconds",
+                str(spec.checkpoint_seconds),
+                *(
+                    ["--allocation", str(allocation_path)]
+                    if spec.allocation is not None
+                    else []
+                ),
+                *(["--initial-admission", str(admission)] if require_initial else []),
+            ]
+            if spec.validate_numerics:
+                training_command = validation_command(spec, root, training_command)
             with (root / "training.log").open("ab") as log:
                 learner = subprocess.Popen(
-                    command
-                    or [
-                        "uv",
-                        "run",
-                        "--no-sync",
-                        "manabot",
-                        "train",
-                        "--regime",
-                        str(recipe),
-                        "--seed",
-                        str(spec.plan.seed),
-                        "--out",
-                        str(root / "run"),
-                        "--checkpoint-seconds",
-                        str(spec.checkpoint_seconds),
-                        *(
-                            ["--allocation", str(allocation_path)]
-                            if spec.allocation is not None
-                            else []
-                        ),
-                        *(
-                            ["--initial-admission", str(admission)]
-                            if require_initial
-                            else []
-                        ),
-                    ],
+                    training_command,
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
@@ -249,7 +248,11 @@ def supervise(
                         record = record.model_copy(
                             update={
                                 "phase": "failed",
-                                "error": f"learner exited {learner.returncode}",
+                                "error": (
+                                    f"job process exited {learner.returncode}"
+                                    if spec.validate_numerics
+                                    else f"learner exited {learner.returncode}"
+                                ),
                             }
                         )
                         break

@@ -22,32 +22,37 @@ owns semantics, overhead and CUDA admission. CPU proofs
 and positive toy learning establish no CUDA validation, MTG strength or historical
 causal attribution. ETU-103/Mini source and artifacts remain untouched.
 
-## Durable cohort owner (ETU-126, 2026-10-07)
+## Durable cohort owner (ETU-126, 2026-10-08)
 
-Jack Heart authorized autonomous MLOps delivery within the inclusive $30 GPU cap.
-ETU-103's controller died at agent-turn exit, independently of its later learner
-failure. Verified count 17,283 exceeds stale remote 16,694; active coordinate
-9,884.38 seconds differs from inflated failure accounting. ETU-127 owns numerics,
-failure snapshots and accounting; frozen source/evidence remain unchanged.
+Jack Heart authorized autonomous MLOps delivery, then raised the overall capacity
+ceiling from $30 to $100 including prior costs, storage, validation and new attempts.
+Jack Heart also authorized step-target preparation; ETU-126 is the single launch
+owner. Preserve per-job limits, failed evidence and Mini training/ordering.
 
-Experiment.jobs now freezes into manabot deploy cohorts. S3 owns intent, attempts,
-cancellation and deadlines; launchd/systemd owns the process on a selected online
-host. Host binding/flock exclude competing owners; no automatic host takeover.
-Reconnect preserves create claims and inclusive budget reservations. Failed,
-paused or uncertain attempts never spawn replacements. Final manifest/cleanup
-admit later jobs; downloads/reporting stay outside scheduling. Terminal progress
-refreshes after stopping writers.
+ETU-103's controller died at agent-turn exit independently of its learner failure.
+Verified count 17,283 and active coordinate 9,884.38 seconds remain frozen;
+ETU-127 owns numerical semantics and failure accounting. PR258/259 supply the owner and numerical repair; CUDA acceptance remains open.
 
-Offline faults and native launchd SIGKILL/restart completed two fake jobs without
-duplicates. No live cloud cohort, Linux host acceptance, CUDA continuation, rental
-or Mini mutation follows. [Remote contracts](../../docs/remote-jobs.md#cohorts-need-an-independent-owner)
-own commands/limits. A separate bounded companion now retains Dashboard exports,
-refreshes reports and optionally projects W&B. Telemetry faults never block scheduling;
-live service acceptance and lost-host recovery remain open. ETU-103 restart needs both fixes landed, an online credentialed host, frozen
-new attempt/protocol and live prices; all earlier charges, including the failed
-$3.63056534815828 estimate, stay inside $30. Retain four active hours unless
-explicitly superseded; one repaired run is not six-run acceptance. Preserve Mini order.
+Experiment.jobs freezes into deploy cohorts. S3 owns intent, attempts, cancellation
+and deadlines; launchd/systemd owns the process on an online host. Host binding
+and flock exclude competing owners. Reconnect retains create claims and inclusive
+reservations; failed, paused or uncertain attempts never spawn replacements.
+Final manifests/cleanup admit later jobs. Separate bounded reporting retains local
+Dashboard evidence before optional W&B; interrupted fetches resume verified bytes.
 
+Offline faults and native launchd restart completed two fake jobs without duplicates.
+The [remote contract](../../docs/remote-jobs.md) owns commands and limits. A named
+CUDA validation gate precedes learning within the same job, preserving logs and
+receipts through ordinary snapshots. CPU fixtures are not live CUDA acceptance.
+
+Retained costs are $4.282386989310 estimated; replace the old proof reservation
+with actual proof charges rather than double-counting. Live 2026-10-08 quotes were
+$0.49/hour for L4/A40 with empty inventory. Control-plane AWS SSO was expired;
+the restricted issuer authenticated but correctly denied control reads. Mini was
+online but lacked controller credentials. No rental or credential mutation followed.
+Versioned targets, final source, validated CUDA, renewable controller authority
+and fresh price/cost admission precede restart. No CUDA exact resume, automatic
+host takeover or six-run result follows from one repaired run.
 
 ## Step targets and machine allocations (ETU-124, 2026-10-07)
 
@@ -1161,13 +1166,9 @@ checkout's stale native extension; one notebook-dependent check remains skipped.
 No scientific campaign or paid compute ran. Software acceptance does not establish
 training, calibration, demo admission or chapter outcomes.
 
-## Capacity comparison software preparation (ETU-103, 2026-10-05)
+## Historical capacity preparation
 
-Historical software scope and the unallocated WDL proposal remain at `0145f77f`
-and [the protocol](../../experiments/model-capacity.md). Later authorized mini/CUDA
-cohorts supersede its allocation status, preserving distinct recipes and evidence.
-Synthetic reporting selected no default.
-
+ETU-103 software scope, WDL proposal and evidence limits remain at `0145f77f`.
 
 ## Saved sampler uncertainty software (ETU-110, 2026-10-05)
 
