@@ -1015,6 +1015,36 @@ def _execute_regime(
                         seeds[name] += imported.origin.iteration
                     run.seed_streams = dict(seeds)
                     persist()
+                pretrained = None
+                if stage.pretrained is not None and snapshot is None:
+                    # A recovered attempt restores its own learner snapshot; the
+                    # producer was admitted, and its copies retained, only once.
+                    record.inputs.update(
+                        {
+                            "pretrained/source_run": dict(stage.pretrained.source_run),
+                            "pretrained/checkpoint": dict(stage.pretrained.checkpoint),
+                        }
+                    )
+                    persist()
+                    tick = time.perf_counter()
+                    admitted = admit_policy(
+                        stage.pretrained, regime, out, name=f"{stage.id}-pretrained"
+                    )
+                    record.artifacts["pretrained"] = admitted.checkpoint
+                    record.artifacts["pretrained_run"] = admitted.source_run
+                    record.producer_cost = admitted.producer_cost
+                    # Fork RNG so loading never shifts this run's own streams.
+                    with torch.random.fork_rng(devices=[]):
+                        pretrained, _ = load_checkpoint_agent(
+                            admitted.checkpoint["path"]
+                        )
+                    if any(
+                        not torch.isfinite(value).all()
+                        for value in pretrained.state_dict().values()
+                    ):
+                        raise ValueError("pretrained policy contains nonfinite tensors")
+                    record.export_seconds += time.perf_counter() - tick
+                    persist()
                 opponent_agent = None
                 if stage.opponent is not None:
                     # Validate before every stage, even when retaining the live
@@ -1049,6 +1079,11 @@ def _execute_regime(
                     agent = Agent(space, regime.agent).to(stage.execution.device)
                     if imported is not None:
                         agent.load_state_dict(imported.raw.state_dict())
+                    if pretrained is not None:
+                        # Only weights are inherited: Adam, the EMA average and
+                        # the schedule iteration below all start fresh.
+                        agent.load_state_dict(pretrained.state_dict())
+                        pretrained = None
                     if (
                         stage.opponent is not None
                         or checkpoint_seconds is not None

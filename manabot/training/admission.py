@@ -1,9 +1,10 @@
 """Published-policy admission into the existing TrainingRun artifact graph.
 
-ImportPolicy pins a producer's exported TrainingRun and checkpoint. Admission
-copies and hashes both before loading, then uses ordinary model/world validation.
-The retained producer receipt owns provenance and sunk costs; StageRecord timings
-measure only fresh admission. No optimizer or live collector state is imported.
+ImportPolicy and a self-play stage's PretrainedPolicy both pin a producer's
+exported TrainingRun and checkpoint. Admission copies and hashes both before
+loading, then uses ordinary model/world validation. The retained producer
+receipt owns provenance and sunk costs; StageRecord timings measure only fresh
+admission. No optimizer or live collector state is imported.
 """
 
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ from manabot.sim.flat_mc import load_checkpoint_agent
 from .models import (
     ArtifactReference,
     ImportPolicy,
+    PretrainedPolicy,
     ProducerCost,
     TrainCompound,
     TrainingRegime,
@@ -53,7 +55,11 @@ def copy_verified_artifact(
 
 
 def admit_policy(
-    stage: ImportPolicy, regime: TrainingRegime, out: Path
+    stage: ImportPolicy | PretrainedPolicy,
+    regime: TrainingRegime,
+    out: Path,
+    *,
+    name: str | None = None,
 ) -> AdmittedPolicy:
     """Validate a completed producer checkpoint, retaining its unmodified export.
 
@@ -61,10 +67,18 @@ def admit_policy(
     Incomplete runs can supply a completed stage; missing source identity or cost
     cannot be replaced by a zero-cost synthetic producer. Legacy checkpoints
     without TrainingRun provenance are deliberately unsupported.
+
+    `name` prefixes the retained copies and is required for a PretrainedPolicy,
+    which has no stage ID of its own. Pretrained self-play weights must come from
+    self-play, and their producer may itself be a continuation or have started
+    from pretrained weights: every ancestor's cost is carried into the result.
     """
-    receipt = copy_verified_artifact(
-        stage.source_run, out / f"{stage.id}-source-run.json"
-    )
+    pretrained = isinstance(stage, PretrainedPolicy)
+    if name is None:
+        if pretrained:
+            raise ValueError("pretrained admission requires a name")
+        name = stage.id
+    receipt = copy_verified_artifact(stage.source_run, out / f"{name}-source-run.json")
     serialized = json.loads(Path(receipt["path"]).read_bytes())
     if not isinstance(serialized, dict) or serialized.get(
         "regime_digest"
@@ -72,8 +86,8 @@ def admit_policy(
         raise ValueError("published producer regime digest mismatch")
     # Hash original evidence before current defaults normalize older recipes.
     source = TrainingRun.model_validate(serialized)
-    if any(isinstance(s, ImportPolicy) for s in source.regime.stages) or any(
-        s.producer_cost is not None for s in source.stages
+    if any(isinstance(s, ImportPolicy) for s in source.regime.stages) or (
+        not pretrained and any(s.producer_cost is not None for s in source.stages)
     ):
         raise ValueError("nested published producer costs are unsupported")
     if not source.identities.get("source_commit") or not source.identities.get(
@@ -90,8 +104,16 @@ def admit_policy(
         or record.status != "completed"
     ):
         raise ValueError("published policy requires a completed producer policy stage")
+    if pretrained and not isinstance(definition, TrainSelfPlay):
+        raise ValueError("pretrained self-play weights require a self-play producer")
     if record.cumulative_seconds is None:
         raise ValueError("published producer cost is unavailable")
+    # A producer segment's own clock excludes the state it started from.
+    sunk_seconds = record.cumulative_seconds
+    if record.learning_state_origin is not None:
+        sunk_seconds += record.learning_state_origin.cumulative_seconds
+    if record.producer_cost is not None:
+        sunk_seconds += record.producer_cost.cumulative_seconds
     published = record.artifacts.get(stage.weights)
     if published is None or any(
         published.get(key) != stage.checkpoint[key] for key in ("sha256", "bytes")
@@ -106,7 +128,7 @@ def admit_policy(
             "published producer model/observation/world differs from regime"
         )
     admitted = copy_verified_artifact(
-        stage.checkpoint, out / f"{stage.id}-{stage.weights}.pt"
+        stage.checkpoint, out / f"{name}-{stage.weights}.pt"
     )
     # Ordinary admission owns architecture, state keys and native world meaning.
     # Fork RNG so validation never shifts downstream initialization streams.
@@ -150,7 +172,7 @@ def admit_policy(
         raise ValueError("published raw checkpoint declares averaged weights")
     if expected_value != "signed_outcome" and any(
         isinstance(s, TrainSupervised)
-        and s.initial == stage.id
+        and s.initial == name
         and s.target.startswith("local_")
         for s in regime.stages
     ):
@@ -162,6 +184,6 @@ def admit_policy(
             run_id=source.id,
             stage_id=stage.source_stage,
             weights=stage.weights,
-            cumulative_seconds=record.cumulative_seconds,
+            cumulative_seconds=sunk_seconds,
         ),
     )

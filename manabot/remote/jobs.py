@@ -52,6 +52,13 @@ class Job(CheckpointCadence, Frozen):
     @model_validator(mode="after")
     def valid(self) -> "Job":
         self.admit_regime(self.plan.regime)
+        if any(
+            getattr(stage, "pretrained", None) is not None
+            for stage in self.plan.regime.stages
+        ):
+            # A worker receives only bytes the controller staged and granted;
+            # pretrained weights have no such grant yet, so fail before renting.
+            raise ValueError("remote jobs cannot stage pretrained weights")
         if self.learning_inputs:
             from manabot.training.models import TrainSelfPlay
 

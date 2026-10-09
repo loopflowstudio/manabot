@@ -259,6 +259,26 @@ class FrozenOpponent(Strict):
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class PretrainedPolicy(Strict):
+    """Published weights a self-play stage starts from instead of random ones.
+
+    The producer fixes what the weights mean, so its world, Agent architecture
+    and observation encoding must equal this regime's. How learning proceeds is
+    this run's own choice: the learning rule and its schedules, streams,
+    transitions, behavior, opponent and seed may all differ from the producer.
+
+    Only the policy is inherited. Adam moments, the EMA average, game streams
+    and the iteration that drives schedules all start fresh, so iteration 1 of
+    this run uses the first value of its own schedule. Use LearningStateImport
+    to extend one unchanged recipe instead.
+    """
+
+    source_run: ArtifactReference
+    source_stage: str
+    checkpoint: ArtifactReference
+    weights: Literal["raw", "ema"] = "raw"
+
+
 class LearningStateImport(Strict):
     """Portable learner state; source bytes retain historical paths and identity.
 
@@ -302,6 +322,9 @@ class TrainSelfPlay(Stage):
     learning_state: LearningStateImport | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    pretrained: PretrainedPolicy | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     updates: int = Field(default=2, ge=1)
     # Frozen v1 compatibility only; JobSpec rejects active-time endpoints.
     # An active-time endpoint completes after a whole collect/update iteration.
@@ -315,6 +338,12 @@ class TrainSelfPlay(Stage):
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.pretrained is not None and (
+            self.initial is not None or self.learning_state is not None
+        ):
+            raise ValueError(
+                "pretrained weights cannot be combined with another starting state"
+            )
         if self.learning_state is not None and (
             self.initial is not None
             or self.active_seconds is not None

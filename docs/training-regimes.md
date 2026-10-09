@@ -301,6 +301,45 @@ training and compound EMA remain unsupported. Live self-play continuation and
 selection diagnostics retain their existing stage restrictions. An EMA import
 never masquerades as raw or changes `last-complete-raw` selection.
 
+### Start self-play from a pretrained policy
+
+`TrainSelfPlay.pretrained` starts one self-play stage from a published policy
+instead of random weights, under a recipe of its own:
+
+```python
+from manabot.training.models import PretrainedPolicy
+
+stage.pretrained = PretrainedPolicy(
+    source_run={"path": "/artifacts/producer/run.json",
+                "sha256": published_run_sha256, "bytes": published_run_bytes},
+    source_stage="policy",
+    checkpoint={"path": "/artifacts/producer/policy-ema.pt",
+                "sha256": published_checkpoint_sha256,
+                "bytes": published_checkpoint_bytes},
+    weights="ema",
+)
+```
+
+The settings divide by what the weights depend on:
+
+| Must equal the producer | Free to change |
+| --- | --- |
+| world | learning rule and every schedule (learning rate, tau, filtering, EMA rate) |
+| `AgentSpec` (architecture, value kind) | `streams`, `transitions`, `updates` |
+| observation contract | `behavior`, `opponent`, execution device |
+| | training seed, and the match if the checkpoint validates against it |
+
+Only the policy is inherited. Adam moments, the EMA average, game streams and
+the iteration that drives schedules start fresh: `updates` counts this run's
+own updates and iteration 1 uses the first value of this run's schedule, so
+choose a schedule meant for a trained policy rather than the from-scratch
+default. The producer must be self-play and may itself be a continuation or a
+pretrained start; `StageRecord.producer_cost` carries the summed cost of every
+ancestor. With checkpoint monitoring enabled, the update-0 checkpoint is the
+pretrained policy. To extend one unchanged recipe with its Adam and EMA state,
+use [portable learner continuation](training-recovery.md) instead. Remote jobs
+reject `pretrained` until the controller can stage and grant those bytes.
+
 Costs have two explicit meanings:
 
 - `StageRecord.producer_cost` identifies the source run/stage/weight and its
