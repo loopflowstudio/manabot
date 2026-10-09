@@ -149,6 +149,23 @@ def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Chec
     return sorted(found, key=lambda c: c.coordinates.training_seconds or 0)
 
 
+def stop_process_group(process: subprocess.Popen[bytes]) -> int:
+    """Kill a session-leader child's whole group, reap it and return its code.
+
+    A group that has already exited is not an error. Darwin reports EPERM rather
+    than ESRCH while the group still holds unreaped zombies, so that case is
+    tolerated once the leader itself is known to have exited.
+    """
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if process.poll() is None:
+            raise
+    return process.wait()
+
+
 class EvaluationJob(Strict):
     run: TrainingRun
     checkpoint: Checkpoint
@@ -237,11 +254,7 @@ class CheckpointQueue:
 
     def _finish(self, error: str | None = None) -> None:
         assert self.process is not None and self.active is not None
-        try:
-            os.killpg(self.process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        code = self.process.wait()
+        code = stop_process_group(self.process)
         self.active.finished_unix = time.time()
         self.active.charged_seconds = self.clock() - self.started
         if error is None and code == 0:

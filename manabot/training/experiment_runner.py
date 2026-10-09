@@ -27,7 +27,7 @@ import torch
 
 from manabot.arena.models import canonical_sha256
 from manabot.sim.teacher1_evidence import source_bundle_sha256
-from manabot.training.checkpoint_queue import CheckpointQueue
+from manabot.training.checkpoint_queue import CheckpointQueue, stop_process_group
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.experiment_execution import (
     ExperimentRun,
@@ -54,11 +54,7 @@ def _runtime() -> dict[str, str]:
 
 
 def _stop(process: subprocess.Popen[bytes]) -> None:
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    process.wait()
+    stop_process_group(process)
 
 
 def run_experiment(
