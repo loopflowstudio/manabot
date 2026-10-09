@@ -55,6 +55,13 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
     assert run.status == "completed"
     assert sum(stage.games for stage in run.stages) > 0
     for index, stage in enumerate(run.stages):
+        outcomes = stage.diagnostics[0]["self_play_outcomes"]
+        assert (
+            sum(r["wins"] + r["losses"] + r["draws"] for r in outcomes)
+            == 2 * stage.games
+        )
+        assert sum(r["wins"] for r in outcomes) == sum(r["losses"] for r in outcomes)
+        assert {r["position"] for r in outcomes} == {"play", "draw"}
         assert stage.learner_transitions == 512
         assert stage.collection_seconds > 0
         assert stage.learning_seconds > 0

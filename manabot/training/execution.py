@@ -1251,6 +1251,10 @@ def _execute_regime(
                     finally:
                         synchronize()
                         record.learning_seconds += time.perf_counter() - tick
+                    if trainer.collector.opponent_mode == "self":
+                        diagnostic["self_play_outcomes"] = (
+                            trainer.collector.stats.self_play.drain()
+                        )
                     record.diagnostics.append(diagnostic)
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:

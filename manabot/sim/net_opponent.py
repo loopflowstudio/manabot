@@ -53,6 +53,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
+from manabot.training.self_play import SelfPlayCounter, deck_identity
 import managym
 
 OPPONENT_MODES = ("random", "frozen", "self")
@@ -112,6 +113,7 @@ class CollectorStats:
     opponent_decisions: int = 0
     games: int = 0
     learner_wins: int = 0
+    self_play: SelfPlayCounter = field(default_factory=SelfPlayCounter)
     truncations: int = 0
     seconds: float = 0.0
     opponent_action_types: dict[str, int] = field(default_factory=dict)
@@ -185,6 +187,7 @@ class SeatRoutedCollector:
 
         self.observation_space = observation_space
         self.match = match
+        self.stream_matches = [match] * num_envs
         self.reward = reward
         self.num_envs = num_envs
         self.opponent_mode = opponent_mode
@@ -204,6 +207,14 @@ class SeatRoutedCollector:
         self._buffers = _allocate_buffers(observation_space, num_envs)
         self._env.set_buffers(self._buffers)
         self._env.reset_all_into_buffers(match.to_rust())
+
+        self._self_play_decks = [
+            (
+                deck_identity(m.hero_deck, m.hero_sideboard),
+                deck_identity(m.villain_deck, m.villain_sideboard),
+            )
+            for m in self.stream_matches
+        ]
 
         #: Learner seat per stream: stream s seats the learner at s % 2, so
         #: half the streams have the learner on the play — seat-balanced.
@@ -256,6 +267,9 @@ class SeatRoutedCollector:
         self._journal = deepcopy(state.journal)
         self._self_rng.set_state(state.sampling_rng)
         self.stats = deepcopy(state.stats)
+        # Pre-instrumentation snapshots have no outcome counters to recover.
+        if not hasattr(self.stats, "self_play"):
+            self.stats.self_play = SelfPlayCounter()
 
     # -- opponent routing -----------------------------------------------------
 
@@ -420,6 +434,10 @@ class SeatRoutedCollector:
                         self.stats.truncations += 1
                         raise RuntimeError(
                             "collector game truncated; no terminal target available"
+                        )
+                    if self.opponent_mode == "self":
+                        self.stats.self_play.record(
+                            self._self_play_decks[int(row)], winner
                         )
                     if winner is None:
                         reward = 0.0

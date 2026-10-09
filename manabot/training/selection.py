@@ -12,6 +12,7 @@ import torch
 from torch import Tensor
 
 from manabot.training.health import NumericalHealth
+from manabot.training.self_play import SelfPlayOutcome
 
 
 class SelectionGroup(TypedDict):
@@ -136,6 +137,7 @@ def selection_diagnostics(
 class UpdateDiagnostics(TypedDict, total=False):
     """Per-iteration measurements persisted in the TrainingRun stage record."""
 
+    self_play_outcomes: list[SelfPlayOutcome]
     numerical: NumericalHealth
     gradient: str
     value_kind: str

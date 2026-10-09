@@ -243,3 +243,27 @@ See the [numerical health contract](https://github.com/loopflowstudio/etude/blob
 for units, sampling and failure investigation. A saturated all-win bootstrap may
 also produce a zero-width interval; that is an empirical resampling limitation,
 not certainty of winning future games.
+
+## Self-play
+
+Self-play deck and play/draw win rates describe the training distribution, not
+playing strength. `self_play_figures(evidence, window_updates=100)` plots completed
+outcomes in non-overlapping training-update windows. Each game contributes one
+observation on the play (seat 0, the engine's first player) and one on the draw
+(seat 1). A drawn game counts in the denominator but not as a win. Rates weight
+completed games, not updates or stream allocations.
+
+Separate panels keep cross-deck and mirror matchups apart. The deck view pools
+both starting seats; the play/draw view pools both decks within that matchup.
+`self_play_points(run)` exposes joint deck, opposing deck, starting position,
+win/loss/draw counts and update coordinates for further notebook analysis.
+In a mirror match, pooled deck win rate is mechanically 50% without draws;
+play/draw imbalance remains informative. Different training seeds and stages
+never share a curve. No uncertainty interval claims independent training seeds.
+
+Historical runs without these counters remain unavailable. New default notebooks
+include this section. Existing editable notebooks can import
+`self_play_figures` from `manabot.training.self_play_report` and append
+`('Self-play balance', 'self-play', self_play_figures(evidence))` to `sections`.
+Raw per-update counts are retained under `self_play_outcomes` in each stage's
+diagnostics. This instrumentation does not change losses, actions or schedules.
