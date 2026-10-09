@@ -120,7 +120,7 @@ class CohortAttempt(Frozen):
 
 
 class CohortInsertion(Frozen):
-    """One immutable addition; original scientific entries and dollars survive."""
+    """One append-only addition; original scientific entries and dollars survive."""
 
     after_job: str
     entries: tuple[CohortEntry, ...] = Field(min_length=1)
@@ -231,10 +231,19 @@ def load_cohort(cohort_id: str, destination: str = DEFAULT_COHORTS) -> Cohort:
     return cohort
 
 
+def _earlier(proposed: float | None, bound: float | None) -> bool:
+    """Whether a proposed limit drops or precedes one the cohort already admitted."""
+    return bound is not None and (proposed is None or proposed < bound)
+
+
 def insert_cohort(
     cohort: Cohort, insertion: CohortInsertion, *, store: JobStore | None = None
 ) -> CohortState:
-    """CAS the queue before its boundary; a racing admission never gets replaced."""
+    """CAS the queue before its boundary; a racing admission never gets replaced.
+
+    A cohort binds one insertion boundary. Repeating the bound insertion is a
+    no-op; a superset that only appends entries extends the queue.
+    """
     store = store or S3JobStore(cohort.prefix)
     raw = store.read("state.json")
     if raw is None:
@@ -245,9 +254,22 @@ def insert_cohort(
     if cancellation_requested(store) is not None or time.time() >= cohort.deadline:
         raise ValueError("cannot insert into cancelled or expired cohort")
     if state.insertion is not None:
-        if state.insertion != insertion:
+        if state.insertion == insertion:
+            return state
+        # A bound insertion is append-only: its boundary, existing entries and
+        # admitted limits survive. New entries queue after the bound ones and pass
+        # every check below, so an already admitted successor still rejects them.
+        bound = state.insertion
+        if (
+            insertion.after_job != bound.after_job
+            or len(insertion.entries) <= len(bound.entries)
+            or insertion.entries[: len(bound.entries)] != bound.entries
+        ):
             raise ValueError("cohort already binds another insertion")
-        return state
+        if _earlier(insertion.deadline, bound.deadline) or _earlier(
+            insertion.access_expires_at, bound.access_expires_at
+        ):
+            raise ValueError("appended insertion cannot shorten admitted limits")
     updated = state.model_copy(update={"insertion": insertion})
     if updated.effective_deadline(cohort) < cohort.deadline:
         raise ValueError("insertion cannot shorten original cohort deadline")

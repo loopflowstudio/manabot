@@ -550,6 +550,10 @@ IDs and allocations that cannot fit the remaining deadline. An explicit insertio
 may extend the cohort deadline within a separately admitted access expiry; it
 never changes an existing job deadline or resets consumed money. A lost response is
 reconciled by rereading the same insertion; it never admits a replacement job.
+A cohort binds one insertion boundary. Later entries are added by submitting the
+bound insertion with new entries appended: existing entries, the boundary and
+admitted deadline or access limits cannot change, and the appended entries pass
+the same budget, deadline and admitted-successor checks.
 
 Each added `CohortEntry.continuation` names an earlier job, its stage and expected
 absolute iteration. After that job completes, publishes its final manifest and

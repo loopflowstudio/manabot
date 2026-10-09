@@ -65,6 +65,102 @@ def test_insert_preserves_active_job_and_restart(harness: Harness) -> None:
     assert harness.provider.created == 1
 
 
+def appended(insertion: CohortInsertion, job_id: str = "follow-up") -> CohortInsertion:
+    entry = insertion.entries[0].model_copy(update={"job_id": job_id})
+    return insertion.model_copy(update={"entries": (*insertion.entries, entry)})
+
+
+def test_bound_insertion_accepts_appended_entry(harness: Harness) -> None:
+    first = harness.launch()
+    insertion = insertion_for(harness)
+    insert_cohort(harness.cohort, insertion, store=harness.store)
+    extended = appended(insertion)
+    state = insert_cohort(harness.cohort, extended, store=harness.store)
+    assert state.attempts[0].spec == first
+    assert [e.job_id for e in state.entries(harness.cohort)] == [
+        "test-0",
+        "continuation",
+        "follow-up",
+        "test-1",
+    ]
+    assert harness.restart().state.insertion == extended
+    assert insert_cohort(harness.cohort, extended, store=harness.store) == state
+    assert harness.provider.created == 1
+
+
+def test_bound_insertion_rejects_rewrites(harness: Harness) -> None:
+    harness.launch()
+    insertion = CohortInsertion.model_validate(
+        {
+            **insertion_for(harness).model_dump(),
+            "deadline": 200000,
+            "access_expires_at": 200000,
+        }
+    )
+    insert_cohort(harness.cohort, insertion, store=harness.store)
+    extended = appended(insertion)
+    renamed = extended.entries[0].model_copy(update={"job_id": "renamed"})
+    rewrites = (
+        insertion.model_copy(update={"entries": (renamed,)}),
+        extended.model_copy(update={"entries": (renamed, extended.entries[1])}),
+        extended.model_copy(update={"entries": extended.entries[::-1]}),
+        extended.model_copy(update={"after_job": "test-1"}),
+    )
+    for rewrite in rewrites:
+        with pytest.raises(ValueError, match="binds another insertion"):
+            insert_cohort(harness.cohort, rewrite, store=harness.store)
+    for limits in (
+        {"deadline": 150000},
+        {"deadline": None, "access_expires_at": None},
+        {"access_expires_at": 200000 - 1, "deadline": 200000 - 1},
+    ):
+        with pytest.raises(ValueError, match="shorten admitted limits"):
+            insert_cohort(
+                harness.cohort,
+                extended.model_copy(update=limits),
+                store=harness.store,
+            )
+    assert harness.restart().state.insertion == insertion
+
+
+def test_appended_entry_cannot_pass_admitted_successor(harness: Harness) -> None:
+    first = harness.launch()
+    insertion = insertion_for(harness)
+    insert_cohort(harness.cohort, insertion, store=harness.store)
+    harness.finish(first)
+    supervisor = harness.restart()
+    supervisor.bind = lambda entry, status, cache: entry.job(harness.clock.now)
+    continuation = supervisor.tick().attempts[-1].spec
+    assert continuation.job_id == "continuation"
+    with pytest.raises(TimeoutError):
+        harness.restart().tick()
+    harness.finish(continuation)
+    assert harness.restart().tick().attempts[-1].spec.job_id == "test-1"
+    with pytest.raises(ValueError, match="boundary already passed"):
+        insert_cohort(harness.cohort, appended(insertion), store=harness.store)
+
+
+def test_appended_entry_cannot_reset_budget(harness: Harness) -> None:
+    harness.launch()
+    insertion = insertion_for(harness)
+    insert_cohort(harness.cohort, insertion, store=harness.store)
+    extended = appended(insertion)
+    plan = extended.entries[1].plan
+    expensive = plan.model_copy(
+        update={"spec": plan.spec.model_copy(update={"spending_limit": 100})}
+    )
+    extended = extended.model_copy(
+        update={
+            "entries": (
+                extended.entries[0],
+                extended.entries[1].model_copy(update={"plan": expensive}),
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="inclusive budget"):
+        insert_cohort(harness.cohort, extended, store=harness.store)
+
+
 def test_insert_rejects_passed_boundary(harness: Harness) -> None:
     first = harness.launch()
     harness.finish(first)
