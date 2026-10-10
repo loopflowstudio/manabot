@@ -398,30 +398,13 @@ gate before integration.
 
 ## Durable evidence
 
-- The order-invariant semantic encoder is mathematically unable to distinguish
-  equal-token programs and remains at 50% on the structural suite.
-- The first relational semantic encoder proved that explicit structure matters:
-  it reached 82.1% overall and 100% on order and hierarchy. Its throughput and
-  trainability were unacceptable.
-- The follow-up discriminator ruled out “just train longer” for that encoder
-  family and ended in `KILL_REDESIGN structural_capacity`. These results kill
-  bag pooling and the first relational-pooling design; they do not require more
-  static katas before a plausible semantic policy can be built.
-- The structured command prototype handled 35 target choices and 64 attacker
-  declarations with zero illegal outputs or trace mismatches at roughly a 4%
-  game-throughput cost. Structured decoding is ready to be used in a learned
-  prototype.
-- Viewer-safe semantic program projection is not currently the bottleneck:
-  real selected-match observations project and batch at tens of thousands per
-  second with explicit ragged structure and no silent truncation.
-- Teacher-0 established a runnable data → policy/value student → arena path.
-  Its 512-game immutable snapshot trained both arms in 8.63 minutes; joint
-  value supervision materially improved value calibration without reducing
-  batch throughput. It is flat Monte Carlo evidence, not MCTS strength.
-- Rust vector stepping and zero-copy observation buffers moved environment-only
-  throughput from roughly 24k to 183k SPS at 16 environments. With inference
-  enabled, model inference consumed 97% of step time. Model layout is now a
-  first-order systems question.
+Historical detail: `43c6e479`, this section. Bag pooling
+cannot distinguish equal-token programs; the first relational encoder recovered
+structure but failed throughput/trainability and the longer-training discriminator
+ended `KILL_REDESIGN structural_capacity`. Structured command decoding showed legal, trace-exact large
+choices at modest cost; projection was not the bottleneck. Teacher-0 proved the
+student/arena path and value calibration, not MCTS strength. Batched engine speed
+exposed inference as the dominant cost. Katas remain regressions, not integration gates.
 
 ## Decisions
 
@@ -1213,3 +1196,21 @@ This separate screen does not authorize changing ETU-106 or restarting the mini.
 Preserve its source/native and ignored evidence. Original authorization detail
 remains at `0145f77f`; the [protocol](../../experiments/model-capacity.md) owns
 results and limits. GPU work neither replaces nor extends this allocation.
+
+## Complexity experiment design boundary (MTG-122, 2026-10-10)
+
+Jack Heart requested design only, separating simple-world learning from ETU-125
+mirror training and separately selectable curriculum transfer. No calibration,
+training, rental or allocation is authorized. The proposal holds representation,
+capacity and learning fixed across three pools; measures within-pool improvement
+against frozen initialization, greedy/random anchors and four deck-role cells;
+and preserves the product matchup. Raw cross-world scores cannot identify difficulty.
+
+At `43c6e479`, authored content requires exact deck/sideboard pairs and the policy
+encoder hardcodes one catalog. Subset/mirror support needs explicit native-content,
+policy-catalog and checkpoint-setup admission, not name/ID bypasses. The collector
+alternates learner seats but keeps deck order fixed; cross-role deck/play-order
+balance needs explicit setup/reset support. A 64-transition stage with four streams
+collects 256 learner transitions per update, not 64. These are static source
+findings; native admission is unverified. ETU-118 retains promotion authority;
+existing cohorts and frozen evidence remain untouched.
