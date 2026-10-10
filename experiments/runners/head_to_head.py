@@ -14,7 +14,8 @@ Principal types and entry points:
   or input schema. Admission is all-or-nothing and happens before any game.
 - `run` plays the schedule through the existing arena (`play_cell`), one unit
   (pairing, deal) at a time: four games covering both deck assignments and
-  both seats. It owns the wall-time cap, the disk floor and `status.json`.
+  both seats, or both same-deck matchups and seats in mirror mode. It owns
+  the wall-time cap, the disk floor and `status.json`.
 - `report` projects retained rows into per-pairing scores, per-entrant scores
   against greedy and the reference opponent, ratings, and the paired contrasts
   the protocol names. It is safe to run while games are still being played.
@@ -34,7 +35,7 @@ import argparse
 from collections.abc import Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 import json
 import multiprocessing as mp
 import os
@@ -47,9 +48,16 @@ from types import FrameType
 from typing import Literal
 
 import numpy as np
+from pydantic import ValidationError
 
 from manabot.arena import players
-from manabot.arena.match import SELECTED_SUITE, play_cell, selected_match
+from manabot.arena.match import (
+    SELECTED_SUITE,
+    MatchupMode,
+    play_cell,
+    selected_decks,
+    selected_match,
+)
 from manabot.arena.models import (
     ArenaKey,
     PlayerRegistration,
@@ -64,6 +72,14 @@ from manabot.training.monitor_evaluation import ArenaRow
 from managym import WORLD_VERSION
 
 NAME = "head-to-head"
+MIRROR_DEAL_SEEDS = tuple(range(1_913_131_000, 1_913_131_100))
+MIRROR_SMOKE_SEEDS = (1_913_131_100, 1_913_131_101)
+TRAINING_CAVEAT = (
+    "Every trained model except etu125-mirrors-10k was trained only on Lessons "
+    "vs Allies: same-deck games are outside its training matchups. "
+    "small-0 is untrained; scripted greedy is a code anchor. "
+    "These are frozen-checkpoint comparisons, not training-seed uncertainty."
+)
 
 # ----------------------------------------------------------------------------
 # Frozen design
@@ -257,7 +273,12 @@ class Admitted:
     checkpoint_paths: dict[str, str]
 
 
-def admit(models: Path, roster: Sequence[Entrant] = ROSTER) -> Admitted:
+def admit(
+    models: Path,
+    roster: Sequence[Entrant] = ROSTER,
+    *,
+    matchup_mode: MatchupMode = "cross",
+) -> Admitted:
     """Verify and load every entrant; raise before any game if one is unfit.
 
     The ordinary loader validates the checkpoint's world, content manifest and
@@ -326,6 +347,11 @@ def admit(models: Path, roster: Sequence[Entrant] = ROSTER) -> Admitted:
                     "deterministic": False,
                     "device": "cpu",
                     "batch_size": 1,
+                    **(
+                        {"allow_deck_repetition": True}
+                        if matchup_mode == "mirrors"
+                        else {}
+                    ),
                 },
                 compute_class_id="policy-cpu-one-thread-one-pass",
                 checkpoint_sha256=entrant.sha256,
@@ -338,7 +364,9 @@ def admit(models: Path, roster: Sequence[Entrant] = ROSTER) -> Admitted:
         world=WORLD_VERSION,
         content_suite=SELECTED_SUITE,
         viewer_boundary="acting-viewer",
-        arena_version="head-to-head-v1",
+        arena_version="head-to-head-mirrors-v1"
+        if matchup_mode == "mirrors"
+        else "head-to-head-v1",
         rating_model_version="exploratory-bradley-terry",
         rating_prior_sha256=canonical_sha256({}),
         anchor_cohort_sha256=canonical_sha256(registrations[GREEDY].model_dump()),
@@ -359,6 +387,7 @@ class Unit:
     player_a: str
     player_b: str
     deal_seed: int
+    matchup_mode: MatchupMode = "cross"
 
     @property
     def directory(self) -> str:
@@ -372,23 +401,37 @@ class Plan:
     roster: tuple[Entrant, ...]
     pairings: tuple[tuple[str, str], ...]
     deal_seeds: tuple[int, ...]
+    matchup_mode: MatchupMode = "cross"
 
     def units(self) -> list[Unit]:
         # Deal-major order keeps every pairing at the same depth if the run stops.
-        return [Unit(a, b, seed) for seed in self.deal_seeds for a, b in self.pairings]
+        return [
+            Unit(a, b, seed, self.matchup_mode)
+            for seed in self.deal_seeds
+            for a, b in self.pairings
+        ]
 
 
-def full_plan() -> Plan:
-    return Plan(ROSTER, pairings(), DEAL_SEEDS)
+def full_plan(matchup_mode: MatchupMode = "cross") -> Plan:
+    seeds = MIRROR_DEAL_SEEDS if matchup_mode == "mirrors" else DEAL_SEEDS
+    return Plan(ROSTER, pairings(), seeds, matchup_mode)
 
 
-def smoke_plan() -> Plan:
-    """Two deals for three pairings that exercise every code path.
+def smoke_plan(matchup_mode: MatchupMode = "cross") -> Plan:
+    """Two deals through checkpoint play, greedy, replay and paired contrasts.
 
-    One trained-vs-trained meeting, both of those entrants against greedy (so
-    the report has a contrast), and the large model so its inference cost is
-    measured before a full run is trusted to fit its cap.
+    Mirrors compare the cross-only and mirror-trained ETU-125 policies; cross
+    mode retains its small-model ladder plus the large-model timing probe.
+    The mirror smoke does not estimate large-model inference cost.
     """
+    if matchup_mode == "mirrors":
+        first, second = "etu125-cross-10k", "etu125-mirrors-10k"
+        return Plan(
+            tuple(e for e in ROSTER if e.id in (GREEDY, first, second)),
+            ((first, GREEDY), (second, GREEDY), (second, first)),
+            MIRROR_SMOKE_SEEDS,
+            matchup_mode,
+        )
     wanted = (GREEDY, "small-26k", "small-100k", "large-15k6")
     return Plan(
         tuple(e for e in ROSTER if e.id in wanted),
@@ -399,6 +442,7 @@ def smoke_plan() -> Plan:
             ("small-100k", "large-15k6"),
         ),
         DEAL_SEEDS[:2],
+        matchup_mode,
     )
 
 
@@ -428,6 +472,7 @@ def _play_unit(
         },
         game_seconds=game_seconds,
         max_commands=MAX_COMMANDS,
+        matchup_mode=unit.matchup_mode,
     )
     atomic_json(directory / "trace.json", trace)
     atomic_json(directory / "replay.json", replay)
@@ -477,6 +522,11 @@ def run(
     if every unit was played and every game was valid.
     """
     plan = plan or full_plan()
+    design_path = out / "design.json"
+    if design_path.exists():
+        previous = json.loads(design_path.read_text())
+        if previous.get("matchup_mode", "cross") != plan.matchup_mode:
+            raise ValueError("this output directory holds a different matchup mode")
     out.mkdir(parents=True, exist_ok=True)
     started = time.time()
     units = plan.units()
@@ -503,13 +553,18 @@ def run(
 
     publish()
     try:
-        admitted = admit(models, plan.roster)
+        admitted = admit(models, plan.roster, matchup_mode=plan.matchup_mode)
     except Exception as error:
         status.state, status.reason = "incomplete", f"admission failed: {error}"
         publish()
         raise
     design = {
         "name": NAME,
+        **(
+            {"matchup_mode": "mirrors", "training_caveat": TRAINING_CAVEAT}
+            if plan.matchup_mode == "mirrors"
+            else {}
+        ),
         "roster": [asdict(entrant) for entrant in plan.roster],
         "pairings": [list(pair) for pair in plan.pairings],
         "deal_seeds": list(plan.deal_seeds),
@@ -521,7 +576,6 @@ def run(
             for name, registration in admitted.registrations.items()
         },
     }
-    design_path = out / "design.json"
     if design_path.exists():
         if json.loads(design_path.read_text()) != json.loads(json.dumps(design)):
             raise ValueError("this output directory holds a different design")
@@ -631,6 +685,7 @@ class PairingScore:
     on_play: Interval | None = None
     on_draw: Interval | None = None
     seconds_per_game: float | None = None
+    failed_units: int = 0
 
 
 @dataclass(frozen=True)
@@ -650,13 +705,19 @@ class Contrast:
 
 
 @dataclass(frozen=True)
-class Report:
-    status: dict[str, object] | None
+class ScorePanel:
     pairings: tuple[PairingScore, ...]
     contrasts: tuple[Contrast, ...]
     # Elo-scaled rating relative to greedy at 0: (2.5%, median, 97.5%).
     ratings: dict[str, tuple[float, float, float]]
     rating_note: str
+
+
+@dataclass(frozen=True)
+class Report(ScorePanel):
+    status: dict[str, object] | None
+    matchup_mode: MatchupMode = "cross"
+    decks: dict[str, ScorePanel] = field(default_factory=dict)
 
 
 def _interval(per_deal: np.ndarray, rng: np.random.Generator) -> Interval:
@@ -682,35 +743,59 @@ class _Cell:
     invalid_games: int
     seconds: float
     rows: tuple[dict[str, object], ...]
+    failed_units: int = 0
 
 
-def _load_cell(out: Path, pairing: tuple[str, str], deal_seeds: Sequence[int]) -> _Cell:
+def _load_cell(
+    out: Path,
+    pairing: tuple[str, str],
+    deal_seeds: Sequence[int],
+    matchup_mode: MatchupMode = "cross",
+) -> _Cell:
     kept: list[int] = []
     scores: list[list[float]] = []
     lessons: list[list[bool]] = []
     play: list[list[bool]] = []
     retained: list[dict[str, object]] = []
     invalid = 0
+    failed_units = 0
     seconds = 0.0
+    expected_decks = {
+        leg: list(selected_decks(leg))
+        for leg in (range(4, 8) if matchup_mode == "mirrors" else range(4))
+    }
     for seed in deal_seeds:
         path = out / "units" / Unit(*pairing, seed).directory / "rows.json"
         if not path.exists():
+            failed_units += int(path.parent.exists())
             continue
         raw_rows: list[dict[str, object]] = json.loads(path.read_text())
-        rows = [ArenaRow.model_validate(row) for row in raw_rows]
+        try:
+            rows = [ArenaRow.model_validate(row) for row in raw_rows]
+        except ValidationError:
+            invalid += max(4, len(raw_rows))
+            continue
         bad = sum(not row.valid for row in rows)
-        if bad or len(rows) != 4:
-            invalid += bad or 4
+        if bad or len(rows) != 4 or {row.leg for row in rows} != expected_decks.keys():
+            invalid += bad or max(4, len(rows))
             continue
         ordered = sorted(zip(rows, raw_rows, strict=True), key=lambda item: item[0].leg)
-        seats = [int(str(raw["player_a_seat"])) for _, raw in ordered]
-        decks = [list(raw["seat_decks"]) for _, raw in ordered]  # type: ignore[call-overload]
+        bad = sum(
+            (row.player_a, row.player_b) != pairing
+            or row.deal_seed != seed
+            or raw.get("player_a_seat") != row.leg % 2
+            or raw.get("seat_decks") != expected_decks[row.leg]
+            for row, raw in ordered
+        )
+        if bad:
+            invalid += bad
+            continue
         kept.append(seed)
         scores.append([float(row.score_a or 0.0) for row, _ in ordered])
         lessons.append(
-            [d[s] == "ur_lessons" for d, s in zip(decks, seats, strict=True)]
+            [expected_decks[row.leg][row.leg % 2] == "ur_lessons" for row, _ in ordered]
         )
-        play.append([seat == 0 for seat in seats])
+        play.append([row.leg % 2 == 0 for row, _ in ordered])
         seconds += sum(row.game_seconds for row in rows)
         # The rating bootstrap resamples `deal_block`; the arena numbers blocks
         # within one call, so rebind it to this deal's place in the cohort.
@@ -724,12 +809,22 @@ def _load_cell(out: Path, pairing: tuple[str, str], deal_seeds: Sequence[int]) -
         invalid,
         seconds,
         tuple(retained),
+        failed_units,
     )
 
 
 def _pairing_score(pairing: tuple[str, str], cell: _Cell) -> PairingScore:
     deals = len(cell.deal_seeds)
-    base = PairingScore(*pairing, deals, 4 * deals, cell.invalid_games, None)
+    base = PairingScore(
+        *pairing,
+        deals,
+        cell.scores.size,
+        cell.invalid_games,
+        None,
+        failed_units=cell.failed_units,
+    )
+    if cell.failed_units:
+        return replace(base, rejected="failed or unfinished units")
     if cell.invalid_games:
         # Dropping failed games would bias the rate; give none instead.
         return replace(base, rejected="invalid games")
@@ -737,8 +832,10 @@ def _pairing_score(pairing: tuple[str, str], cell: _Cell) -> PairingScore:
         return replace(base, rejected="fewer than two deals")
     rng = np.random.default_rng(BOOTSTRAP_SEED)
 
-    def split(mask: np.ndarray) -> Interval:
-        # Every deal has exactly two games on each side of each mask.
+    def split(mask: np.ndarray) -> Interval | None:
+        if not mask.any():
+            return None
+        # Average within each deal before resampling; seats stay paired.
         return _interval((cell.scores * mask).sum(axis=1) / mask.sum(axis=1), rng)
 
     return replace(
@@ -748,7 +845,7 @@ def _pairing_score(pairing: tuple[str, str], cell: _Cell) -> PairingScore:
         as_allies=split(~cell.lessons),
         on_play=split(cell.play),
         on_draw=split(~cell.play),
-        seconds_per_game=cell.seconds / (4 * deals),
+        seconds_per_game=cell.seconds / cell.scores.size,
     )
 
 
@@ -787,19 +884,16 @@ def _contrast(
     )
 
 
-def report(out: Path) -> Report:
-    """Project retained rows; never plays a game or loads a model."""
-    design = json.loads((out / "design.json").read_text())
-    scheduled = [(str(a), str(b)) for a, b in design["pairings"]]
-    deal_seeds = [int(seed) for seed in design["deal_seeds"]]
-    status_path = out / "status.json"
-    status = json.loads(status_path.read_text()) if status_path.exists() else None
-    cells = {pair: _load_cell(out, pair, deal_seeds) for pair in scheduled}
+def _score_panel(cells: dict[tuple[str, str], _Cell]) -> ScorePanel:
+    """Use the same paired-deal estimator on the full matrix or a single deck."""
+    scheduled = list(cells)
     scores = tuple(_pairing_score(pair, cells[pair]) for pair in scheduled)
     usable = {
         pair: cell
         for pair, cell in cells.items()
-        if not cell.invalid_games and len(cell.deal_seeds) >= 2
+        if not cell.invalid_games
+        and not cell.failed_units
+        and len(cell.deal_seeds) >= 2
     }
     contrasts = tuple(
         found
@@ -827,7 +921,54 @@ def report(out: Path) -> Report:
             )
         except (ValueError, np.linalg.LinAlgError) as error:
             note = f"ratings unavailable: {error}"
-    return Report(status, scores, contrasts, ratings, note)
+    return ScorePanel(scores, contrasts, ratings, note)
+
+
+def _deck_cell(cell: _Cell, deck: str) -> _Cell:
+    # Mirror legs are [Lessons play, Lessons draw, Allies play, Allies draw].
+    columns = slice(0, 2) if deck == "ur_lessons" else slice(2, 4)
+    rows = tuple(row for row in cell.rows if row["seat_decks"] == [deck, deck])
+    return replace(
+        cell,
+        scores=cell.scores[:, columns],
+        lessons=cell.lessons[:, columns],
+        play=cell.play[:, columns],
+        rows=rows,
+        seconds=sum(float(str(row["game_seconds"])) for row in rows),
+    )
+
+
+def report(out: Path) -> Report:
+    """Project retained rows; never plays a game or loads a model."""
+    design = json.loads((out / "design.json").read_text())
+    mode = design.get("matchup_mode", "cross")
+    if mode not in ("cross", "mirrors"):
+        raise ValueError("unknown head-to-head matchup mode")
+    scheduled = [(str(a), str(b)) for a, b in design["pairings"]]
+    deal_seeds = [int(seed) for seed in design["deal_seeds"]]
+    status_path = out / "status.json"
+    status = json.loads(status_path.read_text()) if status_path.exists() else None
+    cells = {pair: _load_cell(out, pair, deal_seeds, mode) for pair in scheduled}
+    panel = _score_panel(cells)
+    decks = (
+        {
+            deck: _score_panel(
+                {pair: _deck_cell(cell, deck) for pair, cell in cells.items()}
+            )
+            for deck in ("ur_lessons", "gw_allies")
+        }
+        if mode == "mirrors"
+        else {}
+    )
+    return Report(
+        panel.pairings,
+        panel.contrasts,
+        panel.ratings,
+        panel.rating_note,
+        status,
+        mode,
+        decks,
+    )
 
 
 def _points(interval: Interval | None, *, signed: bool = False) -> str:
@@ -847,11 +988,23 @@ def render(found: Report) -> str:
             + f"; units {s['units_done']}/{s['units_total']}, failed {s['units_failed']},"
             f" invalid games {s['invalid_games']}"
         )
+    if found.matchup_mode == "mirrors":
+        lines += ["", TRAINING_CAVEAT]
+        for deck, panel in found.decks.items():
+            label = "Lessons" if deck == "ur_lessons" else "Allies"
+            lines += ["", f"## {label} vs {label}", _render_panel(panel)]
+    else:
+        lines.append(_render_panel(found))
+    return "\n".join(lines)
+
+
+def _render_panel(found: ScorePanel) -> str:
+    lines: list[str] = []
     lines += [
         "",
         "Pairings. Score is player A's, in points; a draw counts half."
         " Intervals are 95%, resampling whole deals.",
-        "A | B | games | score | A as Lessons | A as Allies | A on play | A on draw | s/game",
+        "A | B | valid games | invalid games | failed units | score | A as Lessons | A as Allies | A on play | A on draw | s/game",
     ]
     for p in found.pairings:
         lines.append(
@@ -860,6 +1013,8 @@ def render(found: Report) -> str:
                     p.player_a,
                     p.player_b,
                     str(p.games),
+                    str(p.invalid_games),
+                    str(p.failed_units),
                     _points(p.score) if p.rejected is None else f"none: {p.rejected}",
                     _points(p.as_lessons),
                     _points(p.as_allies),
@@ -902,6 +1057,9 @@ def main() -> None:
         command = commands.add_parser(name)
         command.add_argument("out", type=Path)
         command.add_argument("--models", type=Path, required=True)
+        command.add_argument(
+            "--matchups", choices=("cross", "mirrors"), default="cross"
+        )
         command.add_argument("--workers", type=int, default=4)
         command.add_argument("--wall-seconds", type=float, default=WALL_SECONDS)
         command.add_argument("--min-free-gib", type=float, default=MIN_FREE_GIB)
@@ -924,7 +1082,9 @@ def main() -> None:
     status = run(
         args.out,
         args.models,
-        plan=smoke_plan() if args.command == "smoke" else full_plan(),
+        plan=smoke_plan(args.matchups)
+        if args.command == "smoke"
+        else full_plan(args.matchups),
         workers=args.workers,
         wall_seconds=args.wall_seconds,
         min_free_gib=args.min_free_gib,

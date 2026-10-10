@@ -123,6 +123,10 @@ class PlayerRegistration(StrictModel):
                     "device": "cpu",
                     "batch_size": 1,
                 }
+                if "allow_deck_repetition" in self.player_spec:
+                    if self.player_spec["allow_deck_repetition"] is not True:
+                        raise ValueError("deck repetition must be explicitly enabled")
+                    expected_checkpoint_spec["allow_deck_repetition"] = True
                 if (
                     self.player_spec != expected_checkpoint_spec
                     or type(self.player_spec.get("deterministic")) is not bool

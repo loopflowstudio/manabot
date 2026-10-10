@@ -918,22 +918,26 @@ pub struct PyPlayerConfig {
     pub decklist: HashMap<String, usize>,
     #[pyo3(get, set)]
     pub sideboard: HashMap<String, usize>,
+    #[pyo3(get, set)]
+    pub content_pack: Option<String>,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None))]
+    #[pyo3(signature = (name, decklist, sideboard=None, content_pack=None))]
     fn new(
         name: String,
         decklist: HashMap<String, usize>,
         sideboard: Option<HashMap<String, usize>>,
+        content_pack: Option<String>,
     ) -> Self {
         Self {
             name,
             decklist,
             sideboard: sideboard.unwrap_or_default(),
+            content_pack,
         }
     }
 }
@@ -945,6 +949,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
             name: value.name,
             decklist: value.decklist.into_iter().collect(),
             sideboard: value.sideboard.into_iter().collect(),
+            content_pack: value.content_pack,
         }
     }
 }
@@ -3337,6 +3342,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
                 name: config.name,
                 decklist: config.decklist.into_iter().collect(),
                 sideboard: config.sideboard.into_iter().collect(),
+                content_pack: Some(pack_key.to_string()),
             });
         }
     }

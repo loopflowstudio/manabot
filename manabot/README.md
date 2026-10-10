@@ -191,3 +191,8 @@ independent of capacity and learning rules; comparison plans remain unexecuted.
 Self-play [numerical health](../docs/numerical-health.md) records policy support,
 selection, gradients and actual optimizer effects, with bounded private failure
 artifacts. CPU correctness does not imply CUDA validation or improved play.
+
+For exploratory same-deck checkpoint play, the [head-to-head runner](../experiments/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
+accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
+roster decks/sideboards and carries their compiled content pack through replay;
+it is not ordinary training-match admission or evidence of mirror competence.

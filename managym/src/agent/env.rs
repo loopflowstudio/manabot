@@ -208,6 +208,10 @@ impl Env {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
+        // Validate explicit authored setup bindings at the fallible environment
+        // boundary, before Game construction can panic on invalid content.
+        crate::semantic::content_pack_for_authored_match(&player_configs)
+            .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         let mut game = Game::new(player_configs, self.seed, self.skip_trivial);
         let events = game.take_observation_events();

@@ -144,7 +144,7 @@ class ArenaRow(BaseModel):
     model_config = ConfigDict(extra="allow", allow_inf_nan=False)
     arena_key: ArenaKey
     deal_seed: int
-    leg: int = Field(ge=0, le=3)
+    leg: int = Field(ge=0, le=7)
     player_a: str
     player_b: str
     player_a_registration_sha256: str

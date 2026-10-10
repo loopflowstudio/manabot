@@ -398,30 +398,22 @@ gate before integration.
 
 ## Durable evidence
 
-- The order-invariant semantic encoder is mathematically unable to distinguish
-  equal-token programs and remains at 50% on the structural suite.
-- The first relational semantic encoder proved that explicit structure matters:
-  it reached 82.1% overall and 100% on order and hierarchy. Its throughput and
-  trainability were unacceptable.
-- The follow-up discriminator ruled out “just train longer” for that encoder
-  family and ended in `KILL_REDESIGN structural_capacity`. These results kill
-  bag pooling and the first relational-pooling design; they do not require more
-  static katas before a plausible semantic policy can be built.
-- The structured command prototype handled 35 target choices and 64 attacker
-  declarations with zero illegal outputs or trace mismatches at roughly a 4%
-  game-throughput cost. Structured decoding is ready to be used in a learned
-  prototype.
-- Viewer-safe semantic program projection is not currently the bottleneck:
-  real selected-match observations project and batch at tens of thousands per
-  second with explicit ragged structure and no silent truncation.
-- Teacher-0 established a runnable data → policy/value student → arena path.
-  Its 512-game immutable snapshot trained both arms in 8.63 minutes; joint
-  value supervision materially improved value calibration without reducing
-  batch throughput. It is flat Monte Carlo evidence, not MCTS strength.
-- Rust vector stepping and zero-copy observation buffers moved environment-only
-  throughput from roughly 24k to 183k SPS at 16 environments. With inference
-  enabled, model inference consumed 97% of step time. Model layout is now a
-  first-order systems question.
+Historical measurements and limits remain at `43c6e479`:
+
+- Order-invariant semantic pooling cannot distinguish equal-token programs
+  (50% structural-suite accuracy). The first relational encoder reached 82.1%
+  overall and 100% on order/hierarchy but failed throughput/trainability; its
+  follow-up ended `KILL_REDESIGN structural_capacity`. More static katas are
+  not a prerequisite to a plausible runnable policy.
+- The structured decoder handled 35 targets and 64 attackers with no illegal
+  output or trace mismatch at roughly 4% throughput cost. Viewer-safe semantic
+  projection/batching reached tens of thousands of observations per second
+  without truncation; dynamic binding and model design remain the bottlenecks.
+- Teacher-0's immutable 512-game snapshot trained both arms in 8.63 minutes;
+  joint value supervision improved calibration without throughput loss. This
+  proves a flat-MC teacher/student/arena path, not MCTS strength.
+- Rust vector stepping reached roughly 183k env-only SPS; inference took 97%
+  of step time. Model layout is a first-order systems question.
 
 ## Decisions
 
@@ -718,29 +710,21 @@ ETU-91 owns final replayed study/notebook evidence, not chapter acceptance.
 
 ## Compound decision implementation (2026-10-04)
 
-Jack Heart authorized ETU-94's bounded implementation and landing separately
-from frozen ETU-91. `train_compound` connects a recurrent legal-offer decoder,
-complete-game collection, grouped joint versus sequential conditional credit,
-outcome/bootstrap estimators and ordinary world-bound exports. The sequential
-control uses the same decoder, not the historical flat policy. Native lowering
-owns legality and canonical Commands; consumers drain sampled suffixes without
-resampling and reject stale/interrupted continuations.
+Jack Heart authorized ETU-94's bounded implementation separately from frozen
+ETU-91. `train_compound` connects the recurrent legal-offer decoder, complete-game
+collection, joint/sequential credit and ordinary world-bound exports. Native
+lowering owns legality; cached suffixes never resample. Terminal rewards are per
+seat; updates never split declarations. Gamma=1 avoids changing discount clocks.
+Sampled-prefix reverse KL is not exact joint KL, and the GRU is not the paper's
+setup-network reproduction. Object features remain limited to public labels and
+pooled viewer state.
 
-Terminal rewards are per seat; updates never occur inside a game/declaration.
-Comparison recipes use gamma=1; grouping otherwise changes trace/discount clocks.
-Forced decoder factors and optionless native resolution are separately counted.
-Sampled-prefix reverse KL is not exact joint reverse KL. Prefix values are scalar;
-the GRU is not the paper's setup-network reproduction. Object representation in
-set-valued choices remains limited to public labels and pooled viewer state.
-
-Two retained one-thread executions completed four arms in 268/224 seconds with
-8 admitted exports and 56 exact-replayed arena games each; reports regenerated
-unchanged. Fixtures cover gradients, hidden-world invariance, large declarations
-and native parity. These establish software behavior, not scientific strength,
-calibration or challenger acceptance. No scientific allocation transfers from
-ETU-91. Preserve `.runs/etu94-compound-smoke-{1,final}`. Details remain at
-`388947de`; [compound contracts](../../docs/training-regimes.md#compound-decisions)
-and the later software-completion entry own supported grouping boundaries.
+Two retained executions produced eight admitted exports and 56 replayed games
+each, proving software, not strength or chapter acceptance. Preserve
+`.runs/etu94-compound-smoke-{1,final}`. Full proof remains at `388947de` and this
+memory at `43c6e479`; the later Compound software completion entry and
+[contract](../../docs/training-regimes.md#compound-decisions) own supported grouping.
+No scientific allocation transfers from ETU-91.
 
 ## Ataraxos source correction and move recipe (2026-10-04)
 
@@ -1213,3 +1197,18 @@ This separate screen does not authorize changing ETU-106 or restarting the mini.
 Preserve its source/native and ignored evidence. Original authorization detail
 remains at `0145f77f`; the [protocol](../../experiments/model-capacity.md) owns
 results and limits. GPU work neither replaces nor extends this allocation.
+
+## Mirror head-to-head evaluation (MTG-131, 2026-10-09)
+
+Jack Heart requested same-deck comparisons without touching active experiments.
+Mirror-only play retains 25 pairings as a scope assumption, plus the roster and
+greedy zero. Exact deck/sideboard repetition requires native compiled-pack
+binding; lists alone can select the wrong world.
+Per-deck scores, play/draw splits, contrasts and ratings resample whole deals;
+invalid/unfinished units suppress estimates rather than scoring survivors.
+All trained entrants except `etu125-mirrors-10k` learned only cross-deck play.
+
+The [protocol](../../experiments/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
+owns seeds and commands. The 24-game exact-replayed smoke binds `001e6920`;
+later report parity does not rebind its source or prove strength. The training
+manager owns the unstarted full Mini run. Active experiments/checkpoints stayed fixed.

@@ -96,3 +96,10 @@ counts still require the semantic input path during the Learn migration.
 The optional [policy-history v1 projection](../docs/recent-events.md) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
 clone/undo and diagnostic injection must preserve its documented lifecycle.
+
+`PlayerConfig.content_pack` can explicitly select the compiled authored runtime
+for repeated-deck matches. Both seats must name the same pack and each complete
+deck/sideboard must be one of its authored setups; unknown packs or partial
+bindings fail reset. Omitting it preserves exact-pair automatic selection.
+Python `MatchHypers.authored` carries this binding for same-deck matches so replay
+cannot silently use generic card definitions.

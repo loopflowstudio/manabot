@@ -7,12 +7,12 @@ import math
 import multiprocessing as mp
 from pathlib import Path
 import time
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
 from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
-from manabot.env import Match, ObservationSpace
+from manabot.env import ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.sim.local_update import LocalUpdatePlayer
 from manabot.sim.teacher1_evidence import build_command, build_viewer_frame
@@ -25,6 +25,25 @@ from .models import ArenaKey, PlayerRegistration, canonical_sha256
 from .replay import replay_environment, replay_games, write_trace
 
 SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"
+MatchupMode = Literal["cross", "mirrors"]
+
+
+def selected_decks(leg: int) -> tuple[str, str]:
+    """Authored decks in seat order for a retained arena leg.
+
+    Adjacent legs share the same setup/deal and exchange players. Legs 0–3
+    cross the decks; 4–7 are mirrors. Execution and report admission share
+    this layout so a leg cannot silently acquire a different deck meaning.
+    """
+    deck_pairs = (
+        ("ur_lessons", "gw_allies"),
+        ("gw_allies", "ur_lessons"),
+        ("ur_lessons", "ur_lessons"),
+        ("gw_allies", "gw_allies"),
+    )
+    if not 0 <= leg < 8:
+        raise ValueError("selected arena leg must be between 0 and 7")
+    return deck_pairs[leg // 2]
 
 
 def selected_match() -> MatchHypers:
@@ -300,6 +319,7 @@ def play_cell(
     comparison_seed_aliases: dict[str, str] | None = None,
     game_seconds: float = 120.0,
     max_commands: int = 10_000,
+    matchup_mode: MatchupMode = "cross",
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
     if not math.isfinite(game_seconds) or game_seconds <= 0 or max_commands < 1:
         raise ValueError("game limits must be finite and positive")
@@ -330,6 +350,19 @@ def play_cell(
                 or player.matchup_sha256 != canonical_sha256(match.model_dump())
             ):
                 raise ValueError("player is not bound to the selected matchup")
+    if matchup_mode not in ("cross", "mirrors"):
+        raise ValueError("unknown arena matchup mode")
+    if matchup_mode == "mirrors":
+        if not selected:
+            raise ValueError("mirrors require the selected authored deck roster")
+        for player in (player_a, player_b):
+            if (
+                player.runner_kind == "checkpoint"
+                and player.player_spec.get("allow_deck_repetition") is not True
+            ):
+                raise ValueError(
+                    "mirrors require explicit checkpoint deck repetition admission"
+                )
     games, rows = [], []
     pair = (player_a.player_id, player_b.player_id)
     cell_id = "__".join(sorted(pair))
@@ -347,20 +380,17 @@ def play_cell(
             )
             for p in (player_a, player_b)
         }
-        for leg in range(4 if selected else 2):
+        legs = range(4, 8) if matchup_mode == "mirrors" else range(4 if selected else 2)
+        for leg in legs:
             seat_players = (
                 [player_a, player_b] if leg % 2 == 0 else [player_b, player_a]
             )
-            # Same per-seat setup/deal within each pair; reverse deck starting seats
-            # for the second pair. Each player gets every deck/seat combination.
+            seat_decks = selected_decks(leg)
             setup = (
-                Match(match).swapped().hypers
-                if leg >= 2
+                MatchHypers.authored("ur-lessons-vs-gw-allies", *seat_decks)
+                if selected
                 else match.model_copy(deep=True)
             )
-            seat_decks = ["ur_lessons", "gw_allies"]
-            if leg >= 2:
-                seat_decks.reverse()
             setup.hero, setup.villain = [p.player_id for p in seat_players]
             game = {
                 "match_id": f"{key.arena_version}:{cell_id}:{deal_seed}:{leg}",
@@ -392,7 +422,7 @@ def play_cell(
                 },
             }
             if selected:
-                game["seat_decks"] = seat_decks
+                game["seat_decks"] = list(seat_decks)
             started = time.perf_counter()
             game = _bounded_game(
                 game, seat_players, checkpoint_paths, max_commands, game_seconds
@@ -450,7 +480,7 @@ def play_cell(
                 "game_seconds": seconds,
             }
             if selected:
-                row["seat_decks"] = seat_decks
+                row["seat_decks"] = list(seat_decks)
             for player_id in pair:
                 values = [
                     d["latency_seconds"]

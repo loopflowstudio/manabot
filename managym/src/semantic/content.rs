@@ -86,6 +86,26 @@ fn select_authored_runtime<'a>(
     player_configs: &[PlayerConfig],
     catalog: &'a [AuthoredRuntime],
 ) -> Result<Option<&'a AuthoredRuntime>, IrError> {
+    if let Some(key) = player_configs.iter().find_map(|p| p.content_pack.as_ref()) {
+        let runtime = catalog
+            .iter()
+            .find(|r| &r.pack_key == key)
+            .ok_or_else(|| IrError::Malformed(format!("unknown explicit content pack {key}")))?;
+        if player_configs.len() != 2
+            || player_configs.iter().any(|p| {
+                p.content_pack.as_ref() != Some(key)
+                    || !runtime
+                        .setups
+                        .iter()
+                        .any(|s| s.decklist == p.decklist && s.sideboard == p.sideboard)
+            })
+        {
+            return Err(IrError::Malformed(
+                "explicit pack requires two admitted authored setups".into(),
+            ));
+        }
+        return Ok(Some(runtime));
+    }
     let matches = catalog
         .iter()
         .filter(|runtime| runtime.matches(player_configs))
@@ -120,6 +140,36 @@ mod catalog_tests {
             PlayerConfig::new("left", semantic.decklist(left).expect("left deck")),
             PlayerConfig::new("right", semantic.decklist(right).expect("right deck")),
         ]
+    }
+
+    #[test]
+    fn explicit_mirrors_preserve_pack_and_reject_unadmitted_setups() {
+        let catalog = authored_runtime_catalog().unwrap();
+        let runtime = catalog
+            .iter()
+            .find(|r| r.pack_key == "ur-lessons-vs-gw-allies")
+            .unwrap();
+        for setup in &runtime.setups {
+            let mut config = setup.clone();
+            config.content_pack = Some(runtime.pack_key.clone());
+            let pair = vec![config.clone(), config.clone()];
+            assert_eq!(
+                select_authored_runtime(&pair, &catalog)
+                    .unwrap()
+                    .unwrap()
+                    .pack_key,
+                runtime.pack_key
+            );
+            let mut wrong = pair.clone();
+            wrong[0].content_pack = None;
+            assert!(select_authored_runtime(&wrong, &catalog).is_err());
+            wrong = pair.clone();
+            wrong[0].decklist.clear();
+            assert!(select_authored_runtime(&wrong, &catalog).is_err());
+            wrong = pair.clone();
+            wrong[0].content_pack = Some("missing-pack".into());
+            assert!(select_authored_runtime(&wrong, &catalog).is_err());
+        }
     }
 
     #[test]

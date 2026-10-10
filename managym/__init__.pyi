@@ -172,10 +172,12 @@ class PlayerConfig:
         name: str,
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
+        content_pack: str | None = None,
     ) -> None: ...
     name: str
     decklist: Dict[str, int]
     sideboard: Dict[str, int]
+    content_pack: str | None
 
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 

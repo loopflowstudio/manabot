@@ -163,8 +163,15 @@ class RandomMatchupPlayer:
 class AgentMatchupPlayer:
     """Trained policy player (stochastic, as in prior seat-balanced evals)."""
 
-    def __init__(self, agent: Agent, deterministic: bool = False) -> None:
+    def __init__(
+        self,
+        agent: Agent,
+        deterministic: bool = False,
+        *,
+        allow_deck_repetition: bool = False,
+    ) -> None:
         self.agent = agent
+        self.allow_deck_repetition = allow_deck_repetition
         self.deterministic = deterministic
         agent.eval()
         self.compound = (
@@ -180,7 +187,11 @@ class AgentMatchupPlayer:
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         from manabot.model.world import validate_agent_setup
 
-        validate_agent_setup(self.agent, env.match.to_rust())
+        validate_agent_setup(
+            self.agent,
+            env.match.to_rust(),
+            allow_deck_repetition=self.allow_deck_repetition,
+        )
         if self.compound is not None:
             return self.compound.act(env._engine, env.last_raw_obs)
         return _select_agent_action(self.agent, obs, deterministic=self.deterministic)
@@ -422,12 +433,18 @@ def make_player(
             spec["path"], include_belief_binding=True
         )
         if agent.belief_count_buckets > 0:
+            if spec.get("allow_deck_repetition"):
+                raise ValueError(
+                    "mirror evaluation does not support belief checkpoints"
+                )
             if binding is None:
                 raise ValueError("belief-enabled checkpoint has no schema binding")
             return ManabotPlayer(agent, checkpoint_binding=binding), obs_space
         return (
             AgentMatchupPlayer(
-                agent, deterministic=bool(spec.get("deterministic", False))
+                agent,
+                deterministic=bool(spec.get("deterministic", False)),
+                allow_deck_repetition=bool(spec.get("allow_deck_repetition", False)),
             ),
             obs_space,
         )

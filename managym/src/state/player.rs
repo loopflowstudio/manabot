@@ -11,6 +11,8 @@ pub struct PlayerConfig {
     pub name: String,
     pub decklist: BTreeMap<String, usize>,
     pub sideboard: BTreeMap<String, usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_pack: Option<String>,
 }
 
 impl PlayerConfig {
@@ -19,6 +21,7 @@ impl PlayerConfig {
             name: name.into(),
             decklist,
             sideboard: BTreeMap::new(),
+            content_pack: None,
         }
     }
 
