@@ -57,7 +57,9 @@ that retain the latest collector or start a fresh learner. Set `schedule_clock`
 to `iteration_fraction` and `recovery_max_microsteps` to an explicit journal
 ceiling. Every stage must be `train_self_play`; supervised, compound, collection
 and belief-training stages cannot opt into recovery. MPS/CUDA are unsupported.
-Ordinary elapsed-time recipes remain unchanged.
+Ataraxos move stages may retain `run_elapsed_budget`: their learning-rate and tau
+formulas use absolute collection/update iteration regardless of that serialized
+field. Recovery rejects other elapsed-time learning schedules.
 
 ```bash
 uv run manabot train --regime recipe.json --seed 197 --out .runs/first
@@ -74,8 +76,9 @@ without replaying or exporting those stages again.
 ## Same-host contract
 
 Private snapshots retain model parameters and buffers, Adam, evaluation EMA,
-Python/NumPy/Torch and minibatch/sampling RNGs, native collector state, diagnostics,
-collector count baselines, stage-local update progress and run-wide iteration.
+Python/NumPy/Torch and minibatch/sampling RNGs, native collector state, diagnostic
+prefix bindings, collector count baselines, stage-local update progress and
+run-wide iteration.
 Frozen-opponent identity is recipe-bound and its checkpoint digest is rechecked.
 The iteration clock continues across linked stages; a fresh stage resets it.
 Scientific schedules use the same update coordinates as uninterrupted execution.
@@ -90,6 +93,16 @@ Snapshots are published at stage entry, at the configured update cadence (every
 update by default), and after completed export/admission. VerifyStore commits the snapshot reference and stage records
 together. Completed prefixes retain their original artifact paths, digests,
 counts and cost receipts; they are not re-exported into the child directory.
+Format 3 snapshots keep each stage's diagnostic count and SHA-256 instead of
+copying its growing rows. `load_update` uses the canonical VerifyStore row of the
+snapshot's original writer, including when a later retry fails during setup.
+It verifies and restores precisely that prefix before deriving the stage-local
+update offset; later uncommitted diagnostics cannot advance recovery. Missing or
+changed prefixes fail admission. Snapshot metadata retains counters and artifact
+bindings at the original boundary. Preserve the canonical database as well as
+snapshot files. Historical format 2 bytes remain readable, without relaxing
+source/runtime admission or rewriting retained evidence.
+
 Uncommitted work may repeat, but its failed-attempt cost remains charged. Orphan
 files never become authoritative merely because they exist on disk.
 
@@ -136,6 +149,57 @@ ETU-91 campaign is unchanged and does not gain recovery retroactively. The
 [complete-loop calibration command](training-calibration.md) remains a separate
 CPU accounting instrument; no new scientific run is required for this contract.
 
+
+## Sustained CPU runs: bounded current-game recovery
+
+ETU-118 adds an explicit `recovery` policy on TrainingRegime, separate from the
+historical `recovery_max_microsteps` contract. Select only one. The new policy
+uses `max_game_microsteps` (default 40,000 across current vector streams) and
+`checkpoint_updates` (default 128). It requires current-self collection and
+iteration-based schedules. Diagnostic injected roots are unsupported.
+
+Native reset seeds and each unfinished game's legal prefix reconstruct collection;
+auto-reset discards the completed game's prefix. Native code owns both the root
+seed and subsequent deal stride. Every observation buffer must match before
+restored model/Adam/EMA/RNG state resumes learning. Terminal flags describing the
+preceding transition are restored separately from the already-reset observation.
+Snapshots remain private, source-bound compressed artifacts. Every created
+snapshot and failed attempt stays retained; the interval avoids serializing an
+unbounded lifetime journal at every update. Committed updates/exports are not
+repeated. Work after the latest recovery commit may repeat and its failed-attempt
+cost remains charged.
+
+For this opt-in contract, occupied elapsed time while the OS is awake is the
+allocation clock. It is not CPU time. macOS/Linux monotonic clocks exclude system
+suspend; the historical continuous watchdog stays unchanged for existing recipes.
+Saved calendar time and known downtime are separate. A safe pause has a measured
+end, so the intervening calendar gap is excluded. After an abrupt owner death on
+the same OS boot, the monotonic gap is conservatively charged as **uncertain awake
+time** (it can include time after process death); known suspend time is excluded.
+After reboot no common monotonic epoch exists: the unobserved calendar gap is
+conservatively charged as uncertain, rather than fabricated as measured compute.
+This can exhaust the remaining allowance; it never grants a fresh allocation.
+Exact active-time attribution across an unobserved reboot is not promised.
+
+ExperimentSchedule selects `active_runtime=True`, requires this recovery policy
+for every learner and an active-runtime MonitoringBudget. Isolated workers have
+sleep-excluding watchdogs that remain bounded if their supervisor exits. No
+sleep-prevention program is used. Retained evaluator crash allowances remain
+conservative process charges, not measured throughput.
+
+The Experiment's `pause.request` file requests a pause at the next complete
+learning boundary. The learner forces a recovery commit before returning
+`TrainingPaused`; the supervisor drains its currently running bounded evaluation
+without launching another, then records `paused=true`. Wait for that state before
+shutdown if an exact known pause is desired. Explicit `resume=True, recover=(N,)`
+continues attempt N before pending later seeds, subtracts consumed allowance and
+preserves the original schedule. A failed seed is never silently retried. The
+[ETU-118 runner](../experiments/current-baseline.md) exposes CLI controls.
+
+The 2026-10-06 focused checks compare uninterrupted and paused/resumed real native
+learning state, optimizer/EMA/RNGs, observations, diagnostics and counts; native
+debug tests compare restored reset sequences with independent scalar environments.
+Clock fault injection tests accounting, not physical lid closure or a host reboot.
 ## Longer local runs
 
 `recovery_every_updates` defaults to one, preserving existing recipe identities.

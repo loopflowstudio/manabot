@@ -11,29 +11,47 @@ from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 import fcntl
+import gzip
 import os
 from pathlib import Path
 import random
 import socket
 import time
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import torch
 
-from manabot.arena.models import file_sha256
+from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.model.agent import Agent
 from manabot.sim.net_opponent import (
     CollectorSnapshot,
     CollectorStats,
     NetOpponentTrainer,
 )
+from manabot.training.clock import boot_identity
 from manabot.training.models import StageRecord, TrainingRun
+
+if TYPE_CHECKING:
+    from manabot.verify.store import VerifyStore
+
+
+@dataclass(frozen=True)
+class DiagnosticPrefix:
+    """Exact committed prefix in the snapshot writer's canonical StageRecord."""
+
+    stage_id: str
+    count: int
+    sha256: str
+
+
+class TrainingPaused(KeyboardInterrupt):
+    """A requested pause after a complete, store-committed learning boundary."""
 
 
 @dataclass
 class UpdateSnapshot:
-    format_version: Literal[2]
+    format_version: Literal[2, 3]
     iteration: int
     completed_stages: list[StageRecord]
     collector_before: CollectorStats
@@ -50,6 +68,8 @@ class UpdateSnapshot:
     regime_digest: str
     seed: int
     identities: dict[str, Any]
+    diagnostic_run_id: str | None = None
+    diagnostic_prefixes: tuple[DiagnosticPrefix, ...] = ()
 
 
 def save_update(
@@ -63,12 +83,19 @@ def save_update(
     collector_before: CollectorStats,
 ) -> None:
     """Publish immutable bytes before the store advertises their digest."""
+    records = [*run.stages[:-1], record]
+    # Diagnostics stay in VerifyStore once. Keep stage metadata at the exact
+    # snapshot boundary, including immutable exports and cumulative counters.
+    compact = [
+        StageRecord.model_validate(row.model_dump(exclude={"diagnostics"}))
+        for row in records
+    ]
     state = UpdateSnapshot(
-        format_version=2,
+        format_version=3,
         iteration=iteration,
-        completed_stages=deepcopy(run.stages[:-1]),
+        completed_stages=compact[:-1],
         collector_before=deepcopy(collector_before),
-        record=record.model_copy(deep=True),
+        record=compact[-1],
         learner=deepcopy(trainer.agent.state_dict()),
         ema=deepcopy(ema.state_dict()) if ema is not None else None,
         optimizer=deepcopy(trainer.optimizer.state_dict()),
@@ -80,10 +107,21 @@ def save_update(
         regime_digest=run.regime_digest,
         seed=run.seed,
         identities=deepcopy(run.identities),
+        diagnostic_run_id=run.id,
+        diagnostic_prefixes=tuple(
+            DiagnosticPrefix(
+                row.id, len(row.diagnostics), canonical_sha256(row.diagnostics)
+            )
+            for row in records
+        ),
     )
     temporary = path.with_suffix(".tmp")
     with temporary.open("xb") as stream:
-        torch.save(state, stream)
+        if path.suffix == ".gz":
+            with gzip.GzipFile(fileobj=stream, mode="wb", mtime=0) as compressed:
+                torch.save(state, compressed)
+        else:
+            torch.save(state, stream)
         stream.flush()
         os.fsync(stream.fileno())
     # Hard link publishes without ever replacing a previous checkpoint.
@@ -91,7 +129,7 @@ def save_update(
     temporary.unlink()
 
 
-def load_update(parent: TrainingRun) -> UpdateSnapshot:
+def load_update(parent: TrainingRun, store: "VerifyStore") -> UpdateSnapshot:
     """Load only the latest artifact registered in the canonical local store."""
     artifact = parent.recovery_artifact
     if artifact is None:
@@ -99,11 +137,11 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
     path = Path(artifact["path"])
     if file_sha256(path) != artifact["sha256"]:
         raise ValueError("recovery artifact digest mismatch")
-    state = torch.load(path, map_location="cpu", weights_only=False)
-    if (
-        not isinstance(state, UpdateSnapshot)
-        or getattr(state, "format_version", None) != 2
-    ):
+    with gzip.open(path, "rb") if path.suffix == ".gz" else path.open("rb") as stream:
+        state = torch.load(stream, map_location="cpu", weights_only=False)
+    if not isinstance(state, UpdateSnapshot) or getattr(
+        state, "format_version", None
+    ) not in {2, 3}:
         raise ValueError("invalid recovery snapshot type")
     if (
         state.regime_digest != parent.regime_digest
@@ -112,6 +150,35 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
     ):
         raise ValueError("recovery snapshot identity mismatch")
     records = [*state.completed_stages, state.record]
+    if state.format_version == 3:
+        if state.diagnostic_run_id is None:
+            raise ValueError("recovery diagnostic owner missing")
+        # A setup failure may inherit an ancestor's snapshot before it has any
+        # current-stage rows of its own. Resolve the writer, not the latest retry.
+        owner = store.training_run(state.diagnostic_run_id)
+        if (owner.regime_digest, owner.seed, owner.identities) != (
+            state.regime_digest,
+            state.seed,
+            state.identities,
+        ):
+            raise ValueError("recovery diagnostic owner mismatch")
+        if len(records) != len(state.diagnostic_prefixes):
+            raise ValueError("recovery diagnostic prefix mismatch")
+        by_id = {row.id: row for row in owner.stages}
+        for row, prefix in zip(records, state.diagnostic_prefixes, strict=True):
+            source = by_id.get(row.id)
+            if (
+                row.diagnostics
+                or prefix.stage_id != row.id
+                or prefix.count < 0
+                or source is None
+                or len(source.diagnostics) < prefix.count
+            ):
+                raise ValueError("recovery diagnostic prefix missing")
+            diagnostics = source.diagnostics[: prefix.count]
+            if canonical_sha256(diagnostics) != prefix.sha256:
+                raise ValueError("recovery diagnostic prefix digest mismatch")
+            row.diagnostics = deepcopy(diagnostics)
     expected = [stage.id for stage in parent.regime.stages[: len(records)]]
     if [record.id for record in records] != expected or any(
         record.status != "completed" for record in state.completed_stages
@@ -178,10 +245,22 @@ def settle_orphan(parent: TrainingRun) -> TrainingRun:
         raise ValueError("calendar clock moved backwards; crash cost is unknown")
     settled = parent.model_copy(deep=True)
     settled.status = "interrupted"
-    settled.seconds += gap
-    settled.watchdog_seconds += gap
-    settled.unobserved_seconds += gap
+    charged = gap
+    if (
+        parent.regime.recovery is not None
+        and parent.recovery_boot_identity == boot_identity()
+    ):
+        if parent.last_recorded_active_seconds is None:
+            raise ValueError("active recovery lacks an awake-clock timestamp")
+        charged = max(0.0, time.monotonic() - parent.last_recorded_active_seconds)
+        settled.downtime_seconds += max(0.0, gap - charged)
+    # After reboot no shared monotonic epoch remains. Conservatively charge the
+    # unknown gap, and label it uncertainty rather than measured active compute.
+    settled.calendar_seconds += gap
+    settled.seconds += charged
+    settled.watchdog_seconds += charged
+    settled.unobserved_seconds += charged
     if settled.stages and settled.stages[-1].status != "completed":
-        settled.stages[-1].watchdog_seconds += gap
+        settled.stages[-1].watchdog_seconds += charged
     settled.error = "Writer lease released; unobserved interval charged conservatively"
     return settled

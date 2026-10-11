@@ -28,6 +28,7 @@ import torch
 from manabot.arena.models import canonical_sha256
 from manabot.sim.teacher1_evidence import source_bundle_sha256
 from manabot.training.checkpoint_queue import CheckpointQueue, stop_process_group
+from manabot.training.clock import arm_worker_deadline, boot_identity
 from manabot.training.execution import atomic_json, execute_regime
 from manabot.training.experiment_execution import (
     ExperimentRun,
@@ -36,6 +37,7 @@ from manabot.training.experiment_execution import (
 )
 from manabot.training.experiments import Experiment
 from manabot.training.models import TrainingRegime, TrainingRun
+from manabot.training.monitor_evaluation import Checkpoint, MonitorProtocol
 from manabot.training.recovery import attempt_lock
 from manabot.verify.store import VerifyStore
 import managym
@@ -80,6 +82,11 @@ def run_experiment(
     selected = hardware.select(schedule.hardware)
     resolved = experiment.resolve()
     regimes = resolved.regimes
+    if schedule.active_runtime and (
+        any(r.recovery is None for r in regimes.values())
+        or not schedule.monitoring.active_runtime
+    ):
+        raise ValueError("active experiment requires active recovery and monitoring")
     for regime in regimes.values():
         schedule.admit_regime(regime)
     if any(
@@ -133,15 +140,32 @@ def run_experiment(
                 or record.runtime != _runtime()
             ):
                 raise ValueError("experiment intent, hardware or runtime changed")
-            if record.status == "running" and record.last_seen_unix is not None:
-                record.elapsed_seconds += max(0, time.time() - record.last_seen_unix)
+            gap = max(0, time.time() - (record.last_seen_unix or time.time()))
+            unknown = gap
+            if (
+                schedule.active_runtime
+                and record.boot_identity == boot_identity()
+                and record.last_seen_active is not None
+            ):
+                unknown = max(0, time.monotonic() - record.last_seen_active)
+            if record.status == "running":
+                record.elapsed_seconds += unknown
+                record.uncertain_seconds += unknown
+                record.downtime_seconds += max(0, gap - unknown)
+            else:
+                record.downtime_seconds += gap
+            record.calendar_seconds += gap
             for attempt in record.attempts:
                 if attempt.status == "running":
                     attempt.status = "interrupted"
                     attempt.error = (
                         "owner stopped; full process allowance conservatively charged"
                     )
-                    attempt.process_seconds = attempt.allowance_seconds
+                    attempt.process_seconds = (
+                        attempt.process_seconds + unknown
+                        if schedule.active_runtime
+                        else attempt.allowance_seconds
+                    )
             for ordinal in recover:
                 parent = next(
                     (a for a in record.attempts if a.ordinal == ordinal), None
@@ -160,7 +184,11 @@ def run_experiment(
                         path=str(
                             out / "training" / f"attempt-{len(record.attempts):04d}"
                         ),
-                        allowance_seconds=parent.allowance_seconds,
+                        allowance_seconds=max(
+                            0, parent.allowance_seconds - parent.process_seconds
+                        )
+                        if schedule.active_runtime
+                        else parent.allowance_seconds,
                         recovery_parent=run.id,
                     )
                 )
@@ -188,10 +216,15 @@ def run_experiment(
                         )
                     )
         started, prior_elapsed = entered, record.elapsed_seconds
+        calendar_started, prior_calendar = time.time(), record.calendar_seconds
+        prior_downtime = record.downtime_seconds
         cpu_started, prior_cpu = cpu_entered, record.coordinator_cpu_seconds
         last_monitor_poll = float("-inf")
         queue: CheckpointQueue | None = None
-        record.status, record.error = "running", None
+        record.status, record.error, record.paused = "running", None, False
+        pause_path = out / "pause.request"
+        if resume:
+            pause_path.unlink(missing_ok=True)
 
         def save() -> None:
             record.coordinator_cpu_seconds = (
@@ -199,7 +232,13 @@ def run_experiment(
             )
             record.host_load = os.getloadavg()
             record.last_seen_unix = time.time()
+            record.last_seen_active = time.monotonic()
+            record.boot_identity = boot_identity() if schedule.active_runtime else None
             record.elapsed_seconds = prior_elapsed + time.monotonic() - started
+            record.calendar_seconds = prior_calendar + time.time() - calendar_started
+            record.downtime_seconds = prior_downtime + max(
+                0, time.time() - calendar_started - (time.monotonic() - started)
+            )
             record.evaluator_seconds = (
                 queue.charged_seconds if queue else record.evaluator_seconds
             )
@@ -229,11 +268,45 @@ def run_experiment(
         save()
         try:
             record.report(out)
-            queue = CheckpointQueue(out / "monitoring", schedule.monitoring)
-            for attempt in record.attempts:
+
+            def protocols_for(
+                run: TrainingRun, checkpoint: Checkpoint
+            ) -> list[MonitorProtocol]:
+                protocols = [schedule.monitoring.protocol]
+                if (
+                    schedule.diagnostic_protocol is not None
+                    and checkpoint.coordinates.updates in schedule.diagnostic_updates
+                ):
+                    protocols.append(schedule.diagnostic_protocol)
+                return protocols
+
+            queue = CheckpointQueue(
+                out / "monitoring",
+                schedule.monitoring,
+                protocols_for=protocols_for
+                if schedule.diagnostic_protocol is not None
+                else None,
+            )
+
+            def execution_order(attempt: RegimeAttempt) -> tuple[int, int]:
+                ancestor = attempt
+                while ancestor.recovery_parent is not None:
+                    ancestor = next(
+                        a
+                        for a in record.attempts
+                        if a.run_id == ancestor.recovery_parent
+                    )
+                return ancestor.ordinal, attempt.ordinal
+
+            for attempt in sorted(record.attempts, key=execution_order):
                 if attempt.status != "pending":
                     continue
                 check()
+                if pause_path.exists():
+                    record.paused = True
+                    break
+                if attempt.allowance_seconds <= 0:
+                    raise TimeoutError("recovered attempt has no remaining allocation")
                 # Reserve monitoring once. Its overlapping process time cannot
                 # disappear inside learner wall time or be spent twice.
                 learning_spent = sum(a.process_seconds for a in record.attempts)
@@ -260,6 +333,10 @@ def run_experiment(
                         "checkpoint_updates": schedule.checkpoint_updates,
                         "allowance_seconds": attempt.allowance_seconds,
                         "deadline_unix": time.time() + attempt.allowance_seconds,
+                        "active_runtime": schedule.active_runtime,
+                        "pause_path": str(pause_path)
+                        if schedule.active_runtime
+                        else None,
                     },
                 )
                 attempt.status = "running"
@@ -297,7 +374,7 @@ def run_experiment(
                         ):
                             raise TimeoutError("training process allowance exhausted")
                         if time.monotonic() - last_monitor_poll >= 5:
-                            queue.tick(sources())
+                            queue.tick(sources(), launch=not pause_path.exists())
                             attempt.process_seconds = time.monotonic() - child_started
                             save()
                             last_monitor_poll = time.monotonic()
@@ -309,6 +386,14 @@ def run_experiment(
                         else None
                     )
                     attempt.run_id = run.id if run else None
+                    if (
+                        run is not None
+                        and run.error
+                        and run.error.startswith("TrainingPaused:")
+                    ):
+                        attempt.status, attempt.error = "interrupted", run.error
+                        record.paused = True
+                        continue
                     if process.returncode or run is None or run.status != "completed":
                         raise RuntimeError(
                             f"learner exited {process.returncode}: {run.error if run else 'missing TrainingRun'}"
@@ -331,10 +416,16 @@ def run_experiment(
                     attempt.process_seconds = time.monotonic() - child_started
                     attempt.finished_unix = time.time()
                     save()
+                if record.paused:
+                    break
+                if schedule.active_runtime and attempt.status != "completed":
+                    # Operational failures need explicit recovery selection. A
+                    # silent next-seed launch can consume the entire allocation.
+                    break
                 queue.tick(sources())
             while True:
                 check()
-                queue.tick(sources())
+                queue.tick(sources(), launch=not record.paused)
                 save()
                 if queue.process is None:
                     break
@@ -369,14 +460,11 @@ def main() -> None:
         raise ValueError("internal worker requires an isolated process session")
     payload = json.loads(args.job.read_text())
 
-    def expire(signum: int, frame: object) -> None:
-        os.killpg(os.getpgrp(), signal.SIGKILL)
-
-    signal.signal(signal.SIGALRM, expire)
-    remaining = payload["deadline_unix"] - time.time()
-    if remaining <= 0:
-        expire(signal.SIGALRM, None)
-    signal.setitimer(signal.ITIMER_REAL, remaining)
+    arm_worker_deadline(
+        active_runtime=payload.get("active_runtime", False),
+        allowance_seconds=payload["allowance_seconds"],
+        deadline_unix=payload["deadline_unix"],
+    )
     with VerifyStore(payload["store"]) as store:
         run = execute_regime(
             TrainingRegime.model_validate(payload["regime"]),
@@ -384,8 +472,13 @@ def main() -> None:
             payload["out"],
             store,
             resume_from=payload["resume_from"],
+            pause_path=Path(payload["pause_path"])
+            if payload.get("pause_path")
+            else None,
             checkpoint_seconds=payload["checkpoint_seconds"],
-            checkpoint_updates=payload.get("checkpoint_updates"),
+            checkpoint_updates=tuple(payload["checkpoint_updates"])
+            if isinstance(payload.get("checkpoint_updates"), list)
+            else payload.get("checkpoint_updates"),
         )
     if run.status != "completed":
         raise SystemExit(1)

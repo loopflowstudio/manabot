@@ -43,8 +43,9 @@ def test_step_interval_is_a_positive_integer(interval: object) -> None:
         CheckpointCadence.model_validate({"checkpoint_updates": interval})
 
 
+@pytest.mark.parametrize("cadence", [2, (2, 4)])
 def test_real_iterations_export_exact_milestones_and_one_endpoint(
-    tmp_path: Path,
+    tmp_path: Path, cadence: int | tuple[int, ...],
 ) -> None:
     recipe = _recipe()
     stage = recipe.stages[0]
@@ -52,7 +53,7 @@ def test_real_iterations_export_exact_milestones_and_one_endpoint(
     stage.updates = 6
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         run = execution.execute_regime(
-            recipe, 197, tmp_path / "run", store, checkpoint_updates=2
+            recipe, 197, tmp_path / "run", store, checkpoint_updates=cadence
         )
     assert run.status == "completed", run.error
     assert run.stages[0].optimizer_updates == sum(

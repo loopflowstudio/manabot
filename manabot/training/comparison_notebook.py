@@ -8,7 +8,9 @@ import os
 from pathlib import Path
 
 
-def write_comparison_notebook(data_root: Path, output: Path) -> Path:
+def write_comparison_notebook(
+    data_root: Path, output: Path, *, individual_progress: bool = False
+) -> Path:
     """Create once, including under races. Existing notebooks require explicit migration."""
     import nbformat
 
@@ -19,6 +21,11 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
     docs = os.path.relpath(
         Path(__file__).resolve().parents[2] / "docs/experiment-metrics.md",
         output.parent.resolve(),
+    )
+    individual_section = (
+        "    ('Individual learning trajectories (unmatched)', 'comparisons', strength_figures(evidence, 'training_seconds', matched_only=False)),\n"
+        if individual_progress
+        else ""
     )
     cells = [
         nbformat.v4.new_markdown_cell(
@@ -68,6 +75,12 @@ def write_comparison_notebook(data_root: Path, output: Path) -> Path:
             "    sections += [\n"
             "        ('Scientific checkpoint strength', 'comparisons', study_strength_figures(study)),\n"
             "        ('Scientific checkpoints at recorded cost', 'comparisons', study_strength_figures(study, 'training_seconds')),\n"
+            "    ]\n"
+            "if evidence.monitors or study is None:\n"
+            "    sections += [\n"
+            f"{individual_section}"
+            "        ('Monitoring strength versus time', 'comparisons', strength_figures(evidence, 'training_seconds')),\n"
+            "        ('Monitoring strength versus work', 'comparisons', strength_figures(evidence, 'environment_decisions')),\n"
             "    ]\n"
             "sections += [\n"
             "    ('Self-play deck and play/draw balance', 'self-play', self_play_figures(evidence)),\n"

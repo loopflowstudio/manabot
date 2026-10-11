@@ -1,5 +1,39 @@
 # Intelligence memory
 
+## Weekly-first mini duration baseline (ETU-118, reconciled 2026-10-11)
+
+Jack Heart selected ETU-105's actor-and-critic-filtered masked-mean scalar
+width64/depth2/heads4, no-history current-self recipe: three 10,000-update seeds,
+256 rows/update. ETU-116/82 outcomes belong here. Source `ba0ae3e9`, plan
+`46aabdb0`, Ataraxos iterations, 620+620 stages and failed preparation
+(`05da79a9`) remain frozen. No retry, fresh week or paid compute.
+
+The [protocol/evidence](../../experiments/current-baseline.md) records three completed
+training seeds and 9,000 exact-replayed monitoring games on 2026-10-09.
+Development gains have strong deck asymmetry; final criteria remain unjudged.
+Training/monitoring charged 171,708.6 additive seconds plus 4355.137744 preparation
+against the original week; final/report charges remain unsettled. No promotion.
+Final analysis, ordinary demo admission, archival and independent daily validation
+remain required. S3 was credential-blocked at launch; only 128 W&B rows were
+verified then. Physical lid closure remains untested; unknown gaps are charged.
+
+Jack Heart requested PR251 repairs on October 10–11, not scientific completion. Repairs
+`64e1f111` and `3514dd5e` supersede the earlier unresolved-six-failures feedback:
+five reproduced; live diagnostics already passed after merging. Publication checks
+on October 11 passed the complete local Integration commands: 754 pytest cases
+(five skipped), 35 frozen-policy fixtures, enum and training smoke. Native debug
+tests passed (393), as did 38 baseline/recovery checks and the isolated remote
+suite (175 passed, two skipped). CI still owns the platform matrix; these software
+checks do not establish scientific acceptance.
+
+Initialization survives failed updates: assert
+exact artifact roles, unchanged finite initialization and no failed replacement.
+Telemetry failure must preserve the original training error.
+Format-3 recovery checks need VerifyStore diagnostics; native seed restoration
+retains per-stream matchups. Canonical recovery owns missing-boundary rejection.
+Scalar step cadence is exclusive; tuple milestones retain hourly exports.
+ETU-125 owns the next Mini workload; ETU-122 retains card-pool curriculum work.
+
 ## Mirror curriculum and frozen-opponent diagnostic (ETU-125, 2026-10-08)
 
 Jack Heart authorized a fresh laptop comparison: two curricula × seeds 12551/12552,
@@ -530,31 +564,22 @@ I1–I6 ordering at `fd7437df` is superseded by later reprioritizations below.
 
 ## Belief-forming branch reconciliation (2026-09-24)
 
-The branch supplies `Manabot.decide`, `evaluate_under_belief`, `ManabotPlayer`,
-a reference compatible-deal updater, schema-bound marginal encoding, and a
-bounded learned exact-world updater. The configured `checkpoint` player
-selects belief capability from serialized Agent fields. Observation-only
-checkpoints still exist; this is not evidence that every training or serving
-path now forms beliefs. Belief-enabled play generates a belief on every
-ordinary decision, and evaluating the same belief explicitly yields identical
-policy/value bytes without replacing autonomous memory.
+`Manabot.decide`, `evaluate_under_belief` and `ManabotPlayer` compose normalized
+beliefs with ordinary checkpoint play. Observation-only policies remain supported;
+not every training/serving path forms beliefs. Explicit evaluation of an identical
+belief preserves policy/value bytes without replacing autonomous memory.
 
-The three semantic layers are managym's possible worlds, manabot's normalized
-weights over those worlds, and managym's typed predicates. Conditioning is
-`b_Q(w) = b(w) * 1[Q(w)] / P_b(Q)`; empty mass fails explicitly. Full world
-weights preserve correlations for queries and search. The policy projection
-contains canonical owner/zone/CardDefId count marginals, validity, entropy,
-and effective support. Equal distributions encode equally regardless of query
-spelling or provenance; marginals cannot authoritatively answer conjunctions.
-Teacher policy/value labels are separate from a supplied belief.
+managym owns possible worlds and typed predicates; manabot owns normalized weights.
+Conditioning uses `b_Q(w) = b(w) * 1[Q(w)] / P_b(Q)` and rejects empty mass.
+Full weights preserve correlations. Canonical owner/zone/CardDefId marginals,
+validity, entropy and effective support encode equal distributions identically;
+marginals cannot answer conjunctions. Teacher labels remain separate.
 
-The implementation shares the visible-state attention/decision core, with a
-schema-bound card-definition embedding for belief rows. The existing visible
-card encoder has numeric features but no CardDefId/name identity to share.
-The learned updater has its own embeddings and head; full semantic parameter
-sharing remains an architectural target, not an implemented claim. Belief and
-strategy losses remain separate, and no private recurrent activation crosses
-the intervention boundary. Joint gradients require a measured future choice.
+The shared visible-state core uses schema-bound belief embeddings; visible cards
+lack CardDefId/name embeddings. The updater owns separate embeddings/head: full
+semantic sharing remains unimplemented. Belief and strategy losses stay separate;
+no private recurrent activation crosses interventions. Joint gradients need a
+measured future choice.
 
 Belief-enabled checkpoints require both `belief_schema_identity` and
 `belief_content_manifest_identity`. The schema binds world/content identities,
@@ -599,21 +624,17 @@ a managym semantic-history replay projection. Do not infer meaning from hashes.
 The v2 updater sum-pools events with square-root count normalization: it learns
 actor/kind/card/multiplicity sensitivity but is explicitly invariant to order.
 
-`uv run manabot belief-learn-demo` samples 160 opening worlds with replacement
-from exact `p0`. One frozen opponent plays its most-held land (canonical-name
-tie break), otherwise passes, after refreshing its legal offers. Each deal
-contributes one real post-transition label; whole episodes split 128/32. The
-held-out test checks joint NLL improvement >0.1 nat, improved inclusion Brier
-and ECE, 90% credible-set coverage >=0.8, and broad posterior support. The same
-scripted population appears in both arms: this proves population supervision,
-not opponent transfer, order sensitivity, multi-seed calibration, or strength.
-Future splits must also hold out opponent versions; the updater must not
-require the acting policy at inference. Known-policy Bayes remains diagnostic.
+`uv run manabot belief-learn-demo` uses 160 physical-prior opening worlds,
+one frozen scripted opponent and a 128/32 whole-episode split. Held-out joint
+NLL, Brier, ECE, coverage and support checks prove same-population supervision
+only, not transfer, order sensitivity, multi-seed calibration or strength.
+Exact recipe/thresholds remain in this memory at `7962bd69`. Future splits must
+hold out opponent versions; inference must not require the acting policy.
+Known-policy Bayes remains diagnostic.
 
 ### What the branch proves and what remains
 
-The 2026-09-24 belief/state/runtime/learning and BC suite passed 27 checks;
-full receipt and historical implementation detail remains at `76afdb68`.
+The 2026-09-24 suite passed 27 checks; receipts remain at `76afdb68`.
 Those bounded proofs do not establish strength or general calibration. Reference
 receipt ranges count opaque events; learned ranges count typed commitments.
 
@@ -892,41 +913,22 @@ from this command. Its costs must be included in campaign accounting.
 
 ## ETU-95 software finish line (2026-10-04)
 
-Jack Heart separated software delivery from new training: ETU-95 now owns
+Jack Heart separated software delivery from new training: ETU-95 owns
 compound-policy sampling search and reloadable distillation targets; ETU-99 owns
-the scientific comparisons previously left open under ETU-95. Historical evidence
-and its limits above remain intact. No new training study or ETU-91 mutation is
-authorized by this continuation.
+scientific comparisons. ETU-91 remained untouched. Detailed integration and fixture
+receipts remain in `cd277710:wave/intelligence/MEMORY.md` and the
+[local-search contract](../../docs/local-policy-search.md).
 
-The final software connects both direct hand samplers to frozen ordinary and
-supported compound policies. Production history never enumerates support; the
-explicit tiny exact reference remains separate. Empty hidden pools have one
-physical deal, the empty hand. Learned sampler admission retains exact policy,
-dataset, schema and world identity. `True` is the only production sampling query.
+Direct hand samplers support frozen ordinary/compound policies without production
+enumeration; empty hidden pools mean one empty hand. Admission binds policy,
+dataset, schema and world. `True` is the only production query. Search preserves
+viewer roots/prefixes and native lowering; the branch runtime owns replay.
+Raw cloning selected branches is forbidden; checkpoint fields stay unchanged.
 
-Jack Heart confirmed ETU-94 PR #216 merged; its blocker/payment API was synced
-before final compound verification. Compound search retains original viewer
-roots and decoder prefixes, proves each canonical route through native lowering,
-and drains sampled suffixes in rollouts and base collection. Attackers,
-single-target casts, independent blocker roles and ordinary fallback offers work.
-The selected branch runtime owns snapshots and prefix replay; raw cloning a
-selected branch is forbidden. No model parameters or checkpoint fields changed.
-
-Ordered waterbend subsets remain explicitly unsupported in this search: excluding
-an earlier tap can give a currently legal micro-action zero conditional mass,
-which the teacher's positive-support local-update contract cannot accept. The
-explicit failure follows Jack Heart's role-boundary allowance. Sequential policies
-still handle payments; ETU-94 compound serving retains its own subset support.
-Compound exact likelihood, belief-input memory and live advice registration remain
-unavailable. Canonical conditional targets are not joint declaration targets.
-
-The fixture-only gate passed 60 affected Python checks, six native debug compound
-tests and focused lint/format checks, including saved-artifact physical/learned
-search, full-game target reader admission and compound arena replay. No optimizer,
-scientific study or paid compute ran. ETU-91 was untouched; these proofs establish
-software behavior, not strength, calibration or human-play success. The durable
-[local-search contract](../../docs/local-policy-search.md) records supported paths,
-receipt/replay requirements and remaining scientific ownership.
+The original ordered-waterbend rejection is superseded by ETU-100's exact-zero
+support contract below. Compound exact likelihood, belief-input memory and live
+advice registration remain unavailable; canonical conditional targets are not joint
+declaration targets. Fixture proofs establish no scientific acceptance.
 
 ## Offline sampler software boundary (ETU-96, 2026-10-04)
 

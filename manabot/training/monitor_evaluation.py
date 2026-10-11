@@ -79,6 +79,22 @@ class MonitorProtocol(Strict):
     opponent: Literal["scripted_greedy", "random"] = Field(
         default="scripted_greedy", exclude_if=lambda value: value == "scripted_greedy"
     )
+    # A frozen external comparison owns seeds, selection and analysis. This binds
+    # its exact bytes; the evaluator itself supplies no promotion decision.
+    comparison_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None
+    )
+
+    @property
+    def result_purpose(
+        self,
+    ) -> EvaluationPurpose | Literal["predeclared-comparison-not-admission"]:
+        """Preserve the external-comparison label without changing frozen bytes."""
+        return (
+            "predeclared-comparison-not-admission"
+            if self.comparison_sha256
+            else self.purpose
+        )
 
     @model_validator(mode="after")
     def unique_deals(self) -> MonitorProtocol:
@@ -198,7 +214,9 @@ class RateInterval(Strict):
 
 class MonitorResult(Strict):
     schema_version: Literal[1] = 1
-    purpose: EvaluationPurpose = "monitoring-not-scientific-evaluation"
+    purpose: EvaluationPurpose | Literal["predeclared-comparison-not-admission"] = (
+        "monitoring-not-scientific-evaluation"
+    )
     run_id: str
     regime_digest: str
     training_seed: int
@@ -218,6 +236,12 @@ class MonitorResult(Strict):
     draw: RateInterval | None = None
     score: RateInterval | None = None
     evaluation_seconds: float | None = None
+    started_unix: float | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    finished_unix: float | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     coordinator_cpu_seconds: float | None = None
     reaped_worker_cpu_seconds: float | None = None
     coordinator_rss_before_bytes: int | None = None
@@ -234,7 +258,7 @@ class MonitorResult(Strict):
 
     @model_validator(mode="after")
     def purpose_matches_protocol(self) -> "MonitorResult":
-        if self.purpose != self.protocol.purpose:
+        if self.purpose != self.protocol.result_purpose:
             raise ValueError(
                 "evaluation result purpose differs from its frozen protocol"
             )
@@ -400,7 +424,7 @@ def _manifest(
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     return MonitorResult(
-        purpose=protocol.purpose,
+        purpose=protocol.result_purpose,
         run_id=run.id,
         regime_digest=run.regime_digest,
         training_seed=run.seed,
@@ -427,6 +451,7 @@ def evaluate_checkpoint(
     """Run bounded arena games. Use a new directory per attempt; never overwrite failures."""
     output_dir.mkdir(parents=True, exist_ok=False)
     start, cpu = time.perf_counter(), time.process_time()
+    started_unix = time.time()
     process = psutil.Process()
     child_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
@@ -444,6 +469,7 @@ def evaluate_checkpoint(
         )
         raise
     result.concurrent_activity = concurrent_activity
+    result.started_unix = started_unix
     result.coordinator_rss_before_bytes = process.memory_info().rss
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
@@ -475,6 +501,7 @@ def evaluate_checkpoint(
         result.error = f"{type(exc).__name__}: {exc}"
     finally:
         result.evaluation_seconds = time.perf_counter() - start
+        result.finished_unix = time.time()
         result.coordinator_cpu_seconds = time.process_time() - cpu
         child_end = resource.getrusage(resource.RUSAGE_CHILDREN)
         result.reaped_worker_cpu_seconds = (

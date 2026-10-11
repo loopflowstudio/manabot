@@ -70,7 +70,12 @@ def test_pause_export_and_resume_preserve_target_and_learning(
         assert paused.status == "paused"
         assert paused.stages[0].status == "paused"
         assert paused.updates_through() == 1
-        assert set(paused.stages[0].artifacts) == {"raw", "ema", "optimizer"}
+        assert set(paused.stages[0].artifacts) == {
+            "initial_raw",
+            "raw",
+            "ema",
+            "optimizer",
+        }
         assert paused.selected_artifact is None
         assert paused.allocation_deadline == allocation.deadline
         assert paused.recovery_artifact is not None
@@ -90,7 +95,11 @@ def test_pause_export_and_resume_preserve_target_and_learning(
         assert resumed.updates_through() == control.updates_through() == 3
         assert resumed.regime_digest == paused.regime_digest == control.regime_digest
         assert_learning_diagnostics_equal(resumed.stages[0], control.stages[0])
-        left, right = load_update(resumed), load_update(control)
+        assert (
+            resumed.stages[0].artifacts["initial_raw"]
+            == paused.stages[0].artifacts["initial_raw"]
+        )
+        left, right = load_update(resumed, store), load_update(control, store)
         assert_state_equal(left.learner, right.learner)
         assert_state_equal(left.optimizer, right.optimizer)
         assert_state_equal(left.ema, right.ema)
@@ -144,7 +153,12 @@ def test_collection_cutoff_leaves_checkpoint_reserve_without_claiming_cuda_recov
             value, 197, tmp_path / "paused", store, allocation=allocation
         )
         assert paused.status == "paused" and paused.updates_through() == 0
-        assert set(paused.stages[0].artifacts) == {"raw", "ema", "optimizer"}
+        assert set(paused.stages[0].artifacts) == {
+            "initial_raw",
+            "raw",
+            "ema",
+            "optimizer",
+        }
         assert paused.recovery_artifact is None
         point = stage_checkpoint(paused, paused.stages[0].id)
         assert point is not None

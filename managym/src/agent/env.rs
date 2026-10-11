@@ -224,6 +224,11 @@ impl Env {
         self.seed = seed;
     }
 
+    /// Seed of the current game, for private collector recovery.
+    pub fn seed(&self) -> u64 {
+        self.seed
+    }
+
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
     /// since the current game began. Resets to zero on `reset`.
     pub fn skip_trivial_count(&self) -> usize {

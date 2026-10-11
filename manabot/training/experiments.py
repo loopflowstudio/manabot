@@ -51,6 +51,7 @@ _ROOT_OWNERS: dict[str, ComponentName] = {
     "wall_seconds": "resources",
     "schedule_clock": "run",
     "recovery_max_microsteps": "run",
+    "recovery": "run",
     "recovery_every_updates": "run",
     "selection": "run",
 }

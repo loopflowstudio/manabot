@@ -115,8 +115,15 @@ def test_newer_metadata_is_preserved_only_in_read_only_projection() -> None:
     run = load_evidence(DEMO).runs[0].model_dump(mode="json")
     run["calendar_seconds"] = 99
     run["regime"]["recovery"] = {"checkpoint_updates": 128}
+    run["regime"]["future_metadata"] = {"producer_version": 2}
     projected = RetainedRun.model_validate(run)
-    assert projected.model_dump()["regime"]["recovery"] == {"checkpoint_updates": 128}
+    assert projected.model_dump()["regime"]["recovery"] == {
+        "checkpoint_updates": 128,
+        "max_game_microsteps": 40000,
+    }
+    assert projected.model_dump()["regime"]["future_metadata"] == {
+        "producer_version": 2
+    }
     assert projected.model_dump()["calendar_seconds"] == 99
     run["seed"] = "not a number"
     with pytest.raises(ValueError):

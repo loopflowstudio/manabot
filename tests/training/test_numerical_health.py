@@ -30,7 +30,12 @@ from manabot.sim.net_opponent import NetOpponentTrainer, SeatRoutedCollector
 from manabot.training import execution
 from manabot.training.ataraxos import damped_policy_loss, update_move_iteration
 from manabot.training.health import NumericalHealth, OptimizerHealth
-from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
+from manabot.training.models import (
+    AtaraxosMoveLearning,
+    TrainingRegime,
+    TrainingRun,
+    TrainSelfPlay,
+)
 from manabot.verify.store import VerifyStore
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
@@ -350,8 +355,14 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         raise AssertionError("expected invariant failure")
 
     original_save = VerifyStore.save_training_run
+    initial_content: bytes | None = None
 
-    def save(self: VerifyStore, run: object) -> None:
+    def save(self: VerifyStore, run: TrainingRun) -> None:
+        nonlocal initial_content
+        if initial_content is None and run.stages:
+            initial = run.stages[0].artifacts.get("initial_raw")
+            if initial is not None:
+                initial_content = Path(initial["path"]).read_bytes()
         if fault == "telemetry" and run.status == "failed":
             raise OSError("fixture telemetry failure")
         original_save(self, run)
@@ -409,7 +420,15 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         and state["model"]
         and state["collector_rng"].numel()
     )
-    assert not record["artifacts"]  # No invalid replacement policy was exported.
+    # Initialization is valid retained evidence; no failed replacement is exported.
+    assert set(record["artifacts"]) == {"initial_raw"}
+    assert run["selected_artifact"] is None
+    initial_path = Path(record["artifacts"]["initial_raw"]["path"])
+    assert initial_content is not None and initial_path.read_bytes() == initial_content
+    initial_agent, _ = execution.load_checkpoint_agent(str(initial_path))
+    assert all(
+        torch.isfinite(value).all() for value in initial_agent.state_dict().values()
+    )
 
 
 @pytest.mark.parametrize("bad", [float("nan"), -1.0, 0.5])

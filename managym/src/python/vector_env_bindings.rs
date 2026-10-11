@@ -216,6 +216,18 @@ impl PyVectorEnv {
         self.inner.current_agent_indices()
     }
 
+    fn current_game_seeds(&self) -> Vec<u64> {
+        self.inner.current_game_seeds()
+    }
+
+    fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {
+                write_buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
+            })
+        })
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()
