@@ -1,14 +1,14 @@
 """Head-to-head arena between frozen trained policies on shared deals.
 
 Every experiment so far scored a policy against scripted greedy. This runner
-plays a fixed roster of trained checkpoints against each other, and against
-greedy, on one shared set of deals, so the two measures can be compared
+plays a built-in or JSON-declared tournament of checkpoints against each other
+and against greedy on shared deals, so the two measures can be compared
 directly. See `experiments/head-to-head.md` for the protocol and reading rule.
 
 Principal types and entry points:
 
-- `ROSTER` and `PAIRINGS` are the frozen design: who plays, identified by
-  checkpoint bytes, and which pairs meet.
+- `Tournament` declares the design (the built-in constants remain the default):
+  who plays, identified by checkpoint bytes, and which pairs meet.
 - `admit` verifies every checkpoint's bytes and loads it through the ordinary
   loader, which rejects a checkpoint bound to a different world, content pack
   or input schema. Admission is all-or-nothing and happens before any game.
@@ -36,10 +36,12 @@ from collections.abc import Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict, dataclass, field, replace
+from functools import partial
 import json
 import multiprocessing as mp
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import sys
@@ -48,7 +50,8 @@ from types import FrameType
 from typing import Literal
 
 import numpy as np
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic.dataclasses import dataclass as validated_dataclass
 
 from manabot.arena import players
 from manabot.arena.match import (
@@ -72,6 +75,7 @@ from manabot.training.monitor_evaluation import ArenaRow
 from managym import WORLD_VERSION
 
 NAME = "head-to-head"
+GREEDY = "scripted-greedy"
 MIRROR_DEAL_SEEDS = tuple(range(1_913_131_000, 1_913_131_100))
 MIRROR_SMOKE_SEEDS = (1_913_131_100, 1_913_131_101)
 TRAINING_CAVEAT = (
@@ -86,9 +90,9 @@ TRAINING_CAVEAT = (
 # ----------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
+@validated_dataclass(frozen=True, config=ConfigDict(extra="forbid", strict=True))
 class Entrant:
-    """One player in the roster.
+    """One player in a Tournament.
 
     A checkpoint entrant is identified by `sha256` and `bytes`; `file` is only
     where the runner looks for those bytes under the models directory. The
@@ -104,12 +108,46 @@ class Entrant:
     training_seed: int | None = None
     updates: int | None = None
 
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{2,63}", self.id):
+            raise ValueError("entrant id must be a safe directory component")
+        if not self.label.strip() or not self.origin.strip():
+            raise ValueError("entrant label and origin must be nonempty")
+        identity = (
+            self.file,
+            self.sha256,
+            self.bytes,
+            self.training_seed,
+            self.updates,
+        )
+        if self.id == GREEDY:
+            if any(value is not None for value in identity):
+                raise ValueError("scripted greedy cannot carry checkpoint fields")
+        else:
+            if (
+                self.file is None
+                or self.sha256 is None
+                or self.bytes is None
+                or self.training_seed is None
+                or self.updates is None
+            ):
+                raise ValueError("checkpoint entrant requires all identity fields")
+            if (
+                not self.file
+                or Path(self.file).name != self.file
+                or self.file in (".", "..")
+            ):
+                raise ValueError("checkpoint file must be a basename under models")
+            if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+                raise ValueError("checkpoint sha256 must be 64 lowercase hex digits")
+            if self.bytes <= 0 or self.training_seed < 0 or self.updates < 0:
+                raise ValueError("invalid checkpoint size, seed or updates")
 
-GREEDY = "scripted-greedy"
+
 # The candidate frozen-checkpoint opponent: the longest-trained policy we have.
 REFERENCE = "small-100k"
 
-ROSTER: tuple[Entrant, ...] = (
+ENTRANTS: tuple[Entrant, ...] = (
     Entrant(GREEDY, "scripted greedy", "code anchor"),
     Entrant(
         "small-0",
@@ -223,16 +261,6 @@ EXTRA: tuple[tuple[str, str], ...] = (
 )
 
 
-def pairings() -> tuple[tuple[str, str], ...]:
-    """Every scheduled meeting, as (player_a, player_b). Scores are player_a's."""
-    against_greedy = [(e.id, GREEDY) for e in ROSTER if e.id != GREEDY]
-    core = [(a, b) for i, a in enumerate(CORE) for b in CORE[i + 1 :]]
-    found = (*against_greedy, *core, *EXTRA)
-    if len({frozenset(pair) for pair in found}) != len(found):
-        raise ValueError("a pairing is scheduled twice")
-    return found
-
-
 # Entrant pairs whose greedy-score difference is compared with their direct
 # meeting. Each pair is also scheduled above.
 CONTRASTS: tuple[tuple[str, str], ...] = (
@@ -246,6 +274,77 @@ CONTRASTS: tuple[tuple[str, str], ...] = (
     ("etu125-mirrors-10k", "etu125-cross-10k"),
     ("etu118-10k", "etu125-cross-10k"),
 )
+
+
+class Tournament(BaseModel):
+    """Validated experiment design; checkpoint paths remain relative to --models.
+
+    Greedy is the fixed code/rating anchor. Every checkpoint meets it; core
+    adds a round robin and extra adds explicitly named meetings.
+    """
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    entrants: tuple[Entrant, ...]
+    core: tuple[str, ...]
+    extra: tuple[tuple[str, str], ...]
+    contrasts: tuple[tuple[str, str], ...]
+    reference: str
+    training_caveat: str
+
+    def pairings(self) -> tuple[tuple[str, str], ...]:
+        anchors = tuple((e.id, GREEDY) for e in self.entrants if e.id != GREEDY)
+        core = tuple(
+            (a, b)
+            for i, a in enumerate(self.core)
+            for b in self.core[i + 1 :]
+            if GREEDY not in (a, b)
+        )
+        return (*anchors, *core, *self.extra)
+
+    @model_validator(mode="after")
+    def validate_design(self) -> "Tournament":
+        ids = {entrant.id for entrant in self.entrants}
+        if len(ids) != len(self.entrants):
+            raise ValueError("duplicate entrant ids")
+        if GREEDY not in ids or len(ids) < 2:
+            raise ValueError("tournament requires scripted-greedy and a checkpoint")
+        if self.reference not in ids or self.reference == GREEDY:
+            raise ValueError("reference must name a checkpoint entrant")
+        if len(set(self.core)) != len(self.core) or not set(self.core) <= ids:
+            raise ValueError("core contains duplicate or unknown ids")
+        pairs = self.pairings()
+        for group in (pairs, self.contrasts):
+            if any(a not in ids or b not in ids or a == b for a, b in group):
+                raise ValueError("pair contains unknown ids or a self meeting")
+            if len({frozenset(pair) for pair in group}) != len(group):
+                raise ValueError("a pairing is scheduled twice")
+        scheduled = {frozenset(pair) for pair in pairs}
+        if any(
+            frozenset(pair) not in scheduled or GREEDY in pair
+            for pair in self.contrasts
+        ):
+            raise ValueError("contrasts require a scheduled checkpoint meeting")
+        if not self.training_caveat.strip():
+            raise ValueError("training caveat must be nonempty")
+        return self
+
+
+def default_tournament() -> Tournament:
+    return Tournament(
+        entrants=ENTRANTS,
+        core=CORE,
+        extra=EXTRA,
+        contrasts=CONTRASTS,
+        reference=REFERENCE,
+        training_caveat=TRAINING_CAVEAT,
+    )
+
+
+def pairings() -> tuple[tuple[str, str], ...]:
+    """Frozen default meetings, preserving their orientation and order."""
+    return default_tournament().pairings()
+
 
 # A namespace no monitoring or study cohort uses. 100 deals x 4 legs = 400
 # games per pairing.
@@ -275,7 +374,7 @@ class Admitted:
 
 def admit(
     models: Path,
-    roster: Sequence[Entrant] = ROSTER,
+    entrants: Sequence[Entrant] = ENTRANTS,
     *,
     matchup_mode: MatchupMode = "cross",
 ) -> Admitted:
@@ -283,18 +382,20 @@ def admit(
 
     The ordinary loader validates the checkpoint's world, content manifest and
     input schema against this runtime. An entrant that fails is never forced
-    in: the whole run stops, because the roster is the frozen design.
+    in: the whole run stops, because the tournament is the frozen design.
     """
     match = selected_match()
     paths: dict[str, str] = {}
     parameters: dict[str, int] = {}
     identities: dict[str, str] | None = None
-    for entrant in roster:
+    for entrant in entrants:
         if entrant.file is None:
             continue
         path = (models / entrant.file).resolve()
         if path.stat().st_size != entrant.bytes or file_sha256(path) != entrant.sha256:
-            raise ValueError(f"{entrant.id}: checkpoint bytes differ from the roster")
+            raise ValueError(
+                f"{entrant.id}: checkpoint bytes differ from the tournament"
+            )
         agent, space = load_checkpoint_agent(str(path))
         runtime = runtime_fingerprints(
             entrant.training_seed or 0, match_hypers=match, observation_space=space
@@ -313,7 +414,7 @@ def admit(
         paths[entrant.id] = str(path)
         parameters[entrant.id] = sum(p.numel() for p in agent.parameters())
     if identities is None:
-        raise ValueError("the roster has no checkpoint entrant")
+        raise ValueError("the tournament has no checkpoint entrant")
     common = {
         "information_boundary": "acting-viewer",
         "world": WORLD_VERSION,
@@ -322,7 +423,7 @@ def admit(
         **identities,
     }
     registrations: dict[str, PlayerRegistration] = {}
-    for entrant in roster:
+    for entrant in entrants:
         if entrant.file is None:
             registrations[entrant.id] = PlayerRegistration(
                 **common,
@@ -398,10 +499,11 @@ class Unit:
 class Plan:
     """What a run plays. The smoke passes a reduced plan through the same path."""
 
-    roster: tuple[Entrant, ...]
+    entrants: tuple[Entrant, ...]
     pairings: tuple[tuple[str, str], ...]
     deal_seeds: tuple[int, ...]
     matchup_mode: MatchupMode = "cross"
+    tournament: Tournament | None = None
 
     def units(self) -> list[Unit]:
         # Deal-major order keeps every pairing at the same depth if the run stops.
@@ -412,29 +514,37 @@ class Plan:
         ]
 
 
-def full_plan(matchup_mode: MatchupMode = "cross") -> Plan:
+def full_plan(
+    matchup_mode: MatchupMode = "cross", tournament: Tournament | None = None
+) -> Plan:
     seeds = MIRROR_DEAL_SEEDS if matchup_mode == "mirrors" else DEAL_SEEDS
-    return Plan(ROSTER, pairings(), seeds, matchup_mode)
+    spec = tournament or default_tournament()
+    return Plan(spec.entrants, spec.pairings(), seeds, matchup_mode, tournament)
 
 
-def smoke_plan(matchup_mode: MatchupMode = "cross") -> Plan:
+def smoke_plan(
+    matchup_mode: MatchupMode = "cross", tournament: Tournament | None = None
+) -> Plan:
     """Two deals through checkpoint play, greedy, replay and paired contrasts.
 
     Mirrors compare the cross-only and mirror-trained ETU-125 policies; cross
     mode retains its small-model ladder plus the large-model timing probe.
     The mirror smoke does not estimate large-model inference cost.
     """
+    if tournament is not None:
+        seeds = MIRROR_SMOKE_SEEDS if matchup_mode == "mirrors" else DEAL_SEEDS[:2]
+        return replace(full_plan(matchup_mode, tournament), deal_seeds=seeds)
     if matchup_mode == "mirrors":
         first, second = "etu125-cross-10k", "etu125-mirrors-10k"
         return Plan(
-            tuple(e for e in ROSTER if e.id in (GREEDY, first, second)),
+            tuple(e for e in ENTRANTS if e.id in (GREEDY, first, second)),
             ((first, GREEDY), (second, GREEDY), (second, first)),
             MIRROR_SMOKE_SEEDS,
             matchup_mode,
         )
     wanted = (GREEDY, "small-26k", "small-100k", "large-15k6")
     return Plan(
-        tuple(e for e in ROSTER if e.id in wanted),
+        tuple(e for e in ENTRANTS if e.id in wanted),
         (
             ("small-26k", GREEDY),
             ("small-100k", GREEDY),
@@ -503,6 +613,52 @@ def _free_gib(path: Path) -> float:
     return shutil.disk_usage(path).free / 2**30
 
 
+def _read_tournament(design: dict[str, object]) -> Tournament | None:
+    """Read the frozen design schema shared by reporting and continuation.
+
+    Historical runs contain only a `roster` entrant list. Grid runs additionally
+    contain `roster_spec`; keep writing those keys so existing evidence and
+    continuation identities do not change when the public concept is renamed.
+    """
+    value = design.get("roster_spec")
+    return (
+        Tournament.model_validate_json(json.dumps(value)) if value is not None else None
+    )
+
+
+def _validate_extension(
+    previous: dict[str, object], current: dict[str, object]
+) -> None:
+    """Compare JSON-form designs; only additive tournaments/schedules may reuse units.
+
+    Pair orientation binds action seeds and directory names. Runtime identities,
+    old registrations, deals and inference bounds remain exact.
+    """
+    for key in previous.keys() | current.keys():
+        old, new = previous.get(key), current.get(key)
+        if key == "roster":
+            by_id = {row["id"]: row for row in new}
+            valid = all(by_id.get(row["id"]) == row for row in old)
+        elif key == "registrations":
+            valid = all(new.get(name) == value for name, value in old.items())
+        elif key == "pairings":
+            valid = all(pair in new for pair in old)
+        elif key == "roster_spec" and old is not None and new is not None:
+            old_spec = _read_tournament(previous)
+            new_spec = _read_tournament(current)
+            valid = (
+                old_spec is not None
+                and new_spec is not None
+                and old_spec.reference == new_spec.reference
+                and old_spec.training_caveat == new_spec.training_caveat
+                and all(pair in new_spec.contrasts for pair in old_spec.contrasts)
+            )
+        else:
+            valid = old == new
+        if not valid:
+            raise ValueError(f"this output directory holds a different design: {key}")
+
+
 def run(
     out: Path,
     models: Path,
@@ -523,10 +679,12 @@ def run(
     """
     plan = plan or full_plan()
     design_path = out / "design.json"
-    if design_path.exists():
-        previous = json.loads(design_path.read_text())
-        if previous.get("matchup_mode", "cross") != plan.matchup_mode:
-            raise ValueError("this output directory holds a different matchup mode")
+    previous = json.loads(design_path.read_text()) if design_path.exists() else None
+    if (
+        previous is not None
+        and previous.get("matchup_mode", "cross") != plan.matchup_mode
+    ):
+        raise ValueError("this output directory holds a different matchup mode")
     out.mkdir(parents=True, exist_ok=True)
     started = time.time()
     units = plan.units()
@@ -551,36 +709,38 @@ def run(
         status.free_gib = _free_gib(out)
         atomic_json(out / "status.json", asdict(status))
 
-    publish()
+    if previous is None:
+        publish()
     try:
-        admitted = admit(models, plan.roster, matchup_mode=plan.matchup_mode)
+        admitted = admit(models, plan.entrants, matchup_mode=plan.matchup_mode)
     except Exception as error:
         status.state, status.reason = "incomplete", f"admission failed: {error}"
-        publish()
+        if previous is None:
+            publish()
         raise
     design = {
         "name": NAME,
-        **(
-            {"matchup_mode": "mirrors", "training_caveat": TRAINING_CAVEAT}
-            if plan.matchup_mode == "mirrors"
-            else {}
-        ),
-        "roster": [asdict(entrant) for entrant in plan.roster],
+        "roster": [asdict(entrant) for entrant in plan.entrants],
         "pairings": [list(pair) for pair in plan.pairings],
         "deal_seeds": list(plan.deal_seeds),
         "game_seconds": GAME_SECONDS,
         "max_commands": MAX_COMMANDS,
-        "arena_key": admitted.key.model_dump(),
+        "arena_key": admitted.key.model_dump(mode="json"),
         "registrations": {
-            name: registration.model_dump()
+            name: registration.model_dump(mode="json")
             for name, registration in admitted.registrations.items()
         },
     }
-    if design_path.exists():
-        if json.loads(design_path.read_text()) != json.loads(json.dumps(design)):
-            raise ValueError("this output directory holds a different design")
-    else:
-        atomic_json(design_path, design)
+    if plan.tournament is not None:
+        design["roster_spec"] = plan.tournament.model_dump(mode="json")
+    if plan.matchup_mode == "mirrors":
+        design["matchup_mode"] = "mirrors"
+        design["training_caveat"] = (
+            plan.tournament.training_caveat if plan.tournament else TRAINING_CAVEAT
+        )
+    if previous is not None:
+        _validate_extension(previous, design)
+    atomic_json(design_path, design)
 
     pending: list[Unit] = []
     for unit in units:
@@ -718,6 +878,14 @@ class Report(ScorePanel):
     status: dict[str, object] | None
     matchup_mode: MatchupMode = "cross"
     decks: dict[str, ScorePanel] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, kw_only=True)
+class TournamentReport(Report):
+    """Declared report context; historical reports retain their exact schema."""
+
+    reference: str
+    training_caveat: str
 
 
 def _interval(per_deal: np.ndarray, rng: np.random.Generator) -> Interval:
@@ -884,10 +1052,12 @@ def _contrast(
     )
 
 
-def _score_panel(cells: dict[tuple[str, str], _Cell]) -> ScorePanel:
+def _score_panel(
+    cells: dict[tuple[str, str], _Cell],
+    contrast_pairs: tuple[tuple[str, str], ...],
+) -> ScorePanel:
     """Use the same paired-deal estimator on the full matrix or a single deck."""
-    scheduled = list(cells)
-    scores = tuple(_pairing_score(pair, cells[pair]) for pair in scheduled)
+    scores = tuple(_pairing_score(pair, cell) for pair, cell in cells.items())
     usable = {
         pair: cell
         for pair, cell in cells.items()
@@ -897,7 +1067,7 @@ def _score_panel(cells: dict[tuple[str, str], _Cell]) -> ScorePanel:
     }
     contrasts = tuple(
         found
-        for first, second in CONTRASTS
+        for first, second in contrast_pairs
         if (found := _contrast(usable, first, second)) is not None
     )
     rows = [row for cell in usable.values() for row in cell.rows]
@@ -949,18 +1119,31 @@ def report(out: Path) -> Report:
     status_path = out / "status.json"
     status = json.loads(status_path.read_text()) if status_path.exists() else None
     cells = {pair: _load_cell(out, pair, deal_seeds, mode) for pair in scheduled}
-    panel = _score_panel(cells)
+    spec = _read_tournament(design)
+    contrasts = spec.contrasts if spec else CONTRASTS
+    panel = _score_panel(cells, contrasts)
     decks = (
         {
             deck: _score_panel(
-                {pair: _deck_cell(cell, deck) for pair, cell in cells.items()}
+                {pair: _deck_cell(cell, deck) for pair, cell in cells.items()},
+                contrasts,
             )
             for deck in ("ur_lessons", "gw_allies")
         }
         if mode == "mirrors"
         else {}
     )
-    return Report(
+    # Select the schema before construction; legacy JSON has no tournament metadata.
+    report_type = (
+        partial(
+            TournamentReport,
+            reference=spec.reference,
+            training_caveat=spec.training_caveat,
+        )
+        if spec is not None
+        else Report
+    )
+    return report_type(
         panel.pairings,
         panel.contrasts,
         panel.ratings,
@@ -988,8 +1171,11 @@ def render(found: Report) -> str:
             + f"; units {s['units_done']}/{s['units_total']}, failed {s['units_failed']},"
             f" invalid games {s['invalid_games']}"
         )
+    if isinstance(found, TournamentReport):
+        lines += ["", found.training_caveat, f"Reference entrant: {found.reference}"]
     if found.matchup_mode == "mirrors":
-        lines += ["", TRAINING_CAVEAT]
+        if not isinstance(found, TournamentReport):
+            lines += ["", TRAINING_CAVEAT]
         for deck, panel in found.decks.items():
             label = "Lessons" if deck == "ur_lessons" else "Allies"
             lines += ["", f"## {label} vs {label}", _render_panel(panel)]
@@ -1057,6 +1243,7 @@ def main() -> None:
         command = commands.add_parser(name)
         command.add_argument("out", type=Path)
         command.add_argument("--models", type=Path, required=True)
+        command.add_argument("--tournament", type=Path)
         command.add_argument(
             "--matchups", choices=("cross", "mirrors"), default="cross"
         )
@@ -1064,10 +1251,10 @@ def main() -> None:
         command.add_argument("--wall-seconds", type=float, default=WALL_SECONDS)
         command.add_argument("--min-free-gib", type=float, default=MIN_FREE_GIB)
     commands.add_parser("report").add_argument("out", type=Path)
-    commands.add_parser("roster")
+    commands.add_parser("tournament")
     args = parser.parse_args()
-    if args.command == "roster":
-        for entrant in ROSTER:
+    if args.command == "tournament":
+        for entrant in ENTRANTS:
             print(
                 f"{entrant.id} | {entrant.label} | {entrant.origin} | {entrant.sha256}"
             )
@@ -1079,12 +1266,17 @@ def main() -> None:
         atomic_json(args.out / "report.json", asdict(found))
         print(render(found))
         return
+    tournament = (
+        Tournament.model_validate_json(args.tournament.read_text())
+        if args.tournament
+        else None
+    )
     status = run(
         args.out,
         args.models,
-        plan=smoke_plan(args.matchups)
+        plan=smoke_plan(args.matchups, tournament)
         if args.command == "smoke"
-        else full_plan(args.matchups),
+        else full_plan(args.matchups, tournament),
         workers=args.workers,
         wall_seconds=args.wall_seconds,
         min_free_gib=args.min_free_gib,
