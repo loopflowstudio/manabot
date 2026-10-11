@@ -51,6 +51,7 @@ _ROOT_OWNERS: dict[str, ComponentName] = {
     "wall_seconds": "resources",
     "schedule_clock": "run",
     "recovery_max_microsteps": "run",
+    "recovery_every_updates": "run",
     "selection": "run",
 }
 
@@ -154,6 +155,7 @@ class RunControl:
     )
     recovery_max_microsteps: int | None = None
     selection: Literal["last-complete-raw"] = "last-complete-raw"
+    recovery_every_updates: int = 1
 
 
 Component = Model | Environment | LearningRule | Resources | Pipeline | RunControl
@@ -319,12 +321,13 @@ def _writes(component: Component, base: TrainingRegime, source: str) -> list[_Wr
             return writes
         case Pipeline(stages):
             return [_Write(("stages",), [_object(stage) for stage in stages], source)]
-        case RunControl(clock, recovery, selection):
+        case RunControl(clock, recovery, selection, cadence):
             return [
                 _Write((key,), value, source)
                 for key, value in (
                     ("schedule_clock", clock),
                     ("recovery_max_microsteps", recovery),
+                    ("recovery_every_updates", cadence),
                     ("selection", selection),
                 )
             ]

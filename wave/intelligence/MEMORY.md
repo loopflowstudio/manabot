@@ -1,5 +1,38 @@
 # Intelligence memory
 
+## Mirror curriculum and frozen-opponent diagnostic (ETU-125, 2026-10-08)
+
+Jack Heart authorized a fresh laptop comparison: two curricula × seeds 12551/12552,
+10,000 updates each. This supersedes the completed 120-update pilot endpoint,
+not its frozen evidence. The pilot's eight-hour cutoff does not bind the new run;
+measure throughput and freeze sufficient calendar/worker budgets before launch.
+Preserve Mini ETU-118, GPU ETU-126 and staged ETU-128; no paid compute.
+
+The unchanged Mini seed-11851 update-2500 checkpoint scored against greedy:
+Allies versus Allies/Lessons 4/10 and 8/10; Lessons versus Allies/Lessons 1/10 and
+7/10. Opponent switches gave +40 [10,70] and +60 [50,80] points over five paired
+deals. All 56 greedy/random games completed with exact replay. This supports
+opponent sensitivity, not unique cause or general strength; matchup remains
+confounded. A failed report call regenerated from saved games. The pilot's Lessons
+cross-deck mirror-minus-cross differences were 0/−16.67 points: descriptive,
+not evidence of improvement. Keep these results separate from the 10k cohort.
+
+Explicit pack binding preserves the full compiled manifest/semantic IDs in mirrors.
+Stream strata balance learner transitions and deck/play-order marginals, not
+completed games. Mirror evaluation is explicit roster repetition; default admission
+stays exact. Profiling found process-tree resource scans dominating short CPU runs;
+RSS sampling can reduce overhead without changing learning. Long native-replay
+recovery needs an explicit journal ceiling, sparse snapshots and storage reserves.
+The [protocol](../../experiments/mirror-curriculum.md) owns admission, paired
+100-game greedy cells, receipts, allocations and pending curriculum comparison.
+The long cohort launched at `9649f42f`; exact HEAD binds same-host recovery.
+Jack Heart requested PR264 conflict/CI repair and landing on 2026-10-10.
+No cohort process remains active; four trajectories completed after retained
+disk-reserve failures, but Experiment remains incomplete (43 completed monitor
+records, one incomplete). Frozen source/notes are archived in `.runs/etu125-10k`.
+Delivery is not cohort acceptance or permission to restart on changed sources.
+
+
 ## Numerical policy contract (ETU-127, 2026-10-07)
 
 Jack Heart authorized autonomous numerical repairs and ineffective-update
@@ -613,75 +646,39 @@ TrainingRegime is not demo admission.
 
 ## Training regime reconciliation (2026-10-04)
 
-Jack Heart split training work into ETU-89 (regime/run infrastructure), ETU-90
-(RL correctness/treatments), and ETU-91 (studies and analysis), then requested
-three dedicated workers. The study recipes and proposed scientific allocations
-are in [the comparison protocol](../../experiments/training-regimes.md) and
-[the ablation protocol](../../experiments/ataraxos-mtg-ablations.md).
-Jack Heart subsequently authorized scientific execution after integration and
-landing within 168 active laptop hours total, including calibration and the
-ablation screen. The root session owns the single launch; workers must not
-start competing training. Counts and allocations must be frozen from measured
-integrated CPU calibration before scoring; smoke does not freeze them.
+Jack Heart assigned ETU-89 infrastructure, ETU-90 RL correctness and ETU-91
+studies, then authorized 168 active laptop hours including calibration, both
+three-seed studies, evaluation and recovery. The root owns the unique launch;
+infrastructure proof grants no paid compute or competing campaign. Measured
+integrated calibration freezes counts, not smoke or short-run extrapolation.
+The [study protocol](../../experiments/training-regimes.md) and
+[ablation protocol](../../experiments/ataraxos-mtg-ablations.md) own allocations.
 
-Trained Challengers remains the chapter; older priorities authorize no costly cycle.
-Infrastructure workers run only bounded proof; no paid compute is authorized.
+TrainingRegime/TrainingRun use existing trainers; VerifyStore owns status and
+JSON exports it. Supervised rounds retain Adam and whole-game splits. Self-play
+continues the latest live collector at an exact update boundary, not an older
+branch. Checkpoints alone promise neither process resume nor byte identity.
+Recipes, source/runtime, artifacts and phase costs bind reproducibility. Later
+explicit recovery and iteration-clock contracts supersede original limitations.
+End-marker GAE and paused streams repair mismatched terminal flags and stale
+bootstrap; trace scale is not a hard horizon. Historical PPO/search comparisons
+do not settle repaired matched-cost performance.
 
-`TrainingRegime` and `TrainingRun` now execute the existing search-supervised
-and self-play trainers through `manabot train --regime`. VerifyStore owns status;
-JSON is an export. Same-run supervised rounds retain Adam and immutable
-whole-game split membership. Self-play continuation retains the latest live
-collector at an exact update boundary; it cannot branch from old collector
-state. Checkpoints do not promise process resume or byte-identical training.
-Resolved recipes, source/runtime identities, artifacts and phase costs are the
-reproducibility contract. Schedules use whole-run elapsed budget, not stage age.
+Integrated semantic smoke proved raw/EMA admission, exact replay and unchanged
+offline reports, not strength or another Task's acceptance. Original receipts,
+13-game infrastructure proof and 24/72-game study proofs remain at `80feee12`.
+A later attempt imported merge conflict markers: never edit source during a
+multiprocessing measurement. Preserve that failure and all ignored `.runs` data;
+Jack Heart requested ETU-91 and its checkout remain open.
 
-The collector defect was a contract mismatch: transition-end flags were passed
-to episode-start GAE, and banked rows made next-state bootstrap stale. Corrected
-end-marker GAE and paused streams address those mechanisms. The trace scale
-`1/(1-gamma*lambda)` is not a hard learning horizon. Historical PPO/search
-comparisons do not settle which repaired recipe wins at matched current cost.
-
-ETU-89 now integrates ETU-75's mandatory checkpoint world/setup contract,
-semantic tensor propagation and ETU-90's complete-state EMA helper. A retained
-two-stage execution completed 13 games and 1,024 learner transitions with four
-ordinary raw/EMA reloads on the semantic ABI. ETU-90 owns EMA complete-state
-correctness; ETU-91 owns final replayed arena/notebook evidence after integration. Study smoke success cannot
-close infrastructure, RL correctness, strength or human-play acceptance for
-another Task. The implementation contract is in
-[training regimes](../../docs/training-regimes.md); scientific proposals and
-limits remain in the [study protocol](../../experiments/training-regimes.md).
-
-Compare study scores only over overlapping observed cost ranges, using the last
-checkpoint available at each cutoff. Search generation remains on the cost axis;
-no overlap means equal-cost comparison is unavailable. One seed and a four-leg
-deal block prove workflow, not method-level uncertainty. ETU-91 owns final
-replayed study and offline-regeneration evidence on the integrated code.
-
-ETU-91 now has integrated semantic study proof: final learning-speed and
-five-arm smokes completed in 91 and 204 seconds with 24 and 72 exact-replayed
-games, two checkpoints per arm, and unchanged offline-regenerated metrics and
-reports. Both use the executor's cumulative checkpoint clock and have observed
-cost overlap. Earlier inherited-ABI evidence remains preliminary. A later
-five-arm attempt failed when a merge exposed conflict markers to a child
-process; that attempt remains retained separately. Never edit imported source
-while a multiprocessing measurement is running.
-
-Scientific plan generation scales measured updates and teacher games, retains
-cumulative fitting, reserves 168 hours across calibration, both three-seed
-studies, evaluation and recovery, and checks projected storage against a 4 GiB
-reserve. The three fixed anchors, untouched endpoint deals and full nine-cell
-main comparison remain explicit. Count extrapolation is not long-run timing
-proof. No scientific study ran here; root owns calibration and the unique launch.
-Post-training evaluation resume retains failed cells without replacement, uses
-remaining original time and cannot turn an incomplete cohort into a strength
-claim. Training checkpoints do not support process resume.
-
-Jack Heart requested keeping ETU-91 and its checkout open to preserve ignored
-`.runs` evidence. Detailed attempts, commands and evidence limits live in the
-[study protocol](../../experiments/training-regimes.md). This evidence does not
-satisfy ETU-82's demo-run contract, ETU-85's improvement comparison, S1–S5
-competence, or the chapter's human-challenger outcome.
+Compare only overlapping observed costs using last available checkpoints; include
+search generation. No overlap means no equal-cost claim. One seed/deal block is
+workflow proof, not method uncertainty. Preserve three fixed anchors, untouched
+endpoint deals, nine-cell comparison and 4 GiB reserve. Evaluation recovery keeps
+failed cells and original remaining time; incomplete cohorts cannot establish
+strength. The [implementation contract](../../docs/training-regimes.md) owns the
+API. This evidence establishes neither ETU-82 demo admission, ETU-85 improvement,
+S1–S5 competence nor human-challenger acceptance. Detailed history: `80feee12`.
 
 ## Direct self-play treatment contracts (2026-10-04)
 

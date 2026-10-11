@@ -148,7 +148,14 @@ class ExperimentSchedule(CheckpointCadence):
             raise ValueError("seeds must be nonempty and unique")
         if any(s < 0 or s >= 100000 for s in self.seeds):
             raise ValueError("training seeds must be in [0, 100000)")
-        if set(self.scientific_deal_seeds) & set(self.monitoring.protocol.deal_seeds):
+        if set(self.scientific_deal_seeds) & {
+            seed
+            for protocol in (
+                self.monitoring.protocol,
+                *self.monitoring.additional_protocols,
+            )
+            for seed in protocol.deal_seeds
+        }:
             raise ValueError("monitoring and scientific deals must be disjoint")
         if self.monitoring.seconds >= self.process_seconds:
             raise ValueError("monitoring must leave a positive learning allocation")

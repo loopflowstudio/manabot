@@ -26,7 +26,12 @@ from pydantic import (
 )
 
 from manabot.arena import players
-from manabot.arena.match import SELECTED_SUITE, play_cell, selected_match
+from manabot.arena.match import (
+    SELECTED_SUITE,
+    play_cell,
+    selected_decks,
+    selected_match,
+)
 from manabot.arena.models import (
     ArenaKey,
     PlayerRegistration,
@@ -44,7 +49,9 @@ from manabot.training.models import (
 )
 
 EvaluationPurpose = Literal[
-    "monitoring-not-scientific-evaluation", "frozen-study-evaluation"
+    "monitoring-not-scientific-evaluation",
+    "frozen-study-evaluation",
+    "supplemental-matchup-diagnostic",
 ]
 
 
@@ -59,6 +66,12 @@ class MonitorProtocol(Strict):
     # Reserved monitoring namespace; callers must also exclude these from any
     # scientific cohort they construct. These deals are repeatedly inspected.
     deal_seeds: tuple[int, ...] = tuple(range(1_910_101_000, 1_910_101_025))
+    include_mirrors: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @property
+    def legs(self) -> int:
+        return 8 if self.include_mirrors else 4
+
     bootstrap_seed: int = 101
     bootstrap_replicates: int = Field(default=2000, ge=1)
     game_seconds: float = Field(default=120, gt=0)
@@ -229,13 +242,27 @@ class MonitorResult(Strict):
 
 
 def _summarize(result: MonitorResult) -> None:
-    expected = {(seed, leg) for seed in result.protocol.deal_seeds for leg in range(4)}
+    expected = {
+        (seed, leg)
+        for seed in result.protocol.deal_seeds
+        for leg in range(result.protocol.legs)
+    }
     seen: set[tuple[int, int]] = set()
     for row in result.rows:
         coordinate = (row.deal_seed, row.leg)
         if coordinate not in expected or coordinate in seen:
             raise ValueError("unexpected or duplicate monitoring deal/leg")
         seen.add(coordinate)
+        if result.protocol.include_mirrors:
+            expected_decks = list(selected_decks(row.leg))
+            extra = row.model_extra or {}
+            if (
+                extra.get("seat_decks") != expected_decks
+                or extra.get("player_a_seat") != row.leg % 2
+            ):
+                raise ValueError(
+                    "mirror row differs from its actual authored deck/seat leg"
+                )
         if (
             row.arena_key != result.key
             or row.player_a != result.candidate.player_id
@@ -306,6 +333,13 @@ def _manifest(
         "engine_source_sha256",
         "content_manifest_sha256",
     ):
+        if (
+            name == "engine_source_sha256"
+            and protocol.purpose == "supplemental-matchup-diagnostic"
+        ):
+            # Artifact loading already admitted the exact rules/content/input binding.
+            # Preserve the historical producer source separately from this instrument.
+            continue
         if runtime[name] != run.identities.get(name):
             raise ValueError(f"monitoring runtime differs from training: {name}")
     runtime["monitor_source_sha256"] = source_bundle_sha256(
@@ -334,6 +368,7 @@ def _manifest(
             "deterministic": False,
             "device": "cpu",
             "batch_size": 1,
+            **({"allow_deck_repetition": True} if protocol.include_mirrors else {}),
         },
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=artifact["sha256"],
@@ -375,7 +410,7 @@ def _manifest(
         key=key,
         candidate=candidate,
         opponent=opponent,
-        expected_games=4 * len(protocol.deal_seeds),
+        expected_games=protocol.legs * len(protocol.deal_seeds),
         evaluation_identities=runtime,
     )
 
@@ -426,6 +461,7 @@ def evaluate_checkpoint(
                 checkpoint_paths={result.candidate.player_id: result.artifact["path"]},
                 game_seconds=result.protocol.game_seconds,
                 max_commands=result.protocol.max_commands,
+                matchup_mode="all" if result.protocol.include_mirrors else "cross",
             )
             atomic_json(directory / "rows.json", rows)
             atomic_json(directory / "trace.json", trace)

@@ -25,7 +25,7 @@ from .models import ArenaKey, PlayerRegistration, canonical_sha256
 from .replay import replay_environment, replay_games, write_trace
 
 SELECTED_SUITE = f"{WORLD_VERSION}-allies-lessons-v1"
-MatchupMode = Literal["cross", "mirrors"]
+MatchupMode = Literal["cross", "mirrors", "all"]
 
 
 def selected_decks(leg: int) -> tuple[str, str]:
@@ -350,9 +350,9 @@ def play_cell(
                 or player.matchup_sha256 != canonical_sha256(match.model_dump())
             ):
                 raise ValueError("player is not bound to the selected matchup")
-    if matchup_mode not in ("cross", "mirrors"):
+    if matchup_mode not in ("cross", "mirrors", "all"):
         raise ValueError("unknown arena matchup mode")
-    if matchup_mode == "mirrors":
+    if matchup_mode in ("mirrors", "all"):
         if not selected:
             raise ValueError("mirrors require the selected authored deck roster")
         for player in (player_a, player_b):
@@ -380,7 +380,13 @@ def play_cell(
             )
             for p in (player_a, player_b)
         }
-        legs = range(4, 8) if matchup_mode == "mirrors" else range(4 if selected else 2)
+        legs = (
+            range(8)
+            if matchup_mode == "all"
+            else range(4, 8)
+            if matchup_mode == "mirrors"
+            else range(4 if selected else 2)
+        )
         for leg in legs:
             seat_players = (
                 [player_a, player_b] if leg % 2 == 0 else [player_b, player_a]

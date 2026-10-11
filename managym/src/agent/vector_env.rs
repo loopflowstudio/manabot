@@ -18,7 +18,7 @@ pub struct StepResult {
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
-    player_configs: Vec<PlayerConfig>,
+    player_configs: Vec<Vec<PlayerConfig>>,
     opponent_policy: OpponentPolicy,
     next_seeds: Vec<u64>,
     seed_stride: u64,
@@ -76,17 +76,22 @@ impl VectorEnv {
         player_configs: Vec<PlayerConfig>,
     ) -> Result<Vec<(Observation, InfoDict)>, AgentError> {
         Self::validate_player_configs(player_configs.len())?;
-        self.player_configs = player_configs;
+        self.player_configs = vec![player_configs; self.envs.len()];
         let player_configs = self.player_configs.clone();
         let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
         let mut results = Vec::with_capacity(self.envs.len());
-        for (env, next_seed) in self.envs.iter_mut().zip(self.next_seeds.iter_mut()) {
+        for (index, (env, next_seed)) in self
+            .envs
+            .iter_mut()
+            .zip(self.next_seeds.iter_mut())
+            .enumerate()
+        {
             let (obs, info) = Self::reset_to_hero_turn_on_env(
                 env,
                 next_seed,
-                &player_configs,
+                &player_configs[index],
                 opponent_policy,
                 seed_stride,
             )?;
@@ -104,17 +109,18 @@ impl VectorEnv {
         let seed_stride = self.seed_stride;
 
         let mut results = Vec::with_capacity(self.envs.len());
-        for ((env, next_seed), action) in self
+        for (index, ((env, next_seed), action)) in self
             .envs
             .iter_mut()
             .zip(self.next_seeds.iter_mut())
             .zip(actions.iter())
+            .enumerate()
         {
             let out = Self::step_with_autoreset_on_env(
                 env,
                 next_seed,
                 *action,
-                &player_configs,
+                &player_configs[index],
                 opponent_policy,
                 seed_stride,
             )?;
@@ -132,7 +138,22 @@ impl VectorEnv {
     where
         F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
     {
-        Self::validate_player_configs(player_configs.len())?;
+        self.reset_each_into(vec![player_configs; self.envs.len()], write)
+    }
+
+    /// Retain one exact setup per stream, including through terminal auto-reset.
+    pub fn reset_each_into<F>(
+        &mut self,
+        player_configs: Vec<Vec<PlayerConfig>>,
+        write: F,
+    ) -> Result<Vec<InfoDict>, AgentError>
+    where
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+    {
+        self.validate_actions_len(player_configs.len())?;
+        for configs in &player_configs {
+            Self::validate_player_configs(configs.len())?;
+        }
         self.player_configs = player_configs;
 
         let player_configs = self.player_configs.clone();
@@ -143,7 +164,7 @@ impl VectorEnv {
             let (obs, info) = Self::reset_to_hero_turn_on_env(
                 env,
                 next_seed,
-                &player_configs,
+                &player_configs[env_index],
                 opponent_policy,
                 seed_stride,
             )?;
@@ -180,7 +201,7 @@ impl VectorEnv {
                 env,
                 next_seed,
                 action,
-                &player_configs,
+                &player_configs[env_index],
                 opponent_policy,
                 seed_stride,
             )?;
@@ -227,7 +248,7 @@ impl VectorEnv {
     }
 
     fn validate_ready_for_step(&self) -> Result<(), AgentError> {
-        if self.player_configs.len() != 2 {
+        if self.player_configs.len() != self.envs.len() || self.player_configs.is_empty() {
             return Err(AgentError(
                 "vector env must be reset before step".to_string(),
             ));

@@ -50,6 +50,9 @@ class MonitoringBudget(Strict):
     require_initial_admission: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
+    additional_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
     terminal_protocols: tuple[MonitorProtocol, ...] = Field(
         default=(), exclude_if=lambda value: not value
     )
@@ -58,7 +61,10 @@ class MonitoringBudget(Strict):
     def separate_terminal_deals(self) -> "MonitoringBudget":
         if self.require_initial_admission and not self.include_initial:
             raise ValueError("initial admission requires initialization evaluation")
-        used = set(self.protocol.deal_seeds)
+        protocols = (self.protocol, *self.additional_protocols)
+        if len({canonical_sha256(p.model_dump()) for p in protocols}) != len(protocols):
+            raise ValueError("duplicate monitoring protocols")
+        used = {seed for p in protocols for seed in p.deal_seeds}
         for protocol in self.terminal_protocols:
             if used.intersection(protocol.deal_seeds):
                 raise ValueError(
@@ -79,7 +85,7 @@ class MonitoringBudget(Strict):
             final = stage_checkpoint(run, run.regime.stages[-1].id)
             if final is not None and final.artifact == checkpoint.artifact:
                 return list(self.terminal_protocols)
-        return [self.protocol]
+        return [self.protocol, *self.additional_protocols]
 
 
 def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Checkpoint]:

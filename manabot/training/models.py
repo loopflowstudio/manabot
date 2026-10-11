@@ -334,10 +334,19 @@ class TrainSelfPlay(Stage):
     )
     streams: int = Field(default=4, ge=2)
     transitions: int = Field(default=256, ge=1)
+    matchup_curriculum: Literal["fixed", "cross-balanced", "mirrors-balanced"] = Field(
+        default="fixed", exclude_if=lambda value: value == "fixed"
+    )
     learning: Learning | AtaraxosMoveLearning = Learning()
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.matchup_curriculum != "fixed":
+            width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
+            if self.streams % width or self.behavior != "current-self":
+                raise ValueError(
+                    "balanced matchups require current-self and complete stream strata"
+                )
         if self.pretrained is not None and (
             self.initial is not None or self.learning_state is not None
         ):
@@ -486,7 +495,11 @@ class TrainingRegime(Strict):
     schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (
         "run_elapsed_budget"
     )
-    recovery_max_microsteps: int | None = Field(default=None, ge=1, le=1_000_000)
+    recovery_max_microsteps: int | None = Field(default=None, ge=1, le=20_000_000)
+    # Cadence affects replayable progress only, never optimizer/collector updates.
+    recovery_every_updates: int = Field(
+        default=1, ge=1, le=1000, exclude_if=lambda value: value == 1
+    )
     selection: Literal["last-complete-raw"] = "last-complete-raw"
 
     @model_validator(mode="after")
@@ -672,12 +685,13 @@ class TrainingRegime(Strict):
                     parent.execution.device != stage.execution.device
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
+                    or parent.matchup_curriculum != stage.matchup_curriculum
                     or parent.learning.ema != stage.learning.ema
                     or parent.opponent != stage.opponent
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, gradient, EMA clock and opponent"
+                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock and opponent"
                     )
             if isinstance(stage, TrainCompound):
                 if initial and parent is not latest_compound:

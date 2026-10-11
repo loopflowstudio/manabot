@@ -558,3 +558,47 @@ def test_death_immediately_after_recovery_claim_keeps_snapshot_admissible(
         assert resumed.prior_seconds == parent.seconds + child.seconds
         assert resumed.stages[0].watchdog_seconds >= parent.stages[0].watchdog_seconds
         assert resumed.status == "completed"
+
+
+def test_sparse_recovery_replays_unsaved_updates_exactly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = recipe()
+    value.recovery_every_updates = 3
+    export = execution.export_training_run
+
+    def fail_after_second_update(
+        run_id: str, owner: VerifyStore, path: str | Path
+    ) -> TrainingRun:
+        run = export(run_id, owner, path)
+        if (
+            run.status == "running"
+            and run.stages
+            and len(run.stages[-1].diagnostics) == 2
+        ):
+            raise KeyboardInterrupt("unsnapshotted progress")
+        return run
+
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+        with monkeypatch.context() as patch:
+            patch.setattr(execution, "export_training_run", fail_after_second_update)
+            with pytest.raises(KeyboardInterrupt):
+                execution.execute_regime(value, 197, tmp_path / "failed", store)
+        row = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        failed = store.training_run(row[0])
+        assert len(failed.stages[0].diagnostics) == 2
+        assert load_update(failed).iteration == 1
+        resumed = execution.execute_regime(
+            value, 197, tmp_path / "resumed", store, resume_from=failed.id
+        )
+        assert resumed.status == "completed"
+        assert resumed.prior_seconds == failed.seconds
+        a, b = load_update(whole), load_update(resumed)
+        for name in ("learner", "optimizer", "ema", "torch_rng", "minibatch_rng"):
+            assert_state_equal(getattr(a, name), getattr(b, name))
+        assert a.collector.journal == b.collector.journal
+        assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
+        assert not list((tmp_path / "whole").glob("*update-00000002.pt"))

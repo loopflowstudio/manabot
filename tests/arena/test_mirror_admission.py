@@ -4,14 +4,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from test_match import selected_players
 
-from manabot.arena.match import play_cell, selected_decks, selected_match
+from manabot.arena.match import MatchupMode, play_cell, selected_decks, selected_match
 from manabot.env import Match, ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.monitor_evaluation import ArenaRow
 from managym import Env
+from tests.arena.test_match import selected_players
 
 
 def test_selected_leg_layout_preserves_cross_setups() -> None:
@@ -73,7 +73,10 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
                 )
 
 
-def test_mirror_only_arena_plays_all_seats_and_replays(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mode", ["mirrors", "all"])
+def test_mirror_arena_plays_all_seats_and_replays(
+    tmp_path: Path, mode: MatchupMode
+) -> None:
     key, (first, second) = selected_players()
     rows, _, replay = play_cell(
         key=key,
@@ -81,13 +84,12 @@ def test_mirror_only_arena_plays_all_seats_and_replays(tmp_path: Path) -> None:
         player_b=second,
         deal_seeds=(1913131102,),
         out_dir=tmp_path,
-        matchup_mode="mirrors",
+        matchup_mode=mode,
     )
-    assert {row["leg"] for row in rows} == {4, 5, 6, 7}
+    legs = range(8) if mode == "all" else range(4, 8)
+    assert {row["leg"] for row in rows} == set(legs)
     assert {(tuple(row["seat_decks"]), row["player_a_seat"]) for row in rows} == {
-        (tuple([deck] * 2), seat)
-        for deck in ("ur_lessons", "gw_allies")
-        for seat in (0, 1)
+        (selected_decks(leg), leg % 2) for leg in legs
     }
     assert all(ArenaRow.model_validate(row).valid for row in rows)
     assert replay["passed"]
