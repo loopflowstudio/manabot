@@ -1,5 +1,10 @@
 # Manifesting Etude Fantasia
 
+> Historical plan. Its naming decisions were superseded by Jack Heart on
+> 2026-10-14: Manabot is the project, Academy the play app, and Etude the
+> external experiment library. See [current naming](../../README.md#naming).
+> Original rollout details below remain historical evidence.
+
 Plan date: 2026-07-16. Status: in progress — the `rename-etude` commit
 (`f57cf63`) landed the repository rename, the README opening, the
 `ETUDE_PLAY` namespace, and the paper retitle; per-item status is noted
@@ -11,7 +16,7 @@ the July 15–16 direction shift — semantic kernel, certified play experience,
 Study charter, measured research program — and the naming model adopted with
 it.
 
-## The naming model (canonical)
+## The historical naming model (superseded)
 
 - **Etude Fantasia** — the full project name and the product experience.
 - **Etude** — the short name wherever brevity or machine identity matters:

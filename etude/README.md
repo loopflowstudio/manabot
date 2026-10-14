@@ -1,8 +1,16 @@
-# etude
+# Academy — legacy etude/ package
 
-The Etude Fantasia experience server: authoritative play, presentation, and
+Manabot's Academy experience server: authoritative play, presentation, and
 study. The Svelte client in [frontend/](../frontend/) renders what this
 package decides; the client never invents rules meaning.
+
+## Name and package boundary
+
+Academy is the manabot.academy component: the web app for playing Magic against
+manabots. This checkout retains its old `etude/` source path and imports.
+It is not the external [Etude experiment SDK](https://github.com/loopflowstudio/etude)
+published as `etude-sdk`. The SDK uses the same `etude` import namespace;
+resolve that collision before integrating it. See [naming](../README.md#naming).
 
 ## Authority model
 

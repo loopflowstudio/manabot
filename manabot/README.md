@@ -1,7 +1,16 @@
 # manabot
 
-The trainable agent of Etude Fantasia: environment wrappers, models, search,
+Manabot's training system (the manabot.manabot component): environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
+
+## Project boundaries
+
+This package owns the agent and learning algorithms. Academy is the play web
+app; managym owns rules. [Etude](https://github.com/loopflowstudio/etude)
+(`etude-sdk`) is the external experiment library selected for launching,
+tracking, checkpoints, and reports. Migrating the corresponding local
+infrastructure is separate work; the commands below describe this checkout,
+not completed SDK adoption. See [naming](../README.md#naming).
 
 ## Quickstart
 

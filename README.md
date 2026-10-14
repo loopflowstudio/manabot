@@ -1,6 +1,6 @@
-# Etude Fantasia
+# Manabot
 
-**Etude Fantasia** is an AI-assisted Pro Tour testing house for
+**Manabot** is an AI-assisted Pro Tour testing house for
 [Magic: The Gathering](https://magic.wizards.com/), built by Loopflow Studio.
 
 The game and the study session are one activity. Pilot a match, watch a human
@@ -16,7 +16,7 @@ to “I think they are holding interaction” should change the advice without
 pretending either read is the hidden truth.
 
 <img src="docs/assets/ai-assisted-testing-house-v1.png"
-     alt="Etude's decision advice prototype comparing viewer-safe beliefs, action probabilities, values, uncertainty, and strategy deltas"
+     alt="Academy's decision advice prototype comparing viewer-safe beliefs, action probabilities, values, uncertainty, and strategy deltas"
      width="720">
 
 *Prototype shown: a checked fixture generated from real, identity-pinned
@@ -27,7 +27,7 @@ and shared watcher roles are still being connected.*
 
 ## What runs today
 
-Etude currently plays a curated one-versus-one game on an authoritative
+Academy currently plays a curated one-versus-one game on an authoritative
 semantic table. A human can face search, random play, or a checkpoint-backed
 manabot; ordinary legal Commands drive the match; semantic presentation,
 recovery, finished-game replay, and viewer-safe decision and evidence contracts
@@ -43,7 +43,7 @@ board.
 
 ## The destination: Avatar Cube Team Sealed
 
-Etude is building toward Avatar Cube Team Sealed: two teams receive 135-card
+Academy is building toward Avatar Cube Team Sealed: two teams receive 135-card
 pools from a versioned 540-card cube, construct three 40-card-minimum decks with
 unlimited basics and deck-specific sideboards, and play the full three-by-three
 deck matchup matrix until one team reaches five wins. Every game remains an
@@ -69,8 +69,8 @@ replay, Retry, compare, and Study.
 - Only the acting pilot can commit the live offered `Command`.
 - Watching, comparing beliefs, and exploring an isolated line never pause or
   mutate the authoritative match.
-- Etude owns the canonical decisions and artifacts a testing group discusses.
-  Discord remains the human communication layer; Etude does not build chat.
+- Academy owns the canonical decisions and artifacts a testing group discusses.
+  Discord remains the human communication layer; Academy does not build chat.
 
 ## Play
 
@@ -125,9 +125,9 @@ quickstart, presets, and the current world's live baselines.
 
 ## How the system divides responsibility
 
-Etude Fantasia is built from three cooperating systems:
+Manabot is built from three cooperating systems:
 
-- **Etude** (`etude`, Python + Svelte): the authored play, replay, Retry,
+- **Academy** (legacy `etude/` here, Python + Svelte): the authored play, replay, Retry,
   comparison, and Study experience
 - **manabot** (`manabot`, Python): trainable agents, beliefs, planning,
   evidence, evaluation, and experiment tracking
@@ -137,11 +137,11 @@ Etude Fantasia is built from three cooperating systems:
 
 The governing contract is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In
 short: managym owns facts and legality, manabot owns inference and advice, and
-Etude owns what the player sees and does.
+Academy owns what the player sees and does.
 
 ## The research ledger
 
-Etude's research program is preregistered and reproducible: every experiment
+Manabot's research program is preregistered and reproducible: every experiment
 states its prediction, budget, and kill criteria before running, and negative
 results are recorded alongside positive ones.
 
@@ -183,8 +183,8 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 
 | Path | What it is |
 |---|---|
-| `etude/` | Experience server: transport, presentation, Study protocol, and adapters over managym authority |
-| `frontend/` | Etude's Svelte client |
+| `etude/` | Legacy path for the Academy experience server: transport, presentation, Study protocol, and adapters over managym authority |
+| `frontend/` | Academy's Svelte client |
 | `manabot/` | The trainable agent: env wrappers, models, search, training, verification |
 | `managym/` | Rust rules engine and vectorized environment (PyO3 bindings) |
 | `protocol/` | Versioned experience/Study schemas certified across Rust, Python, and TypeScript |
@@ -199,15 +199,27 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 
 ## Naming
 
-- **Etude Fantasia** — the full project name and the product experience.
-- **Etude** — the short name wherever brevity or machine identity matters:
-  repository, service namespaces, and ordinary prose after first mention.
-  Always ASCII (never “Étude”).
-- **manabot** — the agent and the Python training library/CLI. Indefinite noun:
-  you train *a* manabot.
-- **managym** — the rules environment the agent lives in.
+- **Manabot** — the whole project.
+- **manabot.manabot** — the training system within the project: agents,
+  models, learning, search, and evaluation. You train *a manabot*.
+- **manabot.academy** / **Academy** — the web app for playing Magic against
+  manabots, including play, replay, and Study.
+- **managym** — the rules environment and authoritative game engine.
+- **Etude** — the separate experiment library at
+  [loopflowstudio/etude](https://github.com/loopflowstudio/etude), distributed
+  on PyPI as [etude-sdk](https://pypi.org/project/etude-sdk/). It provides
+  experiment launching, tracking, checkpoints, and reporting; it is not the
+  name of this project or its play app.
 
-If it faces the player, it is Etude; if it trains or evaluates the agent, it
-is manabot; if it is the world, it is managym. manabot is not a former name to
-erase: existing `manabot.*` contract/schema identifiers, experiment receipts,
-and wandb history keep their names and remain reproducible.
+The dotted names above identify project components, not a promise that those
+Python import paths exist in every historical checkout. In this checkout,
+training lives in `manabot/` and the Academy server still lives in the legacy
+`etude/` directory. The SDK also imports as `etude`; that namespace collision
+must be resolved during integration, not hidden by changing documentation.
+Using the SDK does not replace managym or the learning algorithms.
+
+Older material calls this project Etude or Etude Fantasia. Preserve historical
+quotes, frozen experiment IDs, receipts, schemas, artifact paths, W&B history,
+and actual commands/environment names (including `ETUDE_PLAY_*`) until their
+implementations migrate. Use the current names in new prose. Documentation
+changes alone do not establish SDK integration or authorize experiment spending.

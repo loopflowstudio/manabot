@@ -1,6 +1,6 @@
 # Fly deploy
 
-Etude Fantasia's public surfaces run on Fly.io behind Cloudflare DNS,
+Manabot's public surfaces run on Fly.io behind Cloudflare DNS,
 following the kata/loopflow deployment pattern:
 
 - **etude-website** — the landing site (`website/`), a FastHTML app.

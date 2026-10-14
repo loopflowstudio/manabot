@@ -1,5 +1,10 @@
 # docs/
 
+Current project/component names are defined in [Naming](../README.md#naming):
+Manabot is the project, manabot its training system, Academy its play app,
+and Etude the separate experiment SDK. Historical plans, research comparisons
+and evidence retain their original names; those references do not mean the SDK.
+
 | Where | What |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Top-down system authority, central contracts, laws of physics, end-to-end search/learning flows, and convergence status |

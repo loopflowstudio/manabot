@@ -1,6 +1,6 @@
 # Clean-machine play proof
 
-Etude has one clean-machine-certified play command:
+Academy has one clean-machine-certified play command:
 
 ```bash
 ./scripts/play

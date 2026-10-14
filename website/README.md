@@ -1,4 +1,4 @@
-# Etude Fantasia website
+# Manabot website
 
 The landing site for [etude.gg](https://etude.gg) — a FastHTML app in the
 Sepia Etude visual language, deployed on Fly.io. It mirrors the

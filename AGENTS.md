@@ -2,21 +2,30 @@ Never add "Co-Authored by:" tags in commits
 
 ## Naming
 
-- **Etude Fantasia** — the full project name and the product experience.
-- **Etude** — the short name wherever brevity or machine identity matters:
-  repository, service namespaces, and ordinary prose after first mention.
-  Always ASCII (never "Étude").
-- **manabot** — the agent, and the Python training library/CLI. Indefinite
-  noun: you train *a* manabot.
-- **managym** — the rules environment the agent lives in.
+- **Manabot** — the whole project.
+- **manabot.manabot** — the training system within the project: agents,
+  models, learning, search, and evaluation. You train *a manabot*.
+- **manabot.academy** / **Academy** — the web app for playing Magic against
+  manabots, including play, replay, and Study.
+- **managym** — the rules environment and authoritative game engine.
+- **Etude** — the separate experiment library at
+  [loopflowstudio/etude](https://github.com/loopflowstudio/etude), distributed
+  on PyPI as [etude-sdk](https://pypi.org/project/etude-sdk/). It provides
+  experiment launching, tracking, checkpoints, and reporting; it is not the
+  name of this project or its play app.
 
-Boundary rule for anything those lines don't settle: if it faces the player,
-it is Etude; if it trains or evaluates the agent, it is manabot; if it is the
-world, it is managym. So the play server, experience protocol, curated packs,
-and their env/error namespaces (`ETUDE_PLAY_*`) take Etude names, while
-training infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config
-vars) correctly keeps manabot names. Frozen evidence — experiment IDs,
-contracts, receipts, wandb history — is never renamed.
+The dotted names above identify project components, not a promise that those
+Python import paths exist in every historical checkout. In this checkout,
+training lives in `manabot/` and the Academy server still lives in the legacy
+`etude/` directory. The SDK also imports as `etude`; that namespace collision
+must be resolved during integration, not hidden by changing documentation.
+Using the SDK does not replace managym or the learning algorithms.
+
+Older material calls this project Etude or Etude Fantasia. Preserve historical
+quotes, frozen experiment IDs, receipts, schemas, artifact paths, W&B history,
+and actual commands/environment names (including `ETUDE_PLAY_*`) until their
+implementations migrate. Use the current names in new prose. Documentation
+changes alone do not establish SDK integration or authorize experiment spending.
 
 ## Style
 
