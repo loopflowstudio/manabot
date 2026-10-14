@@ -7,21 +7,26 @@ training, and verification. You train *a* manabot; this package is how.
 
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
-uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
+uv run manabot train --preset simple    # full PPO run (CUDA, Etude tracking)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local` preset is the certified laptop path: it trains a small
-manabot on CPU in under a minute, needs no W&B account or CUDA, and saves
-checkpoints to `.runs/local/step_N.pt`. The `simple` and `attention` presets
-are real training runs: they expect a CUDA machine (see
-[remote training](../docs/remote-training.md)) and track to the `manabot` Weights &
-Biases project. New checkpoints stay local until explicitly published to
-[S3 artifact storage](../docs/training-monitoring.md#s3-model-and-artifact-storage).
-W&B tracks metrics and S3 references; the historical W&B model reader remains
-available for previously published checkpoints.
+The default `local` preset is the bounded laptop training path. Ordinary
+Trainer metrics and exported checkpoints now record through the public
+Etude SDK without a W&B account. Standalone tracking lives under
+`<runs_dir>/<experiment>/etude/`; under `etude launch`, the SDK supplies
+`ETUDE_RUN` and `ETUDE_TRACK_DIR`. The `simple` and `attention` presets still
+expect CUDA. Historical W&B model readers and frozen recipe fields remain
+readable; those fields no longer select the live Trainer tracker.
+
+Self-play TrainingRegime execution logs cumulative update/transition clocks and
+retains admitted raw stage exports in Etude. TrainingRun/VerifyStore still hold
+scientific execution records, and the existing scheduler/evaluator has not yet
+been replaced by Etude jobs. This is a partial migration, not end-to-end experiment
+admission. SDK artifact retention alone does not establish portable collector/RNG
+recovery. Remote storage, rentals and scientific runs require explicit allocation.
 
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from etude.track.read import read_all
 import pytest
 import torch
 
@@ -69,3 +70,10 @@ def test_real_collection_update_export_reload(name: str, tmp_path: Path) -> None
                 torch.isfinite(parameter).all() for parameter in loaded.parameters()
             )
     assert run.selected_artifact == run.stages[-1].artifacts["raw"]
+    tracked = read_all(tmp_path / "run" / recipe.stages[0].id / "etude")
+    assert len(tracked) == 1
+    assert tracked[0].state is not None and tracked[0].state.state == "finished"
+    assert tracked[0].incomplete == 0
+    assert len(tracked[0].checkpoints) == len(recipe.stages)
+    assert [c.at["learner_transitions"] for c in tracked[0].checkpoints] == [16, 32]
+    assert [c.at["updates"] for c in tracked[0].checkpoints] == [1, 2]

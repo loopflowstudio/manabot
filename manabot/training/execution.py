@@ -1192,9 +1192,18 @@ def _execute_regime(
                             exp_name=stage.id,
                             device=stage.execution.device,
                             log_level="WARNING",
+                        ),
+                        resolved_config={
+                            "regime": regime.model_dump(mode="json"),
+                            "run_id": run.id,
+                            "identities": run.identities,
+                        },
+                    )
+                    resources.callback(
+                        lambda exp=experiment: exp.close(
+                            "finished" if run.status == "completed" else "failed"
                         )
                     )
-                    resources.callback(experiment.close)
                     trainer = NetOpponentTrainer(
                         agent,
                         experiment,
@@ -1359,6 +1368,13 @@ def _execute_regime(
                         - before.learner_transitions
                     )
                     diagnostic["coordinates"] = coordinates()
+                    trainer.experiment.log_update(
+                        diagnostic,
+                        updates=int(diagnostic["coordinates"]["updates"]),
+                        transitions=int(
+                            diagnostic["coordinates"]["learner_transitions"]
+                        ),
+                    )
                     if stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds
                         < stage.active_seconds
@@ -1523,6 +1539,13 @@ def _execute_regime(
                         record.rejected_artifacts[name] = candidate
                         raise
                     record.artifacts[name] = candidate
+                    if isinstance(stage, TrainSelfPlay) and name == "raw":
+                        # The SDK retains admitted policy bytes, not a promise of
+                        # collector/RNG recovery. Charge its copy as export cost.
+                        trainer.experiment.checkpoint(
+                            target,
+                            transitions=int(coordinates()["learner_transitions"]),
+                        )
                 optimizer_path = out / f"{stage.id}-optimizer.pt"
                 torch.save(
                     optimizer_state,

@@ -103,6 +103,7 @@ class ExperimentHypers(BaseHypersModel):
     seed: int = 1
     torch_deterministic: bool = True
     device: str = "cpu"
+    # Frozen recipe compatibility only; live training records through Etude.
     wandb: bool = True
     wandb_project_name: str = "manabot"
     runs_dir: Path = Field(default_factory=_default_runs_dir)
