@@ -1,6 +1,6 @@
-# Fantasia
+# Manabot
 
-**Fantasia** is an AI-assisted Pro Tour testing house for
+**Manabot** is an AI-assisted Pro Tour testing house for
 [Magic: The Gathering](https://magic.wizards.com/), built by Loopflow Studio.
 
 The game and the study session are one activity. Pilot a match, watch a human
@@ -199,14 +199,15 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 
 ## Naming
 
-- **Fantasia** — the whole project and this repository.
-- **Academy** — the web app players use: the `academy` package, the frontend,
+- **Manabot** — the whole project and this repository.
+- **manabot.academy** / **Academy** — the web app for playing Magic against manabots: the `academy` package, the frontend,
   and the website.
-- **manabot** — the bot and the Python training library/CLI. Indefinite noun:
+- **manabot.manabot** — the training-system component, implemented in the
+  `manabot` Python package and CLI. Indefinite noun:
   you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
-- **Etude** — the launching and experiment system, built in a separate private
-  repository. Always ASCII (never “Étude”).
+- **Etude** — the separate experiment library at
+  `loopflowstudio/etude`, publicly distributed as `etude-sdk`. Always ASCII (never “Étude”).
 
 If it faces the player, it is Academy; if it trains or evaluates the agent, it
 is manabot; if it is the world, it is managym. manabot is not a former name to

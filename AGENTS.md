@@ -2,21 +2,23 @@ Never add "Co-Authored by:" tags in commits
 
 ## Naming
 
-- **Fantasia** — the whole project, and this repository
-  (`loopflowstudio/fantasia`). It replaces "Etude Fantasia" as the project
-  name.
-- **Academy** — the web app players use: the `academy` package, the frontend,
+- **Manabot** — the whole project, and this repository
+  (`loopflowstudio/fantasia`). The repository address is retained; it is not the product name.
+- **manabot.academy** / **Academy** — the web app for playing Magic against manabots: the `academy` package, the frontend,
   the website, and their service namespaces. Say just "Academy" on anything a
   player sees.
-- **manabot** — the bot, and the Python training library/CLI. Indefinite
+- **manabot.manabot** — the training-system component, implemented in the
+  `manabot` Python package and CLI. Indefinite
   noun: you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
-- **Etude** — the launching and experiment system, built in the private
-  `loopflowstudio/etude` repository. The import name `etude` and the
+- **Etude** — the separate experiment library at `loopflowstudio/etude`,
+  publicly distributed as `etude-sdk`. The import name `etude` and the
   `ETUDE_URL` / `ETUDE_TOKEN_FILE` variables belong to it, never to the app.
   Always ASCII (never "Étude").
 
-Jack Heart set this model on 2026-10-13, "for now".
+Jack Heart clarified these project/component names on 2026-10-14.
+The dotted names identify components; imports are `manabot`, `academy`, and
+`etude` (the external SDK).
 
 Boundary rule for anything those lines don't settle: if it faces the player,
 it is Academy; if it trains or evaluates the agent, it is manabot; if it is the
