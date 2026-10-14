@@ -30,8 +30,8 @@ def test_blog_post_serves(client):
     assert "Rotisserie Drafting" in r.text
 
 
-@pytest.mark.parametrize("host", ["etude.gg", "etude-website.fly.dev", "localhost:5002"])
-def test_healthz_plain_response(client, host):
+@pytest.mark.parametrize("host", ["etude.gg", "fantasia-website.fly.dev", "localhost:5002"])
+def test_healthz_plain_response(client: TestClient, host: str) -> None:
     r = client.get("/healthz", headers={"host": host}, follow_redirects=False)
     assert r.status_code == 200
     assert r.content == b"ok"
@@ -78,9 +78,9 @@ def test_alternate_hosts_redirect(client, host):
     assert r.headers["location"] == "https://etude.gg/"
 
 
-def test_fly_host_serves_directly(client):
+def test_fly_host_serves_directly(client: TestClient) -> None:
     r = client.get(
-        "/", headers={"host": "etude-website.fly.dev"},
+        "/", headers={"host": "fantasia-website.fly.dev"},
         follow_redirects=False)
     assert r.status_code == 302
 

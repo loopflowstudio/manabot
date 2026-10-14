@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Manage the Fly-hosted Fantasia apps (mirrors kata/deploy/kata-fly.sh):
-# the landing site (etude-website) and hosted play (etude-play).
-# DNS lives in Cloudflare; the API token comes from Doppler (etude/prd).
+# the landing site (fantasia-website) and hosted play (academy-play).
+# DNS lives in Cloudflare; the API token comes from Doppler (fantasia/prd).
 
 set -euo pipefail
 
@@ -13,15 +13,15 @@ Commands:
   create   Create the Fly app if it does not exist
   deploy   Deploy the app image to Fly
   certs    Add/list Fly certificates for the app's domains
-  dns      Sync Cloudflare DNS for every domain (requires Doppler etude/prd)
+  dns      Sync Cloudflare DNS for every domain (requires Doppler fantasia/prd)
   status   Show Fly app status
   logs     Tail Fly logs
   health   Check every public domain
   open     Open the Fly dashboard
 
 Environment:
-  ACADEMY_FLY_APP=etude-website   # or etude-play
-  ACADEMY_FLY_ORG=personal
+  ACADEMY_FLY_APP=fantasia-website   # or academy-play
+  ACADEMY_FLY_ORG=loopflow-studio
   ACADEMY_FLY_REGION=sjc
 USAGE
 }
@@ -33,15 +33,15 @@ if [[ -z "$command" || "$command" == "-h" || "$command" == "--help" ]]; then
 fi
 shift || true
 
-app="${ACADEMY_FLY_APP:-etude-website}"
-org="${ACADEMY_FLY_ORG:-personal}"
+app="${ACADEMY_FLY_APP:-fantasia-website}"
+org="${ACADEMY_FLY_ORG:-loopflow-studio}"
 region="${ACADEMY_FLY_REGION:-sjc}"
 repo="$(git rev-parse --show-toplevel)"
 website_domains=(etude.gg www.etude.gg etudefantasia.com www.etudefantasia.com etudefantasia.gg www.etudefantasia.gg)
 play_domains=(play.etude.gg)
 
 case "$app" in
-  etude-play)
+  academy-play)
     config="$repo/deploy/play/fly.toml"
     context="$repo"
     deploy_flags=(--ha=false) # game state is in-process; exactly one machine
@@ -84,7 +84,7 @@ case "$command" in
     ;;
   dns)
     require_tool doppler
-    doppler run --project etude --config prd -- \
+    doppler run --project fantasia --config prd -- \
       uv run --no-project python "$repo/deploy/academy-dns.py"
     ;;
   status)

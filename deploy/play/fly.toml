@@ -1,4 +1,4 @@
-app = "etude-play"
+app = "academy-play"
 primary_region = "sjc"
 
 [build]

@@ -5,7 +5,7 @@ app's unique Fly alias, a DNS-only _acme-challenge CNAME so Fly can issue
 certificates behind the Cloudflare proxy, and a _fly-ownership TXT record
 (required when traffic routes through a proxy).
 
-Run through the wrapper so the token comes from Doppler (etude/prd):
+Run through the wrapper so the token comes from Doppler (fantasia/prd):
 
     deploy/academy-fly.sh dns
 """
@@ -28,14 +28,14 @@ ZONES = {
 
 # hostname -> (fly app, DNS alias prefix printed by `flyctl certs setup`).
 # Every zone's apex and www point at the website; play is its own app.
-WEBSITE = ("etude-website", "pqm95g3")
+WEBSITE = ("fantasia-website", "z30p6om")
 HOSTS = {
     **{
         host: WEBSITE
         for zone in ZONES
         for host in (zone, f"www.{zone}")
     },
-    "play.etude.gg": ("etude-play", "261enw9"),
+    "play.etude.gg": ("academy-play", "nw3xznd"),
 }
 
 

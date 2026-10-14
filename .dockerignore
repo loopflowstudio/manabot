@@ -8,7 +8,7 @@ __pycache__/
 *.pyc
 
 # Keep the remote-build context small: the play image needs pyproject/uv.lock,
-# academy/, managym/ (Rust sources), frontend/ (sources + lockfile), deploy/play/.
+# academy/, manabot/, managym/ (Rust sources), frontend/, deploy/play/.
 **/.venv
 **/node_modules
 **/.pytest_cache

@@ -28,8 +28,10 @@ correctly keeps manabot names. Frozen evidence — experiment IDs, contracts,
 receipts, wandb history — is never renamed, and neither are the compatibility
 surfaces that predate the Academy name: the `etude.gg` domain, the
 `x-etude-*` wire headers, `etude.*` browser storage keys and schema
-identifiers, and the hosted service names. "Sepia Etude" remains the name of
-the visual language.
+identifiers. Hosted services are `academy-play` and `fantasia-website`, with
+deployment secrets in Doppler `fantasia/prd` (Jack Heart, 2026-10-14).
+The shared Etude experiment services retain their names. "Sepia Etude" remains
+the name of the visual language.
 
 ## Style
 

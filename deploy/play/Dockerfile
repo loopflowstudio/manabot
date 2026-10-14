@@ -35,6 +35,7 @@ COPY --from=engine /wheels /wheels
 RUN uv sync --locked --only-group play-runtime --no-install-project \
     && uv pip install /wheels/*.whl
 COPY academy/ academy/
+COPY manabot/ manabot/
 COPY frontend/src/lib/packs/ frontend/src/lib/packs/
 COPY deploy/play/asgi.py ./
 COPY --from=web /build/frontend/build/ frontend/build/
@@ -42,6 +43,10 @@ COPY --from=web /build/frontend/build/ frontend/build/
 ENV PYTHONPATH=/app \
     ACADEMY_FRONTEND_BUILD=/app/frontend/build \
     ACADEMY_TRACES_DIR=/data/traces
+
+# Import the actual entrypoint with only the packaged runtime dependencies.
+# This catches missing modules before Fly replaces a serving machine.
+RUN uv run --no-sync python -c "import asgi"
 
 EXPOSE 8000
 
