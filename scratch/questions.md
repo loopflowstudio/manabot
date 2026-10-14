@@ -74,8 +74,8 @@ Etude 0.1.0 imports successfully in an isolated Python 3.12 environment.
 
 Live Experiment/Trainer W&B logging is replaced by Etude; frozen config fields
 and historical readers remain. Standalone and launcher-owned identity/directory
-paths pass. Self-play logs cumulative coordinates and retains admitted raw stage
-exports; failed attempts remain failed. Scientific TrainingRun/VerifyStore and
+paths pass. Self-play logs cumulative coordinates and retains admitted initialization,
+monitoring milestones and raw stage exports; failed attempts remain failed. Scientific TrainingRun/VerifyStore and
 old scheduling/evaluation still exist and must be migrated before claiming the
 requested Etude experiment path. No science launched.
 
@@ -84,3 +84,9 @@ including launcher environment admission. Initial strict-clock failures exposed
 missing clock values and stage-local counts; fixed without clock suppression.
 Open user decisions are compute allocation and whether to add standard vanilla
 card definitions or restrict the simple pools to Gray Ogre and Craw Wurm.
+
+Check (2026-10-14): SDK initialization/midpoint/end hashes and coordinates passed
+real scalar/categorical learner tests; 15 cadence checks passed. The pause test
+missed a learner finishing between five-second polls (retained run was completed,
+not failed); requesting pause at worker startup removed that test race and its
+recovery check passed. Scientific launch and direct Etude job ownership remain open.

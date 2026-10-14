@@ -454,7 +454,7 @@ def _execute_regime(
             + sum(s.cpu_seconds for s in run.stages[:-1]),
         }
 
-    def monitor_checkpoint(model: Agent) -> None:
+    def monitor_checkpoint(model: Agent, experiment: Experiment | None = None) -> None:
         nonlocal last_monitor_seconds
         active_endpoint = (
             isinstance(stage, TrainSelfPlay) and stage.active_seconds is not None
@@ -531,6 +531,10 @@ def _execute_regime(
             ):
                 load_checkpoint_agent(str(target))
             receipt.artifact = artifact(target)
+            if experiment is not None:
+                experiment.checkpoint(
+                    target, transitions=int(point["learner_transitions"])
+                )
         except Exception as error:
             receipt.error = f"{type(error).__name__}: {error}"
             if target.exists():
@@ -1204,6 +1208,21 @@ def _execute_regime(
                             "finished" if run.status == "completed" else "failed"
                         )
                     )
+                    if snapshot is None:
+                        # Retain the same admitted initialization used by frozen
+                        # controls. SDK copying does not draw policy RNG samples.
+                        tick = time.perf_counter()
+                        point = coordinates()
+                        experiment.log_update(
+                            {},
+                            updates=int(point["updates"]),
+                            transitions=int(point["learner_transitions"]),
+                        )
+                        experiment.checkpoint(
+                            Path(record.artifacts["initial_raw"]["path"]),
+                            transitions=int(point["learner_transitions"]),
+                        )
+                        record.export_seconds += time.perf_counter() - tick
                     trainer = NetOpponentTrainer(
                         agent,
                         experiment,
@@ -1379,7 +1398,7 @@ def _execute_regime(
                         record.collection_seconds + record.learning_seconds
                         < stage.active_seconds
                     ):
-                        monitor_checkpoint(trainer.agent)
+                        monitor_checkpoint(trainer.agent, trainer.experiment)
                     pausing = pause_path is not None and pause_path.exists()
                     cadence = (
                         regime.recovery.checkpoint_updates

@@ -22,7 +22,8 @@ expect CUDA. Historical W&B model readers and frozen recipe fields remain
 readable; those fields no longer select the live Trainer tracker.
 
 Self-play TrainingRegime execution logs cumulative update/transition clocks and
-retains admitted raw stage exports in Etude. TrainingRun/VerifyStore still hold
+retains admitted initialization, exact monitoring milestones, and raw stage
+exports in Etude. These are policy artifacts, not portable training recovery. TrainingRun/VerifyStore still hold
 scientific execution records, and the existing scheduler/evaluator has not yet
 been replaced by Etude jobs. This is a partial migration, not end-to-end experiment
 admission. SDK artifact retention alone does not establish portable collector/RNG

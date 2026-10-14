@@ -74,6 +74,34 @@ def test_real_collection_update_export_reload(name: str, tmp_path: Path) -> None
     assert len(tracked) == 1
     assert tracked[0].state is not None and tracked[0].state.state == "finished"
     assert tracked[0].incomplete == 0
-    assert len(tracked[0].checkpoints) == len(recipe.stages)
-    assert [c.at["learner_transitions"] for c in tracked[0].checkpoints] == [16, 32]
-    assert [c.at["updates"] for c in tracked[0].checkpoints] == [1, 2]
+    assert len(tracked[0].checkpoints) == len(recipe.stages) + 1
+    assert [c.at["learner_transitions"] for c in tracked[0].checkpoints] == [0, 16, 32]
+    assert [c.at["updates"] for c in tracked[0].checkpoints] == [0, 1, 2]
+
+
+def test_sdk_retains_initialization_and_exact_update_milestones(tmp_path: Path) -> None:
+    recipe = _recipe("ataraxos-move-scalar")
+    recipe.agent.hidden_dim = 8
+    recipe.stages = recipe.stages[:1]
+    stage = recipe.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = 3
+    stage.transitions = 4
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        run = execute_regime(
+            recipe, 602, tmp_path / "run", store, checkpoint_updates=(1, 2)
+        )
+    assert run.status == "completed"
+    tracked = read_all(tmp_path / "run" / stage.id / "etude")[0]
+    assert [c.at["updates"] for c in tracked.checkpoints] == [0, 1, 2, 3]
+    assert [c.at["learner_transitions"] for c in tracked.checkpoints] == [0, 16, 32, 48]
+    expected = [
+        run.stages[0].artifacts["initial_raw"],
+        *(c.artifact for c in run.monitoring_checkpoints),
+        run.stages[0].artifacts["raw"],
+    ]
+    assert all(a is not None for a in expected)
+    assert [c.artifact.sha256 for c in tracked.checkpoints] == [
+        a["sha256"] for a in expected if a is not None
+    ]
+    assert tracked.state is not None and tracked.state.state == "finished"

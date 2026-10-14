@@ -193,14 +193,12 @@ def test_shared_experiment_pauses_and_resumes_without_resetting_allocation(
     def request_pause(
         queue: CheckpointQueue, sources: list[Path], *, launch: bool = True
     ) -> None:
+        # The supervisor invokes this after starting the learner. Request at
+        # startup rather than waiting for a running export: twelve tiny updates
+        # can finish between its five-second polls. The worker must still reach
+        # an exact recovery boundary before honoring the request.
+        (root / "pause.request").touch()
         tick(queue, sources, launch=launch)
-        # Progress exports are throttled; request while running rather than
-        # racing a tiny learner to its final exported update count.
-        if any(
-            TrainingRun.model_validate_json(p.read_text()).status == "running"
-            for p in sources
-        ):
-            (root / "pause.request").touch()
 
     with monkeypatch.context() as patch:
         patch.setattr(CheckpointQueue, "tick", request_pause)
