@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const apiPort = process.env.ETUDE_API_PORT ?? '8012';
-const frontendPort = process.env.ETUDE_FRONTEND_PORT ?? '5184';
+const apiPort = process.env.ACADEMY_API_PORT ?? '8012';
+const frontendPort = process.env.ACADEMY_FRONTEND_PORT ?? '5184';
 
 export default defineConfig({
   testDir: './e2e',
@@ -22,7 +22,7 @@ export default defineConfig({
     },
     {
       command: `npm run dev -- --port ${frontendPort} --strictPort`,
-      env: { ETUDE_API_PORT: apiPort },
+      env: { ACADEMY_API_PORT: apiPort },
       url: `http://localhost:${frontendPort}`,
       reuseExistingServer: false,
       timeout: 60_000,

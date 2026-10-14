@@ -1,0 +1,2368 @@
+{
+  "aggregate_seconds": 2700,
+  "attempt_seconds": 900,
+  "held_out_deals": [
+    1911181000,
+    1911181001,
+    1911181002,
+    1911181003,
+    1911181004,
+    1911181005,
+    1911181006,
+    1911181007,
+    1911181008,
+    1911181009,
+    1911181010,
+    1911181011
+  ],
+  "minimum_gain_each_seed": 0.0,
+  "minimum_mean_gain": 0.1,
+  "minimum_win_rate_each_seed": null,
+  "recipes": [
+    {
+      "cases": [
+        {
+          "baseline": "full-game-learning",
+          "baseline_digest": "8019e85953181ca3ae02844a9636f3c1c9e92ec9de414e466a8ad9b5cdc7f821",
+          "label": "full-game-learning",
+          "name": "full-game-learning",
+          "regime": {
+            "agent": {
+              "attention_layers": 1,
+              "attention_on": true,
+              "belief_card_vocab_size": 0,
+              "belief_count_buckets": 0,
+              "belief_hidden_zone_vocab_size": 7,
+              "belief_owner_role_vocab_size": 2,
+              "hidden_dim": 64,
+              "num_attention_heads": 4,
+              "semantic_pack": "ur-lessons-vs-gw-allies",
+              "value_aggregation": "masked_mean",
+              "value_kind": "scalar"
+            },
+            "id": "full-game-learning",
+            "match": {
+              "hero": "arena-seat-0",
+              "hero_deck": {
+                "Accumulate Wisdom": 2,
+                "Divide by Zero": 2,
+                "Dragonfly Swarm": 1,
+                "Fire Nation Cadets": 2,
+                "Firebending Lesson": 4,
+                "First-Time Flyer": 2,
+                "Forecasting Fortune Teller": 1,
+                "Igneous Inspiration": 2,
+                "Island": 9,
+                "It'll Quench Ya!": 2,
+                "Mountain": 8,
+                "Otter-Penguin": 2,
+                "Pop Quiz": 2,
+                "Tiger-Seal": 2
+              },
+              "hero_sideboard": {
+                "Accumulate Wisdom": 1,
+                "Firebending Lesson": 1,
+                "It'll Quench Ya!": 1
+              },
+              "villain": "arena-seat-1",
+              "villain_deck": {
+                "Allies at Last": 2,
+                "Badgermole Cub": 2,
+                "Compassionate Healer": 2,
+                "Earth King's Lieutenant": 2,
+                "Earth Kingdom Jailer": 2,
+                "Fancy Footwork": 2,
+                "Forest": 8,
+                "Invasion Reinforcements": 2,
+                "Kyoshi Warriors": 2,
+                "Plains": 9,
+                "South Pole Voyager": 1,
+                "Suki, Kyoshi Warrior": 1,
+                "Water Tribe Rallier": 2,
+                "White Lotus Reinforcements": 2,
+                "Yip Yip!": 1
+              },
+              "villain_sideboard": {
+                "Fancy Footwork": 1,
+                "Yip Yip!": 1
+              }
+            },
+            "observation": {
+              "max_actions": 64,
+              "max_cards_per_player": 60,
+              "max_events": 32,
+              "max_focus_objects": 2,
+              "max_permanents_per_player": 40
+            },
+            "recovery_max_microsteps": null,
+            "schedule_clock": "run_elapsed_budget",
+            "schema_version": 1,
+            "selection": "last-complete-raw",
+            "stages": [
+              {
+                "behavior": "random",
+                "execution": {
+                  "device": "cpu",
+                  "memory_bytes": 34359738368,
+                  "precision": "float32",
+                  "threads": 1,
+                  "wall_seconds": 580.0,
+                  "workers": 1
+                },
+                "id": "policy-0",
+                "initial": null,
+                "learning": {
+                  "advantage_quantile": 0.75,
+                  "clip": 0.2,
+                  "collection_kl": 0.1,
+                  "ema": 0.999,
+                  "filter_kind": "quantile",
+                  "filter_scope": "actor_critic",
+                  "gradient": "ataraxos_move",
+                  "learning_rate_max": 0.0001,
+                  "learning_rate_min": 5e-06,
+                  "learning_rate_power": 1.1,
+                  "learning_rate_scale": 0.5,
+                  "max_grad_norm": 0.267,
+                  "min_advantage": 0.01,
+                  "policy_lambda": 0.5,
+                  "reference": "action_type_uniform",
+                  "tau_power": 0.3,
+                  "tau_scale": 0.05,
+                  "value_lambda": 0.8
+                },
+                "operation": "train_self_play",
+                "opponent": null,
+                "optimizer": "adam",
+                "streams": 4,
+                "trainable": "policy_value",
+                "trainer": "net_opponent",
+                "transitions": 64,
+                "updates": 128
+              }
+            ],
+            "wall_seconds": 600.0,
+            "world": "w4"
+          },
+          "regime_digest": "8019e85953181ca3ae02844a9636f3c1c9e92ec9de414e466a8ad9b5cdc7f821",
+          "schema_version": 1,
+          "settings": [
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_layers"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_on"
+              ],
+              "source": "full-game-learning",
+              "value": true
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_card_vocab_size"
+              ],
+              "source": "full-game-learning",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_count_buckets"
+              ],
+              "source": "full-game-learning",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_hidden_zone_vocab_size"
+              ],
+              "source": "full-game-learning",
+              "value": 7
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_owner_role_vocab_size"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "compound_decisions"
+              ],
+              "source": "full-game-learning",
+              "value": false
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "hidden_dim"
+              ],
+              "source": "full-game-learning",
+              "value": 64
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "num_attention_heads"
+              ],
+              "source": "full-game-learning",
+              "value": 4
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "semantic_pack"
+              ],
+              "source": "full-game-learning",
+              "value": "ur-lessons-vs-gw-allies"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_aggregation"
+              ],
+              "source": "full-game-learning",
+              "value": "masked_mean"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_kind"
+              ],
+              "source": "full-game-learning",
+              "value": "scalar"
+            },
+            {
+              "component": "identity",
+              "origin": "identity",
+              "path": [
+                "id"
+              ],
+              "source": "experiment-name",
+              "value": "full-game-learning"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero"
+              ],
+              "source": "full-game-learning",
+              "value": "arena-seat-0"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Accumulate Wisdom"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Divide by Zero"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Dragonfly Swarm"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Fire Nation Cadets"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Firebending Lesson"
+              ],
+              "source": "full-game-learning",
+              "value": 4
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "First-Time Flyer"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Forecasting Fortune Teller"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Igneous Inspiration"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Island"
+              ],
+              "source": "full-game-learning",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "It'll Quench Ya!"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Mountain"
+              ],
+              "source": "full-game-learning",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Otter-Penguin"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Pop Quiz"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Tiger-Seal"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Accumulate Wisdom"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Firebending Lesson"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "It'll Quench Ya!"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain"
+              ],
+              "source": "full-game-learning",
+              "value": "arena-seat-1"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Allies at Last"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Badgermole Cub"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Compassionate Healer"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth King's Lieutenant"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth Kingdom Jailer"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Fancy Footwork"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Forest"
+              ],
+              "source": "full-game-learning",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Invasion Reinforcements"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Kyoshi Warriors"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Plains"
+              ],
+              "source": "full-game-learning",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "South Pole Voyager"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Suki, Kyoshi Warrior"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Water Tribe Rallier"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "White Lotus Reinforcements"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Yip Yip!"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Fancy Footwork"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Yip Yip!"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_actions"
+              ],
+              "source": "full-game-learning",
+              "value": 64
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_cards_per_player"
+              ],
+              "source": "full-game-learning",
+              "value": 60
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_events"
+              ],
+              "source": "full-game-learning",
+              "value": 32
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_focus_objects"
+              ],
+              "source": "full-game-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_permanents_per_player"
+              ],
+              "source": "full-game-learning",
+              "value": 40
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "recovery_max_microsteps"
+              ],
+              "source": "full-game-learning",
+              "value": null
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "schedule_clock"
+              ],
+              "source": "full-game-learning",
+              "value": "run_elapsed_budget"
+            },
+            {
+              "component": "identity",
+              "origin": "baseline",
+              "path": [
+                "schema_version"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "selection"
+              ],
+              "source": "full-game-learning",
+              "value": "last-complete-raw"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "behavior"
+              ],
+              "source": "full-game-learning",
+              "value": "random"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "device"
+              ],
+              "source": "full-game-learning",
+              "value": "cpu"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "memory_bytes"
+              ],
+              "source": "full-game-learning",
+              "value": 34359738368
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "precision"
+              ],
+              "source": "full-game-learning",
+              "value": "float32"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "threads"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "wall_seconds"
+              ],
+              "source": "full-game-learning",
+              "value": 580.0
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "workers"
+              ],
+              "source": "full-game-learning",
+              "value": 1
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "id"
+              ],
+              "source": "full-game-learning",
+              "value": "policy-0"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "initial"
+              ],
+              "source": "full-game-learning",
+              "value": null
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "advantage_quantile"
+              ],
+              "source": "full-game-learning",
+              "value": 0.75
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "clip"
+              ],
+              "source": "full-game-learning",
+              "value": 0.2
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "collection_kl"
+              ],
+              "source": "full-game-learning",
+              "value": 0.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "ema"
+              ],
+              "source": "full-game-learning",
+              "value": 0.999
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_kind"
+              ],
+              "source": "full-game-learning",
+              "value": "quantile"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_scope"
+              ],
+              "source": "full-game-learning",
+              "value": "actor_critic"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "gradient"
+              ],
+              "source": "full-game-learning",
+              "value": "ataraxos_move"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_max"
+              ],
+              "source": "full-game-learning",
+              "value": 0.0001
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_min"
+              ],
+              "source": "full-game-learning",
+              "value": 5e-06
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_power"
+              ],
+              "source": "full-game-learning",
+              "value": 1.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_scale"
+              ],
+              "source": "full-game-learning",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "max_grad_norm"
+              ],
+              "source": "full-game-learning",
+              "value": 0.267
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "min_advantage"
+              ],
+              "source": "full-game-learning",
+              "value": 0.01
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "policy_lambda"
+              ],
+              "source": "full-game-learning",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "reference"
+              ],
+              "source": "full-game-learning",
+              "value": "action_type_uniform"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_power"
+              ],
+              "source": "full-game-learning",
+              "value": 0.3
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_scale"
+              ],
+              "source": "full-game-learning",
+              "value": 0.05
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "value_lambda"
+              ],
+              "source": "full-game-learning",
+              "value": 0.8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "operation"
+              ],
+              "source": "full-game-learning",
+              "value": "train_self_play"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "opponent"
+              ],
+              "source": "full-game-learning",
+              "value": null
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "optimizer"
+              ],
+              "source": "full-game-learning",
+              "value": "adam"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "streams"
+              ],
+              "source": "full-game-learning",
+              "value": 4
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainable"
+              ],
+              "source": "full-game-learning",
+              "value": "policy_value"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainer"
+              ],
+              "source": "full-game-learning",
+              "value": "net_opponent"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "transitions"
+              ],
+              "source": "full-game-learning",
+              "value": 64
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "updates"
+              ],
+              "source": "full-game-learning",
+              "value": 128
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "wall_seconds"
+              ],
+              "source": "full-game-learning",
+              "value": 600.0
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "world"
+              ],
+              "source": "full-game-learning",
+              "value": "w4"
+            }
+          ]
+        }
+      ],
+      "name": "full-game-learning",
+      "schema_version": 1
+    },
+    {
+      "cases": [
+        {
+          "baseline": "full-game-frozen",
+          "baseline_digest": "b1c180f398f72f26fea8563944f0bed766cdf2501915a5cf6e912e82acc0d7d7",
+          "label": "full-game-frozen",
+          "name": "full-game-frozen",
+          "regime": {
+            "agent": {
+              "attention_layers": 1,
+              "attention_on": true,
+              "belief_card_vocab_size": 0,
+              "belief_count_buckets": 0,
+              "belief_hidden_zone_vocab_size": 7,
+              "belief_owner_role_vocab_size": 2,
+              "hidden_dim": 64,
+              "num_attention_heads": 4,
+              "semantic_pack": "ur-lessons-vs-gw-allies",
+              "value_aggregation": "masked_mean",
+              "value_kind": "scalar"
+            },
+            "id": "full-game-frozen",
+            "match": {
+              "hero": "arena-seat-0",
+              "hero_deck": {
+                "Accumulate Wisdom": 2,
+                "Divide by Zero": 2,
+                "Dragonfly Swarm": 1,
+                "Fire Nation Cadets": 2,
+                "Firebending Lesson": 4,
+                "First-Time Flyer": 2,
+                "Forecasting Fortune Teller": 1,
+                "Igneous Inspiration": 2,
+                "Island": 9,
+                "It'll Quench Ya!": 2,
+                "Mountain": 8,
+                "Otter-Penguin": 2,
+                "Pop Quiz": 2,
+                "Tiger-Seal": 2
+              },
+              "hero_sideboard": {
+                "Accumulate Wisdom": 1,
+                "Firebending Lesson": 1,
+                "It'll Quench Ya!": 1
+              },
+              "villain": "arena-seat-1",
+              "villain_deck": {
+                "Allies at Last": 2,
+                "Badgermole Cub": 2,
+                "Compassionate Healer": 2,
+                "Earth King's Lieutenant": 2,
+                "Earth Kingdom Jailer": 2,
+                "Fancy Footwork": 2,
+                "Forest": 8,
+                "Invasion Reinforcements": 2,
+                "Kyoshi Warriors": 2,
+                "Plains": 9,
+                "South Pole Voyager": 1,
+                "Suki, Kyoshi Warrior": 1,
+                "Water Tribe Rallier": 2,
+                "White Lotus Reinforcements": 2,
+                "Yip Yip!": 1
+              },
+              "villain_sideboard": {
+                "Fancy Footwork": 1,
+                "Yip Yip!": 1
+              }
+            },
+            "observation": {
+              "max_actions": 64,
+              "max_cards_per_player": 60,
+              "max_events": 32,
+              "max_focus_objects": 2,
+              "max_permanents_per_player": 40
+            },
+            "recovery_max_microsteps": null,
+            "schedule_clock": "run_elapsed_budget",
+            "schema_version": 1,
+            "selection": "last-complete-raw",
+            "stages": [
+              {
+                "behavior": "random",
+                "execution": {
+                  "device": "cpu",
+                  "memory_bytes": 34359738368,
+                  "precision": "float32",
+                  "threads": 1,
+                  "wall_seconds": 580.0,
+                  "workers": 1
+                },
+                "id": "policy-0",
+                "initial": null,
+                "learning": {
+                  "advantage_quantile": 0.75,
+                  "clip": 0.2,
+                  "collection_kl": 0.1,
+                  "ema": 0.999,
+                  "filter_kind": "quantile",
+                  "filter_scope": "actor_critic",
+                  "gradient": "ataraxos_move",
+                  "learning_rate_max": 0.0001,
+                  "learning_rate_min": 5e-06,
+                  "learning_rate_power": 1.1,
+                  "learning_rate_scale": 0.5,
+                  "max_grad_norm": 0.267,
+                  "min_advantage": 0.01,
+                  "policy_lambda": 0.5,
+                  "reference": "action_type_uniform",
+                  "tau_power": 0.3,
+                  "tau_scale": 0.05,
+                  "value_lambda": 0.8
+                },
+                "operation": "train_self_play",
+                "opponent": null,
+                "optimizer": "adam",
+                "streams": 4,
+                "trainable": "none",
+                "trainer": "net_opponent",
+                "transitions": 64,
+                "updates": 128
+              }
+            ],
+            "wall_seconds": 600.0,
+            "world": "w4"
+          },
+          "regime_digest": "b1c180f398f72f26fea8563944f0bed766cdf2501915a5cf6e912e82acc0d7d7",
+          "schema_version": 1,
+          "settings": [
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_layers"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_on"
+              ],
+              "source": "full-game-frozen",
+              "value": true
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_card_vocab_size"
+              ],
+              "source": "full-game-frozen",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_count_buckets"
+              ],
+              "source": "full-game-frozen",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_hidden_zone_vocab_size"
+              ],
+              "source": "full-game-frozen",
+              "value": 7
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_owner_role_vocab_size"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "compound_decisions"
+              ],
+              "source": "full-game-frozen",
+              "value": false
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "hidden_dim"
+              ],
+              "source": "full-game-frozen",
+              "value": 64
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "num_attention_heads"
+              ],
+              "source": "full-game-frozen",
+              "value": 4
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "semantic_pack"
+              ],
+              "source": "full-game-frozen",
+              "value": "ur-lessons-vs-gw-allies"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_aggregation"
+              ],
+              "source": "full-game-frozen",
+              "value": "masked_mean"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_kind"
+              ],
+              "source": "full-game-frozen",
+              "value": "scalar"
+            },
+            {
+              "component": "identity",
+              "origin": "identity",
+              "path": [
+                "id"
+              ],
+              "source": "experiment-name",
+              "value": "full-game-frozen"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero"
+              ],
+              "source": "full-game-frozen",
+              "value": "arena-seat-0"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Accumulate Wisdom"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Divide by Zero"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Dragonfly Swarm"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Fire Nation Cadets"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Firebending Lesson"
+              ],
+              "source": "full-game-frozen",
+              "value": 4
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "First-Time Flyer"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Forecasting Fortune Teller"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Igneous Inspiration"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Island"
+              ],
+              "source": "full-game-frozen",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "It'll Quench Ya!"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Mountain"
+              ],
+              "source": "full-game-frozen",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Otter-Penguin"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Pop Quiz"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Tiger-Seal"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Accumulate Wisdom"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Firebending Lesson"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "It'll Quench Ya!"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain"
+              ],
+              "source": "full-game-frozen",
+              "value": "arena-seat-1"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Allies at Last"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Badgermole Cub"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Compassionate Healer"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth King's Lieutenant"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth Kingdom Jailer"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Fancy Footwork"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Forest"
+              ],
+              "source": "full-game-frozen",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Invasion Reinforcements"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Kyoshi Warriors"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Plains"
+              ],
+              "source": "full-game-frozen",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "South Pole Voyager"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Suki, Kyoshi Warrior"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Water Tribe Rallier"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "White Lotus Reinforcements"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Yip Yip!"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Fancy Footwork"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Yip Yip!"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_actions"
+              ],
+              "source": "full-game-frozen",
+              "value": 64
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_cards_per_player"
+              ],
+              "source": "full-game-frozen",
+              "value": 60
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_events"
+              ],
+              "source": "full-game-frozen",
+              "value": 32
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_focus_objects"
+              ],
+              "source": "full-game-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_permanents_per_player"
+              ],
+              "source": "full-game-frozen",
+              "value": 40
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "recovery_max_microsteps"
+              ],
+              "source": "full-game-frozen",
+              "value": null
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "schedule_clock"
+              ],
+              "source": "full-game-frozen",
+              "value": "run_elapsed_budget"
+            },
+            {
+              "component": "identity",
+              "origin": "baseline",
+              "path": [
+                "schema_version"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "selection"
+              ],
+              "source": "full-game-frozen",
+              "value": "last-complete-raw"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "behavior"
+              ],
+              "source": "full-game-frozen",
+              "value": "random"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "device"
+              ],
+              "source": "full-game-frozen",
+              "value": "cpu"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "memory_bytes"
+              ],
+              "source": "full-game-frozen",
+              "value": 34359738368
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "precision"
+              ],
+              "source": "full-game-frozen",
+              "value": "float32"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "threads"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "wall_seconds"
+              ],
+              "source": "full-game-frozen",
+              "value": 580.0
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "workers"
+              ],
+              "source": "full-game-frozen",
+              "value": 1
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "id"
+              ],
+              "source": "full-game-frozen",
+              "value": "policy-0"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "initial"
+              ],
+              "source": "full-game-frozen",
+              "value": null
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "advantage_quantile"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.75
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "clip"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.2
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "collection_kl"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "ema"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.999
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_kind"
+              ],
+              "source": "full-game-frozen",
+              "value": "quantile"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_scope"
+              ],
+              "source": "full-game-frozen",
+              "value": "actor_critic"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "gradient"
+              ],
+              "source": "full-game-frozen",
+              "value": "ataraxos_move"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_max"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.0001
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_min"
+              ],
+              "source": "full-game-frozen",
+              "value": 5e-06
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_power"
+              ],
+              "source": "full-game-frozen",
+              "value": 1.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_scale"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "max_grad_norm"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.267
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "min_advantage"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.01
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "policy_lambda"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "reference"
+              ],
+              "source": "full-game-frozen",
+              "value": "action_type_uniform"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_power"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.3
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_scale"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.05
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "value_lambda"
+              ],
+              "source": "full-game-frozen",
+              "value": 0.8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "operation"
+              ],
+              "source": "full-game-frozen",
+              "value": "train_self_play"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "opponent"
+              ],
+              "source": "full-game-frozen",
+              "value": null
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "optimizer"
+              ],
+              "source": "full-game-frozen",
+              "value": "adam"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "streams"
+              ],
+              "source": "full-game-frozen",
+              "value": 4
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainable"
+              ],
+              "source": "full-game-frozen",
+              "value": "none"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainer"
+              ],
+              "source": "full-game-frozen",
+              "value": "net_opponent"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "transitions"
+              ],
+              "source": "full-game-frozen",
+              "value": 64
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "updates"
+              ],
+              "source": "full-game-frozen",
+              "value": 128
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "wall_seconds"
+              ],
+              "source": "full-game-frozen",
+              "value": 600.0
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "world"
+              ],
+              "source": "full-game-frozen",
+              "value": "w4"
+            }
+          ]
+        }
+      ],
+      "name": "full-game-frozen",
+      "schema_version": 1
+    }
+  ],
+  "seeds": [
+    11821,
+    11822,
+    11823
+  ]
+}

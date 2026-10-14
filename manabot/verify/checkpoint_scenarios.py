@@ -17,7 +17,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 import torch
 
-from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
+from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.arena.models import canonical_sha256, file_sha256
 from manabot.arena.replay import read_trace, replay_games, write_trace
 from manabot.model.world import checkpoint_world, validate_agent_setup

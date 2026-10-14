@@ -4,7 +4,7 @@
 // fail-closed TransitionReceipt. This is the R1 vertical slice of
 // docs/ARCHITECTURE.md: one common contract projected from the authoritative
 // Game, with positional action indices kept private. It does not own match
-// identity (Etude-owned), replay bookkeeping, or possible-world semantics
+// identity (Academy-owned), replay bookkeeping, or possible-world semantics
 // (RUL-8 / R3). Legal-action identity comes from `structured_search_offers`,
 // which covers every action-space kind as one offer per legal action.
 

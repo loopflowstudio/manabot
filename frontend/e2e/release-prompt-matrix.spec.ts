@@ -112,7 +112,7 @@ interface MatrixBrowserState {
 }
 
 type MatrixWindow = Window & typeof globalThis & {
-  __etudeMatrix?: MatrixBrowserState;
+  __academyMatrix?: MatrixBrowserState;
 };
 
 interface RuntimeFailures {
@@ -386,7 +386,7 @@ async function installScenarioInstrumentation(page: Page, seed: number): Promise
       value: SeededWebSocket,
       writable: true,
     });
-    (window as MatrixWindow).__etudeMatrix = state;
+    (window as MatrixWindow).__academyMatrix = state;
   }, seed);
 }
 
@@ -395,7 +395,7 @@ async function updateSequence(page: Page): Promise<number> {
 }
 
 async function commandCount(page: Page): Promise<number> {
-  return page.evaluate(() => (window as MatrixWindow).__etudeMatrix?.commands.length ?? 0);
+  return page.evaluate(() => (window as MatrixWindow).__academyMatrix?.commands.length ?? 0);
 }
 
 async function renderedActions(page: Page): Promise<RenderedAction[]> {
@@ -653,7 +653,7 @@ async function assertExistingReconnectStatus(
   const sequenceBefore = await updateSequence(page);
 
   await page.evaluate(() => {
-    const matrixState = (window as MatrixWindow).__etudeMatrix;
+    const matrixState = (window as MatrixWindow).__academyMatrix;
     const connectionBadge = document.querySelector<HTMLElement>('[data-testid="connection-badge"]');
     if (!matrixState || !connectionBadge) {
       throw new Error('matrix reconnect instrumentation is unavailable');
@@ -726,7 +726,7 @@ async function assertExistingReconnectStatus(
   );
 
   const statuses = await page.evaluate(
-    () => (window as MatrixWindow).__etudeMatrix?.connectionStatuses ?? [],
+    () => (window as MatrixWindow).__academyMatrix?.connectionStatuses ?? [],
   );
   expect(statuses).toEqual(expect.arrayContaining(['disconnected', 'reconnecting', 'connected']));
   return statuses;
@@ -759,7 +759,7 @@ async function activateKeyboardChoice(
     })
     .toBe(commandsBefore + 1);
   const command = await page.evaluate(
-    () => (window as MatrixWindow).__etudeMatrix?.commands.at(-1) ?? null,
+    () => (window as MatrixWindow).__academyMatrix?.commands.at(-1) ?? null,
   );
   expect(command, `${scenario.id}: ${family} command was not captured`).not.toBeNull();
   expect(command?.command_id, `${scenario.id}: ${family} command id is absent`).not.toBe('');
@@ -780,7 +780,7 @@ async function findTerminalTrace(
   page: Page,
   scenario: PromptScenario,
 ): Promise<{ id: string; payload: TracePayload }> {
-  const id = await page.evaluate(() => (window as MatrixWindow).__etudeMatrix?.attemptId);
+  const id = await page.evaluate(() => (window as MatrixWindow).__academyMatrix?.attemptId);
   expect(typeof id, `${scenario.id}: authority supplied no attempt id`).toBe('string');
   let terminalTrace: { id: string; payload: TracePayload } | undefined;
 

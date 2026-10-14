@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 from nbclient import NotebookClient
 import nbformat
+import pytest
 
 from manabot.training.comparison_notebook import write_comparison_notebook
 from manabot.training.experiment_report import (
@@ -23,8 +24,13 @@ from manabot.training.experiment_report import (
 DEMO = Path(__file__).resolve().parents[2] / "experiments/study/experiment-demo"
 
 
-def test_saved_notebook_generates_html_without_inline_plots(tmp_path: Path) -> None:
-    path = write_comparison_notebook(DEMO, tmp_path / "report.ipynb")
+@pytest.mark.parametrize("individual_progress", [False, True])
+def test_saved_notebook_generates_html_without_inline_plots(
+    tmp_path: Path, individual_progress: bool
+) -> None:
+    path = write_comparison_notebook(
+        DEMO, tmp_path / "report.ipynb", individual_progress=individual_progress
+    )
     notebook = nbformat.read(path, as_version=4)
     notebook.cells[1].source = notebook.cells[1].source.replace(
         "comparison.html", "chosen.html"
@@ -72,6 +78,56 @@ def test_unequal_latest_updates_and_missing_runs_are_not_comparisons() -> None:
         update={"attempts": [*execution.attempts, pending]}
     )
     assert not matched_milestones(replace(evidence, executions=(execution,)))
+
+
+def test_recovery_extends_one_trajectory_without_adding_a_replicate() -> None:
+    evidence = load_evidence(DEMO)
+    parent = evidence.runs[0]
+    child = parent.model_copy(update={"id": "recovered", "parent_run_id": parent.id})
+    monitors = tuple(
+        result.model_copy(update={"run_id": child.id})
+        if result.run_id == parent.id
+        else result
+        for result in evidence.monitors
+    )
+    resumed = replace(evidence, runs=(*evidence.runs, child), monitors=monitors)
+    assert matched_milestones(resumed) == matched_milestones(
+        replace(evidence, monitors=monitors, runs=(child, *evidence.runs[1:]))
+    )
+    for matched in (False, True):
+        figures = strength_figures(resumed, "training_seconds", matched_only=matched)
+        assert len(figures) == 1
+        axes = figures[0].axes[0]
+        assert len(axes.containers) == len(evidence.runs)
+        assert ("Matched stage/update" in axes.get_title()) == matched
+        assert sorted(axes.get_legend_handles_labels()[1]) == sorted(
+            evidence.label(run.id) for run in evidence.runs
+        )
+
+    original = next(
+        result for result in evidence.monitors if result.run_id == parent.id
+    )
+    later = original.model_copy(
+        update={
+            "run_id": child.id,
+            "coordinates": original.coordinates.model_copy(
+                update={"updates": original.coordinates.updates + 1}
+            ),
+        }
+    )
+    histories = strength_figures(
+        replace(resumed, monitors=(*evidence.monitors, later)),
+        "training_seconds",
+        per_run=True,
+    )
+    assert len(histories) == len(evidence.runs)
+    history = next(
+        figure.axes[0]
+        for figure in histories
+        if evidence.label(parent.id) in figure.axes[0].get_legend_handles_labels()[1]
+    )
+    assert len(history.containers) == 1
+    assert len(history.containers[0].lines[0].get_xdata()) == 2
 
 
 def test_failed_evaluation_suppresses_rates_and_remains_visible(tmp_path: Path) -> None:

@@ -22,9 +22,9 @@ from fastapi.testclient import TestClient
 import numpy as np
 import psutil
 
-from etude import server, trace as trace_store
-from etude.authored_match_receipt import DeterministicServerOfferPolicy
-from etude.replay_index import CanonicalReplayV1
+from academy import server, trace as trace_store
+from academy.authored_match_receipt import DeterministicServerOfferPolicy
+from academy.replay_index import CanonicalReplayV1
 from manabot.semantic.learning import LearningSchema, SemanticIr, _TokenBuilder
 import managym
 from managym.decision import Command as SemanticCommand
@@ -1029,7 +1029,7 @@ def render_report(receipt: Mapping[str, Any], contract: Mapping[str, Any]) -> st
         "",
         "## Result",
         "",
-        "Literal seeds 1 and 3 reached terminal through production Etude WebSocket, "
+        "Literal seeds 1 and 3 reached terminal through production Academy WebSocket, "
         "direct headless Commands, and persisted canonical replay. Each tape contains "
         "a Jeong cast followed by a mandatory target Command and an observed +1/+1 "
         "counter delta. Revision witnesses and ordered semantic event groups matched "

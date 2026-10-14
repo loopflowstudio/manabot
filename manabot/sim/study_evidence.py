@@ -13,9 +13,9 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from etude.experience_protocol import Command, ExperienceFrame, InteractionOffer
-from etude.replay_index import ReplayDecisionAddress, decision_payload_sha256
-from etude.study_protocol import StudyArtifact
+from academy.experience_protocol import Command, ExperienceFrame, InteractionOffer
+from academy.replay_index import ReplayDecisionAddress, decision_payload_sha256
+from academy.study_protocol import StudyArtifact
 from manabot.sim.teacher1_evidence import canonical_sha256
 
 

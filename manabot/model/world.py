@@ -35,11 +35,34 @@ def _setups(player_configs) -> list[dict]:
     )
 
 
-def validate_agent_setup(agent: Any, player_configs) -> None:
+def validate_agent_setup(
+    agent: Any,
+    player_configs: Sequence[managym.PlayerConfig],
+    *,
+    allow_deck_repetition: bool = False,
+) -> None:
     """Check an admitted policy against the actual match at execution time."""
     binding = getattr(agent, "world_binding", None)
-    if binding is not None and binding["setups"] != _setups(player_configs):
-        raise ValueError("checkpoint setup differs from the execution match")
+    if binding is None:
+        return
+    actual = _setups(player_configs)
+    if not allow_deck_repetition:
+        if actual != binding["setups"]:
+            raise ValueError("checkpoint setup differs from the execution match")
+        return
+
+    if len(actual) != 2 or any(setup not in binding["setups"] for setup in actual):
+        raise ValueError("execution deck is outside checkpoint's exact setup roster")
+    compiled = binding["content_manifest"].get("compiled_semantics")
+    expected_pack = compiled["pack_key"] if compiled is not None else None
+    if any(p.content_pack not in (None, expected_pack) for p in player_configs):
+        raise ValueError("execution content pack differs from the checkpoint")
+    if actual != binding["setups"] and any(
+        p.content_pack != expected_pack for p in player_configs
+    ):
+        raise ValueError(
+            "repeated decks require the checkpoint's explicit content pack"
+        )
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:

@@ -53,6 +53,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
+from manabot.training.matchups import Curriculum, stream_matches
 from manabot.training.self_play import SelfPlayCounter, deck_identity
 import managym
 
@@ -118,6 +119,7 @@ class CollectorStats:
     seconds: float = 0.0
     opponent_action_types: dict[str, int] = field(default_factory=dict)
     learner_action_types: dict[str, int] = field(default_factory=dict)
+    games_by_stream: dict[int, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -131,7 +133,16 @@ class CollectorStats:
             "seconds": self.seconds,
             "opponent_action_types": dict(self.opponent_action_types),
             "learner_action_types": dict(self.learner_action_types),
+            "games_by_stream": dict(self.games_by_stream),
         }
+
+
+@dataclass
+class CurrentGames:
+    """Native reset seeds and only the unfinished games' legal action prefixes."""
+
+    seeds: list[int]
+    actions: list[list[int]]
 
 
 @dataclass
@@ -147,6 +158,7 @@ class CollectorSnapshot:
     buffers: dict[str, np.ndarray]
     sampling_rng: torch.Tensor
     stats: CollectorStats
+    current_games: CurrentGames | None = None
 
 
 _ACTION_TYPE_NAMES = {int(member): member.name.lower() for member in ActionEnum}
@@ -177,6 +189,9 @@ class SeatRoutedCollector:
         opponent_agent: Agent | None = None,
         device: str = "cpu",
         recovery_max_microsteps: int | None = None,
+        recovery_max_game_microsteps: int | None = None,
+        root: str | None = None,
+        matchup_curriculum: Curriculum = "fixed",
     ) -> None:
         if opponent_mode not in OPPONENT_MODES:
             raise ValueError(
@@ -187,26 +202,47 @@ class SeatRoutedCollector:
 
         self.observation_space = observation_space
         self.match = match
-        self.stream_matches = [match] * num_envs
         self.reward = reward
         self.num_envs = num_envs
         self.opponent_mode = opponent_mode
         self.device = torch.device(device)
         self.stats = CollectorStats()
-        if recovery_max_microsteps is not None and opponent_mode != "self":
+        if (
+            recovery_max_microsteps is not None
+            or recovery_max_game_microsteps is not None
+        ) and opponent_mode != "self":
             raise ValueError("recovery supports current-self opponents only")
         self._recovery_limit = recovery_max_microsteps
+        self._game_recovery_limit = recovery_max_game_microsteps
+        self._game_actions: list[list[int]] = [[] for _ in range(num_envs)]
         self._journal: list[tuple[list[int], list[bool]]] = []
 
-        self._env = managym.VectorEnv(
-            num_envs=num_envs,
-            seed=seed,
-            skip_trivial=True,
-            opponent_policy="none",
-        )
+        if root is None:
+            self._env = managym.VectorEnv(
+                num_envs=num_envs,
+                seed=seed,
+                skip_trivial=True,
+                opponent_policy="none",
+            )
+        else:
+            from manabot.env.target_practice import TargetPracticeVector
+
+            if (
+                root != "lethal-target-v1"
+                or recovery_max_microsteps is not None
+                or recovery_max_game_microsteps is not None
+            ):
+                raise ValueError("unsupported training root or root recovery")
+            self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
         self._buffers = _allocate_buffers(observation_space, num_envs)
         self._env.set_buffers(self._buffers)
-        self._env.reset_all_into_buffers(match.to_rust())
+        self.stream_matches = stream_matches(match, num_envs, matchup_curriculum)
+        if matchup_curriculum == "fixed":
+            self._env.reset_all_into_buffers(match.to_rust())
+        else:
+            self._env.reset_each_into_buffers(
+                [m.to_rust() for m in self.stream_matches]
+            )
 
         self._self_play_decks = [
             (
@@ -238,7 +274,7 @@ class SeatRoutedCollector:
 
     def snapshot(self) -> CollectorSnapshot:
         """Capture a completed update boundary, including native RNG replay."""
-        if self._recovery_limit is None:
+        if self._recovery_limit is None and self._game_recovery_limit is None:
             raise ValueError("collector recovery is disabled")
         if any(self._streams) or any(p is not None for p in self._pending):
             raise ValueError("collector snapshot requires an update boundary")
@@ -247,21 +283,58 @@ class SeatRoutedCollector:
             {key: value.copy() for key, value in self._buffers.items()},
             self._self_rng.get_state().clone(),
             deepcopy(self.stats),
+            CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
+            if self._game_recovery_limit is not None
+            else None,
         )
 
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
         """Replay into a fresh collector; reject divergence before any learning."""
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
-        if (
-            self._recovery_limit is None
-            or state.stats.micro_steps > self._recovery_limit
-        ):
-            raise ValueError("collector replay exceeds recovery bound")
-        for actions, active in state.journal:
-            check()
-            self._env.step_into_buffers(actions, active)
+        if state.current_games is not None:
+            games = state.current_games
+            if (
+                self._game_recovery_limit is None
+                or len(games.seeds) != self.num_envs
+                or len(games.actions) != self.num_envs
+                or sum(map(len, games.actions)) > self._game_recovery_limit
+            ):
+                raise ValueError("current-game replay exceeds recovery bound")
+            self._env.reset_seeds_into_buffers(games.seeds)
+            for index in range(max(map(len, games.actions), default=0)):
+                check()
+                active = [index < len(row) for row in games.actions]
+                actions = [
+                    row[index] if enabled else 0
+                    for row, enabled in zip(games.actions, active, strict=True)
+                ]
+                self._env.step_into_buffers(actions, active)
+                if (
+                    self._buffers["terminated"].any()
+                    or self._buffers["truncated"].any()
+                ):
+                    raise ValueError("current-game replay crossed a terminal boundary")
+            self._game_actions = deepcopy(games.actions)
+        else:
+            if (
+                self._recovery_limit is None
+                or state.stats.micro_steps > self._recovery_limit
+            ):
+                raise ValueError("collector replay exceeds recovery bound")
+            for actions, active in state.journal:
+                check()
+                self._env.step_into_buffers(actions, active)
         for key, expected in state.buffers.items():
+            # At an update boundary the terminal flags describe the preceding
+            # step; the encoded observation already belongs to its auto-reset root.
+            if state.current_games is not None and key in {
+                "rewards",
+                "terminated",
+                "truncated",
+            }:
+                self._buffers[key][...] = expected
+                continue
             if not np.array_equal(self._buffers[key], expected):
                 raise ValueError(f"collector replay diverged: {key}")
         self._journal = deepcopy(state.journal)
@@ -424,12 +497,23 @@ class SeatRoutedCollector:
             self.stats.micro_steps += int(active.sum())
 
             done = (buffers["terminated"] > 0) | (buffers["truncated"] > 0)
+            if self._game_recovery_limit is not None:
+                for row in np.flatnonzero(active):
+                    if done[row]:
+                        self._game_actions[row].clear()
+                    else:
+                        self._game_actions[row].append(int(actions[row]))
+                if sum(map(len, self._game_actions)) > self._game_recovery_limit:
+                    raise RuntimeError("current-game recovery journal limit exceeded")
             if done.any():
                 infos = env.get_last_info()
                 for row in np.flatnonzero(done):
                     winner = infos[row].get("winner_index")
                     winner = int(winner) if winner is not None else None
                     self.stats.games += 1
+                    self.stats.games_by_stream[int(row)] = (
+                        self.stats.games_by_stream.get(int(row), 0) + 1
+                    )
                     if buffers["truncated"][row]:
                         self.stats.truncations += 1
                         raise RuntimeError(

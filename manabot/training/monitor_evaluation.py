@@ -26,7 +26,12 @@ from pydantic import (
 )
 
 from manabot.arena import players
-from manabot.arena.match import SELECTED_SUITE, play_cell, selected_match
+from manabot.arena.match import (
+    SELECTED_SUITE,
+    play_cell,
+    selected_decks,
+    selected_match,
+)
 from manabot.arena.models import (
     ArenaKey,
     PlayerRegistration,
@@ -44,7 +49,9 @@ from manabot.training.models import (
 )
 
 EvaluationPurpose = Literal[
-    "monitoring-not-scientific-evaluation", "frozen-study-evaluation"
+    "monitoring-not-scientific-evaluation",
+    "frozen-study-evaluation",
+    "supplemental-matchup-diagnostic",
 ]
 
 
@@ -59,6 +66,12 @@ class MonitorProtocol(Strict):
     # Reserved monitoring namespace; callers must also exclude these from any
     # scientific cohort they construct. These deals are repeatedly inspected.
     deal_seeds: tuple[int, ...] = tuple(range(1_910_101_000, 1_910_101_025))
+    include_mirrors: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @property
+    def legs(self) -> int:
+        return 8 if self.include_mirrors else 4
+
     bootstrap_seed: int = 101
     bootstrap_replicates: int = Field(default=2000, ge=1)
     game_seconds: float = Field(default=120, gt=0)
@@ -66,6 +79,22 @@ class MonitorProtocol(Strict):
     opponent: Literal["scripted_greedy", "random"] = Field(
         default="scripted_greedy", exclude_if=lambda value: value == "scripted_greedy"
     )
+    # A frozen external comparison owns seeds, selection and analysis. This binds
+    # its exact bytes; the evaluator itself supplies no promotion decision.
+    comparison_sha256: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$", exclude_if=lambda value: value is None
+    )
+
+    @property
+    def result_purpose(
+        self,
+    ) -> EvaluationPurpose | Literal["predeclared-comparison-not-admission"]:
+        """Preserve the external-comparison label without changing frozen bytes."""
+        return (
+            "predeclared-comparison-not-admission"
+            if self.comparison_sha256
+            else self.purpose
+        )
 
     @model_validator(mode="after")
     def unique_deals(self) -> MonitorProtocol:
@@ -144,7 +173,7 @@ class ArenaRow(BaseModel):
     model_config = ConfigDict(extra="allow", allow_inf_nan=False)
     arena_key: ArenaKey
     deal_seed: int
-    leg: int = Field(ge=0, le=3)
+    leg: int = Field(ge=0, le=7)
     player_a: str
     player_b: str
     player_a_registration_sha256: str
@@ -185,7 +214,9 @@ class RateInterval(Strict):
 
 class MonitorResult(Strict):
     schema_version: Literal[1] = 1
-    purpose: EvaluationPurpose = "monitoring-not-scientific-evaluation"
+    purpose: EvaluationPurpose | Literal["predeclared-comparison-not-admission"] = (
+        "monitoring-not-scientific-evaluation"
+    )
     run_id: str
     regime_digest: str
     training_seed: int
@@ -205,6 +236,12 @@ class MonitorResult(Strict):
     draw: RateInterval | None = None
     score: RateInterval | None = None
     evaluation_seconds: float | None = None
+    started_unix: float | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    finished_unix: float | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     coordinator_cpu_seconds: float | None = None
     reaped_worker_cpu_seconds: float | None = None
     coordinator_rss_before_bytes: int | None = None
@@ -221,7 +258,7 @@ class MonitorResult(Strict):
 
     @model_validator(mode="after")
     def purpose_matches_protocol(self) -> "MonitorResult":
-        if self.purpose != self.protocol.purpose:
+        if self.purpose != self.protocol.result_purpose:
             raise ValueError(
                 "evaluation result purpose differs from its frozen protocol"
             )
@@ -229,13 +266,27 @@ class MonitorResult(Strict):
 
 
 def _summarize(result: MonitorResult) -> None:
-    expected = {(seed, leg) for seed in result.protocol.deal_seeds for leg in range(4)}
+    expected = {
+        (seed, leg)
+        for seed in result.protocol.deal_seeds
+        for leg in range(result.protocol.legs)
+    }
     seen: set[tuple[int, int]] = set()
     for row in result.rows:
         coordinate = (row.deal_seed, row.leg)
         if coordinate not in expected or coordinate in seen:
             raise ValueError("unexpected or duplicate monitoring deal/leg")
         seen.add(coordinate)
+        if result.protocol.include_mirrors:
+            expected_decks = list(selected_decks(row.leg))
+            extra = row.model_extra or {}
+            if (
+                extra.get("seat_decks") != expected_decks
+                or extra.get("player_a_seat") != row.leg % 2
+            ):
+                raise ValueError(
+                    "mirror row differs from its actual authored deck/seat leg"
+                )
         if (
             row.arena_key != result.key
             or row.player_a != result.candidate.player_id
@@ -306,6 +357,13 @@ def _manifest(
         "engine_source_sha256",
         "content_manifest_sha256",
     ):
+        if (
+            name == "engine_source_sha256"
+            and protocol.purpose == "supplemental-matchup-diagnostic"
+        ):
+            # Artifact loading already admitted the exact rules/content/input binding.
+            # Preserve the historical producer source separately from this instrument.
+            continue
         if runtime[name] != run.identities.get(name):
             raise ValueError(f"monitoring runtime differs from training: {name}")
     runtime["monitor_source_sha256"] = source_bundle_sha256(
@@ -334,6 +392,7 @@ def _manifest(
             "deterministic": False,
             "device": "cpu",
             "batch_size": 1,
+            **({"allow_deck_repetition": True} if protocol.include_mirrors else {}),
         },
         compute_class_id="policy-cpu-one-thread-one-pass",
         checkpoint_sha256=artifact["sha256"],
@@ -365,7 +424,7 @@ def _manifest(
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     return MonitorResult(
-        purpose=protocol.purpose,
+        purpose=protocol.result_purpose,
         run_id=run.id,
         regime_digest=run.regime_digest,
         training_seed=run.seed,
@@ -375,7 +434,7 @@ def _manifest(
         key=key,
         candidate=candidate,
         opponent=opponent,
-        expected_games=4 * len(protocol.deal_seeds),
+        expected_games=protocol.legs * len(protocol.deal_seeds),
         evaluation_identities=runtime,
     )
 
@@ -392,6 +451,7 @@ def evaluate_checkpoint(
     """Run bounded arena games. Use a new directory per attempt; never overwrite failures."""
     output_dir.mkdir(parents=True, exist_ok=False)
     start, cpu = time.perf_counter(), time.process_time()
+    started_unix = time.time()
     process = psutil.Process()
     child_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
@@ -409,6 +469,7 @@ def evaluate_checkpoint(
         )
         raise
     result.concurrent_activity = concurrent_activity
+    result.started_unix = started_unix
     result.coordinator_rss_before_bytes = process.memory_info().rss
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
@@ -426,6 +487,7 @@ def evaluate_checkpoint(
                 checkpoint_paths={result.candidate.player_id: result.artifact["path"]},
                 game_seconds=result.protocol.game_seconds,
                 max_commands=result.protocol.max_commands,
+                matchup_mode="all" if result.protocol.include_mirrors else "cross",
             )
             atomic_json(directory / "rows.json", rows)
             atomic_json(directory / "trace.json", trace)
@@ -439,6 +501,7 @@ def evaluate_checkpoint(
         result.error = f"{type(exc).__name__}: {exc}"
     finally:
         result.evaluation_seconds = time.perf_counter() - start
+        result.finished_unix = time.time()
         result.coordinator_cpu_seconds = time.process_time() - cpu
         child_end = resource.getrusage(resource.RUSAGE_CHILDREN)
         result.reaped_worker_cpu_seconds = (

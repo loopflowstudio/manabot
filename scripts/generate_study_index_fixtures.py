@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from etude.study_index import canonical_json_bytes, main, pretty_json_bytes
-from etude.study_protocol import RecordedDecisionInput, StudyIdentity
+from academy.study_index import canonical_json_bytes, main, pretty_json_bytes
+from academy.study_protocol import RecordedDecisionInput, StudyIdentity
 
 ROOT = Path(__file__).parents[1]
 PROTOCOL = ROOT / "protocol"

@@ -147,9 +147,9 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Architecture convergence (accepted 2026-07-17)
 
-- managym is the rules engine Etude Fantasia specifically needs, including
+- managym is the rules engine Fantasia specifically needs, including
   authoritative match identity/revision, semantic Commands, committed events,
-  replay, viewer Observations, and exact forks. Etude and manabot consume this
+  replay, viewer Observations, and exact forks. Academy and manabot consume this
   authority; they do not reconstruct it.
 - Observation is a central viewer protocol object composed from current
   visible state, ordered visible events, and the complete current semantic
@@ -160,7 +160,7 @@ preserves accepted decisions, dated proof limits and source history.
   owns probability and learned belief over that domain.
 - The high-priority provider order is: match/Command authority, canonical
   Observation history, possible-world/query kernel, then a cross-consumer
-  Etude → search → replay → Study proof. New card breadth and branch
+  Academy → search → replay → Study proof. New card breadth and branch
   representations follow the exercised contracts.
 
 ## Ownership boundaries
@@ -174,7 +174,7 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Open tensions
 
-- Migrate current Etude match/revision/replay bookkeeping into managym without
+- Migrate current Academy match/revision/replay bookkeeping into managym without
   a flag day or a permanent second authority.
 - Replace action-position and duplicated offer/Command meaning one consumer at
   a time while keeping the curated matchup playable.

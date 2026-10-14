@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('configured trained opponent completes both deck assignments and retains feedback', async ({ page }) => {
-  test.skip(!process.env.ETUDE_PLAY_CANDIDATE, 'Requires a freshly trained local candidate');
+  test.skip(!process.env.ACADEMY_PLAY_CANDIDATE, 'Requires a freshly trained local candidate');
   test.setTimeout(600_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const errors: string[] = [];

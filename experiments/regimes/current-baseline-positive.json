@@ -1,0 +1,2444 @@
+{
+  "aggregate_seconds": 3600,
+  "attempt_seconds": 900,
+  "held_out_deals": [
+    1911180000,
+    1911180001,
+    1911180002,
+    1911180003,
+    1911180004,
+    1911180005,
+    1911180006,
+    1911180007,
+    1911180008,
+    1911180009,
+    1911180010,
+    1911180011,
+    1911180012,
+    1911180013,
+    1911180014,
+    1911180015,
+    1911180016,
+    1911180017,
+    1911180018,
+    1911180019,
+    1911180020,
+    1911180021,
+    1911180022,
+    1911180023,
+    1911180024,
+    1911180025,
+    1911180026,
+    1911180027,
+    1911180028,
+    1911180029,
+    1911180030,
+    1911180031,
+    1911180032,
+    1911180033,
+    1911180034,
+    1911180035,
+    1911180036,
+    1911180037,
+    1911180038,
+    1911180039,
+    1911180040,
+    1911180041,
+    1911180042,
+    1911180043,
+    1911180044,
+    1911180045,
+    1911180046,
+    1911180047,
+    1911180048,
+    1911180049,
+    1911180050,
+    1911180051,
+    1911180052,
+    1911180053,
+    1911180054,
+    1911180055,
+    1911180056,
+    1911180057,
+    1911180058,
+    1911180059,
+    1911180060,
+    1911180061,
+    1911180062,
+    1911180063
+  ],
+  "minimum_gain_each_seed": 0.25,
+  "minimum_mean_gain": 0.25,
+  "minimum_win_rate_each_seed": 0.85,
+  "recipes": [
+    {
+      "cases": [
+        {
+          "baseline": "lethal-target-learning",
+          "baseline_digest": "4ef52742c8ffcda83f3f28cf6cf16c11214594d5a032fad163e3e70583e8c045",
+          "label": "lethal-target-learning",
+          "name": "lethal-target-learning",
+          "regime": {
+            "agent": {
+              "attention_layers": 1,
+              "attention_on": true,
+              "belief_card_vocab_size": 0,
+              "belief_count_buckets": 0,
+              "belief_hidden_zone_vocab_size": 7,
+              "belief_owner_role_vocab_size": 2,
+              "hidden_dim": 64,
+              "num_attention_heads": 4,
+              "semantic_pack": "ur-lessons-vs-gw-allies",
+              "value_aggregation": "masked_mean",
+              "value_kind": "scalar"
+            },
+            "id": "lethal-target-learning",
+            "match": {
+              "hero": "arena-seat-0",
+              "hero_deck": {
+                "Accumulate Wisdom": 2,
+                "Divide by Zero": 2,
+                "Dragonfly Swarm": 1,
+                "Fire Nation Cadets": 2,
+                "Firebending Lesson": 4,
+                "First-Time Flyer": 2,
+                "Forecasting Fortune Teller": 1,
+                "Igneous Inspiration": 2,
+                "Island": 9,
+                "It'll Quench Ya!": 2,
+                "Mountain": 8,
+                "Otter-Penguin": 2,
+                "Pop Quiz": 2,
+                "Tiger-Seal": 2
+              },
+              "hero_sideboard": {
+                "Accumulate Wisdom": 1,
+                "Firebending Lesson": 1,
+                "It'll Quench Ya!": 1
+              },
+              "villain": "arena-seat-1",
+              "villain_deck": {
+                "Allies at Last": 2,
+                "Badgermole Cub": 2,
+                "Compassionate Healer": 2,
+                "Earth King's Lieutenant": 2,
+                "Earth Kingdom Jailer": 2,
+                "Fancy Footwork": 2,
+                "Forest": 8,
+                "Invasion Reinforcements": 2,
+                "Kyoshi Warriors": 2,
+                "Plains": 9,
+                "South Pole Voyager": 1,
+                "Suki, Kyoshi Warrior": 1,
+                "Water Tribe Rallier": 2,
+                "White Lotus Reinforcements": 2,
+                "Yip Yip!": 1
+              },
+              "villain_sideboard": {
+                "Fancy Footwork": 1,
+                "Yip Yip!": 1
+              }
+            },
+            "observation": {
+              "max_actions": 64,
+              "max_cards_per_player": 60,
+              "max_events": 32,
+              "max_focus_objects": 2,
+              "max_permanents_per_player": 40
+            },
+            "recovery_max_microsteps": null,
+            "schedule_clock": "run_elapsed_budget",
+            "schema_version": 1,
+            "selection": "last-complete-raw",
+            "stages": [
+              {
+                "behavior": "current-self",
+                "execution": {
+                  "device": "cpu",
+                  "memory_bytes": 34359738368,
+                  "precision": "float32",
+                  "threads": 1,
+                  "wall_seconds": 760.0,
+                  "workers": 1
+                },
+                "id": "policy-0",
+                "initial": null,
+                "learning": {
+                  "advantage_quantile": 0.75,
+                  "clip": 0.2,
+                  "collection_kl": 0.1,
+                  "ema": 0.999,
+                  "filter_kind": "quantile",
+                  "filter_scope": "actor_critic",
+                  "gradient": "ataraxos_move",
+                  "learning_rate_max": 0.0001,
+                  "learning_rate_min": 5e-06,
+                  "learning_rate_power": 1.1,
+                  "learning_rate_scale": 0.5,
+                  "max_grad_norm": 0.267,
+                  "min_advantage": 0.01,
+                  "policy_lambda": 0.5,
+                  "reference": "action_type_uniform",
+                  "tau_power": 0.3,
+                  "tau_scale": 0.05,
+                  "value_lambda": 0.8
+                },
+                "operation": "train_self_play",
+                "opponent": null,
+                "optimizer": "adam",
+                "root": "lethal-target-v1",
+                "streams": 4,
+                "trainable": "policy_value",
+                "trainer": "net_opponent",
+                "transitions": 16,
+                "updates": 100
+              }
+            ],
+            "wall_seconds": 780.0,
+            "world": "w4"
+          },
+          "regime_digest": "4ef52742c8ffcda83f3f28cf6cf16c11214594d5a032fad163e3e70583e8c045",
+          "schema_version": 1,
+          "settings": [
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_layers"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_on"
+              ],
+              "source": "lethal-target-learning",
+              "value": true
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_card_vocab_size"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_count_buckets"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_hidden_zone_vocab_size"
+              ],
+              "source": "lethal-target-learning",
+              "value": 7
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_owner_role_vocab_size"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "compound_decisions"
+              ],
+              "source": "lethal-target-learning",
+              "value": false
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "hidden_dim"
+              ],
+              "source": "lethal-target-learning",
+              "value": 64
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "num_attention_heads"
+              ],
+              "source": "lethal-target-learning",
+              "value": 4
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "semantic_pack"
+              ],
+              "source": "lethal-target-learning",
+              "value": "ur-lessons-vs-gw-allies"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_aggregation"
+              ],
+              "source": "lethal-target-learning",
+              "value": "masked_mean"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_kind"
+              ],
+              "source": "lethal-target-learning",
+              "value": "scalar"
+            },
+            {
+              "component": "identity",
+              "origin": "identity",
+              "path": [
+                "id"
+              ],
+              "source": "experiment-name",
+              "value": "lethal-target-learning"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero"
+              ],
+              "source": "lethal-target-learning",
+              "value": "arena-seat-0"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Accumulate Wisdom"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Divide by Zero"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Dragonfly Swarm"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Fire Nation Cadets"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Firebending Lesson"
+              ],
+              "source": "lethal-target-learning",
+              "value": 4
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "First-Time Flyer"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Forecasting Fortune Teller"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Igneous Inspiration"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Island"
+              ],
+              "source": "lethal-target-learning",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "It'll Quench Ya!"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Mountain"
+              ],
+              "source": "lethal-target-learning",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Otter-Penguin"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Pop Quiz"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Tiger-Seal"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Accumulate Wisdom"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Firebending Lesson"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "It'll Quench Ya!"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain"
+              ],
+              "source": "lethal-target-learning",
+              "value": "arena-seat-1"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Allies at Last"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Badgermole Cub"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Compassionate Healer"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth King's Lieutenant"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth Kingdom Jailer"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Fancy Footwork"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Forest"
+              ],
+              "source": "lethal-target-learning",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Invasion Reinforcements"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Kyoshi Warriors"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Plains"
+              ],
+              "source": "lethal-target-learning",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "South Pole Voyager"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Suki, Kyoshi Warrior"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Water Tribe Rallier"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "White Lotus Reinforcements"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Yip Yip!"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Fancy Footwork"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Yip Yip!"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_actions"
+              ],
+              "source": "lethal-target-learning",
+              "value": 64
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_cards_per_player"
+              ],
+              "source": "lethal-target-learning",
+              "value": 60
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_events"
+              ],
+              "source": "lethal-target-learning",
+              "value": 32
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_focus_objects"
+              ],
+              "source": "lethal-target-learning",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_permanents_per_player"
+              ],
+              "source": "lethal-target-learning",
+              "value": 40
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "recovery_max_microsteps"
+              ],
+              "source": "lethal-target-learning",
+              "value": null
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "schedule_clock"
+              ],
+              "source": "lethal-target-learning",
+              "value": "run_elapsed_budget"
+            },
+            {
+              "component": "identity",
+              "origin": "baseline",
+              "path": [
+                "schema_version"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "selection"
+              ],
+              "source": "lethal-target-learning",
+              "value": "last-complete-raw"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "behavior"
+              ],
+              "source": "lethal-target-learning",
+              "value": "current-self"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "device"
+              ],
+              "source": "lethal-target-learning",
+              "value": "cpu"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "memory_bytes"
+              ],
+              "source": "lethal-target-learning",
+              "value": 34359738368
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "precision"
+              ],
+              "source": "lethal-target-learning",
+              "value": "float32"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "threads"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "wall_seconds"
+              ],
+              "source": "lethal-target-learning",
+              "value": 760.0
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "workers"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "id"
+              ],
+              "source": "lethal-target-learning",
+              "value": "policy-0"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "initial"
+              ],
+              "source": "lethal-target-learning",
+              "value": null
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "advantage_quantile"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.75
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "clip"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.2
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "collection_kl"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "ema"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.999
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_kind"
+              ],
+              "source": "lethal-target-learning",
+              "value": "quantile"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_scope"
+              ],
+              "source": "lethal-target-learning",
+              "value": "actor_critic"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "gradient"
+              ],
+              "source": "lethal-target-learning",
+              "value": "ataraxos_move"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_max"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.0001
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_min"
+              ],
+              "source": "lethal-target-learning",
+              "value": 5e-06
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_power"
+              ],
+              "source": "lethal-target-learning",
+              "value": 1.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_scale"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "max_grad_norm"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.267
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "min_advantage"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.01
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "policy_lambda"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "reference"
+              ],
+              "source": "lethal-target-learning",
+              "value": "action_type_uniform"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_power"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.3
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_scale"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.05
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "value_lambda"
+              ],
+              "source": "lethal-target-learning",
+              "value": 0.8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "operation"
+              ],
+              "source": "lethal-target-learning",
+              "value": "train_self_play"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "opponent"
+              ],
+              "source": "lethal-target-learning",
+              "value": null
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "optimizer"
+              ],
+              "source": "lethal-target-learning",
+              "value": "adam"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "root"
+              ],
+              "source": "lethal-target-learning",
+              "value": "lethal-target-v1"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "streams"
+              ],
+              "source": "lethal-target-learning",
+              "value": 4
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainable"
+              ],
+              "source": "lethal-target-learning",
+              "value": "policy_value"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainer"
+              ],
+              "source": "lethal-target-learning",
+              "value": "net_opponent"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "transitions"
+              ],
+              "source": "lethal-target-learning",
+              "value": 16
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "updates"
+              ],
+              "source": "lethal-target-learning",
+              "value": 100
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "wall_seconds"
+              ],
+              "source": "lethal-target-learning",
+              "value": 780.0
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "world"
+              ],
+              "source": "lethal-target-learning",
+              "value": "w4"
+            }
+          ]
+        }
+      ],
+      "name": "lethal-target-learning",
+      "schema_version": 1
+    },
+    {
+      "cases": [
+        {
+          "baseline": "lethal-target-frozen",
+          "baseline_digest": "2d4fe92f1eff304d9871819c09d5ef70ae6285721b70a07cb0018786ab98cfde",
+          "label": "lethal-target-frozen",
+          "name": "lethal-target-frozen",
+          "regime": {
+            "agent": {
+              "attention_layers": 1,
+              "attention_on": true,
+              "belief_card_vocab_size": 0,
+              "belief_count_buckets": 0,
+              "belief_hidden_zone_vocab_size": 7,
+              "belief_owner_role_vocab_size": 2,
+              "hidden_dim": 64,
+              "num_attention_heads": 4,
+              "semantic_pack": "ur-lessons-vs-gw-allies",
+              "value_aggregation": "masked_mean",
+              "value_kind": "scalar"
+            },
+            "id": "lethal-target-frozen",
+            "match": {
+              "hero": "arena-seat-0",
+              "hero_deck": {
+                "Accumulate Wisdom": 2,
+                "Divide by Zero": 2,
+                "Dragonfly Swarm": 1,
+                "Fire Nation Cadets": 2,
+                "Firebending Lesson": 4,
+                "First-Time Flyer": 2,
+                "Forecasting Fortune Teller": 1,
+                "Igneous Inspiration": 2,
+                "Island": 9,
+                "It'll Quench Ya!": 2,
+                "Mountain": 8,
+                "Otter-Penguin": 2,
+                "Pop Quiz": 2,
+                "Tiger-Seal": 2
+              },
+              "hero_sideboard": {
+                "Accumulate Wisdom": 1,
+                "Firebending Lesson": 1,
+                "It'll Quench Ya!": 1
+              },
+              "villain": "arena-seat-1",
+              "villain_deck": {
+                "Allies at Last": 2,
+                "Badgermole Cub": 2,
+                "Compassionate Healer": 2,
+                "Earth King's Lieutenant": 2,
+                "Earth Kingdom Jailer": 2,
+                "Fancy Footwork": 2,
+                "Forest": 8,
+                "Invasion Reinforcements": 2,
+                "Kyoshi Warriors": 2,
+                "Plains": 9,
+                "South Pole Voyager": 1,
+                "Suki, Kyoshi Warrior": 1,
+                "Water Tribe Rallier": 2,
+                "White Lotus Reinforcements": 2,
+                "Yip Yip!": 1
+              },
+              "villain_sideboard": {
+                "Fancy Footwork": 1,
+                "Yip Yip!": 1
+              }
+            },
+            "observation": {
+              "max_actions": 64,
+              "max_cards_per_player": 60,
+              "max_events": 32,
+              "max_focus_objects": 2,
+              "max_permanents_per_player": 40
+            },
+            "recovery_max_microsteps": null,
+            "schedule_clock": "run_elapsed_budget",
+            "schema_version": 1,
+            "selection": "last-complete-raw",
+            "stages": [
+              {
+                "behavior": "current-self",
+                "execution": {
+                  "device": "cpu",
+                  "memory_bytes": 34359738368,
+                  "precision": "float32",
+                  "threads": 1,
+                  "wall_seconds": 760.0,
+                  "workers": 1
+                },
+                "id": "policy-0",
+                "initial": null,
+                "learning": {
+                  "advantage_quantile": 0.75,
+                  "clip": 0.2,
+                  "collection_kl": 0.1,
+                  "ema": 0.999,
+                  "filter_kind": "quantile",
+                  "filter_scope": "actor_critic",
+                  "gradient": "ataraxos_move",
+                  "learning_rate_max": 0.0001,
+                  "learning_rate_min": 5e-06,
+                  "learning_rate_power": 1.1,
+                  "learning_rate_scale": 0.5,
+                  "max_grad_norm": 0.267,
+                  "min_advantage": 0.01,
+                  "policy_lambda": 0.5,
+                  "reference": "action_type_uniform",
+                  "tau_power": 0.3,
+                  "tau_scale": 0.05,
+                  "value_lambda": 0.8
+                },
+                "operation": "train_self_play",
+                "opponent": null,
+                "optimizer": "adam",
+                "root": "lethal-target-v1",
+                "streams": 4,
+                "trainable": "none",
+                "trainer": "net_opponent",
+                "transitions": 16,
+                "updates": 100
+              }
+            ],
+            "wall_seconds": 780.0,
+            "world": "w4"
+          },
+          "regime_digest": "2d4fe92f1eff304d9871819c09d5ef70ae6285721b70a07cb0018786ab98cfde",
+          "schema_version": 1,
+          "settings": [
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_layers"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "attention_on"
+              ],
+              "source": "lethal-target-frozen",
+              "value": true
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_card_vocab_size"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_count_buckets"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_hidden_zone_vocab_size"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 7
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "belief_owner_role_vocab_size"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "compound_decisions"
+              ],
+              "source": "lethal-target-frozen",
+              "value": false
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "hidden_dim"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 64
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "num_attention_heads"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 4
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "semantic_pack"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "ur-lessons-vs-gw-allies"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_aggregation"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "masked_mean"
+            },
+            {
+              "component": "model",
+              "origin": "baseline",
+              "path": [
+                "agent",
+                "value_kind"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "scalar"
+            },
+            {
+              "component": "identity",
+              "origin": "identity",
+              "path": [
+                "id"
+              ],
+              "source": "experiment-name",
+              "value": "lethal-target-frozen"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "arena-seat-0"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Accumulate Wisdom"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Divide by Zero"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Dragonfly Swarm"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Fire Nation Cadets"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Firebending Lesson"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 4
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "First-Time Flyer"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Forecasting Fortune Teller"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Igneous Inspiration"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Island"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "It'll Quench Ya!"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Mountain"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Otter-Penguin"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Pop Quiz"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_deck",
+                "Tiger-Seal"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Accumulate Wisdom"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "Firebending Lesson"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "hero_sideboard",
+                "It'll Quench Ya!"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "arena-seat-1"
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Allies at Last"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Badgermole Cub"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Compassionate Healer"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth King's Lieutenant"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Earth Kingdom Jailer"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Fancy Footwork"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Forest"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 8
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Invasion Reinforcements"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Kyoshi Warriors"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Plains"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 9
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "South Pole Voyager"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Suki, Kyoshi Warrior"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Water Tribe Rallier"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "White Lotus Reinforcements"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_deck",
+                "Yip Yip!"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Fancy Footwork"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "match",
+                "villain_sideboard",
+                "Yip Yip!"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_actions"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 64
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_cards_per_player"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 60
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_events"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 32
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_focus_objects"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 2
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "observation",
+                "max_permanents_per_player"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 40
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "recovery_max_microsteps"
+              ],
+              "source": "lethal-target-frozen",
+              "value": null
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "schedule_clock"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "run_elapsed_budget"
+            },
+            {
+              "component": "identity",
+              "origin": "baseline",
+              "path": [
+                "schema_version"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "run",
+              "origin": "baseline",
+              "path": [
+                "selection"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "last-complete-raw"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "behavior"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "current-self"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "device"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "cpu"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "memory_bytes"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 34359738368
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "precision"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "float32"
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "threads"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "wall_seconds"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 760.0
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "execution",
+                "workers"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "id"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "policy-0"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "initial"
+              ],
+              "source": "lethal-target-frozen",
+              "value": null
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "advantage_quantile"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.75
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "clip"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.2
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "collection_kl"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "ema"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.999
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_kind"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "quantile"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "filter_scope"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "actor_critic"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "gradient"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "ataraxos_move"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_max"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.0001
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_min"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 5e-06
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_power"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 1.1
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "learning_rate_scale"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "max_grad_norm"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.267
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "min_advantage"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.01
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "policy_lambda"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.5
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "reference"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "action_type_uniform"
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_power"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.3
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "tau_scale"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.05
+            },
+            {
+              "component": "learning",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "learning",
+                "value_lambda"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 0.8
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "operation"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "train_self_play"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "opponent"
+              ],
+              "source": "lethal-target-frozen",
+              "value": null
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "optimizer"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "adam"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "root"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "lethal-target-v1"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "streams"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 4
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainable"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "none"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "trainer"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "net_opponent"
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "transitions"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 16
+            },
+            {
+              "component": "pipeline",
+              "origin": "baseline",
+              "path": [
+                "stages",
+                "0",
+                "updates"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 100
+            },
+            {
+              "component": "resources",
+              "origin": "baseline",
+              "path": [
+                "wall_seconds"
+              ],
+              "source": "lethal-target-frozen",
+              "value": 780.0
+            },
+            {
+              "component": "environment",
+              "origin": "baseline",
+              "path": [
+                "world"
+              ],
+              "source": "lethal-target-frozen",
+              "value": "w4"
+            }
+          ]
+        }
+      ],
+      "name": "lethal-target-frozen",
+      "schema_version": 1
+    }
+  ],
+  "seeds": [
+    11801,
+    11802,
+    11803
+  ]
+}

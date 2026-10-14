@@ -2,7 +2,7 @@
 
 ## North star
 
-- Etude Fantasia grows toward Avatar Cube Team Sealed: two teams build three
+- Academy grows toward Avatar Cube Team Sealed: two teams build three
   decks from shared pools, play the full three-by-three deck matchup matrix to
   five wins, and can study every recorded game afterward.
 - Study is a named Game mode, not an independent product wave. Construction,
@@ -23,7 +23,7 @@
   playing experience, not a rendering technology.
 - The experience target is Phase-level or better smoothness, performance,
   polish, reliability, and portability for creator-selected decks.
-- Preserve Etude Fantasia's differentiators: visible AI identity, decision inspection,
+- Preserve Academy's differentiators: visible AI identity, decision inspection,
   research-grade traces, replay, and a deliberately tiny curated product.
 - The authority seam is `ExperienceFrame`, `InteractionOffer`/`Command`,
   `PresentationEvent`, and `RecoveryEnvelope`.

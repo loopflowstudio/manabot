@@ -1,6 +1,6 @@
 """Generate and verify one retained-checkpoint advice-v1 fixture.
 
-The fixture starts from Etude's checked UR Lessons versus GW Allies authored
+The fixture starts from Academy's checked UR Lessons versus GW Allies authored
 match. Public bytes contain one canonical viewer-safe decision and aggregate
 policy/search evidence. Retained roots, materialized worlds, branch receipts,
 and derived RNG state remain authority-private.
@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from etude.advice import (
+from academy.advice import (
     ADVISOR_SOURCE_PATHS,
     CHECKPOINT_VERSIONED_FIXTURE_PATH,
     AdviceProvider,
@@ -31,25 +31,25 @@ from etude.advice import (
     parse_advice_response_bytes,
     runtime_advisor_abis,
 )
-from etude.advice_identity import (
+from academy.advice_identity import (
     AbiIdentity,
     AdvisorComputeIdentity,
     AdvisorIdentity,
     AdvisorSeedIdentity,
     CheckpointArtifact,
 )
-from etude.authored_match_parity import RECEIPT_PATH as PARITY_RECEIPT_PATH
-from etude.authored_match_receipt import (
+from academy.authored_match_parity import RECEIPT_PATH as PARITY_RECEIPT_PATH
+from academy.authored_match_receipt import (
     DEFAULT_RECEIPT_PATH as AUTHORITY_RECEIPT_PATH,
     play_fixed_authored_match,
 )
-from etude.replay_index import (
+from academy.replay_index import (
     ReplayDecisionAddress,
     canonical_projection_sha256,
     project_replay,
 )
-from etude.server import GameSession
-from etude.testing_house_protocol import (
+from academy.server import GameSession
+from academy.testing_house_protocol import (
     BeliefScenario,
     BeliefSource,
     PersonalAudience,

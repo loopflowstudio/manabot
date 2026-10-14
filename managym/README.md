@@ -1,12 +1,12 @@
 # managym
 
 The deterministic Magic: The Gathering rules engine and search environment
-behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the
-agent) and Academy (the experience server, under legacy `etude/` here).
+behind Fantasia. Rust, with PyO3 bindings consumed by `manabot` (the
+agent) and `academy` (the experience server).
 
 ## Architecture
 
-managym is Manabot's authoritative world: match execution, semantic
+managym is Fantasia's authoritative world: match execution, semantic
 Commands, viewer Observations, deterministic replay, exact forks, and the
 meaning and materialization of possible worlds. The cross-package contracts
 and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
@@ -96,3 +96,10 @@ counts still require the semantic input path during the Learn migration.
 The optional [policy-history v1 projection](../docs/recent-events.md) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
 clone/undo and diagnostic injection must preserve its documented lifecycle.
+
+`PlayerConfig.content_pack` can explicitly select the compiled authored runtime
+for repeated-deck matches. Both seats must name the same pack and each complete
+deck/sideboard must be one of its authored setups; unknown packs or partial
+bindings fail reset. Omitting it preserves exact-pair automatic selection.
+Python `MatchHypers.authored` carries this binding for same-deck matches so replay
+cannot silently use generic card definitions.

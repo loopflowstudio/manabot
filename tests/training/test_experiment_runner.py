@@ -15,17 +15,19 @@ from experiments.runners.experiment_depth import declaration as depth_declaratio
 from experiments.runners.experiment_history import declaration as history_declaration
 from experiments.runners.experiment_screen import admit_screen
 from experiments.runners.run_history_input import history_plan
-from manabot.training.checkpoint_queue import MonitoringBudget
+from manabot.training.checkpoint_queue import Attempt, MonitoringBudget
 from manabot.training.comparison_notebook import write_comparison_notebook
 from manabot.training.experiment_execution import (
+    ExperimentRun,
     ExperimentSchedule,
     Hardware,
     HardwareInventory,
 )
 from manabot.training.experiment_runner import run_experiment
-from manabot.training.monitor_evaluation import MonitorProtocol
+from manabot.training.monitor_evaluation import MonitorProtocol, MonitorResult
 from manabot.verify.store import VerifyStore
 from tests.training.test_history_input import calibration
+from tests.training.test_monitor_evaluation import failure_summary
 
 
 @pytest.fixture(autouse=True)
@@ -38,6 +40,32 @@ def hardware() -> HardwareInventory:
     return HardwareInventory(
         resources=(Hardware(name="fixture", host=socket.gethostname(), cpu_threads=2),)
     )
+
+
+def _experiment_failures(record: ExperimentRun, monitoring: Path) -> str:
+    """Name each failed attempt's reason; full records exceed pytest's limit."""
+    lines = [f"experiment {record.status}: {record.error}"]
+    lines += [
+        f"training attempt {a.ordinal} {a.status}: {a.error}"
+        for a in record.attempts
+        if a.status != "completed"
+    ]
+    for path in sorted(monitoring.glob("attempt-*/attempt.json")):
+        attempt = Attempt.model_validate_json(path.read_text())
+        if attempt.status == "completed":
+            continue
+        lines.append(
+            f"monitoring {path.parent.name} {attempt.status} after "
+            f"{attempt.charged_seconds:.1f}s of {attempt.reserved_seconds:.0f}s: "
+            f"{attempt.error}"
+        )
+        result = path.parent / "evaluation/monitor.json"
+        if result.exists():
+            summary = failure_summary(
+                MonitorResult.model_validate_json(result.read_text())
+            )
+            lines += [f"  {line}" for line in summary.splitlines()]
+    return "\n".join(lines)
 
 
 def test_screen_declarations_preserve_frozen_recipes_and_cohorts() -> None:
@@ -234,3 +262,63 @@ def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -
     assert all(a["status"] == "pending" for a in payload["attempts"])
     assert payload["process_seconds"] == 0
     assert not list(out.glob("training-*.log"))
+
+
+def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) -> None:
+    from manabot.training.experiments import Baseline, Experiment
+    from manabot.training.models import TrainingRun
+    from tests.training.test_recovery import recipe
+
+    value = recipe()
+    value.recovery_max_microsteps = None
+    value.stages[0].updates = 2
+    # Five real four-game cohorts include subprocess startup and exact replay.
+    # This is a routing check, not an evaluator performance threshold, so the
+    # default per-game and per-cohort budgets serve only as hang guards.
+    cohort_seconds = MonitoringBudget.model_fields["attempt_seconds"].default
+    schedule = ExperimentSchedule(
+        seeds=(11840,),
+        hardware="fixture",
+        wall_seconds=3600,
+        process_seconds=3600,
+        checkpoint_updates=(1,),
+        monitoring=MonitoringBudget(
+            seconds=5 * cohort_seconds,
+            include_initial=True,
+            protocol=MonitorProtocol(deal_seeds=(1911182000,)),
+        ),
+        diagnostic_protocol=MonitorProtocol(
+            deal_seeds=(1911182001,),
+            opponent="random",
+        ),
+        diagnostic_updates=(0, 2),
+        scientific_deal_seeds=(1911182002,),
+    )
+    value.wall_seconds = 60
+    value.stages[0].execution.wall_seconds = 60
+    record = run_experiment(
+        Experiment("diagnostic", Baseline.capture("fixture", value), schedule=schedule),
+        hardware(),
+        tmp_path / "live",
+    )
+    if record.status != "completed":
+        pytest.fail(
+            _experiment_failures(record, tmp_path / "live/monitoring"), pytrace=False
+        )
+    results = [
+        MonitorResult.model_validate_json(p.read_text())
+        for p in (tmp_path / "live/monitoring").rglob("monitor.json")
+    ]
+    assert {(r.coordinates.updates, r.protocol.opponent) for r in results} == {
+        (0, "scripted_greedy"),
+        (1, "scripted_greedy"),
+        (2, "scripted_greedy"),
+        (0, "random"),
+        (2, "random"),
+    }
+    assert len(results) == 5
+    assert all(r.status == "completed" and len(r.rows) == 4 for r in results)
+    saved = TrainingRun.model_validate_json(
+        (Path(record.attempts[0].path) / "run.json").read_text()
+    )
+    assert [c.updates for c in saved.monitoring_checkpoints] == [1]

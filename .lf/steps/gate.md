@@ -33,8 +33,8 @@ does not prove that a sitemap is valid XML.
 
 ## Required checks for clean-machine startup work
 
-Run the launcher and verifier tests in `tests/etude/test_play_launcher.py` and
-`tests/etude/test_clean_machine_verifier.py`, then `./scripts/verify-clean-machine`
+Run the launcher and verifier tests in `tests/academy/test_play_launcher.py` and
+`tests/academy/test_clean_machine_verifier.py`, then `./scripts/verify-clean-machine`
 with the documented empty-artifact precondition. Preserve existing local build
 artifacts outside the checkout before the proof and restore them afterward.
 Use unused ports as described in `.lf/directions/e2e-ports.md`.
@@ -63,7 +63,7 @@ and compare visual references on the pinned Linux profile. A digest-only edit
 or a macOS run with ignored screenshots does not certify the release matrix.
 Classify a new prompt family as excluded only after the browser scenarios show
 it is unreached; a new turn-based rule can reach it in either seeded game. A
-world or manifest change also requires `tests/etude/test_learn_setup.py`, whose
+world or manifest change also requires `tests/academy/test_learn_setup.py`, whose
 checked Learn demo fixture pins the content manifest and state digests.
 
 ## Required checks for Rust managym work

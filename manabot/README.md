@@ -1,16 +1,7 @@
 # manabot
 
-Manabot's training system (the manabot.manabot component): environment wrappers, models, search,
+The trainable agent of Fantasia: environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
-
-## Project boundaries
-
-This package owns the agent and learning algorithms. Academy is the play web
-app; managym owns rules. [Etude](https://github.com/loopflowstudio/etude)
-(`etude-sdk`) is the external experiment library selected for launching,
-tracking, checkpoints, and reports. Migrating the corresponding local
-infrastructure is separate work; the commands below describe this checkout,
-not completed SDK adoption. See [naming](../README.md#naming).
 
 ## Quickstart
 
@@ -200,3 +191,8 @@ independent of capacity and learning rules; comparison plans remain unexecuted.
 Self-play [numerical health](../docs/numerical-health.md) records policy support,
 selection, gradients and actual optimizer effects, with bounded private failure
 artifacts. CPU correctness does not imply CUDA validation or improved play.
+
+For exploratory same-deck checkpoint play, the [head-to-head runner](../experiments/head-to-head.md#mirror-only-follow-up-mtg-131-2026-10-09)
+accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
+roster decks/sideboards and carries their compiled content pack through replay;
+it is not ordinary training-match admission or evidence of mirror competence.

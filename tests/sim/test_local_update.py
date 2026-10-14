@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 import torch
 
-from etude.advice import BeliefNormalizationReceipt
-from etude.local_advice import local_update_scenario
+from academy.advice import BeliefNormalizationReceipt
+from academy.local_advice import local_update_scenario
 from manabot.arena.match import _execute_game
 from manabot.arena.models import (
     PlayerRegistration,

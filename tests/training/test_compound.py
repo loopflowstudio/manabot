@@ -317,7 +317,7 @@ def test_regime_trains_reloads_and_ordinary_player_uses_compound(
     )
     player, _ = make_player({"kind": "checkpoint", "path": path}, seed=1)
     assert player.compound is not None
-    from etude.villain import CheckpointVillain
+    from academy.villain import CheckpointVillain
 
     villain = CheckpointVillain(path, player_configs=_match().to_rust())
     env = managym.Env(seed=9)

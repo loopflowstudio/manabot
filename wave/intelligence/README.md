@@ -135,7 +135,7 @@ residuals. Development pairwise matches remain explicitly non-admission.
 
 Accept an exact managym historical Observation/decision plus player-selected
 typed queries, resolve the exact model/planner artifacts, and emit attributable
-baseline and conditional `DecisionEvidence`. Etude owns query construction and
+baseline and conditional `DecisionEvidence`. Academy owns query construction and
 explanation; manabot owns the distributions and uncertainty. Missing artifacts
 or quantities remain typed unavailable. Raw sampled worlds and actual-query
 truth never enter viewer-facing evidence.
@@ -203,6 +203,6 @@ tripwire is superseded by D1 — diagnosis replaces the plateau proxy.
 
 ## Not here
 
-Rules-authority implementation (owned by the active Rules wave), Etude UI
+Rules-authority implementation (owned by the active Rules wave), Academy UI
 implementation (owned by Game/Study), cube optimization (north star, not now),
 multiplayer/general-sum play, and hidden decklists.

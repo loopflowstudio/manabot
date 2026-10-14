@@ -26,14 +26,14 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from etude.advice import AdviceArtifact, int13_condition_to_decision_evidence
-from etude.replay_index import (
+from academy.advice import AdviceArtifact, int13_condition_to_decision_evidence
+from academy.replay_index import (
     CanonicalReplayV1,
     ReplayDecisionAddress,
     project_replay,
 )
-from etude.server import GameSession
-from etude.study_protocol import StudyArtifact
+from academy.server import GameSession
+from academy.study_protocol import StudyArtifact
 from manabot.sim.conditional_search import (
     ConditionalStrategyResult,
     HasCard,

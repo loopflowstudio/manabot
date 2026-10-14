@@ -53,7 +53,11 @@ def candidate_deck(row: ArenaRow) -> str | None:
 
 def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
     """Require the complete frozen four-leg cohort before computing any deck rate."""
-    expected = {(s, leg) for s in result.protocol.deal_seeds for leg in range(4)}
+    expected = {
+        (s, leg)
+        for s in result.protocol.deal_seeds
+        for leg in range(result.protocol.legs)
+    }
     if result.status != "completed":
         return ()
     if (
@@ -71,7 +75,16 @@ def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
             or row.player_b_registration_sha256 != result.opponent.identity_sha256
         ):
             raise ValueError("monitoring row differs from completed frozen cohort")
-    decks = [candidate_deck(r) for r in result.rows]
+
+    def cell(row: ArenaRow) -> str | None:
+        deck = candidate_deck(row)
+        if deck is None or not result.protocol.include_mirrors:
+            return deck
+        extra = row.model_extra or {}
+        opponent = extra["seat_decks"][1 - extra["player_a_seat"]]
+        return f"{deck} vs {opponent}"
+
+    decks = [cell(r) for r in result.rows]
     if None in decks:
         return ()
     rng = np.random.default_rng(result.protocol.bootstrap_seed)
@@ -82,7 +95,7 @@ def deck_results(result: MonitorResult) -> tuple[DeckResult, ...]:
     )
     summaries: list[DeckResult] = []
     for deck in sorted(set(d for d in decks if d is not None)):
-        selected = [r for r in result.rows if candidate_deck(r) == deck]
+        selected = [r for r in result.rows if cell(r) == deck]
         blocks: list[float] = []
         for seed in result.protocol.deal_seeds:
             pair = [r for r in selected if r.deal_seed == seed]
@@ -156,7 +169,7 @@ def checkpoint_panels(evidence: "ReportEvidence") -> tuple[CheckpointPanel, ...]
 
 
 def _deck_name(deck: str) -> str:
-    return {"gw_allies": "Allies", "ur_lessons": "Lessons"}.get(deck, deck)
+    return deck.replace("gw_allies", "Allies").replace("ur_lessons", "Lessons")
 
 
 def _number(value: object, unit: str = "") -> str:

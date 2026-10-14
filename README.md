@@ -1,6 +1,6 @@
-# Manabot
+# Fantasia
 
-**Manabot** is an AI-assisted Pro Tour testing house for
+**Fantasia** is an AI-assisted Pro Tour testing house for
 [Magic: The Gathering](https://magic.wizards.com/), built by Loopflow Studio.
 
 The game and the study session are one activity. Pilot a match, watch a human
@@ -43,7 +43,7 @@ board.
 
 ## The destination: Avatar Cube Team Sealed
 
-Academy is building toward Avatar Cube Team Sealed: two teams receive 135-card
+Fantasia is building toward Avatar Cube Team Sealed: two teams receive 135-card
 pools from a versioned 540-card cube, construct three 40-card-minimum decks with
 unlimited basics and deck-specific sideboards, and play the full three-by-three
 deck matchup matrix until one team reaches five wins. Every game remains an
@@ -77,8 +77,8 @@ replay, Retry, compare, and Study.
 You need [uv](https://docs.astral.sh/uv/), Node, and a Rust toolchain. Then:
 
 ```bash
-git clone git@github.com:loopflowstudio/etude.git
-cd etude
+git clone git@github.com:loopflowstudio/fantasia.git
+cd fantasia
 ./scripts/play
 ```
 
@@ -125,9 +125,9 @@ quickstart, presets, and the current world's live baselines.
 
 ## How the system divides responsibility
 
-Manabot is built from three cooperating systems:
+Fantasia is built from three cooperating systems:
 
-- **Academy** (legacy `etude/` here, Python + Svelte): the authored play, replay, Retry,
+- **Academy** (`academy`, Python + Svelte): the authored play, replay, Retry,
   comparison, and Study experience
 - **manabot** (`manabot`, Python): trainable agents, beliefs, planning,
   evidence, evaluation, and experiment tracking
@@ -141,7 +141,7 @@ Academy owns what the player sees and does.
 
 ## The research ledger
 
-Manabot's research program is preregistered and reproducible: every experiment
+Fantasia's research program is preregistered and reproducible: every experiment
 states its prediction, budget, and kill criteria before running, and negative
 results are recorded alongside positive ones.
 
@@ -175,7 +175,7 @@ cd managym && cargo fmt --check && cargo clippy --all-targets --all-features -- 
 uv run --extra dev pytest tests/
 ```
 
-Package structure and style live with [etude/](etude/README.md),
+Package structure and style live with [academy/](academy/README.md),
 [manabot/](manabot/README.md), and [managym/](managym/README.md). Agent and
 contributor conventions are in [AGENTS.md](AGENTS.md).
 
@@ -183,7 +183,7 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 
 | Path | What it is |
 |---|---|
-| `etude/` | Legacy path for the Academy experience server: transport, presentation, Study protocol, and adapters over managym authority |
+| `academy/` | Experience server: transport, presentation, Study protocol, and adapters over managym authority |
 | `frontend/` | Academy's Svelte client |
 | `manabot/` | The trainable agent: env wrappers, models, search, training, verification |
 | `managym/` | Rust rules engine and vectorized environment (PyO3 bindings) |
@@ -199,27 +199,19 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 
 ## Naming
 
-- **Manabot** — the whole project.
-- **manabot.manabot** — the training system within the project: agents,
-  models, learning, search, and evaluation. You train *a manabot*.
-- **manabot.academy** / **Academy** — the web app for playing Magic against
-  manabots, including play, replay, and Study.
-- **managym** — the rules environment and authoritative game engine.
-- **Etude** — the separate experiment library at
-  [loopflowstudio/etude](https://github.com/loopflowstudio/etude), distributed
-  on PyPI as [etude-sdk](https://pypi.org/project/etude-sdk/). It provides
-  experiment launching, tracking, checkpoints, and reporting; it is not the
-  name of this project or its play app.
+- **Fantasia** — the whole project and this repository.
+- **Academy** — the web app players use: the `academy` package, the frontend,
+  and the website.
+- **manabot** — the bot and the Python training library/CLI. Indefinite noun:
+  you train *a* manabot.
+- **managym** — the rules environment the agent lives in.
+- **Etude** — the launching and experiment system, built in a separate private
+  repository. Always ASCII (never “Étude”).
 
-The dotted names above identify project components, not a promise that those
-Python import paths exist in every historical checkout. In this checkout,
-training lives in `manabot/` and the Academy server still lives in the legacy
-`etude/` directory. The SDK also imports as `etude`; that namespace collision
-must be resolved during integration, not hidden by changing documentation.
-Using the SDK does not replace managym or the learning algorithms.
-
-Older material calls this project Etude or Etude Fantasia. Preserve historical
-quotes, frozen experiment IDs, receipts, schemas, artifact paths, W&B history,
-and actual commands/environment names (including `ETUDE_PLAY_*`) until their
-implementations migrate. Use the current names in new prose. Documentation
-changes alone do not establish SDK integration or authorize experiment spending.
+If it faces the player, it is Academy; if it trains or evaluates the agent, it
+is manabot; if it is the world, it is managym. manabot is not a former name to
+erase: existing `manabot.*` contract/schema identifiers, experiment receipts,
+and wandb history keep their names and remain reproducible. The same holds
+for names that predate Academy: the `etude.gg` domain, `x-etude-*` headers,
+`etude.*` storage keys and schema identifiers, and the Sepia Etude visual
+language.

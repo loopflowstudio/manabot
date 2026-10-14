@@ -142,7 +142,7 @@ resolution, priority exchange or newly revealed choices. Other action kinds
 remain action-aligned. A native `compound_commands_json` call lowers the sampled
 submission on an exact fork into ordinary revision-bound Commands, ending at the
 native declaration/payment boundary. Sampling and lowering leave the live root
-untouched. The ordinary checkpoint player and Academy opponent execute the resulting
+untouched. The ordinary checkpoint player and Academy villain execute the resulting
 suffix without asking the model to reconsider it. Interruption rejects and clears
 a stale suffix. Canonical DecisionFrames stay action-aligned, and the existing
 local-search/sampler consumers keep their API and checkpoint fields.

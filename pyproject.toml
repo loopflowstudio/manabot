@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "manabot"
 version = "0.1.0"
-description = "The trainable Magic: The Gathering agent for Etude Fantasia"
+description = "The trainable Magic: The Gathering agent for Fantasia"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24.0",
     "pandas>=2.0.0",
     "gymnasium>=1.0.0",
-    "pydantic>=2.10.0",
+    "pydantic>=2.12.0",
     "typer>=0.12.5",
     "wandb>=0.18.7",
     "psutil>=5.9.0",
@@ -87,7 +87,7 @@ torch = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["manabot", "etude"]
+packages = ["manabot", "academy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -107,5 +107,5 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
-known-first-party = ["etude", "manabot"]
+known-first-party = ["academy", "manabot"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

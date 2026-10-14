@@ -121,7 +121,7 @@ history updates retain the command that preceded the failure. The ordinary
 selected arena still owns its existing suites; tiny-pool tests do not register a
 new production arena or establish selected-matchup admission.
 
-`etude.local_advice.local_update_scenario` projects into `AdvisorScenarioEvidence`;
+`academy.local_advice.local_update_scenario` projects into `AdvisorScenarioEvidence`;
 `regularized-local-update/v1` identifies the policy semantic. Q quantities name
 signed-value methods, and unmeasured uncertainty/robustness remain unavailable.
 No sampled worlds, sampling weights, rollout seeds or branch tapes enter that

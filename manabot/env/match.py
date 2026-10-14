@@ -39,11 +39,16 @@ class Match:
         self.villain_sideboard = deepcopy(hypers.villain_sideboard)
 
     def to_rust_hero(self) -> "managym.PlayerConfig":
-        return managym.PlayerConfig(self.hero, self.hero_deck, self.hero_sideboard)
+        return managym.PlayerConfig(
+            self.hero, self.hero_deck, self.hero_sideboard, self.hypers.content_pack
+        )
 
     def to_rust_villain(self) -> "managym.PlayerConfig":
         return managym.PlayerConfig(
-            self.villain, self.villain_deck, self.villain_sideboard
+            self.villain,
+            self.villain_deck,
+            self.villain_sideboard,
+            self.hypers.content_pack,
         )
 
     def to_rust(self) -> "list[managym.PlayerConfig]":
@@ -59,6 +64,7 @@ class Match:
         """
         return Match(
             MatchHypers(
+                content_pack=self.hypers.content_pack,
                 hero=self.villain,
                 villain=self.hero,
                 hero_deck=self.villain_deck,

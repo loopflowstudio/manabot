@@ -215,7 +215,7 @@ At base `1cd60fdaabf783788f6ee94ce4c4508c9435785c`:
 - `Trainer.save` saves weights/optimizer/step, but there is no complete
   environment/RNG/collector continuation interface. Treat restarts as new
   attempts, not exact resumes. Prefer on-demand capacity initially.
-- `etude/villain.py:CheckpointVillain` is the actual demo load consumer.
+- `academy/villain.py:CheckpointVillain` is the actual demo load consumer.
   Closer inspection of `arena/match.py:play_cell` found another hardcoded
   INTERACTIVE_DECK mirror. Its registration/replay machinery is reusable, but
   its current game loop does not evaluate Allies/Lessons. This counterexample

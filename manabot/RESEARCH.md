@@ -1,6 +1,6 @@
 # Manabot research
 
-Manabot's training research program builds increasingly strong Magic:
+Manabot is Fantasia's program for building increasingly strong Magic:
 The Gathering agents. The objective is not to accumulate isolated model
 results. It is to build agents that play real `managym` games, measure them
 honestly, understand why they improve or fail, and repeat until a bounded

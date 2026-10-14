@@ -22,7 +22,7 @@ from typing import Any, Iterable, Mapping
 
 import numpy as np
 
-from etude import server
+from academy import server
 from manabot.belief.audit import (
     PairedKnownTruthPoint,
     aggregate_belief_truth,
@@ -51,7 +51,7 @@ from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldS
 
 EXPERIMENT = "int-17-belief-calibration-v1"
 SOURCE_PATHS = (
-    REPO_ROOT / "etude" / "public_commitment_parity.py",
+    REPO_ROOT / "academy" / "public_commitment_parity.py",
     REPO_ROOT / "experiments" / "runners" / "run_belief_calibration.py",
     REPO_ROOT / "manabot" / "belief" / "audit.py",
     REPO_ROOT / "manabot" / "belief" / "likelihood.py",

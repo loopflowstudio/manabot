@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 import torch
@@ -17,6 +17,21 @@ from manabot.sim.teacher1_evidence import runtime_fingerprints
 from manabot.training import monitor_evaluation as monitor
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitoring import default_panels, evaluation_dashboard
+
+
+def failure_summary(result: monitor.MonitorResult) -> str:
+    """Name why a cohort is incomplete; its full record exceeds pytest's limit."""
+    lines = [
+        f"{result.status} with {len(result.rows)}/{result.expected_games} games: "
+        f"{result.error}"
+    ]
+    lines += [
+        f"row {i}: {row.termination_reason} after {row.decisions} decisions "
+        f"in {row.game_seconds:.1f}s: {row.failure}"
+        for i, row in enumerate(result.rows)
+        if row.failure is not None
+    ]
+    return "\n".join(lines)
 
 
 def _manifest() -> monitor.MonitorResult:
@@ -215,8 +230,44 @@ def test_default_monitoring_cohort() -> None:
         monitor.MonitorProtocol(deal_seeds=(1, 1))
 
 
-@pytest.mark.parametrize("max_commands", [1, 10000])
-def test_real_arena_checkpoint_outcomes(tmp_path: Path, max_commands: int) -> None:
+@pytest.mark.parametrize("binding", ["monitoring", "study", "comparison"])
+def test_result_purpose_preserves_protocol_binding(
+    binding: Literal["monitoring", "study", "comparison"],
+) -> None:
+    protocol = (
+        monitor.MonitorProtocol(
+            purpose="frozen-study-evaluation", study_protocol_sha256="a" * 64
+        )
+        if binding == "study"
+        else monitor.MonitorProtocol(
+            comparison_sha256="a" * 64 if binding == "comparison" else None
+        )
+    )
+    expected = {
+        "monitoring": "monitoring-not-scientific-evaluation",
+        "study": "frozen-study-evaluation",
+        "comparison": "predeclared-comparison-not-admission",
+    }[binding]
+    data = _manifest().model_dump(mode="json")
+    data.update(protocol=protocol.model_dump(mode="json"), purpose=expected)
+    result = monitor.MonitorResult.model_validate(data)
+    assert monitor.MonitorResult.model_validate_json(result.model_dump_json()) == result
+    data["purpose"] = (
+        "frozen-study-evaluation"
+        if binding == "monitoring"
+        else "monitoring-not-scientific-evaluation"
+    )
+    with pytest.raises(ValueError, match="purpose differs"):
+        monitor.MonitorResult.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "max_commands,opponent",
+    [(1, "scripted_greedy"), (10000, "scripted_greedy"), (10000, "random")],
+)
+def test_real_arena_checkpoint_outcomes(
+    tmp_path: Path, max_commands: int, opponent: Literal["scripted_greedy", "random"]
+) -> None:
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
@@ -271,8 +322,24 @@ def test_real_arena_checkpoint_outcomes(tmp_path: Path, max_commands: int) -> No
             ),
             tmp_path / "arena",
             protocol=monitor.MonitorProtocol(
-                deal_seeds=(1910101000,), max_commands=max_commands, game_seconds=30
+                deal_seeds=(1910101000,),
+                max_commands=max_commands,
+                # The default per-game budget includes spawning the worker and
+                # loading torch; macOS runners have taken 30s for one
+                # random-opponent game. It guards hangs, not evaluator speed.
+                opponent=opponent,
+                comparison_sha256="a" * 64 if opponent == "random" else None,
             ),
+        )
+        assert (
+            result.started_unix is not None
+            and result.finished_unix >= result.started_unix
+        )
+        assert result.opponent.player_spec["kind"] == opponent
+        assert result.purpose == (
+            "predeclared-comparison-not-admission"
+            if opponent == "random"
+            else "monitoring-not-scientific-evaluation"
         )
         assert len(result.rows) == 4
         if max_commands == 1:
@@ -280,7 +347,8 @@ def test_real_arena_checkpoint_outcomes(tmp_path: Path, max_commands: int) -> No
             assert all(row.failure is not None for row in result.rows)
             assert result.score is None
         else:
-            assert result.status == "completed", result.model_dump_json()
+            if result.status != "completed":
+                pytest.fail(failure_summary(result), pytrace=False)
             assert all(row.valid for row in result.rows)
             assert result.score is not None
         assert all(

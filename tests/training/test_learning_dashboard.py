@@ -115,8 +115,15 @@ def test_newer_metadata_is_preserved_only_in_read_only_projection() -> None:
     run = load_evidence(DEMO).runs[0].model_dump(mode="json")
     run["calendar_seconds"] = 99
     run["regime"]["recovery"] = {"checkpoint_updates": 128}
+    run["regime"]["future_metadata"] = {"producer_version": 2}
     projected = RetainedRun.model_validate(run)
-    assert projected.model_dump()["regime"]["recovery"] == {"checkpoint_updates": 128}
+    assert projected.model_dump()["regime"]["recovery"] == {
+        "checkpoint_updates": 128,
+        "max_game_microsteps": 40000,
+    }
+    assert projected.model_dump()["regime"]["future_metadata"] == {
+        "producer_version": 2
+    }
     assert projected.model_dump()["calendar_seconds"] == 99
     run["seed"] = "not a number"
     with pytest.raises(ValueError):
@@ -201,3 +208,41 @@ def test_supervised_epoch_plans_are_not_reported_as_zero_updates(
         sections=[],
     ).read_text()
     assert "7 (includes epochs)" in html
+
+
+def test_mirror_matrix_reports_four_cells_without_pooling_opponent_decks() -> None:
+    monitor = _monitor()
+    seeds = tuple(monitor.protocol.deal_seeds)
+    rows = []
+    for seed in seeds:
+        for leg, decks in enumerate(
+            (
+                ["ur_lessons", "gw_allies"],
+                ["ur_lessons", "gw_allies"],
+                ["gw_allies", "ur_lessons"],
+                ["gw_allies", "ur_lessons"],
+                ["ur_lessons", "ur_lessons"],
+                ["ur_lessons", "ur_lessons"],
+                ["gw_allies", "gw_allies"],
+                ["gw_allies", "gw_allies"],
+            )
+        ):
+            row = monitor.rows[0].model_copy(deep=True)
+            row.deal_seed, row.leg = seed, leg
+            row.model_extra["seat_decks"] = decks
+            row.model_extra["player_a_seat"] = leg % 2
+            row.score_a = float(decks[1 - leg % 2] == "ur_lessons")
+            rows.append(row)
+    result = monitor.model_copy(
+        update={
+            "rows": rows,
+            "win": None,
+            "protocol": monitor.protocol.model_copy(update={"include_mirrors": True}),
+            "expected_games": len(rows),
+        }
+    )
+    summaries = {d.deck: d for d in deck_results(result)}
+    assert len(summaries) == 4
+    for cell, summary in summaries.items():
+        assert summary.games == 2 * len(seeds)
+        assert summary.interval.mean == float(cell.endswith("vs ur_lessons"))

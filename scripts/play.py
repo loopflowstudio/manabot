@@ -32,7 +32,7 @@ from urllib.request import urlopen
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 FRONTEND_LOCK = FRONTEND / "package-lock.json"
-FRONTEND_INSTALL_MARKER = FRONTEND / "node_modules" / ".etude-package-lock.sha256"
+FRONTEND_INSTALL_MARKER = FRONTEND / "node_modules" / ".academy-package-lock.sha256"
 FRONTEND_REQUIRED_PATHS = (
     FRONTEND / "node_modules" / ".bin" / "svelte-kit",
     FRONTEND / "node_modules" / ".bin" / "vite",
@@ -41,9 +41,9 @@ FRONTEND_REQUIRED_PATHS = (
 PACK_DIR = FRONTEND / "src" / "lib" / "packs" / "tla-ur-lessons-vs-gw-allies" / "v2"
 PACK_MANIFEST = PACK_DIR / "manifest.json"
 PACK_NOTICE = PACK_DIR / "NOTICE.md"
-ERROR_MARKER_ENV = "ETUDE_PLAY_ERROR_MARKER"
-READY_PREFIX = "ETUDE_PLAY_READY "
-ERROR_PREFIX = "ETUDE_PLAY_ERROR "
+ERROR_MARKER_ENV = "ACADEMY_PLAY_ERROR_MARKER"
+READY_PREFIX = "ACADEMY_PLAY_READY "
+ERROR_PREFIX = "ACADEMY_PLAY_ERROR "
 PYTHON_VERSION = (3, 12)
 DEFAULT_READY_TIMEOUT = 30.0
 NODE_VERSION_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
@@ -56,7 +56,7 @@ UV_RUNTIME = [
     "--only-group",
     "play-runtime",
 ]
-RUNTIME_IMPORTS = ("etude.server", "etude.live_advice", "numpy", "torch")
+RUNTIME_IMPORTS = ("academy.server", "academy.live_advice", "numpy", "torch")
 
 
 @dataclass(frozen=True)
@@ -134,7 +134,7 @@ def _phase_record(
     returncode: int | None = None,
 ) -> None:
     print(
-        "ETUDE_PLAY_PHASE "
+        "ACADEMY_PLAY_PHASE "
         + json.dumps(
             {
                 "phase": phase,
@@ -154,7 +154,7 @@ def validate_python_version(version_info: Any = sys.version_info) -> str:
     if actual != PYTHON_VERSION:
         raise PlayError(
             "python.version",
-            "etude play requires CPython 3.12",
+            "academy play requires CPython 3.12",
             f"running {actual[0]}.{actual[1]}",
         )
     return f"{actual[0]}.{actual[1]}.{int(version_info.micro)}"
@@ -206,7 +206,7 @@ def validate_pack() -> Any:
     if not PACK_NOTICE.is_file():
         raise PlayError("pack.notice", "the installed curated-pack notice is missing")
     try:
-        from etude.curated_pack import load_curated_pack
+        from academy.curated_pack import load_curated_pack
 
         return load_curated_pack(PACK_MANIFEST)
     except (OSError, RuntimeError, ValueError) as error:
@@ -240,7 +240,7 @@ def frontend_needs_install() -> bool:
 def ensure_frontend(npm: str, *, runner: Runner = subprocess.run) -> None:
     if not frontend_needs_install():
         return
-    print("etude play: installing locked frontend dependencies", flush=True)
+    print("academy play: installing locked frontend dependencies", flush=True)
     result = run_text(
         [npm, "ci", "--no-audit", "--no-fund"],
         cwd=FRONTEND,
@@ -305,7 +305,7 @@ def ensure_native(*, runner: Runner = subprocess.run) -> dict[str, str]:
     if imported is not None:
         return imported
 
-    print("etude play: building the CPython 3.12 managym extension", flush=True)
+    print("academy play: building the CPython 3.12 managym extension", flush=True)
     result = run_text(
         [
             *UV_RUNTIME,
@@ -348,7 +348,7 @@ def ensure_runtime_imports(*, runner: Runner = subprocess.run) -> None:
     if result.returncode != 0:
         raise PlayError(
             "runtime.import",
-            "the locked play runtime cannot import the Etude server",
+            "the locked play runtime cannot import the Academy server",
             (result.stderr or result.stdout).strip(),
         )
 
@@ -450,7 +450,7 @@ def start_processes(
                 [
                     *UV_RUNTIME,
                     "uvicorn",
-                    "etude.server:app",
+                    "academy.server:app",
                     "--host",
                     "127.0.0.1",
                     "--port",
@@ -472,7 +472,7 @@ def start_processes(
         ensure_frontend(npm)
         try:
             environment = dict(os.environ)
-            environment["ETUDE_API_PORT"] = str(backend_port)
+            environment["ACADEMY_API_PORT"] = str(backend_port)
             frontend = subprocess.Popen(
                 [
                     npm,

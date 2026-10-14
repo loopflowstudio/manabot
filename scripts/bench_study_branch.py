@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure and verify the production Etude Study branch lifecycle.
+"""Measure and verify the production Academy Study branch lifecycle.
 
 Invoke only through uv:
 
@@ -26,15 +26,15 @@ from typing import Any, Callable
 
 import psutil
 
-from etude.replay_index import (
+from academy.replay_index import (
     CanonicalReplayV1,
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecisionAddress,
     restore_decision,
 )
-from etude.server import GameSession
-from etude.study_branch import (
+from academy.server import GameSession
+from academy.study_branch import (
     STUDY_BRANCH_DRIVER,
     STUDY_COMMAND_PATH,
     StudyBranch,
@@ -146,7 +146,7 @@ def _extension_path() -> Path:
 def source_paths() -> list[Path]:
     paths: set[Path] = set()
     for relative, suffixes in (
-        ("etude", {".py"}),
+        ("academy", {".py"}),
         ("managym/src", {".rs"}),
         ("content/semantic/v1", {".json"}),
     ):
@@ -164,7 +164,7 @@ def source_paths() -> list[Path]:
         "pyproject.toml",
         "scripts/bench_study_branch.py",
         "tests/bench/test_study_branch_benchmark.py",
-        "tests/etude/test_study_branch.py",
+        "tests/academy/test_study_branch.py",
         "uv.lock",
     ):
         path = ROOT / relative
@@ -625,7 +625,7 @@ def run_measurement(
         and warmup == CANONICAL_WARMUP
     )
 
-    with tempfile.TemporaryDirectory(prefix="etude-study-branch-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="academy-study-branch-") as temporary:
         session, replay = _build_completed_session(Path(temporary))
         row, address, expected_projection, cast, baseline_return = _first_cast_workload(
             session, replay

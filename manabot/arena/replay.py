@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from etude.experience_protocol import Command
-from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
+from academy.experience_protocol import Command
+from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import Env, Match, ObservationSpace, Reward
 from manabot.infra.hypers import MatchHypers, ObservationSpaceHypers, RewardHypers
 from manabot.model.world import checkpoint_world

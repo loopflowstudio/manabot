@@ -1,4 +1,4 @@
-# Etude kickoff evidence
+# Academy kickoff evidence
 
 For play/checkpoint designs, inspect the actual `GameSession`, `Trace` writer,
 table protocol and selected-world loader before proposing another session or

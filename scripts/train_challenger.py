@@ -315,8 +315,8 @@ def demo_check(out: Path, recipe: dict) -> None:
     """Play the exported candidate through the play server in both assignments."""
     import random
 
-    from etude.opponent import configured_opponent
-    from etude.server import GameSession
+    from academy.opponent import configured_opponent
+    from academy.server import GameSession
 
     opponent = configured_opponent()
     if opponent is None:
@@ -359,7 +359,7 @@ def demo_check(out: Path, recipe: dict) -> None:
         {
             "complete": True,
             "opponent": opponent.identity(),
-            "path": "etude.opponent.configured_opponent -> etude.server.GameSession",
+            "path": "academy.opponent.configured_opponent -> academy.server.GameSession",
             "games": games,
         },
     )
@@ -448,7 +448,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     sources = [
         *root.glob("manabot/**/*.py"),
-        *root.glob("etude/**/*.py"),
+        *root.glob("academy/**/*.py"),
         *root.glob("managym/*.py"),
         *root.glob("managym/src/**/*.rs"),
         *root.glob("managym/_managym*.so"),
@@ -556,9 +556,9 @@ def main() -> int:
                     rss_bytes,
                     {
                         **os.environ,
-                        "ETUDE_PLAY_CANDIDATE": str(out / "candidate.json"),
-                        "ETUDE_TRACES_DIR": str(out / "demo-check"),
-                        "ETUDE_PLAY_RECORD_ORIGIN": "automated_validation",
+                        "ACADEMY_PLAY_CANDIDATE": str(out / "candidate.json"),
+                        "ACADEMY_TRACES_DIR": str(out / "demo-check"),
+                        "ACADEMY_PLAY_RECORD_ORIGIN": "automated_validation",
                         "OMP_NUM_THREADS": "1",
                         "MKL_NUM_THREADS": "1",
                     },

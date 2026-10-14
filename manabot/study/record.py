@@ -211,7 +211,7 @@ def record_game(spec: GameSpec) -> GameRecord:
     """Play one game to the end. Failures are kept as records, never dropped."""
     import torch
 
-    from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
+    from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
     from manabot.env import Env, Match, ObservationSpace, Reward
     from manabot.infra.hypers import RewardHypers
     from manabot.sim.teacher1_evidence import build_viewer_frame

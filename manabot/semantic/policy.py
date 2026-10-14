@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import json
 from typing import Any, Literal, Mapping
 
-from etude.experience_protocol import Command, ExperienceFrame
+from academy.experience_protocol import Command, ExperienceFrame
 from manabot.sim.structured_policy import (
     DecodedSubmission,
     RaggedOfferBatch,

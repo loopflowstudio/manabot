@@ -1,9 +1,6 @@
-# Manabot architecture
+# Fantasia architecture
 
-This is the top-down architecture for Manabot: Academy, the manabot training
-system, and managym. Current names and legacy paths are defined in
-[the naming contract](../README.md#naming). Etude now denotes the separate
-experiment library; SDK integration is distinct from these game/agent contracts.
+This is the top-down architecture for Academy, manabot, and managym.
 It names the central data structures, assigns one owner to each kind of truth,
 and states the contracts that play, replay, search, learning, evaluation, and
 Study must share.
@@ -69,7 +66,7 @@ The ownership rule follows the repository's naming boundary:
   worlds, search, policy/value models, teacher evidence, datasets,
   checkpoints, self-play, opponent selection, evaluation, and promotion
   evidence.
-- **Academy is the play app.** It owns transport, interaction drafts, reconnect
+- **Academy is the product.** It owns transport, interaction drafts, reconnect
   behavior, presentation, Study navigation, query construction and
   explanation, and research consent. It does not reconstruct rules meaning.
 

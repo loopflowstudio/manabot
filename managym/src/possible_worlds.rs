@@ -99,7 +99,7 @@ pub enum WorldQuery {
     Not(CountQuery),
 }
 
-/// Stable wire grammar for Python/Etude consumers. Conversion enters the
+/// Stable wire grammar for Python/Academy consumers. Conversion enters the
 /// same authoritative `WorldQuery` canonicalizer and evaluator used in Rust.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]

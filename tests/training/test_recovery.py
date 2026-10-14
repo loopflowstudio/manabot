@@ -140,7 +140,7 @@ def test_real_interruption_restores_complete_learning_state(
         assert resumed.prior_watchdog_seconds == failed.watchdog_seconds
         assert resumed.recovery_seconds > 0
         assert resumed.stages[0].cumulative_seconds >= resumed.prior_seconds
-        a, b = load_update(whole), load_update(resumed)
+        a, b = load_update(whole, store), load_update(resumed, store)
         for name in (
             "learner",
             "optimizer",
@@ -282,8 +282,9 @@ with VerifyStore(Path(sys.argv[2])) as store:
         assert resumed.prior_seconds == parent.seconds
         assert (failed_out / "run.json").read_bytes() == evidence
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
-        assert_state_equal(load_update(whole).learner, load_update(resumed).learner)
-        assert_state_equal(load_update(whole).optimizer, load_update(resumed).optimizer)
+        a, b = load_update(whole, store), load_update(resumed, store)
+        assert_state_equal(a.learner, b.learner)
+        assert_state_equal(a.optimizer, b.optimizer)
 
 
 def test_live_lease_rejects_recovery(
@@ -383,7 +384,7 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
             assert Path(path).read_bytes() == data
         for row in completed:
             assert not list((tmp_path / "child").glob(f"{row.id}-*.pt"))
-        a, b = load_update(whole), load_update(child)
+        a, b = load_update(whole, store), load_update(child, store)
         for name in (
             "learner",
             "optimizer",
@@ -558,3 +559,47 @@ def test_death_immediately_after_recovery_claim_keeps_snapshot_admissible(
         assert resumed.prior_seconds == parent.seconds + child.seconds
         assert resumed.stages[0].watchdog_seconds >= parent.stages[0].watchdog_seconds
         assert resumed.status == "completed"
+
+
+def test_sparse_recovery_replays_unsaved_updates_exactly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = recipe()
+    value.recovery_every_updates = 3
+    export = execution.export_training_run
+
+    def fail_after_second_update(
+        run_id: str, owner: VerifyStore, path: str | Path
+    ) -> TrainingRun:
+        run = export(run_id, owner, path)
+        if (
+            run.status == "running"
+            and run.stages
+            and len(run.stages[-1].diagnostics) == 2
+        ):
+            raise KeyboardInterrupt("unsnapshotted progress")
+        return run
+
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
+        with monkeypatch.context() as patch:
+            patch.setattr(execution, "export_training_run", fail_after_second_update)
+            with pytest.raises(KeyboardInterrupt):
+                execution.execute_regime(value, 197, tmp_path / "failed", store)
+        row = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        failed = store.training_run(row[0])
+        assert len(failed.stages[0].diagnostics) == 2
+        assert load_update(failed, store).iteration == 1
+        resumed = execution.execute_regime(
+            value, 197, tmp_path / "resumed", store, resume_from=failed.id
+        )
+        assert resumed.status == "completed"
+        assert resumed.prior_seconds == failed.seconds
+        a, b = load_update(whole, store), load_update(resumed, store)
+        for name in ("learner", "optimizer", "ema", "torch_rng", "minibatch_rng"):
+            assert_state_equal(getattr(a, name), getattr(b, name))
+        assert a.collector.journal == b.collector.journal
+        assert_learning_diagnostics_equal(whole.stages[0], resumed.stages[0])
+        assert not list((tmp_path / "whole").glob("*update-00000002.pt"))

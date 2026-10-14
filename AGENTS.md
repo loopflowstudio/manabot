@@ -2,30 +2,36 @@ Never add "Co-Authored by:" tags in commits
 
 ## Naming
 
-- **Manabot** — the whole project.
-- **manabot.manabot** — the training system within the project: agents,
-  models, learning, search, and evaluation. You train *a manabot*.
-- **manabot.academy** / **Academy** — the web app for playing Magic against
-  manabots, including play, replay, and Study.
-- **managym** — the rules environment and authoritative game engine.
-- **Etude** — the separate experiment library at
-  [loopflowstudio/etude](https://github.com/loopflowstudio/etude), distributed
-  on PyPI as [etude-sdk](https://pypi.org/project/etude-sdk/). It provides
-  experiment launching, tracking, checkpoints, and reporting; it is not the
-  name of this project or its play app.
+- **Fantasia** — the whole project, and this repository
+  (`loopflowstudio/fantasia`). It replaces "Etude Fantasia" as the project
+  name.
+- **Academy** — the web app players use: the `academy` package, the frontend,
+  the website, and their service namespaces. Say just "Academy" on anything a
+  player sees.
+- **manabot** — the bot, and the Python training library/CLI. Indefinite
+  noun: you train *a* manabot.
+- **managym** — the rules environment the agent lives in.
+- **Etude** — the launching and experiment system, built in the private
+  `loopflowstudio/etude` repository. The import name `etude` and the
+  `ETUDE_URL` / `ETUDE_TOKEN_FILE` variables belong to it, never to the app.
+  Always ASCII (never "Étude").
 
-The dotted names above identify project components, not a promise that those
-Python import paths exist in every historical checkout. In this checkout,
-training lives in `manabot/` and the Academy server still lives in the legacy
-`etude/` directory. The SDK also imports as `etude`; that namespace collision
-must be resolved during integration, not hidden by changing documentation.
-Using the SDK does not replace managym or the learning algorithms.
+Jack Heart set this model on 2026-10-13, "for now".
 
-Older material calls this project Etude or Etude Fantasia. Preserve historical
-quotes, frozen experiment IDs, receipts, schemas, artifact paths, W&B history,
-and actual commands/environment names (including `ETUDE_PLAY_*`) until their
-implementations migrate. Use the current names in new prose. Documentation
-changes alone do not establish SDK integration or authorize experiment spending.
+Boundary rule for anything those lines don't settle: if it faces the player,
+it is Academy; if it trains or evaluates the agent, it is manabot; if it is the
+world, it is managym; if it launches or records experiments, it is Etude. So
+the play server, experience protocol, curated packs, and their env/error
+namespaces (`ACADEMY_PLAY_*`) take Academy names, while training
+infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
+correctly keeps manabot names. Frozen evidence — experiment IDs, contracts,
+receipts, wandb history — is never renamed, and neither are the compatibility
+surfaces that predate the Academy name: the `etude.gg` domain, the
+`x-etude-*` wire headers, `etude.*` browser storage keys and schema
+identifiers. Hosted services are `academy-play` and `fantasia-website`, with
+deployment secrets in Doppler `fantasia/prd` (Jack Heart, 2026-10-14).
+The shared Etude experiment services retain their names. "Sepia Etude" remains
+the name of the visual language.
 
 ## Style
 

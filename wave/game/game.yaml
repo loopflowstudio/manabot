@@ -1,6 +1,6 @@
 flow: code
 area:
-  - etude/
+  - academy/
   - manabot/env/
   - managym/src/
   - tests/

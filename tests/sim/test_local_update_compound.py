@@ -9,8 +9,8 @@ import numpy as np
 import pytest
 import torch
 
-from etude.advice import BeliefNormalizationReceipt
-from etude.local_advice import local_update_scenario
+from academy.advice import BeliefNormalizationReceipt
+from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env import Env, Match, ObservationSpace

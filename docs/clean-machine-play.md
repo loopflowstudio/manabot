@@ -10,7 +10,7 @@ From a fresh checkout on the reference profile, that command prepares the
 locked, minimal play-runtime Python environment, builds the CPython 3.12 `managym` extension,
 installs the locked frontend dependencies, starts the local FastAPI and Vite
 processes, validates the installed curated pack, and prints a
-`ETUDE_PLAY_READY` JSON record plus the play URL. Ctrl-C stops both child
+`ACADEMY_PLAY_READY` JSON record plus the play URL. Ctrl-C stops both child
 processes.
 
 The existing `uv run scripts/play.py` path remains useful in an already
@@ -76,13 +76,13 @@ launcher also starts Vite and requests its root page during the native build,
 so frontend startup and initial compilation overlap backend preparation.
 Both services must pass readiness before the launcher emits its ready record.
 Any installation or service-start failure tears down the started services. The
-browser waits for `ETUDE_PLAY_READY` before navigating. This overlaps proof
+browser waits for `ACADEMY_PLAY_READY` before navigating. This overlaps proof
 setup with installation without moving the external start time or relaxing
 the ninety-second playable-state assertion.
 
 ### Startup phase evidence
 
-The launcher emits timestamped `ETUDE_PLAY_PHASE` records when the locked Python
+The launcher emits timestamped `ACADEMY_PLAY_PHASE` records when the locked Python
 runtime is ready and around frontend installation/sync and the native build.
 Installation and compiler output streams directly to the launcher log, including
 while a subprocess is still running. A missing completion record therefore leaves
@@ -90,7 +90,7 @@ its start timestamp and live output available after a timeout. Completed phases
 report their duration and exit code. These are diagnostics; the external playable
 clock and its 90,000 ms assertion remain unchanged.
 
-On 2026-10-08, [main run 37798764116](https://github.com/loopflowstudio/etude/actions/runs/37798764116)
+On 2026-10-08, [main run 37798764116](https://github.com/loopflowstudio/fantasia/actions/runs/37798764116)
 at `69594494` timed out after Vite was ready and native compilation had started.
 Its launcher buffered compiler output until process exit, so the retained log
 cannot distinguish slow compilation from an intervening download or tool failure.
@@ -127,7 +127,7 @@ proof.
 
 ## Deterministic diagnostics
 
-Controlled failures print one `ETUDE_PLAY_ERROR` JSON record and exit
+Controlled failures print one `ACADEMY_PLAY_ERROR` JSON record and exit
 nonzero. The stable codes are:
 
 | Code | Meaning |

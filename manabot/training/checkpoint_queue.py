@@ -23,6 +23,7 @@ from pydantic import Field, model_validator
 import torch
 
 from manabot.arena.models import canonical_sha256
+from manabot.training.clock import arm_worker_deadline
 from manabot.training.execution import atomic_json
 from manabot.training.models import (
     ArtifactReference,
@@ -46,9 +47,15 @@ class MonitoringBudget(Strict):
     seconds: float = Field(gt=0)
     attempt_seconds: float = Field(default=600, gt=0)
     protocol: MonitorProtocol = Field(default_factory=MonitorProtocol)
+    active_runtime: bool = Field(default=False, exclude_if=lambda value: not value)
     include_initial: bool = Field(default=False, exclude_if=lambda value: not value)
+    include_monitoring: bool = Field(default=True, exclude_if=lambda value: value)
+    updates: tuple[int, ...] = Field(default=(), exclude_if=lambda value: not value)
     require_initial_admission: bool = Field(
         default=False, exclude_if=lambda value: not value
+    )
+    additional_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
     )
     terminal_protocols: tuple[MonitorProtocol, ...] = Field(
         default=(), exclude_if=lambda value: not value
@@ -58,7 +65,10 @@ class MonitoringBudget(Strict):
     def separate_terminal_deals(self) -> "MonitoringBudget":
         if self.require_initial_admission and not self.include_initial:
             raise ValueError("initial admission requires initialization evaluation")
-        used = set(self.protocol.deal_seeds)
+        protocols = (self.protocol, *self.additional_protocols)
+        if len({canonical_sha256(p.model_dump()) for p in protocols}) != len(protocols):
+            raise ValueError("duplicate monitoring protocols")
+        used = {seed for p in protocols for seed in p.deal_seeds}
         for protocol in self.terminal_protocols:
             if used.intersection(protocol.deal_seeds):
                 raise ValueError(
@@ -79,10 +89,12 @@ class MonitoringBudget(Strict):
             final = stage_checkpoint(run, run.regime.stages[-1].id)
             if final is not None and final.artifact == checkpoint.artifact:
                 return list(self.terminal_protocols)
-        return [self.protocol]
+        return [self.protocol, *self.additional_protocols]
 
 
-def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Checkpoint]:
+def checkpoints(
+    run: TrainingRun, *, include_initial: bool = False, include_monitoring: bool = True
+) -> list[Checkpoint]:
     """Admitted raw exports with their original cumulative training coordinates."""
     found = [
         Checkpoint(
@@ -92,7 +104,7 @@ def checkpoints(run: TrainingRun, *, include_initial: bool = False) -> list[Chec
             ),
         )
         for c in run.monitoring_checkpoints
-        if c.artifact is not None and c.error is None
+        if include_monitoring and c.artifact is not None and c.error is None
     ]
     for stage in run.stages:
         if (
@@ -172,6 +184,7 @@ class EvaluationJob(Strict):
     protocol: MonitorProtocol
     allowance_seconds: float
     deadline_unix: float
+    active_runtime: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class Attempt(Strict):
@@ -306,8 +319,15 @@ class CheckpointQueue:
                 training_dashboard(run).model_dump(mode="json"),
             )
             for checkpoint in checkpoints(
-                run, include_initial=self.config.include_initial
+                run,
+                include_initial=self.config.include_initial,
+                include_monitoring=self.config.include_monitoring,
             ):
+                if (
+                    self.config.updates
+                    and checkpoint.coordinates.updates not in self.config.updates
+                ):
+                    continue
                 artifact_binding = (
                     run_dir
                     / f"artifact-{canonical_sha256(checkpoint.artifact['path'])}.json"
@@ -329,7 +349,11 @@ class CheckpointQueue:
                     identity = canonical_sha256(
                         {
                             **(
-                                {"run": run.id}
+                                {
+                                    "run": f"{run.regime_digest}/{run.seed}"
+                                    if run.regime.recovery
+                                    else run.id
+                                }
                                 if run.monitoring_checkpoint_updates is None
                                 else {}
                             ),
@@ -360,11 +384,23 @@ class CheckpointQueue:
                     raise ValueError("relocated checkpoint identity differs")
                 local_checkpoint = checkpoint.model_copy(update={"artifact": local})
             job = EvaluationJob(
-                run=run,
+                # Keep producer metadata without copying the growing learning
+                # ledger into every evaluation job. VerifyStore owns diagnostics.
+                run=run.model_copy(
+                    update={
+                        "stages": [
+                            stage.model_copy(update={"diagnostics": []})
+                            for stage in run.stages
+                        ],
+                        "monitoring_checkpoints": [],
+                        "fixed_validation": None,
+                    }
+                ),
                 checkpoint=local_checkpoint,
                 protocol=protocol,
                 allowance_seconds=self.config.attempt_seconds,
                 deadline_unix=time.time() + self.config.attempt_seconds,
+                active_runtime=self.config.active_runtime,
             )
             attempt = Attempt(
                 ordinal=len(self.attempts),
@@ -444,6 +480,8 @@ class CheckpointQueue:
             {
                 "purpose": "checkpoint-evaluation"
                 if self.protocols_for is not None
+                else "predeclared-comparison-not-admission"
+                if self.config.protocol.comparison_sha256
                 else "monitoring-not-scientific-evaluation",
                 "allocation_seconds": self.config.seconds,
                 "charged_evaluator_process_seconds": self.charged_seconds,
@@ -476,14 +514,11 @@ def main() -> None:
 
     # Even if the supervisor dies, stop this whole evaluator session at its cap.
     # The supervisor retains the immutable attempt and conservatively charges it.
-    def expire(signum: int, frame: object) -> None:
-        os.killpg(os.getpgrp(), signal.SIGKILL)
-
-    signal.signal(signal.SIGALRM, expire)
-    remaining = job.deadline_unix - time.time()
-    if remaining <= 0:
-        expire(signal.SIGALRM, None)
-    signal.setitimer(signal.ITIMER_REAL, remaining)
+    arm_worker_deadline(
+        active_runtime=job.active_runtime,
+        allowance_seconds=job.allowance_seconds,
+        deadline_unix=job.deadline_unix,
+    )
     torch.set_num_threads(1)
     result = evaluate_checkpoint(
         job.run,

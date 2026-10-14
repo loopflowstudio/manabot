@@ -19,4 +19,4 @@ with ZipFile(wheel) as archive:
 PY
 
 cargo test --manifest-path managym/Cargo.toml authored_match_parity --no-fail-fast
-uv run --extra dev python -m etude.authored_match_parity verify
+uv run --extra dev python -m academy.authored_match_parity verify

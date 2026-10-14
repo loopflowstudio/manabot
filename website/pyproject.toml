@@ -1,7 +1,7 @@
 [project]
-name = "etude-website"
+name = "academy-website"
 version = "0.1.0"
-description = "Etude Fantasia landing site"
+description = "Academy landing site"
 requires-python = ">=3.12"
 dependencies = [
     "python-fasthtml>=0.6.0",

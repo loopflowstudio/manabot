@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "etude-fantasia"
+version = "0.1.0"
+description = "Private Fantasia observation adapter for Etude's public API"
+requires-python = ">=3.12"
+dependencies = ["etude-client"]
+
+[project.scripts]
+etude-fantasia = "etude_fantasia.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/etude_fantasia"]

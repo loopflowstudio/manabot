@@ -27,7 +27,7 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
-from etude.study_protocol import StudyArtifact
+from academy.study_protocol import StudyArtifact
 from experiments.runners import run_visit_teacher_iteration as iteration
 from manabot.sim.distill import ROOT_VALUE_KEY, load_shards
 from manabot.sim.flat_mc import load_checkpoint_agent
@@ -98,7 +98,7 @@ def _production_runtime(seed: int) -> dict[str, Any]:
                 REPO_ROOT / "manabot/sim/search_supervised.py",
                 REPO_ROOT / "manabot/sim/study_evidence.py",
                 REPO_ROOT / "manabot/verify/competency.py",
-                REPO_ROOT / "etude/study_protocol.py",
+                REPO_ROOT / "academy/study_protocol.py",
                 REPO_ROOT / "protocol/study-v1.schema.json",
             ]
         ),

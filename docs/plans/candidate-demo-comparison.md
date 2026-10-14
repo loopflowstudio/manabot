@@ -24,7 +24,7 @@ a hypothesis, not a measured forecast or a reason to lower the success bar.
 ## Baseline, candidates and freeze
 
 **Baseline: stock Search-64.** Freeze `SearchVillain` from
-[`etude/villain.py`](../../etude/villain.py): 64 simulations **per legal action**,
+[`academy/villain.py`](../../academy/villain.py): 64 simulations **per legal action**,
 16 compatible worlds × 4 random terminal rollouts, 2,000 steps per rollout,
 first maximum in legal-offer order. These are the unconfigured server's defaults,
 not PUCT's total-root simulation budget. Pin source, native implementation and
@@ -314,7 +314,7 @@ identified these implementation prerequisites for the comparison Task:
 | `scripts/train_challenger.py`, `manabot/sim/distill.py` | The runner constructs main-deck-only `MatchHypers`. Consume the accepted authored matchup including sideboards, retain actual train/validation identities, and obtain corrected-world repeat receipts with exact source capture. |
 | `load_checkpoint_agent`, `CheckpointVillain`, candidate admission | Prove ordinary corrected-world schema/content binding and full legal-offer preservation through the actual demo. No loader bypass or state-dict port for old evidence. |
 | `manabot/arena/match.py`, `models.py`, existing arena runner | `play_cell` hardcodes `INTERACTIVE_DECK`; the frozen contract admits w2 and two legs. Extend the existing owner for corrected authored matches and four-leg blocks, new registrations/schedules and honest failed-attempt retention. Do not run or rewrite the frozen historical contract as though it covered this matchup. |
-| `manabot/arena/players.py`, `etude/villain.py` | Bind exact Search-64 and Random/Passive semantics, stochastic policy seeding and per-game reset; verify parity on common roots including forced choices. Demo Search skips its RNG call counter on a single offer while `FlatMCPlayer` currently increments; nominally equal settings alone do not prove parity. |
+| `manabot/arena/players.py`, `academy/villain.py` | Bind exact Search-64 and Random/Passive semantics, stochastic policy seeding and per-game reset; verify parity on common roots including forced choices. Demo Search skips its RNG call counter on a single offer while `FlatMCPlayer` currently increments; nominally equal settings alone do not prove parity. |
 | `manabot/arena/profile.py`, `rating.py`, `replay.py` | Reuse root profiling and replay; bind CPU timing, watchdogs, four-leg/cross-seed analysis and correct authoritative-draw handling in these owners. Existing rating filtering of truncated rows cannot decide this protocol's full-cohort result. |
 
 ETU-84 changes documentation only. ETU-14, ETU-21, ETU-31 and ETU-55 remain

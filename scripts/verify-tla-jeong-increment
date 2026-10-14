@@ -41,6 +41,6 @@ with ZipFile(wheel) as archive:
 PY
 
 uv run --extra dev pytest -q \
-  tests/etude/test_curated_pack.py \
-  tests/etude/test_play_modes.py
+  tests/academy/test_curated_pack.py \
+  tests/academy/test_play_modes.py
 uv run --extra dev experiments/runners/run_rul10_tla_jeong_increment.py --verify

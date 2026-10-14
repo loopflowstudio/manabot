@@ -1,0 +1,31 @@
+{
+  "entrants": [
+    {"id": "scripted-greedy", "label": "scripted greedy", "origin": "code anchor"},
+    {
+      "id": "w64-floor010", "label": "width 64, floor 0.01",
+      "origin": "etu103-recovery-v3-science-0 final raw",
+      "file": "small-26000-raw.pt",
+      "sha256": "3a3c65cbbc90231d9f96c5619b9bbc1b8ea88ac4711e1b1752fe2e99e33cb0da",
+      "bytes": 822901, "training_seed": 10351, "updates": 26000
+    },
+    {
+      "id": "w64-floor003", "label": "width 64, floor 0.003",
+      "origin": "size-floor-grid-20261009b-0 final raw",
+      "file": "w64-d2-floor003-26000-raw.pt",
+      "sha256": "b838dae96342fc97d91760a93700be043a36d56978abf6c7cb2b51c7b43d3ecc",
+      "bytes": 822901, "training_seed": 10351, "updates": 26000
+    },
+    {
+      "id": "w32-floor010", "label": "width 32, floor 0.01",
+      "origin": "size-floor-grid-20261010c-0 final raw",
+      "file": "w32-d2-floor010-26000-raw.pt",
+      "sha256": "d405b49d66656b7df0ea73684ac129f760406a94767b5fba7368be77035b7e5d",
+      "bytes": 277941, "training_seed": 10351, "updates": 26000
+    }
+  ],
+  "core": ["scripted-greedy", "w64-floor010", "w64-floor003", "w32-floor010"],
+  "extra": [],
+  "contrasts": [["w64-floor003", "w64-floor010"], ["w32-floor010", "w64-floor010"]],
+  "reference": "w64-floor010",
+  "training_caveat": "These checkpoints trained on cross-deck Lessons vs Allies; mirrors are outside their training matchups. All three checkpoints use training seed 10351 and 26,000 updates, not independent training replicates. Equal updates do not imply equal samples or cost. Scripted greedy is a code anchor. Intervals describe frozen-checkpoint deal uncertainty, not training-seed uncertainty."
+}

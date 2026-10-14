@@ -20,7 +20,7 @@ from tempfile import TemporaryDirectory
 import time
 from typing import Any
 
-from etude.advice import (
+from academy.advice import (
     ADVISOR_SOURCE_PATHS,
     VERSIONED_FIXTURE_PATH,
     AdviceProvider,
@@ -37,19 +37,19 @@ from etude.advice import (
     runtime_advisor_abis,
     source_bundle_sha256,
 )
-from etude.advice_identity import (
+from academy.advice_identity import (
     AdvisorComputeIdentity,
     AdvisorIdentity,
     AdvisorSeedIdentity,
     CodeSourceArtifact,
 )
-from etude.replay_index import (
+from academy.replay_index import (
     ReplayDecisionAddress,
     canonical_projection_sha256,
     project_replay,
 )
-from etude.server import GameSession
-from etude.testing_house_protocol import (
+from academy.server import GameSession
+from academy.testing_house_protocol import (
     BeliefScenario,
     BeliefSource,
     PersonalAudience,

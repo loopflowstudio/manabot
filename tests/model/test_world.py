@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 import torch
 
-from etude.villain import CheckpointVillain
+from academy.villain import CheckpointVillain
 from manabot.env import Match, ObservationSpace
 from manabot.infra.hypers import AgentSpec, MatchHypers, RewardHypers
 from manabot.model import Agent

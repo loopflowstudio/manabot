@@ -19,6 +19,7 @@ from manabot.sim.search_supervised import (
     train_search_supervised,
 )
 from manabot.training import execution, monitoring
+from manabot.training.checkpoint_queue import checkpoints
 from manabot.training.execution import execute_regime
 from manabot.training.models import (
     CollectSearch,
@@ -133,7 +134,11 @@ def test_monitor_exports_do_not_change_learning_and_survive_reload(
             recipe, 197, tmp_path / "monitored", store, checkpoint_seconds=1e-9
         )
         assert store.training_run(monitored.id) == monitored
-    assert len(monitored.monitoring_checkpoints) == 2
+    # The stage's raw export owns the endpoint; monitoring must not duplicate it.
+    assert [c.updates for c in monitored.monitoring_checkpoints] == [1]
+    evaluated = checkpoints(monitored)
+    assert [c.coordinates.updates for c in evaluated] == [1, 2]
+    assert evaluated[-1].artifact == monitored.selected_artifact
     for checkpoint in monitored.monitoring_checkpoints:
         assert checkpoint.error is None and checkpoint.artifact is not None
         load_checkpoint_agent(checkpoint.artifact["path"])

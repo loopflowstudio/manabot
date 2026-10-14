@@ -5,7 +5,7 @@
 This is the unfinished ETU-14/ETU-21 design retained from scratch. It is not a
 release receipt. The checkout now implements `DecisionAddressV2`, pending-root
 promotion, the managym conditioning-index binding, and a selected live tracked
-posterior resolver. `tests/etude/test_live_advice.py` covers those three seams.
+posterior resolver. `tests/academy/test_live_advice.py` covers those three seams.
 The production `/api/advice` route still calls the fixture provider; the
 participant-authenticated live provider, full UI connection, fresh live/Study
 byte parity, and concurrency/performance gates below are not demonstrated.
@@ -305,7 +305,7 @@ one real browser flow:
 
 1. `cargo test` passes in debug, including Rust/Python address parity and the
    new authority-private query-conditioning binding.
-2. `uv run pytest tests/etude/test_live_advice.py tests/etude/test_testing_house.py`
+2. `uv run pytest tests/academy/test_live_advice.py tests/academy/test_testing_house.py`
    proves the surfaced address equals the later replay/Study address; Has and
    Lacks requests differ only in `BeliefScenario`, bind the tracked posterior,
    and produce non-identical strategy; fresh live and Study providers return

@@ -1,7 +1,8 @@
 # Head-to-head play between trained policies
 
-Status: queued on the M1 mini on 2026-10-09 to start after the early
-learning-rate screen releases the host. No results yet. This is **exploratory**:
+Original cross-deck freeze (2026-10-09): queued on the M1 mini after the early
+learning-rate screen, before results. The later MTG-131 request reports partial
+cross-deck results; this document does not track that run's live status. This is **exploratory**:
 one checkpoint per model, one training seed behind each, and no result here
 changes a recipe by itself.
 
@@ -35,8 +36,8 @@ that admission, plus a byte check against the hashes below, before any game.
 
 The three small-ladder checkpoints are one training run and its continuations,
 so their ordering is a statement about that run. The update counts are the job
-names' and were not re-derived from the run records. The roster in
-[`head_to_head.py`](runners/head_to_head.py) is the authority; `roster` prints it.
+names' and were not re-derived from the run records. The tournament in
+[`head_to_head.py`](runners/head_to_head.py) is the authority; `tournament` prints it.
 
 Left out, with reasons:
 
@@ -194,3 +195,184 @@ two hosts produced identical score tables, as they should from identical seeds.
 The starting player's opening hand was identical across all four pairings on
 each deal and deck assignment, which is the shared-deal claim checked directly.
 All 32 games were valid and replayed.
+
+## Mirror-only follow-up (MTG-131, 2026-10-09)
+
+Jack Heart requested same-deck head-to-heads to separate deck-specific skill from
+cross-deck advantage. The cross-deck protocol and evidence above remain unchanged.
+The mirror follow-up is implemented but **the full run has not started here**;
+Jack Heart's training manager owns execution on the Mini after the current
+head-to-head finishes. No running experiment is changed by this follow-up.
+
+### Frozen schedule and interpretation
+
+`--matchups mirrors` keeps the same ten entrants and **25 scheduled pairings**,
+not a new 45-pair round robin. This is the implementation assumption for “redo
+the head-to-heads”: all deck/seat combinations within the existing schedule,
+not an independently approved expansion of the model pairings.
+Every pairing receives the same 100 deal seeds,
+**1,913,131,000–1,913,131,099**, reserved for MTG-131 and disjoint from the
+cross-deck and existing study/monitoring cohorts. Each deal has four games:
+
+| leg | matchup | player A |
+| --- | --- | --- |
+| 4 | Lessons vs Lessons | on the play |
+| 5 | Lessons vs Lessons | on the draw |
+| 6 | Allies vs Allies | on the play |
+| 7 | Allies vs Allies | on the draw |
+
+That is 10,000 games, 200 per deck per pairing (100 per deck/seat split).
+No cross-deck games are replayed. Deal seeds specify the same per-seat shuffle
+across pairings, while action noise remains seeded per pairing and player.
+
+Every trained model except **`etu125-mirrors-10k`** was trained only on Lessons
+vs Allies: same-deck games are outside its training matchups. `small-0` is
+untrained; scripted greedy remains the code anchor. Mirror transfer is a property
+of these frozen checkpoints, not a multi-seed learning-method result.
+
+The report gives separate Lessons and Allies panels: each pairing's score and
+play/draw splits, the existing direct/greedy contrasts, and a separate seat-aware
+Bradley-Terry fit with greedy at zero. Each 95% bootstrap resamples whole deals,
+keeping both seats together and sharing sampled deal blocks across pairings.
+Invalid games and failed/unfinished units are counted explicitly; any such unit
+suppresses that pairing's estimates on **both** decks and excludes it from
+contrasts/ratings. This conservative whole-unit rule does not silently score the
+survivors. Partial runs show their completed deal counts; missing scheduled deals
+are not a completed cohort. Two smoke deals establish no strength or uncertainty
+precision. The cross-deck reading rule is not a multiplicity-adjusted claim for
+these two exploratory panels, nor does its four-game precision estimate apply
+to a two-game per-deck block.
+
+Mirror execution explicitly admits repetition of exact checkpoint tournament decks
+**and sideboards**, never arbitrary cards. It carries the original compiled pack
+through native reset and retained replay; a same-deck list alone must not fall
+back to the generic registry. Checkpoint bytes and their ordinary load admission
+are unchanged. Belief checkpoints remain unsupported for this mirror option.
+Omitting `--matchups` retains the original cross-deck behavior and identities.
+
+### Commands and bounded smoke
+
+Use the native library rebuilt from this branch, not a cross-deck-only checkout's
+extension. The models directory contains the exact filenames/hashes in the tournament.
+Use a fresh output directory: cross-deck and mirror designs cannot share one.
+
+```bash
+# Bounded local proof only: 2 deals × 3 pairings × 4 mirror legs = 24 games.
+uv run python -m experiments.runners.head_to_head smoke .runs/mtg131-mirror-smoke \
+  --models .runs/mtg131-models --matchups mirrors --workers 1 --wall-seconds 600
+uv run python -m experiments.runners.head_to_head report .runs/mtg131-mirror-smoke
+
+# Training-manager handoff only; NOT launched by this implementation.
+uv run python -m experiments.runners.head_to_head run .runs/mtg131-mirrors \
+  --models /path/to/models --matchups mirrors --workers 4
+```
+
+The mirror smoke uses **1,913,131,100–101**, separate from scoring, and compares
+`etu125-cross-10k`, `etu125-mirrors-10k`, and scripted greedy. It exercises saved
+model admission, trained-vs-trained play, both greedy comparisons, every deck/seat,
+exact replay, direct contrasts and deck ratings. It does not measure large-model
+mirror cost; Mini runtime and the full tournament remain the manager's responsibility.
+The existing six-hour admission cap, 120-second/10,000-command game bounds and
+40-GiB disk floor remain unchanged. Timing is workflow evidence, not strength or
+an uncontended Mini throughput estimate.
+
+The local arm64 smoke completed on 2026-10-09 in **83.70 seconds wall** with
+one worker: 24/24 valid games, 2,960 decisions, zero failed units or integrity
+errors, and exact replay throughout. Summed per-game time was 72.81 seconds
+(**3.03 s/game**, including game-process startup; replay/coordinator work is
+additional). Both deck reports include the ETU-125 direct contrast and greedy-zero
+ratings. Reconstructed opening hands agreed across all three pairings and both
+legs in each of eight (deal, deck, seat) groups. This is not a strength result.
+
+Original design, rows, traces, replay receipts and reports remain in
+`.runs/mtg131-mirror-smoke`; its `smoke-receipt.json` binds them by SHA-256
+(`8356e32d9e134d7199f7caa67d7a01b3b0cd6016c55588c62ab7b60f7ba59635`).
+The receipt also pins runner/arena source and the rebuilt native extension.
+Those source hashes match `001e6920`, before the shared leg-layout simplification
+in `0e1d0e57`. Offline reconciliation on 2026-10-09 verified all 28 retained file
+hashes and reproduced the saved JSON/text report with the simplified code;
+it did not rerun games or replace the original smoke's source identity.
+Host load was high and changed during the smoke; do not extrapolate this rate
+as uncontended Mini throughput. No large-model mirror timing or full-tournament
+result is claimed.
+
+## Tournament files (MTG-134, 2026-10-10)
+
+Jack Heart approved Mini head-to-head evaluation of the size × advantage-floor
+grid because scripted-greedy scores compress above about 0.65. The initial
+[grid tournament](tournaments/size-floor-grid.json) pins greedy and three final raw
+26,000-update, seed-10351 checkpoints in a full round robin. It declares floor
+at width 64 and width at floor 0.01 contrasts, with `w64-floor010` as reference.
+These are checkpoint comparisons, not independent-seed method estimates.
+
+```bash
+uv run python -m experiments.runners.head_to_head smoke .runs/grid-smoke \
+  --models /path/to/models --tournament experiments/tournaments/size-floor-grid.json
+# Operator-owned Mini evaluation; use a separate directory from the smoke.
+uv run python -m experiments.runners.head_to_head run .runs/grid-cross \
+  --models /path/to/models --tournament experiments/tournaments/size-floor-grid.json
+uv run python -m experiments.runners.head_to_head report .runs/grid-cross
+```
+
+Use `--matchups mirrors` with a separate output directory for same-deck play.
+Custom smoke uses the entire selected schedule on two deals; it does not
+automatically launch the full evaluation. No flag preserves the original
+built-in schedule, arena versions and historical report format.
+
+The strict JSON model is `Tournament` in the runner. Required fields are
+`entrants`, `core`, `extra`, `contrasts`, `reference` and
+`training_caveat`. Checkpoint entrants require `id`, `label`, `origin`,
+`file`, `sha256`, `bytes`, `training_seed` and `updates`. Files are basenames
+relative to `--models`; hashes and positive sizes bind exact checkpoint bytes.
+The required `scripted-greedy` entrant has only id, label and origin (checkpoint
+fields may be null). IDs follow arena registration naming: 3–64 lowercase
+letters, digits or hyphens, starting with a letter or digit. Unknown fields,
+coercible wrong types, unknown IDs, self-pairs, duplicate unordered pairings,
+missing reference and unscheduled contrasts fail before games.
+
+Every checkpoint meets greedy automatically. `core` adds a round robin;
+including greedy in core is allowed and does not duplicate those automatic
+meetings. `extra` adds explicit pairs; do not repeat core or greedy pairs.
+Contrast pairs must be scheduled checkpoint meetings; their order determines
+the reported subtraction. Greedy remains the rating zero, distinct from the
+named reference opponent.
+
+The run saves the actual specification in `design.json`; reporting needs no
+tournament file. To append the remaining grid cells when their final bytes exist,
+append entrants and core IDs (or extra meetings), then rerun the same command.
+Existing oriented pairs, entrant fields, reference, caveat, contrasts,
+deal seeds, runtime registrations and game bounds must remain unchanged.
+New contrasts may be appended. Changing pair orientation is not an extension:
+it changes action seeds. Completed units retain their files and only missing
+directories are scheduled; failed/unfinished directories remain failures, not
+silent retries. A new invocation has its own explicit wall cap.
+
+The operator owns appending `w32-floor003`, `w128-d4-floor003` and
+`w128-d4-floor010` with their actual seed-10352 receipts. On 2026-10-10,
+Jack Heart relayed that the size-floor grid evaluation was already running on
+the Mini from `18c6ef6f`. Publication does not restart or modify that run.
+
+Validation boundary (2026-10-10): synthetic cross/mirror report goldens match
+`c9c28153`. Jack Heart relayed the operator's regeneration on the Mac Mini,
+using branch `54acf51f` on copies of both retained 2026-10-09 run directories:
+
+- Mirrors: regenerated `report.json` and report text are byte-identical to the
+  originals.
+- Cross: regenerated JSON and text are byte-identical to main `a11d89bd`
+  (the merged mirror-match change). They differ from the original files,
+  produced by pre-mirror runner `83faa3c5`, only by fields already added on
+  main: `decks`, `matchup_mode` and `failed_units` columns.
+
+This establishes no historical report change relative to main, not byte parity
+with the pre-mirror cross originals. The operator-reported evidence resolves
+the publication blocker; it was not independently rerun in this checkout.
+Report regeneration does not rerun games or establish grid strength.
+
+Jack Heart named this concept **Tournament** on 2026-10-10. The public type,
+flag and listing subcommand are `Tournament`, `--tournament` and `tournament`.
+Persisted designs keep the historical `roster` entrant list and `roster_spec`
+specification keys, including new writes. One reader owns specification loading
+for reports and continuation; no frozen run directories need migration.
+Focused synthetic grid report goldens bind the pre-rename runner `dd1ff797`;
+historical default goldens and additive continuation cover both matchup modes.
+No retained Mini games or reports were rewritten during this rename.
