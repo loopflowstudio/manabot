@@ -3014,7 +3014,7 @@ impl PyEnv {
     }
 
     /// Apply the shared semantic Command and return the ordinary acting
-    /// observation needed by Etude presentation and trace consumers.
+    /// observation needed by Academy presentation and trace consumers.
     fn step_semantic_command(
         &self,
         py: Python<'_>,

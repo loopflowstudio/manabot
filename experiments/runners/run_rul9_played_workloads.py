@@ -25,9 +25,9 @@ import managym._managym as native_managym
 import numpy as np
 import psutil
 
-from etude import authored_match_parity as parity, server, trace as trace_store
-from etude.authored_match_receipt import DEFAULT_RECEIPT_PATH
-from etude.replay_index import CanonicalReplayV1
+from academy import authored_match_parity as parity, server, trace as trace_store
+from academy.authored_match_receipt import DEFAULT_RECEIPT_PATH
+from academy.replay_index import CanonicalReplayV1
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.sim.mcts import _mix_seed, determinized_puct
 from manabot.sim.selected_branchdriver_teacher import (
@@ -59,15 +59,15 @@ SOURCE_SINGLETONS = (
     "content/semantic/v1/generated/two_deck.ir.json",
     "content/semantic/v1/learning_schema.json",
     "content/semantic/v1/two_deck.source.json",
-    "etude/authored_match_parity.py",
-    "etude/authored_match_receipt.py",
-    "etude/curated_pack.py",
-    "etude/experience_protocol.py",
-    "etude/presentation.py",
-    "etude/replay_index.py",
-    "etude/semantic_boundary.py",
-    "etude/server.py",
-    "etude/trace.py",
+    "academy/authored_match_parity.py",
+    "academy/authored_match_receipt.py",
+    "academy/curated_pack.py",
+    "academy/experience_protocol.py",
+    "academy/presentation.py",
+    "academy/replay_index.py",
+    "academy/semantic_boundary.py",
+    "academy/server.py",
+    "academy/trace.py",
     "experiments/runners/run_rul9_played_workloads.py",
     "manabot/semantic/compiler.py",
     "manabot/semantic/learning.py",

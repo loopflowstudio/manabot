@@ -1,0 +1,267 @@
+"""
+trace.py
+Trace dataclasses, viewer projection, and SQLite/legacy JSON readers.
+"""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+from typing import Any
+
+import managym
+
+TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
+TRACES_DIR = Path(os.getenv("ACADEMY_TRACES_DIR", "academy/traces"))
+
+
+@dataclass
+class GameConfig:
+    hero_deck: dict[str, int]
+    villain_deck: dict[str, int]
+    villain_type: str
+    seed: int | None = None
+    seed_was_requested: bool = False
+    # Named-deck identifiers ("interactive" / "ur_lessons" / "gw_allies" /
+    # "custom") — recorded so every trace is attributable to an exact matchup.
+    hero_deck_name: str = "custom"
+    villain_deck_name: str = "custom"
+    # Exact installed presentation pack for this oriented matchup. ``None``
+    # keeps legacy/custom games and old traces backwards-compatible.
+    asset_pack: dict[str, str] | None = None
+    # Opponent parameters (recorded in traces so every game is attributable
+    # to an exact opponent configuration).
+    villain_sims: int | None = None  # search: simulations per legal action
+    villain_checkpoint: str | None = None  # checkpoint: path to .pt file
+    villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
+    opponent: dict[str, str] | None = None
+    # Priority-stop configuration at game start (MTGO-style auto-pass).
+    # ``stops`` maps "my"/"opponent" to the stop step names that surface;
+    # None means the server defaults. set_stops updates the live session,
+    # not this record.
+    stops: dict[str, list[str]] | None = None
+    stop_on_stack: bool = True  # always surface when the stack is non-empty
+    auto_pass: bool = True  # master switch; False = surface every window
+    hero_sideboard: dict[str, int] = field(default_factory=dict)
+    villain_sideboard: dict[str, int] = field(default_factory=dict)
+
+    def to_rust(self) -> list[managym.PlayerConfig]:
+        """Rebuild the recorded root with its explicit outside-game copies."""
+        from .curated_pack import curated_pack_for_matchup
+
+        for sideboard in (self.hero_sideboard, self.villain_sideboard):
+            if not isinstance(sideboard, dict) or any(
+                not isinstance(name, str)
+                or not name
+                or type(count) is not int
+                or count <= 0
+                for name, count in sideboard.items()
+            ):
+                raise ValueError("Recorded sideboard requires positive integer counts")
+        pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
+        if pack is not None:
+            if self.asset_pack != pack.reference:
+                raise ValueError("Recorded asset pack differs from the installed setup")
+            for name, deck, sideboard in (
+                (self.hero_deck_name, self.hero_deck, self.hero_sideboard),
+                (self.villain_deck_name, self.villain_deck, self.villain_sideboard),
+            ):
+                expected = pack.player_config(name, name)
+                if deck != expected.decklist or sideboard != expected.sideboard:
+                    raise ValueError(
+                        f"Recorded setup for {name!r} differs from compiled deck/sideboard setup"
+                    )
+        return [
+            managym.PlayerConfig("Hero", self.hero_deck, self.hero_sideboard),
+            managym.PlayerConfig("Villain", self.villain_deck, self.villain_sideboard),
+        ]
+
+
+@dataclass
+class TraceEvent:
+    actor: str
+    observation: dict[str, Any]
+    actions: list[dict[str, Any]]
+    action: int
+    action_description: str
+    reward: float
+    # Authoritative semantic beats caused by this exact engine step. Live play,
+    # replay, and the decision-inspector seam consume these same persisted
+    # objects; no consumer reconstructs them from observation differences.
+    # True when the server auto-passed this priority window (stops system /
+    # F6), False for decisions the human actually clicked. Competency metrics
+    # must not credit auto-passes as deliberate passes.
+    auto: bool = False
+    # Ordered semantic facts committed by the same authority transition. Old
+    # traces omit this field and remain valid because replay treats it as an
+    # empty sequence.
+    presentation: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class Trace:
+    config: GameConfig
+    events: list[TraceEvent]
+    final_observation: dict[str, Any]
+    winner: int | None
+    end_reason: str
+    timestamp: str
+    # Complete mixed-view replay truth. It remains authority-private and is
+    # removed from the established trace API before any redaction mode is
+    # applied. Legacy traces omit it.
+    canonical_replay: dict[str, Any] | None = None
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _trace_path(trace_id: str, trace_dir: Path) -> Path:
+    if not TRACE_ID_PATTERN.fullmatch(trace_id):
+        raise ValueError("Invalid trace id")
+    return trace_dir / f"{trace_id}.json"
+
+
+def load_trace(trace_id: str, trace_dir: Path | None = None) -> dict[str, Any]:
+    target_dir = trace_dir or TRACES_DIR
+    from .attempts import AttemptStore
+
+    recorded = AttemptStore(target_dir / "play.sqlite").load(trace_id)
+    if recorded is not None:
+        return recorded
+    path = _trace_path(trace_id, target_dir)
+    if not path.exists():
+        raise FileNotFoundError(f"Trace not found: {trace_id}")
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return payload
+
+
+def list_trace_summaries(trace_dir: Path | None = None) -> list[dict[str, Any]]:
+    target_dir = trace_dir or TRACES_DIR
+    if not target_dir.exists():
+        return []
+
+    summaries: list[dict[str, Any]] = []
+    for path in target_dir.glob("*.json"):
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except Exception:
+            continue
+
+        if (
+            not isinstance(payload, dict)
+            or not isinstance(payload.get("config"), dict)
+            or not isinstance(payload.get("events"), list)
+            or not isinstance(payload.get("final_observation"), dict)
+        ):
+            continue
+        events = payload["events"]
+        summaries.append(
+            {
+                "id": path.stem,
+                "timestamp": payload.get("timestamp"),
+                "winner": payload.get("winner"),
+                "end_reason": payload.get("end_reason"),
+                "num_events": len(events),
+            }
+        )
+
+    summaries.sort(key=lambda item: str(item.get("timestamp") or ""), reverse=True)
+    return summaries
+
+
+def _redact_hand(player_state: dict[str, Any]) -> None:
+    hand = player_state.get("hand")
+    if not isinstance(hand, list):
+        return
+    zone_counts = player_state.get("zone_counts")
+    if isinstance(zone_counts, dict) and "HAND" in zone_counts:
+        player_state["hand_hidden_count"] = int(zone_counts["HAND"])
+    else:
+        player_state["hand_hidden_count"] = len(hand)
+    player_state["hand"] = []
+
+
+def redact_observation(observation: dict[str, Any]) -> None:
+    """Strip the opponent's hidden information from a serialized observation.
+
+    Mutates in place. Libraries are never serialized (only counts), so the
+    opponent's hand is the only hidden zone to remove.
+    """
+    if not isinstance(observation, dict):
+        return
+
+    opponent = observation.get("opponent")
+    if isinstance(opponent, dict):
+        _redact_hand(opponent)
+        opponent.pop("sideboard", None)
+
+
+def normalize_observation_to_hero(observation: dict[str, Any]) -> None:
+    """Present an observation from the hero's (player 0) perspective.
+
+    Trace events record the raw engine observation, whose perspective is the
+    player to act — villain events are villain-perspective. The replay viewer
+    (and any human-facing payload) renders ``agent`` as the hero, so swap the
+    sides back when needed. Mutates in place; no-op when player_index is
+    missing (e.g. minimal test fixtures).
+    """
+    if not isinstance(observation, dict):
+        return
+    agent = observation.get("agent")
+    opponent = observation.get("opponent")
+    if not isinstance(agent, dict) or not isinstance(opponent, dict):
+        return
+    if agent.get("player_index") == 1 and opponent.get("player_index") == 0:
+        observation["agent"], observation["opponent"] = opponent, agent
+        if observation.get("game_over") and "won" in observation:
+            observation["won"] = not bool(observation["won"])
+
+
+def prepare_trace_payload(
+    payload: dict[str, Any], reveal_hidden: bool = False
+) -> dict[str, Any]:
+    """Normalize a stored trace for the viewer: hero-perspective throughout,
+    with the villain's hand redacted unless ``reveal_hidden``."""
+    prepared = deepcopy(payload)
+    # ``reveal_hidden`` is a legacy post-game observation aid. It never grants
+    # access to the mixed-view canonical authority artifact.
+    prepared.pop("canonical_replay", None)
+    config = prepared.get("config", {})
+    config.pop("villain_checkpoint", None)
+    config.pop("seed", None)
+    reveal_hidden = (
+        reveal_hidden
+        and payload.get("end_reason") == "game_over"
+        and bool(payload.get("final_observation", {}).get("game_over"))
+    )
+
+    observations = [
+        event.get("observation", {}) for event in prepared.get("events", [])
+    ]
+    observations.append(prepared.get("final_observation", {}))
+
+    if not reveal_hidden:
+        for event in prepared.get("events", []):
+            if event.get("actor") == "villain":
+                event["actions"] = []
+                event["action"] = -1
+                event["action_description"] = "Opponent decision"
+
+    for observation in observations:
+        normalize_observation_to_hero(observation)
+        if not reveal_hidden:
+            redact_observation(observation)
+
+    return prepared
+
+
+def redact_trace_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return prepare_trace_payload(payload, reveal_hidden=False)

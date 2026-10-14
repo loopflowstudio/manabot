@@ -1,7 +1,7 @@
 # Selected-match public-commitment parity v1
 
 This checked receipt re-executes the immutable 132-Command UR Lessons versus
-GW Allies authority tape through Etude live WebSocket play, persisted canonical
+GW Allies authority tape through Academy live WebSocket play, persisted canonical
 replay, and direct managym execution. It binds the viewer-safe
 `PublicCommitment` stream, two exact-range `BeliefTracker` histories, one
 materialized revision-29 discard hypothesis, and atomic unsupported/mismatched

@@ -25,7 +25,7 @@ the native extension:
 
 ```bash
 npm --prefix frontend run test:e2e:release -- --update-snapshots
-uv run --no-sync pytest tests/etude/test_release_prompt_matrix.py -q
+uv run --no-sync pytest tests/academy/test_release_prompt_matrix.py -q
 npm --prefix frontend run test:e2e:release
 ```
 

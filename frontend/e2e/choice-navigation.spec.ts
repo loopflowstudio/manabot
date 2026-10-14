@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import positionsJson from '../../etude/fixtures/choice-navigation.json' with { type: 'json' };
+import positionsJson from '../../academy/fixtures/choice-navigation.json' with { type: 'json' };
 import boltJson from '../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 
@@ -116,10 +116,10 @@ test('retained large Learn decision keeps modes, cancellation and all original c
 });
 
 // The review path uses the real backend, the retained legal prefix and ordinary
-// Commands. Set ETUDE_REVIEW_CHOICE to a family and run headed to pause for play.
+// Commands. Set ACADEMY_REVIEW_CHOICE to a family and run headed to pause for play.
 for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
   test(`live retained ${family} can execute an intended choice`, async ({ page }) => {
-    test.skip(Boolean(process.env.ETUDE_REVIEW_CHOICE && process.env.ETUDE_REVIEW_CHOICE !== family));
+    test.skip(Boolean(process.env.ACADEMY_REVIEW_CHOICE && process.env.ACADEMY_REVIEW_CHOICE !== family));
     const position = positions[family];
     await page.addInitScript(config => {
       const state: Window['__choiceNavigation'] = {
@@ -178,7 +178,7 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     );
     expect(actual.offers).toEqual(position.frame.offers);
     expect(actual.projection).toEqual(position.frame.projection);
-    if (process.env.ETUDE_REVIEW_CHOICE === family) {
+    if (process.env.ACADEMY_REVIEW_CHOICE === family) {
       await page.pause();
       return;
     }

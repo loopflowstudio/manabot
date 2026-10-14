@@ -1093,7 +1093,7 @@ def serialize_result(result: ConditionalStrategyResult) -> dict[str, Any]:
     branch receipts. Consumed by INT-12 (the lower-level contract).
 
     ``viewer_safe`` — action distributions, Q-values, uncertainty, and
-    comparison deltas. Consumed by GAM-6 (the Etude Study advisor).
+    comparison deltas. Consumed by GAM-6 (the Academy Study advisor).
     No opponent hands, world labels, or hidden truth appear in this layer.
     """
 

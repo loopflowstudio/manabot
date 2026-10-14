@@ -134,7 +134,7 @@ wheels = [
 ]
 
 [[package]]
-name = "etude-website"
+name = "academy-website"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

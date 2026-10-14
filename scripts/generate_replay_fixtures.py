@@ -11,13 +11,13 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from etude.replay_index import (
+from academy.replay_index import (
     CanonicalReplayV1,
     ReplayDecisionAddress,
     canonical_projection_sha256,
     project_replay,
 )
-from etude.server import GameSession
+from academy.server import GameSession
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = ROOT / "protocol" / "fixtures"

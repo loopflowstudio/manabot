@@ -1,6 +1,6 @@
 """Study export tests for actual replayed Teacher-1 decisions."""
 
-from etude.replay_index import ReplayDecisionAddress
+from academy.replay_index import ReplayDecisionAddress
 from manabot.sim.study_evidence import build_study_artifact
 from manabot.sim.teacher1_evidence import (
     record_teacher_trajectories,

@@ -15,7 +15,7 @@ class DemoSearchPlayer:
     """Run the exact demo policy, including its forced-offer seed behavior."""
 
     def __init__(self, spec: dict[str, Any], seed: int):
-        from etude.villain import SearchVillain
+        from academy.villain import SearchVillain
 
         self.policy = SearchVillain(
             sims=spec["sims"],

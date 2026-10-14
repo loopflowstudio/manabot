@@ -11,7 +11,7 @@ from pathlib import Path
 import sys
 from typing import Any, Mapping, Sequence
 
-from etude import authored_match_parity, public_commitment_parity
+from academy import authored_match_parity, public_commitment_parity
 from experiments.runners import run_rul9_played_workloads as rul9
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,7 +22,7 @@ EXPERIMENT_ID = "rul-12-release-stack-budget-v1"
 SCHEMA_VERSION = 1
 
 SOURCE_SINGLETONS = set(rul9.SOURCE_SINGLETONS) | {
-    "etude/public_commitment_parity.py",
+    "academy/public_commitment_parity.py",
     "experiments/contracts/rul-12-release-stack-budget-v1.json",
     "experiments/runners/run_rul12_release_stack_budget.py",
     "manabot/belief/likelihood.py",

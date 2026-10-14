@@ -12,5 +12,5 @@ uv run --extra dev pytest -q \
   tests/semantic/test_decision_contract.py \
   tests/belief/test_player.py \
   tests/belief/test_tracker.py \
-  tests/etude/test_public_commitment_parity.py
-uv run --extra dev python -m etude.public_commitment_parity verify
+  tests/academy/test_public_commitment_parity.py
+uv run --extra dev python -m academy.public_commitment_parity verify

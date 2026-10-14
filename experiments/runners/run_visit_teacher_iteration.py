@@ -32,7 +32,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from etude.study_protocol import StudyArtifact
+from academy.study_protocol import StudyArtifact
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import AgentSpec
 from manabot.model.agent import Agent
@@ -101,7 +101,7 @@ def _iteration_runtime(seed: int) -> dict[str, Any]:
         REPO_ROOT / "manabot" / "sim" / "study_evidence.py",
         REPO_ROOT / "manabot" / "sim" / "search_supervised.py",
         REPO_ROOT / "manabot" / "sim" / "distill.py",
-        REPO_ROOT / "etude" / "study_protocol.py",
+        REPO_ROOT / "academy" / "study_protocol.py",
         REPO_ROOT / "protocol" / "study-v1.schema.json",
         REPO_ROOT / "managym" / "src" / "bin" / "validate_study_artifact.rs",
     ]

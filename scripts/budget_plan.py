@@ -25,7 +25,7 @@ CONSUMERS = {
     "setup": "ETU-79 corrected-world binding and device smoke",
     "generation": "manabot.sim.selected_branchdriver_teacher.run_teacher_game",
     "training": "manabot.sim.search_supervised.train_search_supervised",
-    "export": "manabot.sim.distill.save_bc_checkpoint -> etude.villain.CheckpointVillain",
+    "export": "manabot.sim.distill.save_bc_checkpoint -> academy.villain.CheckpointVillain",
     "evaluation": "manabot.arena.match.play_cell (ETU-79 selected-match binding required)",
 }
 

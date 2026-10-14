@@ -19,7 +19,7 @@ no preference or approval by Jack Heart is implied.
 
 ## Retained positions and coverage
 
-[The fixture](../etude/fixtures/choice-navigation.json) pins source commit,
+[The fixture](../academy/fixtures/choice-navigation.json) pins source commit,
 configuration, every prefix offer ID/label, native digest and full viewer frame.
 These are actual ordinary GameSession positions in UR Lessons versus GW Allies,
 with Random opponents and auto-pass off. They are newly captured software
@@ -50,14 +50,14 @@ After `./scripts/play` has installed the locked local runtime, stop that instanc
 Run from the repository root (choose unused ports):
 
 ```bash
-ETUDE_REVIEW_CHOICE=CHOOSE_TARGET ETUDE_API_PORT=8147 ETUDE_FRONTEND_PORT=5347 \
-  ETUDE_TRACES_DIR=/tmp/etude-choice-review ETUDE_PLAY_RECORD_ORIGIN=automated_validation \
+ACADEMY_REVIEW_CHOICE=CHOOSE_TARGET ACADEMY_API_PORT=8147 ACADEMY_FRONTEND_PORT=5347 \
+  ACADEMY_TRACES_DIR=/tmp/academy-choice-review ACADEMY_PLAY_RECORD_ORIGIN=automated_validation \
   npm --prefix frontend run test:e2e -- choice-navigation.spec.ts --headed -g 'live retained'
 ```
 
 The test replays the retained prefix through the real server and pauses with the
 nine-target decision ready. Play in that browser while the inspector is paused;
-resume the inspector to finish. Repeat with `ETUDE_REVIEW_CHOICE=DISCARD` for the
+resume the inspector to finish. Repeat with `ACADEMY_REVIEW_CHOICE=DISCARD` for the
 eight-card cleanup. These sandbox attempts have automated provenance because
 the prefix is scripted; they do not count as a human completion cohort.
 The ordinary `./scripts/play --demo learn` path remains the Learn walkthrough.

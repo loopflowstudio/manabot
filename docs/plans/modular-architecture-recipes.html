@@ -130,12 +130,12 @@ is useful for authority but is not a reliable inventory of today's implementatio
 </tbody>
 </table>
 <h3 id="play-and-trace-ownership-checked-before-proposing-persistence">Play and trace ownership checked before proposing persistence</h3>
-<p><code>etude/server.py:GameSession</code> owns live prompts, revisions, canonical decision
+<p><code>academy/server.py:GameSession</code> owns live prompts, revisions, canonical decision
 rows and retained roots. <code>_step</code> makes automatic Commands but only appends
 canonical decision rows when <code>auto</code> is false. <code>TraceEvent.auto</code> distinguishes
 server passes from deliberate decisions. <code>_persist_attempt</code> writes current trace
 and canonical replay through <code>AttemptStore</code> in <code>play.sqlite</code>. The table DTOs in
-<code>etude/experience_protocol.py</code> follow the Rust-owned experience schema.</p>
+<code>academy/experience_protocol.py</code> follow the Rust-owned experience schema.</p>
 <p>Keep those owners. Architecture metadata belongs in existing artifact and player
 identity records, not a new session log. Canonical historical decisions alone
 are not a complete execution tape or a neural-memory snapshot. This inspection

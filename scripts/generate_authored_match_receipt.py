@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from etude.authored_match_receipt import (
+from academy.authored_match_receipt import (
     DEFAULT_RECEIPT_PATH,
     write_or_check_authored_match_receipt,
 )

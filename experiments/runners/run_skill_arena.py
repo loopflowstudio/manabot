@@ -101,7 +101,7 @@ def arena_runtime_fingerprints(**kwargs) -> dict[str, Any]:
 def registration_source_paths(registration: PlayerRegistration) -> list[str]:
     kind = registration.player_spec["kind"]
     if kind == "demo_search":
-        return ["etude/villain.py", "manabot/arena/players.py"]
+        return ["academy/villain.py", "manabot/arena/players.py"]
     if kind == "scripted_greedy":
         return ["manabot/arena/players.py"]
     if kind == "determinized_puct":
@@ -1949,7 +1949,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     """Bounded instrument proof on authored Allies/Lessons, without promotion."""
     import math
 
-    from etude.villain import (
+    from academy.villain import (
         DEFAULT_MAX_PLAYOUT_STEPS,
         DEFAULT_ROLLOUTS_PER_WORLD,
         DEFAULT_SEARCH_SIMS,
@@ -2007,7 +2007,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             "rollouts_per_world": DEFAULT_ROLLOUTS_PER_WORLD,
             "max_steps": DEFAULT_MAX_PLAYOUT_STEPS,
         },
-        source_sha256=source_digest(["etude/villain.py", "manabot/arena/players.py"]),
+        source_sha256=source_digest(["academy/villain.py", "manabot/arena/players.py"]),
     )
     candidate = (
         candidate
@@ -2029,9 +2029,9 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
                 str(path.relative_to(REPO_ROOT))
                 for path in (REPO_ROOT / "manabot").rglob("*.py")
             ],
-            "etude/villain.py",
-            "etude/server.py",
-            "etude/experience_protocol.py",
+            "academy/villain.py",
+            "academy/server.py",
+            "academy/experience_protocol.py",
             "experiments/runners/run_skill_arena.py",
             "uv.lock",
         }

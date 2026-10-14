@@ -1,4 +1,4 @@
-"""Etude Fantasia landing site.
+"""Academy landing site.
 
 A single leaf in the Sepia Etude language: parchment grounds, three inks,
 bronze display serif, one Mountain-red action, and the WUBRG weave as the
@@ -51,7 +51,7 @@ app, rt = fast_app(
         Meta(charset="utf-8"),
         Meta(name="viewport", content="width=device-width, initial-scale=1"),
         Meta(name="description", content=DESCRIPTION),
-        Meta(property="og:title", content="Etude Fantasia"),
+        Meta(property="og:title", content="Academy"),
         Meta(property="og:description", content=DESCRIPTION),
         Meta(property="og:image", content=f"{BASE_URL}/static/board-developed.png"),
         Meta(property="og:url", content=BASE_URL + "/"),
@@ -99,7 +99,7 @@ def Masthead(hero):
         Weave(),
         Nav(
             Div(
-                Span("Etude Fantasia", cls="brand"),
+                Span("Academy", cls="brand"),
                 Pips(),
                 cls="brand-group",
             ),
@@ -110,7 +110,7 @@ def Masthead(hero):
                         href=hero["repo_url"],
                         target="_blank",
                         rel="noopener noreferrer",
-                        **{"aria-label": "Etude Fantasia on GitHub (opens in new tab)"},
+                        **{"aria-label": "Academy on GitHub (opens in new tab)"},
                     )
                 ),
                 Li(A("Play", href=hero["play_url"], cls="btn btn-primary")),
@@ -219,7 +219,7 @@ def Colophon(colophon):
     return Footer(
         Div(
             Div(
-                P("Etude Fantasia", cls="colophon-title"),
+                P("Academy", cls="colophon-title"),
                 P(colophon["identity"], cls="colophon-identity"),
                 P(
                     A(
@@ -234,7 +234,7 @@ def Colophon(colophon):
                 ),
             ),
             P(
-                "Etude Fantasia is unofficial Fan Content permitted under the ",
+                "Academy is unofficial Fan Content permitted under the ",
                 A(
                     "Wizards of the Coast Fan Content Policy",
                     href=colophon["fan_content_policy_url"],

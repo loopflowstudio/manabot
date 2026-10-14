@@ -1,6 +1,6 @@
 """Hosted play entrypoint: the experience server plus the built frontend.
 
-Wraps etude.server's FastAPI app and mounts the static SPA build so the
+Wraps academy.server's FastAPI app and mounts the static SPA build so the
 client, /api, and /ws/play share one origin — the same shape ./scripts/play
 gives locally via the Vite proxy.
 """
@@ -11,9 +11,9 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
-from etude.server import app
+from academy.server import app
 
-BUILD_DIR = Path(os.environ.get("ETUDE_FRONTEND_BUILD", "/app/frontend/build"))
+BUILD_DIR = Path(os.environ.get("ACADEMY_FRONTEND_BUILD", "/app/frontend/build"))
 
 
 class SpaStaticFiles(StaticFiles):

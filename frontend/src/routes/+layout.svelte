@@ -19,7 +19,7 @@
 </script>
 
 <svelte:head>
-  <title>Etude Fantasia</title>
+  <title>Academy</title>
 </svelte:head>
 
 <div class="flex min-h-screen flex-col text-ink">
@@ -41,7 +41,7 @@
   >
     <div class="mx-auto flex w-full max-w-[1600px] items-center justify-between px-4 py-3">
       <div class="flex items-baseline gap-3">
-        <div data-testid="brand-name" class="type-brand text-[#f8f1e0]">Etude Fantasia</div>
+        <div data-testid="brand-name" class="type-brand text-[#f8f1e0]">Academy</div>
         <div class="type-rubric hidden text-[#f8f1e0]/65 sm:block">Play · replay · study</div>
       </div>
       <nav class="flex items-center gap-2">
@@ -71,7 +71,7 @@
   <footer class="mt-10 border-t border-line">
     <div class="mx-auto grid w-full max-w-[1400px] gap-x-12 gap-y-6 px-4 py-8 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,22rem)]">
       <div>
-        <div class="type-title text-display">Etude Fantasia</div>
+        <div class="type-title text-display">Academy</div>
         <p class="type-caption mt-1 max-w-[48ch] text-ink-2">
           An étude in studying Magic: play a manabot, replay every decision,
           and annotate the score.
@@ -86,7 +86,7 @@
         </ul>
       </nav>
       <p class="type-caption text-ink-3">
-        Etude Fantasia is unofficial Fan Content permitted under the
+        Academy is unofficial Fan Content permitted under the
         <a
           class="underline underline-offset-2 hover:text-ink"
           href="https://company.wizards.com/en/legal/fancontentpolicy"

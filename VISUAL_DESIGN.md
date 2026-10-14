@@ -1,6 +1,6 @@
-# Etude Fantasia Visual Design System — Sepia Etude
+# Academy Visual Design System — Sepia Etude
 
-The design contract for Etude Fantasia's player-facing surfaces. It
+The design contract for Academy's player-facing surfaces. It
 describes one visual language in three artifacts: **the Sheet** (Play),
 **the Plate** (the card), and **the Score** (Replay, and Study as it
 grows). `frontend/src/app.css` is the single source of truth for every

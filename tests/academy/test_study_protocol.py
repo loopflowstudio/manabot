@@ -1,0 +1,227 @@
+"""Cross-language and privacy conformance for study artifact v1."""
+
+from copy import deepcopy
+import json
+from pathlib import Path
+
+from jsonschema import Draft202012Validator
+from pydantic import ValidationError
+import pytest
+
+from academy.replay_index import (
+    CanonicalReplayProjectionV1,
+    DecisionAddressV2,
+    ReplayDecisionAddress,
+    canonical_projection_sha256,
+)
+from academy.study_protocol import (
+    KnowledgeScope,
+    RecordedDecisionInput,
+    StudyArtifact,
+    StudyDecisionIndex,
+)
+
+PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
+FIXTURE = json.loads(
+    (PROTOCOL_DIR / "fixtures" / "study-curated-decision.json").read_text(
+        encoding="utf-8"
+    )
+)
+SOURCE_REPLAY = json.loads(
+    (PROTOCOL_DIR / "fixtures" / "canonical-replay-player-0.json").read_text(
+        encoding="utf-8"
+    )
+)
+RUST_SCHEMA = json.loads(
+    (PROTOCOL_DIR / "study-v1.schema.json").read_text(encoding="utf-8")
+)
+RUST_VALIDATOR = Draft202012Validator(RUST_SCHEMA)
+PYTHON_SCHEMA = StudyArtifact.model_json_schema()
+
+STRUCT_MODELS = (
+    "AnalysisBudgetIdentity",
+    "ContentPackIdentity",
+    "DecisionAlternative",
+    "DecisionEvidence",
+    "EngineIdentity",
+    "EvidenceProvenance",
+    "ModelIdentity",
+    "PolicyMass",
+    "SampledWorldRobustness",
+    "SearchValue",
+    "StudyIdentity",
+    "StudyLandmark",
+    "UncertaintyEvidence",
+    "VisitCount",
+)
+
+
+def _shape(schema: dict) -> tuple[set[str], set[str]]:
+    return set(schema.get("properties", {})), set(schema.get("required", []))
+
+
+def _secret_card() -> dict:
+    return {
+        "id": 99,
+        "registry_key": 99,
+        "name": "Secret Counterspell",
+        "zone": "HAND",
+        "owner_id": 0,
+        "power": 0,
+        "toughness": 0,
+        "mana_value": 2,
+        "types": {
+            "is_creature": False,
+            "is_land": False,
+            "is_spell": True,
+            "is_artifact": False,
+            "is_enchantment": False,
+            "is_planeswalker": False,
+            "is_battle": False,
+        },
+    }
+
+
+def test_python_round_trips_shared_historical_decision_and_distinct_evidence():
+    Draft202012Validator.check_schema(RUST_SCHEMA)
+    RUST_VALIDATOR.validate(FIXTURE)
+    artifact = StudyArtifact.model_validate(FIXTURE)
+
+    assert artifact.model_dump(mode="json", exclude_unset=True) == FIXTURE
+    assert artifact.identity.source_replay_sha256 == canonical_projection_sha256(
+        CanonicalReplayProjectionV1.model_validate(SOURCE_REPLAY)
+    )
+    landmark = artifact.landmarks[0]
+    address = ReplayDecisionAddress.parse(landmark.decision_id)
+    source_row = next(
+        row for row in SOURCE_REPLAY["decisions"] if row["ordinal"] == address.ordinal
+    )
+    assert (
+        landmark.frame.model_dump(mode="json", exclude_unset=True)
+        == source_row["frame"]
+    )
+    assert landmark.played.model_dump(mode="json") == source_row["command"]
+    assert (
+        next(offer for offer in landmark.frame.offers if offer.id == landmark.offer_id)
+        == landmark.offer
+    )
+    assert landmark.played.offer_id == landmark.offer_id
+    assert {row.alternative for row in landmark.evidence.policy_mass} == {
+        alternative.id for alternative in landmark.alternatives
+    }
+    assert landmark.evidence.policy_mass is not landmark.evidence.search_value
+    assert landmark.evidence.visits is not landmark.evidence.uncertainty
+
+
+def test_python_study_shapes_match_rust_generated_schema():
+    assert _shape(RUST_SCHEMA) == _shape(PYTHON_SCHEMA)
+    for name in STRUCT_MODELS:
+        assert _shape(RUST_SCHEMA["$defs"][name]) == _shape(
+            PYTHON_SCHEMA["$defs"][name]
+        ), name
+    assert [
+        variant["const"] for variant in RUST_SCHEMA["$defs"]["KnowledgeScope"]["oneOf"]
+    ] == [value.value for value in KnowledgeScope]
+
+
+def _precommand_artifact() -> dict:
+    artifact = deepcopy(FIXTURE)
+    projection = CanonicalReplayProjectionV1.model_validate(SOURCE_REPLAY)
+    for landmark in artifact["landmarks"]:
+        previous = ReplayDecisionAddress.parse(landmark["decision_id"])
+        row = next(
+            row for row in projection.decisions if row.ordinal == previous.ordinal
+        )
+        landmark["decision_id"] = DecisionAddressV2.from_decision(
+            projection, row
+        ).serialize()
+    return artifact
+
+
+def test_precommand_study_address_is_independent_of_command_id():
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    address = landmark["decision_id"]
+    landmark["played"]["command_id"] = "another-command-at-the-same-decision"
+
+    validated = StudyArtifact.model_validate(artifact)
+
+    assert validated.landmarks[0].decision_id == address
+    RUST_VALIDATOR.validate(artifact)
+
+
+@pytest.mark.parametrize("field", ["frame_hash", "decision_sha256", "replay_id"])
+def test_precommand_study_rejects_address_drift(field):
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    address = DecisionAddressV2.parse(landmark["decision_id"])
+    landmark["decision_id"] = address.model_copy(update={field: "0" * 64}).serialize()
+
+    with pytest.raises(ValidationError, match="replay decision address drifted"):
+        StudyArtifact.model_validate(artifact)
+
+
+def test_precommand_study_still_binds_played_command_to_selected_offer():
+    artifact = _precommand_artifact()
+    landmark = artifact["landmarks"][0]
+    landmark["played"]["offer_id"] = next(
+        offer["id"]
+        for offer in landmark["frame"]["offers"]
+        if offer["id"] != landmark["offer_id"]
+    )
+
+    with pytest.raises(ValidationError, match="command identity drifted"):
+        StudyArtifact.model_validate(artifact)
+
+
+def test_default_study_evidence_rejects_opponent_private_hand_identity():
+    invalid = deepcopy(FIXTURE)
+    invalid["landmarks"][0]["frame"]["projection"]["opponent"]["hand"] = [
+        _secret_card()
+    ]
+
+    # The reusable transitional ExperienceFrame can represent a hand. The
+    # StudyArtifact's cross-field privacy validator closes that wider shape.
+    RUST_VALIDATOR.validate(invalid)
+    with pytest.raises(ValidationError, match="opponent-private hand"):
+        StudyArtifact.model_validate(invalid)
+
+
+@pytest.mark.parametrize(
+    "fixture,model,rows",
+    [
+        ("canonical-replay-player-0.json", CanonicalReplayProjectionV1, "decisions"),
+        ("study-curated-decision.json", StudyArtifact, "landmarks"),
+        ("recorded-match-decisions-curated.json", RecordedDecisionInput, "decisions"),
+        ("study-decision-index-curated.json", StudyDecisionIndex, "decisions"),
+    ],
+)
+def test_recorded_boundaries_reject_opponent_sideboard_candidates(fixture, model, rows):
+    payload = json.loads((PROTOCOL_DIR / "fixtures" / fixture).read_text())
+    opponent = payload[rows][0]["frame"]["projection"]["opponent"]
+    model.model_validate(payload)
+    # Open decklists expose definitions, never the owner's copy candidates.
+    opponent["sideboard"] = [
+        {
+            "candidate_id": 83,
+            "owner_id": opponent["id"],
+            "registry_key": 7,
+            "name": "Accumulate Wisdom",
+        }
+    ]
+    with pytest.raises(ValidationError, match="sideboard candidates"):
+        model.model_validate(payload)
+
+
+def test_default_study_evidence_rejects_rng_secrets_and_binding_drift():
+    rng_secret = deepcopy(FIXTURE)
+    rng_secret["landmarks"][0]["evidence"]["provenance"]["rng_seed"] = 377
+    assert list(RUST_VALIDATOR.iter_errors(rng_secret))
+    with pytest.raises(ValidationError):
+        StudyArtifact.model_validate(rng_secret)
+
+    prompt_drift = deepcopy(FIXTURE)
+    prompt_drift["landmarks"][0]["prompt_id"] = 26
+    RUST_VALIDATOR.validate(prompt_drift)
+    with pytest.raises(ValidationError, match="viewer, prompt, or offer binding"):
+        StudyArtifact.model_validate(prompt_drift)

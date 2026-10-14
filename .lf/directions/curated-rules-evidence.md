@@ -21,7 +21,7 @@ well as recorded seat labels when evaluating those callers.
 
 When a rules change reveals a card entering a hidden zone, inspect both
 `Game::determinize` and `PossibleWorldSpace` as consumers of that information.
-An event rendered correctly in Etude does not establish search correctness.
+An event rendered correctly in Academy does not establish search correctness.
 Event subject IDs have typed domains: a Definition subject already names its
 definition and must bypass object-to-definition lookup. Numeric collisions
 between card objects and definitions otherwise produce plausible wrong evidence.

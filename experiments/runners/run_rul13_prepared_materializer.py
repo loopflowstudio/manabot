@@ -81,7 +81,7 @@ def _root_at_ordinal() -> tuple[managym.Env, Mapping[str, Any], Mapping[str, Any
     contract = load_contract(V1_CONTRACT)
     trace, public_provider = _load_inputs(contract)
     env = managym.Env(seed=int(contract["cohort"]["game_seed"]))
-    from etude import server
+    from academy import server
 
     env.reset(
         [
@@ -129,7 +129,7 @@ def _expect_rejection(call, fragment: str) -> str:
 
 def measure() -> dict[str, Any]:
     root, trace, public_provider = _root_at_ordinal()
-    from etude.public_commitment_parity import build_receipt
+    from academy.public_commitment_parity import build_receipt
 
     # Replay the actual live/headless/persisted boundaries with this extension.
     # Keep the previous immutable receipt as a reference, never rewrite it.

@@ -77,11 +77,11 @@ Build and serve the same SPA/ASGI entrypoint as the hosted app, locally:
 
 ```sh
 npm --prefix frontend ci
-ETUDE_STATIC_BUILD=1 npm --prefix frontend run build
-ETUDE_PLAY_CANDIDATE="$PWD/.runs/my-challenger/candidate.json" \
-ETUDE_FRONTEND_BUILD="$PWD/frontend/build" \
-ETUDE_TRACES_DIR="$PWD/.runs/human-play" \
-ETUDE_PLAY_RECORD_ORIGIN=human_exploratory \
+ACADEMY_STATIC_BUILD=1 npm --prefix frontend run build
+ACADEMY_PLAY_CANDIDATE="$PWD/.runs/my-challenger/candidate.json" \
+ACADEMY_FRONTEND_BUILD="$PWD/frontend/build" \
+ACADEMY_TRACES_DIR="$PWD/.runs/human-play" \
+ACADEMY_PLAY_RECORD_ORIGIN=human_exploratory \
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 uv run uvicorn deploy.play.asgi:app --host 127.0.0.1 --port 8000
 ```
@@ -160,7 +160,7 @@ uv run python -m experiments.runners.run_skill_arena evaluate-matchup \
 ```
 
 Without a candidate registration this runs Random against the shipped default
-demo Search-64. It calls `etude.villain.SearchVillain` itself: 64 simulations
+demo Search-64. It calls `academy.villain.SearchVillain` itself: 64 simulations
 per legal action, four rollouts per world, 2,000-step playout cap, deterministic
 first-maximum selection, CPU, one worker and one Torch thread. The baseline
 registration pins the policy source bytes; the protocol additionally pins the
@@ -246,7 +246,7 @@ public human IDs; bot identities come from the configured artifact's optional
 lineage retain an identity for their exact digest; we do not guess lineage from
 similar names. New local challenger exports declare `etude:local-challenger`.
 
-Declare record origin when launching the server with `ETUDE_PLAY_RECORD_ORIGIN`:
+Declare record origin when launching the server with `ACADEMY_PLAY_RECORD_ORIGIN`:
 `human_exploratory`, `automated_validation`, `bot_evaluation`, or `training`.
 The default is `unknown`. This is operator-supplied provenance, not automatic
 human detection; do not use a human-labeled server for automated proof runs.
@@ -265,5 +265,5 @@ are typed summary data; private traces, credentials and deal seeds are absent.
 credentials still work. Listing is not mutation or private replay permission.
 
 For a separate built preview without replacing another running server's assets,
-set `ETUDE_FRONTEND_BUILD` to a fresh absolute output path for both the static
-build and ASGI launch. Use a separate `ETUDE_TRACES_DIR` and port as well.
+set `ACADEMY_FRONTEND_BUILD` to a fresh absolute output path for both the static
+build and ASGI launch. Use a separate `ACADEMY_TRACES_DIR` and port as well.

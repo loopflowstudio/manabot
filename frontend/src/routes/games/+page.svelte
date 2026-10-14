@@ -95,7 +95,7 @@
   }
 </script>
 
-<svelte:head><title>Games · Etude Fantasia</title></svelte:head>
+<svelte:head><title>Games · Academy</title></svelte:head>
 
 <main class="mx-auto max-w-[1400px] px-4 py-8">
   <header class="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">

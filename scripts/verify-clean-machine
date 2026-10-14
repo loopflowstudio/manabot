@@ -8,7 +8,7 @@ cd "$ROOT" || exit 1
 proof_error() {
   code=$1
   message=$2
-  printf 'ETUDE_CLEAN_PROOF_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
+  printf 'ACADEMY_CLEAN_PROOF_ERROR {"schema_version":1,"code":"%s","message":"%s"}\n' \
     "$code" "$message" >&2
   exit 2
 }
@@ -36,8 +36,8 @@ fi
 mkdir -p .cache/clean-machine
 log=$ROOT/.cache/clean-machine/launch.log
 receipt=$ROOT/.cache/clean-machine/proof.json
-api_port=${ETUDE_CLEAN_API_PORT:-18011}
-frontend_port=${ETUDE_CLEAN_FRONTEND_PORT:-15183}
+api_port=${ACADEMY_CLEAN_API_PORT:-18011}
+frontend_port=${ACADEMY_CLEAN_FRONTEND_PORT:-15183}
 start_ms=$(uv run --no-project --python 3.12 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
   proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
@@ -51,12 +51,12 @@ launcher_pid=$!
 proof_pid=
 
 start_browser_proof() {
-  ETUDE_EXTERNAL_SERVERS=1 \
-  ETUDE_API_PORT=$api_port \
-  ETUDE_FRONTEND_PORT=$frontend_port \
-  ETUDE_CLEAN_START_MS=$start_ms \
-  ETUDE_CLEAN_RECEIPT=$receipt \
-  ETUDE_LAUNCH_LOG=$log \
+  ACADEMY_EXTERNAL_SERVERS=1 \
+  ACADEMY_API_PORT=$api_port \
+  ACADEMY_FRONTEND_PORT=$frontend_port \
+  ACADEMY_CLEAN_START_MS=$start_ms \
+  ACADEMY_CLEAN_RECEIPT=$receipt \
+  ACADEMY_LAUNCH_LOG=$log \
     npm --prefix frontend run test:e2e -- clean-machine.spec.ts &
   proof_pid=$!
 }
@@ -85,7 +85,7 @@ cleanup() {
 }
 trap cleanup 0 HUP INT TERM
 
-while ! grep -q '^ETUDE_PLAY_READY ' "$log" 2>/dev/null; do
+while ! grep -q '^ACADEMY_PLAY_READY ' "$log" 2>/dev/null; do
   if ! kill -0 "$launcher_pid" 2>/dev/null; then
     cat "$log" >&2
     proof_error proof.launch "./scripts/play exited before readiness"
@@ -97,7 +97,7 @@ while ! grep -q '^ETUDE_PLAY_READY ' "$log" 2>/dev/null; do
   # npm's locked install completes independently of the native build. Prepare
   # Chromium now; the browser scenario waits for the launcher's ready record.
   if [ -z "$proof_pid" ] && \
-      [ -f frontend/node_modules/.etude-package-lock.sha256 ]; then
+      [ -f frontend/node_modules/.academy-package-lock.sha256 ]; then
     start_browser_proof
   fi
   sleep 0.1

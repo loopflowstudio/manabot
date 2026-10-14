@@ -5,10 +5,10 @@ These dataclasses parse the canonical JSON produced by the PyO3 methods
 ``Env.execute_semantic_command_json`` (see ``managym/src/decision.rs``).
 
 This is the cross-package contract surface for docs/ARCHITECTURE.md step 1 /
-Rules R1: manabot (agent/search) and etude (experience) both consume it so
+Rules R1: manabot (agent/search) and academy (experience) both consume it so
 the two sides share one revision-bound, viewer-safe, fail-closed authority.
 Positional action indices and offer decoding remain private to Rust; match
-identity stays Etude-owned; possible-world semantics (RUL-8) are not here.
+identity stays Academy-owned; possible-world semantics (RUL-8) are not here.
 """
 
 from __future__ import annotations

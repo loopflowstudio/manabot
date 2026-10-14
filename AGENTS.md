@@ -2,21 +2,34 @@ Never add "Co-Authored by:" tags in commits
 
 ## Naming
 
-- **Etude Fantasia** — the full project name and the product experience.
-- **Etude** — the short name wherever brevity or machine identity matters:
-  repository, service namespaces, and ordinary prose after first mention.
-  Always ASCII (never "Étude").
-- **manabot** — the agent, and the Python training library/CLI. Indefinite
+- **Fantasia** — the whole project, and this repository
+  (`loopflowstudio/fantasia`). It replaces "Etude Fantasia" as the project
+  name.
+- **Academy** — the web app players use: the `academy` package, the frontend,
+  the website, and their service namespaces. Say just "Academy" on anything a
+  player sees.
+- **manabot** — the bot, and the Python training library/CLI. Indefinite
   noun: you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
+- **Etude** — the launching and experiment system, built in the private
+  `loopflowstudio/etude` repository. The import name `etude` and the
+  `ETUDE_URL` / `ETUDE_TOKEN_FILE` variables belong to it, never to the app.
+  Always ASCII (never "Étude").
+
+Jack Heart set this model on 2026-10-13, "for now".
 
 Boundary rule for anything those lines don't settle: if it faces the player,
-it is Etude; if it trains or evaluates the agent, it is manabot; if it is the
-world, it is managym. So the play server, experience protocol, curated packs,
-and their env/error namespaces (`ETUDE_PLAY_*`) take Etude names, while
-training infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config
-vars) correctly keeps manabot names. Frozen evidence — experiment IDs,
-contracts, receipts, wandb history — is never renamed.
+it is Academy; if it trains or evaluates the agent, it is manabot; if it is the
+world, it is managym; if it launches or records experiments, it is Etude. So
+the play server, experience protocol, curated packs, and their env/error
+namespaces (`ACADEMY_PLAY_*`) take Academy names, while training
+infrastructure (wandb project, presets, ops jobs, `MANABOT_*` config vars)
+correctly keeps manabot names. Frozen evidence — experiment IDs, contracts,
+receipts, wandb history — is never renamed, and neither are the compatibility
+surfaces that predate the Academy name: the `etude.gg` domain, the
+`x-etude-*` wire headers, `etude.*` browser storage keys and schema
+identifiers, and the hosted service names. "Sepia Etude" remains the name of
+the visual language.
 
 ## Style
 

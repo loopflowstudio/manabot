@@ -1,4 +1,4 @@
-# Etude Fantasia fonts
+# Academy fonts
 
 These are the same files bundled by Loopflow's Swift application:
 

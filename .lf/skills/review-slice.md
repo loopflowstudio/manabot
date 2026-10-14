@@ -1,4 +1,4 @@
-# Etude play-record review
+# Academy play-record review
 
 After changing GameSession persistence, run presentation and Study runtime
 integration checks as well as attempt-store checks. Their source-immutability
@@ -20,6 +20,6 @@ the environment and policy; matching initial hands alone misses policy drift.
 Shared history needs separate listing, replay and feedback permission checks.
 Exercise two browser identities, both seats and incomplete attempts; apply
 visibility before pagination. Human seat metadata does not prove human play:
-automated runs must declare `ETUDE_PLAY_RECORD_ORIGIN=automated_validation`.
+automated runs must declare `ACADEMY_PLAY_RECORD_ORIGIN=automated_validation`.
 Retain the accepted privacy and future data-consumer boundaries in
 `docs/evidence/trained-challenger-2026-09-25.md` when evaluating later changes.

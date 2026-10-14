@@ -91,8 +91,8 @@ Focused reproduction commands (from the repository root unless noted):
 cargo test --manifest-path managym/Cargo.toml --test rules_tests ur_lessons_increment
 cargo test --manifest-path managym/Cargo.toml --test rules_tests cr_514
 cargo test --manifest-path managym/Cargo.toml --lib observation_encoder
-uv run pytest tests/etude/test_ur_lessons_increment.py tests/semantic/test_decision_contract.py tests/env/test_observation.py -q
-uv run pytest tests/etude/test_experience_protocol.py tests/etude/test_study_protocol.py -q
+uv run pytest tests/academy/test_ur_lessons_increment.py tests/semantic/test_decision_contract.py tests/env/test_observation.py -q
+uv run pytest tests/academy/test_experience_protocol.py tests/academy/test_study_protocol.py -q
 uv run pytest tests/arena/test_match.py -k selected -q
 uv run pytest tests/sim/test_train_challenger.py -q
 # In frontend/:

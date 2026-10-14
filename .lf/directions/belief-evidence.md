@@ -22,6 +22,6 @@ integration selection does not include the belief suite. Preserve exact
 marginal bytes and encoding receipts when optimizing projection; compare
 prior, conditioned, and nonuniform sparse distributions at a native root.
 Checkpoint or source-binding changes also require
-`uv run pytest tests/etude/test_belief_advisor.py tests/etude/test_live_advice.py -q`:
+`uv run pytest tests/academy/test_belief_advisor.py tests/academy/test_live_advice.py -q`:
 these consumers bind frozen source/checkpoint artifacts. Preserve the evidence
 and report typed unavailability when those artifacts are no longer admissible.

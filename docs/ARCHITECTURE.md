@@ -1,6 +1,6 @@
-# Etude Fantasia architecture
+# Fantasia architecture
 
-This is the top-down architecture for Etude Fantasia, manabot, and managym.
+This is the top-down architecture for Academy, manabot, and managym.
 It names the central data structures, assigns one owner to each kind of truth,
 and states the contracts that play, replay, search, learning, evaluation, and
 Study must share.
@@ -18,7 +18,7 @@ review:
 > making queries on it to filter possible worlds.”
 
 The intended product proof is simple to describe: at a historical decision,
-Etude can show the complete play distribution under the baseline belief, “they
+Academy can show the complete play distribution under the baseline belief, “they
 have Lightning Bolt,” and “they have no lands,” while preserving the exact
 rules position and never revealing which condition is actually true.
 
@@ -51,7 +51,7 @@ rules position and never revealing which condition is actually true.
                                       v        v         v
                                     shards   arena   Study evidence
 
-                            player experience (Etude)
+                            player experience (Academy)
 
              transport + interaction drafts + presentation + explanation
 ```
@@ -66,7 +66,7 @@ The ownership rule follows the repository's naming boundary:
   worlds, search, policy/value models, teacher evidence, datasets,
   checkpoints, self-play, opponent selection, evaluation, and promotion
   evidence.
-- **Etude is the product.** It owns transport, interaction drafts, reconnect
+- **Academy is the product.** It owns transport, interaction drafts, reconnect
   behavior, presentation, Study navigation, query construction and
   explanation, and research consent. It does not reconstruct rules meaning.
 
@@ -86,14 +86,14 @@ The labels in this document are precise:
 
 | Boundary | Current main | In flight | Target |
 |---|---|---|---|
-| Match authority | managym `Game`/`GameState` own rules mutation, while the Etude server separately owns match IDs, revisions, accepted commands, and historical decision bookkeeping. | — | One managym `MatchAuthority` owns match identity, revision, execution, committed Commands/events, replay, observation, and forks. |
-| Decisions | `ActionSpace` and `step(index)` are authoritative internally. `StructuredOfferSet`/`AtomicCommand` are a narrow bridge; Etude has a separate protocol `Command` and lowering context. | Structured command and compiled-semantic work continues in Rules. | A revision-bound semantic `DecisionFrame` and atomic `Command` are the common contract. Positional indices are private acceleration only. |
+| Match authority | managym `Game`/`GameState` own rules mutation, while the Academy server separately owns match IDs, revisions, accepted commands, and historical decision bookkeeping. | — | One managym `MatchAuthority` owns match identity, revision, execution, committed Commands/events, replay, observation, and forks. |
+| Decisions | `ActionSpace` and `step(index)` are authoritative internally. `StructuredOfferSet`/`AtomicCommand` are a narrow bridge; Academy has a separate protocol `Command` and lowering context. | Structured command and compiled-semantic work continues in Rules. | A revision-bound semantic `DecisionFrame` and atomic `Command` are the common contract. Positional indices are private acceleration only. |
 | Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
 | Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
 | Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
 | Learning | Teacher traces, NPZ shards, masked policy/value training, and checkpoints work end to end; stronger provenance lives mostly in experiment runners. | Visit-teacher and selected-branch work continue to harden this path. | Query-conditioned teacher rows, belief-conditioned policy/value, shared artifact manifests, and checkpoint-bound history/belief schemas. |
 | Evaluation | `play_games` provides deal-diverse, seat-balanced pairwise results and Wilson intervals. INT-18 ran INT-6's frozen world-pinned arena for real on 2026-07-18: 720 games over five anchors and dPUCT-32 retained the complete matrix, connected rating scale, and paired-deal uncertainty; dPUCT was rated but not promotion-eligible, and the exact-range comparison remains an evidence wait. | — | Development matches remain non-admission. Only the versioned arena promotes immutable player artifacts. |
-| Study | Etude identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Etude presents it without becoming another replay or belief engine. |
+| Study | Academy identifies historical decisions and can exact-fork a retained managym root, execute a normal structured command, prove sibling/source isolation, and consume a source-bound return receipt. manabot can adapt selected policy/search outputs into strict `DecisionEvidence`; exact arbitrary historical model/evidence resolution remains incomplete. | — | managym resolves the exact replay position and return authority, manabot produces attributable baseline and conditional strategy evidence, and Academy presents it without becoming another replay or belief engine. |
 
 The current implementation is not renamed into compliance. Migration is
 complete only when consumers use the target contract and the duplicate meaning
@@ -246,15 +246,15 @@ The durable learning and evaluation identities are:
 | `OpponentPoolManifest` | manabot | Immutable registered opponents and a versioned selection policy. A sampled opponent is recorded per match. |
 | `PlayerRegistration` | manabot | Immutable algorithm/checkpoint bytes, world, information boundary, compute class, and seed policy. |
 | `ArenaKey` | manabot | World, content suite, viewer boundary, arena/rating versions, frozen anchor cohort, and compute class. |
-| `DecisionEvidence` | manabot evidence consumed by Etude | Immutable alternatives, policy/visits, values, robustness, uncertainty, and typed unavailable fields bound to one exact replay decision. |
-| `StudyReturnReceipt` | Etude adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest and a full-clone/structured-only execution receipt; fails closed if the retained root drifts or a rejected command mutates its child. |
+| `DecisionEvidence` | manabot evidence consumed by Academy | Immutable alternatives, policy/visits, values, robustness, uncertainty, and typed unavailable fields bound to one exact replay decision. |
+| `StudyReturnReceipt` | Academy adapter over retained managym authority | Consuming exact return to the canonical replay decision plus the captured managym source digest and a full-clone/structured-only execution receipt; fails closed if the retained root drifts or a rejected command mutates its child. |
 
 ## Laws of physics
 
 ### 1. Authority and ownership
 
 There is one rules and match authority. Only managym commits legal state
-transitions. Etude and manabot select Commands; neither patches state, invents
+transitions. Academy and manabot select Commands; neither patches state, invents
 legality, reconstructs viewer filtering, or interprets replay independently.
 Play, replay, Study, self-play, arena matches, and search must exercise this
 same authority.
@@ -414,7 +414,7 @@ number, experiment report, or Study artifact promotes a checkpoint.
 
 1. `MatchAuthority.observe(viewer, cursor)` returns the canonical Observation.
 2. Its `DecisionFrame` lists all semantic legal offers for the actor.
-3. Etude, a human, or a manabot chooses an offer and supplies all currently
+3. Academy, a human, or a manabot chooses an offer and supplies all currently
    knowable answers in one Command.
 4. `MatchAuthority.execute(command)` checks match, revision, actor, offer,
    answers, costs, and targets immediately before mutation.
@@ -600,7 +600,7 @@ over all declared strength, safety, competency, and systems gates.
 
 ### 10. Projecting evidence into Study
 
-Etude selects a historical decision and optional typed conditions. managym
+Academy selects a historical decision and optional typed conditions. managym
 resolves its exact replay, historical viewer, Observation, and legal semantic
 offers. manabot resolves the exact checkpoint/planner artifacts or reports
 typed unavailability, then emits `DecisionEvidence` or a
@@ -616,7 +616,7 @@ The convergence work is to move the remaining match/replay identity into
 managym and attach exact conditional manabot evidence to that proven return
 seam.
 
-Etude presents full distributions, values, robustness, uncertainty, and deltas
+Academy presents full distributions, values, robustness, uncertainty, and deltas
 without private sampled worlds. Queries may overlap; displays label conditional
 differences rather than causal effects. Study never substitutes nearby evidence
 and never reveals whether an actual hidden hand satisfies a condition.
@@ -625,8 +625,8 @@ and never reveals whether an actual hidden hand satisfies a condition.
 
 | Present duplication or gap | Scaling failure | Convergence action |
 |---|---|---|
-| managym rules state versus Etude-owned match revision, accepted-command, and replay bookkeeping | Live play, Study, and search can disagree about the same match. | Introduce managym `MatchAuthority`; migrate Etude transport and historical consumers; delete server-side semantic/replay authority. |
-| `ActionSpace` positions, narrow `AtomicCommand`, Etude protocol `Command`, and multiple offer constructors | Cross-world actions and replay depend on positional or adapter-specific meaning. | Make managym semantic `DecisionFrame`/`Command` authoritative and retain indices only in revision-private bindings. |
+| managym rules state versus Academy-owned match revision, accepted-command, and replay bookkeeping | Live play, Study, and search can disagree about the same match. | Introduce managym `MatchAuthority`; migrate Academy transport and historical consumers; delete server-side semantic/replay authority. |
+| `ActionSpace` positions, narrow `AtomicCommand`, Academy protocol `Command`, and multiple offer constructors | Cross-world actions and replay depend on positional or adapter-specific meaning. | Make managym semantic `DecisionFrame`/`Command` authoritative and retain indices only in revision-private bindings. |
 | Snapshot-like Observation plus duplicated Rust/Python tensor encoders | Visible history and legal actions can be truncated or drift across scalar/vector paths. | Land composite Observation and one managym encoder with explicit receipts; derive all model views from it. |
 | Uniform determinizers, raw-game search access, and INT-9 range types | Belief semantics, query semantics, and world completion can fork into separate ontologies. | Establish managym `PossibleWorldSpace`/`WorldQuery`/materializer, then adapt INT-9 and all planners to manabot distributions over it. |
 | Action-index keyed search trees/results | Semantic actions fail to align across conditioned worlds. | Key durable root evidence by semantic offer identity and validate every materialized world's legal correspondence. |
@@ -645,7 +645,7 @@ The original integration order was dependency-shaped:
 5. INT-9 adaptation, self-play pools, INT-6 arena admission, and Study
    conditional evidence.
 
-Each step migrates at least one real Etude or manabot consumer and deletes its
+Each step migrates at least one real Academy or manabot consumer and deletes its
 duplicate constructor. Contract-only substrate that no running path consumes
 does not complete a step.
 
@@ -672,7 +672,7 @@ not by duplicating provider APIs.
 Detailed existing contracts remain authoritative within their narrower scope:
 
 - [experience protocol v1](architecture/experience-protocol-v1.md) describes
-  the current and transitional Etude wire path;
+  the current and transitional Academy wire path;
 - [match-state hash v1](architecture/match-state-hash-v1.md) defines one
   deterministic state-hash domain;
 - [presentation runtime](architecture/presentation-runtime.md) describes the
@@ -691,7 +691,7 @@ meaning and are never rewritten to appear compliant.
 
 ## Non-goals
 
-- A general-purpose Magic rules library independent of Etude's selected
+- A general-purpose Magic rules library independent of Academy's selected
   worlds.
 - Runtime natural-language parsing or LLM authority over legality.
 - Hidden decklists, multiplayer/general-sum play, Commander breadth, or broad

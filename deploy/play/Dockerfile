@@ -24,7 +24,7 @@ COPY frontend/scripts/fetch-card-art.mjs scripts/fetch-card-art.mjs
 COPY frontend/src/lib/packs/ src/lib/packs/
 RUN node scripts/fetch-card-art.mjs
 COPY frontend/ ./
-RUN ETUDE_STATIC_BUILD=1 npm run build
+RUN ACADEMY_STATIC_BUILD=1 npm run build
 
 # ---- runtime ----
 FROM python:3.12-slim
@@ -34,14 +34,14 @@ COPY pyproject.toml uv.lock ./
 COPY --from=engine /wheels /wheels
 RUN uv sync --locked --only-group play-runtime --no-install-project \
     && uv pip install /wheels/*.whl
-COPY etude/ etude/
+COPY academy/ academy/
 COPY frontend/src/lib/packs/ frontend/src/lib/packs/
 COPY deploy/play/asgi.py ./
 COPY --from=web /build/frontend/build/ frontend/build/
 
 ENV PYTHONPATH=/app \
-    ETUDE_FRONTEND_BUILD=/app/frontend/build \
-    ETUDE_TRACES_DIR=/data/traces
+    ACADEMY_FRONTEND_BUILD=/app/frontend/build \
+    ACADEMY_TRACES_DIR=/data/traces
 
 EXPOSE 8000
 

@@ -66,7 +66,6 @@ disk-reserve failures, but Experiment remains incomplete (43 completed monitor
 records, one incomplete). Frozen source/notes are archived in `.runs/etu125-10k`.
 Delivery is not cohort acceptance or permission to restart on changed sources.
 
-
 ## Numerical policy contract (ETU-127, 2026-10-07)
 
 Jack Heart authorized autonomous numerical repairs and ineffective-update
@@ -267,8 +266,8 @@ live archival or portable recovery. Six history runs are archived and verified.
 The [report guide](../../docs/evidence/history-report-learning-2026-10-06.md) and
 [storage contract](../../docs/training-monitoring.md#s3-model-and-artifact-storage)
 own reproduction and limits. Originals remain retained. The accidentally broad
-validation attempt remains in `.runs/etu117-interrupted-validation`, with no
-completed monitoring rows; later checks were offline-only. Browser capture was
+validation attempt remains in `.runs/etu117-interrupted-validation` (no
+monitoring rows); later checks were offline-only. Browser capture was
 blank; Jack Heart's shipping acceptance does not imply specific visual findings.
 No substantive campaign allocation follows.
 
@@ -302,7 +301,7 @@ retained data. Interpretation, ledger updates and next-experiment choices belong
 to a skill. Landing and auto-merge remain forbidden pending Jack Heart's review.
 
 Tiny fixtures prove scheduling/reporting only; retain timeouts, omit incomplete-cohort
-rates. No strength claim or live ETU-103/106 change. [Execution guide](../../docs/experiment-execution.md): launch, recovery, costs and reporting.
+rates. No strength claim. [Execution guide](../../docs/experiment-execution.md): launch, recovery, costs and reporting.
 
 ## History input (ETU-106, 2026-10-06)
 
@@ -649,21 +648,16 @@ Learned-belief continuation needs held-out NLL, query calibration and coverage,
 zero incompatible mass, pre-event equality to p0, hidden-truth invariance, and
 latency; then evaluate the full autonomous loop at matched compute.
 
-Historical lineage remains at `76afdb68`: INT-14's positional tags and INT-9's
-separate exact-range player left composition missing. INT-15's curated flip,
-INT-17's support-enumeration failure and INT-18's omitted tracker comparison remain
-separate evidence limits, regardless of Task completion status.
+INT-9/14/15/17/18 lineage and their separate evidence limits remain at
+`76afdb68`, regardless of Task completion status.
 
-### Historical planning reconciliation (2026-09-24)
-
-GOAL.md owns ETU-21/31/34 dispositions; `59f16e0d` / `60e2f897` retain history.
-Unavailable ed2 advice/checkpoints follow the [live-advice plan](../../docs/plans/live-belief-advice.md).
+GOAL.md owns ETU-21/31/34 dispositions (history at `59f16e0d` / `60e2f897`);
+unavailable ed2 advice follows the [live-advice plan](../../docs/plans/live-belief-advice.md).
 
 ## Corrected-world training binding (2026-09-29)
 
 The [dated record](../../docs/evidence/corrected-world-training-2026-09-29.md)
-and `01fd9029` retain pipeline-only proofs and unresolved optimizer/label limits;
-TrainingRegime is not demo admission.
+and `01fd9029` retain pipeline-only proofs and limits; not demo admission.
 
 ## Training regime reconciliation (2026-10-04)
 
@@ -812,7 +806,7 @@ scoring. Source roots plus belief history remain required for rollout replay;
 private receipts are not a replacement for GameSession/Trace authority.
 
 The arena lifecycle retains private targets and actual command replay, including
-commands preceding failed belief updates. Etude has a typed viewer-safe projection,
+commands preceding failed belief updates. Academy has a typed viewer-safe projection,
 not a new live advisor registration. Genuine same-root PUCT-visit controls,
 archived-root relabeling, learned-sampler integration, independent-seed strength
 and human-play acceptance remain open. See [local-search contracts](../../docs/local-policy-search.md)

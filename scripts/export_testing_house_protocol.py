@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from etude.testing_house_protocol import testing_house_schema
+from academy.testing_house_protocol import testing_house_schema
 
 
 def main() -> None:

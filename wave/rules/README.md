@@ -3,7 +3,7 @@
 Rules owns the semantic kernel shared by human play, replay, training, and
 search. It is active again as of 2026-07-15 with a redesigned charter: make the
 creator-selected decks exact, expressive, inspectable, and cheap to branch
-without turning Etude into a general Magic platform.
+without turning Academy into a general Magic platform.
 
 The top-down contract is [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 The highest-priority Rules work is now to make managym the complete match,
@@ -55,7 +55,7 @@ meaning path; contract-only substrate is not complete.
 Introduce the semantic `MatchAuthority`, `DecisionFrame`, `Command`, and
 `TransitionReceipt` boundary over the existing `Game`. A Command contains every
 choice knowable at commitment time and validates against one exact revision.
-Migrate Etude live play and one manabot execution/search path from separately
+Migrate Academy live play and one manabot execution/search path from separately
 constructed offers and positional action meaning. Preserve current behavior
 with characterization tests, then delete the migrated duplicate constructor.
 
@@ -72,7 +72,7 @@ lossless per-viewer history contract. Consolidate Rust/Python tensor encoding
 behind one managym implementation with an encoding receipt and hard failure on
 legality- or meaning-affecting truncation.
 
-Proof: Etude play/reconnect, manabot scalar/vector execution, replay, and one
+Proof: Academy play/reconnect, manabot scalar/vector execution, replay, and one
 dataset path consume equivalent Observations; viewer-equivalent states encode
 identically; hidden-information and event-cursor tests pass.
 
@@ -92,7 +92,7 @@ covered through the real two-deck world and exact branch API.
 
 ### R4 — Prove one authority across all consumers
 
-Complete a vertical receipt chain through Etude play, manabot conditional
+Complete a vertical receipt chain through Academy play, manabot conditional
 search, exact replay, and Study fork/return. Every stage binds the same match,
 revision, viewer, Observation, semantic Command, content, world schema, and
 source identity. Search branches execute normal Commands; Study restores the

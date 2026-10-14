@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from etude.server import ASSET_MANIFEST_HASH, CONTENT_HASH
+from academy.server import ASSET_MANIFEST_HASH, CONTENT_HASH
 from manabot.env import ObservationSpace
 from manabot.infra.hypers import MatchHypers
 from manabot.sim.local_update import LocalUpdatePlayer

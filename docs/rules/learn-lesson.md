@@ -4,7 +4,7 @@ Accepted design: 2026-09-24. Working-interaction approval: 2026-09-25.
 Implementation remains unfinished in
 [Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup).
 This is the bounded Rules change following
-[PR #185](https://github.com/loopflowstudio/etude/pull/185),
+[PR #185](https://github.com/loopflowstudio/fantasia/pull/185),
 not a restart of ETU-14/31/55 or evidence of completed replay certification.
 
 ## Continuation on 2026-10-04
@@ -38,7 +38,7 @@ of a retained trained challenger.
 
 Configured Search executes Learn in both deck assignments without changing the
 source root. The existing GameSession/live tape and canonical replay owners
-feed `etude.learn_lesson_evidence`; no second replay engine was introduced.
+feed `academy.learn_lesson_evidence`; no second replay engine was introduced.
 The prospective cohort, exact source closure and 10,000-Command cap are recorded
 in `conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
 19 retrievals, 25 discard/draws and 14 declines) at source `57ac36a5`. Final

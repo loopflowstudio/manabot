@@ -22,7 +22,7 @@ from typing import Any, Mapping, Sequence, cast
 
 import torch
 
-from etude.experience_protocol import Command
+from academy.experience_protocol import Command
 from manabot.semantic import SemanticDecision, SemanticDecisionAdapter
 from manabot.semantic.runtime_policy import (
     POLICY_ARMS,

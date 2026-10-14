@@ -12,8 +12,8 @@ target/
 .lf/prompts/
 .venv/
 .uv-cache/
-etude/traces/*.json
-etude/traces/*.sqlite*
+academy/traces/*.json
+academy/traces/*.sqlite*
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/

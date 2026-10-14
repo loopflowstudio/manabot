@@ -5,7 +5,7 @@ import {
   type StudyArtifact,
 } from './study-protocol';
 
-// This module is the TypeScript twin of the Python adapter in etude/advice.py.
+// This module is the TypeScript twin of the Python adapter in academy/advice.py.
 // Two explicit seams cross the wire here, matching the Python adapter:
 //   - GAM-4 seam: AdviceRequestIdentity + AdviceRequest are the request
 //     contract GAM-4's live decision address and retry/compare controls bind
@@ -70,7 +70,7 @@ export interface AdviceRequest {
  * layer. The artifact is validated through the existing viewer-safe study
  * validator (opponent-hand privacy, bindings); the scenarios are a prototype
  * presentation layer validated here. This is the TypeScript twin of the
- * Python adapter in etude/advice.py.
+ * Python adapter in academy/advice.py.
  */
 export function assertViewerSafeAdviceArtifact(advice: AdviceArtifact): void {
   assertViewerSafeStudyArtifact(advice.artifact);

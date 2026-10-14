@@ -23,7 +23,7 @@ from typing import Any, Mapping
 
 from fastapi.testclient import TestClient
 
-from etude.advice import (
+from academy.advice import (
     ADVISOR_SOURCE_PATHS,
     CHECKPOINT_VERSIONED_FIXTURE_PATH,
     FLIP_VERSIONED_FIXTURE_PATH,
@@ -45,19 +45,19 @@ from etude.advice import (
     serialize_advice_response,
     source_bundle_sha256,
 )
-from etude.advice_identity import (
+from academy.advice_identity import (
     AdvisorComputeIdentity,
     AdvisorIdentity,
     AdvisorSeedIdentity,
     CodeSourceArtifact,
 )
-from etude.replay_index import (
+from academy.replay_index import (
     ReplayDecisionAddress,
     canonical_projection_sha256,
     project_replay,
 )
-from etude.server import GameSession, app
-from etude.testing_house_protocol import (
+from academy.server import GameSession, app
+from academy.testing_house_protocol import (
     BeliefScenario,
     BeliefSource,
     PersonalAudience,

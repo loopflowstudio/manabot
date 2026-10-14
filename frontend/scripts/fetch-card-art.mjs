@@ -18,7 +18,7 @@ const manifestPath = path.join(
 );
 const outDir = path.join(here, '../src/lib/card-art');
 
-const USER_AGENT = 'EtudeFantasia/0.1 (research fan project; github.com/loopflowstudio/etude)';
+const USER_AGENT = 'Academy/0.1 (research fan project; github.com/loopflowstudio/fantasia)';
 const DELAY_MS = 150;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
