@@ -19,6 +19,21 @@ from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitoring import default_panels, evaluation_dashboard
 
 
+def failure_summary(result: monitor.MonitorResult) -> str:
+    """Name why a cohort is incomplete; its full record exceeds pytest's limit."""
+    lines = [
+        f"{result.status} with {len(result.rows)}/{result.expected_games} games: "
+        f"{result.error}"
+    ]
+    lines += [
+        f"row {i}: {row.termination_reason} after {row.decisions} decisions "
+        f"in {row.game_seconds:.1f}s: {row.failure}"
+        for i, row in enumerate(result.rows)
+        if row.failure is not None
+    ]
+    return "\n".join(lines)
+
+
 def _manifest() -> monitor.MonitorResult:
     common = dict(
         world="w4",
@@ -309,7 +324,9 @@ def test_real_arena_checkpoint_outcomes(
             protocol=monitor.MonitorProtocol(
                 deal_seeds=(1910101000,),
                 max_commands=max_commands,
-                game_seconds=30,
+                # The default per-game budget includes spawning the worker and
+                # loading torch; macOS runners have taken 30s for one
+                # random-opponent game. It guards hangs, not evaluator speed.
                 opponent=opponent,
                 comparison_sha256="a" * 64 if opponent == "random" else None,
             ),
@@ -330,7 +347,8 @@ def test_real_arena_checkpoint_outcomes(
             assert all(row.failure is not None for row in result.rows)
             assert result.score is None
         else:
-            assert result.status == "completed", result.model_dump_json()
+            if result.status != "completed":
+                pytest.fail(failure_summary(result), pytrace=False)
             assert all(row.valid for row in result.rows)
             assert result.score is not None
         assert all(
