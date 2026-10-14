@@ -43,7 +43,7 @@ board.
 
 ## The destination: Avatar Cube Team Sealed
 
-Fantasia is building toward Avatar Cube Team Sealed: two teams receive 135-card
+Manabot is building toward Avatar Cube Team Sealed: two teams receive 135-card
 pools from a versioned 540-card cube, construct three 40-card-minimum decks with
 unlimited basics and deck-specific sideboards, and play the full three-by-three
 deck matchup matrix until one team reaches five wins. Every game remains an
@@ -118,14 +118,16 @@ This workflow establishes a playable candidate, not a measured strongest bot.
 The [dated evidence and remaining acceptance](docs/evidence/trained-challenger-2026-09-25.md)
 separate automated integration proof from human play and corrected-world proof.
 
-Serious runs train on Ubuntu machines in AWS and track to Weights & Biases.
+Live learner metrics and admitted raw policy exports use the public Etude SDK.
+Historical W&B records remain readable; experiment scheduling and scientific
+evidence migration are still in progress.
 Simulation pulls trained models and can run locally on CPU. See
 [manabot/README.md](manabot/README.md) for the training and simulation
 quickstart, presets, and the current world's live baselines.
 
 ## How the system divides responsibility
 
-Fantasia is built from three cooperating systems:
+Manabot is built from three cooperating systems:
 
 - **Academy** (`academy`, Python + Svelte): the authored play, replay, Retry,
   comparison, and Study experience
@@ -141,7 +143,7 @@ Academy owns what the player sees and does.
 
 ## The research ledger
 
-Fantasia's research program is preregistered and reproducible: every experiment
+Manabot's research program is preregistered and reproducible: every experiment
 states its prediction, budget, and kill criteria before running, and negative
 results are recorded alongside positive ones.
 

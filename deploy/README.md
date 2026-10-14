@@ -1,6 +1,6 @@
 # Fly deploy
 
-Fantasia's public surfaces run on Fly.io behind Cloudflare DNS,
+Manabot's public surfaces run on Fly.io behind Cloudflare DNS,
 following the kata/loopflow deployment pattern:
 
 - **fantasia-website** — the landing site (`website/`), a FastHTML app.

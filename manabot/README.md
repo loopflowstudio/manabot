@@ -1,6 +1,6 @@
 # manabot
 
-The trainable agent of Fantasia: environment wrappers, models, search,
+The trainable agent of Manabot: environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
 
 ## Quickstart
