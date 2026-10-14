@@ -89,4 +89,22 @@ Check (2026-10-14): SDK initialization/midpoint/end hashes and coordinates passe
 real scalar/categorical learner tests; 15 cadence checks passed. The pause test
 missed a learner finishing between five-second polls (retained run was completed,
 not failed); requesting pause at worker startup removed that test race and its
-recovery check passed. Scientific launch and direct Etude job ownership remain open.
+recovery check passed. Scientific launch and actual Etude placement remain open.
+
+
+## Direct Etude worker (2026-10-14)
+
+TrainingJob now freezes single-stage fresh self-play into the public SDK Job,
+with explicit source/target/lifetime and one attempt. Its real subprocess command
+runs the ordinary learner, records initialization/milestones/end in SDK tracking,
+and writes etude-result.json only after target and policy admission. No legacy
+ExperimentSchedule runner is used. TrainingRun/VerifyStore remain scientific
+receipts. Late deadlines, target mismatch, occupied outputs and policy-only
+continuation fail explicitly. Cancellation retains failure rather than a partial
+success. This does not prove actual SDK placement or portable source setup;
+native extension provisioning, simple catalog admission, matrix evaluation and
+campaign execution/analysis remain. Do not mistake a constructed Job for a launch.
+
+Check: 15 direct-worker/SDK/real-learner tests passed (including a real subprocess
+and retained cancellation receipt); focused ruff and diff checks passed. No
+scientific cohort, rental or source-frozen experiment was launched.

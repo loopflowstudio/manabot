@@ -170,6 +170,7 @@ def execute_regime(
     initial_admission: Path | None = None,
     allocation: Allocation | None = None,
     pause_path: Path | None = None,
+    stop_path: Path | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement."""
     regime = validate_regime(regime)
@@ -267,6 +268,7 @@ def execute_regime(
             checkpoint_updates=checkpoint_updates,
             checkpoint_milestones=checkpoint_milestones,
             pause_path=pause_path,
+            stop_path=stop_path,
             initial_admission=initial_admission,
             allocation=allocation,
         )
@@ -284,6 +286,7 @@ def _execute_regime(
     checkpoint_updates: int | None = None,
     checkpoint_milestones: tuple[int, ...] = (),
     pause_path: Path | None = None,
+    stop_path: Path | None = None,
     initial_admission: Path | None = None,
     allocation: Allocation | None = None,
 ) -> TrainingRun:
@@ -656,6 +659,10 @@ def _execute_regime(
                 if now - last_memory_sample < 1.0:
                     return
                 last_memory_sample = now
+                if stop_path is not None and stop_path.exists():
+                    # Cancellation retains failed scientific receipts; unlike
+                    # pause it makes no complete-state recovery promise.
+                    raise RuntimeError("training cancelled by launcher")
                 process = psutil.Process()
                 memory = process.memory_info().rss + sum(
                     p.memory_info().rss

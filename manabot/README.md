@@ -202,3 +202,34 @@ For exploratory same-deck checkpoint play, the [head-to-head runner](../experime
 accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
 roster decks/sideboards and carries their compiled content pack through replay;
 it is not ordinary training-match admission or evidence of mirror competence.
+
+### Etude-owned training jobs
+
+`manabot.training.etude_job.TrainingJob` freezes a single fresh self-play
+`TrainingRegime` and its interior update milestones into an `etude.launch.Job`.
+Its `job(repo=..., revision=..., max_hours=...)` method only builds the job;
+`job.runs(*seeds)` only declares runs. Neither submits or reserves resources.
+The job command is:
+
+```sh
+uv run --locked python -m manabot.training.etude_job
+```
+
+Run that command through an Etude worker, not as a standalone training CLI: it
+requires the SDK's config, seed, target, deadline, output, stop and tracking
+environment. The source revision is explicit, the update target must agree with
+the recipe, and the remaining lifetime must cover the entire recipe watchdog
+plus the declared finalization reserve. A late start fails instead of shortening
+the experiment. The machine must supply this source's built native extension;
+portable source-build setup and the full complexity campaign remain unfinished.
+
+Etude owns job execution and tracking on this path; the old ExperimentSchedule
+runner is not involved. TrainingRun/VerifyStore still retain scientific learning,
+world/ABI admission and failure receipts inside the attempt output. Only a
+completed target emits `etude-result.json` with the admitted policy path.
+Cancellation is checked with the resource watchdog (at most once per second at
+check boundaries) and retains a failed receipt, not a successful partial target.
+Policy checkpoints cannot resume optimizer, RNG or collector state. Automatic
+retries are disabled (`max_attempts=1`); multi-stage and imported-state jobs are
+not yet admitted. This worker proof does not establish SDK placement, remote
+provisioning, scientific evaluation, artifact upload or learning strength.
