@@ -1,0 +1,56 @@
+{
+  "device": "cuda",
+  "samples": [
+    {
+      "batch_sha256": "9dcd7a3a12d30160814189f0bbd70a2b4bde71839745d619a9157216b6abb52f",
+      "cached": false,
+      "decisions": 8571,
+      "game_seeds_sha256": "2a424cf6842534e0e7c69bd723e6be61d33d2c02a2ad9a29193a8c0ddaba4617",
+      "games": 2,
+      "journal_sha256": "4dca7d9b0295e8f78974b34586110f6c236ab3fcb2294a9980178a9e62094037",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 249138688,
+      "seconds": 1.185328772291541,
+      "truncations": 0
+    },
+    {
+      "batch_sha256": "9dcd7a3a12d30160814189f0bbd70a2b4bde71839745d619a9157216b6abb52f",
+      "cached": true,
+      "decisions": 8571,
+      "game_seeds_sha256": "2a424cf6842534e0e7c69bd723e6be61d33d2c02a2ad9a29193a8c0ddaba4617",
+      "games": 2,
+      "journal_sha256": "4dca7d9b0295e8f78974b34586110f6c236ab3fcb2294a9980178a9e62094037",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 249146880,
+      "seconds": 0.9367261826992035,
+      "truncations": 0
+    },
+    {
+      "batch_sha256": "9dcd7a3a12d30160814189f0bbd70a2b4bde71839745d619a9157216b6abb52f",
+      "cached": true,
+      "decisions": 8571,
+      "game_seeds_sha256": "2a424cf6842534e0e7c69bd723e6be61d33d2c02a2ad9a29193a8c0ddaba4617",
+      "games": 2,
+      "journal_sha256": "4dca7d9b0295e8f78974b34586110f6c236ab3fcb2294a9980178a9e62094037",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 249146880,
+      "seconds": 0.958345852792263,
+      "truncations": 0
+    },
+    {
+      "batch_sha256": "9dcd7a3a12d30160814189f0bbd70a2b4bde71839745d619a9157216b6abb52f",
+      "cached": false,
+      "decisions": 8571,
+      "game_seeds_sha256": "2a424cf6842534e0e7c69bd723e6be61d33d2c02a2ad9a29193a8c0ddaba4617",
+      "games": 2,
+      "journal_sha256": "4dca7d9b0295e8f78974b34586110f6c236ab3fcb2294a9980178a9e62094037",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 249138688,
+      "seconds": 1.1415565684437752,
+      "truncations": 0
+    }
+  ],
+  "seed": 10833,
+  "streams": 256,
+  "warmup_learner_steps": 2
+}

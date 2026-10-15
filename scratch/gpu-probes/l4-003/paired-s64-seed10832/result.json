@@ -1,0 +1,56 @@
+{
+  "device": "cuda",
+  "samples": [
+    {
+      "batch_sha256": "2c4e1d39f04fb9275e2d649b4082f8a8cfc486d452bc60c592f77e83a532dc37",
+      "cached": true,
+      "decisions": 8517,
+      "game_seeds_sha256": "2975c6e31c6d62d7cdbcc43453217883841a27415017a12d995b4fb8570b406d",
+      "games": 33,
+      "journal_sha256": "43d26e5cbcf454e6fcf1c130fe8b21962c57eb80aff74665b7382ef418dcd2be",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 74306560,
+      "seconds": 1.591585323214531,
+      "truncations": 0
+    },
+    {
+      "batch_sha256": "2c4e1d39f04fb9275e2d649b4082f8a8cfc486d452bc60c592f77e83a532dc37",
+      "cached": false,
+      "decisions": 8517,
+      "game_seeds_sha256": "2975c6e31c6d62d7cdbcc43453217883841a27415017a12d995b4fb8570b406d",
+      "games": 33,
+      "journal_sha256": "43d26e5cbcf454e6fcf1c130fe8b21962c57eb80aff74665b7382ef418dcd2be",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 74298368,
+      "seconds": 4.540883446112275,
+      "truncations": 0
+    },
+    {
+      "batch_sha256": "2c4e1d39f04fb9275e2d649b4082f8a8cfc486d452bc60c592f77e83a532dc37",
+      "cached": false,
+      "decisions": 8517,
+      "game_seeds_sha256": "2975c6e31c6d62d7cdbcc43453217883841a27415017a12d995b4fb8570b406d",
+      "games": 33,
+      "journal_sha256": "43d26e5cbcf454e6fcf1c130fe8b21962c57eb80aff74665b7382ef418dcd2be",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 74298368,
+      "seconds": 2.2850689720362425,
+      "truncations": 0
+    },
+    {
+      "batch_sha256": "2c4e1d39f04fb9275e2d649b4082f8a8cfc486d452bc60c592f77e83a532dc37",
+      "cached": true,
+      "decisions": 8517,
+      "game_seeds_sha256": "2975c6e31c6d62d7cdbcc43453217883841a27415017a12d995b4fb8570b406d",
+      "games": 33,
+      "journal_sha256": "43d26e5cbcf454e6fcf1c130fe8b21962c57eb80aff74665b7382ef418dcd2be",
+      "learner_transitions": 4096,
+      "peak_allocated_bytes": 74306560,
+      "seconds": 1.538064667955041,
+      "truncations": 0
+    }
+  ],
+  "seed": 10832,
+  "streams": 64,
+  "warmup_learner_steps": 2
+}

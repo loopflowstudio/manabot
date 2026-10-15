@@ -1,156 +1,137 @@
-# GPU validation allocation — 2026-10-14
+# GPU validation — current evidence and allocation
 
-Jack Heart authorized **$50 total** GPU time to validate directions on an actual
-machine. This replaces the earlier no-paid-compute boundary for this goal only.
-It does not allocate money from other experiments or authorize changing them.
+Jack Heart authorized **$50 total** GPU spend for this goal. It supersedes the
+original no-paid boundary. No other experiments, Tasks or publication are selected.
+Complete preregistration and earlier operational history are retained byte-for-byte
+in `gpu-probes/eac79ab23e09900cabe7f6bf3e060e602c6e3fdfb56b572f70dcc9d73f07c4b0.protocol.txt`
+and the committed versions of this note. Do not lose failed attempts or predictions.
 
-Question: do current model service curves and ordinary CUDA collection support
-the laptop replay/queue model's bottleneck ranking? Predict before execution:
-at width 64/depth 1, device-resident batch 256 throughput exceeds batch 64 by
-at least 20%, but ordinary collection fails to reach 50% of the best model-only
-decision throughput. These are exploratory systems predictions, not playing
-strength claims. Three independent initial seeds are used for collection;
-no trained-checkpoint representativeness or multi-GPU result is claimed.
+## Evidence from the first completed measurement
 
-First allocation: one RunPod L4 through the existing Etude client, independent
-launcher database under `.runs/gpu-validation/launcher`, dedicated existing-bucket
-prefix `etude/fantasia-gpu-validation-20261014`. Live API quote: L4 and A40 each
-$0.59/hour; H100 SXM $3.99/hour. No existing pods observed. Recheck admission price.
-One GPU maximum, $0.80/hour ceiling, job maximum 30 minutes, Etude's additional
-setup allowance at most 15 minutes, maximum one infrastructure attempt, $1.50
-job cap and $3 cohort reservation. Reserve another $5 of the total for storage,
-retrieval and delayed billing; at most $42 remains unallocated after this job.
-Use actual provider bills when available and retain conservative estimates until
-cleanup is confirmed. Uncertain creation/deletion prevents another rental.
+Run `a7df3b8d1a77`, source `724da6e1ab87381c65d1e85ed54cb4176df25ed5`,
+L4 23,661,248,512bytes, Torch2.10.0+cu128, Python3.12.3, float32/TF32off.
+All53 manifest entries verified after fetch. Small raw records, failure logs,
+summary and current capacity report are in `gpu-probes/l4-002`. Complete tensors,
+trace and archive are retained under `.runs/gpu-validation/result-002`;
+archive SHA `fa2b9efa8615831ec7b1a4baabb947421eaa6b4df97536883dc802a732c02e8d`.
 
-The stock image and Etude source package are pinned. Read credentials from
-Doppler etude/prd only in-process; use its dedicated Etude journal issuer and
-existing private bucket, no IAM or account changes. Worker self-deletion and
-its independent deadline bound rental lifetime; poll actual rental state.
-No GPU launch until source, protocol, command and job limits are frozen in git.
+| Small-model batch | Inference observations/s, median of3 windows |
+|---|---:|
+|1|314|
+|4|1,314|
+|16|5,151|
+|64|15,071|
+|256|26,316|
+|1024|28,064|
 
-Reuse `cuda_performance` for eight fresh-process model cells: width64/depth1 at
-batches 1,4,16,64,256,1024; width384/depth8 at 64,256. Preserve OOM/failure cells.
-Each measures synchronized float32 inference and diagnostic Adam service;
-TF32 disabled. Use actual collected observations, record their hash and shapes.
-Measure ordinary collection at 16/64/256 streams, 4096 learner transitions per
-sample, seeds 10831/10832/10833, cold and repeated instances with exact same-device
-replay hashes. One separate profiler collection at 64 streams x16 transitions
-attributes kernel/copy intervals; do not mix profiled times with throughput.
-Two existing ordinary TrainingRun cells (batch512, streams16/64) measure actual
-filtered learning, export and persistence. No strength evaluation or promotion.
+Batch256 is1.75x batch64, meeting the preregistered>=20% prediction. In contrast,
+width384/depth8 achieved942/934 observations/s at64/256. Batching is not always
+beneficial. Actual attention length is202, versus203 in historical curves.
 
-Kill criteria: missing CUDA, wrong GPU, source/schema mismatch, nonfinite outputs,
-or replay mismatch stops the affected probe. 90-second cell, 600-second total
-measurement and 900-second dependency/build ceilings. Failed/OOM/timeout cells
-are retained, never relabeled successful or silently replaced. Source and all
-result hashes, hardware/software identity, commands, elapsed time and costs
-are retained. Local CPU checks may validate schema/orchestration only.
+Repeated whole collection across three untrained seeds delivered972–1,210
+**decisions**/s at16streams,2,269–2,707 at64,3,785–4,970 at256. All nine exact
+same-seed rollout comparisons passed; no truncations. Every case was below50%
+of best model-only throughput, meeting the second prediction. These are different
+boundaries, not measured distributed efficiency. 256stream traces end after16
+learner steps and only1–2 games: not mature-policy or steady traffic.
 
-Follow-up allocation requires inspecting these results and confirmed cleanup.
-Keep the full $50 ceiling inclusive across all failed and successful attempts;
-do not interpret one run's smaller cap as a fresh budget on retry.
+The single host profiler interval is1.389588s, with0.207562s kernel/copy union
+(14.94%),68,114kernels and4,955copies. Three same-named GPU annotations are nested
+duplicates, not repetitions. CPU GRU inclusive time0.2447s over119forwards;
+launch runtime0.5246s overlaps those operations. Busy intervals are not SM occupancy.
+CPU catalog dominance cannot be transferred quantitatively to GPU.
 
-## First allocation status
+Both actual-learning cells failed before learning: Git archives lack`.git`.
+The existing source owner supports a verified`.manabot-source.json` bundle;
+use that contract, retain failed logs, and make no learning-throughput claim.
 
-Protocol/driver commit `7f93210e2328003d2734c2f33dd358c8dbd191c1` was
-committed before launch. Etude published only that explicit revision; other
-untracked research artifacts were excluded. Client source is
-`d04d4996e16ca064eab127da39cb9375c5a511c2` from the existing private client.
-Run `49c55761a6d3`, cohort `l4-validation-001`, session `5c4dee556dac`, pod
-`td9idyvn0cg2wg` was created at 2026-10-15 02:18:56.538 UTC for $0.59/hour.
-Its worker started; provider status was RUNNING on the subsequent exact-ID read.
+## Catalog experiment (completed)
 
-Launch and one observation command timed out delivering the 182,743,040-byte
-uncompressed Git archive through Etude's 60-second single-request upload. The
-run remains recorded. Recovery uses the same source object, commit, run and pod,
-uploading the exact archive through multipart S3 followed by full SHA-256
-readback. No replacement rental was requested. Credential values stay in process.
-Local budget/allocation state is `.runs/gpu-validation/budget.json`; the local
-launcher home is `.runs/gpu-validation/launcher`. The authenticated CLI adapter is
-`.runs/gpu-validation/cli.py`, invoked through Doppler and uv with the existing
-Etude client package. Resume observation of the exact run, never relaunch to
-recover an uncertain response. Confirm deletion and settle cost before allocating
-any follow-up.
+Frozen source `a5b73db1007ae247fc18d59e08722b1e4bfbc75f`, cohort
+`l4-validation-003`, source archive SHA
+`6e34d4be03a2861986901a0ad7049137f602f5d10aef9694c5208583a11433a4`.
+Multipart upload and complete readback finished before renting (185.034s).
+The job manifest binds1938 source files and the worker-built native module.
 
-First allocation ended before measurement: the bootstrap installed `dev`, but
-the repository declares maturin in `play`. The ordinary build command therefore
-failed before CUDA admission. Source readback was verified after 153.397 seconds;
-the failure log is `.runs/gpu-validation/observed.log`. Etude reported about
-$0.07 estimated. Exact provider lookup confirmed pod absence at
-2026-10-15 02:27:57 UTC (`first-cleanup.json`); reserve $0.10 pending final billing.
-This is a bootstrap failure, not negative performance evidence.
+Reference versus research-only catalog reuse inside one frozen-policy collection:
+three seeds10831–10833,64/256streams,4096learner transitions, four paired samples
+in ABBA/BAAB order after two-step warmup. First cache computation is timed. Require
+exact rollout/journal/reset-seed parity; reject gradients or parameter-version
+changes inside the cache. Destroy it before learning. Prediction frozen before
+execution: >=15% median collection gain at64streams, smaller relative gain at256.
+This tests a mechanism, not a production cache/invalidation API.
 
-Second allocation amendment: add the existing locked `play` extra; preserve all
-measurement cells and predictions. One new attempt, same $1.50 job/$3 cohort
-ceilings, cohort `l4-validation-002`; all costs remain inside the original $50.
-Upload the exact frozen archive to the same private prefix with multipart and
-full SHA-256 readback before renting. A local transport adapter may copy that
-verified object server-side to Etude's session-specific source key; bytes, Git
-source identity, worker execution and cleanup remain owned by the existing
-launcher. No changes to the Etude checkout or credential scope.
+Ordinary three-update TrainingRun comparisons at16/64streams use separate
+reference/cached processes and the same seed. Retain real exposure/skip counters
+and compare final logical tensor states where possible. Do not replace RL with
+the model-only diagnostic Adam measurement. Source bundle verification happens
+before the existing source owner admits training. CPU preflight exact paired
+parity passed in2.846commandseconds,324.2MiB sampled peak; not GPU speed evidence.
 
-Second source commit `724da6e1ab87381c65d1e85ed54cb4176df25ed5` was prepared
-and fully read back before renting (102.352 seconds). SHA-256 of its tar is
-`b6714a4476a4b98de52b74d0fce0ee901c6059dc89ded3e44340b5eb8e50204b`.
-Server-side copy to the new session key succeeded and matched size/hash metadata.
-Run `a7df3b8d1a77`, session `de4b7799f228`, pod `lhu3ok84ordvqw` is the active
-second attempt; worker start observed at 2026-10-15 02:34:42 UTC. Its observation
-process is the exact run's `etude wait`, not a new submission. Use the CLI adapter
-with `uv run --no-sync --with /Users/jack/src/etude/client --with boto3 python`
-under Doppler etude/prd. Logs are retained locally as `observed-002.log`.
+## Controls, costs and recovery
 
-## Second allocation findings and next discriminating probe
+One L4 at a time, quoted$0.59/hour again before third admission. Pool hourly
+ceiling$0.80,6vCPU/48GBminimum,40GBdisk. Job30minutes/$1.50, cohort$3, maxoneattempt;
+Etude adds at most15minutes setup. Driver limits setup900s, measurements600s,
+child90s. Missing CUDA/wrong device/parity/nonfinite/source errors retain a failed
+cell. Never automatically rerent after an ambiguous launch or deletion response.
 
-All 53 manifest entries verified on retrieval. Both exact provider pod IDs are
-absent; second machine estimated $0.08, total rental estimate $0.15. Reserve
-$0.25 conservatively plus the separate $5 ancillary reserve. Raw small records
-and failures are in `gpu-probes/l4-002`; the full archive is retained under
-`.runs/gpu-validation/result-002` (archive SHA in the portable summary).
+First run `49c55761a6d3` failed bootstrap (missing locked play extra/maturin),
+no measurements. Pod `td9idyvn0cg2wg` absent at02:27:57UTC; estimate$0.07, reserve$0.10.
+Second pod `lhu3ok84ordvqw` absent at02:42:10UTC; estimate$0.08, reserve$0.15.
+Total settled rental estimate$0.15, conservative charges$0.25, ancillary reserve$5;
+Third allocation is now closed; its settled estimate and remaining budget are below.
+Actual bills replace estimates when available. Ledger `.runs/gpu-validation/budget.json` owns evolving allocations.
 
-Width64 inference median rates at batches1/4/16/64/256/1024 were
-314/1,314/5,151/15,071/26,316/28,064 observations/s. Batch256 versus64 is1.75x,
-meeting the preregistered20% prediction. Width384/depth8 is942/934 at64/256:
-larger batching is not universally helpful. Repeated whole collection across
-three seeds delivered972–1,210 decisions/s at16streams,2,269–2,707 at64, and
-3,785–4,970 at256. All nine exact same-seed rollout comparisons passed, with
-no truncations. 256stream traces ended after16 learner steps and1–2 games;
-these short trajectories are not steady mature-policy traffic.
+Use isolated existing Etude launcher via:
+`doppler run --project etude --config prd -- uv run --no-sync --with /Users/jack/src/etude/client --with boto3 python .runs/gpu-validation/cli.py`.
+Append `runs`, `logs RUN`, `wait RUN`, `fetch RUN evidence.tar.gz DEST`, or
+`machines --all`. Fetch destination is a directory. Exact provider lookup must
+also confirm absence before another rental. Credentials stay in-process; no IAM
+or Etude source changes. Same-source multipart/server-side copy adapter avoids
+Etude's60second single-PUT limit without changing archive bytes.
 
-The sole host profile interval is1.389588s, with0.207562s kernel/copy union
-(14.94%),68,114 kernels and4,955 copies. Three same-named GPU annotations are
-nested duplicate windows, not independent repetitions. CPU GRU inclusive time
-was0.2447s over119forwards; launch runtime0.5246s, overlapping those operations.
-Busy intervals do not measure SM occupancy. CPU catalog dominance must not be
-transferred quantitatively to GPU. Current attention length is202, unlike the
-historical203-slot curves, so old rates remain historical sensitivity evidence.
+Third run `a7f16bef6f6c`, Etude session`63a7ec918a53`, exact provider pod
+`hp72lq3m023eaj`, created02:50:27.481UTC. Provider name is`etude-63a7ec918a53`;
+Etude machine display name differs. Resolve provider IDs from the existing
+machine record, not by guessing the display name. Run and machine are terminal. Log`observed-003.log` is local.
 
-Both actual-learning cells failed before any learning because a Git archive
-has no`.git`; `source_commit()` supports a verified`.manabot-source.json` bundle.
-This is source admission failure, not a measured learning rate. Preserve both
-failures and use the existing source-bundle contract on the next run.
 
-Third allocation preregistration: same L4/pool/price and caps, cohort
-`l4-validation-003`, maxoneattempt, no automatic retries. Compare reference and
-research-only catalog reuse within a frozen-policy collection call. Three seeds,
-64/256streams,4096learnertransitions, four paired measurements in ABBA/BAAB
-order after one short warmup. Cache first computation is included; destroy it
-before learning. Require exact rollout, journal and reset-seed equality and
-unchanged parameter versions. Never supply cached values with gradients enabled.
-Prediction: at least15% median collection gain at64streams, smaller relative gain
-at256. Losing that prediction is valid evidence. This does not select a production
-cache API or invalidate-on-update design.
+## Catalog results and remaining uncertainty
 
-Rerun ordinary three-update TrainingRun cells at16/64streams, reference and cached
-collection, preserving actual learning/skip counters and comparing final tensor
-states where available. Keep gradients on the original uncached path. The source
-bundle binds the prepared Git archive's complete file hashes plus the freshly
-built native module; verify before invoking the existing source owner. Setup900s,
-measurement600s, eachchild90s, same$1.50job/$3cohort caps. One local small CPU
-smoke checks reference/cache parity within the remaining local probe allowance;
-it is not GPU performance evidence. No production code changes.
+All59 returned manifest files verified; archiveSHA
+`3a4c377151f535fe5b90863585c3719aebb680f58aed01bb92be7b0b9082bb9b`.
+Full small records and tensor comparison: `gpu-probes/l4-003/summary.json` and
+`tensor-comparison.json`; raw tensor archive in`.runs/gpu-validation/result-003`.
+Third provider pod absent at02:55:38.926UTC. All three allocations are deleted.
+Total rental estimate$0.20; conservative charges$0.35 plus ancillary reserve$5
+leave$44.65 unallocated. No new allocation is pending. Full ledger is retained
+with the third results; billing amounts remain estimates.
 
-Preflight: the4stream x16step CPU paired smoke passed all four ABBA trajectory
-hash comparisons in2.846commandseconds, sampled peak324.2MiB. This consumes the
-existing local cap, not GPU budget. Ruff check/format passed. The GPU experiment
-retains separate baseline/candidate processes for whole-training comparisons.
+Across seeds,64stream collection speedups were1.490/2.181/1.466x (median1.490x);
+256stream1.297/1.252/1.228x (median1.252x). All24 timed trajectories matched
+exactly within their seed/stream pairs, including rollout, journal and reset
+seeds. Extra peak GPU allocation was8192bytes. Both catalog predictions passed.
+The2.181x case includes a4.541s reference outlier versus2.285s on its repeat;
+retain it. The median result and all other paired comparisons still show gains.
+
+All four three-update training runs completed, each1536learner transitions and
+384optimizer exposures;16streams had96optimizer steps/11games,64streams24steps/
+zero finished games. No nonfinite or skipped steps were reported. Initial, final
+raw and EMA tensor states matched exactly between reference/cache, as did all
+scientific diagnostics after excluding timing/resource coordinates.48state tensors
+changed during each run, so this was actual optimization, not an empty-filter smoke.
+16stream Adam state also matched exactly.64stream Adam state had3differing moment
+tensors, maximum absolute delta3.64e-12; no tolerance was preregistered, so exact
+optimizer parity is **not** established. Possible explanations include ordinary
+CUDA reduction variation and cache-dependent execution/allocation ordering.
+A reference/reference plus cached/cached repeatability control is the next small
+check before selecting a production implementation. No new tolerance is invented.
+
+Whole-run times were8.825→5.847s (16streams),3.143→2.916s (64streams).
+These are single reference-then-candidate comparisons, not a robust training-speed
+claim; initialization/host variability contributes. Driver580.159.04 differs
+from the prior rental's595.91.07, so use within-rental pairs. Zero completed games
+in64stream learning also limits representativeness. This validates catalog reuse
+as an optimization direction; production API/invalidation, mature-policy traffic,
+and a learner/backpressure/policy-age model remain unimplemented/unmeasured.
