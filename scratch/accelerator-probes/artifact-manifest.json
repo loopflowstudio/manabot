@@ -903,8 +903,8 @@
     },
     {
       "path": "scratch/compare-training-states.py",
-      "bytes": 5713,
-      "sha256": "eab2f9f550b0962a863294024a186b06359b06842665ab2d97c13c59ab1b0c7d"
+      "bytes": 6074,
+      "sha256": "251a66ba81c0ce1e90ea062d9080d527d38d5a72f241ac22e1146aaca165d2bb"
     },
     {
       "path": "scratch/accelerator-probes/44a1c12352bd33bb6f4b30ffb2a3c2c8a8b06006adc152be122f995dd066ca6e.notes.txt",
@@ -963,8 +963,8 @@
     },
     {
       "path": "scratch/cohort-flow-probe.py",
-      "bytes": 15143,
-      "sha256": "b6d8069e3d428ad7c425b4519b5e4b44cb9d55e11c6d8dd4442c283a2bca1107"
+      "bytes": 16038,
+      "sha256": "6f2dc44130b7d64b9d2205deb6e576a972280e8b7fc6de78b0a64ed50c37cbd0"
     },
     {
       "path": "scratch/cohort-protocol.txt",
@@ -1015,6 +1015,146 @@
       "path": "scratch/cpu-probes/cohort-flow.stdout.log",
       "bytes": 186,
       "sha256": "0c7099c7a63d7529d9f68f4ba323294af883ab95750a80c301d318c99a77db85"
+    },
+    {
+      "path": "scratch/accelerator-probes/1753d60a8399c8c175821dc78d9c47631c6e0697b0c23be43a96696ba1e40705.notes.txt",
+      "bytes": 3331,
+      "sha256": "1753d60a8399c8c175821dc78d9c47631c6e0697b0c23be43a96696ba1e40705"
+    },
+    {
+      "path": "scratch/accelerator-probes/251a66ba81c0ce1e90ea062d9080d527d38d5a72f241ac22e1146aaca165d2bb.source.txt",
+      "bytes": 6074,
+      "sha256": "251a66ba81c0ce1e90ea062d9080d527d38d5a72f241ac22e1146aaca165d2bb"
+    },
+    {
+      "path": "scratch/accelerator-probes/6f2dc44130b7d64b9d2205deb6e576a972280e8b7fc6de78b0a64ed50c37cbd0.source.txt",
+      "bytes": 16038,
+      "sha256": "6f2dc44130b7d64b9d2205deb6e576a972280e8b7fc6de78b0a64ed50c37cbd0"
+    },
+    {
+      "path": "scratch/accelerator-probes/791bfbcb0c6b9a6eee757499ded4bf3124954a1ab1b22bf6a388f6edeab520d7.source.txt",
+      "bytes": 20737,
+      "sha256": "791bfbcb0c6b9a6eee757499ded4bf3124954a1ab1b22bf6a388f6edeab520d7"
+    },
+    {
+      "path": "scratch/accelerator-probes/7aa79430e0a2d3faf7d251dcf8995ce2deab863e08b9593684d5bdc45f0280f1.source.txt",
+      "bytes": 4775,
+      "sha256": "7aa79430e0a2d3faf7d251dcf8995ce2deab863e08b9593684d5bdc45f0280f1"
+    },
+    {
+      "path": "scratch/accelerator-probes/a5c8a130d82f7c6199f8d84ded4e126e6b028280bbe9d6e28eb763baf62ac41d.source.txt",
+      "bytes": 3916,
+      "sha256": "a5c8a130d82f7c6199f8d84ded4e126e6b028280bbe9d6e28eb763baf62ac41d"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-h100-s4096.json",
+      "bytes": 46463,
+      "sha256": "b3d7fae7f331723a7896d36c137733697205e58e472652f367fd28bd985e36e9"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-h100-s512.json",
+      "bytes": 46389,
+      "sha256": "7d501fd47bd2182248ba220ed69b46dcd48f489905ce87f69b27268721a08c6e"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-selectable-l4.json",
+      "bytes": 46440,
+      "sha256": "e16f9fc5b5250c6cf2d1cb7100e695aabe165e4cd5ba8db5256e6e03b5953864"
+    },
+    {
+      "path": "scratch/accelerator-probes/eab2f9f550b0962a863294024a186b06359b06842665ab2d97c13c59ab1b0c7d.source.txt",
+      "bytes": 5713,
+      "sha256": "eab2f9f550b0962a863294024a186b06359b06842665ab2d97c13c59ab1b0c7d"
+    },
+    {
+      "path": "scratch/accelerator-probes/ee4c34718160f004656471b1f86002722e6735d83b8809fe5c718cec3d70be5a.notes.txt",
+      "bytes": 7810,
+      "sha256": "ee4c34718160f004656471b1f86002722e6735d83b8809fe5c718cec3d70be5a"
+    },
+    {
+      "path": "scratch/accelerator-probes/f05aca5171bf9fc9a1830edbfd402a65aefea8ab51b2165915e76baf49698acc.notes.txt",
+      "bytes": 6664,
+      "sha256": "f05aca5171bf9fc9a1830edbfd402a65aefea8ab51b2165915e76baf49698acc"
+    },
+    {
+      "path": "scratch/accelerator-queue-probe.py",
+      "bytes": 20737,
+      "sha256": "791bfbcb0c6b9a6eee757499ded4bf3124954a1ab1b22bf6a388f6edeab520d7"
+    },
+    {
+      "path": "scratch/cpu-probe-command.py",
+      "bytes": 4775,
+      "sha256": "7aa79430e0a2d3faf7d251dcf8995ce2deab863e08b9593684d5bdc45f0280f1"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-h100-s4096.receipt.json",
+      "bytes": 1348,
+      "sha256": "58487831c6aa7d710ec41119261186b7152adfb894e02ded67dd2f4edd805763"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-h100-s4096.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-h100-s4096.stdout.log",
+      "bytes": 186,
+      "sha256": "5686bea590d230a5bd6c494f7a1a3287aff35efd14ee59e6bd1f65ded614af28"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-h100-s512.receipt.json",
+      "bytes": 1228,
+      "sha256": "94bfcee09523e83f8126e099d0aaa4fdffeb9f55a47ba56d9f1a1fee9cb4f68d"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-h100-s512.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-h100-s512.stdout.log",
+      "bytes": 186,
+      "sha256": "5686bea590d230a5bd6c494f7a1a3287aff35efd14ee59e6bd1f65ded614af28"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-selectable-l4.receipt.json",
+      "bytes": 1051,
+      "sha256": "51960b3c45fad1bde4d85c76c86f87339bbe172416efd2693645a07577ad252c"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-selectable-l4.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-selectable-l4.stdout.log",
+      "bytes": 186,
+      "sha256": "5686bea590d230a5bd6c494f7a1a3287aff35efd14ee59e6bd1f65ded614af28"
+    },
+    {
+      "path": "scratch/gpu-highend-protocol.txt",
+      "bytes": 3162,
+      "sha256": "8b98a65c140964c6c7d5db3d39823b3770c05b98c48c63a6d6bf37430a55f288"
+    },
+    {
+      "path": "scratch/gpu-probes/frozen-l4-inputs.pt.gz",
+      "bytes": 173861,
+      "sha256": "34835373e994fd4c0fc1eae2a500deeb0cf2bb27d6e5487158d770a8e002a2f0"
+    },
+    {
+      "path": "scratch/gpu-probes/frozen-l4-inputs.pt.json",
+      "bytes": 330,
+      "sha256": "cec3302bd57dc8b637513e90585cc20e7d20158740fa487fd3c718c8a63b2004"
+    },
+    {
+      "path": "scratch/gpu-probes/h100-005/artifact-manifest.json",
+      "bytes": 18475,
+      "sha256": "b9aa5ba22bf8e93d615ea0a0250f3acb4f33232e05666fa1e49336c7b0c6db12"
+    },
+    {
+      "path": "scratch/highend-integration-protocol.txt",
+      "bytes": 1763,
+      "sha256": "210f0e4423491fad80a69b09a73ec7095590e1126d6aa19d14b7367461c330c4"
     }
   ]
 }

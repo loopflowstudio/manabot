@@ -1,0 +1,45 @@
+{
+  "checked_at": "2026-10-15T04:19:07.093443+00:00",
+  "rentals": [
+    {
+      "machine": "l4-validation-5c4dee556dac",
+      "deleted_at": "2026-10-15T02:26:22.119840+00:00",
+      "current_cost_usd": "0.07195696677081287000000000000",
+      "billed_usd": "0.07195696677081287",
+      "billed_through": "2026-10-15T03:00:00+00:00",
+      "hourly_rate_usd": "0.59"
+    },
+    {
+      "machine": "l4-validation-de4b7799f228",
+      "deleted_at": "2026-10-15T02:41:39.889745+00:00",
+      "current_cost_usd": "0.07712540961802006000000000000",
+      "billed_usd": "0.07712540961802006",
+      "billed_through": "2026-10-15T03:00:00+00:00",
+      "hourly_rate_usd": "0.59"
+    },
+    {
+      "machine": "l4-validation-63a7ec918a53",
+      "deleted_at": "2026-10-15T02:55:22.632230+00:00",
+      "current_cost_usd": "0.03977563860826193999999999998",
+      "billed_usd": "0.03977563860826194",
+      "billed_through": "2026-10-15T03:00:00+00:00",
+      "hourly_rate_usd": "0.59"
+    },
+    {
+      "machine": "l4-validation-20e2d6c4c331",
+      "deleted_at": "2026-10-15T03:51:13.916340+00:00",
+      "current_cost_usd": "0.06708300032777777583229787222",
+      "billed_usd": "0",
+      "billed_through": null,
+      "hourly_rate_usd": "0.59"
+    },
+    {
+      "machine": "h100-validation-02d52ca3dac9",
+      "deleted_at": "2026-10-15T04:18:23.780728+00:00",
+      "current_cost_usd": "0.4565662237500000244949660556",
+      "billed_usd": "0",
+      "billed_through": null,
+      "hourly_rate_usd": "3.99"
+    }
+  ]
+}

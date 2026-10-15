@@ -1,0 +1,2715 @@
+{
+  "calendar_seconds": 22.290375471115112,
+  "downtime_seconds": 2.68593430519104e-06,
+  "error": null,
+  "fixed_validation": null,
+  "id": "34b125aa9f624343a96c96ca7eb2f50c",
+  "identities": {
+    "action_abi_sha256": "388cad683f617fae7c39bd515be1f28c2966c7414b47877559093ab2e7eacddf",
+    "architecture": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+    "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
+    "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+    "content_manifest_sha256": "6c62803124bde313acdceb673e19129614c539424aeacea96cbb044a5e609c32",
+    "content_schema_version": 1,
+    "cuda": {
+      "capability": [
+        9,
+        0
+      ],
+      "device": "NVIDIA H100 80GB HBM3",
+      "memory_bytes": 85017493504,
+      "runtime": "12.8"
+    },
+    "engine_extension_name": "_managym.cpython-312-x86_64-linux-gnu.so",
+    "engine_extension_sha256": "c758ca57609c4686c0799ce1e44d3e569f3b1eed78c880ac20378a88c3551d7e",
+    "engine_source_sha256": "586453419d1db9b85d11e3f89cf739d52dc1b7e8831684baf72f72d1b4758138",
+    "experience_content_hash": "legacy-content-unversioned",
+    "experience_protocol_sha256": "825f96f5af6c9f1a23df4145bc75fe8266dd3b089a0c924400476bdfbb6e9b22",
+    "hardware": {
+      "cpu_count": 208,
+      "memory_bytes": 2164111167488,
+      "platform": "Linux-6.8.0-90-generic-x86_64-with-glibc2.39",
+      "processor": "x86_64"
+    },
+    "matchup": {
+      "hero": "arena-seat-0",
+      "hero_deck": {
+        "Accumulate Wisdom": 2,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 1,
+        "Fire Nation Cadets": 2,
+        "Firebending Lesson": 4,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Igneous Inspiration": 2,
+        "Island": 9,
+        "It'll Quench Ya!": 2,
+        "Mountain": 8,
+        "Otter-Penguin": 2,
+        "Pop Quiz": 2,
+        "Tiger-Seal": 2
+      },
+      "hero_sideboard": {
+        "Accumulate Wisdom": 1,
+        "Firebending Lesson": 1,
+        "It'll Quench Ya!": 1
+      },
+      "villain": "arena-seat-1",
+      "villain_deck": {
+        "Allies at Last": 2,
+        "Badgermole Cub": 2,
+        "Compassionate Healer": 2,
+        "Earth King's Lieutenant": 2,
+        "Earth Kingdom Jailer": 2,
+        "Fancy Footwork": 2,
+        "Forest": 8,
+        "Invasion Reinforcements": 2,
+        "Kyoshi Warriors": 2,
+        "Plains": 9,
+        "South Pole Voyager": 1,
+        "Suki, Kyoshi Warrior": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 2,
+        "Yip Yip!": 1
+      },
+      "villain_sideboard": {
+        "Fancy Footwork": 1,
+        "Yip Yip!": 1
+      }
+    },
+    "matchup_sha256": "5b46db09a613880980ac8fbd5d0942fe24d5465ff0789984cc75709adf7be343",
+    "observation_abi_sha256": "b28c5dd6144d2b847fce54de773ffb08f514f8142498905b67f3833ff0e40d47",
+    "pilot_source_sha256": "ff7cfdf4f5ea30d44deac21ae21e4538d73d8ad29bc876d3bdb68339fca5ce9d",
+    "policy_numerics": "masked-log-softmax-v1",
+    "source_commit": "cb73f3865b503d9212e9f4a4cf73b9e601fe18da",
+    "torch": "2.10.0+cu128",
+    "training_source_sha256": "1f7bc00ab139dceee74b8015cd1d2833175390e50bbc483de3112e57b8a06a1f",
+    "world": "w4"
+  },
+  "last_recorded_active_seconds": 22297251.985425703,
+  "last_recorded_wall_seconds": 1792037822.7703688,
+  "monitoring_checkpoint_seconds": null,
+  "monitoring_checkpoints": [],
+  "monitoring_export_seconds": 0.0,
+  "parent_run_id": null,
+  "prior_seconds": 0.0,
+  "prior_watchdog_seconds": 0.0,
+  "recovery_artifact": null,
+  "recovery_host": "bc2d638c35c2",
+  "recovery_lock_path": "/run/etude/sessions/02d52ca3dac9/attempts/919ec49adeb0/outputs/evidence/shape-t8-s4096-cached-a/w64-d1-loop-b32768-s4096/run.writer.lock",
+  "recovery_seconds": 0.0,
+  "regime": {
+    "agent": {
+      "attention_layers": 1,
+      "attention_on": true,
+      "belief_card_vocab_size": 0,
+      "belief_count_buckets": 0,
+      "belief_hidden_zone_vocab_size": 7,
+      "belief_owner_role_vocab_size": 2,
+      "hidden_dim": 64,
+      "num_attention_heads": 4,
+      "semantic_pack": "ur-lessons-vs-gw-allies",
+      "value_aggregation": "masked_mean",
+      "value_kind": "scalar"
+    },
+    "id": "w64-d1",
+    "match": {
+      "hero": "arena-seat-0",
+      "hero_deck": {
+        "Accumulate Wisdom": 2,
+        "Divide by Zero": 2,
+        "Dragonfly Swarm": 1,
+        "Fire Nation Cadets": 2,
+        "Firebending Lesson": 4,
+        "First-Time Flyer": 2,
+        "Forecasting Fortune Teller": 1,
+        "Igneous Inspiration": 2,
+        "Island": 9,
+        "It'll Quench Ya!": 2,
+        "Mountain": 8,
+        "Otter-Penguin": 2,
+        "Pop Quiz": 2,
+        "Tiger-Seal": 2
+      },
+      "hero_sideboard": {
+        "Accumulate Wisdom": 1,
+        "Firebending Lesson": 1,
+        "It'll Quench Ya!": 1
+      },
+      "villain": "arena-seat-1",
+      "villain_deck": {
+        "Allies at Last": 2,
+        "Badgermole Cub": 2,
+        "Compassionate Healer": 2,
+        "Earth King's Lieutenant": 2,
+        "Earth Kingdom Jailer": 2,
+        "Fancy Footwork": 2,
+        "Forest": 8,
+        "Invasion Reinforcements": 2,
+        "Kyoshi Warriors": 2,
+        "Plains": 9,
+        "South Pole Voyager": 1,
+        "Suki, Kyoshi Warrior": 1,
+        "Water Tribe Rallier": 2,
+        "White Lotus Reinforcements": 2,
+        "Yip Yip!": 1
+      },
+      "villain_sideboard": {
+        "Fancy Footwork": 1,
+        "Yip Yip!": 1
+      }
+    },
+    "observation": {
+      "max_actions": 64,
+      "max_cards_per_player": 60,
+      "max_events": 32,
+      "max_focus_objects": 2,
+      "max_permanents_per_player": 40
+    },
+    "recovery_max_microsteps": null,
+    "schedule_clock": "run_elapsed_budget",
+    "schema_version": 1,
+    "selection": "last-complete-raw",
+    "stages": [
+      {
+        "behavior": "current-self",
+        "execution": {
+          "device": "cuda",
+          "memory_bytes": 17179869184,
+          "precision": "float32",
+          "threads": 1,
+          "wall_seconds": 55.0,
+          "workers": 1
+        },
+        "id": "policy-0",
+        "initial": null,
+        "learning": {
+          "advantage_quantile": 0.75,
+          "clip": 0.2,
+          "collection_kl": 0.1,
+          "ema": 0.999,
+          "filter_kind": "quantile",
+          "filter_scope": "actor_critic",
+          "gradient": "ataraxos_move",
+          "learning_rate_max": 0.0001,
+          "learning_rate_min": 5e-06,
+          "learning_rate_power": 1.1,
+          "learning_rate_scale": 0.5,
+          "max_grad_norm": 0.267,
+          "min_advantage": 0.0,
+          "policy_lambda": 0.5,
+          "reference": "action_type_uniform",
+          "tau_power": 0.3,
+          "tau_scale": 0.05,
+          "value_lambda": 0.8
+        },
+        "operation": "train_self_play",
+        "opponent": null,
+        "optimizer": "adam",
+        "streams": 4096,
+        "trainable": "policy_value",
+        "trainer": "net_opponent",
+        "transitions": 8,
+        "updates": 3
+      }
+    ],
+    "wall_seconds": 60.0,
+    "world": "w4"
+  },
+  "regime_digest": "61c040f4fc185807781e9cd86657441cb1442f17c10d69dff9b82013bb5ca1c3",
+  "schema_version": 1,
+  "seconds": 22.290372785180807,
+  "seed": 10349,
+  "seed_streams": {
+    "belief_collection": 50349,
+    "belief_initialization": 60349,
+    "collection": 20349,
+    "evaluation": 40349,
+    "initialization": 10349,
+    "minibatches": 30349
+  },
+  "selected_artifact": {
+    "bytes": 618019,
+    "path": "/run/etude/sessions/02d52ca3dac9/attempts/919ec49adeb0/outputs/evidence/shape-t8-s4096-cached-a/w64-d1-loop-b32768-s4096/run/policy-0-raw.pt",
+    "sha256": "0e3709ed16becda5c496b301e6a9d5667385f2234678392cc96bf26e7dc74f16"
+  },
+  "setup_seconds": 0.22105413675308228,
+  "stages": [
+    {
+      "actual_device": "cuda:0",
+      "actual_threads": 1,
+      "artifacts": {
+        "ema": {
+          "bytes": 618729,
+          "path": "/run/etude/sessions/02d52ca3dac9/attempts/919ec49adeb0/outputs/evidence/shape-t8-s4096-cached-a/w64-d1-loop-b32768-s4096/run/policy-0-ema.pt",
+          "sha256": "93b1d931ced9d1d2a4a518a7de47ad5617c64528a0568fa3a1ebe5d0ce5afae7"
+        },
+        "initial_raw": {
+          "bytes": 618459,
+          "path": "/run/etude/sessions/02d52ca3dac9/attempts/919ec49adeb0/outputs/evidence/shape-t8-s4096-cached-a/w64-d1-loop-b32768-s4096/run/policy-0-initial-raw.pt",
+          "sha256": "2ed6c6942f88f2f8a3fbda6d3e03e79edda9796660b72bd9d31071457d9b3b83"
+        },
+        "optimizer": {
+          "bytes": 1149393,
+          "path": "/run/etude/sessions/02d52ca3dac9/attempts/919ec49adeb0/outputs/evidence/shape-t8-s4096-cached-a/w64-d1-loop-b32768-s4096/run/policy-0-optimizer.pt",
+          "sha256": "5be9ddd346537f76443386e480afa21ee2ab04ebedbbc4428e24314871e28d4d"
+        },
+        "raw": {
+          "bytes": 618019,
+          "path": "/run/etude/sessions/02d52ca3dac9/attempts/919ec49adeb0/outputs/evidence/shape-t8-s4096-cached-a/w64-d1-loop-b32768-s4096/run/policy-0-raw.pt",
+          "sha256": "0e3709ed16becda5c496b301e6a9d5667385f2234678392cc96bf26e7dc74f16"
+        }
+      },
+      "collection_seconds": 15.921216133981943,
+      "cpu_seconds": 22.061090298,
+      "cumulative_seconds": 22.285355359315872,
+      "diagnostic_seconds": 0.0,
+      "diagnostics": [
+        {
+          "actor_exposures": 8192,
+          "advantage_abs_mean": 0.04626309126615524,
+          "behavior": "current-self",
+          "behavior_iteration": 0,
+          "bootstrapped_tail_fraction": 0.999755859375,
+          "collection_kl": 3.654508873296436e-06,
+          "coordinates": {
+            "active_training_seconds": 7.100368209183216,
+            "environment_decisions": 71627,
+            "games": 1,
+            "host_load_1m": 10.88671875,
+            "learner_transitions": 32768,
+            "optimizer_exposures": 8192,
+            "optimizer_updates": 8,
+            "process_cpu_seconds": 8.165641526999998,
+            "rss_bytes": 4509016064,
+            "segment_updates": 1,
+            "training_seconds": 8.3885394372046,
+            "updates": 1
+          },
+          "critic_exposures": 8192,
+          "entropy": 1.0268759727478027,
+          "gradient": "ataraxos_move",
+          "gradient_norm": 0.3810237646102905,
+          "iteration": 1,
+          "learning_rate": 0.0001,
+          "loss": -0.08162497856562229,
+          "numerical": {
+            "actor_rows": 8192,
+            "clip_fraction": 0.0,
+            "critic_rows": 8192,
+            "empty_actor_batch": 0,
+            "forced_rows": 0,
+            "frozen_parameter_tensors": 0,
+            "gradient_missing_tensors": 0,
+            "gradient_nonzero_tensors": 48,
+            "gradient_norm_after": 0.2669998890154975,
+            "gradient_norm_before": 2.647962808609009,
+            "gradient_zero_tensors": 0,
+            "legal_logit_gap_max": 0.007538557052612305,
+            "legal_probability_min": 0.09084932506084442,
+            "legal_underflow_count": 0,
+            "nonfinite_count": 0,
+            "optimizer_steps": 8,
+            "parameter_delta_l2": 0.024300107182059025,
+            "parameter_relative_delta": 0.0002218503509890665,
+            "rejected_steps": 0,
+            "sampled_steps": 1,
+            "skipped_steps": 0,
+            "zero_advantage_rows": 90
+          },
+          "optimizer_exposures": 8192,
+          "policy_loss": -0.0881103890659401,
+          "reference": "action_type_uniform",
+          "reference_kl": 0.04324160888791084,
+          "retained": 8192,
+          "rows": 32768,
+          "schedule_clock": "collection-update-iteration",
+          "selection_groups": [
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                0.01607581228017807,
+                0.01607581228017807,
+                0.01607581228017807,
+                0.01607581228017807,
+                0.01607581228017807
+              ],
+              "residual_abs_mean": 0.04798361659049988,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.075148805975914,
+                0.0022791847586631775,
+                0.032697953283786774,
+                0.08871167153120041,
+                0.36966145038604736
+              ],
+              "residual_abs_mean": 0.07972652465105057,
+              "retained": 3791,
+              "retained_advantage_quantiles": [
+                -0.075148805975914,
+                0.08760656416416168,
+                0.1099931001663208,
+                0.14325183629989624,
+                0.36966145038604736
+              ],
+              "retained_residual_abs_mean": 0.15376409888267517,
+              "rows": 11201,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                0.17577889561653137,
+                0.17577889561653137,
+                0.17577889561653137,
+                0.17577889561653137,
+                0.17577889561653137
+              ],
+              "residual_abs_mean": 0.22607499361038208,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                0.17577889561653137,
+                0.17577889561653137,
+                0.17577889561653137,
+                0.17577889561653137,
+                0.17577889561653137
+              ],
+              "retained_residual_abs_mean": 0.22607499361038208,
+              "rows": 1,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                0.1893140971660614,
+                0.1893140971660614,
+                0.1893140971660614,
+                0.1893140971660614,
+                0.1893140971660614
+              ],
+              "residual_abs_mean": 0.005954653024673462,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                0.1893140971660614,
+                0.1893140971660614,
+                0.1893140971660614,
+                0.1893140971660614,
+                0.1893140971660614
+              ],
+              "retained_residual_abs_mean": 0.005954653024673462,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.06453331559896469,
+                0.006548499688506126,
+                0.027983462437987328,
+                0.07052569091320038,
+                0.3767136335372925
+              ],
+              "residual_abs_mean": 0.058518797159194946,
+              "retained": 2035,
+              "retained_advantage_quantiles": [
+                0.06558650732040405,
+                0.08262316882610321,
+                0.1030692383646965,
+                0.13720111548900604,
+                0.3767136335372925
+              ],
+              "retained_residual_abs_mean": 0.13445930182933807,
+              "rows": 7510,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                0.10546697676181793,
+                0.10546697676181793,
+                0.10546697676181793,
+                0.10546697676181793,
+                0.10546697676181793
+              ],
+              "residual_abs_mean": 0.16328245401382446,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                0.10546697676181793,
+                0.10546697676181793,
+                0.10546697676181793,
+                0.10546697676181793,
+                0.10546697676181793
+              ],
+              "retained_residual_abs_mean": 0.16328245401382446,
+              "rows": 1,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                0.026184186339378357,
+                0.026184186339378357,
+                0.026184186339378357,
+                0.026184186339378357,
+                0.026184186339378357
+              ],
+              "residual_abs_mean": 0.06370916962623596,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.07155772298574448,
+                -0.016225047409534454,
+                0.00255696102976799,
+                0.030389633029699326,
+                0.28383469581604004
+              ],
+              "residual_abs_mean": 0.05844813585281372,
+              "retained": 1401,
+              "retained_advantage_quantiles": [
+                -0.07155772298574448,
+                0.09312781691551208,
+                0.12742656469345093,
+                0.17358896136283875,
+                0.28383469581604004
+              ],
+              "retained_residual_abs_mean": 0.16358621418476105,
+              "rows": 9556,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.08472403883934021,
+                0.00475861132144928,
+                0.022199489176273346,
+                0.05509544163942337,
+                0.19568601250648499
+              ],
+              "residual_abs_mean": 0.04208727180957794,
+              "retained": 230,
+              "retained_advantage_quantiles": [
+                -0.08472403883934021,
+                0.07799064368009567,
+                0.094062939286232,
+                0.12064937502145767,
+                0.19568601250648499
+              ],
+              "retained_residual_abs_mean": 0.10779523849487305,
+              "rows": 1225,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.08608594536781311,
+                -0.0320429801940918,
+                -0.020097773522138596,
+                -0.003306089900434017,
+                0.09223800897598267
+              ],
+              "residual_abs_mean": 0.02536969631910324,
+              "retained": 13,
+              "retained_advantage_quantiles": [
+                -0.08608594536781311,
+                -0.07211650907993317,
+                -0.07032161951065063,
+                -0.06714172661304474,
+                0.09223800897598267
+              ],
+              "retained_residual_abs_mean": 0.06989268958568573,
+              "rows": 374,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.07190538197755814,
+                -0.0013606809079647064,
+                0.010437879711389542,
+                0.035177718847990036,
+                0.16363999247550964
+              ],
+              "residual_abs_mean": 0.03098093718290329,
+              "retained": 109,
+              "retained_advantage_quantiles": [
+                -0.07190538197755814,
+                0.07425948977470398,
+                0.08681157231330872,
+                0.09970028698444366,
+                0.16363999247550964
+              ],
+              "retained_residual_abs_mean": 0.09731901437044144,
+              "rows": 1006,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 6,
+              "advantage_quantiles": [
+                -0.04091730713844299,
+                0.01281806267797947,
+                0.025278430432081223,
+                0.04182957857847214,
+                0.21176832914352417
+              ],
+              "residual_abs_mean": 0.03996124118566513,
+              "retained": 24,
+              "retained_advantage_quantiles": [
+                0.06673712283372879,
+                0.07493303716182709,
+                0.08599895238876343,
+                0.15154336392879486,
+                0.21176832914352417
+              ],
+              "retained_residual_abs_mean": 0.13761082291603088,
+              "rows": 296,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 7,
+              "advantage_quantiles": [
+                -0.029516927897930145,
+                0.01115343440324068,
+                0.022018566727638245,
+                0.06161448359489441,
+                0.09581919014453888
+              ],
+              "residual_abs_mean": 0.03687257319688797,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                0.06884394586086273,
+                0.0692293643951416,
+                0.06961478292942047,
+                0.08271698653697968,
+                0.09581919014453888
+              ],
+              "retained_residual_abs_mean": 0.07340186089277267,
+              "rows": 18,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 8,
+              "advantage_quantiles": [
+                -0.03890353441238403,
+                0.014443966560065746,
+                0.03572842478752136,
+                0.059486668556928635,
+                0.08099482953548431
+              ],
+              "residual_abs_mean": 0.04152732342481613,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                0.0675753504037857,
+                0.07330010831356049,
+                0.07902485877275467,
+                0.08000984787940979,
+                0.08099482953548431
+              ],
+              "retained_residual_abs_mean": 0.07270479202270508,
+              "rows": 14,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -1.1227903366088867,
+                -1.1227903366088867,
+                -1.1227903366088867,
+                -1.1227903366088867,
+                -1.1227903366088867
+              ],
+              "residual_abs_mean": 1.1227903366088867,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -1.1227903366088867,
+                -1.1227903366088867,
+                -1.1227903366088867,
+                -1.1227903366088867,
+                -1.1227903366088867
+              ],
+              "retained_residual_abs_mean": 1.1227903366088867,
+              "rows": 1,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.5275968909263611,
+                -0.44541001319885254,
+                -0.363223135471344,
+                -0.28103625774383545,
+                -0.1988493949174881
+              ],
+              "residual_abs_mean": 0.7455160617828369,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.5275968909263611,
+                -0.44541001319885254,
+                -0.363223135471344,
+                -0.28103625774383545,
+                -0.1988493949174881
+              ],
+              "retained_residual_abs_mean": 0.7455160617828369,
+              "rows": 2,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.07723884284496307,
+                0.024842005223035812,
+                0.05354548245668411,
+                0.10100891441106796,
+                0.22716696560382843
+              ],
+              "residual_abs_mean": 0.07615961879491806,
+              "retained": 527,
+              "retained_advantage_quantiles": [
+                -0.07723884284496307,
+                0.08841929584741592,
+                0.11160434782505035,
+                0.13996389508247375,
+                0.22716696560382843
+              ],
+              "retained_residual_abs_mean": 0.12956510484218597,
+              "rows": 1262,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 10,
+              "advantage_quantiles": [
+                -0.06003174930810928,
+                -1.341104507446289e-07,
+                0.010393813252449036,
+                0.024881094694137573,
+                0.1347564458847046
+              ],
+              "residual_abs_mean": 0.020246269181370735,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                0.06803731620311737,
+                0.09564393013715744,
+                0.12325054407119751,
+                0.12900349497795105,
+                0.1347564458847046
+              ],
+              "retained_residual_abs_mean": 0.10738439857959747,
+              "rows": 109,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 13,
+              "advantage_quantiles": [
+                -0.014526806771755219,
+                -0.009973650798201561,
+                -0.0005571618676185608,
+                0.00460980087518692,
+                0.03369980305433273
+              ],
+              "residual_abs_mean": 0.010661431588232517,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 8,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 14,
+              "advantage_quantiles": [
+                -0.0994231179356575,
+                0.005825147032737732,
+                0.022623196244239807,
+                0.05726255103945732,
+                0.12868382036685944
+              ],
+              "residual_abs_mean": 0.0463300496339798,
+              "retained": 18,
+              "retained_advantage_quantiles": [
+                -0.0994231179356575,
+                0.06820990145206451,
+                0.08612382411956787,
+                0.10306072235107422,
+                0.12868382036685944
+              ],
+              "retained_residual_abs_mean": 0.09288430958986282,
+              "rows": 65,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -0.061660751700401306,
+                -0.0030999528244137764,
+                0.025961413979530334,
+                0.06504376232624054,
+                0.12675613164901733
+              ],
+              "residual_abs_mean": 0.043615810573101044,
+              "retained": 29,
+              "retained_advantage_quantiles": [
+                0.06721581518650055,
+                0.06983451545238495,
+                0.08097463846206665,
+                0.09229773283004761,
+                0.12675613164901733
+              ],
+              "retained_residual_abs_mean": 0.08704287558794022,
+              "rows": 116,
+              "terminal_distance": "censored"
+            }
+          ],
+          "self_play_outcomes": [
+            {
+              "deck": "7d663f0e59c72a61c2efb795e9bcbd55531b9e8298bd2cb5dc0a6a2c68dbcad9",
+              "draws": 0,
+              "losses": 0,
+              "opponent_deck": "fc948195d1e841189608b39ba9662b589398b433fc53c85952132d1303269d79",
+              "position": "draw",
+              "wins": 1
+            },
+            {
+              "deck": "fc948195d1e841189608b39ba9662b589398b433fc53c85952132d1303269d79",
+              "draws": 0,
+              "losses": 1,
+              "opponent_deck": "7d663f0e59c72a61c2efb795e9bcbd55531b9e8298bd2cb5dc0a6a2c68dbcad9",
+              "position": "play",
+              "wins": 0
+            }
+          ],
+          "tau": 0.05,
+          "value_kind": "scalar",
+          "value_loss": 0.006485410500317812
+        },
+        {
+          "actor_exposures": 8192,
+          "advantage_abs_mean": 0.017683085054159164,
+          "behavior": "current-self",
+          "behavior_iteration": 1,
+          "bootstrapped_tail_fraction": 0.99853515625,
+          "collection_kl": 2.8393108308932824e-08,
+          "coordinates": {
+            "active_training_seconds": 13.944367453455925,
+            "environment_decisions": 138546,
+            "games": 20,
+            "host_load_1m": 12.1025390625,
+            "learner_transitions": 65536,
+            "optimizer_exposures": 16384,
+            "optimizer_updates": 16,
+            "process_cpu_seconds": 15.019358447000002,
+            "rss_bytes": 4961837056,
+            "segment_updates": 2,
+            "training_seconds": 15.24104231968522,
+            "updates": 2
+          },
+          "critic_exposures": 8192,
+          "entropy": 0.9447780251502991,
+          "gradient": "ataraxos_move",
+          "gradient_norm": 0.11443571746349335,
+          "iteration": 2,
+          "learning_rate": 0.0001,
+          "loss": 0.002669436436139181,
+          "numerical": {
+            "actor_rows": 8192,
+            "clip_fraction": 0.0,
+            "critic_rows": 8192,
+            "empty_actor_batch": 0,
+            "forced_rows": 0,
+            "legal_logit_gap_max": 0.00875246524810791,
+            "legal_probability_min": 0.08330172300338745,
+            "legal_underflow_count": 0,
+            "nonfinite_count": 0,
+            "optimizer_steps": 8,
+            "rejected_steps": 0,
+            "sampled_steps": 0,
+            "skipped_steps": 0,
+            "zero_advantage_rows": 175
+          },
+          "optimizer_exposures": 8192,
+          "policy_loss": -0.007078234527267382,
+          "reference": "action_type_uniform",
+          "reference_kl": 0.03238082304596901,
+          "retained": 8192,
+          "rows": 32768,
+          "schedule_clock": "collection-update-iteration",
+          "selection_groups": [
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -1.1215760707855225,
+                -1.1072649955749512,
+                -1.0888572931289673,
+                -1.0709911584854126,
+                -1.040450096130371
+              ],
+              "residual_abs_mean": 1.0854337215423584,
+              "retained": 9,
+              "retained_advantage_quantiles": [
+                -1.1215760707855225,
+                -1.1072649955749512,
+                -1.0888572931289673,
+                -1.0709911584854126,
+                -1.040450096130371
+              ],
+              "retained_residual_abs_mean": 1.0854337215423584,
+              "rows": 9,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.5406989455223083,
+                -0.5174813270568848,
+                -0.374947726726532,
+                -0.11166980117559433,
+                -0.07236021012067795
+              ],
+              "residual_abs_mean": 0.68899005651474,
+              "retained": 10,
+              "retained_advantage_quantiles": [
+                -0.5406989455223083,
+                -0.5174813270568848,
+                -0.374947726726532,
+                -0.11166980117559433,
+                -0.07236021012067795
+              ],
+              "retained_residual_abs_mean": 0.68899005651474,
+              "rows": 10,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.03596307337284088,
+                -0.02019190415740013,
+                -0.015152992680668831,
+                -0.005651961546391249,
+                0.0160309337079525
+              ],
+              "residual_abs_mean": 0.2860459089279175,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.03596307337284088,
+                -0.03596307337284088,
+                -0.03596307337284088,
+                -0.03596307337284088,
+                -0.03596307337284088
+              ],
+              "retained_residual_abs_mean": 0.3578679859638214,
+              "rows": 6,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.06186963990330696,
+                -0.011965986341238022,
+                -0.004587204195559025,
+                0.006614767014980316,
+                0.22158676385879517
+              ],
+              "residual_abs_mean": 0.01891585998237133,
+              "retained": 1037,
+              "retained_advantage_quantiles": [
+                -0.06186963990330696,
+                -0.024207482114434242,
+                0.028062554076313972,
+                0.044276174157857895,
+                0.22158676385879517
+              ],
+              "retained_residual_abs_mean": 0.04169014096260071,
+              "rows": 4849,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -1.071298599243164,
+                -1.071298599243164,
+                -1.071298599243164,
+                -1.071298599243164,
+                -1.071298599243164
+              ],
+              "residual_abs_mean": 1.071298599243164,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -1.071298599243164,
+                -1.071298599243164,
+                -1.071298599243164,
+                -1.071298599243164,
+                -1.071298599243164
+              ],
+              "retained_residual_abs_mean": 1.071298599243164,
+              "rows": 1,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.5600900053977966,
+                -0.27595698833465576,
+                -0.1420471966266632,
+                -0.06895913183689117,
+                -0.05139043927192688
+              ],
+              "residual_abs_mean": 0.6143092513084412,
+              "retained": 20,
+              "retained_advantage_quantiles": [
+                -0.5600900053977966,
+                -0.27595698833465576,
+                -0.1420471966266632,
+                -0.06895913183689117,
+                -0.05139043927192688
+              ],
+              "retained_residual_abs_mean": 0.6143092513084412,
+              "rows": 20,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.03737698495388031,
+                -0.026467829942703247,
+                -0.018339844420552254,
+                -0.010578282177448273,
+                -0.0007683970034122467
+              ],
+              "residual_abs_mean": 0.3111964464187622,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.03737698495388031,
+                -0.03374059870839119,
+                -0.03010421432554722,
+                -0.026467829942703247,
+                -0.022831443697214127
+              ],
+              "retained_residual_abs_mean": 0.35169461369514465,
+              "rows": 4,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.059572022408246994,
+                -0.0007495086174458265,
+                0.004809467121958733,
+                0.014554190449416637,
+                0.17156696319580078
+              ],
+              "residual_abs_mean": 0.01852181740105152,
+              "retained": 1441,
+              "retained_advantage_quantiles": [
+                -0.059572022408246994,
+                0.024946093559265137,
+                0.03363192081451416,
+                0.0483204647898674,
+                0.17156696319580078
+              ],
+              "retained_residual_abs_mean": 0.049342088401317596,
+              "rows": 7864,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.5580145120620728,
+                -0.27062636613845825,
+                -0.21732115745544434,
+                -0.08527195453643799,
+                0.02885158360004425
+              ],
+              "residual_abs_mean": 0.586487352848053,
+              "retained": 19,
+              "retained_advantage_quantiles": [
+                -0.5580145120620728,
+                -0.27062636613845825,
+                -0.21732115745544434,
+                -0.08527195453643799,
+                0.02885158360004425
+              ],
+              "retained_residual_abs_mean": 0.586487352848053,
+              "rows": 19,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.03672785684466362,
+                -0.029102899134159088,
+                -0.0109691321849823,
+                0.002290939912199974,
+                0.0244920551776886
+              ],
+              "residual_abs_mean": 0.2664017677307129,
+              "retained": 5,
+              "retained_advantage_quantiles": [
+                -0.03672785684466362,
+                -0.03657277673482895,
+                -0.029102899134159088,
+                -0.022289812564849854,
+                0.0244920551776886
+              ],
+              "retained_residual_abs_mean": 0.28783896565437317,
+              "rows": 9,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.06324747204780579,
+                -0.013532834127545357,
+                -0.0006740686949342489,
+                0.012109948322176933,
+                0.19837456941604614
+              ],
+              "residual_abs_mean": 0.019167430698871613,
+              "retained": 1742,
+              "retained_advantage_quantiles": [
+                -0.06324747204780579,
+                -0.022578753530979156,
+                0.028832001611590385,
+                0.04685785248875618,
+                0.19837456941604614
+              ],
+              "retained_residual_abs_mean": 0.042628299444913864,
+              "rows": 7910,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.5316741466522217,
+                -0.5316741466522217,
+                -0.5316741466522217,
+                -0.5316741466522217,
+                -0.5316741466522217
+              ],
+              "residual_abs_mean": 0.8529714941978455,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.5316741466522217,
+                -0.5316741466522217,
+                -0.5316741466522217,
+                -0.5316741466522217,
+                -0.5316741466522217
+              ],
+              "retained_residual_abs_mean": 0.8529714941978455,
+              "rows": 1,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.007074214518070221,
+                -0.007074214518070221,
+                -0.007074214518070221,
+                -0.007074214518070221,
+                -0.007074214518070221
+              ],
+              "residual_abs_mean": 0.24983945488929749,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.053912051022052765,
+                0.004834227729588747,
+                0.014662796631455421,
+                0.0315096378326416,
+                0.1363414078950882
+              ],
+              "residual_abs_mean": 0.028133904561400414,
+              "retained": 1776,
+              "retained_advantage_quantiles": [
+                -0.053912051022052765,
+                0.027842923998832703,
+                0.037932075560092926,
+                0.052958469837903976,
+                0.1363414078950882
+              ],
+              "retained_residual_abs_mean": 0.0502178929746151,
+              "rows": 4517,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.27025169134140015,
+                -0.18711990118026733,
+                -0.1527959704399109,
+                -0.13299281895160675,
+                -0.09342346340417862
+              ],
+              "residual_abs_mean": 0.5724716186523438,
+              "retained": 4,
+              "retained_advantage_quantiles": [
+                -0.27025169134140015,
+                -0.18711990118026733,
+                -0.1527959704399109,
+                -0.13299281895160675,
+                -0.09342346340417862
+              ],
+              "retained_residual_abs_mean": 0.5724716186523438,
+              "rows": 4,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.05147857218980789,
+                -0.05147857218980789,
+                -0.05147857218980789,
+                -0.05147857218980789,
+                -0.05147857218980789
+              ],
+              "residual_abs_mean": 0.36705708503723145,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.05147857218980789,
+                -0.05147857218980789,
+                -0.05147857218980789,
+                -0.05147857218980789,
+                -0.05147857218980789
+              ],
+              "retained_residual_abs_mean": 0.36705708503723145,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.08468407392501831,
+                -0.025237323716282845,
+                -0.0146431103348732,
+                -0.0028813574463129044,
+                0.07851995527744293
+              ],
+              "residual_abs_mean": 0.02107730694115162,
+              "retained": 454,
+              "retained_advantage_quantiles": [
+                -0.08468407392501831,
+                -0.03938966244459152,
+                -0.029491819441318512,
+                -0.023835962638258934,
+                0.07851995527744293
+              ],
+              "retained_residual_abs_mean": 0.03502519056200981,
+              "rows": 1231,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -1.1201800107955933,
+                -1.1062259674072266,
+                -1.093583106994629,
+                -1.0742348432540894,
+                -1.0401643514633179
+              ],
+              "residual_abs_mean": 1.0868775844573975,
+              "retained": 4,
+              "retained_advantage_quantiles": [
+                -1.1201800107955933,
+                -1.1062259674072266,
+                -1.093583106994629,
+                -1.0742348432540894,
+                -1.0401643514633179
+              ],
+              "retained_residual_abs_mean": 1.0868775844573975,
+              "rows": 4,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.5478797554969788,
+                -0.467245489358902,
+                -0.20156311988830566,
+                -0.12973079085350037,
+                -0.045662738382816315
+              ],
+              "residual_abs_mean": 0.6598862409591675,
+              "retained": 6,
+              "retained_advantage_quantiles": [
+                -0.5478797554969788,
+                -0.467245489358902,
+                -0.20156311988830566,
+                -0.12973079085350037,
+                -0.045662738382816315
+              ],
+              "retained_residual_abs_mean": 0.6598862409591675,
+              "rows": 6,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.027696488425135612,
+                -0.02662508934736252,
+                -0.007751235738396645,
+                0.015448933467268944,
+                0.02949928306043148
+              ],
+              "residual_abs_mean": 0.2465248703956604,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                -0.027696488425135612,
+                -0.026982221752405167,
+                -0.02626795694231987,
+                0.0016156639903783798,
+                0.02949928306043148
+              ],
+              "retained_residual_abs_mean": 0.24459302425384521,
+              "rows": 4,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.08756272494792938,
+                -0.0014966749586164951,
+                0.005498502403497696,
+                0.01592278853058815,
+                0.12150846421718597
+              ],
+              "residual_abs_mean": 0.018685273826122284,
+              "retained": 543,
+              "retained_advantage_quantiles": [
+                -0.08756272494792938,
+                0.022874154150485992,
+                0.029201362282037735,
+                0.0410643145442009,
+                0.12150846421718597
+              ],
+              "retained_residual_abs_mean": 0.04451233148574829,
+              "rows": 2659,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 6,
+              "advantage_quantiles": [
+                -0.047606635838747025,
+                0.0015886640176177025,
+                0.008763395249843597,
+                0.018927868455648422,
+                0.1530776023864746
+              ],
+              "residual_abs_mean": 0.020332463085651398,
+              "retained": 184,
+              "retained_advantage_quantiles": [
+                -0.047606635838747025,
+                0.025370974093675613,
+                0.03179397061467171,
+                0.051118820905685425,
+                0.1530776023864746
+              ],
+              "retained_residual_abs_mean": 0.050631795078516006,
+              "rows": 846,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 7,
+              "advantage_quantiles": [
+                -0.03690112382173538,
+                0.006107177119702101,
+                0.023604977875947952,
+                0.03991304337978363,
+                0.0758824571967125
+              ],
+              "residual_abs_mean": 0.029715286567807198,
+              "retained": 40,
+              "retained_advantage_quantiles": [
+                -0.03690112382173538,
+                0.02759837731719017,
+                0.03730752319097519,
+                0.05590864643454552,
+                0.0758824571967125
+              ],
+              "retained_residual_abs_mean": 0.04590273275971413,
+              "rows": 74,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 8,
+              "advantage_quantiles": [
+                -0.029506199061870575,
+                0.009807838127017021,
+                0.021961387246847153,
+                0.03998187929391861,
+                0.08637792617082596
+              ],
+              "residual_abs_mean": 0.03275148943066597,
+              "retained": 39,
+              "retained_advantage_quantiles": [
+                -0.029506199061870575,
+                0.028534211218357086,
+                0.038199812173843384,
+                0.05538672208786011,
+                0.08637792617082596
+              ],
+              "retained_residual_abs_mean": 0.0485016405582428,
+              "rows": 75,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -1.111790418624878,
+                -1.0999970436096191,
+                -1.0882036685943604,
+                -1.0632028579711914,
+                -1.038201928138733
+              ],
+              "residual_abs_mean": 1.0793986320495605,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                -1.111790418624878,
+                -1.0999970436096191,
+                -1.0882036685943604,
+                -1.0632028579711914,
+                -1.038201928138733
+              ],
+              "retained_residual_abs_mean": 1.0793986320495605,
+              "rows": 3,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.5519111156463623,
+                -0.5248963236808777,
+                -0.20462635159492493,
+                -0.10816238820552826,
+                -0.06903845071792603
+              ],
+              "residual_abs_mean": 0.6672315001487732,
+              "retained": 10,
+              "retained_advantage_quantiles": [
+                -0.5519111156463623,
+                -0.5248963236808777,
+                -0.20462635159492493,
+                -0.10816238820552826,
+                -0.06903845071792603
+              ],
+              "retained_residual_abs_mean": 0.6672315001487732,
+              "rows": 10,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.013497456908226013,
+                -0.007537735626101494,
+                -0.0015780143439769745,
+                0.006753931753337383,
+                0.015085877850651741
+              ],
+              "residual_abs_mean": 0.30291271209716797,
+              "retained": 0,
+              "retained_advantage_quantiles": [],
+              "retained_residual_abs_mean": null,
+              "rows": 3,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.04511558264493942,
+                0.011725671589374542,
+                0.02319101244211197,
+                0.03424204885959625,
+                0.15671353042125702
+              ],
+              "residual_abs_mean": 0.0326206237077713,
+              "retained": 353,
+              "retained_advantage_quantiles": [
+                -0.04511558264493942,
+                0.026372838765382767,
+                0.03300554305315018,
+                0.04685722663998604,
+                0.15671353042125702
+              ],
+              "retained_residual_abs_mean": 0.0491265244781971,
+              "rows": 651,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 10,
+              "advantage_quantiles": [
+                -0.04955397918820381,
+                0.001590147614479065,
+                0.010064706206321716,
+                0.019890591502189636,
+                0.10552120208740234
+              ],
+              "residual_abs_mean": 0.01939490996301174,
+              "retained": 164,
+              "retained_advantage_quantiles": [
+                -0.04955397918820381,
+                0.02342650108039379,
+                0.0312851257622242,
+                0.042414672672748566,
+                0.10552120208740234
+              ],
+              "retained_residual_abs_mean": 0.04252582788467407,
+              "rows": 633,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 11,
+              "advantage_quantiles": [
+                -0.023793384432792664,
+                -0.004341296851634979,
+                0.004090001340955496,
+                0.014113267883658409,
+                0.08093925565481186
+              ],
+              "residual_abs_mean": 0.014329073950648308,
+              "retained": 9,
+              "retained_advantage_quantiles": [
+                -0.023793384432792664,
+                0.024947047233581543,
+                0.03261181712150574,
+                0.03614705055952072,
+                0.08093925565481186
+              ],
+              "retained_residual_abs_mean": 0.035953473299741745,
+              "rows": 68,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 13,
+              "advantage_quantiles": [
+                -0.03552018851041794,
+                0.0006592832505702972,
+                0.004404284060001373,
+                0.008067328482866287,
+                0.05351385474205017
+              ],
+              "residual_abs_mean": 0.012124307453632355,
+              "retained": 18,
+              "retained_advantage_quantiles": [
+                -0.03552018851041794,
+                0.022858619689941406,
+                0.028760839253664017,
+                0.03421606868505478,
+                0.05351385474205017
+              ],
+              "retained_residual_abs_mean": 0.04258577153086662,
+              "rows": 289,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 14,
+              "advantage_quantiles": [
+                -0.5290170311927795,
+                -0.5290170311927795,
+                -0.5290170311927795,
+                -0.5290170311927795,
+                -0.5290170311927795
+              ],
+              "residual_abs_mean": 0.8504561185836792,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.5290170311927795,
+                -0.5290170311927795,
+                -0.5290170311927795,
+                -0.5290170311927795,
+                -0.5290170311927795
+              ],
+              "retained_residual_abs_mean": 0.8504561185836792,
+              "rows": 1,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 14,
+              "advantage_quantiles": [
+                -0.0373225212097168,
+                0.0009844489395618439,
+                0.010252545587718487,
+                0.02574233151972294,
+                0.10832546651363373
+              ],
+              "residual_abs_mean": 0.025031017139554024,
+              "retained": 127,
+              "retained_advantage_quantiles": [
+                -0.0373225212097168,
+                0.026162495836615562,
+                0.03853650018572807,
+                0.05951103940606117,
+                0.10832546651363373
+              ],
+              "retained_residual_abs_mean": 0.051483843475580215,
+              "rows": 402,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -1.128412127494812,
+                -1.1126692295074463,
+                -1.096926212310791,
+                -1.0811833143234253,
+                -1.0654404163360596
+              ],
+              "residual_abs_mean": 1.096926212310791,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -1.128412127494812,
+                -1.1126692295074463,
+                -1.096926212310791,
+                -1.0811833143234253,
+                -1.0654404163360596
+              ],
+              "retained_residual_abs_mean": 1.096926212310791,
+              "rows": 2,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -0.5350688695907593,
+                -0.40675923228263855,
+                -0.2784495949745178,
+                -0.1501399576663971,
+                -0.021830324083566666
+              ],
+              "residual_abs_mean": 0.6290390491485596,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.5350688695907593,
+                -0.40675923228263855,
+                -0.2784495949745178,
+                -0.1501399576663971,
+                -0.021830324083566666
+              ],
+              "retained_residual_abs_mean": 0.6290390491485596,
+              "rows": 2,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -0.05149233341217041,
+                -0.005466739647090435,
+                0.005073008127510548,
+                0.019314514473080635,
+                0.11692999303340912
+              ],
+              "residual_abs_mean": 0.024130841717123985,
+              "retained": 161,
+              "retained_advantage_quantiles": [
+                -0.05149233341217041,
+                0.023641012609004974,
+                0.037760309875011444,
+                0.05348796024918556,
+                0.11692999303340912
+              ],
+              "retained_residual_abs_mean": 0.051229603588581085,
+              "rows": 580,
+              "terminal_distance": "censored"
+            }
+          ],
+          "self_play_outcomes": [
+            {
+              "deck": "7d663f0e59c72a61c2efb795e9bcbd55531b9e8298bd2cb5dc0a6a2c68dbcad9",
+              "draws": 0,
+              "losses": 1,
+              "opponent_deck": "fc948195d1e841189608b39ba9662b589398b433fc53c85952132d1303269d79",
+              "position": "draw",
+              "wins": 18
+            },
+            {
+              "deck": "fc948195d1e841189608b39ba9662b589398b433fc53c85952132d1303269d79",
+              "draws": 0,
+              "losses": 18,
+              "opponent_deck": "7d663f0e59c72a61c2efb795e9bcbd55531b9e8298bd2cb5dc0a6a2c68dbcad9",
+              "position": "play",
+              "wins": 1
+            }
+          ],
+          "tau": 0.04061261981781178,
+          "value_kind": "scalar",
+          "value_loss": 0.009747670963406563
+        },
+        {
+          "actor_exposures": 8192,
+          "advantage_abs_mean": 0.01150653325021267,
+          "behavior": "current-self",
+          "behavior_iteration": 2,
+          "bootstrapped_tail_fraction": 0.996826171875,
+          "collection_kl": 1.424090896762209e-06,
+          "coordinates": {
+            "active_training_seconds": 20.927426040172577,
+            "environment_decisions": 205293,
+            "games": 63,
+            "host_load_1m": 12.1748046875,
+            "learner_transitions": 98304,
+            "optimizer_exposures": 24576,
+            "optimizer_updates": 24,
+            "process_cpu_seconds": 22.012498425,
+            "rss_bytes": 5004918784,
+            "segment_updates": 3,
+            "training_seconds": 22.233956545591354,
+            "updates": 3
+          },
+          "critic_exposures": 8192,
+          "entropy": 0.9580026268959045,
+          "gradient": "ataraxos_move",
+          "gradient_norm": 0.03431563824415207,
+          "iteration": 3,
+          "learning_rate": 0.0001,
+          "loss": 0.021410448658247587,
+          "numerical": {
+            "actor_rows": 8192,
+            "clip_fraction": 0.0,
+            "critic_rows": 8192,
+            "empty_actor_batch": 0,
+            "forced_rows": 0,
+            "legal_logit_gap_max": 0.010178804397583008,
+            "legal_probability_min": 0.07665913552045822,
+            "legal_underflow_count": 0,
+            "nonfinite_count": 0,
+            "optimizer_steps": 8,
+            "rejected_steps": 0,
+            "sampled_steps": 0,
+            "skipped_steps": 0,
+            "zero_advantage_rows": 140
+          },
+          "optimizer_exposures": 8192,
+          "policy_loss": 0.005706105562825798,
+          "reference": "action_type_uniform",
+          "reference_kl": 0.029660934582352638,
+          "retained": 8192,
+          "rows": 32768,
+          "schedule_clock": "collection-update-iteration",
+          "selection_groups": [
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -1.0409647226333618,
+                -1.0295989513397217,
+                -1.0128000974655151,
+                -1.0074924230575562,
+                -0.9857836961746216
+              ],
+              "residual_abs_mean": 1.0165678262710571,
+              "retained": 9,
+              "retained_advantage_quantiles": [
+                -1.0409647226333618,
+                -1.0295989513397217,
+                -1.0128000974655151,
+                -1.0074924230575562,
+                -0.9857836961746216
+              ],
+              "retained_residual_abs_mean": 1.0165678262710571,
+              "rows": 9,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.5239453315734863,
+                -0.2575403153896332,
+                -0.24055621027946472,
+                -0.11957769840955734,
+                -0.05008583515882492
+              ],
+              "residual_abs_mean": 0.6017221212387085,
+              "retained": 22,
+              "retained_advantage_quantiles": [
+                -0.5239453315734863,
+                -0.2575403153896332,
+                -0.24055621027946472,
+                -0.11957769840955734,
+                -0.05008583515882492
+              ],
+              "retained_residual_abs_mean": 0.6017221212387085,
+              "rows": 22,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.036966849118471146,
+                -0.03384724631905556,
+                -0.013149984180927277,
+                -0.007998154498636723,
+                0.02447357028722763
+              ],
+              "residual_abs_mean": 0.27896323800086975,
+              "retained": 7,
+              "retained_advantage_quantiles": [
+                -0.036966849118471146,
+                -0.03526371717453003,
+                -0.016212310642004013,
+                -0.012986861169338226,
+                0.02447357028722763
+              ],
+              "retained_residual_abs_mean": 0.29252955317497253,
+              "rows": 9,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 0,
+              "advantage_quantiles": [
+                -0.04778258502483368,
+                -0.008437220007181168,
+                -0.0035375661682337523,
+                0.0015935751143842936,
+                0.09482240676879883
+              ],
+              "residual_abs_mean": 0.01068782526999712,
+              "retained": 881,
+              "retained_advantage_quantiles": [
+                -0.04778258502483368,
+                -0.017046775668859482,
+                -0.013164432719349861,
+                0.019877532497048378,
+                0.09482240676879883
+              ],
+              "retained_residual_abs_mean": 0.022170566022396088,
+              "rows": 3825,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.9958372116088867,
+                -0.9958372116088867,
+                -0.9958372116088867,
+                -0.9958372116088867,
+                -0.9958372116088867
+              ],
+              "residual_abs_mean": 0.9958372116088867,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.9958372116088867,
+                -0.9958372116088867,
+                -0.9958372116088867,
+                -0.9958372116088867,
+                -0.9958372116088867
+              ],
+              "retained_residual_abs_mean": 0.9958372116088867,
+              "rows": 1,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.5168730616569519,
+                -0.32931897044181824,
+                -0.19057217240333557,
+                -0.10389725863933563,
+                -0.055051494389772415
+              ],
+              "residual_abs_mean": 0.6004548072814941,
+              "retained": 32,
+              "retained_advantage_quantiles": [
+                -0.5168730616569519,
+                -0.32931897044181824,
+                -0.19057217240333557,
+                -0.10389725863933563,
+                -0.055051494389772415
+              ],
+              "retained_residual_abs_mean": 0.6004548072814941,
+              "rows": 32,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.06668612360954285,
+                -0.029791072010993958,
+                -0.01410415954887867,
+                -0.005943336524069309,
+                0.03118838369846344
+              ],
+              "residual_abs_mean": 0.2879095673561096,
+              "retained": 12,
+              "retained_advantage_quantiles": [
+                -0.06668612360954285,
+                -0.03385089337825775,
+                -0.027613375335931778,
+                -0.015674088150262833,
+                0.03118838369846344
+              ],
+              "retained_residual_abs_mean": 0.316473126411438,
+              "rows": 19,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 1,
+              "advantage_quantiles": [
+                -0.039187006652355194,
+                -0.001853653695434332,
+                0.0018029497005045414,
+                0.0069320593029260635,
+                0.1158917024731636
+              ],
+              "residual_abs_mean": 0.009736662730574608,
+              "retained": 1099,
+              "retained_advantage_quantiles": [
+                -0.039187006652355194,
+                0.012766179628670216,
+                0.016923509538173676,
+                0.024652723222970963,
+                0.1158917024731636
+              ],
+              "retained_residual_abs_mean": 0.02550181932747364,
+              "rows": 6926,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -1.0283750295639038,
+                -1.0133150815963745,
+                -1.0082683563232422,
+                -1.0071088075637817,
+                -1.0037106275558472
+              ],
+              "residual_abs_mean": 1.012155532836914,
+              "retained": 4,
+              "retained_advantage_quantiles": [
+                -1.0283750295639038,
+                -1.0133150815963745,
+                -1.0082683563232422,
+                -1.0071088075637817,
+                -1.0037106275558472
+              ],
+              "retained_residual_abs_mean": 1.012155532836914,
+              "rows": 4,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.5216307044029236,
+                -0.5074402093887329,
+                -0.25966739654541016,
+                -0.09191830456256866,
+                0.053105443716049194
+              ],
+              "residual_abs_mean": 0.634568452835083,
+              "retained": 27,
+              "retained_advantage_quantiles": [
+                -0.5216307044029236,
+                -0.5074402093887329,
+                -0.25966739654541016,
+                -0.09191830456256866,
+                0.053105443716049194
+              ],
+              "retained_residual_abs_mean": 0.634568452835083,
+              "rows": 27,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.039093077182769775,
+                -0.029433682560920715,
+                -0.017954589799046516,
+                -0.006875623017549515,
+                0.02067454159259796
+              ],
+              "residual_abs_mean": 0.2616211175918579,
+              "retained": 8,
+              "retained_advantage_quantiles": [
+                -0.039093077182769775,
+                -0.0329987108707428,
+                -0.02562432736158371,
+                -0.017201924696564674,
+                0.02067454159259796
+              ],
+              "retained_residual_abs_mean": 0.27526676654815674,
+              "rows": 11,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 2,
+              "advantage_quantiles": [
+                -0.05573178827762604,
+                -0.008755747228860855,
+                -0.0022946028038859367,
+                0.008550332859158516,
+                0.11101830005645752
+              ],
+              "residual_abs_mean": 0.010902087204158306,
+              "retained": 2014,
+              "retained_advantage_quantiles": [
+                -0.05573178827762604,
+                -0.013825524598360062,
+                0.014777855947613716,
+                0.02169518917798996,
+                0.11101830005645752
+              ],
+              "retained_residual_abs_mean": 0.02107894793152809,
+              "rows": 7197,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -1.0603491067886353,
+                -1.0362194776535034,
+                -1.0090643167495728,
+                0.9830647706985474,
+                1.0082067251205444
+              ],
+              "residual_abs_mean": 1.0165984630584717,
+              "retained": 7,
+              "retained_advantage_quantiles": [
+                -1.0603491067886353,
+                -1.0362194776535034,
+                -1.0090643167495728,
+                0.9830647706985474,
+                1.0082067251205444
+              ],
+              "retained_residual_abs_mean": 1.0165984630584717,
+              "rows": 7,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.521041989326477,
+                -0.25576359033584595,
+                -0.0727105587720871,
+                0.1274203211069107,
+                0.5041033625602722
+              ],
+              "residual_abs_mean": 0.6250379681587219,
+              "retained": 27,
+              "retained_advantage_quantiles": [
+                -0.521041989326477,
+                -0.25576359033584595,
+                -0.0727105587720871,
+                0.1274203211069107,
+                0.5041033625602722
+              ],
+              "retained_residual_abs_mean": 0.6250379681587219,
+              "rows": 27,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.004465647041797638,
+                -0.0001667216420173645,
+                0.017649156972765923,
+                0.035831134766340256,
+                0.06227075308561325
+              ],
+              "residual_abs_mean": 0.25889384746551514,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                0.017649156972765923,
+                0.026740144938230515,
+                0.035831134766340256,
+                0.049050942063331604,
+                0.06227075308561325
+              ],
+              "retained_residual_abs_mean": 0.2922059893608093,
+              "rows": 5,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 3,
+              "advantage_quantiles": [
+                -0.035706840455532074,
+                0.0007042738143354654,
+                0.005057450383901596,
+                0.012415258213877678,
+                0.09214412420988083
+              ],
+              "residual_abs_mean": 0.01253149937838316,
+              "retained": 1530,
+              "retained_advantage_quantiles": [
+                -0.035706840455532074,
+                0.014980298466980457,
+                0.01947808265686035,
+                0.027005871757864952,
+                0.09214412420988083
+              ],
+              "retained_residual_abs_mean": 0.02725796587765217,
+              "rows": 5759,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -1.060821294784546,
+                -1.0518953800201416,
+                -1.0430569648742676,
+                -1.02863609790802,
+                -1.007993221282959
+              ],
+              "residual_abs_mean": 1.0391710996627808,
+              "retained": 12,
+              "retained_advantage_quantiles": [
+                -1.060821294784546,
+                -1.0518953800201416,
+                -1.0430569648742676,
+                -1.02863609790802,
+                -1.007993221282959
+              ],
+              "retained_residual_abs_mean": 1.0391710996627808,
+              "rows": 12,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.5256940126419067,
+                -0.33083197474479675,
+                -0.13596993684768677,
+                -0.10471741855144501,
+                -0.07346490025520325
+              ],
+              "residual_abs_mean": 0.5933107137680054,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                -0.5256940126419067,
+                -0.33083197474479675,
+                -0.13596993684768677,
+                -0.10471741855144501,
+                -0.07346490025520325
+              ],
+              "retained_residual_abs_mean": 0.5933107137680054,
+              "rows": 3,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.047765109688043594,
+                -0.044857971370220184,
+                -0.041950829327106476,
+                -0.039043691009283066,
+                -0.036136552691459656
+              ],
+              "residual_abs_mean": 0.3512025475502014,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.047765109688043594,
+                -0.044857971370220184,
+                -0.041950829327106476,
+                -0.039043691009283066,
+                -0.036136552691459656
+              ],
+              "retained_residual_abs_mean": 0.3512025475502014,
+              "rows": 2,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 4,
+              "advantage_quantiles": [
+                -0.06475227326154709,
+                -0.01801360957324505,
+                -0.010264454409480095,
+                -0.001958910608664155,
+                0.039616361260414124
+              ],
+              "residual_abs_mean": 0.014013349078595638,
+              "retained": 736,
+              "retained_advantage_quantiles": [
+                -0.06475227326154709,
+                -0.024784453213214874,
+                -0.019147848710417747,
+                -0.014764761552214622,
+                0.039616361260414124
+              ],
+              "retained_residual_abs_mean": 0.021566154435276985,
+              "rows": 1630,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -1.0065780878067017,
+                -1.0037527084350586,
+                -1.0009273290634155,
+                -0.9981020092964172,
+                -0.9952766299247742
+              ],
+              "residual_abs_mean": 1.0009273290634155,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -1.0065780878067017,
+                -1.0037527084350586,
+                -1.0009273290634155,
+                -0.9981020092964172,
+                -0.9952766299247742
+              ],
+              "retained_residual_abs_mean": 1.0009273290634155,
+              "rows": 2,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.2750980257987976,
+                -0.23771028220653534,
+                -0.12386798858642578,
+                -0.10101588070392609,
+                -0.0387941412627697
+              ],
+              "residual_abs_mean": 0.5328654646873474,
+              "retained": 12,
+              "retained_advantage_quantiles": [
+                -0.2750980257987976,
+                -0.23771028220653534,
+                -0.12386798858642578,
+                -0.10101588070392609,
+                -0.0387941412627697
+              ],
+              "retained_residual_abs_mean": 0.5328654646873474,
+              "rows": 12,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.02820831909775734,
+                -0.025655150413513184,
+                -0.01587175950407982,
+                -0.0067568207159638405,
+                -0.006208999082446098
+              ],
+              "residual_abs_mean": 0.2769307792186737,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.02820831909775734,
+                -0.02735726162791252,
+                -0.026506206020712852,
+                -0.025655150413513184,
+                -0.024804092943668365
+              ],
+              "retained_residual_abs_mean": 0.30654728412628174,
+              "rows": 4,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 5,
+              "advantage_quantiles": [
+                -0.03635852038860321,
+                -0.0010705261956900358,
+                0.003536307718604803,
+                0.010008650831878185,
+                0.06958351284265518
+              ],
+              "residual_abs_mean": 0.010542917996644974,
+              "retained": 587,
+              "retained_advantage_quantiles": [
+                -0.03635852038860321,
+                0.013494066894054413,
+                0.01674143224954605,
+                0.022387810051441193,
+                0.06958351284265518
+              ],
+              "retained_residual_abs_mean": 0.023098062723875046,
+              "rows": 2582,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 6,
+              "advantage_quantiles": [
+                -0.06903404742479324,
+                -0.06744886189699173,
+                -0.06586368381977081,
+                -0.0642784982919693,
+                -0.06269331276416779
+              ],
+              "residual_abs_mean": 0.4244759976863861,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.06903404742479324,
+                -0.06744886189699173,
+                -0.06586368381977081,
+                -0.0642784982919693,
+                -0.06269331276416779
+              ],
+              "retained_residual_abs_mean": 0.4244759976863861,
+              "rows": 2,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 6,
+              "advantage_quantiles": [
+                -0.034901250153779984,
+                -0.034901250153779984,
+                -0.034901250153779984,
+                -0.034901250153779984,
+                -0.034901250153779984
+              ],
+              "residual_abs_mean": 0.32974061369895935,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.034901250153779984,
+                -0.034901250153779984,
+                -0.034901250153779984,
+                -0.034901250153779984,
+                -0.034901250153779984
+              ],
+              "retained_residual_abs_mean": 0.32974061369895935,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 6,
+              "advantage_quantiles": [
+                -0.036799050867557526,
+                0.0007559049990959466,
+                0.0035755799617618322,
+                0.009519468992948532,
+                0.08609771728515625
+              ],
+              "residual_abs_mean": 0.009901595301926136,
+              "retained": 263,
+              "retained_advantage_quantiles": [
+                -0.036799050867557526,
+                0.013952421024441719,
+                0.016951225697994232,
+                0.02518080733716488,
+                0.08609771728515625
+              ],
+              "retained_residual_abs_mean": 0.02430224046111107,
+              "rows": 1274,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 7,
+              "advantage_quantiles": [
+                -0.02093764767050743,
+                -0.0034718059469014406,
+                0.004988614469766617,
+                0.016293508931994438,
+                0.04805974289774895
+              ],
+              "residual_abs_mean": 0.013682262040674686,
+              "retained": 46,
+              "retained_advantage_quantiles": [
+                -0.02093764767050743,
+                0.014441319741308689,
+                0.018509719520807266,
+                0.026702312752604485,
+                0.04805974289774895
+              ],
+              "retained_residual_abs_mean": 0.023722117766737938,
+              "rows": 112,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 8,
+              "advantage_quantiles": [
+                -0.026250354945659637,
+                -0.0012965486384928226,
+                0.005010574124753475,
+                0.013126096688210964,
+                0.058168068528175354
+              ],
+              "residual_abs_mean": 0.012354320846498013,
+              "retained": 31,
+              "retained_advantage_quantiles": [
+                -0.026250354945659637,
+                0.014269478619098663,
+                0.017301753163337708,
+                0.02625562809407711,
+                0.058168068528175354
+              ],
+              "retained_residual_abs_mean": 0.024899708107113838,
+              "rows": 100,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -1.0745820999145508,
+                -1.0475964546203613,
+                -1.0413652658462524,
+                -1.0364142656326294,
+                -1.0209572315216064
+              ],
+              "residual_abs_mean": 1.0436125993728638,
+              "retained": 8,
+              "retained_advantage_quantiles": [
+                -1.0745820999145508,
+                -1.0475964546203613,
+                -1.0413652658462524,
+                -1.0364142656326294,
+                -1.0209572315216064
+              ],
+              "retained_residual_abs_mean": 1.0436125993728638,
+              "rows": 8,
+              "terminal_distance": "terminal"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.5316755771636963,
+                -0.5029624700546265,
+                -0.2667462229728699,
+                -0.2519305944442749,
+                -0.07238058000802994
+              ],
+              "residual_abs_mean": 0.7012798190116882,
+              "retained": 7,
+              "retained_advantage_quantiles": [
+                -0.5316755771636963,
+                -0.5029624700546265,
+                -0.2667462229728699,
+                -0.2519305944442749,
+                -0.07238058000802994
+              ],
+              "retained_residual_abs_mean": 0.7012798190116882,
+              "rows": 7,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 9,
+              "advantage_quantiles": [
+                -0.030293021351099014,
+                0.0011612981325015426,
+                0.00919246580451727,
+                0.0167093425989151,
+                0.06417923420667648
+              ],
+              "residual_abs_mean": 0.01337356399744749,
+              "retained": 256,
+              "retained_advantage_quantiles": [
+                -0.030293021351099014,
+                0.01461443305015564,
+                0.01864616572856903,
+                0.024013279005885124,
+                0.06417923420667648
+              ],
+              "retained_residual_abs_mean": 0.02272690460085869,
+              "rows": 626,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 10,
+              "advantage_quantiles": [
+                -0.2664502263069153,
+                -0.2333231121301651,
+                -0.20019599795341492,
+                -0.16706888377666473,
+                -0.13394176959991455
+              ],
+              "residual_abs_mean": 0.6029529571533203,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.2664502263069153,
+                -0.2333231121301651,
+                -0.20019599795341492,
+                -0.16706888377666473,
+                -0.13394176959991455
+              ],
+              "retained_residual_abs_mean": 0.6029529571533203,
+              "rows": 2,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 10,
+              "advantage_quantiles": [
+                -0.06046079844236374,
+                -0.040696270763874054,
+                -0.020931746810674667,
+                -0.0011672209948301315,
+                0.018597304821014404
+              ],
+              "residual_abs_mean": 0.2882598042488098,
+              "retained": 2,
+              "retained_advantage_quantiles": [
+                -0.06046079844236374,
+                -0.040696270763874054,
+                -0.020931746810674667,
+                -0.0011672209948301315,
+                0.018597304821014404
+              ],
+              "retained_residual_abs_mean": 0.2882598042488098,
+              "rows": 2,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 10,
+              "advantage_quantiles": [
+                -0.03391953185200691,
+                0.000460282142739743,
+                0.006290420889854431,
+                0.012603206560015678,
+                0.07069873064756393
+              ],
+              "residual_abs_mean": 0.011364791542291641,
+              "retained": 195,
+              "retained_advantage_quantiles": [
+                -0.03391953185200691,
+                0.013734418898820877,
+                0.017687944695353508,
+                0.022176090627908707,
+                0.07069873064756393
+              ],
+              "retained_residual_abs_mean": 0.023155154660344124,
+              "rows": 675,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 11,
+              "advantage_quantiles": [
+                -0.5032890439033508,
+                -0.5004636645317078,
+                -0.4976383149623871,
+                -0.31151247024536133,
+                -0.12538662552833557
+              ],
+              "residual_abs_mean": 0.7109171152114868,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                -0.5032890439033508,
+                -0.5004636645317078,
+                -0.4976383149623871,
+                -0.31151247024536133,
+                -0.12538662552833557
+              ],
+              "retained_residual_abs_mean": 0.7109171152114868,
+              "rows": 3,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 11,
+              "advantage_quantiles": [
+                -0.024130381643772125,
+                -0.024130381643772125,
+                -0.024130381643772125,
+                -0.024130381643772125,
+                -0.024130381643772125
+              ],
+              "residual_abs_mean": 0.3147149384021759,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.024130381643772125,
+                -0.024130381643772125,
+                -0.024130381643772125,
+                -0.024130381643772125,
+                -0.024130381643772125
+              ],
+              "retained_residual_abs_mean": 0.3147149384021759,
+              "rows": 1,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 11,
+              "advantage_quantiles": [
+                -0.027765383943915367,
+                -0.0005105002783238888,
+                0.003419540822505951,
+                0.009370589628815651,
+                0.060689304023981094
+              ],
+              "residual_abs_mean": 0.01002117246389389,
+              "retained": 51,
+              "retained_advantage_quantiles": [
+                -0.027765383943915367,
+                0.013128493912518024,
+                0.014809487387537956,
+                0.021268602460622787,
+                0.060689304023981094
+              ],
+              "retained_residual_abs_mean": 0.025109024718403816,
+              "rows": 295,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 13,
+              "advantage_quantiles": [
+                -0.023052500560879707,
+                0.0011866502463817596,
+                0.0031393887475132942,
+                0.005668186116963625,
+                0.02581988275051117
+              ],
+              "residual_abs_mean": 0.0066946628503501415,
+              "retained": 31,
+              "retained_advantage_quantiles": [
+                -0.023052500560879707,
+                0.01259227842092514,
+                0.014067940413951874,
+                0.017860624939203262,
+                0.02581988275051117
+              ],
+              "retained_residual_abs_mean": 0.02316344901919365,
+              "rows": 689,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 14,
+              "advantage_quantiles": [
+                -0.26161718368530273,
+                -0.26161718368530273,
+                -0.26161718368530273,
+                -0.26161718368530273,
+                -0.26161718368530273
+              ],
+              "residual_abs_mean": 0.6517086625099182,
+              "retained": 1,
+              "retained_advantage_quantiles": [
+                -0.26161718368530273,
+                -0.26161718368530273,
+                -0.26161718368530273,
+                -0.26161718368530273,
+                -0.26161718368530273
+              ],
+              "retained_residual_abs_mean": 0.6517086625099182,
+              "rows": 1,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 14,
+              "advantage_quantiles": [
+                -0.03339910879731178,
+                -0.00017975317314267159,
+                0.0047999597154557705,
+                0.011533431708812714,
+                0.04885820299386978
+              ],
+              "residual_abs_mean": 0.011998849920928478,
+              "retained": 97,
+              "retained_advantage_quantiles": [
+                -0.03339910879731178,
+                0.01301539409905672,
+                0.01616017334163189,
+                0.025798100978136063,
+                0.04885820299386978
+              ],
+              "retained_residual_abs_mean": 0.023990632966160774,
+              "rows": 350,
+              "terminal_distance": "censored"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -0.5383999347686768,
+                -0.48465991020202637,
+                -0.25727173686027527,
+                -0.10785162448883057,
+                -0.06836692988872528
+              ],
+              "residual_abs_mean": 0.6476545333862305,
+              "retained": 5,
+              "retained_advantage_quantiles": [
+                -0.5383999347686768,
+                -0.48465991020202637,
+                -0.25727173686027527,
+                -0.10785162448883057,
+                -0.06836692988872528
+              ],
+              "retained_residual_abs_mean": 0.6476545333862305,
+              "rows": 5,
+              "terminal_distance": "1-4"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -0.039330340921878815,
+                -0.03617929667234421,
+                -0.0330282561480999,
+                -0.03237757086753845,
+                -0.031726885586977005
+              ],
+              "residual_abs_mean": 0.32846349477767944,
+              "retained": 3,
+              "retained_advantage_quantiles": [
+                -0.039330340921878815,
+                -0.03617929667234421,
+                -0.0330282561480999,
+                -0.03237757086753845,
+                -0.031726885586977005
+              ],
+              "retained_residual_abs_mean": 0.32846349477767944,
+              "rows": 3,
+              "terminal_distance": "5+"
+            },
+            {
+              "action_type": 15,
+              "advantage_quantiles": [
+                -0.03715302050113678,
+                -0.0038062483072280884,
+                0.0030575916171073914,
+                0.010905885137617588,
+                0.0556795597076416
+              ],
+              "residual_abs_mean": 0.012081868946552277,
+              "retained": 148,
+              "retained_advantage_quantiles": [
+                -0.03715302050113678,
+                -0.013240506872534752,
+                0.015312766656279564,
+                0.019188059493899345,
+                0.0556795597076416
+              ],
+              "retained_residual_abs_mean": 0.023144587874412537,
+              "rows": 485,
+              "terminal_distance": "censored"
+            }
+          ],
+          "self_play_outcomes": [
+            {
+              "deck": "7d663f0e59c72a61c2efb795e9bcbd55531b9e8298bd2cb5dc0a6a2c68dbcad9",
+              "draws": 0,
+              "losses": 10,
+              "opponent_deck": "fc948195d1e841189608b39ba9662b589398b433fc53c85952132d1303269d79",
+              "position": "draw",
+              "wins": 33
+            },
+            {
+              "deck": "fc948195d1e841189608b39ba9662b589398b433fc53c85952132d1303269d79",
+              "draws": 0,
+              "losses": 33,
+              "opponent_deck": "7d663f0e59c72a61c2efb795e9bcbd55531b9e8298bd2cb5dc0a6a2c68dbcad9",
+              "position": "play",
+              "wins": 10
+            }
+          ],
+          "tau": 0.03596115466624322,
+          "value_kind": "scalar",
+          "value_loss": 0.01570434309542179
+        }
+      ],
+      "environment_decisions": 205293,
+      "error": null,
+      "export_seconds": 0.06491228193044662,
+      "games": 63,
+      "id": "policy-0",
+      "inputs": {},
+      "learner_transitions": 98304,
+      "learning_seconds": 5.006209906190634,
+      "optimizer_exposures": 24576,
+      "optimizer_updates": 24,
+      "producer_cost": null,
+      "rejected_artifacts": {},
+      "sampled_peak_rss_bytes": 5009088512,
+      "seconds": 22.06247267127037,
+      "status": "completed",
+      "watchdog_seconds": 22.062473695725203
+    }
+  ],
+  "status": "completed",
+  "unobserved_seconds": 0.0,
+  "watchdog_seconds": 22.29037145152688
+}

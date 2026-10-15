@@ -1,0 +1,1028 @@
+{
+  "run": "6c134ed75f40",
+  "source": "cb73f3865b503d9212e9f4a4cf73b9e601fe18da",
+  "verified_files": 143,
+  "archive_bytes": 26359989,
+  "archive_sha256": "bd0b1f3c693630e4cd3c8720fc63cb523bbacb2e5f2501d0d9a6a3d12fdbee86",
+  "analysis_sha256": "e4e1f06806f74cab667dc7f7c0836c0fbd759ebc00a6f46a2b7f919fa1c7d0d2",
+  "cells": [
+    {
+      "collection_seconds": 15.921216133981943,
+      "learning_seconds": 5.006209906190634,
+      "learner_transitions": 98304,
+      "environment_decisions": 205293,
+      "games": 63,
+      "optimizer_exposures": 24576,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 5009088512,
+      "name": "shape-t8-s4096-cached-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "34b125aa9f624343a96c96ca7eb2f50c",
+      "run_seconds": 22.290372785180807,
+      "shape": [
+        8,
+        4096
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 5.326086457818747
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 1.7731978110969067
+        },
+        {
+          "phase": "collect",
+          "seconds": 5.212418116629124
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 1.6223347522318363
+        },
+        {
+          "phase": "collect",
+          "seconds": 5.365775715559721
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 1.6077883765101433
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 9786454016,
+        "peak_reserved_bytes": 15183380480,
+        "run_id": "34b125aa9f624343a96c96ca7eb2f50c",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 19636.411944780455,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 16.040095135569572,
+      "learning_seconds": 5.003237601369619,
+      "learner_transitions": 98304,
+      "environment_decisions": 205293,
+      "games": 63,
+      "optimizer_exposures": 24576,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 5020827648,
+      "name": "shape-t8-s4096-reference-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "644863fc01a64304bed43acdb7546b9d",
+      "run_seconds": 22.48063027113676,
+      "shape": [
+        8,
+        4096
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 5.240800246596336
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 1.7713753916323185
+        },
+        {
+          "phase": "collect",
+          "seconds": 5.236221246421337
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 1.6225673034787178
+        },
+        {
+          "phase": "collect",
+          "seconds": 5.545127861201763
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 1.606749676167965
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 9786454016,
+        "peak_reserved_bytes": 15183380480,
+        "run_id": "644863fc01a64304bed43acdb7546b9d",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 19648.07747149358,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 2.6731997691094875,
+      "learning_seconds": 1.0844238325953484,
+      "learner_transitions": 12288,
+      "environment_decisions": 25582,
+      "games": 4,
+      "optimizer_exposures": 3072,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2387042304,
+      "name": "shape-t8-s512-cached-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "1d4f5a4a4efb4cba8f3cf0f1bf1cb52b",
+      "run_seconds": 4.944713547825813,
+      "shape": [
+        8,
+        512
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 1.0560327135026455
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.47453372180461884
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.7704018391668797
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.2987115830183029
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.8426051400601864
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.308634452521801
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 1184729600,
+        "peak_reserved_bytes": 1637875712,
+        "run_id": "1d4f5a4a4efb4cba8f3cf0f1bf1cb52b",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 11331.362914250201,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 2.7801813408732414,
+      "learning_seconds": 1.1172243542969227,
+      "learner_transitions": 12288,
+      "environment_decisions": 25582,
+      "games": 4,
+      "optimizer_exposures": 3072,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2398560256,
+      "name": "shape-t8-s512-cached-b",
+      "status": "completed",
+      "error": null,
+      "run_id": "a6572b4f116441b6ad3ce2490431c2ec",
+      "run_seconds": 5.0932541862130165,
+      "shape": [
+        8,
+        512
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 1.0407838970422745
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.4823397062718868
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.8114915490150452
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3020249381661415
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.9238097742199898
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3301701098680496
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 1184729600,
+        "peak_reserved_bytes": 1637875712,
+        "run_id": "a6572b4f116441b6ad3ce2490431c2ec",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 10998.686121314395,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 3.352576043456793,
+      "learning_seconds": 1.1635770238935947,
+      "learner_transitions": 12288,
+      "environment_decisions": 25582,
+      "games": 4,
+      "optimizer_exposures": 3072,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2399117312,
+      "name": "shape-t8-s512-reference-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "6c8c6b7f9a154094a0570f42485d17dd",
+      "run_seconds": 6.024935193359852,
+      "shape": [
+        8,
+        512
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 1.2240174189209938
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.5332758761942387
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.9970045424997807
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3109692707657814
+        },
+        {
+          "phase": "collect",
+          "seconds": 1.1260087117552757
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3166874349117279
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 1184729600,
+        "peak_reserved_bytes": 1637875712,
+        "run_id": "6c8c6b7f9a154094a0570f42485d17dd",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 10560.5385356283,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 3.197257835417986,
+      "learning_seconds": 1.0723952651023865,
+      "learner_transitions": 12288,
+      "environment_decisions": 25582,
+      "games": 4,
+      "optimizer_exposures": 3072,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2394267648,
+      "name": "shape-t8-s512-reference-b",
+      "status": "completed",
+      "error": null,
+      "run_id": "b829db2a9b5d4aee9de92c0ecf0aefc7",
+      "run_seconds": 5.458056658506393,
+      "shape": [
+        8,
+        512
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 1.1635631620883942
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.4703405313193798
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.9696256257593632
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.29429246112704277
+        },
+        {
+          "phase": "collect",
+          "seconds": 1.0593381635844707
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3052355907857418
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 1184729600,
+        "peak_reserved_bytes": 1637875712,
+        "run_id": "b829db2a9b5d4aee9de92c0ecf0aefc7",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 11458.461632453038,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 1.0229058898985386,
+      "learning_seconds": 0.8544597364962101,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2023358464,
+      "name": "shape-t8-s64-cached-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "5fc615f8070f4d9d8587c2f649874216",
+      "run_seconds": 3.0250478833913803,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.5726390741765499
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.390765942633152
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.19838229939341545
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.20000102743506432
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.2504873611032963
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.261043943464756
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 216131072,
+        "peak_reserved_bytes": 352321536,
+        "run_id": "5fc615f8070f4d9d8587c2f649874216",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 1797.6271255314005,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 1.2156882360577583,
+      "learning_seconds": 0.8592789210379124,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2024964096,
+      "name": "shape-t8-s64-cached-b",
+      "status": "completed",
+      "error": null,
+      "run_id": "dfd08d228628409488e762a49a7920a6",
+      "run_seconds": 3.3214823231101036,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.7510000914335251
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.4236181639134884
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.20457050949335098
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.20654531195759773
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.2585340030491352
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.2264789305627346
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 216131072,
+        "peak_reserved_bytes": 352321536,
+        "run_id": "dfd08d228628409488e762a49a7920a6",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 1787.5453038516116,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 1.4202293381094933,
+      "learning_seconds": 0.8165880553424358,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2023198720,
+      "name": "shape-t8-s64-reference-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "01386902cfc645b9b0c11f0cc7e6f5ca",
+      "run_seconds": 3.4463558048009872,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.7145985774695873
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.41195715218782425
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.30792051553726196
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.18673494458198547
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.39631591737270355
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.2153310589492321
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 216131072,
+        "peak_reserved_bytes": 352321536,
+        "run_id": "01386902cfc645b9b0c11f0cc7e6f5ca",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 1880.9973890150513,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 1.4411231726408005,
+      "learning_seconds": 0.8323958106338978,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2029408256,
+      "name": "shape-t8-s64-reference-b",
+      "status": "completed",
+      "error": null,
+      "run_id": "4258fa1d94b347caacb8805859577c44",
+      "run_seconds": 3.4555799178779125,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.7151595987379551
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.4069170244038105
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.3151903934776783
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.20218191295862198
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.4091931991279125
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.22072742134332657
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 216131072,
+        "peak_reserved_bytes": 352321536,
+        "run_id": "4258fa1d94b347caacb8805859577c44",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 1845.2759857480346,
+      "changed_raw_state_tensors": 48
+    }
+  ],
+  "model_comparison": [
+    {
+      "cell": "w64-d1-model-b1-s0",
+      "h100_inference_rows_per_second": 275.80799353501254,
+      "l4_inference_rows_per_second": 313.9678877332763,
+      "inference_ratio": 0.8784592447534585,
+      "optimizer_ratio": 0.3686594577388542,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "semantic_cards": {
+            "total": 35456,
+            "trainable": 35456
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+        "parameters": {
+          "total": 138434,
+          "trainable": 138434
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w64-d1-model-b4-s0",
+      "h100_inference_rows_per_second": 1128.3735526568166,
+      "l4_inference_rows_per_second": 1313.6592025113991,
+      "inference_ratio": 0.8589545526721382,
+      "optimizer_ratio": 0.4066977918244423,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "semantic_cards": {
+            "total": 35456,
+            "trainable": 35456
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+        "parameters": {
+          "total": 138434,
+          "trainable": 138434
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w64-d1-model-b16-s0",
+      "h100_inference_rows_per_second": 4553.36341645583,
+      "l4_inference_rows_per_second": 5150.925923626202,
+      "inference_ratio": 0.8839893028883448,
+      "optimizer_ratio": 0.3971300011295999,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "semantic_cards": {
+            "total": 35456,
+            "trainable": 35456
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+        "parameters": {
+          "total": 138434,
+          "trainable": 138434
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w64-d1-model-b64-s0",
+      "h100_inference_rows_per_second": 17865.725517562634,
+      "l4_inference_rows_per_second": 15070.70492583465,
+      "inference_ratio": 1.1854605080175564,
+      "optimizer_ratio": 0.6381001325627361,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "semantic_cards": {
+            "total": 35456,
+            "trainable": 35456
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+        "parameters": {
+          "total": 138434,
+          "trainable": 138434
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w64-d1-model-b256-s0",
+      "h100_inference_rows_per_second": 60965.40769662544,
+      "l4_inference_rows_per_second": 26315.829264689542,
+      "inference_ratio": 2.3166819895137616,
+      "optimizer_ratio": 1.2061758014819641,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "semantic_cards": {
+            "total": 35456,
+            "trainable": 35456
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+        "parameters": {
+          "total": 138434,
+          "trainable": 138434
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w64-d1-model-b1024-s0",
+      "h100_inference_rows_per_second": 140292.6601973564,
+      "l4_inference_rows_per_second": 28063.737076233167,
+      "inference_ratio": 4.999072640121351,
+      "optimizer_ratio": 1.3411318961078604,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 5248,
+            "trainable": 5248
+          },
+          "action_layer": {
+            "total": 16512,
+            "trainable": 16512
+          },
+          "attention": {
+            "total": 50048,
+            "trainable": 50048
+          },
+          "card_embedding": {
+            "total": 6720,
+            "trainable": 6720
+          },
+          "perm_embedding": {
+            "total": 5824,
+            "trainable": 5824
+          },
+          "player_embedding": {
+            "total": 6016,
+            "trainable": 6016
+          },
+          "policy_head": {
+            "total": 4225,
+            "trainable": 4225
+          },
+          "semantic_cards": {
+            "total": 35456,
+            "trainable": 35456
+          },
+          "value_head": {
+            "total": 8385,
+            "trainable": 8385
+          }
+        },
+        "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+        "parameters": {
+          "total": 138434,
+          "trainable": 138434
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w384-d8-model-b64-s0",
+      "h100_inference_rows_per_second": 3783.5675796839328,
+      "l4_inference_rows_per_second": 942.533056601247,
+      "inference_ratio": 4.0142545167884,
+      "optimizer_ratio": 3.7617876455275563,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 154368,
+            "trainable": 154368
+          },
+          "action_layer": {
+            "total": 590592,
+            "trainable": 590592
+          },
+          "attention": {
+            "total": 1774848,
+            "trainable": 1774848
+          },
+          "card_embedding": {
+            "total": 163200,
+            "trainable": 163200
+          },
+          "extra_attention": {
+            "total": 12421248,
+            "trainable": 12421248
+          },
+          "perm_embedding": {
+            "total": 157824,
+            "trainable": 157824
+          },
+          "player_embedding": {
+            "total": 158976,
+            "trainable": 158976
+          },
+          "policy_head": {
+            "total": 148225,
+            "trainable": 148225
+          },
+          "semantic_cards": {
+            "total": 950016,
+            "trainable": 950016
+          },
+          "value_head": {
+            "total": 296065,
+            "trainable": 296065
+          }
+        },
+        "identity": "1473b2f41afc40a12b3294fc4bb80afb589fb5f948e8ddf12b6d47c348be0f43",
+        "parameters": {
+          "total": 16815362,
+          "trainable": 16815362
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    },
+    {
+      "cell": "w384-d8-model-b256-s0",
+      "h100_inference_rows_per_second": 5129.176172925723,
+      "l4_inference_rows_per_second": 934.488060390537,
+      "inference_ratio": 5.488755170164679,
+      "optimizer_ratio": 4.495946143901323,
+      "h100_model": {
+        "components": {
+          "action_embedding": {
+            "total": 154368,
+            "trainable": 154368
+          },
+          "action_layer": {
+            "total": 590592,
+            "trainable": 590592
+          },
+          "attention": {
+            "total": 1774848,
+            "trainable": 1774848
+          },
+          "card_embedding": {
+            "total": 163200,
+            "trainable": 163200
+          },
+          "extra_attention": {
+            "total": 12421248,
+            "trainable": 12421248
+          },
+          "perm_embedding": {
+            "total": 157824,
+            "trainable": 157824
+          },
+          "player_embedding": {
+            "total": 158976,
+            "trainable": 158976
+          },
+          "policy_head": {
+            "total": 148225,
+            "trainable": 148225
+          },
+          "semantic_cards": {
+            "total": 950016,
+            "trainable": 950016
+          },
+          "value_head": {
+            "total": 296065,
+            "trainable": 296065
+          }
+        },
+        "identity": "1473b2f41afc40a12b3294fc4bb80afb589fb5f948e8ddf12b6d47c348be0f43",
+        "parameters": {
+          "total": 16815362,
+          "trainable": 16815362
+        },
+        "schema_version": 1
+      },
+      "boundary": "Same tensor input/model runner, different host/device/driver; not chip-only causality."
+    }
+  ],
+  "limits": [
+    "Three actual update iterations per complete cell; no strength or mature-policy claim.",
+    "Method update timing excludes EMA; whole learning includes it.",
+    "Incomplete whole loops are excluded from service calibration; partial records are retained.",
+    "Host/GPU/driver vary across rentals even with identical model observations."
+  ]
+}

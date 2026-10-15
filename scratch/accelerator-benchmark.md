@@ -87,12 +87,13 @@ uv run --no-sync python scratch/accelerator-queue-probe.py host --tape scratch/a
 
 Six focused tests passed; ten closed-form/conservation checks cover queue timing,
 finite completion, padding and host tails. All measured attempts used bounded
-supervision. The legacy wrapper has consumed238.718of240aggregate probe seconds;
+supervision. The original probe phase closed at238.718of240seconds;
 its original600second setup cap is separate. The accelerator-specific300second
-measurement/180second focused-test limits also remain unexhausted. New measured
+measurement/180second focused-test limits remain unexhausted. The new20second
+calibration-analysis slice used4.428seconds; conservative combined usage268.812/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
-records$0.255941 billed/estimated rentals,$0.45 conservative charges+$5reserve,
-$44.55 free; all four machines are confirmed deleted.
+records$0.712507 billed/estimated rentals,$1.05 conservative charges+$5reserve,
+$43.95 free; all five machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -115,10 +116,9 @@ Raw evidence and source snapshots are indexed by`accelerator-probes/artifact-man
 Complete previous notes and exact historical/current source snapshots are retained
 by hash in that manifest; no old result was overwritten.
 
-The learner model now couples the existing inference queue to measured8×64/8×512
-central updates under a zero-lag cohort barrier. It counts idle actor capacity,
-retained arrays, partial horizons and publication. The27case result reverses the
-preferred inference batch between one and eight servers; extra actors beyond the
-measured learner shape stay idle. See `learner-flow.md` for protocol, reproduction,
-evidence and limits. This is a stationary scheduling control, not a distributed
-training implementation.8×4096 whole-loop service remains unavailable.
+The learner model couples the existing inference queue to measured central updates
+under a zero-lag barrier, with explicit hardware/service selection. H100 calibration
+now supports complete8×4096 cohorts; L4 does not. It counts idle actors, arrays,
+partial horizons and publication. All27L4 outputs remain exact; two27case H100
+matrices passed. See `learner-flow.md` for reproduction and limits. This remains a
+stationary scheduling control, not a distributed training implementation.

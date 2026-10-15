@@ -248,14 +248,26 @@ def check() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--card", default="l4")
+    parser.add_argument("--global-streams", type=int, choices=(512, 4096), default=512)
+    parser.add_argument(
+        "--hardware",
+        type=Path,
+        default=Path("scratch/gpu-probes/l4-002/capacity-report.json"),
+    )
+    parser.add_argument(
+        "--learner-service",
+        type=Path,
+        default=Path("scratch/gpu-probes/l4-004/learner-service.json"),
+    )
     args = parser.parse_args()
     if args.out.exists():
         raise ValueError("fresh output required")
     check()
     root = Path("scratch/accelerator-probes/cohort-t8-s64")
     tape_path, replay_path = root / "tape.json", root / "replay.json"
-    service_path = Path("scratch/gpu-probes/l4-004/learner-service.json")
-    hardware_path = Path("scratch/gpu-probes/l4-002/capacity-report.json")
+    service_path = args.learner_service
+    hardware_path = args.hardware
     data = json.loads(service_path.read_text())
     summary_path = service_path.parent / data["source_summary"]
     assert (
@@ -312,21 +324,23 @@ def main() -> None:
     hardware = {
         s.batch: s.inference_seconds
         for s in load_services(hardware_path)
-        if s.card == "l4" and s.capacity == "w64-d1"
+        if s.card == args.card and s.capacity == "w64-d1"
     }
     queue = queue_module()
     queue.check()
     outcomes: list[Outcome] = []
+    global_streams = args.global_streams
+    global_actors = leases(select(points, global_streams), tape)
     for streams, actors, cpus, gpus, speed, delay, repeat in [
         (64, 1, 1, 1, 1, 0, "a"),
         (64, 1, 1, 1, 1, 0, "b"),
-        (512, 8, 1, 1, 1, 0, "a"),
-        (512, 8, 8, 1, 1, 0, "a"),
-        (512, 8, 8, 8, 1, 0, "a"),
-        (512, 4096, 8, 8, 1, 0, "a"),
-        (512, 4096, 512, 64, 1, 0, "a"),
-        (512, 8, 8, 1, 2, 0, "a"),
-        (512, 8, 8, 1, 1, 0.01, "a"),
+        (global_streams, global_actors, 1, 1, 1, 0, "a"),
+        (global_streams, global_actors, global_actors, 1, 1, 0, "a"),
+        (global_streams, global_actors, global_actors, global_actors, 1, 0, "a"),
+        (global_streams, 4096, global_actors, global_actors, 1, 0, "a"),
+        (global_streams, 4096, 512, 64, 1, 0, "a"),
+        (global_streams, global_actors, global_actors, 1, 2, 0, "a"),
+        (global_streams, global_actors, global_actors, 1, 1, 0.01, "a"),
     ]:
         point = select(points, streams, repeat)
         leased = leases(point, tape)
@@ -370,8 +384,16 @@ def main() -> None:
                     sample.demand.buffer_bytes,
                 )
             )
-    reference = next(o for o in outcomes if o.settings == Settings(8, 8, 8, 256))
-    idle = next(o for o in outcomes if o.settings == Settings(4096, 8, 8, 256))
+    reference = next(
+        o
+        for o in outcomes
+        if o.settings == Settings(global_actors, global_actors, global_actors, 256)
+    )
+    idle = next(
+        o
+        for o in outcomes
+        if o.settings == Settings(4096, global_actors, global_actors, 256)
+    )
     assert (
         reference.stationary_raw_rows_per_second == idle.stationary_raw_rows_per_second
     )
@@ -385,6 +407,8 @@ def main() -> None:
         hardware_path,
     )
     report = {
+        "card": args.card,
+        "global_streams": global_streams,
         "sources": {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
         "host_repeat": 1,
         "outcomes": [
@@ -392,10 +416,10 @@ def main() -> None:
         ],
         "limits": [
             "Stationary cloned untrained CPU tape; not real multi-version training.",
-            "One centrally filtered update; only measured8×64/8×512 shapes. No interpolation or multi-GPU learning.",
+            "One centrally filtered update with a completed measured shape; no interpolation or multi-GPU learning.",
             "Inference and learning share GPUs in exclusive phases; zero-lag cohort barrier prevents overlap.",
             "Aggregation/publication zero is an optimistic network bound;10ms sensitivity is assumed.",
-            "GPU service points come from different L4 rentals/drivers; coupled performance is modeled, not measured.",
+            "GPU service comes from the selected named hardware report and learner receipt; coupled performance is modeled, not measured.",
             "Array-memory scenario retains leased actor arrays while copying a global batch; idle capacity has no instantiated collectors. Native games, models, Python, staging excluded.",
             "Horizon counts completed updates, published versions and pending phase; CPU work excludes the partial epoch.",
             "Extra inference-serving CPU thread perGPU; target CPU contention and all-reduce unmodeled.",

@@ -363,6 +363,9 @@ def main() -> None:
     )
     parser.add_argument("--request-timings", action="store_true")
     parser.add_argument(
+        "--card", default="l4", help="Exact card label in the supplied hardware report"
+    )
+    parser.add_argument(
         "--hardware",
         type=Path,
         default=Path("experiments/data/cuda-capacity/capacity-report.json"),
@@ -404,7 +407,7 @@ def main() -> None:
     services = [
         s
         for s in load_services(hardware_path)
-        if s.card == "l4" and s.capacity == "w64-d1"
+        if s.card == args.card and s.capacity == "w64-d1"
     ]
     frames = [f.rows for f in tape.frames]
     if args.mode == "host":
@@ -515,7 +518,7 @@ def main() -> None:
         if args.request_timings
         else "proportional average",
         "inference_server_reservation": "One additional CPU serving thread per GPU; measured synchronized model calls include its dispatch/validation overhead",
-        "card": "l4",
+        "card": args.card,
         "capacity": "w64-d1",
         "execution_seconds": time.perf_counter() - started,
         "outcomes": [asdict(r) for r in results],

@@ -1,0 +1,72 @@
+"""Derive H100 service and learner records from verified fifth-run outputs."""
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import shutil
+from statistics import median
+import sys
+
+root = Path('.runs/gpu-validation/result-005')
+evidence = root/'evidence'
+spec = importlib.util.spec_from_file_location('comparison', 'scratch/compare-training-states.py')
+assert spec is not None and spec.loader is not None
+comparison = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = comparison
+spec.loader.exec_module(comparison)
+rows: list[dict[str, object]] = []
+for p in sorted(evidence.glob('shape*/**/run.json')):
+    run = json.loads(p.read_text()); stage = run['stages'][0]; cell = p.parent.parent
+    phases = json.loads((cell/'phase-timings.json').read_text())
+    result = json.loads((cell/'result.json').read_text()) if (cell/'result.json').exists() else None
+    row = {k:stage[k] for k in ('collection_seconds','learning_seconds','learner_transitions','environment_decisions','games','optimizer_exposures','optimizer_updates','sampled_peak_rss_bytes')}
+    row.update(name=p.parts[-4],status=run['status'],error=run['error'],run_id=run['id'],run_seconds=run['seconds'],shape=phases['shape'],phases=phases['phases'],gpu_memory=result)
+    row['completed_update_iterations'] = len(stage['diagnostics'])
+    row['nonfinite_count'] = sum(d['numerical']['nonfinite_count'] for d in stage['diagnostics'])
+    row['skipped_steps'] = sum(d['numerical']['skipped_steps'] for d in stage['diagnostics'])
+    row['rows_per_complete_learning_second'] = stage['learner_transitions']/stage['learning_seconds'] if stage['learning_seconds'] else None
+    row['changed_raw_state_tensors'] = len(comparison.compare(comparison.state(p.parent/'policy-0-initial-raw.pt','initial-raw'),comparison.state(p.parent/'policy-0-raw.pt','raw'))) if run['status']=='completed' else None
+    rows.append(row)
+old = json.loads(Path('scratch/gpu-probes/l4-002/capacity-report.json').read_text())
+previous = {r['cell']:r for r in old['hardware']}
+attempts = json.loads((evidence/'attempts.json').read_text())
+hardware: list[dict[str, object]] = []
+comparisons: list[dict[str, object]] = []
+expected_hash = '424ab00b9f07e56f47a1072d9fa9a080b99a93d785197a8ddc70be7f4f03dfa2'
+for attempt in attempts:
+    name = attempt['name']
+    if '-model-' not in name: continue
+    batch = int(name.split('-b')[1].split('-')[0]); capacity=name.split('-model-')[0]
+    item = {'card':'h100','capacity':capacity,'cell':name,'kind':'model','status':attempt['status'],'batch':batch}
+    p=evidence/name/'result.json'
+    if attempt['status']=='completed':
+        r=json.loads(p.read_text()); assert r['input_sha256']==expected_hash and r['device']=='NVIDIA H100 80GB HBM3'
+        rates={phase:median(w['observations']/w['seconds'] for w in r[phase]['windows']) for phase in ('inference','optimizer')}
+        item.update(inference_observations_per_second=rates['inference'],optimizer_observations_per_second=rates['optimizer'],peak_allocated_bytes=max(r[phase]['peak_allocated_bytes'] for phase in ('inference','optimizer')),source_sha256=hashlib.sha256(p.read_bytes()).hexdigest(),attention_slots=r['attention_slots'],input_sha256=r['input_sha256'])
+        oldrow=previous[name]
+        comparisons.append({'cell':name,'h100_inference_rows_per_second':rates['inference'],'l4_inference_rows_per_second':oldrow['inference_observations_per_second'],'inference_ratio':rates['inference']/oldrow['inference_observations_per_second'],'optimizer_ratio':rates['optimizer']/oldrow['optimizer_observations_per_second'],'h100_model':r['architecture'],'boundary':'Same tensor input/model runner, different host/device/driver; not chip-only causality.'})
+    hardware.append(item)
+verification=json.loads((root/'verification.json').read_text())
+summary={'run':'6c134ed75f40','source':'cb73f3865b503d9212e9f4a4cf73b9e601fe18da',**verification,'analysis_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cells':rows,'model_comparison':comparisons,'limits':['Three actual update iterations per complete cell; no strength or mature-policy claim.','Method update timing excludes EMA; whole learning includes it.','Incomplete whole loops are excluded from service calibration; partial records are retained.','Host/GPU/driver vary across rentals even with identical model observations.']}
+(root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+(root/'capacity-report.json').write_text(json.dumps({'run':summary['run'],'hardware':hardware},indent=2)+'\n')
+points=[]
+for c in rows:
+    if c['status']!='completed' or '-reference-' not in c['name']:continue
+    collect=[p['seconds'] for p in c['phases'] if p['phase']=='collect'];update=[p['seconds'] for p in c['phases'] if p['phase']=='update_iteration']
+    assert len(collect)==len(update)==c['completed_update_iterations']==3
+    points.append({'case':c['name'],'shape':c['shape'],'raw_rows_per_iteration':c['shape'][0]*c['shape'][1],'optimizer_exposures_per_iteration':c['optimizer_exposures']//3,'optimizer_steps_per_iteration':c['optimizer_updates']//3,'whole_learning_seconds_per_iteration':c['learning_seconds']/3,'whole_collection_seconds_per_iteration':c['collection_seconds']/3,'synchronized_update_seconds':update,'synchronized_collect_seconds':collect,'complete_loop_run_id':c['run_id'],'peak_gpu_allocated_bytes':c['gpu_memory']['peak_allocated_bytes']})
+calibration={'schema':'manabot.research.learner-service.v1','source_summary':'summary.json','source_sha256':hashlib.sha256((root/'summary.json').read_bytes()).hexdigest(),'points':points,'unavailable_complete_loop_shapes':[[8,s] for s in (64,512,4096) if not any(p['shape']==[8,s] for p in points)],'limits':summary['limits']}
+(root/'learner-service.json').write_text(json.dumps(calibration,indent=2)+'\n')
+for c in comparisons:print(c['cell'],round(c['inference_ratio'],3),round(c['optimizer_ratio'],3))
+for c in rows:print(c['name'],c['status'],c['collection_seconds'],c['learning_seconds'],c['changed_raw_state_tensors'])
+destination=Path('scratch/gpu-probes/h100-005');staging=destination.with_name('.h100-005-staging')
+assert not destination.exists() and not staging.exists();staging.mkdir()
+for p in evidence.rglob('*'):
+    if p.is_file() and p.suffix in {'.json','.log'}:
+        target=staging/'evidence'/p.relative_to(evidence);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target)
+for name in ('verification.json','summary.json','tensor-comparison.json','capacity-report.json','learner-service.json'):
+    shutil.copy2(root/name,staging/name)
+for name in ('fifth-cleanup.json','rental-costs-005.json','source-copy.json','job-005.json','preflight-005.json','fifth-pod.json','prepared-source.json','budget.json'):
+    shutil.copy2(Path('.runs/gpu-validation')/name,staging/name)
+shutil.copy2(__file__,staging/'analysis.source.txt');shutil.copy2('scratch/compare-training-states.py',staging/'comparison.source.txt');shutil.copy2('scratch/gpu-highend-protocol.txt',staging/'protocol.txt');shutil.copy2('.runs/gpu-validation/observed-005.log',staging/'observed.log');staging.rename(destination)

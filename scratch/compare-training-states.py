@@ -90,17 +90,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--repeated-streams", type=int, nargs="+", default=[64])
     args = parser.parse_args()
     if args.out.exists():
         raise ValueError("fresh comparison output required")
     comparisons: list[dict[str, object]] = []
+    if not set(args.repeated_streams) <= {64, 512, 4096}:
+        raise ValueError("unsupported repeated shape")
     pairs = [
-        (64, "reference-a", "reference-b"),
-        (64, "cached-a", "cached-b"),
-        (64, "reference-a", "cached-a"),
-        (64, "reference-b", "cached-b"),
-        (512, "reference-a", "cached-a"),
-        (4096, "reference-a", "cached-a"),
+        (streams, first, second)
+        for streams in (64, 512, 4096)
+        for first, second in (
+            [
+                ("reference-a", "reference-b"),
+                ("cached-a", "cached-b"),
+                ("reference-a", "cached-a"),
+                ("reference-b", "cached-b"),
+            ]
+            if streams in args.repeated_streams
+            else [("reference-a", "cached-a")]
+        )
     ]
     for streams, first, second in pairs:
         base = f"w64-d1-loop-b{streams * 8}-s{streams}/run"

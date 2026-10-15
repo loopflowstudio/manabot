@@ -1,0 +1,26 @@
+H100 result integration — local analysis protocol, recorded before execution
+
+The initial CPU-probe phase remains closed at238.717656/240seconds; its receipts
+and cap are unchanged. This new calibration-analysis phase permits at most20 summed
+command seconds,5seconds per invocation, one thread,6GiB sampled RSS. It performs
+pure scheduling/receipt checks only: no new environment capture, model forward,
+optimizer or training. It is part of the existing accelerator300second allowance.
+
+Conservative prior accounting: all legacy probe commands238.717656 plus every
+nested accelerator attempt25.666315 =264.383971seconds (deliberately double-counts
+some nested work). Even the full20second new slice stays below300. The supervisor
+must enforce both the20second phase and the300second conservative total. Do not
+change prior failed-attempt deadlines, reset prior receipts, or charge analysis
+to setup. Existing artifact/tensor comparison is post-run data inspection.
+
+Use the named H100 model-service file and matching H100 actual-learning receipt.
+Run the same27 coupled cases/closed-form checks as the L4 analysis, with frozen
+laptop tape/host repeat1. Compare source hashes and reject unavailable shapes.
+Do not silently mix H100 inference with L4 learning. Report observed hardware
+performance separately from these stationary predictions and all old results.
+
+If H100 has an exact completed8×4096 reference receipt, run a second27case matrix
+with64 leased64stream actors and global4096streams. Use the same tape, measured
+host intervals, resource settings adjusted to the lease count, and exact hardware
+service. Otherwise retain this shape as unavailable and do not run the matrix.
+This tests an explicit larger cohort, not an extrapolated learner curve.
