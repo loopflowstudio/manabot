@@ -1,2 +1,0 @@
-/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/.venv/lib/python3.12/site-packages/torch/profiler/profiler.py:217: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
-  _warn_once(

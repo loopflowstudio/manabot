@@ -1,9 +1,0 @@
-{
-  "units": 44476,
-  "unit": "surfaced native decisions including wrapper/random-sampling overhead",
-  "seconds": 1.0000554580474272,
-  "units_per_second": 44473.5335846652,
-  "parameters": 11316,
-  "initialization_and_warmup_excluded": true,
-  "strength_or_useful_learning_progress_measured": false
-}

@@ -1,1 +1,0 @@
-{"status": "call_deadline", "exit_code": -9, "seconds": 36.16574618592858, "call_limit_seconds": 25, "child_limit_seconds": 85, "expired_call": "measured-0", "observed_overshoot_seconds": 0.009167414158582687, "incomplete_trace_tail_lines": 0}

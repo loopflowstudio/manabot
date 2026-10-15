@@ -1,7 +1,0 @@
-{
-  "process_handle": 91849,
-  "exit_code": 1,
-  "exception": "etude.launch.storage.s3.StorageUnavailable",
-  "message": "GET session 9dc41736a8ca out/receipt: no reply",
-  "action": "Resume observation and cleanup of same run; never resubmit."
-}

@@ -1,7 +1,0 @@
-{
-  "status": "passed",
-  "exit_code": 0,
-  "seconds": 0.45002270804252476,
-  "cap_seconds": 2,
-  "scope": "existing focused-test allowance; exercise telemetry callback with normal/expired children"
-}
