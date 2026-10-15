@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from manabot.arena.match import selected_match
+from manabot.arena.matchup import AuthoredMatchup
 from manabot.arena.models import ArenaKey, PlayerRegistration, canonical_sha256
 from manabot.env import Match, ObservationSpace
 from manabot.infra.hypers import AgentSpec
@@ -262,16 +263,33 @@ def test_result_purpose_preserves_protocol_binding(
 
 
 @pytest.mark.parametrize(
-    "max_commands,opponent",
-    [(1, "scripted_greedy"), (10000, "scripted_greedy"), (10000, "random")],
+    "max_commands,opponent,explicit_matrix",
+    [
+        (1, "scripted_greedy", False),
+        (10000, "scripted_greedy", False),
+        (10000, "random", False),
+        (10000, "scripted_greedy", True),
+    ],
 )
 def test_real_arena_checkpoint_outcomes(
-    tmp_path: Path, max_commands: int, opponent: Literal["scripted_greedy", "random"]
+    tmp_path: Path,
+    max_commands: int,
+    opponent: Literal["scripted_greedy", "random"],
+    explicit_matrix: bool,
 ) -> None:
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
-        match = selected_match()
+        matrix = (
+            AuthoredMatchup(
+                pack_key="ur-lessons-vs-gw-allies",
+                role_a="ur_lessons",
+                role_b="gw_allies",
+            )
+            if explicit_matrix
+            else None
+        )
+        match = matrix.match() if matrix else selected_match()
         space = ObservationSpace()
         hypers = AgentSpec(
             hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
@@ -323,6 +341,8 @@ def test_real_arena_checkpoint_outcomes(
             tmp_path / "arena",
             protocol=monitor.MonitorProtocol(
                 deal_seeds=(1910101000,),
+                authored_matchup=matrix,
+                include_mirrors=explicit_matrix,
                 max_commands=max_commands,
                 # The default per-game budget includes spawning the worker and
                 # loading torch; macOS runners have taken 30s for one
@@ -341,7 +361,7 @@ def test_real_arena_checkpoint_outcomes(
             if opponent == "random"
             else "monitoring-not-scientific-evaluation"
         )
-        assert len(result.rows) == 4
+        assert len(result.rows) == (8 if explicit_matrix else 4)
         if max_commands == 1:
             assert result.status == "incomplete"
             assert all(row.failure is not None for row in result.rows)

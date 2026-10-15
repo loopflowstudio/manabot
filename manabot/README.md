@@ -249,3 +249,19 @@ coverage before joining transport IDs. The selected product catalog remains the
 only registered policy catalog; research catalogs need their own checked IR and
 schema admission. In particular, the native Jeong increment alone is not policy
 admission: its `Rebel` subtype is absent from the current learning schema.
+
+### Explicit research evaluation matrices
+
+`AuthoredMatchup(pack_key=..., role_a=..., role_b=...)` names two exact native
+authored setups. Pass it as `MonitorProtocol(authored_matchup=...,
+include_mirrors=True)` to evaluate A–B, B–A, A–A and B–B, each with both player
+seat assignments. The training match must equal `matrix.match()`; arbitrary
+renaming or substituting a different setup fails admission. Simple roles retain
+their own names, never Allies/Lessons labels.
+
+The shared arena records the actual decks, explicit content pack and Commands;
+its ordinary replay checks still apply. The matrix identity is separate from
+the historical selected-world suite. Omitting it preserves existing selected
+protocol serialization. A native authored roster does not itself admit a neural
+policy catalog. Research report presentation and Etude evaluation recording are
+still separate remaining integration work.

@@ -139,3 +139,21 @@ native setup rejection is translated to the existing binding error. This is a
 prerequisite for a research pack with more than two registered deck roles, not
 proof that that pack exists. Check: 25 world/catalog/Etude-worker checks passed;
 focused lint and diff checks passed. No scientific games were scored.
+
+
+## Shared authored evaluation matrix (2026-10-14)
+
+AuthoredMatchup now names an exact native pack and two role keys. The existing
+arena/MonitorProtocol accepts that roster, binds a separate suite identity,
+executes all four role cells in both seats, and replays the actual retained
+Commands. The training matchup must equal the explicit roster's cross setup;
+source/world/ABI checks and checkpoint repetition admission remain. Omitted
+rosters preserve existing selected-world protocol serialization. This is not
+permission to load Jeong through the unsupported neural schema.
+
+Check: 24 monitoring/matrix/legacy mirror-plan tests passed in 46.81s, including
+8 complete native Jeong anchor games and 8 complete ordinary selected-checkpoint
+games through the explicit matrix with replay. Bounded fixtures establish the
+shared path, not learning or the proposed simple-world cohort. Etude evaluation
+records, research dashboard role labels, simple native/schema content and the
+actual campaign remain unfinished; compute/vanilla decisions remain requested.
