@@ -61,7 +61,7 @@ def recipe(updates: int, seconds: float) -> TrainingRegime:
 class BaselinePlan(Strict):
     """All counts and measured admission costs frozen before scientific fitting."""
 
-    updates: int = Field(ge=1000, le=10000)
+    updates: Literal[10000] = 10000
     seed_order: tuple[int, int, int] = SEEDS
     training_seconds_per_run: float = Field(gt=120)
     evaluation_reserve_seconds: float = Field(gt=0)
@@ -70,8 +70,8 @@ class BaselinePlan(Strict):
 
     @model_validator(mode="after")
     def admit(self) -> "BaselinePlan":
-        if self.updates % 100 or self.seed_order != SEEDS:
-            raise ValueError("baseline requires fixed seeds and 100-update granularity")
+        if self.seed_order != SEEDS:
+            raise ValueError("baseline requires its fixed three seeds")
         if set(self.calibration_hashes) != {"training", "scripted_greedy", "random"}:
             raise ValueError("complete calibration receipts required")
         if (
@@ -80,6 +80,10 @@ class BaselinePlan(Strict):
         ):
             raise ValueError("baseline exceeds remaining allocation")
         return self
+
+    @property
+    def evaluation_updates(self) -> tuple[int, ...]:
+        return (0, self.updates)
 
     @property
     def digest(self) -> str:
@@ -102,12 +106,12 @@ class BaselinePlan(Strict):
     ) -> MonitorProtocol:
         if pool != "l3":
             raise ValueError("baseline has no simple-pool arms")
-        ordinal = (0, self.updates // 2, self.updates).index(update)
+        ordinal = self.evaluation_updates.index(update)
         start = 1_226_100_000 + ordinal * 1000
         return MonitorProtocol(
             authored_matchup=MATCHUP,
             include_mirrors=True,
-            deal_seeds=tuple(range(start, start + 50)),
+            deal_seeds=tuple(range(start, start + 25)),
             opponent=anchor,
             purpose="frozen-study-evaluation",
             study_protocol_sha256=self.digest,
@@ -123,14 +127,13 @@ def resolve_counts(
     remaining: float,
     hashes: dict[str, str],
 ) -> BaselinePlan:
-    """1.5x timing margins; never reduce seeds, controls or 12,000-game matrix."""
-    evaluation = 6000 * 1.5 * sum(panel_costs)
-    training = (remaining - evaluation - 601) / 3
+    """Admit fixed 10,000-update fits and 3,600 games with 1.5x timing margins."""
+    evaluation = 1800 * 1.5 * sum(panel_costs)
+    training = 10000 * 1.5 * slowest_update + 120
     if slowest_update <= 0 or training <= 120:
         raise ValueError("insufficient measured capacity")
-    updates = min(10000, int((training - 120) / (1.5 * slowest_update)) // 100 * 100)
     return BaselinePlan(
-        updates=updates,
+        updates=10000,
         training_seconds_per_run=training,
         evaluation_reserve_seconds=evaluation,
         total_seconds=remaining,

@@ -79,6 +79,10 @@ class ComplexityPlan(Strict):
         return self
 
     @property
+    def evaluation_updates(self) -> tuple[int, ...]:
+        return (0, self.updates // 2, self.updates)
+
+    @property
     def digest(self) -> str:
         return canonical_sha256(self.model_dump(mode="json"))
 
@@ -198,6 +202,8 @@ class CampaignPlan(Protocol):
     training_seconds_per_run: float
     evaluation_reserve_seconds: float
 
+    @property
+    def evaluation_updates(self) -> tuple[int, ...]: ...
     @property
     def digest(self) -> str: ...
     def model_dump(self, *, mode: str) -> dict[str, object]: ...
@@ -326,6 +332,8 @@ def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
                 )
                 for point in points:
                     milestone = point.coordinates.updates
+                    if milestone not in plan.evaluation_updates:
+                        continue
                     for anchor in ("scripted_greedy", "random"):
                         protocol = plan.protocol(pool, anchor, milestone)
                         variants = (

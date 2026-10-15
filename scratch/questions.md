@@ -366,3 +366,24 @@ No replacement attempt, source change or allowance extension occurred. Receipts:
 Native w6 build completed; calibration precedes automatic count admission and
 three scientific fits. Prior evidence remains on Mini; partial local rsync was
 stopped to free transport during recovery, so full local archival remains open.
+
+## Sustained horizon correction (2026-10-15)
+
+Jack Heart accepted targeting10000 updates per seed and reducing evaluation load,
+with a slight budget increase permitted in principle. Exact increased ceiling is
+not yet fixed. The running3200-update plan is unchanged; first fit was observed
+at155 updates. W6 calibration's slowest20-update block is3.6620606374s/update;
+three10000-update fits at the existing1.5x margin alone reserve45.78h. A proposed
+3600-game initialization/endpoint/frozen-control matrix (25deals ×8legs ×2anchors
+×3cohorts ×3seeds) adds4.88h at retained panel rates. Prior spending and setup push
+the inclusive requirement to roughly68h; proposed ceiling72h needs explicit
+confirmation because that is not a slight increase over48h. No live source,
+plan, seed, deadline or budget was silently changed. Historical running outputs
+remain evidence, not resumed optimizer/collector state for a new10000-update job.
+
+Jack Heart approved72 inclusive Mini hours. The replacement protocol fixes10000
+updates ×3 seeds,3600 evaluation games (initialization, endpoint and paired frozen
+control;25deals ×8legs ×2anchors). Calibration may reject capacity but cannot
+shorten10000. The5000-update export is unscored. Prior short w6 run is cancelled
+and retained; no optimizer/collector continuation is claimed. Reserve18h prior,
+53.5h new job,0.5h settlement. Five focused declaration/count tests passed.

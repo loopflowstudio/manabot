@@ -1,6 +1,10 @@
 # Corrected-world baseline — MTG-122
 
-2026-10-15. Jack Heart authorized stopping the w4 complexity study, deferring
+2026-10-15. Sustained-horizon amendment: Jack Heart approved a 72-hour inclusive
+Mini ceiling and 10,000 updates per seed with reduced evaluation. The prior
+3,200-update attempt is stopped and retained; it is not a continuation source.
+
+Jack Heart authorized stopping the w4 complexity study, deferring
 card-pool comparisons, and launching an Allies/Lessons baseline after PR288/289.
 Both are merged. This is a fresh w6/layout2 study, never checkpoint continuation.
 
@@ -32,37 +36,37 @@ TrainingRun/VerifyStore/arena execution and Etude job, on Mini only. No laptop
 experiment, GPU expenditure, automatic retry or resume. A single SDK hard deadline
 includes setup, native build, calibration, all learning/evaluation and cleanup.
 
-The original 48-hour ceiling is not reset: reserve 16 hours for all prior attempts
-(including cancelled science), 31.5 hours for this allocation and 0.5 hour for
-external transfer/report/settlement. Prior SDK planned-to-finished durations total
-about 15.15 hours; the larger 16-hour reservation also covers earlier admission
-and preparation charges. Original receipts, including the cancellation and stale
-campaign JSON, are retained without rewriting their status. No old scores are
-combined with this cohort.
+The revised **72-hour inclusive Mini ceiling** includes all earlier attempts.
+Reserve18 hours for prior attempts/preparation,53.5 hours for this new allocation
+and0.5 hour for external transfer/report/settlement. No GPU spending is added.
+The stopped w4 and short w6 attempts retain original receipts and artifacts.
+The earlier w4 calibration reserves and failed admissions remain charged.
 
-Calibrate with reserved seed12260: 100 updates (1200-second learner cap), plus
+Calibrate with reserved seed12260:100 updates (1200-second learner cap), plus
 one complete eight-leg deal against each anchor. Calibration scores cannot choose
 the recipe, seeds, or count. Retain all failures; incomplete calibration stops.
-The scientific plan is written durably before its first fit. Its count is the
-largest multiple of100, capped at10000, fitting 1.5 times the slowest measured
-20-update block within each equal learner allowance, reserving120 seconds/run.
-The update floor is1000. Lower capacity fails admission, not a smaller study.
-
-Evaluation reserves 6000 games per anchor times1.5 times the larger of its
-slowest role-cell mean or full coordinator/replay seconds/game. From the remaining
-SDK time subtract evaluation and601 seconds; divide the rest equally among three
-learners. Another120 seconds remain outside the scientific plan. These are timing
-projections, not sustained-throughput proof. The SDK deadline remains binding.
+The scientific plan is saved durably before its first fit, with **10000 updates
+per seed fixed in advance**. Admission reserves1.5 times the slowest measured
+20-update block times10000, plus120 seconds per learner. It never shortens the
+horizon to fit. Evaluation reserves1800 games per anchor times1.5 times the larger
+of its slowest role-cell mean or full coordinator/replay seconds/game. All three
+learners plus evaluation and600 seconds must fit the remaining SDK time; another
+120 seconds remain outside the scientific plan. Insufficient capacity stops.
+These timings extrapolate, not guarantee sustained performance. The SDK hard
+deadline remains binding; no automatic extension or replacement seed.
 
 Science seeds12261/12262/12263 each begin independently from initialization.
-Each fit collects256 learner transitions/update before filtering. Score0,N/2,N;
-raw only, stochastic one-forward-pass CPU policy. Each milestone has50 held-out
-deal blocks, eight legs covering AA/AB/BA/BB balanced over play order, against
-fixed scripted-greedy and random anchors. Midpoint and endpoint each re-evaluate
-exact frozen initialization on the candidate's same deal/action streams. Five
-cohorts/fit ×800 games ×3fits =12000 games. Separate milestone families start at
-1226100000,1226101000,1226102000; calibration uses1226000000. No score-selected
-checkpoint, replacement seed, sample reduction or early strength stopping.
+Each fit collects256 learner transitions/update before filtering:2,560,000
+per seed and7,680,000 total. Score0 and10000 only; the5000-update export remains
+unscored. Raw only, stochastic one-forward-pass CPU policy. Each scored cohort
+has25 held-out deal blocks ×8 legs covering AA/AB/BA/BB balanced over play order,
+against fixed scripted-greedy and random anchors:200 games per anchor and
+50 games per role cell/anchor. Endpoint also re-evaluates exact frozen
+initialization on the candidate's same deal/action streams. Three cohorts/fit
+×400 games ×3fits =3600 games. Initialization and endpoint families begin at
+1226100000 and1226101000; calibration uses1226000000. The short attempt's scores
+did not select this change; no best-checkpoint or seed replacement is permitted.
+Old attempted outputs stay separate, not pooled with the new cohort.
 
 ## Analysis and stopping
 
@@ -72,7 +76,8 @@ positive on average. This is a prediction, not a stopping rule. Report all four
 role cells, per-seed paired effects, mean and95% t interval(df2), separately from
 conditional whole-deal bootstrap intervals(10000 replicates, seed12290).
 Retain the existing paired analysis/censoring semantics and cost/exposure axes.
-Threshold attainment means10-point greedy improvement confirmed at endpoint;
+Only endpoint progress is observed; any10-point threshold crossing is interval-
+censored between initialization and endpoint, not dated to the unscored export;
 missing endpoints stay unavailable. No method-level conclusion from one seed.
 
 Every completed cohort requires exact replay and ordinary legality. Game watchdog
