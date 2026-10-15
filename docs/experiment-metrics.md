@@ -301,3 +301,19 @@ infer inclusive campaign costs from learner time. Cost accounting, censored
 time-to-progress, the campaign notebook and scientific execution remain required
 before the experiment can be called complete. Synthetic arithmetic tests are not
 learning results.
+
+`observed_progress` reports the first observed threshold crossing only if the
+planned endpoint also meets the threshold. A crossing is interval-censored
+between its preceding planned checkpoint and that checkpoint; no interpolation
+claims the exact instant of learning. No crossing is right-censored at the final
+observed clock value. An early crossing followed by a below-threshold endpoint is
+explicitly unconfirmed, not erased or counted as sustained progress. Missing
+planned cohorts or unavailable clocks make the result unavailable. Curves cannot
+mix training seeds, initializations or experiment identities.
+
+The supported clocks are updates, learner transitions, optimizer exposures,
+active collection/update seconds and training-executor elapsed seconds. Equal
+updates need not mean equal exposures. Executor elapsed time is not total campaign
+cost: external evaluation, transfer and failed-attempt accounting still belong to
+the campaign ledger. Censoring bounds are observation intervals, not statistical
+confidence intervals or proof of continuous progress between checkpoints.

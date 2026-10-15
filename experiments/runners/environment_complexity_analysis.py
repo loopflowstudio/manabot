@@ -8,6 +8,7 @@ separate. No cross-world raw-score ranking or candidate selection occurs here.
 
 from dataclasses import dataclass
 import math
+from typing import Literal
 
 import numpy as np
 
@@ -45,6 +46,7 @@ class SeedEffect:
     deal_blocks: int
     candidate_result_sha256: str
     control_result_sha256: str
+    series_identity: str
 
 
 @dataclass(frozen=True)
@@ -191,6 +193,17 @@ def paired_improvement(
         len(deals),
         canonical_sha256(candidate.model_dump(mode="json")),
         canonical_sha256(control.model_dump(mode="json")),
+        canonical_sha256(
+            {
+                "regime_digest": candidate.regime_digest,
+                "protocol": candidate.protocol.model_dump(
+                    mode="json", exclude={"deal_seeds"}
+                ),
+                "key": candidate.key.model_dump(mode="json"),
+                "opponent": candidate.opponent.model_dump(mode="json"),
+                "inference": candidate.candidate.player_spec,
+            }
+        ),
     )
 
 
@@ -216,4 +229,118 @@ def three_seed_summary(
     mean = float(values.mean())
     return CohortEffect(
         True, None, effects, Interval(mean, mean - half_width, mean + half_width)
+    )
+
+
+ProgressClock = Literal[
+    "updates",
+    "learner_transitions",
+    "optimizer_exposures",
+    "active_training_seconds",
+    "training_seconds",
+]
+
+
+@dataclass(frozen=True)
+class ObservedProgress:
+    status: Literal["interval_censored", "right_censored", "unconfirmed", "unavailable"]
+    clock: ProgressClock
+    threshold: float
+    lower: float | None
+    upper: float | None
+    first_observed_update: int | None
+    reason: str | None
+
+
+def observed_progress(
+    effects: tuple[SeedEffect, ...],
+    planned_updates: tuple[int, ...],
+    *,
+    clock: ProgressClock = "active_training_seconds",
+    threshold: float = 0.10,
+) -> ObservedProgress:
+    """First observed threshold crossing, confirmed at the planned endpoint.
+
+    Bounds are observation intervals, not confidence intervals. Missing planned
+    checkpoints suppress the result. training_seconds is executor elapsed time,
+    not inclusive campaign cost; evaluator/transfer costs must be supplied by the
+    campaign's separate cost accounting, never inferred from this clock.
+    """
+    if (
+        len(planned_updates) < 2
+        or planned_updates[0] != 0
+        or tuple(sorted(set(planned_updates))) != planned_updates
+        or any(type(n) is not int or n < 0 for n in planned_updates)
+    ):
+        raise ValueError("planned updates must start at zero and strictly increase")
+    if not math.isfinite(threshold) or not 0 < threshold <= 1:
+        raise ValueError("progress threshold must be finite and in (0, 1]")
+    by_update = {effect.coordinates.updates: effect for effect in effects}
+    if len(by_update) != len(effects) or not set(by_update).issubset(planned_updates):
+        raise ValueError("duplicate or unplanned checkpoint")
+    if (
+        effects
+        and len({(e.seed, e.series_identity, e.initialization_sha256) for e in effects})
+        != 1
+    ):
+        raise ValueError("progress curve mixes seeds, initializations or experiments")
+    if set(by_update) != set(planned_updates):
+        return ObservedProgress(
+            "unavailable",
+            clock,
+            threshold,
+            None,
+            None,
+            None,
+            "missing planned checkpoint cohorts",
+        )
+    ordered = [by_update[n] for n in planned_updates]
+    if ordered[0].improvement.mean != 0:
+        raise ValueError("initialization must have zero paired improvement")
+    positions = [getattr(e.coordinates, clock) for e in ordered]
+    if any(value is None for value in positions):
+        return ObservedProgress(
+            "unavailable",
+            clock,
+            threshold,
+            None,
+            None,
+            None,
+            "clock unavailable at a planned checkpoint",
+        )
+    values = [float(value) for value in positions if value is not None]
+    if any(not math.isfinite(value) or value < 0 for value in values) or any(
+        after < before for before, after in zip(values, values[1:])
+    ):
+        raise ValueError("progress clock is not finite and monotonic")
+    crossings = [i for i, e in enumerate(ordered) if e.improvement.mean >= threshold]
+    if not crossings:
+        return ObservedProgress(
+            "right_censored",
+            clock,
+            threshold,
+            values[-1],
+            None,
+            None,
+            "threshold not observed by planned endpoint",
+        )
+    if ordered[-1].improvement.mean < threshold:
+        return ObservedProgress(
+            "unconfirmed",
+            clock,
+            threshold,
+            None,
+            None,
+            planned_updates[crossings[0]],
+            "earlier crossing not confirmed at endpoint",
+        )
+    first = crossings[0]
+    return ObservedProgress(
+        "interval_censored",
+        clock,
+        threshold,
+        values[first - 1],
+        values[first],
+        planned_updates[first],
+        None,
     )

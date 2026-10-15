@@ -195,3 +195,15 @@ These are synthetic arithmetic/admission proofs, not learned improvement. The
 campaign still needs time-to-progress/cost accounting, notebook assembly,
 simple content/schema, declaration/calibration and actual execution. Pending
 vanilla-card and machine/budget choices are unchanged.
+
+
+## Observed progress accounting (2026-10-14)
+
+MTG-122 analysis now distinguishes interval-censored threshold crossing confirmed
+at endpoint, right-censored non-attainment, an unconfirmed earlier crossing,
+and unavailable/missing cohorts. It uses planned checkpoints only, never
+interpolates, and rejects mixed seeds/initializations/experiment identities.
+Update, transition, exposure, active-learning and executor-elapsed clocks stay
+separate. None reconstructs inclusive campaign cost. Check: ten synthetic paired
+analysis/censoring tests passed; these do not measure learning. Full cost ledger,
+notebook, simple native/schema admission and the authorized campaign remain open.

@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from experiments.runners.environment_complexity_analysis import (
+    observed_progress,
     paired_improvement,
     three_seed_summary,
 )
@@ -101,3 +102,39 @@ def test_invalid_pair_is_not_scored(defect: str) -> None:
         initialization["sha256"] = "0" * 64
     with pytest.raises(ValueError):
         paired_improvement(candidate, control, initialization=initialization)
+
+
+@pytest.mark.parametrize(
+    "gains,status,bounds",
+    [
+        ((0.0, 0.12, 0.15), "interval_censored", (0, 10)),
+        ((0.0, 0.05, 0.15), "interval_censored", (10, 20)),
+        ((0.0, 0.05, 0.08), "right_censored", (20, None)),
+        ((0.0, 0.12, 0.05), "unconfirmed", (None, None)),
+    ],
+)
+def test_progress_uses_observed_intervals_not_interpolation(
+    gains: tuple[float, float, float],
+    status: str,
+    bounds: tuple[int | None, int | None],
+) -> None:
+    control = cohort()
+    baseline = paired_improvement(control, control, initialization=control.artifact)
+    points = tuple(
+        replace(
+            baseline,
+            coordinates=baseline.coordinates.model_copy(
+                update={"updates": update, "active_training_seconds": seconds}
+            ),
+            improvement=replace(baseline.improvement, mean=gain),
+        )
+        for update, seconds, gain in zip(
+            (0, 500, 1000), (0, 10, 20), gains, strict=True
+        )
+    )
+    progress = observed_progress(points, (0, 500, 1000))
+    assert progress.status == status
+    assert (progress.lower, progress.upper) == bounds
+    assert observed_progress(points[:2], (0, 500, 1000)).status == "unavailable"
+    with pytest.raises(ValueError, match="mixes seeds"):
+        observed_progress((*points[:2], replace(points[2], seed=999)), (0, 500, 1000))
