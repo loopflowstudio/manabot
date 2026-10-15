@@ -1,5 +1,6 @@
 """CLI entrypoints for training and simulation."""
 
+from pathlib import Path
 from typing import Optional, Sequence
 
 import typer
@@ -9,6 +10,7 @@ from manabot.config.presets import DEFAULT_SIM_PRESET, DEFAULT_TRAIN_PRESET
 from manabot.model.train import run_training
 from manabot.remote.cli import app as deploy_app
 from manabot.sim.sim import run_simulation
+from manabot.training.baseline import BASELINE_STEPS, run_baseline
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
@@ -31,8 +33,15 @@ def _run_sim(preset: str, set_values: list[str]) -> None:
 @app.command("train")
 def train_command(
     preset: Optional[str] = typer.Option(None, help="Training preset name"),
+    recipe: str | None = typer.Option(None, help="Complete training recipe: baseline"),
+    steps: int | None = typer.Option(
+        None, min=1, help="Recipe horizon in collection/update iterations"
+    ),
+    seconds: float | None = typer.Option(
+        None, min=1, help="Recipe wall-time limit; does not alter learning schedules"
+    ),
     regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
-    seed: Optional[int] = typer.Option(None, help="Regime execution seed"),
+    seed: Optional[int] = typer.Option(None, help="Regime or recipe training seed"),
     out: Optional[str] = typer.Option(None, help="New run directory"),
     resume_from: Optional[str] = typer.Option(
         None, help="Stopped TrainingRun ID in the same store"
@@ -54,6 +63,41 @@ def train_command(
         help="Override config values with key.path=value (repeatable)",
     ),
 ) -> None:
+    if recipe is not None:
+        if recipe != "baseline":
+            raise typer.BadParameter("unknown recipe; available: baseline")
+        if (
+            any(
+                value is not None
+                for value in (
+                    preset,
+                    regime,
+                    resume_from,
+                    checkpoint_updates,
+                    checkpoint_seconds,
+                    initial_admission,
+                    allocation,
+                )
+            )
+            or set_values
+        ):
+            raise typer.BadParameter(
+                "--recipe cannot be combined with regime/preset overrides or resume/cadence controls"
+            )
+        result = run_baseline(
+            steps=BASELINE_STEPS if steps is None else steps,
+            seed=197 if seed is None else seed,
+            out=Path(out) if out else None,
+            seconds=seconds,
+        )
+        typer.echo(
+            f"baseline: {result.status}; report: {Path(result.notebook).with_name('report.md')}"
+        )
+        if result.status != "completed":
+            raise typer.Exit(1)
+        return
+    if steps is not None or seconds is not None:
+        raise typer.BadParameter("--steps and --seconds require --recipe")
     if regime:
         if preset is not None or set_values:
             raise typer.BadParameter(
@@ -61,17 +105,15 @@ def train_command(
             )
         if out is None:
             raise typer.BadParameter("--regime requires --out")
-        from pathlib import Path
-
         from manabot.remote.plan import Allocation
         from manabot.training.execution import execute_regime
         from manabot.training.models import TrainingRegime
         from manabot.verify.store import VerifyStore
 
-        recipe = TrainingRegime.model_validate_json(Path(regime).read_text())
+        regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
         with VerifyStore(Path(out).parent / "training.sqlite") as store:
             execute_regime(
-                recipe,
+                regime_spec,
                 197 if seed is None else seed,
                 out,
                 store,

@@ -7,6 +7,7 @@ training, and verification. You train *a* manabot; this package is how.
 
 ```bash
 uv run manabot train              # --preset local: bounded laptop run
+uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --preset simple    # full PPO run (CUDA, W&B)
 uv run manabot sim --preset sim --set sim.hero=attention --set sim.villain=simple
 uv run manabot belief-demo        # engine-derived belief/intervention proof
@@ -25,6 +26,17 @@ available for previously published checkpoints.
 
 Override any hyperparameter with `--set dotted.path=value`; presets live in
 `manabot/config/presets.py`.
+
+`--recipe baseline` selects a complete ordinary training run above the regime
+layer: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
+checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
+collection/update iterations (four streams × 64 transitions each), not optimizer
+calls. The same recipe drives the [nightly learning check](../docs/nightly-learnability.md).
+The bare command remains the small `local` smoke run. Use `--out` for a new output
+directory; otherwise the recipe creates a timestamped directory under `.runs/`.
+`--seconds` sets a failure deadline without changing the step schedule. Historical
+`--regime` and `--preset` routes retain their meanings and cannot be combined with
+`--recipe`. The baseline is a versioned starting point, not a strength certification.
 
 For an identified Allies/Lessons opponent, use the bounded
 [train/export/play workflow](../docs/local-trained-challenger.md). It uses the
@@ -202,3 +214,8 @@ For exploratory same-deck checkpoint play, the [head-to-head runner](../experime
 accepts `--matchups mirrors`. This explicitly permits repeating exact checkpoint
 roster decks/sideboards and carries their compiled content pack through replay;
 it is not ordinary training-match admission or evidence of mirror competence.
+
+The [learnability diagnostic](../docs/nightly-learnability.md) trains
+three shared tiny generic policies, fans out identity/capacity assertions, and
+checks reward-driven production PPO plus checkpoint reload. Its credential-free
+CPU runner and failure reports are separate from full-game strength evidence.
