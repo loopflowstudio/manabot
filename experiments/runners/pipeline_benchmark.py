@@ -12,6 +12,7 @@ uses one bounded child process and retains failures, including timeouts and OOMs
 
 import argparse
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import fields
 from datetime import datetime, timezone
 import hashlib
@@ -43,6 +44,7 @@ from manabot.training.models import TrainingRegime
 import managym
 
 JSON_OBJECT = TypeAdapter(dict[str, JsonValue])
+PolicyForward = Callable[[dict[str, torch.Tensor]], tuple[torch.Tensor, torch.Tensor]]
 
 
 class Frame(BaseModel):
@@ -158,13 +160,19 @@ def _tensor_bytes(tensors: dict[str, torch.Tensor]) -> int:
 
 
 def capture(
-    recipe: TrainingRegime, out: Path, streams: int, transitions: int, seed: int
+    recipe: TrainingRegime,
+    out: Path,
+    streams: int,
+    transitions: int,
+    seed: int,
+    *,
+    forward: PolicyForward | None = None,
 ) -> Tape:
     """Capture ordinary network outputs; no model update or synthetic action choice."""
     torch.manual_seed(seed)
     agent = Agent(ObservationSpace(recipe.observation), recipe.agent).eval()
     collector = _collector(recipe, streams, seed)
-    original = agent.forward_distribution
+    original = agent.forward_distribution if forward is None else forward
     frames: list[Frame] = []
     outputs: list[dict[str, torch.Tensor]] = []
 
@@ -257,100 +265,168 @@ def _load_outputs(path: Path, tape: Tape) -> list[tuple[torch.Tensor, torch.Tens
     return outputs
 
 
+class PreparedReplay:
+    """One resident actor with separate collection and verification phases.
+
+    Collect once, then verify while retaining the rollout. Multiple instances
+    may coexist in one process; each restores its captured CPU sampling state
+    before collection. They must be collected sequentially within that process
+    because Torch's CPU generator is process-global. Use separate processes for
+    concurrent collection. No neural forward or simulated device wait runs here.
+    """
+
+    def __init__(
+        self, tape_dir: Path, *, verify_inputs: bool, request_timings: bool = False
+    ) -> None:
+        self.tape_dir = tape_dir
+        self.verify_inputs = verify_inputs
+        self.request_timings = request_timings
+        tape = Tape.model_validate_json((self.tape_dir / "tape.json").read_text())
+        if _world(tape.recipe) != tape.world_binding:
+            raise ValueError("world/schema/setup differs from capture")
+        outputs = _load_outputs(self.tape_dir / "outputs.pt", tape)
+        torch.manual_seed(tape.seed)
+        agent = Agent(
+            ObservationSpace(tape.recipe.observation), tape.recipe.agent
+        ).eval()
+        collector = _collector(tape.recipe, tape.streams, tape.seed)
+        timer = _TimedEnvironment(collector._env)
+        collector._env = timer
+        self.tape = tape
+        self.outputs = outputs
+        self.agent = agent
+        self.collector = collector
+        self.timer = timer
+        self.sampling_state = torch.get_rng_state().clone()
+        self.batch: RolloutBatch | None = None
+        self._attempted = False
+        self._cursor = 0
+        self._elapsed = 0.0
+        self._intervals: list[float] | None = None
+        self._tail: float | None = None
+
+    def collect(self, forward: PolicyForward | None = None) -> None:
+        """Collect once and retain arrays; a failed session cannot be retried."""
+        if self._attempted:
+            raise RuntimeError("replay collection already attempted")
+        self._attempted = True
+        tape, outputs = self.tape, self.outputs
+        agent, collector = self.agent, self.collector
+        verify_inputs, request_timings = self.verify_inputs, self.request_timings
+        torch.set_rng_state(self.sampling_state)
+        cursor = 0
+        request_entries: list[float] = []
+
+        def playback(obs: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+            nonlocal cursor
+            if request_timings:
+                request_entries.append(time.perf_counter())
+            if cursor >= len(outputs):
+                raise ValueError("replay requested an extra policy call")
+            frame = tape.frames[cursor]
+            if len(obs["actions_valid"]) != frame.rows:
+                raise ValueError("policy batch shape diverged")
+            if verify_inputs and _digest_tensors(obs) != frame.input_sha256:
+                raise ValueError("acting-view policy input diverged")
+            logits, critic = outputs[cursor]
+            cursor += 1
+            if forward is not None:
+                actual = forward(obs)
+                if verify_inputs and not (
+                    torch.equal(actual[0], logits) and torch.equal(actual[1], critic)
+                ):
+                    raise ValueError("live policy outputs diverged from tape")
+                return actual
+            # Include output materialization on the host. Device transfer latency
+            # itself is a separate modeled demand, not a sleep in this measurement.
+            return logits.clone(), critic.clone()
+
+        started = time.perf_counter()
+        with patch.object(agent, "forward_distribution", playback):
+            batch = collector.collect(agent, tape.transitions)
+        finished = time.perf_counter()
+        elapsed = finished - started
+        intervals = (
+            [
+                entry - previous
+                for previous, entry in zip(
+                    [started, *request_entries[:-1]], request_entries, strict=True
+                )
+            ]
+            if request_entries
+            else None
+        )
+        self.batch = batch
+        self._cursor = cursor
+        self._elapsed = elapsed
+        self._intervals = intervals
+        self._tail = finished - request_entries[-1] if request_entries else None
+
+    def verify(self) -> Replay:
+        """Check every retained rollout against its tape, outside timed work."""
+        if self.batch is None:
+            raise RuntimeError("replay has no completed collection")
+        batch, tape = self.batch, self.tape
+        collector, timer = self.collector, self.timer
+        cursor, elapsed = self._cursor, self._elapsed
+        intervals = self._intervals
+        tensors = _batch_tensors(batch)
+        batch_hash = _digest_tensors(tensors)
+        buffers_hash = _buffer_digest(collector)
+        journal_hash = _journal_digest(collector)
+        seeds = timer.current_game_seeds()
+        if (
+            cursor != len(tape.frames)
+            or batch_hash != tape.batch_sha256
+            or buffers_hash != tape.buffers_sha256
+            or journal_hash != tape.journal_sha256
+            or seeds != tape.game_seeds
+        ):
+            raise ValueError("collector replay diverged from captured policy")
+        buffer_bytes = sum(v.nbytes for v in collector._buffers.values())
+        return Replay(
+            seconds=elapsed,
+            native_seconds=timer.seconds,
+            demand=HostDemand(
+                decisions=collector.stats.micro_steps,
+                learner_transitions=collector.stats.learner_transitions,
+                seconds=elapsed,
+                native_seconds=timer.seconds,
+                input_bytes=sum(f.input_bytes for f in tape.frames),
+                output_bytes=sum(f.output_bytes for f in tape.frames),
+                forward_calls=len(tape.frames),
+                streams=tape.streams,
+                rollout_bytes=_tensor_bytes(tensors),
+                buffer_bytes=buffer_bytes,
+            ),
+            batch_sha256=batch_hash,
+            buffers_sha256=buffers_hash,
+            journal_sha256=journal_hash,
+            game_seeds=seeds,
+            forward_batches=dict(Counter(f.rows for f in tape.frames)),
+            native_calls=timer.calls,
+            games=collector.stats.games,
+            truncated_games=collector.stats.truncations,
+            rss_bytes=psutil.Process().memory_info().rss,
+            request_host_seconds=intervals,
+            tail_host_seconds=self._tail,
+        )
+
+
 def replay(
     tape_dir: Path, *, verify_inputs: bool, request_timings: bool = False
 ) -> Replay:
-    """Replay exact outputs; timed calls omit per-input hashing after an audited pass.
+    """Replay exact outputs; omit input hashing only after an audited pass.
 
-    All calls still require identical action journals, rollout arrays, final
-    observation buffers and reset seeds. This witnesses the collector boundary,
-    not a complete hidden-authority hash of every native environment.
+    Every call checks action journals, rollout arrays, final observation buffers
+    and reset seeds. These witness the collector boundary, not the complete
+    hidden authority of each native environment.
     """
-    tape = Tape.model_validate_json((tape_dir / "tape.json").read_text())
-    if _world(tape.recipe) != tape.world_binding:
-        raise ValueError("world/schema/setup differs from capture")
-    outputs = _load_outputs(tape_dir / "outputs.pt", tape)
-    torch.manual_seed(tape.seed)
-    agent = Agent(ObservationSpace(tape.recipe.observation), tape.recipe.agent).eval()
-    collector = _collector(tape.recipe, tape.streams, tape.seed)
-    timer = _TimedEnvironment(collector._env)
-    collector._env = timer
-    cursor = 0
-    request_entries: list[float] = []
-
-    def playback(obs: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
-        nonlocal cursor
-        if request_timings:
-            request_entries.append(time.perf_counter())
-        if cursor >= len(outputs):
-            raise ValueError("replay requested an extra policy call")
-        frame = tape.frames[cursor]
-        if len(obs["actions_valid"]) != frame.rows:
-            raise ValueError("policy batch shape diverged")
-        if verify_inputs and _digest_tensors(obs) != frame.input_sha256:
-            raise ValueError("acting-view policy input diverged")
-        logits, critic = outputs[cursor]
-        cursor += 1
-        # Include output materialization on the host. Device transfer latency
-        # itself is a separate modeled demand, not a sleep in this measurement.
-        return logits.clone(), critic.clone()
-
-    started = time.perf_counter()
-    with patch.object(agent, "forward_distribution", playback):
-        batch = collector.collect(agent, tape.transitions)
-    finished = time.perf_counter()
-    elapsed = finished - started
-    intervals = (
-        [
-            entry - previous
-            for previous, entry in zip(
-                [started, *request_entries[:-1]], request_entries, strict=True
-            )
-        ]
-        if request_entries
-        else None
+    prepared = PreparedReplay(
+        tape_dir, verify_inputs=verify_inputs, request_timings=request_timings
     )
-    tensors = _batch_tensors(batch)
-    batch_hash = _digest_tensors(tensors)
-    buffers_hash = _buffer_digest(collector)
-    journal_hash = _journal_digest(collector)
-    seeds = timer.current_game_seeds()
-    if (
-        cursor != len(tape.frames)
-        or batch_hash != tape.batch_sha256
-        or buffers_hash != tape.buffers_sha256
-        or journal_hash != tape.journal_sha256
-        or seeds != tape.game_seeds
-    ):
-        raise ValueError("collector replay diverged from captured policy")
-    buffer_bytes = sum(v.nbytes for v in collector._buffers.values())
-    return Replay(
-        seconds=elapsed,
-        native_seconds=timer.seconds,
-        demand=HostDemand(
-            decisions=collector.stats.micro_steps,
-            learner_transitions=collector.stats.learner_transitions,
-            seconds=elapsed,
-            native_seconds=timer.seconds,
-            input_bytes=sum(f.input_bytes for f in tape.frames),
-            output_bytes=sum(f.output_bytes for f in tape.frames),
-            forward_calls=len(tape.frames),
-            streams=tape.streams,
-            rollout_bytes=_tensor_bytes(tensors),
-            buffer_bytes=buffer_bytes,
-        ),
-        batch_sha256=batch_hash,
-        buffers_sha256=buffers_hash,
-        journal_sha256=journal_hash,
-        game_seeds=seeds,
-        forward_batches=dict(Counter(f.rows for f in tape.frames)),
-        native_calls=timer.calls,
-        games=collector.stats.games,
-        truncated_games=collector.stats.truncations,
-        rss_bytes=psutil.Process().memory_info().rss,
-        request_host_seconds=intervals,
-        tail_host_seconds=finished - request_entries[-1] if request_entries else None,
-    )
+    prepared.collect()
+    return prepared.verify()
 
 
 class HardwareRow(BaseModel):
