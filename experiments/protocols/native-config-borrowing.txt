@@ -1,0 +1,57 @@
+Native configuration borrowing — prospective protocol, 2026-10-15
+
+Goal: complete single-GPU training throughput. Run020 rejected direct rollout
+storage; that production candidate and its exclusive machinery are removed.
+The pre-storage Python collector is the common owner for both arms below.
+
+Intervention: native vector stepping/reset iteration borrows immutable per-stream
+player configs instead of deep-copying the full config list on every call. Game
+rules, masks, observation encoding, sampling, learning and reset seeds do not
+change. Reference: exact vector_env.rs frome41edb26, retained with its SHA256.
+Only that source file differs between native builds. The candidate source,
+reference fixture, build helper and workload must be published before admission.
+
+Both native libraries are compiled on the same rented host, with identical release
+profile/features/interpreter/toolchain. Retain both binary hashes/bytes, wheel
+hashes, commands, toolchain and every Rust input hash. A build failure restores
+the candidate source and installed library and fails visibly. Source readback
+must match after builds. The experiment parent selects a library atomically
+before starting each fresh child; never overwrite a loaded library inode.
+Each child checks its loaded library hash. Per-cell source-bundle receipts bind
+the chosen native bytes; variant receipts identify which Rust source built them.
+The parent performs no measured native work. Restore candidate library on exit.
+
+One RTX5090 at <=$1.25/h, >=8vCPU/48GBRAM; original total$50. Reserve$4, job30min/$3,
+rental2700s, one attempt. Confirm all prior admitted pods deleted and unknown015
+provider absence with its separate$4reserve. No retry/deadline extension. Freeze
+and fully read back the exact source archive before admission.
+
+Existing worker_experiment --native-variants uses the same cuda_performance.child:
+512/4096streams,8steps x3updates,seed10349,w64-d1,FP32/TF32off,oneTorchCPUthread.
+Fixed work12,288/98,304learner rows per cell. Existing55s stage/60s recipe/70s
+process limits unchanged. All32cells, failures, missing cells and repeats remain
+in analysis; no survivor-only medians or substituted workloads.
+
+Eight deterministic proof cells: cloned1/borrowed1/borrowed4/cloned4, each512/4096.
+Existing deterministic settings and complete collection witnesses are diagnostic
+only. Require exact rollout/buffer/action-active journal/seeds/sampling RNG and
+final raw/EMA/Adam/scientific diagnostics within each shape; all cells complete.
+
+Twenty-four ordinary timing cells: cloned1/borrowed1/borrowed4/cloned4/cloned4/
+borrowed4/borrowed1/cloned1/borrowed4/cloned1/cloned4/borrowed1, each512/4096.
+Three complete repetitions per condition/shape. No full collection hashing or
+deterministic override in these ordinary timing cells. Record complete TrainingRun,
+collection/learning durations, CPU time, rows, memory, thread cleanup and all
+learned-state hashes plus selected native build identity.
+
+At4096 require borrowed4/cloned1 throughput>=1.25x and borrowed4/cloned4>=1.15x;
+at512 borrowed4 duration<=1.05x cloned1. Report borrowed1 and all repetitions to
+distinguish removing copies from producer effects. These slice gates do not
+automatically establish full goal completion or general capacity/playing strength.
+
+Exact deterministic and ordinary learned-state gates remain in force. Prior Adam
+variation remains unexplained, including within-baseline variation; a performance
+win cannot waive it. No tolerance or earlier failed gate is changed. A separate
+fixed-graph gradient diagnostic may be needed afterward; it is not an unlisted
+arm of this experiment. Verify immutable archive hash and every manifest entry
+before analysis, retain complete evidence, and confirm provider deletion.

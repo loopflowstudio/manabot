@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import sys
 import threading
 import time
 from unittest.mock import patch
@@ -21,6 +22,7 @@ from unittest.mock import patch
 import torch
 
 from experiments.runners.cuda_performance import Cell, child
+from experiments.runners.native_variants import NativeBuild, file_digest
 from experiments.runners.pipeline_benchmark import (
     _batch_tensors,
     _buffer_digest,
@@ -167,7 +169,14 @@ def main() -> None:
     parser.add_argument("--cell", type=Cell.model_validate_json, required=True)
     parser.add_argument("--reference-policy", action="store_true")
     parser.add_argument("--deterministic", action="store_true")
+    parser.add_argument("--native-build", type=Path)
     args = parser.parse_args()
+    native: NativeBuild | None = None
+    if args.native_build:
+        native = NativeBuild.model_validate_json(args.native_build.read_text())
+        loaded = sys.modules["managym._managym"].__file__
+        if loaded is None or file_digest(Path(loaded)) != native.library_sha256:
+            raise ValueError("child native library differs from selected build")
     if args.cell.kind != "loop":
         parser.error("preparation comparison requires an ordinary training loop")
     if args.deterministic:
@@ -198,6 +207,12 @@ def main() -> None:
                 - before.ru_utime
                 - before.ru_stime,
                 "remaining_producer_threads": remaining,
+                "native_build": {
+                    "variant": native.variant,
+                    "library_sha256": native.library_sha256,
+                }
+                if native
+                else None,
             },
             indent=2,
         )

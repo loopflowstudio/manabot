@@ -489,3 +489,11 @@ not separately measured, and no GPU speedup is claimed for the borrowing change.
 Nine Rust debug vector tests and20Python producer/collector/inference tests pass,
 including mixed per-stream setups through masked terminal auto-reset and recovery.
 A matched same-host native comparison remains required.
+The [native borrowing protocol](protocols/native-config-borrowing.txt) specifies
+that comparison. `native_variants` builds both source variants with the same
+release command, and `worker_experiment --native-variants` selects verified native
+bytes before each fresh training process. Per-cell source/build receipts identify
+the selected binary. Local real-build checks matched complete collections and
+learned states across both variants and one/four workers; selector tests cover
+tampering, failed-build restoration and archive identity without Git. These are
+correctness checks, not GPU performance results.

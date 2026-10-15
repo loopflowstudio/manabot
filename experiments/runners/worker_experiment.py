@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -22,6 +23,7 @@ import psutil
 import torch
 
 from experiments.runners.cuda_performance import Cell
+from experiments.runners.native_variants import NativeBuilds, NativeVariant, install
 from experiments.runners.pipeline_benchmark import Tape
 from experiments.runners.worker_scaling import write_json
 from manabot.training.source_bundle import SourceBundle, source_commit
@@ -44,6 +46,7 @@ class TrainingTrial:
     reference: bool = False
     workers: Literal[1, 2, 4] = 1
     deterministic: bool = False
+    native: NativeVariant | None = None
 
 
 def read_optional(path: str) -> str | None:
@@ -66,8 +69,10 @@ def main() -> None:
     mode.add_argument("--serving-preparation", action="store_true")
     mode.add_argument("--collection-profile", action="store_true")
     mode.add_argument("--producer-scaling", action="store_true")
+    mode.add_argument("--native-variants", type=Path)
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
+    bundle: SourceBundle | None = None
     if config_path := os.environ.get("ETUDE_CONFIG"):
         config = json.loads(Path(config_path).read_text())
         bundle = SourceBundle.model_validate(config["source"])
@@ -81,6 +86,28 @@ def main() -> None:
         if source_commit() != bundle.commit:
             raise ValueError("source owner rejected exact archive identity")
         write_json(args.out / "source-bundle.json", bundle.model_dump(mode="json"))
+    native_builds: NativeBuilds | None = None
+    if args.native_variants:
+        if bundle is None:
+            raise ValueError("native comparison requires an admitted source bundle")
+        native_builds = NativeBuilds.model_validate_json(
+            (args.native_variants / "builds.json").read_text()
+        )
+        if native_builds.commit != bundle.commit or set(native_builds.builds) != {
+            "cloned",
+            "borrowed",
+        }:
+            raise ValueError("native builds differ from admitted source")
+        if any(key != build.variant for key, build in native_builds.builds.items()):
+            raise ValueError("native variant labels differ from build receipts")
+        for path, expected in native_builds.builds["borrowed"].sources.items():
+            if digest(Path(path)) != expected:
+                raise ValueError(f"candidate native source differs: {path}")
+        shutil.copytree(
+            args.native_variants,
+            args.out / "native-builds",
+            ignore=shutil.ignore_patterns("wheels"),
+        )
     name = torch.cuda.get_device_name()
     if name != args.expected_gpu:
         raise ValueError(f"expected {args.expected_gpu}, received {name}")
@@ -106,7 +133,7 @@ def main() -> None:
     )
     statuses = []
     try:
-        if args.collection_profile or args.producer_scaling:
+        if args.collection_profile or args.producer_scaling or args.native_variants:
             trials = []
         elif args.serving_preparation:
             trials = [
@@ -238,6 +265,36 @@ def main() -> None:
                 for index, (reference, workers) in enumerate(order)
                 for streams in (512, 4096)
             ]
+        if native_builds is not None:
+            native_order: tuple[tuple[NativeVariant, Literal[1, 2, 4]], ...] = (
+                ("cloned", 1),
+                ("borrowed", 1),
+                ("borrowed", 4),
+                ("cloned", 4),
+                ("cloned", 4),
+                ("borrowed", 4),
+                ("borrowed", 1),
+                ("cloned", 1),
+                ("borrowed", 4),
+                ("cloned", 1),
+                ("cloned", 4),
+                ("borrowed", 1),
+            )
+            training_cases = [
+                TrainingTrial(
+                    f"{kind}-{index}-{variant}-w{workers}-s{streams}",
+                    streams,
+                    workers=workers,
+                    deterministic=kind == "proof",
+                    native=variant,
+                )
+                for kind, order in (
+                    ("proof", native_order[:4]),
+                    ("timing", native_order),
+                )
+                for index, (variant, workers) in enumerate(order)
+                for streams in (512, 4096)
+            ]
         for training in training_cases:
             name, streams, reference = (
                 training.name,
@@ -246,6 +303,16 @@ def main() -> None:
             )
             root = args.out / name
             root.mkdir()
+            if training.native is not None:
+                assert native_builds is not None and bundle is not None
+                selected = native_builds.builds[training.native]
+                library = install(
+                    args.out / "native-builds" / training.native, selected
+                )
+                bundle.files[str(library)] = selected.library_sha256
+                write_json(Path(".manabot-source.json"), bundle.model_dump(mode="json"))
+                write_json(root / "source-bundle.json", bundle.model_dump(mode="json"))
+                write_json(root / "native-build.json", selected.model_dump(mode="json"))
             write_json(root / "baseline.json", tape.recipe.model_dump(mode="json"))
             cell = Cell(
                 capacity="w64-d1",
@@ -268,6 +335,7 @@ def main() -> None:
                     if args.serving_preparation
                     or args.collection_profile
                     or args.producer_scaling
+                    or args.native_variants
                     else "experiments.runners.cuda_performance"
                 ),
                 "--root",
@@ -277,6 +345,11 @@ def main() -> None:
                 *(["--profile-kind", profile_kind] if profiling else []),
                 *(["--reference-policy"] if reference else []),
                 *(["--deterministic"] if training.deterministic else []),
+                *(
+                    ["--native-build", str(root / "native-build.json")]
+                    if training.native is not None
+                    else []
+                ),
             ]
             with (root / "worker.log").open("w") as log:
                 try:
@@ -305,6 +378,11 @@ def main() -> None:
             )
             write_json(args.out / "status.json", {"cases": statuses})
     finally:
+        if native_builds is not None and bundle is not None:
+            selected = native_builds.builds["borrowed"]
+            library = install(args.out / "native-builds" / "borrowed", selected)
+            bundle.files[str(library)] = selected.library_sha256
+            write_json(Path(".manabot-source.json"), bundle.model_dump(mode="json"))
         # Live exchange slots are disposable transport, not immutable evidence;
         # include them in the manifest nonetheless rather than hiding output.
         files = [
