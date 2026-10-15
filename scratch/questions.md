@@ -288,3 +288,13 @@ pools; original nested TrainingRun exports remain intact. Scientific child outpu
 directories now isolate those copies. Four declaration/cohort tests passed.
 Scientific learning, final analysis, editable notebook/HTML and archival are still
 unfinished; admission is not a result. Do not edit the frozen remote source.
+
+Scientific attempt `030a6ea72338` failed before learning because its SDK Step
+constructor omitted the required meaning. The repaired constructor passed a real
+tracker init/log/finish fixture (no games). Retry `063198864bfb` is live on Mini;
+session `6e352edc3173`, attempt `6070eba01d26`. Exact source/cap/charged prior time
+live in `.runs/mtg122/science-clock-repair.json`. Plan digest and all scientific
+counts/seeds/recipes remain unchanged; no learned attempt was replaced. First
+`l1-12251/training/run.json` confirms learning has begun. SDK root progress does
+not aggregate child update clocks; nested TrainingRun receipts own per-fit work.
+The failed first scientific attempt remains retained and charged.
