@@ -50,3 +50,42 @@ are retained. Local CPU checks may validate schema/orchestration only.
 Follow-up allocation requires inspecting these results and confirmed cleanup.
 Keep the full $50 ceiling inclusive across all failed and successful attempts;
 do not interpret one run's smaller cap as a fresh budget on retry.
+
+## First allocation status
+
+Protocol/driver commit `7f93210e2328003d2734c2f33dd358c8dbd191c1` was
+committed before launch. Etude published only that explicit revision; other
+untracked research artifacts were excluded. Client source is
+`d04d4996e16ca064eab127da39cb9375c5a511c2` from the existing private client.
+Run `49c55761a6d3`, cohort `l4-validation-001`, session `5c4dee556dac`, pod
+`td9idyvn0cg2wg` was created at 2026-10-15 02:18:56.538 UTC for $0.59/hour.
+Its worker started; provider status was RUNNING on the subsequent exact-ID read.
+
+Launch and one observation command timed out delivering the 182,743,040-byte
+uncompressed Git archive through Etude's 60-second single-request upload. The
+run remains recorded. Recovery uses the same source object, commit, run and pod,
+uploading the exact archive through multipart S3 followed by full SHA-256
+readback. No replacement rental was requested. Credential values stay in process.
+Local budget/allocation state is `.runs/gpu-validation/budget.json`; the local
+launcher home is `.runs/gpu-validation/launcher`. The authenticated CLI adapter is
+`.runs/gpu-validation/cli.py`, invoked through Doppler and uv with the existing
+Etude client package. Resume observation of the exact run, never relaunch to
+recover an uncertain response. Confirm deletion and settle cost before allocating
+any follow-up.
+
+First allocation ended before measurement: the bootstrap installed `dev`, but
+the repository declares maturin in `play`. The ordinary build command therefore
+failed before CUDA admission. Source readback was verified after 153.397 seconds;
+the failure log is `.runs/gpu-validation/observed.log`. Etude reported about
+$0.07 estimated. Exact provider lookup confirmed pod absence at
+2026-10-15 02:27:57 UTC (`first-cleanup.json`); reserve $0.10 pending final billing.
+This is a bootstrap failure, not negative performance evidence.
+
+Second allocation amendment: add the existing locked `play` extra; preserve all
+measurement cells and predictions. One new attempt, same $1.50 job/$3 cohort
+ceilings, cohort `l4-validation-002`; all costs remain inside the original $50.
+Upload the exact frozen archive to the same private prefix with multipart and
+full SHA-256 readback before renting. A local transport adapter may copy that
+verified object server-side to Etude's session-specific source key; bytes, Git
+source identity, worker execution and cleanup remain owned by the existing
+launcher. No changes to the Etude checkout or credential scope.

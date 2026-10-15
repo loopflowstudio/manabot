@@ -12,7 +12,7 @@ if ! command -v cargo >/dev/null; then
 fi
 rustup toolchain install 1.98.1 --profile minimal
 export RUSTUP_TOOLCHAIN=1.98.1
-uv sync --locked --python 3.12 --extra dev
+uv sync --locked --python 3.12 --extra dev --extra play
 uv run --no-sync maturin develop --release --features python --manifest-path managym/Cargo.toml
 uv --version
 rustc --version
