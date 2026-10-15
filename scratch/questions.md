@@ -127,3 +127,15 @@ checkpoint identity, not a global schema rewrite. Only the product policy pack
 remains registered. Simple-world admission is still open pending exact vanilla
 roster. The budget and roster questions were presented again in this conversation;
 no scientific run is authorized by this software proof.
+
+
+## Exact compiled-pack reload (2026-10-14)
+
+Ordinary checkpoint loading now reconstructs the saved compiled pack selection
+alongside decks/sideboards, then checks the complete runtime binding. Previously
+both explicit product mirror checkpoints fell back to general content and failed
+reload. Both now reload without relaxing roster, manifest or sideboard checks;
+native setup rejection is translated to the existing binding error. This is a
+prerequisite for a research pack with more than two registered deck roles, not
+proof that that pack exists. Check: 25 world/catalog/Etude-worker checks passed;
+focused lint and diff checks passed. No scientific games were scored.

@@ -1,6 +1,7 @@
 """Ordinary checkpoint admission binds corrected rules and complete setup."""
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 import torch
@@ -112,3 +113,20 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
     obs, _ = env.reset(seed=0)
     with pytest.raises(ValueError, match="setup differs"):
         players[consumer]().act(env, obs)
+
+
+@pytest.mark.parametrize("deck", ["ur_lessons", "gw_allies"])
+def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
+    tmp_path: Path, deck: str
+) -> None:
+    space = ObservationSpace()
+    match = Match(MatchHypers.authored("ur-lessons-vs-gw-allies", deck, deck))
+    payload = checkpoint()
+    payload["world_binding"] = checkpoint_world(match.to_rust(), space)
+    path = tmp_path / "mirror.pt"
+    torch.save(payload, path)
+    agent, _ = load_checkpoint_agent(str(path))
+    assert agent.world_binding == payload["world_binding"]
+    validate_checkpoint_world(payload, space, match.to_rust())
+    with pytest.raises(ValueError, match="world/setup/input"):
+        validate_checkpoint_world(payload, space, selected_match().to_rust())

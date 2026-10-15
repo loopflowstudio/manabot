@@ -116,12 +116,26 @@ def validate_checkpoint_world(
     try:
         configs = player_configs
         if configs is None:
+            # Deck multisets alone do not select a compiled pack for mirrors
+            # or research rosters. Reconstruct the recorded selection, then
+            # validate its complete manifest below; this does not trust its
+            # digest or grant new setup membership.
+            compiled = binding["content_manifest"].get("compiled_semantics")
+            pack_key = None
+            if compiled is not None:
+                if not isinstance(compiled, dict) or not isinstance(
+                    compiled.get("pack_key"), str
+                ):
+                    raise ValueError("invalid compiled content pack selection")
+                pack_key = compiled["pack_key"]
             configs = [
-                managym.PlayerConfig(str(index), setup["deck"], setup["sideboard"])
+                managym.PlayerConfig(
+                    str(index), setup["deck"], setup["sideboard"], pack_key
+                )
                 for index, setup in enumerate(binding["setups"])
             ]
         expected = checkpoint_world(configs, observation_space)
-    except (KeyError, TypeError, ValueError) as error:
+    except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error
     if _digest(binding) != _digest(expected):
         raise ValueError(
