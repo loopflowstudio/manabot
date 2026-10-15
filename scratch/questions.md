@@ -393,3 +393,11 @@ session `f89409f36a91`, attempt `a9878311d7d9`; receipt
 `.runs/mtg122/w6-admitted-launch.json`. Native build and retained-calibration
 admission passed; first scientific seed12261 has a10000-update target. No new
 calibration or checkpoint continuation. Other attempts remain terminal and charged.
+
+Jack Heart requested quick latest-checkpoint evaluation and an Etude report.
+At4494 updates only initialization was exported; trained export is scheduled5000.
+Do not interrupt learning or evaluate initialization as a trained policy. Quick
+evaluation is supplemental, not a new scientific cohort or cross-world causal
+claim. Etude's own `reports write` generated `.runs/mtg122/etude-report/self-play.html`
+from copied SDK tracking files; it is a local snapshot, not live strength evidence.
+No strength evaluations were present and no auxiliary games have run yet.
