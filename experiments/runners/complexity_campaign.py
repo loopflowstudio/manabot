@@ -198,6 +198,7 @@ def execute(plan: ComplexityPlan) -> None:
         {c.name: c.receipt() for c in plan.experiment().resolve().cases},
     )
     root_run, root_tracking = env["ETUDE_RUN"], env["ETUDE_TRACK_DIR"]
+    root_output = env["ETUDE_OUTPUT_DIR"]
     start = time.time()
     evaluation_tracker = init(
         experiment="mtg122-evaluation",
@@ -237,6 +238,7 @@ def execute(plan: ComplexityPlan) -> None:
                 key = f"{pool}-{seed}"
                 directory = output / key
                 directory.mkdir()
+                env["ETUDE_OUTPUT_DIR"] = str(directory)
                 env["ETUDE_RUN"] = f"{root_run}-{key}"
                 env["ETUDE_TRACK_DIR"] = str(Path(root_tracking) / key)
                 with VerifyStore(directory / "training.sqlite") as store:
@@ -340,6 +342,7 @@ def execute(plan: ComplexityPlan) -> None:
         )
         state["elapsed_seconds"] = time.time() - start
         atomic_json(manifest, state)
+        env["ETUDE_OUTPUT_DIR"] = root_output
         env["ETUDE_RUN"], env["ETUDE_TRACK_DIR"] = root_run, root_tracking
 
 
