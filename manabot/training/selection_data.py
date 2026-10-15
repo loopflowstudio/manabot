@@ -16,7 +16,7 @@ import torch
 
 from manabot.arena.models import canonical_sha256
 from manabot.env import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.model.agent import Agent
 from manabot.model.world import validate_agent_setup
 from manabot.training.models import SelectionGameSpec, Strict
@@ -139,7 +139,9 @@ def collect_selection_game(
                 actor=actor,
                 observation_identity=observation.viewer_state_hash,
                 action=action,
-                action_type=int(tensors["actions"][0, action, :-1].argmax()),
+                action_type=int(
+                    tensors["actions"][0, action, :ACTION_TYPE_DIM].argmax()
+                ),
                 value=float(value.item()),
                 action_probability=float(probabilities[0, action]),
                 entropy=float(-(probabilities * logs).sum()),

@@ -20,10 +20,15 @@ def test_frozen_capacity_contract() -> None:
         (Path(__file__).parent / "fixtures/capacity_base.json").read_text()
     )
     torch.set_num_threads(1)
+    # This frozen receipt measures the w4 architecture. Keep its original input
+    # width for construction only; native execution and checkpoint admission use w5.
+    historical_space = ObservationSpace()
+    historical_space.encoder.action_dim = 17
+    historical_space.shapes = historical_space.encoder.shapes
     for row in frozen["models"]:
         torch.manual_seed(115)
         agent = Agent(
-            ObservationSpace(),
+            historical_space,
             AgentSpec(attention_layers=row["depth"], value_aggregation=row["pooling"]),
         )
         digest = hashlib.sha256()

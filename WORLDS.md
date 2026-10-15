@@ -14,9 +14,10 @@ was dead on arrival in exp-10.)
 | **w2** | rules stage 3–4 + conformance (`cb80331`..`a9f1f91`, max_actions 32 @ `55a0b4b`) | 28 / 38 / 24 / 14 | exp-10 V + BC student; exp-11 arms (incl. ported student_r0, validated 86.5%) | exp-06 PPO 60–77%; exp-10/11 (pending merge) |
 | **w3** | corrected Learn evidence, 2026-09-24–29 (certification unfinished) | 28 / 39 / 24 / 16 | frozen Learn/checkpoint evidence; see [Learn record](docs/rules/learn-lesson.md) | no completed new baseline certification |
 | **w4** | ETU-88, 2026-09-29 | 28 / 39 / 25 / 16; 13 decision kinds | Gran-Gran, Proft's Eidetic Memory, Combustion Technique and required base rules | no strength baseline yet |
+| **w5** | attack declaration encoding, 2026-10-15 | 28 / 39 / 25 / 16; action width 18 including declaration and validity | no promoted checkpoints | no strength baseline yet |
 
-**Current world: w4.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w3) are **not comparable** to w4; do not reuse their
+**Current world: w5.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w4) are **not comparable** to w5; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -24,6 +25,23 @@ Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any shape change.
+
+## w5: distinguish attack from decline
+
+The ordinary action tensor now includes the existing `declared` choice at index
+16, after the 16 action-family bits. Validity moves from index 16 to 17.
+Attack and decline previously had identical family/focus inputs and therefore
+identical policy scores. The extra bit allows the shared policy head to learn
+either preference. Blocking declarations also carry their existing choice bit;
+other actions use zero. Native legal actions and their ordering are unchanged.
+
+Both native/vector and Python encoders share this layout. Family priors and
+diagnostics read only the 16 family bits. Ordinary checkpoint admission rejects
+w4 bindings before loading weights; no weight padding or compatibility relabeling
+is provided. Frozen w4 recipes, checkpoints and experiment receipts retain their
+identities and require their historical runtime. New training recipes must name
+w5 explicitly. The rules conformance corpus remains w4 because rules and native
+Commands have not changed. This input fix makes no new strength claim.
 
 ETU-75 completes the ordinary policy input binding against **w4**, preserving
 the native rules world from ETU-88. The base feature widths above remain

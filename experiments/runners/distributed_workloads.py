@@ -36,7 +36,8 @@ def _recipe(path: Path | None, timeout: float) -> TrainingRegime:
         (path or Path("experiments/regimes/ataraxos-move.json")).read_bytes()
     )
     if path is None:
-        recipe.id = "etu108-benchmark"
+        recipe.world = native.WORLD_VERSION
+        recipe.id = f"benchmark-smoke-{recipe.world}"
         recipe.wall_seconds = 60
         for stage in recipe.stages:
             if not isinstance(stage, TrainSelfPlay):

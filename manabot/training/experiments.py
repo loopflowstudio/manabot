@@ -516,7 +516,7 @@ class Experiment:
                 for write in writes:
                     _set(data, write)
                 data["id"] = name
-                resolved = validate_regime(data)
+                resolved = validate_regime(data, require_current_world=False)
                 complete = _object(resolved)
                 provenance: list[SettingProvenance] = []
                 effective = _object(resolved)

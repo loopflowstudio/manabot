@@ -5,6 +5,7 @@ from experiments.runners.run_skill_arena import play_cells
 from manabot.arena.match import derive_seed, play_cell
 from manabot.arena.models import ArenaContract, MatchRow
 from manabot.arena.replay import read_trace, replay_games
+from managym import WORLD_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -116,12 +117,12 @@ def selected_players():
         )
     )
     key = contract.key.model_copy(
-        update={"world": "w4", "content_suite": SELECTED_SUITE}
+        update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
     )
     players = [
         player.model_copy(
             update={
-                "world": "w4",
+                "world": WORLD_VERSION,
                 "content_suite": SELECTED_SUITE,
                 "matchup_sha256": canonical_sha256(selected_match().model_dump()),
             }
@@ -303,7 +304,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
         agent, space, path, player_configs=Match(selected_match()).to_rust()
     )
     runtime = runtime_fingerprints(
-        match_hypers=selected_match(), observation_space=space, world="w4"
+        match_hypers=selected_match(), observation_space=space, world=WORLD_VERSION
     )
     candidate = PlayerRegistration.model_validate(
         {

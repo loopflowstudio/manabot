@@ -96,6 +96,11 @@ class ActionSpaceEnum(IntEnum):
     LEGEND_RULE = 12
 
 
+# Native action tensor: family one-hot, declaration choice, validity.
+ACTION_TYPE_DIM = len(ActionEnum)
+ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
+
+
 class ZoneEnum(IntEnum):
     """Mirrors managym.ZoneEnum for validation."""
 
@@ -177,8 +182,8 @@ class ObservationEncoder:
         self.permanent_dim = 25
         self.event_dim = 12 if hypers.policy_history_version == 1 else 7
 
-        # Action space dimension: action type + validity bit.
-        self.action_dim = self.num_actions + 1  # validity bit
+        # Preserve attack/decline independently of action family and focus.
+        self.action_dim = self.num_actions + 2  # declaration and validity bits
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -523,6 +528,8 @@ class ObservationEncoder:
             action_type = int(action.action_type)
             if 0 <= action_type < self.num_actions:
                 arr[idx, action_type] = 1.0
+
+            arr[idx, ACTION_DECLARED_INDEX] = float(action.declared is True)
 
             if len(action.focus) > self.max_focus_objects:
                 raise ValueError("observation capacity exceeded: action focus")

@@ -14,10 +14,14 @@ from manabot.training.experiment_runner import run_experiment
 from manabot.training.experiments import Baseline, Case, Experiment, Model
 from manabot.training.monitor_evaluation import MonitorProtocol
 from manabot.training.presets import ataraxos_mtg_v1
+import managym
 
 
 def declaration() -> Experiment:
     base = ataraxos_mtg_v1().regime()
+    # This live software demo creates a new recipe, not historical study evidence.
+    base.world = managym.WORLD_VERSION
+    base.id = f"fixture-{base.world}"
     base.stages = base.stages[:1]
     base.wall_seconds = 20
     for stage in base.stages:
@@ -28,7 +32,7 @@ def declaration() -> Experiment:
     base.agent.num_attention_heads = 2
     return Experiment(
         name="fixture",
-        baseline=Baseline.capture("fixture", base),
+        baseline=Baseline.capture(f"fixture-{base.world}", base),
         cases=(Case("small"), Case("wide", (Model(AgentSpec(hidden_dim=16)),))),
         schedule=ExperimentSchedule(
             seeds=(117, 118),

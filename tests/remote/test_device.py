@@ -10,6 +10,7 @@ from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime
 from manabot.verify.store import VerifyStore
+import managym
 from tests.remote.test_compile import ROOT
 
 
@@ -20,6 +21,8 @@ def test_unavailable_cuda_never_falls_back(
     for stage in data["stages"]:
         stage["execution"]["device"] = "cuda"
     regime = TrainingRegime.model_validate(data)
+    regime.world = managym.WORLD_VERSION
+    regime.id = f"test-{regime.world}-{regime.id}"
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="CPU fallback is forbidden"):
@@ -36,6 +39,8 @@ def test_cuda_continuation_exports_cpu_loadable_raw_and_ema(tmp_path: Path) -> N
         stage["execution"]["device"] = "cuda"
         stage["learning"]["ema"] = 0.9
     regime = TrainingRegime.model_validate(data)
+    regime.world = managym.WORLD_VERSION
+    regime.id = f"test-{regime.world}-{regime.id}"
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(regime, 197, tmp_path / "run", store)
     assert run.status == "completed"

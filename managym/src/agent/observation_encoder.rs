@@ -9,7 +9,10 @@ pub const PLAYER_DIM: usize = 28;
 pub const CARD_DIM: usize = 39;
 pub const PERMANENT_DIM: usize = 25;
 pub const ACTION_TYPE_DIM: usize = 16;
-pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
+/// Declaration choice is separate from its family: attack and decline must
+/// have distinct policy inputs even when they focus the same permanent.
+pub const ACTION_DECLARED_INDEX: usize = ACTION_TYPE_DIM;
+pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 2;
 pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
@@ -649,6 +652,7 @@ fn encode_actions(
         if action_type_index < ACTION_TYPE_DIM {
             row[action_type_index] = 1.0;
         }
+        row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
         row[ACTION_DIM - 1] = 1.0;
         out_valid[action_index] = 1.0;
 
@@ -847,6 +851,32 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn attack_and_decline_have_distinct_policy_features() {
+        let mut observation = sample_observation();
+        observation.action_space.action_space_type = ActionSpaceKind::DeclareAttacker;
+        observation.action_space.actions = [true, false]
+            .into_iter()
+            .map(|declared| ActionOption {
+                action_type: ActionType::DeclareAttacker,
+                focus: vec![333],
+                declared: Some(declared),
+            })
+            .collect();
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&observation, &config).expect("attack decision encodes");
+        assert_ne!(
+            &encoded.actions[..ACTION_DIM - 1],
+            &encoded.actions[ACTION_DIM..2 * ACTION_DIM - 1],
+            "the policy must be able to prefer attacking or declining"
+        );
+        assert_eq!(
+            &encoded.action_focus[..config.max_focus_objects],
+            &encoded.action_focus[config.max_focus_objects..2 * config.max_focus_objects]
+        );
+        assert_eq!(&encoded.actions_valid[..2], &[1.0, 1.0]);
     }
 
     fn make_card(
