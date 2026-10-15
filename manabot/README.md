@@ -233,3 +233,19 @@ Policy checkpoints cannot resume optimizer, RNG or collector state. Automatic
 retries are disabled (`max_attempts=1`); multi-stage and imported-state jobs are
 not yet admitted. This worker proof does not establish SDK placement, remote
 provisioning, scientific evaluation, artifact upload or learning strength.
+
+### Semantic catalog dimensions
+
+`SemanticCardEncoder` uses a shared GRU over semantic-token embeddings, not an
+independent learned embedding per card. Its `catalog_shape` reports definition
+count, unique token count, total expanded sequence length, longest sequence and
+padded token count. Referenced definitions are expanded into the parent sequence.
+The embedding runs over the padded array; the packed GRU skips padding. These
+counts describe representation cost, not observed learning difficulty.
+
+`manabot.semantic.policy_catalog` owns explicit native/IR admission. Policy
+construction checks compiled pack, IR and source hashes and complete native
+coverage before joining transport IDs. The selected product catalog remains the
+only registered policy catalog; research catalogs need their own checked IR and
+schema admission. In particular, the native Jeong increment alone is not policy
+admission: its `Rebel` subtype is absent from the current learning schema.

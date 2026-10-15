@@ -108,3 +108,22 @@ campaign execution/analysis remain. Do not mistake a constructed Job for a launc
 Check: 15 direct-worker/SDK/real-learner tests passed (including a real subprocess
 and retained cancellation receipt); focused ruff and diff checks passed. No
 scientific cohort, rental or source-frozen experiment was launched.
+
+
+## Catalog admission prerequisite (2026-10-14)
+
+The encoder now obtains native/IR bindings through an explicit policy catalog
+registry, requiring matching pack/IR/source receipts and complete native coverage.
+CatalogShape separates definitions, unique tokens, expanded sequence length and
+padding. Selected product counts are 31 definitions, 163 unique tokens, 2200
+expanded positions, maximum 148, and 4588 padded positions. These are static
+representation counts, not timing or learning results. Fixed-seed original state
+and output bytes were unchanged by extraction; nine model/learner tests passed.
+
+Trying the already-native Jeong pack exposed an unrepresented Rebel subtype.
+It was not admitted or silently added to the product schema. The existing schema
+also lacks Ogre/Wurm: research content needs a separately bound schema and
+checkpoint identity, not a global schema rewrite. Only the product policy pack
+remains registered. Simple-world admission is still open pending exact vanilla
+roster. The budget and roster questions were presented again in this conversation;
+no scientific run is authorized by this software proof.
