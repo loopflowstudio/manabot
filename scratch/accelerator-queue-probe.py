@@ -17,7 +17,7 @@ import json
 import math
 from pathlib import Path
 import time
-from typing import Literal
+from typing import Literal, Protocol
 
 from experiments.runners.pipeline_benchmark import Replay, Tape, load_services
 
@@ -43,6 +43,24 @@ class Request:
     actor: int
     rows: int
     arrived: float
+
+
+class RowRequest(Protocol):
+    @property
+    def rows(self) -> int: ...
+
+
+def pop_batch[T: RowRequest](ready: deque[T], maximum: int) -> tuple[T, ...]:
+    """Consume the FIFO prefix fitting one batch; shared by modeled/live replay."""
+    if maximum < 1 or (ready and ready[0].rows > maximum):
+        raise ValueError("head request cannot fit the maximum batch")
+    selected: list[T] = []
+    used = 0
+    while ready and used + ready[0].rows <= maximum:
+        request = ready.popleft()
+        selected.append(request)
+        used += request.rows
+    return tuple(selected)
 
 
 @dataclass(frozen=True)
@@ -186,12 +204,9 @@ def simulate(
                     flush_at = deadline
                     event(deadline, "flush")
                 return
-            selected: list[Request] = []
-            used = 0
-            while ready and used + ready[0].rows <= settings.max_batch:
-                request = ready.popleft()
-                selected.append(request)
-                used += request.rows
+            selected = pop_batch(ready, settings.max_batch)
+            used = sum(request.rows for request in selected)
+            for request in selected:
                 delay = at - request.arrived
                 queue_sum += delay
                 queue_max = max(queue_max, delay)

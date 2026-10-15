@@ -1,4 +1,4 @@
-"""Frozen learner-shape validation with exact source-bundle admission."""
+"""Frozen physical-serving validation with exact source-bundle admission."""
 
 from decimal import Decimal
 import hashlib
@@ -25,10 +25,10 @@ def runs() -> Job:
                         source, "sha256"
                     ).hexdigest()
     return Job(
-        name="fantasia-gpu-highend-h100-005",
+        name="fantasia-gpu-serving-h100-006",
         repo=str(Path.cwd()),
         revision="HEAD",
-        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment highend --expected-gpu "NVIDIA H100 80GB HBM3" --root "$ETUDE_OUTPUT_DIR/evidence"',
+        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment serving --expected-gpu "NVIDIA H100 80GB HBM3" --root "$ETUDE_OUTPUT_DIR/evidence"',
         config=json.dumps(
             {
                 "recipe": json.loads(

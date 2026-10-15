@@ -405,7 +405,7 @@ def main() -> None:
     parser.add_argument("--expected-gpu", default="NVIDIA L4")
     parser.add_argument(
         "--experiment",
-        choices=("baseline", "catalog", "scale", "highend"),
+        choices=("baseline", "catalog", "scale", "highend", "serving"),
         default="baseline",
     )
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
@@ -420,7 +420,7 @@ def main() -> None:
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    if args.experiment in ("catalog", "scale", "highend"):
+    if args.experiment in ("catalog", "scale", "highend", "serving"):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
             path = Path(name)
@@ -484,18 +484,20 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
-        if args.experiment == "highend":
+        if args.experiment in ("highend", "serving"):
             if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
                 raise RuntimeError("frozen CUDA input admission failed")
             models = [
                 Cell(capacity="w64-d1", kind="model", batch=b)
                 for b in (1, 4, 16, 64, 256, 1024)
             ]
-            models += [
-                Cell(capacity="w384-d8", kind="model", batch=b) for b in (64, 256)
-            ]
+            if args.experiment == "highend":
+                models += [
+                    Cell(capacity="w384-d8", kind="model", batch=b) for b in (64, 256)
+                ]
+            model_ok = True
             for cell in models:
-                run(
+                completed = run(
                     cell.name,
                     [
                         sys.executable,
@@ -507,6 +509,31 @@ def main() -> None:
                         cell.model_dump_json(),
                     ],
                 )
+                model_ok = completed and model_ok
+            if args.experiment == "serving":
+                if not model_ok:
+                    raise RuntimeError(
+                        "physical serving requires all six completed calibration points"
+                    )
+                for actors in (1, 8, 64):
+                    for maximum in (64, 256, 1024):
+                        name = f"serve-a{actors}-b{maximum}"
+                        run(
+                            name,
+                            [
+                                sys.executable,
+                                "scratch/physical-serving-probe.py",
+                                "--root",
+                                str(root),
+                                "--out",
+                                str(root / name),
+                                "--actors",
+                                str(actors),
+                                "--max-batch",
+                                str(maximum),
+                            ],
+                        )
+                return
         if args.experiment in ("scale", "highend"):
             cells = [
                 (streams, cached, repeat)
