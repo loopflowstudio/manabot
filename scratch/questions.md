@@ -240,3 +240,13 @@ Two declaration/remote-guard checks passed. Native build was observed running;
 no calibration or scientific result is claimed yet. A remote build failure,
 incomplete matrix or timing projection that cannot fit remains evidence, not
 permission to replace the cohort silently.
+
+Calibration attempt `ff9f4cd90d03` failed before learner construction: SDK archives
+lack `.git`, but TrainingRun source identity required it. The existing verified
+SourceBundle path now admits launcher-submitted exact source hashes and records
+the remotely built native digest. Two tamper/admission tests passed. No fabricated
+Git checkout or source-identity fallback was added. Source `330d365b` retries only
+after this repair, retaining the original failure. Inclusive first-attempt charge
+is 114.739966 seconds; retry is capped at the remaining 3485.260034 seconds of
+the same one-hour calibration reserve. Exact retry admission remains in
+`.runs/mtg122/calibration-retry-source.json`; the scientific cohort is not started.
