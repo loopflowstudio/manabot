@@ -9,8 +9,8 @@ from contextlib import contextmanager
 import fcntl
 import json
 import math
-import shutil
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -111,7 +111,7 @@ def current_source(root: Path) -> Source:
 
 def verify_public_source(source: Source) -> None:
     request = Request(
-        f"https://api.github.com/repos/loopflowstudio/fantasia/git/commits/{source.commit}",
+        f"https://api.github.com/repos/loopflowstudio/manabot/git/commits/{source.commit}",
         headers={"User-Agent": "manabot/0.1"},
     )
     try:
@@ -129,7 +129,7 @@ def verify_public_source(source: Source) -> None:
                 [
                     gh,
                     "api",
-                    f"repos/loopflowstudio/fantasia/git/commits/{source.commit}",
+                    f"repos/loopflowstudio/manabot/git/commits/{source.commit}",
                 ],
                 capture_output=True,
                 text=True,
@@ -169,7 +169,7 @@ def _verify_public_source_git(source: Source) -> None:
             "fetch",
             "--quiet",
             "--depth=1",
-            "https://github.com/loopflowstudio/fantasia.git",
+            "https://github.com/loopflowstudio/manabot.git",
             source.commit,
         )
         if (

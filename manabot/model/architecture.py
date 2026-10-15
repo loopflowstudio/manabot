@@ -50,7 +50,7 @@ def architecture_identity(spec: AgentSpec, space: ObservationSpace) -> str:
         payload.pop("attention_feedforward_dim", None)
     return canonical_sha256(
         {
-            "layout_version": 1,
+            "layout_version": 2,
             "agent": payload,
             "observation": space.encoder.hypers.model_dump(mode="json"),
         }

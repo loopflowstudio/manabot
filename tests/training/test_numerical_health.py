@@ -37,6 +37,7 @@ from manabot.training.models import (
     TrainSelfPlay,
 )
 from manabot.verify.store import VerifyStore
+import managym
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
 ROOT = Path(__file__).resolve().parents[2]
@@ -325,6 +326,8 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/ataraxos-move-scalar.json").read_text()
     )
+    recipe.world = managym.WORLD_VERSION
+    recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.stages = recipe.stages[:1]
     recipe.agent.hidden_dim = 8
     stage = recipe.stages[0]

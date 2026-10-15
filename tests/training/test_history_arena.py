@@ -29,6 +29,8 @@ def test_history_on_full_game_uses_own_abi_and_fixed_anchor(tmp_path: Path) -> N
         )
     torch.set_num_threads(1)
     values = recipes()
+    for recipe in values:
+        recipe.world = managym.WORLD_VERSION
     common, bindings = runtime_bindings(values)
     anchor = PlayerRegistration(
         player_id="scripted-greedy-fixed-anchor",

@@ -148,7 +148,7 @@ The earlier July 16 design describes a missing learned runtime join; the July 18
 |---|---|---|
 | [ETU-25](https://linear.app/loopflow/issue/ETU-25/disambiguate-structural-encoder-optimization-capacity-and-cpu-cost) | Completed | Structural discriminator retained a kill/redesign result. Runtime reports a missing historical worktree and `no_action`, with reason “Task is being abandoned.” |
 | [ETU-26](https://linear.app/loopflow/issue/ETU-26/prove-structural-semantic-representations-on-diagnostic-katas) | Completed | Static diagnostic result is retained. Runtime reports a missing worktree and a merged-PR successor recommendation. |
-| [ETU-27](https://linear.app/loopflow/issue/ETU-27/build-a-semantic-policy-prototype-in-the-real-engine) | Completed | Adapter shipped in [PR #128](https://github.com/loopflowstudio/etude/pull/128), commit `36d0784`. Runtime reports a missing worktree and successor recommendation. |
+| [ETU-27](https://linear.app/loopflow/issue/ETU-27/build-a-semantic-policy-prototype-in-the-real-engine) | Completed | Adapter shipped in [PR #128](https://github.com/loopflowstudio/manabot/pull/128), commit `36d0784`. Runtime reports a missing worktree and successor recommendation. |
 | [ETU-28](https://linear.app/loopflow/issue/ETU-28/train-and-play-the-first-learned-semantic-runtime-policy) | Completed | Learner and INT-11 evidence shipped in `fd53966`. Runtime reports a missing worktree and successor recommendation. |
 
 These lifecycle discrepancies do not authorize restarting completed Tasks.

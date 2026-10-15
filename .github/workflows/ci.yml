@@ -50,7 +50,11 @@ jobs:
       - name: Run unit tests
         run: |
           uv run --python 3.12 --extra dev pytest tests/infra/ \
-            tests/academy/test_clean_machine_verifier.py
+            tests/academy/test_clean_machine_verifier.py deploy/play/tests/
+
+      - name: Website routing tests
+        working-directory: website
+        run: uv run --python 3.12 --extra test pytest -q
 
   integration:
     name: Integration (${{ matrix.os }})

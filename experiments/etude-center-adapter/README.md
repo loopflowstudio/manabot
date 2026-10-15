@@ -5,7 +5,8 @@ Etude research center. **Nothing here runs by default.** It is not installed,
 not imported by manabot or the play product, and not collected by `pytest` or
 CI (`testpaths = ["tests"]`). Fantasia does not depend on Etude.
 
-It was written in the private `loopflowstudio/etude` repository (EXP-2) and
+It was written in the private repository now named `loopflowstudio/etude-studio`
+(formerly `loopflowstudio/etude`, EXP-2) and
 moved here on 2026-10-10 at Jack Heart's direction, because code that reads
 Fantasia's record formats belongs with Fantasia. Its last commit there is
 `53a56cb`. The Etude center keeps a general API and no Fantasia-specific code.
@@ -29,9 +30,10 @@ contact with jobs, no listing beyond what the caller names.
 
 ## What is needed to run it
 
-- `etude_client`, which is not published. Install it from the private Etude
-  repository's `client/` directory. `pyproject.toml` here names the dependency
-  but nothing resolves it in this repository.
+- The legacy `etude_client` API used at `etude-studio` revision `53a56cb`.
+  The public `loopflowstudio/etude` repository now provides the distinct
+  `etude-sdk` package; do not assume it satisfies this adapter's dependency.
+  `pyproject.toml` names `etude_client`, but nothing resolves it here.
 - `ETUDE_URL` and `ETUDE_TOKEN_FILE` pointing at a private write token for an
   Etude organization. Never a database connection string.
 - Read access to the records being published.

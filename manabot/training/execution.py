@@ -111,12 +111,21 @@ def export_training_run(
     return run
 
 
-def validate_regime(regime: TrainingRegime | Mapping[str, object]) -> TrainingRegime:
+def validate_regime(
+    regime: TrainingRegime | Mapping[str, object], *, require_current_world: bool = True
+) -> TrainingRegime:
+    """Validate a recipe; execution additionally requires the native world.
+
+    Offline authoring can resolve historical recipes without relabeling them.
+    Every execution entry point retains the current-world check by default.
+    """
     regime = TrainingRegime.model_validate(
         regime.model_dump() if isinstance(regime, TrainingRegime) else regime
     )
-    if regime.world != managym.WORLD_VERSION:
+    if require_current_world and regime.world != managym.WORLD_VERSION:
         raise ValueError("regime world differs from native runtime")
+    if regime.world not in {"w2", "w3", "w4", "w5", managym.WORLD_VERSION}:
+        raise ValueError("unsupported regime world")
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
     return regime

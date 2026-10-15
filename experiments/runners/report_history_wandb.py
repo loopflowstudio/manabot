@@ -424,7 +424,7 @@ def publish_plan(plan: ReportPlan, output: Path) -> str:
             wr.H2("Evidence and costs"),
             *[wr.P(note) for note in plan.evidence_notes],
             wr.MarkdownBlock(
-                "[Metric definitions and sampling limits](https://github.com/loopflowstudio/etude/blob/jack/etu-117-make-experiment-reports-reveal-learning-trends-and-evidence/docs/experiment-metrics.md) · [Project and raw run histories](https://wandb.ai/loopflow-studio/etude)"
+                "[Metric definitions and sampling limits](https://github.com/loopflowstudio/manabot/blob/jack/etu-117-make-experiment-reports-reveal-learning-trends-and-evidence/docs/experiment-metrics.md) · [Project and raw run histories](https://wandb.ai/loopflow-studio/etude)"
             ),
         ]
     )

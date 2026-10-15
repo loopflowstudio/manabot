@@ -1,6 +1,6 @@
 # manabot
 
-The trainable agent of Fantasia: environment wrappers, models, search,
+The trainable agent of Manabot: environment wrappers, models, search,
 training, and verification. You train *a* manabot; this package is how.
 
 ## Quickstart
@@ -70,9 +70,10 @@ its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current world is **w4** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current world is **w6** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including corrected-Learn w3 artifacts, are not comparable to w4. The local
+including w5 artifacts with aliased object and mode choices, are not compatible
+with w6. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).
@@ -151,6 +152,11 @@ rating we are establishing, accepted evidence, and the value-learning,
 teacher/student, belief-modeling, and semantic-transfer frontiers. Live work
 and ownership remain in Linear; frozen predictions and results remain in
 `experiments/`.
+
+[Understanding Strategic Learning](LEARNING_RESEARCH_GUIDE.md) is a scientific
+guide informed by Ataraxos, covering regularization, training trajectories,
+strategic cycling, simulation efficiency, and policy-guided search. It frames
+research questions and experimental interpretation, not an implementation plan.
 
 ## Style
 

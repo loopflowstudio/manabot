@@ -587,8 +587,9 @@ source checkouts and credentials until every dependent allocation settles.
 
 ### Queued price rejection and startup clocks
 
-Public worker source is `loopflowstudio/fantasia`, not the private service repository
-`loopflowstudio/etude`. Admission checks the pinned commit/tree; Git fallback also
+Public worker source is `loopflowstudio/manabot`. The separate Etude client is
+`loopflowstudio/etude`; its private research service is `loopflowstudio/etude-studio`.
+Admission checks the pinned commit/tree; Git fallback also
 checks lock bytes. An API 403 may use the controller's existing `gh` login, then
 public Git fetch. No controller GitHub credential is forwarded to the rental.
 

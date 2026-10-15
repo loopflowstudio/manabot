@@ -1339,6 +1339,8 @@ pub struct PyPermanent {
     #[pyo3(get, set)]
     pub id: i32,
     #[pyo3(get, set)]
+    pub registry_key: i32,
+    #[pyo3(get, set)]
     pub controller_id: i32,
     #[pyo3(get, set)]
     pub tapped: bool,
@@ -1370,6 +1372,7 @@ impl From<PermanentData> for PyPermanent {
     fn from(value: PermanentData) -> Self {
         Self {
             id: value.id,
+            registry_key: value.registry_key,
             controller_id: value.controller_id,
             tapped: value.tapped,
             damage: value.damage,
@@ -1391,6 +1394,7 @@ impl From<PyPermanent> for PermanentData {
     fn from(value: PyPermanent) -> Self {
         Self {
             id: value.id,
+            registry_key: value.registry_key,
             controller_id: value.controller_id,
             tapped: value.tapped,
             damage: value.damage,
@@ -1417,6 +1421,10 @@ pub struct PyAction {
     pub focus: Vec<i32>,
     #[pyo3(get, set)]
     pub declared: Option<bool>,
+    #[pyo3(get, set)]
+    pub mode_index: Option<usize>,
+    #[pyo3(get, set)]
+    pub ability_index: Option<usize>,
 }
 
 #[cfg(feature = "python")]
@@ -1522,6 +1530,8 @@ impl From<ActionOption> for PyAction {
             action_type: value.action_type.into(),
             focus: value.focus,
             declared: value.declared,
+            mode_index: value.mode_index,
+            ability_index: value.ability_index,
         }
     }
 }
@@ -1533,6 +1543,8 @@ impl From<PyAction> for ActionOption {
             action_type: value.action_type.into(),
             focus: value.focus,
             declared: value.declared,
+            mode_index: value.mode_index,
+            ability_index: value.ability_index,
         }
     }
 }
@@ -3355,6 +3367,10 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
+    m.add(
+        "CARD_DEFINITION_COUNT",
+        crate::cardsets::alpha::CardRegistry::default().len(),
+    )?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
 
     m.add_class::<ZoneEnum>()?;

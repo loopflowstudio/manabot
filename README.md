@@ -1,6 +1,6 @@
-# Fantasia
+# Manabot
 
-**Fantasia** is an AI-assisted Pro Tour testing house for
+**Manabot** is an AI-assisted Pro Tour testing house for
 [Magic: The Gathering](https://magic.wizards.com/), built by Loopflow Studio.
 
 The game and the study session are one activity. Pilot a match, watch a human
@@ -43,7 +43,7 @@ board.
 
 ## The destination: Avatar Cube Team Sealed
 
-Fantasia is building toward Avatar Cube Team Sealed: two teams receive 135-card
+Manabot is building toward Avatar Cube Team Sealed: two teams receive 135-card
 pools from a versioned 540-card cube, construct three 40-card-minimum decks with
 unlimited basics and deck-specific sideboards, and play the full three-by-three
 deck matchup matrix until one team reaches five wins. Every game remains an
@@ -77,8 +77,8 @@ replay, Retry, compare, and Study.
 You need [uv](https://docs.astral.sh/uv/), Node, and a Rust toolchain. Then:
 
 ```bash
-git clone git@github.com:loopflowstudio/fantasia.git
-cd fantasia
+git clone git@github.com:loopflowstudio/manabot.git
+cd manabot
 ./scripts/play
 ```
 
@@ -125,7 +125,7 @@ quickstart, presets, and the current world's live baselines.
 
 ## How the system divides responsibility
 
-Fantasia is built from three cooperating systems:
+Manabot is built from three cooperating systems:
 
 - **Academy** (`academy`, Python + Svelte): the authored play, replay, Retry,
   comparison, and Study experience
@@ -141,7 +141,7 @@ Academy owns what the player sees and does.
 
 ## The research ledger
 
-Fantasia's research program is preregistered and reproducible: every experiment
+Manabot's research program is preregistered and reproducible: every experiment
 states its prediction, budget, and kill criteria before running, and negative
 results are recorded alongside positive ones.
 
@@ -199,19 +199,26 @@ contributor conventions are in [AGENTS.md](AGENTS.md).
 
 ## Naming
 
-- **Fantasia** — the whole project and this repository.
+- **Manabot** — the whole project and this repository.
 - **Academy** — the web app players use: the `academy` package, the frontend,
-  and the website.
+  and its play service. The project website uses Manabot.
 - **manabot** — the bot and the Python training library/CLI. Indefinite noun:
   you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
-- **Etude** — the launching and experiment system, built in a separate private
-  repository. Always ASCII (never “Étude”).
+- **Etude** — the separate launching and experiment system. Its public client
+  is [`loopflowstudio/etude`](https://github.com/loopflowstudio/etude); the
+  private research service is `loopflowstudio/etude-studio`. Always ASCII
+  (never “Étude”).
 
 If it faces the player, it is Academy; if it trains or evaluates the agent, it
 is manabot; if it is the world, it is managym. manabot is not a former name to
 erase: existing `manabot.*` contract/schema identifiers, experiment receipts,
 and wandb history keep their names and remain reproducible. The same holds
-for names that predate Academy: the `etude.gg` domain, `x-etude-*` headers,
+for names that predate Academy: `x-etude-*` headers,
 `etude.*` storage keys and schema identifiers, and the Sepia Etude visual
 language.
+
+Jack Heart selected Manabot on 2026-10-14. The project lives at `manabot.gg`,
+with Academy at `play.manabot.gg` or `academy.manabot.gg`. The old `etude.gg`
+addresses redirect to the matching new hosts, preserving paths and queries.
+The GitHub repository and deployed service identifiers retain their existing names.

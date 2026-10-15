@@ -19,7 +19,7 @@ Gate guidance updated to require website suite with parsed XML and health probe 
 
 Observed UTC: 2026-09-24T20:32:39.859806+00:00
 
-PR: https://github.com/loopflowstudio/etude/pull/182
+PR: https://github.com/loopflowstudio/manabot/pull/182
 
 Published head and local HEAD: `2a58adf728209ba86815e03e9454e63dfcea0b10`.
 
@@ -27,11 +27,11 @@ Published head and local HEAD: `2a58adf728209ba86815e03e9454e63dfcea0b10`.
 
 Exact-head check-runs at handoff:
 
-- Visual Reference Gate: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36055453082/job/107821111435
-- Rust Tests: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36055453082/job/107821111377
-- Python Unit Tests: completed, conclusion success. https://github.com/loopflowstudio/etude/actions/runs/36055453082/job/107821111360
-- Protocol v1 Conformance: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36055453082/job/107821111336
-- Clean-machine Play: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36055453082/job/107821111069
+- Visual Reference Gate: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36055453082/job/107821111435
+- Rust Tests: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36055453082/job/107821111377
+- Python Unit Tests: completed, conclusion success. https://github.com/loopflowstudio/manabot/actions/runs/36055453082/job/107821111360
+- Protocol v1 Conformance: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36055453082/job/107821111336
+- Clean-machine Play: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36055453082/job/107821111069
 
 Commit status aggregate: pending; individual statuses: 0.
 
@@ -117,17 +117,17 @@ Observed UTC: 2026-09-24T20:44:09.843915+00:00
 
 Updated Python Unit Tests command: 30 passed.
 
-`lf pr arm` succeeded. PR: https://github.com/loopflowstudio/etude/pull/182
+`lf pr arm` succeeded. PR: https://github.com/loopflowstudio/manabot/pull/182
 
 Published head and local HEAD: `7c9dda0826688318db79f59879c0e854cd9f0163`.
 
 State: OPEN; merge state: BLOCKED; auto-merge enabled: True; merged at: None.
 
-- Python Unit Tests: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36056779748/job/107825683654
-- Visual Reference Gate: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36056779748/job/107825683576
-- Rust Tests: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36056779748/job/107825683507
-- Protocol v1 Conformance: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36056779748/job/107825683445
-- Clean-machine Play: in_progress, conclusion pending. https://github.com/loopflowstudio/etude/actions/runs/36056779748/job/107825683339
+- Python Unit Tests: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36056779748/job/107825683654
+- Visual Reference Gate: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36056779748/job/107825683576
+- Rust Tests: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36056779748/job/107825683507
+- Protocol v1 Conformance: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36056779748/job/107825683445
+- Clean-machine Play: in_progress, conclusion pending. https://github.com/loopflowstudio/manabot/actions/runs/36056779748/job/107825683339
 
 CI on this exact head remains pending; no merge is claimed. The existing landing supervisor resumes observation. No watcher was started and no merge wait was performed. No deployment, #179/#183 change, PR retirement, or provider-materializer interference occurred.
 

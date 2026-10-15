@@ -7,9 +7,17 @@ use crate::{
 
 pub const PLAYER_DIM: usize = 28;
 pub const CARD_DIM: usize = 39;
-pub const PERMANENT_DIM: usize = 25;
+pub const PERMANENT_DEFINITION_INDEX: usize = 24;
+pub const PERMANENT_DIM: usize = 26;
 pub const ACTION_TYPE_DIM: usize = 16;
-pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 1;
+/// Declaration choice is separate from its family: attack and decline must
+/// have distinct policy inputs even when they focus the same permanent.
+pub const ACTION_DECLARED_INDEX: usize = ACTION_TYPE_DIM;
+pub const ACTION_MODE_INDEX: usize = ACTION_DECLARED_INDEX + 1;
+pub const ACTION_ABILITY_INDEX: usize = ACTION_MODE_INDEX + 1;
+pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 4;
+/// Selectors encode index+1, reserving zero for absence. Keep f32 integers exact.
+pub const MAX_ACTION_SELECTOR: usize = (1 << 24) - 1;
 pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
@@ -305,6 +313,18 @@ pub fn encode_into(
         }
     }
     for action in &obs.action_space.actions {
+        for index in [action.mode_index, action.ability_index]
+            .into_iter()
+            .flatten()
+        {
+            if index > MAX_ACTION_SELECTOR {
+                return Err(ObservationEncodeError::Capacity {
+                    field: "action selector",
+                    capacity: MAX_ACTION_SELECTOR,
+                    actual: index,
+                });
+            }
+        }
         if action.focus.len() > config.max_focus_objects {
             return Err(ObservationEncodeError::Capacity {
                 field: "action focus",
@@ -622,7 +642,8 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[21] = bool_to_f32(permanent.keywords.menace);
     out[22] = bool_to_f32(permanent.keywords.hexproof);
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
-    out[24] = 1.0;
+    out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
+    out[PERMANENT_DIM - 1] = 1.0;
 }
 
 fn encode_actions(
@@ -649,6 +670,9 @@ fn encode_actions(
         if action_type_index < ACTION_TYPE_DIM {
             row[action_type_index] = 1.0;
         }
+        row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
+        row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+        row[ACTION_ABILITY_INDEX] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
         row[ACTION_DIM - 1] = 1.0;
         out_valid[action_index] = 1.0;
 
@@ -737,6 +761,35 @@ mod tests {
         ZONE_DIM,
     };
 
+    #[test]
+    fn selector_encoding_is_exact_and_rejects_overflow() {
+        use super::{ACTION_ABILITY_INDEX, ACTION_MODE_INDEX, MAX_ACTION_SELECTOR};
+        let mut obs = sample_observation();
+        obs.action_space.actions[0].mode_index = Some(0);
+        obs.action_space.actions[1].ability_index = Some(MAX_ACTION_SELECTOR);
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&obs, &config).unwrap();
+        assert_eq!(encoded.actions[ACTION_MODE_INDEX], 1.0);
+        assert_eq!(encoded.actions[ACTION_ABILITY_INDEX], 0.0);
+        assert_eq!(
+            encoded.actions[ACTION_DIM + ACTION_ABILITY_INDEX],
+            16777216.0
+        );
+        for mode in [false, true] {
+            let mut obs = sample_observation();
+            let action = &mut obs.action_space.actions[0];
+            if mode {
+                action.mode_index = Some(MAX_ACTION_SELECTOR + 1);
+            } else {
+                action.ability_index = Some(MAX_ACTION_SELECTOR + 1);
+            }
+            assert!(matches!(
+                encode(&obs, &config),
+                Err(ObservationEncodeError::Capacity { .. })
+            ));
+        }
+    }
+
     fn sample_observation() -> Observation {
         Observation {
             game_over: false,
@@ -755,16 +808,22 @@ mod tests {
                         action_type: ActionType::PriorityCastSpell,
                         focus: vec![111, 333],
                         declared: None,
+                        mode_index: None,
+                        ability_index: None,
                     },
                     ActionOption {
                         action_type: ActionType::ChooseTarget,
                         focus: vec![444],
                         declared: None,
+                        mode_index: None,
+                        ability_index: None,
                     },
                     ActionOption {
                         action_type: ActionType::DeclareBlocker,
                         focus: vec![999],
                         declared: Some(true),
+                        mode_index: None,
+                        ability_index: None,
                     },
                 ],
                 focus: Vec::new(),
@@ -849,6 +908,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn attack_and_decline_have_distinct_policy_features() {
+        let mut observation = sample_observation();
+        observation.action_space.action_space_type = ActionSpaceKind::DeclareAttacker;
+        observation.action_space.actions = [true, false]
+            .into_iter()
+            .map(|declared| ActionOption {
+                action_type: ActionType::DeclareAttacker,
+                focus: vec![333],
+                declared: Some(declared),
+                mode_index: None,
+                ability_index: None,
+            })
+            .collect();
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&observation, &config).expect("attack decision encodes");
+        assert_ne!(
+            &encoded.actions[..ACTION_DIM - 1],
+            &encoded.actions[ACTION_DIM..2 * ACTION_DIM - 1],
+            "the policy must be able to prefer attacking or declining"
+        );
+        assert_eq!(
+            &encoded.action_focus[..config.max_focus_objects],
+            &encoded.action_focus[config.max_focus_objects..2 * config.max_focus_objects]
+        );
+        assert_eq!(&encoded.actions_valid[..2], &[1.0, 1.0]);
+    }
+
     fn make_card(
         id: i32,
         zone: ZoneType,
@@ -896,6 +983,7 @@ mod tests {
     fn make_permanent(id: i32, mine: bool) -> PermanentData {
         PermanentData {
             id,
+            registry_key: 0,
             controller_id: if mine { 10 } else { 20 },
             tapped: false,
             damage: 0,
@@ -986,6 +1074,8 @@ mod tests {
                 action_type: ActionType::LearnTakeLesson,
                 focus: vec![card.candidate_id],
                 declared: None,
+                mode_index: None,
+                ability_index: None,
             })
             .collect();
         let config = ObservationEncoderConfig::default();

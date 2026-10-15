@@ -37,6 +37,7 @@ from manabot.training.monitoring import (
 )
 from manabot.verify.store import VerifyStore
 from manabot.verify.util import INTERACTIVE_DECK
+import managym
 from tests.sim.test_search_supervised import _dataset
 
 
@@ -44,6 +45,8 @@ def _recipe() -> TrainingRegime:
     value = TrainingRegime.model_validate_json(
         Path("experiments/regimes/direct-self-play.json").read_text()
     )
+    value.world = managym.WORLD_VERSION
+    value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)
@@ -223,7 +226,7 @@ def test_executor_streams_fixed_and_growing_validation(
     monkeypatch.setattr(execution, "generate_selfplay_shard", collect)
     recipe = TrainingRegime(
         id="distillation-fixture",
-        world="w4",
+        world=managym.WORLD_VERSION,
         match=MatchHypers(
             hero_deck=dict(INTERACTIVE_DECK), villain_deck=dict(INTERACTIVE_DECK)
         ),

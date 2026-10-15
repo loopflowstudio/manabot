@@ -519,7 +519,7 @@ def write_dashboard(
         )
         guide_html = guide_html.replace(
             'href="evidence/',
-            'href="https://github.com/loopflowstudio/etude/blob/main/docs/evidence/',
+            'href="https://github.com/loopflowstudio/manabot/blob/main/docs/evidence/',
         )
         guide_path.write_text(
             '<!doctype html><html lang="en"><meta charset="utf-8">'
@@ -871,7 +871,7 @@ def write_dashboard(
             + "</details>"
         )
         parts.append(
-            '<p>Batch counts cover collected rows; gradient and parameter effect sample the first step at iteration 1 and every 25th iteration. Missing samples are unavailable. Forced choices and filtering can explain zeros; missing gradients or zero parameter movement need investigation. <a href="https://github.com/loopflowstudio/etude/blob/main/docs/numerical-health.md">Metric definitions and failure investigation</a>.</p>'
+            '<p>Batch counts cover collected rows; gradient and parameter effect sample the first step at iteration 1 and every 25th iteration. Missing samples are unavailable. Forced choices and filtering can explain zeros; missing gradients or zero parameter movement need investigation. <a href="https://github.com/loopflowstudio/manabot/blob/main/docs/numerical-health.md">Metric definitions and failure investigation</a>.</p>'
         )
     for title, anchor, figures in sections:
         if anchor != "comparisons":
