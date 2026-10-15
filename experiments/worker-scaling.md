@@ -283,3 +283,68 @@ post-hoc state-difference audit and all timing samples are retained in
 [data/worker-scaling/gpu-017](data/worker-scaling/gpu-017). The provider confirmed
 deletion; estimated whole rental cost was $0.307. This does not establish playing
 strength or clear the full single-GPU training bottleneck.
+
+## Ordinary collection attribution (run018)
+
+The [attribution protocol](protocols/collection-attribution.txt) ran ten ordinary
+TrainingRun cells on an RTX 5090 / Xeon Gold 6530 host with a 13.6-core quota.
+All cells completed. Four controls had no profiler; four Torch profiles observed
+only the second collection, after a real update; two separate cProfile runs
+observed the same collection at 4,096 streams. These are diagnostic observations,
+not replicated throughput estimates. The one large unprofiled reference/prepared
+pair took 28.463 / 28.740 seconds for 98,304 learner rows, including 22.448 /
+22.670 seconds of collection. It supplies no new training-speedup claim.
+
+The aligned Torch trace measured these host windows at 4,096 streams:
+
+| Second-collection phase | Reference seconds | Prepared seconds |
+|---|---:|---:|
+| Complete collection | 8.922 | 8.132 |
+| Native stepping and observation encoding | 4.241 | 4.073 |
+| Input slicing, preparation and transfer | 0.945 | 1.239 |
+| Model forward | 1.369 | 0.616 |
+| Policy log processing | 0.306 | 0.308 |
+| Sampling | 0.046 | 0.045 |
+| Final batch assembly | 0.991 | 0.894 |
+| Unmarked host intervals | 1.022 | 0.956 |
+
+These windows include host scheduling and synchronization. Semantic catalog
+encoding is nested inside forward: 199 calls / 0.629 seconds in reference versus
+one call / 0.003 seconds in prepared. It must not be added to the table's forward
+total. Traced device kernel/copy/memset union occupied 0.718 / 0.579 seconds of
+the complete collection, respectively; that is activity time, not SM utilization.
+Both modes made 199 policy calls for 67,275 acting rows. Of those calls, 142 had
+at most 64 rows despite 4,096 resident streams; the largest call had 4,096 rows.
+Resident stream count therefore does not describe every actual inference batch.
+
+Independent cProfile observations agree on the large native boundary (4.099 /
+4.098 seconds) and batch assembly (0.922 / 0.944 inclusive seconds), inside
+7.643 / 7.910 seconds of profiled collection. Prepared inputs also add CPU
+admission and repeated policy-version inspection: their input helper took 1.340
+seconds versus 0.839 in reference. These are separately instrumented observations,
+not coefficients that can be subtracted from the unprofiled controls.
+
+At 512 streams the traced reference/prepared collections took 1.459 / 1.167
+seconds, with forward 0.517 / 0.250 and native stepping/encoding 0.324 / 0.294.
+This reinforces the workload dependence. At 4,096 streams, the optimized model
+forward host window is about 8% of collection, while native stepping/encoding is
+about half. Input materialization, transfer, batch assembly and other host work
+remain substantial. Improving how CPU producers feed a GPU service is therefore
+more promising than another model-only serving change. This is a design direction,
+not evidence that a parallel training pipeline is already implemented.
+
+The native boundary is not pure rules simulation. It includes stepping, observation
+construction/encoding and bindings. Source inspection of `VectorEnv::step_into`
+also shows active rows are skipped before stepping; these measurements do not
+support a claim that all inactive games are simulated. A new pipeline must preserve
+stream/seed identities, sampling order or explicitly admitted numerical differences,
+policy-version barriers and ordinary checkpoint recovery. Existing worker benchmark
+parity is insufficient to establish those production contracts.
+
+All initial/raw/EMA hashes matched across controls and profile modes at each
+stream count. Adam state had two distinct hashes at each count, so exact learned
+state remains unproven and run017's failed gate is unchanged. The full 55 MB output
+archive and all 137 manifest files were verified; raw traces, profiles, receipts
+and summaries are in [data/worker-scaling/gpu-018](data/worker-scaling/gpu-018).
+Run `2953f94c4d13` used source `3afa1ac26f277f70dea997e288c28dcf3b77e66f`.
+The provider confirmed deletion; estimated whole rental cost was $0.139.
