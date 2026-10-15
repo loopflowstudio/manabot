@@ -267,3 +267,37 @@ include this section. Existing editable notebooks can import
 `('Self-play balance', 'self-play', self_play_figures(evidence))` to `sections`.
 Raw per-update counts are retained under `self_play_outcomes` in each stage's
 diagnostics. This instrumentation does not change losses, actions or schedules.
+
+## Complexity experiment: paired frozen-initialization contrasts
+
+`experiments.runners.environment_complexity_analysis` implements the offline
+within-pool comparison for MTG-122. It does not launch, select or promote a
+candidate. Both inputs must be complete, exact-replayed eight-leg matrices with
+the same producer run, recipe, seed, evaluator, opponent, inference contract and
+held-out deals. The control must have zero updates/exposures and match the
+producer's retained `initial_raw` artifact hash and size. Missing cohorts fail
+admission; copying a report or publishing it again is not another training seed.
+
+For seed `s`, deal `d` and leg `l`, subtract scores first:
+`delta[s,d,l] = candidate_score[s,d,l] - initialization_score[s,d,l]`.
+Score is win + half draw. Each of the four deck-role cells has two seat legs;
+cell means weight its deals and seats equally. The pool mean weights all four
+cells equally. Cell assignment uses the candidate's actual seat: for cross legs,
+A-versus-B is legs 0 and 3, not adjacent legs 0 and 1.
+
+The conditional 95% percentile interval resamples whole deal blocks, retaining
+all eight legs together. It measures evaluation noise for this fixed seed and
+checkpoint, not method uncertainty. The separate three-seed summary averages
+paired seed effects and reports `mean ± t(.975,2) * sample_std / sqrt(3)`.
+This assumption-sensitive interval has two degrees of freedom and is not clipped
+to the score's physical range. All three predeclared distinct seeds must be
+present; missing seeds make the summary unavailable, never zero or an estimate
+from the successful subset. Different worlds, recipes, protocols or milestones
+cannot share this summary. Raw cross-pool scores do not identify difficulty.
+
+The returned records retain source-result hashes, checkpoint/control identities,
+actual training coordinates, deal counts and separate cell effects. They do not
+infer inclusive campaign costs from learner time. Cost accounting, censored
+time-to-progress, the campaign notebook and scientific execution remain required
+before the experiment can be called complete. Synthetic arithmetic tests are not
+learning results.

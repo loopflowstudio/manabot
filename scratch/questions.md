@@ -177,3 +177,21 @@ after the final key change. Source-byte changes and fabricated summary estimates
 are rejected. No scientific cohort launched. Remaining work includes SDK campaign
 orchestration, evidence-deduplicated research reporting, native/simple schema
 admission and calibration after the pending vanilla/compute decisions.
+
+
+## Paired learning analysis (2026-10-14)
+
+The offline MTG-122 analysis now admits matched candidate/frozen-initialization
+results, verifies the producer initialization receipt, and subtracts scores before
+whole-deal resampling. Four cells follow the candidate's actual deck/seat; the
+cross-role A/B cell uses legs 0 and 3. It preserves coordinates and source hashes.
+The separate three-seed summary requires the entire declared seed cohort and
+matching protocol/recipe/world/milestone, reports the df=2 t interval without
+clipping, and suppresses incomplete cohorts. No game-level CI substitutes for
+training-seed uncertainty. The experiment metric guide owns formulas/limits.
+
+Check: nine paired-analysis/publisher tests passed; lint/diff checks passed.
+These are synthetic arithmetic/admission proofs, not learned improvement. The
+campaign still needs time-to-progress/cost accounting, notebook assembly,
+simple content/schema, declaration/calibration and actual execution. Pending
+vanilla-card and machine/budget choices are unchanged.
