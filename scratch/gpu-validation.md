@@ -39,21 +39,16 @@ archive: `.runs/gpu-validation/result-003`. The fourth controls below address th
 optimizer discrepancy. Production invalidation/API and mature-policy safety remain
 unselected; no playing-strength claim follows.
 
-All rentals used one L4 at$0.59/hour, pool ceiling$0.80, job30minutes/$1.50,
-cohort$3,maxoneattempt. Driver caps: setup900s, measurements600s, child90s.
-Etude owns source transport/self-deletion; credentials stay in-process. GPU drivers
-differ across rentals, so use within-rental comparisons. Exact IDs, failed logs,
-source/output checksums, billing and cleanup receipts remain with each result.
+All rentals retained the same one-L4 caps: $0.59/hour, $3 cohort, $1.50 job,
+one attempt, setup900s/measurements600s/child90s. Etude owns transport/deletion.
+Exact identities, failures, source/output hashes, billing and cleanup receipts
+remain with each result. Compare performance within each rental.
 
 ## Learner shapes and repeatability (fourth allocation)
 
-Preregistered in `gpu-scale-protocol.txt`, frozen source
-`d056d09218d3be3c234b40c9eafa70ad736f5c81`; run `1f97b066ed87`,
-session `20e2d6c4c331`. Source archive SHA
-`cfa68303d46ef31aac7668353b5840ef2aa5b6d0dd839bbfe9a96be75719bde4`.
-A source readback timeout happened before rental; complete ordered range readback
-with If-Match verified the unchanged archive in9.137s. No rental retry occurred.
-L4 driver580.126.20 differs from earlier rentals; use within-rental comparisons.
+Protocol: `gpu-scale-protocol.txt`; frozen source `d056d092`, run `1f97b066ed87`.
+Source/readback receipts and exact identities accompany `gpu-probes/l4-004`.
+No rental retry occurred. Driver580.126.20 differs from earlier rentals.
 
 Six three-update cells completed; both4096stream cells were interrupted by the
 55second training deadline during their third collection. Each had already
