@@ -203,7 +203,12 @@ def execute(plan: ComplexityPlan) -> None:
     start = time.time()
     evaluation_tracker = init(
         experiment="mtg122-evaluation",
-        clocks=[Step("completed_runs")],
+        clocks=[
+            Step(
+                "completed_runs",
+                "Fits with all declared training and evaluation completed",
+            )
+        ],
         run=f"{root_run}-evaluations",
         directory=Path(root_tracking) / "evaluations",
         config=plan.model_dump(mode="json"),
