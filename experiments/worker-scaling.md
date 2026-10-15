@@ -348,3 +348,70 @@ archive and all 137 manifest files were verified; raw traces, profiles, receipts
 and summaries are in [data/worker-scaling/gpu-018](data/worker-scaling/gpu-018).
 Run `2953f94c4d13` used source `3afa1ac26f277f70dea997e288c28dcf3b77e66f`.
 The provider confirmed deletion; estimated whole rental cost was $0.139.
+
+## Persistent production producers (run019)
+
+The [producer protocol](protocols/producer-scaling.txt) measured the ordinary
+TrainingRun with persistent native CPU shards feeding the same GPU collector.
+It preserved global inference batches, sampling order and reset identities.
+The RTX 5090 host had an AMD EPYC 7543 CPU, a 14.375-core quota, PyTorch2.10/cu128
+and driver570.153.02. This differs from run018's host; comparisons below use
+only run019's matched conditions.
+
+Thirty of34cells completed. Four hit the unchanged training wall deadline:
+the large deterministic proofs with two workers, four workers and the final
+reference, plus the first large ordinary reference. All prepared ordinary
+timing cells completed. Their complete-training medians were:
+
+| Streams | Producers | Seconds | Learner rows/s | Speedup vs prepared1 |
+|---|---:|---:|---:|---:|
+|512|1|7.285|1,687|1.000x|
+|512|2|6.757|1,819|1.078x|
+|512|4|6.699|1,834|1.088x|
+|4,096|1|29.359|3,348|1.000x|
+|4,096|2|26.806|3,667|1.095x|
+|4,096|4|26.233|3,747|1.119x|
+
+Each median includes all three declared repetitions; large prepared1 durations
+were26.659–33.467s and prepared4 durations24.367–27.922s. The four-worker point
+estimate falls below the20% target versus prepared1. The missing large reference
+repetition prevents the complete25%-versus-reference comparison; no median of
+surviving reference samples substitutes for it. At512streams reference median
+was8.110s, so the candidate passed the small-run regression criterion. Summed
+process CPU time increased from29.480s to39.527s at4,096streams, while collection
+wall medians fell22.580→20.060s. That demonstrates additional CPU work with a
+modest wall-time gain, without identifying its cause or establishing four-core
+efficiency. These measurements do not clear the training bottleneck.
+
+All five512-stream deterministic proof runs exactly matched full rollouts,
+buffers, action/active journals, game seeds, sampling RNG, raw/EMA parameters,
+Adam state and scientific diagnostics. At4,096streams every available collection
+witness matched: five samples for each of the first two collections and three
+for the third. Only the first reference and prepared1 completed all learning,
+and their final states matched. Matching prefixes do not certify the unfinished
+large proof runs. Diagnostic durations are excluded from throughput estimates.
+
+Completed ordinary timing runs had identical raw/EMA parameters and scientific
+diagnostics within each stream count, but Adam state varied. The512-stream
+outlier differed in71moment elements, maximum absolute difference3.64e-12; at
+4,096streams the two groups differed in one element by2.84e-14. Both single-worker
+reference and prepared runs participate in the large-run variation. The
+[post-hoc audit](data/worker-scaling/gpu-019/parity-audit.json) preserves exact
+differences; it does not relax the strict gate or prove the cause. Deterministic
+execution is promising diagnostic evidence, not a waiver of ordinary parity.
+
+The implementation remains provisional. The native profiler is disabled on
+this path and its lock is per environment, so source inspection does not support a
+shared profiler-lock explanation. Host variability, producer overhead and serial
+collection work remain distinct possibilities. The existing collector also
+copies learner observations into per-row pending dictionaries, then copies them
+again into the final batch through nested Python loops. Run018 measured substantial
+batch assembly and input materialization costs. Direct rollout storage is a
+concrete next data-flow intervention; its benefit is not yet measured.
+
+Run `978556688139` used published source
+`a07b3cd3794df658368918742ef25b661b28bb38`. The complete83MB archive and452manifest
+entries were verified. All failed cells and timing repetitions remain in
+[data/worker-scaling/gpu-019](data/worker-scaling/gpu-019). The provider confirmed
+deletion; estimated whole rental cost was$0.380. The original$50authorization
+remains unchanged, and no additional experiment was launched for this analysis.
