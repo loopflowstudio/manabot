@@ -1,0 +1,215 @@
+{
+  "sources": {
+    "scratch/accelerator-probes/capture-s64/tape.json": "2d89de3587527eb38a714110e57b3682dbc22317e2e8c24d72624dd2cfcb0ef8",
+    "scratch/accelerator-probes/replay-s64/replay.json": "67d6507c058b77b27ef99e3276a571193242c4879ea8d05498233b240db3a866",
+    "experiments/data/cuda-capacity/capacity-report.json": "8ba5c684855294aed83aa8b81a8b71c499376afa66ed8393de8e65154bf9e4af",
+    "/Users/jack/src/managym-cpu-research/scratch/accelerator-queue-probe.py": "c7bf88f30c2e06dea29206e017b2a1cc224fa8835a9c87e8d91b49c4e3230b2c"
+  },
+  "host_repeat": 1,
+  "card": "l4",
+  "capacity": "w64-d1",
+  "execution_seconds": 13.665037124999799,
+  "outcomes": [
+    {
+      "settings": {
+        "actors": 512,
+        "cpu_workers": 128,
+        "gpus": 8,
+        "max_batch": 64,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 46.69319312751553,
+      "decisions": 4550656,
+      "requests": 251392,
+      "decisions_per_second": 97458.65928621561,
+      "cpu_busy_fraction": 0.023501491133373766,
+      "device_and_transfer_busy_fraction": 0.9999135880445502,
+      "padded_batch_counts": {
+        "16": 7,
+        "64": 97228
+      },
+      "useful_row_fraction": 0.7312988051496584,
+      "mean_queue_seconds": 0.09068274525555492,
+      "max_queue_seconds": 0.2411761726771694,
+      "mean_request_seconds": 0.094523932452293,
+      "max_request_seconds": 0.2450175943202061,
+      "peak_queued_rows": 21110,
+      "peak_queued_requests": 504
+    },
+    {
+      "settings": {
+        "actors": 512,
+        "cpu_workers": 128,
+        "gpus": 8,
+        "max_batch": 256,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 23.98744161725783,
+      "decisions": 4550656,
+      "requests": 251392,
+      "decisions_per_second": 189709.93541578934,
+      "cpu_busy_fraction": 0.045747257326755476,
+      "device_and_transfer_busy_fraction": 0.9934073483909249,
+      "padded_batch_counts": {
+        "16": 4,
+        "64": 35,
+        "256": 19191
+      },
+      "useful_row_fraction": 0.9258333333333333,
+      "mean_queue_seconds": 0.03836014353560061,
+      "max_queue_seconds": 0.10785813724855409,
+      "mean_request_seconds": 0.04824551356064173,
+      "max_request_seconds": 0.11778408173198507,
+      "peak_queued_rows": 17912,
+      "peak_queued_requests": 472
+    },
+    {
+      "settings": {
+        "actors": 512,
+        "cpu_workers": 128,
+        "gpus": 8,
+        "max_batch": 1024,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 27.095603393567895,
+      "decisions": 4550656,
+      "requests": 251392,
+      "decisions_per_second": 167948.13290927708,
+      "cpu_busy_fraction": 0.04049954704222305,
+      "device_and_transfer_busy_fraction": 0.8650554496324008,
+      "padded_batch_counts": {
+        "4": 75,
+        "16": 21,
+        "64": 48,
+        "256": 271,
+        "1024": 4909
+      },
+      "useful_row_fraction": 0.8923029863330654,
+      "mean_queue_seconds": 0.018221055001691695,
+      "max_queue_seconds": 0.07332757401755008,
+      "mean_request_seconds": 0.05379553694755143,
+      "max_request_seconds": 0.11088648451484623,
+      "peak_queued_rows": 11144,
+      "peak_queued_requests": 335
+    },
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 64,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 46.9745119694608,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 775000.0260496135,
+      "cpu_busy_fraction": 0.04672149292316664,
+      "device_and_transfer_busy_fraction": 0.9998148584022909,
+      "padded_batch_counts": {
+        "4": 5,
+        "16": 6,
+        "64": 782466
+      },
+      "useful_row_fraction": 0.726971756426083,
+      "mean_queue_seconds": 0.0912252166263314,
+      "max_queue_seconds": 0.24123790533153766,
+      "mean_request_seconds": 0.09506660590232788,
+      "max_request_seconds": 0.24507932697457413,
+      "peak_queued_rows": 171370,
+      "peak_queued_requests": 4032
+    },
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 256,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 23.917783884544942,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 1522099.5463348147,
+      "cpu_busy_fraction": 0.09176098166722704,
+      "device_and_transfer_busy_fraction": 0.9807508259791173,
+      "padded_batch_counts": {
+        "4": 11,
+        "16": 49,
+        "64": 234,
+        "256": 151140
+      },
+      "useful_row_fraction": 0.9405183120936009,
+      "mean_queue_seconds": 0.03814800677429606,
+      "max_queue_seconds": 0.11645682966279836,
+      "mean_request_seconds": 0.048053298727454626,
+      "max_request_seconds": 0.12638277414622934,
+      "peak_queued_rows": 153379,
+      "peak_queued_requests": 3776
+    },
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 1024,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 27.118381034303866,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 1342456.5409693355,
+      "cpu_busy_fraction": 0.0809310602197917,
+      "device_and_transfer_busy_fraction": 0.8221361265364288,
+      "padded_batch_counts": {
+        "1": 6,
+        "4": 17,
+        "16": 107,
+        "64": 311,
+        "256": 878,
+        "1024": 37717
+      },
+      "useful_row_fraction": 0.9366220080720032,
+      "mean_queue_seconds": 0.017436806364392567,
+      "max_queue_seconds": 0.07212378725712654,
+      "mean_request_seconds": 0.054138989430853435,
+      "max_request_seconds": 0.10968269775442252,
+      "peak_queued_rows": 90438,
+      "peak_queued_requests": 2542
+    }
+  ],
+  "limits": [
+    "Hypothetical coalesced serving path, not production CUDA or distributed throughput",
+    "Proportional mean CPU demand; no measured per-request timings or CPU contention curve",
+    "All actors repeat one untrained-policy trace from the same starting phase",
+    "One outstanding request per whole actor; no independent per-environment scheduling",
+    "Finite trace includes startup and drain; not a steady-state capacity measurement",
+    "Device and transfers serialize; independent GPU links; no network or all-reduce",
+    "No learner queue or policy lag; optional diagnostic optimizer service is only reserved time",
+    "Historical device service and CPU postprocessing require matching target calibration"
+  ]
+}

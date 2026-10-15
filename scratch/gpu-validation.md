@@ -68,34 +68,17 @@ the model-only diagnostic Adam measurement. Source bundle verification happens
 before the existing source owner admits training. CPU preflight exact paired
 parity passed in2.846commandseconds,324.2MiB sampled peak; not GPU speed evidence.
 
-## Controls, costs and recovery
+## Execution controls and retained history
 
-One L4 at a time, quoted$0.59/hour again before third admission. Pool hourly
-ceiling$0.80,6vCPU/48GBminimum,40GBdisk. Job30minutes/$1.50, cohort$3, maxoneattempt;
-Etude adds at most15minutes setup. Driver limits setup900s, measurements600s,
-child90s. Missing CUDA/wrong device/parity/nonfinite/source errors retain a failed
-cell. Never automatically rerent after an ambiguous launch or deletion response.
-
-First run `49c55761a6d3` failed bootstrap (missing locked play extra/maturin),
-no measurements. Pod `td9idyvn0cg2wg` absent at02:27:57UTC; estimate$0.07, reserve$0.10.
-Second pod `lhu3ok84ordvqw` absent at02:42:10UTC; estimate$0.08, reserve$0.15.
-Total settled rental estimate$0.15, conservative charges$0.25, ancillary reserve$5;
-Third allocation is now closed; its settled estimate and remaining budget are below.
-Actual bills replace estimates when available. Ledger `.runs/gpu-validation/budget.json` owns evolving allocations.
-
-Use isolated existing Etude launcher via:
-`doppler run --project etude --config prd -- uv run --no-sync --with /Users/jack/src/etude/client --with boto3 python .runs/gpu-validation/cli.py`.
-Append `runs`, `logs RUN`, `wait RUN`, `fetch RUN evidence.tar.gz DEST`, or
-`machines --all`. Fetch destination is a directory. Exact provider lookup must
-also confirm absence before another rental. Credentials stay in-process; no IAM
-or Etude source changes. Same-source multipart/server-side copy adapter avoids
-Etude's60second single-PUT limit without changing archive bytes.
-
-Third run `a7f16bef6f6c`, Etude session`63a7ec918a53`, exact provider pod
-`hp72lq3m023eaj`, created02:50:27.481UTC. Provider name is`etude-63a7ec918a53`;
-Etude machine display name differs. Resolve provider IDs from the existing
-machine record, not by guessing the display name. Run and machine are terminal. Log`observed-003.log` is local.
-
+All allocations used one L4 at$0.59/hour, pool ceiling$0.80, job30minutes/$1.50,
+cohort$3,maxoneattempt. Driver caps: setup900s, measurements600s, child90s.
+Etude owns source transport and self-deletion; credentials stay in-process.
+The first run failed bootstrap before measurements; the second retained two
+source-admission failures. Their costs and evidence are included, not discarded.
+Exact allocation IDs, cleanup receipts, CLI recovery and complete operational
+history are retained in`gpu-probes/f81f288a4bde6776f15cb9d0ce4c7aab6034d08ed3eb07cecd701cb91eace2bc.history.txt`.
+The current ledger is`.runs/gpu-validation/budget.json`; its latest snapshot is
+`gpu-probes/l4-003/budget.json`. No allocation or observation process remains live.
 
 ## Catalog results and remaining uncertainty
 

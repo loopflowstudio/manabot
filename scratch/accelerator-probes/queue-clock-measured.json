@@ -1,0 +1,162 @@
+{
+  "sources": {
+    "scratch/accelerator-probes/capture-s64/tape.json": "2d89de3587527eb38a714110e57b3682dbc22317e2e8c24d72624dd2cfcb0ef8",
+    "scratch/accelerator-probes/replay-clock-measured/replay.json": "741411352c2c8f2c004500fde2fed5c99f3452e7d15aeb3e9d5af22f38e0ae21",
+    "scratch/gpu-probes/l4-002/capacity-report.json": "f848a6f1252675a577a521dd64f9ae16a973aad422f40b5e0c2e18a965354311",
+    "/Users/jack/src/managym-cpu-research/scratch/accelerator-queue-probe.py": "38d4299657a28213421ff132240051c94546010fc4f24316d18cc3949ad91e24"
+  },
+  "host_repeat": 1,
+  "host_timing": "measured request intervals and final tail",
+  "card": "l4",
+  "capacity": "w64-d1",
+  "execution_seconds": 16.510673250071704,
+  "outcomes": [
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 256,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "actor_phase": "aligned",
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 25.637940230192175,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 1419975.5391085532,
+      "cpu_busy_fraction": 0.07820786904248365,
+      "cpu_busy_seconds": 1026.6054000854492,
+      "device_and_transfer_busy_fraction": 0.9705232453252339,
+      "padded_batch_counts": {
+        "1": 10,
+        "4": 38,
+        "16": 119,
+        "64": 255,
+        "256": 151110
+      },
+      "useful_row_fraction": 0.9406421996113641,
+      "mean_queue_seconds": 0.04065923105816164,
+      "max_queue_seconds": 0.10502162520613467,
+      "mean_request_seconds": 0.051158035255086054,
+      "max_request_seconds": 0.11554899183018819,
+      "peak_queued_rows": 139556,
+      "peak_queued_requests": 3776
+    },
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 1024,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "actor_phase": "aligned",
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 28.516243176313406,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 1276649.5142754104,
+      "cpu_busy_fraction": 0.07031391406100052,
+      "cpu_busy_seconds": 1026.6054000854492,
+      "device_and_transfer_busy_fraction": 0.8228475662888204,
+      "padded_batch_counts": {
+        "1": 2,
+        "4": 66,
+        "16": 191,
+        "64": 378,
+        "256": 1175,
+        "1024": 37579
+      },
+      "useful_row_fraction": 0.9380569199939911,
+      "mean_queue_seconds": 0.01835726753919801,
+      "max_queue_seconds": 0.07807528885247361,
+      "mean_request_seconds": 0.05671506614618013,
+      "max_request_seconds": 0.11764118340115326,
+      "peak_queued_rows": 87579,
+      "peak_queued_requests": 2423
+    },
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 256,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "actor_phase": "rotated",
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 24.823637869582193,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 1466555.715615293,
+      "cpu_busy_fraction": 0.08077336136533161,
+      "cpu_busy_seconds": 1026.6054000854492,
+      "device_and_transfer_busy_fraction": 0.9957970762216224,
+      "padded_batch_counts": {
+        "64": 15,
+        "256": 150272
+      },
+      "useful_row_fraction": 0.9463136933271004,
+      "mean_queue_seconds": 0.039091813441366224,
+      "max_queue_seconds": 0.05145170919517028,
+      "mean_request_seconds": 0.04961912289906322,
+      "max_request_seconds": 0.061979075819223794,
+      "peak_queued_rows": 62829,
+      "peak_queued_requests": 3546
+    },
+    {
+      "settings": {
+        "actors": 4096,
+        "cpu_workers": 512,
+        "gpus": 64,
+        "max_batch": 1024,
+        "wait_seconds": 0.00025,
+        "host_speed": 1.0,
+        "actor_phase": "rotated",
+        "transfer_gb_per_second": 12.0,
+        "transfer_latency_seconds": 2e-05,
+        "optimizer_observations_per_decision": 0.0
+      },
+      "seconds": 22.534162367215313,
+      "decisions": 36405248,
+      "requests": 2011136,
+      "decisions_per_second": 1615558.076077661,
+      "cpu_busy_fraction": 0.08897995138967636,
+      "cpu_busy_seconds": 1026.6054000854492,
+      "device_and_transfer_busy_fraction": 0.9893189376759745,
+      "padded_batch_counts": {
+        "4": 1,
+        "64": 33,
+        "256": 53,
+        "1024": 36043
+      },
+      "useful_row_fraction": 0.9859584013700029,
+      "mean_queue_seconds": 0.00533445549243182,
+      "max_queue_seconds": 0.03651831057471313,
+      "mean_request_seconds": 0.044895624727164046,
+      "max_request_seconds": 0.0760842051233928,
+      "peak_queued_rows": 13493,
+      "peak_queued_requests": 673
+    }
+  ],
+  "limits": [
+    "Hypothetical coalesced serving path, not production CUDA or distributed throughput",
+    "Host intervals include laptop scheduling/measurement overhead; no target CPU contention curve",
+    "All actors repeat one untrained-policy trace; phase rotation is synthetic sensitivity, not independent workloads",
+    "One outstanding request per whole actor; no independent per-environment scheduling",
+    "Finite trace includes startup and drain; not a steady-state capacity measurement",
+    "Device and transfers serialize; independent GPU links; no network or all-reduce",
+    "No learner queue or policy lag; optional diagnostic optimizer service is only reserved time",
+    "Named device service is measured separately; CPU postprocessing and transfer assumptions need end-to-end calibration"
+  ]
+}

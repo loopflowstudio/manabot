@@ -1,0 +1,56 @@
+{
+  "purpose": "Measured per-request host intervals and final tails, compared with proportional average host demand",
+  "host_repeat": 1,
+  "source_tape": "capture-s64/tape.json",
+  "request_count": 491,
+  "host_seconds": 0.2506360840052366,
+  "tail_seconds": 0.036792958970181644,
+  "tail_fraction": 0.14679833159782738,
+  "clock_conservation_error_seconds": 0.0,
+  "comparisons": [
+    {
+      "phase": "aligned",
+      "batch": 256,
+      "proportional_rate": 1435364.4335544857,
+      "interval_rate": 1419975.5391085532,
+      "rate_ratio": 0.9892787545196282,
+      "conserved_cpu_seconds": 1026.6054000854492
+    },
+    {
+      "phase": "aligned",
+      "batch": 1024,
+      "proportional_rate": 1273378.800055656,
+      "interval_rate": 1276649.5142754104,
+      "rate_ratio": 1.002568532018604,
+      "conserved_cpu_seconds": 1026.6054000854492
+    },
+    {
+      "phase": "rotated",
+      "batch": 256,
+      "proportional_rate": 1472596.6122136742,
+      "interval_rate": 1466555.715615293,
+      "rate_ratio": 0.9958977926824779,
+      "conserved_cpu_seconds": 1026.6054000854492
+    },
+    {
+      "phase": "rotated",
+      "batch": 1024,
+      "proportional_rate": 1630444.7322546018,
+      "interval_rate": 1615558.076077661,
+      "rate_ratio": 0.9908695732627777,
+      "conserved_cpu_seconds": 1026.6054000854492
+    }
+  ],
+  "proof_limits": [
+    "Final tail includes last-response processing/finalization/assembly; not isolated assembly cost",
+    "Virtual 64GPU inference servers; current L4 model-call service includes host dispatch, not pure kernel time",
+    "Only one trace per scenario, synthetic phase rotation; mixed independent/mature policies remain unmeasured",
+    "Timing-enabled and disabled measurements ran sequentially; no precise zero-overhead estimate"
+  ],
+  "second_seed": {
+    "seed": 10832,
+    "capture": "capture-seed10832/tape.json",
+    "replay": "replay-seed10832/replay.json",
+    "queue": "queue-seed10832-sensitivity.json"
+  }
+}
