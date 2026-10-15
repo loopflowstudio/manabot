@@ -1,5 +1,11 @@
 # Learner admission and coupled cohort model
 
+Physical serving validation now rejects the model-only absolute service boundary:
+nine measured cells took1.35–1.90× their predictions. The batch ranking survived,
+but the rates below are conditional optimistic scenarios, not validated absolute
+throughput. Missing batch preparation and underestimated transfers require new
+calibration and withheld-case validation; see `gpu-validation.md`.
+
 ## Coupled zero-lag control
 
 `scratch/cohort-flow-probe.py` now reuses the existing finite-request inference
@@ -44,9 +50,7 @@ original300second accelerator allowance (`highend-integration-protocol.txt`).
 Limits: cloned stationary untrained tape, named GPU service/learner receipts, assumed links, one extra serving CPU thread/server. Zero aggregation/
 publication is an optimistic network bound. Actual policy evolution, target CPU
 contention, multi-GPU optimization and physical distributed execution remain unmeasured.
-The strict zero-lag barrier is a compatibility control, not a selected production
-architecture. Next validation needs matching physical service and traffic before
-using modeled rates to choose a distributed design.
+The zero-lag barrier is a compatibility control, not a selected architecture.
 
 H100 integration preserves all27L4 outcomes exactly. The same27case H100 matrix
 at512streams prefers batch1024 on one server (5,465rows/s), versus L4's256.

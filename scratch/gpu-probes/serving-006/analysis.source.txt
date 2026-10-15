@@ -1,0 +1,53 @@
+"""Summarize physical serving versus the same rental's event-model prediction."""
+import hashlib
+import json
+from pathlib import Path
+from statistics import median
+import shutil
+
+root=Path('.runs/gpu-validation/result-006');evidence=root/'evidence'
+attempts=json.loads((evidence/'attempts.json').read_text());by_name={a['name']:a for a in attempts}
+rows=[]
+for actors in (1,8,64):
+    for batch in (64,256,1024):
+        name=f'serve-a{actors}-b{batch}';path=evidence/name/'result.json';attempt=by_name.get(name)
+        row={'name':name,'actors':actors,'max_batch':batch,'status':attempt['status'] if attempt else 'not_attempted'}
+        if path.exists() and row['status']=='completed':
+            r=json.loads(path.read_text());samples=r['samples'];assert len(samples)==3
+            reference=samples[1]
+            assert all(s['requests']==actors*59 and s['decisions']==actors*1099 for s in samples)
+            for s in samples:
+                assert abs(sum(s['service_phase_seconds'].values())-s['service_seconds'])<1e-8
+                assert 0<s['service_seconds']<=s['seconds']
+            curve={}
+            for size in (1,4,16,64,256,1024):
+                m=json.loads((evidence/f'w64-d1-model-b{size}-s0'/'result.json').read_text());curve[size]=size/median(w['observations']/w['seconds'] for w in m['inference']['windows'])
+            expected_forward=sum(int(count)*curve[int(size)] for size,count in reference['padded_batch_counts'].items())
+            padded=sum(int(size)*int(count) for size,count in reference['padded_batch_counts'].items())
+            count=sum(reference['padded_batch_counts'].values())
+            expected_transfer=padded*r['payload_bytes_per_row']/12e9+count*40e-6
+            row.update(predicted_seconds=r['prediction']['seconds'],sample_seconds=[s['seconds'] for s in samples],median_seconds=median(s['seconds'] for s in samples),actual_over_predicted=r['median_actual_to_predicted_seconds'],within_20_percent=0.8<=r['median_actual_to_predicted_seconds']<=1.2,output_hash_differences=r['different_output_requests_vs_first'],peak_allocated_bytes=r['peak_allocated_bytes'],declared_repeat=1,service_phase_seconds=reference['service_phase_seconds'],forward_seconds_predicted_for_actual_batches=expected_forward,transfer_seconds_predicted_for_actual_batches=expected_transfer,actual_batches=reference['padded_batch_counts'],predicted_batches=r['prediction']['padded_batch_counts'],actual_useful_row_fraction=reference['useful_row_fraction'],predicted_useful_row_fraction=r['prediction']['useful_row_fraction'],timer_lateness_max=reference['nominal_host_release_lateness_max'],timer_lateness_mean=reference['nominal_host_release_lateness_mean'],delivery_delay_max=reference['max_delivery_seconds'],queue_mean=reference['mean_queue_seconds'],request_mean=reference['mean_request_seconds'])
+        rows.append(row)
+rankings=[]
+for actors in (1,8,64):
+    cases=[r for r in rows if r['actors']==actors and r['status']=='completed']
+    if len(cases)!=3:
+        rankings.append({'actors':actors,'status':'unavailable'});continue
+    predicted=min(r['predicted_seconds'] for r in cases)
+    winners=[r['max_batch'] for r in cases if abs(r['predicted_seconds']-predicted)<1e-9]
+    actual=min(cases,key=lambda r:r['median_seconds'])['max_batch']
+    rankings.append({'actors':actors,'predicted_best_batches':winners,'actual_best_batch':actual,'prediction_preserved':actual in winners})
+summary={'run':'8c51916229c9','source':'b32f4c03aecc757d3fadb5877f8ff30b0ad4c6aa',**json.loads((root/'verification.json').read_text()),'analysis_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cells':rows,'rankings':rankings,'limits':['Real one-process serving with virtual host delays; not distributed collection, IPC, network or learning.','Fixed real observation pool and deterministic row-index selection differ from original game inputs.','Validation and hashing are measured explicitly; phase1 refers to declared repeat1, not the fastest repeat.','All phases are worker wall intervals, not GPU kernel occupancy. Logical host demand overlaps the worker; do not add it as disjoint wall time.','Same-rental model calibration precedes serving; mixed-batch forward drift is retained, not corrected away.']}
+(root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+for r in rows:print(r['name'],r['status'],round(r.get('actual_over_predicted',0),3),r.get('service_phase_seconds'))
+print(rankings)
+# Complete portable artifact publication happens after cleanup/cost records exist.
+destination=Path('scratch/gpu-probes/serving-006');staging=destination.with_name('.serving-006-staging');assert not destination.exists() and not staging.exists();staging.mkdir()
+for p in evidence.rglob('*'):
+    if p.is_file() and p.suffix in {'.json','.log'}:
+        target=staging/'evidence'/p.relative_to(evidence);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target)
+for name in ('summary.json','verification.json'):
+    shutil.copy2(root/name,staging/name)
+for name in ('sixth-cleanup.json','source-stall-006.json','rental-costs-006.json','source-copy.json','job-006.json','preflight-006.json','sixth-pod.json','prepared-source.json','budget.json'):
+    shutil.copy2(Path('.runs/gpu-validation')/name,staging/name)
+shutil.copy2(__file__,staging/'analysis.source.txt');shutil.copy2('scratch/serving-validation-protocol.txt',staging/'protocol.txt');shutil.copy2('.runs/gpu-validation/observed-006.log',staging/'observed.log');staging.rename(destination)

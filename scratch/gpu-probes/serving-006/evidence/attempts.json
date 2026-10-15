@@ -1,0 +1,271 @@
+[
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/scratch/gpu-validation.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--expected-gpu",
+      "NVIDIA H100 80GB HBM3",
+      "--child",
+      "inputs",
+      "--frozen-inputs"
+    ],
+    "exit_code": 0,
+    "name": "inputs",
+    "seconds": 3.82810691697523,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":1,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b1-s0",
+    "seconds": 13.274820124031976,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":4,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b4-s0",
+    "seconds": 11.199231760809198,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":16,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b16-s0",
+    "seconds": 11.402383918873966,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":64,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b64-s0",
+    "seconds": 11.206683352123946,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":256,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b256-s0",
+    "seconds": 11.405028701061383,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "-m",
+      "experiments.runners.cuda_performance",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--cell",
+      "{\"capacity\":\"w64-d1\",\"kind\":\"model\",\"batch\":1024,\"streams\":0}"
+    ],
+    "exit_code": 0,
+    "name": "w64-d1-model-b1024-s0",
+    "seconds": 11.874131898861378,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a1-b64",
+      "--actors",
+      "1",
+      "--max-batch",
+      "64"
+    ],
+    "exit_code": 0,
+    "name": "serve-a1-b64",
+    "seconds": 5.833196415100247,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a1-b256",
+      "--actors",
+      "1",
+      "--max-batch",
+      "256"
+    ],
+    "exit_code": 0,
+    "name": "serve-a1-b256",
+    "seconds": 5.68387702293694,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a1-b1024",
+      "--actors",
+      "1",
+      "--max-batch",
+      "1024"
+    ],
+    "exit_code": 0,
+    "name": "serve-a1-b1024",
+    "seconds": 5.558694058097899,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a8-b64",
+      "--actors",
+      "8",
+      "--max-batch",
+      "64"
+    ],
+    "exit_code": 0,
+    "name": "serve-a8-b64",
+    "seconds": 7.8890975730028,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a8-b256",
+      "--actors",
+      "8",
+      "--max-batch",
+      "256"
+    ],
+    "exit_code": 0,
+    "name": "serve-a8-b256",
+    "seconds": 6.987376339035109,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a8-b1024",
+      "--actors",
+      "8",
+      "--max-batch",
+      "1024"
+    ],
+    "exit_code": 0,
+    "name": "serve-a8-b1024",
+    "seconds": 6.334620476933196,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a64-b64",
+      "--actors",
+      "64",
+      "--max-batch",
+      "64"
+    ],
+    "exit_code": 0,
+    "name": "serve-a64-b64",
+    "seconds": 27.592130799079314,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a64-b256",
+      "--actors",
+      "64",
+      "--max-batch",
+      "256"
+    ],
+    "exit_code": 0,
+    "name": "serve-a64-b256",
+    "seconds": 12.11140855285339,
+    "status": "completed"
+  },
+  {
+    "command": [
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/src/.venv/bin/python3",
+      "scratch/physical-serving-probe.py",
+      "--root",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence",
+      "--out",
+      "/run/etude/sessions/5da3083ae0ab/attempts/070777f835f5/outputs/evidence/serve-a64-b1024",
+      "--actors",
+      "64",
+      "--max-batch",
+      "1024"
+    ],
+    "exit_code": 0,
+    "name": "serve-a64-b1024",
+    "seconds": 10.786985700018704,
+    "status": "completed"
+  }
+]

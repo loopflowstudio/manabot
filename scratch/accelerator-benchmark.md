@@ -20,8 +20,11 @@ No PR, merge, Task operation or other experiment is selected by this work.
    Each actor waits for its request before continuing. `--request-timings` uses
    actual request intervals and final host tails; default proportional timing
    remains a control. Explicit `--tape`, `--replay`, `--hardware` select evidence.
-4. Physical CUDA collection and ordinary TrainingRun probes validate selected
-   directions. Neither replay nor queue output is a playing-strength claim.
+4. Physical CUDA collection, ordinary TrainingRun and serving probes validate
+   selected directions. Serving now rejects absolute queue timing: measured
+   duration is1.35–1.90× modeled across nine cells, despite preserved best-batch
+   rankings. CPU batch preparation is missing and transfers are underestimated.
+   See gpu-validation.md; neither replay nor queue output is a strength claim.
 
 The queue requires one additional inference-serving CPU thread per GPU: measured
 synchronized model calls include host dispatch/validation.512collector CPUs plus
@@ -38,31 +41,19 @@ transitions,31games and491policy requests. The second independent seed10832 has
 with no truncations. They are untrained policies; phases rotated within one tape
 are synthetic sensitivity, not independent game trajectories.
 
-Request timing preserves exact replay and reconstructs collection wall time.
-Seed10831's declared repeat1 took0.25064s, with36.793ms final host tail(14.68%);
-seed10832 took0.23346s with38.185ms tail. Tails include last-response processing,
-finalization and assembly, not isolated assembly cost. Three sequential repetitions
-with/without instrumentation show no obvious penalty, not precise zero overhead.
-Full intervals and controls are in`request-timing-summary.json` and raw replays.
+Request timing preserves exact replay and collection wall time, including final
+tails. Seed10831/10832 repeat1 took0.25064/0.23346s, with36.793/38.185ms tails.
+Full intervals and instrumentation controls remain in`request-timing-summary.json`.
 
 Current L4 service comes from`gpu-probes/l4-002/capacity-report.json`, float32,
 TF32off,202attention slots. Historical203slot reports remain separate. The small
 model's median batch64/256/1024 rates were15,071/26,316/28,064 observations/s.
 Actual whole collection is much slower; see GPU evidence for its boundaries.
 
-At4096virtual actors/512collector CPUs/64GPU servers:
-
-| Phase / batch | Proportional host timing | Measured intervals + tail |
-|---|---:|---:|
-|aligned /256|1.435M decisions/s|1.420M|
-|aligned /1024|1.273M|1.277M|
-|rotated /256|1.473M|1.467M|
-|rotated /1024|1.630M|1.616M|
-
-The preregistered batching reversal survives. Rate changes are at most1.08% in
-these GPU-limited cases; this supports the simpler approximation for this tested
-comparison, not for host bottlenecks generally. Measured total CPU work is
-1026.605s across4096actors in every cell, including their final tails.
+At4096virtual actors/512collector CPUs/64servers, measured intervals preserve the
+preregistered aligned/rotated batching reversal; modeled rates change at most1.08%
+from proportional intervals. Full historical rates remain in archived notes.
+This timing comparison does not validate the physical serving boundary.
 
 The independent seed10832 64actor sensitivity matrix also completed. At batch256,
 doubling collector speed moved22,172→22,244decisions/s(0.33%). Reserving one
@@ -70,9 +61,7 @@ model-only diagnostic Adam observation per decision lowered the original speed
 to3,777/s and raised mean request latency66.5→395.2ms. This reserve still lacks
 an actual learner queue, sample reuse and policy-age feedback.
 
-Physical catalog reuse improved collection median1.49x/1.25x at64/256streams.
-See gpu-validation.md for exact trajectory/raw/EMA parity, the small Adam-state
-discrepancy, costs and proof limits. This remains a research prototype.
+See gpu-validation.md for physical catalog-reuse results and parity limits.
 
 ## Reproduction
 
@@ -90,10 +79,10 @@ finite completion, padding and host tails. All measured attempts used bounded
 supervision. The original probe phase closed at238.718of240seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
-calibration-analysis slice used4.428seconds; conservative combined usage268.812/300. New measured
+calibration-analysis slice used7.700seconds; conservative combined usage272.084/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
-records$0.712507 billed/estimated rentals,$1.05 conservative charges+$5reserve,
-$43.95 free; all five machines are confirmed deleted.
+records$1.033486 billed/estimated rentals,$1.51 conservative charges+$5reserve,
+$43.49 free; all six machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -105,9 +94,10 @@ state, Python objects, staging, models and allocator slack. Finite startup/drain
 and synthetic phase rotations must remain visible. Exact replay of one policy
 does not predict how a changed trained policy changes its game distribution.
 
-Next: mixed independent/mature-policy traces, actual learner/backpressure and
-policy-age accounting, and coupling to measured learner service. Reference/reference
-controls reproduce tiny Adam differences without caching (gpu-validation.md).
+Next: calibrate the complete serving boundary and validate withheld cases before
+trusting absolute throughput; then mixed mature-policy traces, real backpressure
+and policy-age accounting. Measured learner coupling already exists below.
+Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and
 learning before a system-speed claim. The active goal is not complete.
