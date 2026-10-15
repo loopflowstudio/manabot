@@ -58,9 +58,7 @@ def profile_service(service: CudaService, out: Path) -> None:
                 with torch.inference_mode():
                     started = time.perf_counter()
                     with torch.profiler.record_function("service/h2d"):
-                        device_obs = {
-                            key: value.to("cuda") for key, value in obs.items()
-                        }
+                        device_obs = service.inference.prepare(obs)
                         torch.cuda.synchronize()
                     timings["h2d_seconds"] = time.perf_counter() - started
                     started = time.perf_counter()
@@ -84,7 +82,7 @@ def profile_service(service: CudaService, out: Path) -> None:
         {
             "samples": samples,
             "parity": "exact logits and values at each original input shape",
-            "boundary": "synchronized H2D/forward/D2H, profiler enabled; excludes worker IPC and observation preparation",
+            "boundary": "synchronized CPU admission+H2D/forward/D2H, profiler enabled; excludes worker IPC and observation slicing; scope catalog already warm",
             "inputs": "first real initial observations, not stationary training distribution",
         },
     )

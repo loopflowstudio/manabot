@@ -29,6 +29,7 @@ from experiments.runners.pipeline_benchmark import (
 )
 from manabot.env import ObservationSpace
 from manabot.model.agent import Agent
+from manabot.model.inference import PolicyInference
 
 # Array dtype differs by observation field; validate once against frozen schemas.
 Array: TypeAlias = NDArray[np.generic]
@@ -149,15 +150,15 @@ class CudaPolicy:
         )
         self.calls = 0
         self.seconds = 0.0
+        # This policy never learns; its scope ends with the owning process.
+        self.inference = PolicyInference(self.agent)
 
     def forward(
         self, obs: dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
         started = time.perf_counter()
         with torch.inference_mode():
-            logits, value = self.agent.forward_distribution(
-                {k: v.to("cuda") for k, v in obs.items()}
-            )
+            logits, value = self.agent.forward_distribution(self.inference.prepare(obs))
             result = logits.cpu(), value.cpu()
         self.calls += 1
         self.seconds += time.perf_counter() - started

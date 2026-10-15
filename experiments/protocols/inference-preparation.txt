@@ -1,0 +1,63 @@
+Policy-scoped inference preparation — prospective protocol, 2026-10-15
+
+Objective: clear the inference bottleneck for single-GPU training. This is one
+intervention toward that objective, not a redefinition of completion as a local
+serving win. Original total paid authorization remains $50. Reserve at most $4
+for this experiment; one attempt, no automatic retry, job30min/$3, rental2700s.
+Use RTX5090 at <=$1.25/h with >=8vCPU/48GBRAM. Verify prior admitted pods deleted;
+failed admission015 retains its full separate $4 reserve and absence receipt.
+Publish the exact source and protocol before renting; verify its source archive.
+
+Observation: run016 worker-local models improved four-worker throughput15.5%,
+but still spent most worker time in inference. A separate instrumented profile
+measured ~7ms forward at1–64rows, ~3ms inclusive catalog host spans,15scalar reads
+and3equality checks per forward. These are not unprofiled timing coefficients.
+Priorw4 catalog reuse improved4096-stream whole training only0.85%; therefore
+catalog reuse alone is not assumed to solve the full training problem.
+
+Intervention: PolicyInference owns CPU admission of definition references and
+one lazily encoded semantic catalog during an unchanged behavior-policy scope.
+Ordinary SeatRoutedCollector opens/closes a scope for each collection; learning,
+raw/EMA updates and checkpoint recovery remain outside it. Worker CudaPolicy owns
+one scope for its immutable model lifetime. No changed request shapes, sampling,
+action masks, learning loss, precision or native simulation. Normal differentiable
+Agent forwarding keeps its admission and computes fresh catalog embeddings.
+
+Reference: the experiment patches only PolicyInference.prepare to the ordinary
+CPU-to-device tensor dictionary transfer. Agent receives a plain dictionary and
+executes its original admission/catalog path. Same source, hardware, weights,
+model mode, seeds and inputs. The small common scope construction/version capture
+overhead remains in both arms; this is not an exact timing of historical source.
+Recorded/external CPU placeholder policies never repeat their actual GPU owner's
+admission/encoding. Their original dictionary transport and exact tape audit stay.
+
+Worker comparison: six complete shared-service process-pool lifetimes, order
+reference/prepared/prepared/reference/reference/prepared. Each64actors x64streams
+x8steps, with1/2/4active persistent processes; one repetition per lifetime gives
+three samples per mode/count. Each180s whole-process-tree cap and24GiB summedRSS.
+Require exact acting-input/output audit and all1152actor rollout/buffer/journal/
+seed witnesses across modes. Keep initialization, collection and verification
+separate. Retain every failure; do not expand a deadline to complete a cell.
+
+Primary training comparison: the same six-arm order, each at512 and4096streams,
+8steps x3ordinaryupdates, FP32/TF32off, existing width64 one-layer recipe and
+seed10349. Each55s stage/60s recipe/70s process cap, fresh process per cell.
+Compare complete TrainingRun calendar time, collection/learning breakdown, memory
+and all repetitions. After timing, hash canonical initial/raw/EMA model tensors
+and Adam state from ordinary exports; require exact agreement across modes and
+replicates at each stream count, plus identical scientific diagnostics/counters.
+Local tests additionally require exact gradients and restored collector continuation.
+
+Prospective screen: predict >=1.5x four-worker serving throughput and >=10%
+4096-stream complete-training throughput gain, with no >5%512-stream regression.
+All correctness gates must pass. Report medians and individual samples; three
+timing repeats of one untrained policy are not independent training seeds and
+do not establish mature-policy performance or playing strength. If either speed
+prediction fails, retain the negative result and do not call the training goal
+complete. Keep production adoption provisional pending the complete-training gate;
+batching and larger actor requests remain different interventions if needed.
+
+Package the complete output directory as one archive after execution (also on
+cell failure) to avoid per-object upload overhead. Preserve its internal file
+manifest and all raw outputs, then verify both upload receipt and extracted
+manifest on recovery. No measurement is dropped to reduce upload size.

@@ -33,6 +33,7 @@ class Trial:
     repeats: int = 3
     seconds: int = 600
     profile: bool = False
+    reference: bool = False
 
 
 def read_optional(path: str) -> str | None:
@@ -52,6 +53,7 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--replay-only", action="store_true")
     mode.add_argument("--serving-ownership", action="store_true")
+    mode.add_argument("--serving-preparation", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     if config_path := os.environ.get("ETUDE_CONFIG"):
@@ -92,7 +94,20 @@ def main() -> None:
     )
     statuses = []
     try:
-        if args.serving_ownership:
+        if args.serving_preparation:
+            trials = [
+                Trial(
+                    f"preparation-{index}-{'reference' if reference else 'prepared'}",
+                    "cuda",
+                    repeats=1,
+                    seconds=180,
+                    reference=reference,
+                )
+                for index, reference in enumerate(
+                    (True, False, False, True, True, False)
+                )
+            ]
+        elif args.serving_ownership:
             # Interleave independent complete process-pool lifetimes, retaining
             # startup in each receipt and all three fixed-work worker counts.
             trials = [
@@ -130,6 +145,7 @@ def main() -> None:
                 "24",
                 *(["--capture-replay"] if trial.device == "replay" else []),
                 *(["--profile"] if trial.profile else []),
+                *(["--reference-policy"] if trial.reference else []),
             ]
             started = time.monotonic()
             result = subprocess.run(command, check=False)
@@ -145,8 +161,26 @@ def main() -> None:
         tape = Tape.model_validate_json(
             Path("experiments/data/worker-scaling/tape-w6/tape.json").read_text()
         )
-        for streams in () if args.replay_only else (512, 4096):
-            root = args.out / f"ordinary-s{streams}"
+        training_cases = (
+            [
+                (
+                    f"training-{index}-{'reference' if reference else 'prepared'}-s{streams}",
+                    streams,
+                    reference,
+                )
+                for index, reference in enumerate(
+                    (True, False, False, True, True, False)
+                )
+                for streams in (512, 4096)
+            ]
+            if args.serving_preparation
+            else [
+                (f"ordinary-s{streams}", streams, False)
+                for streams in (() if args.replay_only else (512, 4096))
+            ]
+        )
+        for name, streams, reference in training_cases:
+            root = args.out / name
             root.mkdir()
             write_json(root / "baseline.json", tape.recipe.model_dump(mode="json"))
             cell = Cell(
@@ -157,11 +191,16 @@ def main() -> None:
             command = [
                 sys.executable,
                 "-m",
-                "experiments.runners.cuda_performance",
+                (
+                    "experiments.runners.inference_preparation"
+                    if args.serving_preparation
+                    else "experiments.runners.cuda_performance"
+                ),
                 "--root",
                 str(root),
                 "--cell",
                 cell.model_dump_json(),
+                *(["--reference-policy"] if reference else []),
             ]
             with (root / "worker.log").open("w") as log:
                 try:
@@ -181,7 +220,7 @@ def main() -> None:
                 code = 1
             statuses.append(
                 {
-                    "device": f"ordinary-s{streams}",
+                    "device": name,
                     "exit_code": code,
                     "training_status": training_status,
                     "seconds": time.monotonic() - started,

@@ -40,6 +40,7 @@ import torch
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
 from manabot.model.agent import Agent
+from manabot.model.inference import PolicyInference
 from manabot.model.policy_distribution import (
     NumericalError,
     legal_mask,
@@ -346,9 +347,11 @@ class SeatRoutedCollector:
 
     # -- opponent routing -----------------------------------------------------
 
-    def _opponent_actions(self, agent: Agent, rows: np.ndarray) -> np.ndarray:
+    def _opponent_actions(
+        self, agent: Agent, rows: np.ndarray, inference: PolicyInference
+    ) -> np.ndarray:
         if self.opponent_mode == "self":
-            obs = self._slice_obs_tensors(rows)
+            obs = self._slice_obs_tensors(rows, inference)
             with torch.inference_mode():
                 logits, _ = agent.forward(obs)
                 probs = self._policy_logs(logits, obs).exp()
@@ -370,15 +373,24 @@ class SeatRoutedCollector:
             )
             raise
 
-    def _slice_obs_tensors(self, rows: np.ndarray) -> Dict[str, torch.Tensor]:
+    def _slice_obs_tensors(
+        self, rows: np.ndarray, inference: PolicyInference | None = None
+    ) -> dict[str, torch.Tensor]:
         obs = {}
         for key in OBS_KEYS:
             tensor = torch.from_numpy(self._buffers[key][rows])
             if key == "action_focus":
                 # Training convention (VectorEnv): action_focus as float32.
                 tensor = tensor.float()
-            obs[key] = tensor.to(self.device)
-        return obs
+            obs[key] = tensor
+        if inference is not None:
+            if inference.device.type != self.device.type or (
+                self.device.index is not None
+                and inference.device.index != self.device.index
+            ):
+                raise ValueError("collector and inference policy devices differ")
+            return inference.prepare(obs)
+        return {key: tensor.to(self.device) for key, tensor in obs.items()}
 
     def _count_action_types(
         self, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
@@ -404,6 +416,27 @@ class SeatRoutedCollector:
     ) -> RolloutBatch:
         """Advance all streams until every env has ``num_steps`` finalized
         learner transitions, stopping before the bootstrap action is sampled."""
+
+        # No cache or prepared observation survives learning, snapshot or restore.
+        # Both seats in self-play use this same unchanged behavior-policy scope.
+        with PolicyInference(agent) as inference:
+            return self._collect(
+                agent,
+                num_steps,
+                inference,
+                deadline_monotonic=deadline_monotonic,
+                check=check,
+            )
+
+    def _collect(
+        self,
+        agent: Agent,
+        num_steps: int,
+        inference: PolicyInference,
+        *,
+        deadline_monotonic: float | None,
+        check: Callable[[], None] | None,
+    ) -> RolloutBatch:
 
         start = time.perf_counter()
         buffers = self._buffers
@@ -435,7 +468,7 @@ class SeatRoutedCollector:
             opp_rows = np.flatnonzero(active & (acting != self.learner_seat))
 
             if len(learner_rows):
-                obs_t = self._slice_obs_tensors(learner_rows)
+                obs_t = self._slice_obs_tensors(learner_rows, inference)
                 with torch.no_grad():
                     outcomes: np.ndarray | None = None
                     if agent.hypers.value_kind == "categorical_wdl":
@@ -482,7 +515,7 @@ class SeatRoutedCollector:
                 )
 
             if len(opp_rows):
-                opp_acts = self._opponent_actions(agent, opp_rows)
+                opp_acts = self._opponent_actions(agent, opp_rows, inference)
                 actions[opp_rows] = opp_acts
                 self.stats.opponent_decisions += len(opp_rows)
                 self._count_action_types(

@@ -12,7 +12,8 @@ uses one bounded child process and retains failures, including timeouts and OOMs
 
 import argparse
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import fields
 from datetime import datetime, timezone
 import hashlib
@@ -37,6 +38,7 @@ from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.accelerator_model import DeviceService, HostDemand, Scenario, project
 from manabot.infra.hypers import RewardHypers
 from manabot.model.agent import Agent
+from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world
 from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
 from manabot.training.execution import atomic_json
@@ -159,6 +161,28 @@ def _tensor_bytes(tensors: dict[str, torch.Tensor]) -> int:
     return sum(t.numel() * t.element_size() for t in tensors.values())
 
 
+@contextmanager
+def _policy_override(
+    agent: Agent, forward: PolicyForward, *, external: bool
+) -> Iterator[None]:
+    # A recorded/external policy owns admission and encoding. The placeholder
+    # CPU Agent must not repeat that work before requesting the actual policy.
+    original = PolicyInference.prepare
+
+    def prepare(
+        scope: PolicyInference, obs: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        if external and scope.agent is agent:
+            return {key: value.to(scope.device) for key, value in obs.items()}
+        return original(scope, obs)
+
+    with (
+        patch.object(agent, "forward_distribution", forward),
+        patch.object(PolicyInference, "prepare", prepare),
+    ):
+        yield
+
+
 def capture(
     recipe: TrainingRegime,
     out: Path,
@@ -194,7 +218,7 @@ def capture(
         return logits, value
 
     started = time.perf_counter()
-    with patch.object(agent, "forward_distribution", record):
+    with _policy_override(agent, record, external=forward is not None):
         batch = collector.collect(agent, transitions)
     elapsed = time.perf_counter() - started
     torch.save(outputs, out / "outputs.pt")
@@ -342,7 +366,7 @@ class PreparedReplay:
             return logits.clone(), critic.clone()
 
         started = time.perf_counter()
-        with patch.object(agent, "forward_distribution", playback):
+        with _policy_override(agent, playback, external=True):
             batch = collector.collect(agent, tape.transitions)
         finished = time.perf_counter()
         elapsed = finished - started

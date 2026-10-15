@@ -215,3 +215,13 @@ any experiment started, and the provider inventory found no pod. Its reservation
 remains conservatively held while cleanup observation continues; run016 was an
 explicit replacement admission with the same source/protocol, not a measurement
 retry. No training speedup or playing-strength improvement is claimed.
+
+The next candidate is now implemented in ordinary collection: `PolicyInference`
+admits definition references on CPU and reuses semantic catalog embeddings during
+one unchanged behavior-policy scope. It preserves original request shapes and
+sampling. Normal learning retains fresh differentiable catalog computation.
+`worker_experiment --serving-preparation` compares this path against ordinary
+tensor inputs, with paired complete TrainingRuns and exact raw/EMA/Adam witnesses.
+See the [prospective preparation protocol](protocols/inference-preparation.txt).
+The candidate passes local forward, gradient, rollout, recovery and whole-training
+parity tests; its GPU performance and production adoption remain unproven.

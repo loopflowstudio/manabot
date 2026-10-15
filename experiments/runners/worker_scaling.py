@@ -280,6 +280,7 @@ def controller(args: argparse.Namespace) -> None:
                 str(args.out),
                 "--device",
                 args.device,
+                *(["--reference-policy"] if args.reference_policy else []),
                 *exchange_args,
             ],
             stdin=subprocess.PIPE,
@@ -426,6 +427,11 @@ def main() -> None:
     )
     parser.add_argument("--exchange", type=Path, help=argparse.SUPPRESS)
     parser.add_argument(
+        "--reference-policy",
+        action="store_true",
+        help="research control: ordinary inputs without scoped preparation",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         help="attribute one shared service separately from worker timing",
@@ -446,12 +452,18 @@ def main() -> None:
         parser.error("actors must be divisible by4 in4..64; repeats1..3")
     if not 0 < args.seconds <= 600 or not 0 < args.rss_gib <= 32:
         parser.error("seconds must be in(0,600]; RSS in(0,32]GiB")
-    if args.worker is not None:
-        worker(args)
-    elif args.controller:
-        controller(args)
-    else:
+    if args.worker is None and not args.controller:
         supervise(args)
+        return
+
+    # Keep model/runtime imports in children; the supervisor only owns limits.
+    from experiments.runners.inference_preparation import reference_inference
+
+    with reference_inference(args.reference_policy):
+        if args.worker is not None:
+            worker(args)
+        else:
+            controller(args)
 
 
 if __name__ == "__main__":
