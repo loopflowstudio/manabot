@@ -19,6 +19,7 @@ This suite verifies:
     - Deeply nested calls using relative labels produce the correct hierarchical paths.
 """
 
+import random
 import time
 
 import numpy as np
@@ -26,6 +27,26 @@ import pytest
 
 # Local imports
 from manabot.infra.profiler import Profiler  # Adjust the import as needed
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_profiling_preserves_training_random_stream(enabled: bool) -> None:
+    saved = random.getstate()
+    try:
+        random.seed(10349)
+        before = random.getstate()
+        profiler = Profiler(enabled=enabled, max_samples=2)
+        for _ in range(20):
+            with profiler.track("collection"):
+                with profiler.track("policy"):
+                    pass
+        assert random.getstate() == before
+        if enabled:
+            stats = profiler.get_stats()
+            assert stats["collection"]["count"] == 20
+            assert len(profiler.node_cache["collection"].durations) == 2
+    finally:
+        random.setstate(saved)
 
 
 # --- Label Enforcement Tests ---

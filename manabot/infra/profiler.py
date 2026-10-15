@@ -35,7 +35,7 @@ import numpy as np
 class TimingNode:
     def __init__(
         self, label: str, parent: Optional["TimingNode"] = None, max_samples: int = 100
-    ):
+    ) -> None:
         self.label = label  # local label only
         self.parent = parent
         self.previous_total = 0.0  # accumulated time from previous runs
@@ -44,8 +44,11 @@ class TimingNode:
         self.count = 0  # number of times this node was entered
         self.durations: List[float] = []  # list to store durations of each call
         self.max_samples = max_samples  # maximum number of duration samples to keep
+        # Timing reservoir choices must never consume the learner's random stream.
+        # A fixed private seed also keeps sample selection reproducible by count.
+        self._random = random.Random(0)
 
-    def start(self):
+    def start(self) -> None:
         if self.start_time is not None:
             raise RuntimeError(f"Timer '{self.label}' is already running.")
         self.start_time = time.perf_counter()
@@ -59,7 +62,7 @@ class TimingNode:
 
         # Add duration using reservoir sampling to maintain max_samples limit
         if len(self.durations) >= self.max_samples:
-            idx = random.randint(0, self.count - 1)  # Use count for better distribution
+            idx = self._random.randint(0, self.count - 1)
             if idx < self.max_samples:  # Only replace if idx is within our sample array
                 self.durations[idx] = elapsed
         else:
