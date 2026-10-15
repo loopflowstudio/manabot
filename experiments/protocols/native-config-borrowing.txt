@@ -55,3 +55,12 @@ win cannot waive it. No tolerance or earlier failed gate is changed. A separate
 fixed-graph gradient diagnostic may be needed afterward; it is not an unlisted
 arm of this experiment. Verify immutable archive hash and every manifest entry
 before analysis, retain complete evidence, and confirm provider deletion.
+
+Setup amendment after run021: the initial setup installed Cargo in a subprocess,
+whose PATH exports did not reach the paired-build command. The first variant build
+failed before any training cell started. Its source, log, archive and all32unstarted
+cells remain evidence. Shared worker-gpu-env.sh is now sourced in the parent job
+shell and setup script. A separately identified cohort may test the fixed source
+under this unchanged32cell protocol after publication/readback and a new budget/
+provider preflight. Run021 is terminal and is never resubmitted; no deadline,
+workload, numerical tolerance, performance gate or total$50budget is changed.

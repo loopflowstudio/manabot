@@ -497,3 +497,24 @@ the selected binary. Local real-build checks matched complete collections and
 learned states across both variants and one/four workers; selector tests cover
 tampering, failed-build restoration and archive identity without Git. These are
 correctness checks, not GPU performance results.
+
+## Native comparison setup failure (run021)
+
+Run `df2ecc8af264`, source `2f5305c35463185d3e796152a7ce7648ca0d2cf7`, failed before
+any of its32training cells started. Setup installed Cargo and built the extension,
+but the first paired native build could not find Cargo. PATH was exported inside
+the setup subprocess and was absent from the later build process. This supplies
+no throughput or parity evidence; all32cells are retained as not started.
+
+The547-byte output archive and both internal manifest files were verified. The
+retained [build failure and receipts](data/worker-scaling/gpu-021) identify the
+failure directly. Provider deletion is confirmed; estimated whole rental cost
+is$0.054. Original total authorization remains$50, with about$6.35estimated rental
+usage. The failure is not retried under the same run identity.
+
+The fix gives setup and the parent job shell one shared environment script. A
+regression test starts from a stripped PATH and checks that Cargo is available
+both to subsequent parent commands and their children. Four native-selection/
+environment tests pass; shell syntax, Ruff and diff checks pass. The protocol's
+setup amendment requires a separately admitted fixed-source cohort and leaves
+all workload, deadline, performance and exact-state gates unchanged.

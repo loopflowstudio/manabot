@@ -1,6 +1,7 @@
 """Native experiment selection preserves loaded bytes and restores failed builds."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import zipfile
@@ -14,6 +15,32 @@ from experiments.runners.native_variants import (
     install,
     prepare,
 )
+
+
+def test_job_environment_exposes_cargo_to_later_commands(tmp_path: Path) -> None:
+    cargo_home = tmp_path / "cargo"
+    binary = cargo_home / "bin/cargo"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    script = (
+        Path(__file__).resolve().parents[2] / "scripts/benchmarks/worker-gpu-env.sh"
+    )
+    environment = dict(os.environ, PATH="/usr/bin:/bin", CARGO_HOME=str(cargo_home))
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; command -v cargo; bash -c "command -v cargo"',
+            "native-build-test",
+            str(script),
+        ],
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout.splitlines() == [str(binary), str(binary)]
 
 
 def test_archive_build_identity_requires_no_git_checkout(
