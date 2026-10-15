@@ -1204,20 +1204,22 @@ The [protocol](../../experiments/head-to-head.md#tournament-files-mtg-134-2026-1
 owns evidence limits. Grid evaluation runs from `18c6ef6f`; this rename starts
 no games and claims no strength. Publish for review; no merge authorization.
 
-## Complexity experiment design boundary (MTG-122, 2026-10-10)
+## Complexity experiment execution boundary (MTG-122, 2026-10-14)
 
-Jack Heart requested design only, separating simple-world learning from ETU-125
-mirror training and separately selectable curriculum transfer. No calibration,
-training, rental or allocation is authorized. The proposal holds representation,
-capacity and learning fixed across three pools; measures within-pool improvement
-against frozen initialization, greedy/random anchors and four deck-role cells;
-and preserves the product matchup. Raw cross-world scores cannot identify difficulty.
+Jack Heart authorized running and analyzing the three-pool comparison through
+public etude-sdk, adding ability-free vanilla creatures, and either 48 hours on
+Mini or $25 GPU spending. No local experiment execution; alternatives are not
+additive. Include calibration, evaluation, failures and cleanup in the selected
+cap, preserve existing cohorts, and freeze counts from remote calibration before
+scoring. The earlier design-only hold/local CPU proposal is superseded. No
+scientific cohort has launched. Catalog-size and curriculum contrasts stay separate.
 
-At `43c6e479`, authored content requires exact deck/sideboard pairs and the policy
-encoder hardcodes one catalog. Subset/mirror support needs explicit native-content,
-policy-catalog and checkpoint-setup admission, not name/ID bypasses. The collector
-alternates learner seats but keeps deck order fixed; cross-role deck/play-order
-balance needs explicit setup/reset support. A 64-transition stage with four streams
-collects 256 learner transitions per update, not 64. These are static source
-findings; native admission is unverified. ETU-118 retains promotion authority;
-existing cohorts and frozen evidence remain untouched.
+Hold capacity, representation and learning fixed across worlds; compare each
+against its own frozen initialization, greedy/random anchors and four deck-role
+cells. Raw cross-world scores cannot identify difficulty. Semantic token embeddings
+and shared GRU encoding are not independent learned card embeddings. Research
+content/schema admission remains required; never bypass IDs or world checks.
+The explicit authored arena matrix and SDK tracking/worker/evaluation adapters
+have bounded software proofs, not learning evidence. Four streams ×64 transitions
+collect 256 learner transitions/update. Product content/frozen evidence remain
+unchanged; ETU-118 owns promotion.

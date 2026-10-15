@@ -1,15 +1,17 @@
 # MTG-122 open decisions and assumptions
 
-2026-10-10 — Jack Heart authorized design only. Proposed cards, fixed catalog,
-four-stream cross-role assignments, three seeds and the 48-wall/64-process-hour
-CPU ceiling are reversible design choices, not an approved allocation. No resource
-is reserved and no waiting/automatic launch is authorized. Calibration and science
-require later explicit budgets; transfer remains separately selectable.
+2026-10-14 — Jack Heart authorized running and analyzing MTG-122 through the
+public Etude SDK. Jack Heart permits adding vanilla creatures without abilities.
+Scientific compute may use Mini for up to 48 hours OR GPU for up to $25;
+local experiment execution is forbidden. These alternatives are not additive.
+Calibration, setup, evaluation, failures and cleanup count inside the selected
+cap. Existing cohorts and evidence must not be displaced. Mini is the preferred
+route, subject to capacity/admission; no campaign has launched.
 
-Source inspection establishes that semantic subset/mirror admission and deck-order
-balancing are missing in this base. The design chooses shared owner extensions,
-not loader bypasses or a competing collector. Native proofs remain unavailable
-until the later software gate; no trained candidate or human-play proof exists.
+The earlier design-only hold and proposed local 48-wall/64-process-hour allocation
+are superseded. Exact content, source freeze, calibrated counts and remaining
+SDK deployment/reporting software must be admitted before scored execution.
+Catalog-size and curriculum comparisons remain separately scoped.
 
 ## Vanilla-only basic pool (2026-10-13)
 

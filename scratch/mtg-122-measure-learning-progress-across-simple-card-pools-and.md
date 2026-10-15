@@ -293,33 +293,34 @@ No hidden reduction from 100 total games to 25 per matrix cell. If that floor
 does not fit, the scientific plan is unadmitted; do not launch a smaller cohort
 and call it accepted evidence.
 
-### Hardware and budget — proposed, not reserved
+### Hardware and budget — authorized alternatives (2026-10-14)
 
-Choose a **local CPU run after approved laptop cohorts release their resource**,
-using configured hardware and host/evaluator leases. No Mini slot (ETU-125 owns
-its separate selection), no GPU rental and no displaced existing work. Proposed
-ceiling: **48 occupied wall hours and 64 additive process hours**, at most one
-single-thread learner and one single-thread evaluator. No dollar allocation;
-report dollars unavailable unless an explicit host price is frozen. This is a
-budget proposal only, not permission to wait/queue/start work automatically.
+Jack Heart authorized Mini for up to **48 hours**, or **$25 total GPU spending**,
+and prohibited local experiment runs. Select one route, not cumulative budgets.
+The earlier local CPU/64-process-hour proposal is withdrawn. Mini is preferred,
+subject to available capacity without displacing existing cohorts. Public Etude
+owns launch/tracking; exact source/native environment must be admitted remotely.
 
-Reserve process time before admission: calibration 1 h, scientific learning 18 h
-(2 h maximum per pool/seed), evaluation 36 h, setup/export/report/recovery 9 h.
-All attempts, failures, clean-play/replay and artifact transfer count. Wall and
-process ceilings both bind; overlap is not free. No carryover of another Task's
-budget. Future explicit authorization and resource availability are required.
+The selected ceiling includes setup, calibration, training, evaluation/replay,
+failed attempts, artifact publication and cleanup. Freeze reserves and a hard
+shutdown before admission; no automatic extension or replacement allocation.
+For Mini, also retain additive process costs so overlap is visible. For GPU,
+obtain a current provider quote and reserve non-training costs before renting;
+no dollar cap is converted to training hours using a historical price.
 
-Calibration would require separate authorization; its proposed bounded phase is: all three
-pools, a fourth seed 12250, same model/streams/rule, up to 100 updates per pool,
-reload/complete games in each matrix cell against both anchors, plus greedy vs
-random and same-anchor checks. Use at most one hour total; failures stay retained.
-No checkpoint from calibration enters scored science. Record setup/export/replay,
-per-update block timing and per-cell game time, not bare forward-pass rates.
+Bounded calibration: all three pools, fourth seed 12250, same model/streams/rule,
+up to 100 updates per pool, complete/reloaded games in every matrix cell against
+both anchors, plus anchor diagnostics. Reserve at most one hour of the selected
+allocation; calibration checkpoints never enter scientific scoring. Measure
+setup/export/replay, per-update blocks and per-cell game time on the selected
+machine. Proposed Mini learning caps remain two hours per pool/seed; evaluation
+and other reserves must fit the actual 48-hour critical path. GPU placement needs
+its own cost-derived plan, not a silently reused CPU timing projection.
 
 Resolve N = largest multiple of 100 no greater than 10,000 for which a 1.5×
 margin on the slowest measured per-update block cost fits every 2 h learner cap.
 Also require the full 36,000-game projection (1.5× slowest per-cell measured
-mean, with measured setup/replay costs) to fit the 36 h evaluation reservation,
+mean, with measured setup/replay costs) to fit the frozen evaluation reservation,
 and full projected critical path to fit 48 h. N < 1,000 or incomplete calibration
 means **budget-infeasible**, not a smaller silent launch. Timings extrapolate;
 they do not promise sustained throughput. Commit resolved counts, absolute
