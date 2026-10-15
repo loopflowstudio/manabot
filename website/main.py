@@ -1,4 +1,4 @@
-"""Academy landing site.
+"""Manabot landing site.
 
 A single leaf in the Sepia Etude language: parchment grounds, three inks,
 bronze display serif, one Mountain-red action, and the WUBRG weave as the
@@ -7,16 +7,20 @@ banner's one moment of full color. Copy lives in content.yaml.
 
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 from fasthtml.common import *
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
 from starlette.responses import PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-BASE_URL = "https://etude.gg"
-CANONICAL_HOST = "etude.gg"
+CANONICAL_HOST = "manabot.gg"
+BASE_URL = f"https://{CANONICAL_HOST}"
 REDIRECT_HOSTS = {
+    "www.manabot.gg",
+    "etude.gg",
     "www.etude.gg",
     "etudefantasia.com",
     "www.etudefantasia.com",
@@ -32,11 +36,23 @@ WUBRG = ["W", "U", "B", "R", "G"]
 class CanonicalHostMiddleware(BaseHTTPMiddleware):
     """301 the alternate domains onto the canonical host."""
 
-    async def dispatch(self, request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         host = request.headers.get("host", "").split(":")[0].lower()
         if host in REDIRECT_HOSTS:
+            # Starlette URL.path is decoded; retain encoded slashes in old links.
+            raw_path = request.scope.get("raw_path")
+            path = (
+                raw_path.decode("ascii")
+                if isinstance(raw_path, bytes)
+                else quote(request.url.path, safe="/")
+            )
             return RedirectResponse(
-                f"{BASE_URL}{request.url.path}", status_code=301
+                str(request.url.replace(
+                    scheme="https", netloc=CANONICAL_HOST, path=path
+                )),
+                status_code=301,
             )
         return await call_next(request)
 
@@ -51,7 +67,7 @@ app, rt = fast_app(
         Meta(charset="utf-8"),
         Meta(name="viewport", content="width=device-width, initial-scale=1"),
         Meta(name="description", content=DESCRIPTION),
-        Meta(property="og:title", content="Academy"),
+        Meta(property="og:title", content="Manabot"),
         Meta(property="og:description", content=DESCRIPTION),
         Meta(property="og:image", content=f"{BASE_URL}/static/board-developed.png"),
         Meta(property="og:url", content=BASE_URL + "/"),
@@ -99,7 +115,7 @@ def Masthead(hero):
         Weave(),
         Nav(
             Div(
-                Span("Academy", cls="brand"),
+                Span("Manabot", cls="brand"),
                 Pips(),
                 cls="brand-group",
             ),
@@ -110,7 +126,7 @@ def Masthead(hero):
                         href=hero["repo_url"],
                         target="_blank",
                         rel="noopener noreferrer",
-                        **{"aria-label": "Academy on GitHub (opens in new tab)"},
+                        **{"aria-label": "Manabot on GitHub (opens in new tab)"},
                     )
                 ),
                 Li(A("Play", href=hero["play_url"], cls="btn btn-primary")),
@@ -219,7 +235,7 @@ def Colophon(colophon):
     return Footer(
         Div(
             Div(
-                P("Academy", cls="colophon-title"),
+                P("Manabot", cls="colophon-title"),
                 P(colophon["identity"], cls="colophon-identity"),
                 P(
                     A(
@@ -234,7 +250,7 @@ def Colophon(colophon):
                 ),
             ),
             P(
-                "Academy is unofficial Fan Content permitted under the ",
+                "Manabot is unofficial Fan Content permitted under the ",
                 A(
                     "Wizards of the Coast Fan Content Policy",
                     href=colophon["fan_content_policy_url"],

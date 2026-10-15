@@ -14,7 +14,7 @@ from tests.remote.test_compile import SOURCE
 
 def test_public_source_api_identity(monkeypatch: pytest.MonkeyPatch) -> None:
     def response(request: Request, *, timeout: int) -> BytesIO:
-        assert "repos/loopflowstudio/fantasia/git/commits/" in request.full_url
+        assert "repos/loopflowstudio/manabot/git/commits/" in request.full_url
         return BytesIO(
             json.dumps({"sha": SOURCE.commit, "tree": {"sha": SOURCE.tree}}).encode()
         )
@@ -34,7 +34,7 @@ def test_rate_limit_falls_back_without_forwarding_credentials(
         assert command == [
             "/host/gh",
             "api",
-            f"repos/loopflowstudio/fantasia/git/commits/{SOURCE.commit}",
+            f"repos/loopflowstudio/manabot/git/commits/{SOURCE.commit}",
         ]
         assert "env" not in kwargs
         return subprocess.CompletedProcess(
@@ -73,6 +73,6 @@ def test_public_git_checks_lock_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="lock identity differs"):
         deploy._verify_public_source_git(SOURCE)
     assert any(
-        "https://github.com/loopflowstudio/fantasia.git" in command
+        "https://github.com/loopflowstudio/manabot.git" in command
         for command in commands
     )

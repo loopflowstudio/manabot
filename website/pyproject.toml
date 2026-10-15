@@ -1,7 +1,7 @@
 [project]
 name = "academy-website"
 version = "0.1.0"
-description = "Academy landing site"
+description = "Manabot landing site"
 requires-python = ">=3.12"
 dependencies = [
     "python-fasthtml>=0.6.0",

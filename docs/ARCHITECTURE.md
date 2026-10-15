@@ -1,4 +1,4 @@
-# Fantasia architecture
+# Manabot architecture
 
 This is the top-down architecture for Academy, manabot, and managym.
 It names the central data structures, assigns one owner to each kind of truth,

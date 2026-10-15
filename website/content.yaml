@@ -1,15 +1,15 @@
-# Academy website content
+# Manabot website content
 # Edit copy here — no need to touch main.py
 
 homepage:
   hero:
     tagline: "The study of a game that improvises."
     subline: >-
-      Academy is a way to study Magic: The Gathering. Play a trained
+      Manabot is a way to study Magic: The Gathering. Play a trained
       manabot in your browser, replay every decision, and train your own —
       the whole loop also runs on your laptop from one command.
-    play_url: "https://play.etude.gg"
-    repo_url: "https://github.com/loopflowstudio/fantasia"
+    play_url: "https://play.manabot.gg"
+    repo_url: "https://github.com/loopflowstudio/manabot"
 
   showcase:
     image: "/static/board-developed.png"
@@ -47,8 +47,8 @@ homepage:
       dependencies, builds the engine, starts backend and frontend, and opens
       the curated matchup against a trained manabot in your browser.
     code: |
-      git clone git@github.com:loopflowstudio/fantasia.git
-      cd fantasia
+      git clone git@github.com:loopflowstudio/manabot.git
+      cd manabot
       ./scripts/play
 
   train:
@@ -63,11 +63,11 @@ homepage:
   research:
     heading: "The research ledger"
     body: >-
-      Academy's research program is preregistered and reproducible: every
+      Manabot's research program is preregistered and reproducible: every
       experiment states its prediction, budget, and kill criteria before
       running, and negative results are recorded alongside positive ones.
     link_label: "Read the ledger on GitHub"
-    link_url: "https://github.com/loopflowstudio/fantasia/tree/main/experiments"
+    link_url: "https://github.com/loopflowstudio/manabot/tree/main/experiments"
 
 colophon:
   identity: >-
@@ -76,7 +76,7 @@ colophon:
   built_by: "Built by Loopflow Studio."
   built_by_url: "https://loopflow.studio"
   fan_content: >-
-    Academy is unofficial Fan Content permitted under the Wizards of
+    Manabot is unofficial Fan Content permitted under the Wizards of
     the Coast Fan Content Policy. Card art and mana symbols are © Wizards of
     the Coast. Not approved or endorsed by Wizards.
   fan_content_policy_url: "https://company.wizards.com/en/legal/fancontentpolicy"

@@ -67,6 +67,8 @@ Style and history policy:
 Do this first so every later document references final names and URLs.
 
 - **[landed]** Rename the GitHub repository → `loopflowstudio/etude`
+  (historical name; this repository is now `loopflowstudio/manabot`, as of
+  2026-10-15. The `etude` name now belongs to the separate public client.)
   (redirects preserved; clone URLs updated in `f57cf63`).
 - **[landed]** Rename the local root directory → `~/src/etude`.
 - **[landed]** README opens with Etude Fantasia and introduces the naming

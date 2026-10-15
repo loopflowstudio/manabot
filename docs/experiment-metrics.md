@@ -239,7 +239,7 @@ this is not permission to execute a newer recipe through an older trainer.
 Numerical diagnostics live below the playing-strength story. Gradient norms,
 rounded legal zeros, skipped steps and measured parameter movement describe
 optimizer behavior, not competence. Missing cadence samples stay unavailable.
-See the [numerical health contract](https://github.com/loopflowstudio/fantasia/blob/main/docs/numerical-health.md)
+See the [numerical health contract](https://github.com/loopflowstudio/manabot/blob/main/docs/numerical-health.md)
 for units, sampling and failure investigation. A saturated all-win bootstrap may
 also produce a zero-width interval; that is an empirical resampling limitation,
 not certainty of winning future games.
