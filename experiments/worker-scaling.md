@@ -224,4 +224,62 @@ sampling. Normal learning retains fresh differentiable catalog computation.
 tensor inputs, with paired complete TrainingRuns and exact raw/EMA/Adam witnesses.
 See the [prospective preparation protocol](protocols/inference-preparation.txt).
 The candidate passes local forward, gradient, rollout, recovery and whole-training
-parity tests; its GPU performance and production adoption remain unproven.
+parity tests. The GPU comparison below rejects adoption for ordinary training:
+its complete-training speed target and strict learned-state parity gate failed.
+
+## Scoped preparation result (run017)
+
+On one RTX 5090 / EPYC 7543 host with a 14.375-core CPU quota, six interleaved
+trials compared ordinary inputs with scoped preparation. All 18 worker cases
+completed and all 1,152 actor results matched exactly across both modes.
+
+| Active workers | Reference rows/s | Prepared rows/s |
+|---|---:|---:|
+| 1 | 944 | 1,428 |
+| 2 | 1,203 | 2,150 |
+| 4 | 1,238 | 2,283 |
+
+Four-worker serving improved **1.844x**, passing its 1.5x timing target. Median
+collection duration fell from 26.465 to 14.353 seconds. Peak summed process RSS
+remained below 7.0 GiB. This is a measured small-request serving benefit, not a
+complete-training benefit or a single-GPU throughput ceiling.
+
+All twelve ordinary three-update TrainingRuns completed, but their medians were:
+
+| Streams | Reference seconds | Prepared seconds | Reference rows/s | Prepared rows/s |
+|---|---:|---:|---:|---:|
+| 512 | 6.282 | 6.324 | 1,956 | 1,943 |
+| 4,096 | 24.601 | 24.401 | 3,996 | 4,029 |
+
+The large case improved only **0.82%**, missing the prospective 10% target; the
+small case took 0.68% longer. All samples remain included, including the first
+512-stream reference run at 8.820 seconds. Reference large-case times were
+23.510 / 24.601 / 25.136 seconds; prepared times were 23.963 / 24.671 / 24.401.
+Three timing repeats cannot distinguish this small change from run variation.
+
+The strict raw/EMA/Adam/diagnostic parity gate also failed. At 4,096 streams,
+all raw and EMA parameters and scientific diagnostics matched exactly; one
+prepared repetition differed in one Adam moment element by 3.55e-15. At 512
+streams, the first reference repetition differed from later references in raw
+parameters (maximum absolute difference 2.38e-7), EMA, Adam state and diagnostics.
+One prepared repetition also had four differing Adam elements (maximum 1.82e-12)
+despite matching raw/EMA parameters. This establishes variation within a mode;
+it does not identify its cause or prove the intervention harmless. The original
+exact gate remains failed, with no relaxed tolerance or excluded repetition.
+
+The decision is to retain scoped preparation as an experimental serving result,
+not accept the production collector change on these results. Small-request
+serving and ordinary large-batch collection need separate bottleneck models.
+The next discriminating measurement is phase attribution of ordinary collection
+at the actual 512/4,096-stream shapes, including inference, observation assembly,
+transfers, sampling and synchronization. Existing service traces do not answer
+that question. Larger requests or coalescing remain possible interventions,
+not measured training wins. No simulation rewrite is justified by this result.
+
+Run `71bfad424b47` used published source
+`61e7149a707940e56eece42836cd912a6be4247e`. The complete 32.6 MB output archive and
+all 783 internal manifest files were verified. Structured raw receipts, the
+post-hoc state-difference audit and all timing samples are retained in
+[data/worker-scaling/gpu-017](data/worker-scaling/gpu-017). The provider confirmed
+deletion; estimated whole rental cost was $0.307. This does not establish playing
+strength or clear the full single-GPU training bottleneck.
