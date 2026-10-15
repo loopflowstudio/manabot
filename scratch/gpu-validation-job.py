@@ -25,10 +25,10 @@ def runs() -> Job:
                         source, "sha256"
                     ).hexdigest()
     return Job(
-        name="fantasia-gpu-serving-h100-007",
+        name="fantasia-gpu-staging-h100-008",
         repo=str(Path.cwd()),
         revision="HEAD",
-        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment serving-confirm --expected-gpu "NVIDIA H100 80GB HBM3" --root "$ETUDE_OUTPUT_DIR/evidence"',
+        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment staging --expected-gpu "NVIDIA H100 80GB HBM3" --root "$ETUDE_OUTPUT_DIR/evidence"',
         config=json.dumps(
             {
                 "recipe": json.loads(

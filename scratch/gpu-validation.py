@@ -412,6 +412,7 @@ def main() -> None:
             "highend",
             "serving",
             "serving-confirm",
+            "staging",
         ),
         default="baseline",
     )
@@ -427,7 +428,14 @@ def main() -> None:
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    if args.experiment in ("catalog", "scale", "highend", "serving", "serving-confirm"):
+    if args.experiment in (
+        "catalog",
+        "scale",
+        "highend",
+        "serving",
+        "serving-confirm",
+        "staging",
+    ):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
             path = Path(name)
@@ -491,9 +499,29 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
-        if args.experiment in ("highend", "serving", "serving-confirm"):
+        if args.experiment in ("highend", "serving", "serving-confirm", "staging"):
             if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
                 raise RuntimeError("frozen CUDA input admission failed")
+            if args.experiment == "staging":
+                for actors in (16, 128):
+                    for maximum in (256, 1024):
+                        name = f"staging-a{actors}-b{maximum}"
+                        run(
+                            name,
+                            [
+                                sys.executable,
+                                "scratch/staging-serving-probe.py",
+                                "--root",
+                                str(root),
+                                "--out",
+                                str(root / name),
+                                "--actors",
+                                str(actors),
+                                "--max-batch",
+                                str(maximum),
+                            ],
+                        )
+                return
             models = [
                 Cell(capacity="w64-d1", kind="model", batch=b)
                 for b in (1, 4, 16, 64, 256, 1024)

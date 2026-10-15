@@ -274,6 +274,12 @@ class CudaBackend:
         self.observations = observations
         self.available = len(observations["actions_valid"])
 
+    def materialize(self, indices: torch.Tensor) -> dict[str, torch.Tensor]:
+        return {k: v[indices].contiguous() for k, v in self.observations.items()}
+
+    def upload(self, host: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        return {k: v.to("cuda") for k, v in host.items()}
+
     def __call__(
         self, requests: tuple[LiveRequest, ...], padded: int
     ) -> ServiceReceipt:
@@ -287,9 +293,9 @@ class CudaBackend:
         if padded > used:
             indices.append(torch.arange(padded - used) % self.available)
         joined = torch.cat(indices)
-        host = {k: v[joined].contiguous() for k, v in self.observations.items()}
+        host = self.materialize(joined)
         prepared = time.perf_counter()
-        device = {k: v.to("cuda") for k, v in host.items()}
+        device = self.upload(host)
         torch.cuda.synchronize()
         uploaded = time.perf_counter()
         with torch.inference_mode():
@@ -336,6 +342,45 @@ class CudaBackend:
             logits.numel() * logits.element_size()
             + values.numel() * values.element_size(),
         )
+
+
+class StagedCudaBackend(CudaBackend):
+    """One worker's reusable buffers; each call still materializes current rows.
+
+    CudaBackend synchronizes uploads, inference and CPU delivery before returning,
+    so no consumer can retain an outstanding read when the next call reuses input
+    storage. This contract is inference-only and does not admit retained autograd.
+    """
+
+    def __init__(
+        self, agent: Agent, observations: dict[str, torch.Tensor], maximum: int
+    ) -> None:
+        super().__init__(agent, observations)
+        if maximum < 1:
+            raise ValueError("positive staging capacity required")
+        self.maximum = maximum
+        self.host_buffers = {
+            k: torch.empty((maximum, *v.shape[1:]), dtype=v.dtype, pin_memory=True)
+            for k, v in observations.items()
+        }
+        self.device_buffers = {
+            k: torch.empty_like(v, device="cuda") for k, v in self.host_buffers.items()
+        }
+
+    def materialize(self, indices: torch.Tensor) -> dict[str, torch.Tensor]:
+        count = len(indices)
+        if indices.ndim != 1 or not 0 < count <= self.maximum:
+            raise ValueError("request exceeds fixed staging capacity")
+        host = {k: v[:count] for k, v in self.host_buffers.items()}
+        for key, source in self.observations.items():
+            torch.index_select(source, 0, indices, out=host[key])
+        return host
+
+    def upload(self, host: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        device = {k: self.device_buffers[k][: len(v)] for k, v in host.items()}
+        for key, source in host.items():
+            device[key].copy_(source, non_blocking=True)
+        return device
 
 
 def check() -> None:

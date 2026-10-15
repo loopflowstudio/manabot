@@ -1158,8 +1158,8 @@
     },
     {
       "path": "scratch/physical-serving-probe.py",
-      "bytes": 20444,
-      "sha256": "a13c4f53ddeec170a1eed3461f7f65e991ebe0d60e2f3fdd95d3c9fe54db0f3f"
+      "bytes": 22366,
+      "sha256": "d31dcdc1bdb5e169e67290e435acf29c6843db43433b3d8ec6b01ac5c2e37e33"
     },
     {
       "path": "scratch/serving-validation-protocol.txt",
@@ -1488,13 +1488,13 @@
     },
     {
       "path": "scratch/gpu-validation.py",
-      "bytes": 27002,
-      "sha256": "277ce9f2155cfea283f342c931bb1f3d5557aa26ab449d7891bb93635477080b"
+      "bytes": 27946,
+      "sha256": "9676d55c7801cb34954ba009a500855dea26b06bc118c98df114e05c09757605"
     },
     {
       "path": "scratch/gpu-validation-job.py",
-      "bytes": 1482,
-      "sha256": "2c80b3e36d9be2821e5430870b0193f53f77c11164e639f7fd62aef10b0c25e1"
+      "bytes": 1474,
+      "sha256": "026094ce10234d52c1e4d6600d4662d071765e85cc7c09149a6565b2d27e04cd"
     },
     {
       "path": "scratch/serving-calibration-protocol.txt",
@@ -1995,6 +1995,51 @@
       "path": "scratch/accelerator-probes/fe3ac465f6981b5447142df99ba7ec50a6799f5955c2b61e0ff9e16bb41b2be1.source.txt",
       "bytes": 23542,
       "sha256": "fe3ac465f6981b5447142df99ba7ec50a6799f5955c2b61e0ff9e16bb41b2be1"
+    },
+    {
+      "path": "scratch/staging-serving-probe.py",
+      "bytes": 10882,
+      "sha256": "b73509fd4c2533f32ba9a7d8e6cc8ce5ff9bfeaf41903c82d969ec5d566ace79"
+    },
+    {
+      "path": "scratch/staging-validation-protocol.txt",
+      "bytes": 3891,
+      "sha256": "5cccd57b7833e1bf34facc17ff1409e6800a93ddd966de5fcf96b219a3389133"
+    },
+    {
+      "path": "scratch/cpu-probes/staging-local-preflight.receipt.json",
+      "bytes": 1072,
+      "sha256": "3de8f61999c168a195f7a7353fbd3c7ed842472380e936ea1ab3381285b082fa"
+    },
+    {
+      "path": "scratch/cpu-probes/staging-local-preflight.stdout.log",
+      "bytes": 135,
+      "sha256": "04078b1a0e854f6a85529fbaa88b1dac90cac8853df4497622a915425cd57e0a"
+    },
+    {
+      "path": "scratch/cpu-probes/staging-local-preflight.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/accelerator-probes/d31dcdc1bdb5e169e67290e435acf29c6843db43433b3d8ec6b01ac5c2e37e33.source.txt",
+      "bytes": 22366,
+      "sha256": "d31dcdc1bdb5e169e67290e435acf29c6843db43433b3d8ec6b01ac5c2e37e33"
+    },
+    {
+      "path": "scratch/accelerator-probes/b73509fd4c2533f32ba9a7d8e6cc8ce5ff9bfeaf41903c82d969ec5d566ace79.source.txt",
+      "bytes": 10882,
+      "sha256": "b73509fd4c2533f32ba9a7d8e6cc8ce5ff9bfeaf41903c82d969ec5d566ace79"
+    },
+    {
+      "path": "scratch/accelerator-probes/9676d55c7801cb34954ba009a500855dea26b06bc118c98df114e05c09757605.source.txt",
+      "bytes": 27946,
+      "sha256": "9676d55c7801cb34954ba009a500855dea26b06bc118c98df114e05c09757605"
+    },
+    {
+      "path": "scratch/accelerator-probes/026094ce10234d52c1e4d6600d4662d071765e85cc7c09149a6565b2d27e04cd.source.txt",
+      "bytes": 1474,
+      "sha256": "026094ce10234d52c1e4d6600d4662d071765e85cc7c09149a6565b2d27e04cd"
     }
   ]
 }

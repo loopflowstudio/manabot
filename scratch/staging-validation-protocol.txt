@@ -1,0 +1,55 @@
+Reusable serving buffers — paired GPU prototype, 2026-10-15
+
+Previous turn integrated prospectively checked complete service into both laptop
+CLIs. It preserved9physical predictions and27L4 outcomes;4096actor/64server sweep
+completed in3.5065s/~302MB. Full-cost4096global-stream one-server model predicts8874
+rows/s; doubling collector CPU changes0.061%. GPU-side serving preparation remains
+a measured target, not proof that a production collector/trainer will speed up.
+
+One H10080GB HBM3, quote<=4.10/hour, job30min/$3, cohort$4,maxoneattempt. Seven prior
+pods must be absent. Original$50budget; conservative charges$2.82 plus$5ancillary
+reserve leave$42.18. Reserve$4, leaving$38.18 while live. Freeze/verify exact source
+before rent. Setup900s, measurements600s, child90s, live repeat25s, unchanged. No
+retry/cap relaxation; keep all failures and confirm provider deletion/whole-rental
+cost. The last692s post-job billing interval had unestablished cause: budget from
+whole rental, not job-status cost. Keep the owned wait process under macOS
+caffeinate -i (no persistent settings); provider limits still cover disconnection.
+
+Prototype only in the existing physical-serving research backend. Reference uses
+advanced CPU indexing and per-field .to(cuda). Candidate uses preallocated pinned
+host tensors, torch.index_select(...,out=...), preallocated device tensors and
+nonblocking copy_, then the same synchronization, Agent, CPU outputs and hashes.
+Every batch materializes current CPU observations and uploads them; never preload
+or cache the immutable observation pool on GPU. GPU input buffers may be reused
+only after the preceding inference/output synchronization. No learning/cache/
+precision/game rules changes. One CUDA worker still owns service execution.
+
+Four cases: actors16/128 × maxbatch256/1024, collector slots=min(actors,8), same
+59request/1099decision tape, virtual host delays, FIFO250us. Reference/candidate
+order ABBA for16/256 and128/1024; BAAB for16/1024 and128/256. Two observations of
+each backend/case, two warmups each. Keep all samples and phase durations. Setup
+allocation is measured separately; report persistent pinned/device bytes and total
+peak with both backends coexisting, not a misleading per-variant memory ratio.
+
+Before live timing, compare identical fixed ragged request groups at supported
+sizes1/4/16/64/256/1024, with same grouping/model/weights and ABBA output witnesses.
+Require every request/input-index/output hash exact (reference/reference included).
+Also compare every CPU and copied CUDA field exactly for alternating row indices,
+verify pinned ownership and stable buffer pointers across sizes/calls, and reject
+oversized staging requests. These checks run on the GPU, outside live timing but
+inside child budget. A parity failure ends that cell; no new tolerance is allowed.
+Live grouping may differ as service changes: retain cross-variant per-request hash
+differences without claiming exact trajectories or optimizer equivalence.
+
+Prediction: >=1.15× median live completion gain at both128actor cases; neither16actor
+case regresses>5%. GPU/host, order effects, batch mix, prepare/H2D/forward/validation
+and scheduler delays separate explanations. Do not silently retune cases. Any speed
+gain remains specific to serving; ordinary collection/learning validation is still
+required before claiming training improvement.
+
+No fresh model-only sweep is necessary for this paired comparison; retain exact
+frozen observation input and current host/driver identity. Four fresh child processes
+share no allocated buffers. Local preflight is syntax plus the existing fake-backend
+scheduler check only, no local ML; cap2seconds within the remaining2.055660498s of
+20second calibration slice and original300second conservative total. If it times out,
+retain the failure and rely on explicit remote correctness gates, not a cap increase.
