@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
+from etude.track.read import read_all
+from etude.track.records import Step
+from etude.track.run import init
 import pytest
 import torch
 
@@ -16,6 +19,7 @@ from manabot.model.agent import Agent
 from manabot.sim.distill import save_bc_checkpoint
 from manabot.sim.teacher1_evidence import runtime_fingerprints
 from manabot.training import monitor_evaluation as monitor
+from manabot.training.etude_evaluation import publish_saved_evaluation
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitoring import default_panels, evaluation_dashboard
 
@@ -374,6 +378,20 @@ def test_real_arena_checkpoint_outcomes(
         assert all(
             (tmp_path / "arena" / row.trace_path).is_file() for row in result.rows
         )
+        tracker = init(
+            experiment="real-arena-publication",
+            clocks=[Step("updates", "updates")],
+            directory=tmp_path / "tracking",
+            strict=True,
+        )
+        try:
+            publish_saved_evaluation(tracker, tmp_path / "arena/monitor.json")
+        finally:
+            tracker.finish()
+        evaluation = read_all(tmp_path / "tracking")[0].evaluations[0]
+        assert evaluation.subject.sha256 == result.artifact["sha256"]
+        assert evaluation.state == ("failed" if max_commands == 1 else "settled")
+        assert evaluation.episodes == len(result.rows)
     finally:
         torch.set_num_threads(previous_threads)
 

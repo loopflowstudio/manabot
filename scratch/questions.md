@@ -157,3 +157,23 @@ games through the explicit matrix with replay. Bounded fixtures establish the
 shared path, not learning or the proposed simple-world cohort. Etude evaluation
 records, research dashboard role labels, simple native/schema content and the
 actual campaign remain unfinished; compute/vanilla decisions remain requested.
+
+
+## Etude evaluation publication (2026-10-14)
+
+The public SDK publisher consumes retained monitor.json, verifies checkpoint
+bytes, recomputes cohort admission/whole-deal intervals, and records whitelisted
+outcomes with coordinates. Incomplete cohorts become failed evaluations without
+strength estimates; n counts deals, never training seeds. Original arena/replay
+receipts remain authority. This does not certify untrusted historical replay,
+archive local artifacts remotely, or import pre-manifest admission failures.
+Each publication key includes the source result digest and a unique publication
+suffix so SDK episode files are never appended twice under the same key. Reports
+must deduplicate publications by evidence digest, not count them as new attempts.
+
+Check: 23 publisher/monitoring checks passed, including actual checkpoint arena
+results and deliberate incomplete games; three focused publisher checks passed
+after the final key change. Source-byte changes and fabricated summary estimates
+are rejected. No scientific cohort launched. Remaining work includes SDK campaign
+orchestration, evidence-deduplicated research reporting, native/simple schema
+admission and calibration after the pending vanilla/compute decisions.

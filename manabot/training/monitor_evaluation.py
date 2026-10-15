@@ -260,6 +260,10 @@ class MonitorResult(Strict):
     error: str | None = None
     evaluation_identities: dict[str, JsonValue] = {}
 
+    def validate_cohort(self) -> None:
+        """Recompute completeness and paired-deal intervals from retained rows."""
+        _summarize(self)
+
     @model_validator(mode="after")
     def purpose_matches_protocol(self) -> "MonitorResult":
         if self.purpose != self.protocol.result_purpose:
