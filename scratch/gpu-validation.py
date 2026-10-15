@@ -6,6 +6,8 @@ and packages returned evidence. This research driver changes no training rule.
 
 import argparse
 from collections import Counter
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, nullcontext
 from dataclasses import fields
 import hashlib
 import json
@@ -23,7 +25,7 @@ from pydantic import BaseModel
 import torch
 
 from experiments.runners.cuda_collection_profile import Trace, busy_microseconds
-from experiments.runners.cuda_performance import Cell
+from experiments.runners.cuda_performance import Cell, child as capacity_child
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import RewardHypers
@@ -32,6 +34,7 @@ from manabot.model.world import checkpoint_world
 from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRegime
+from manabot.training.source_bundle import SourceBundle, source_commit
 import managym
 
 
@@ -60,7 +63,9 @@ def digest_batch(batch: RolloutBatch) -> str:
     return digest.hexdigest()
 
 
-def collector(recipe: TrainingRegime, streams: int, seed: int) -> SeatRoutedCollector:
+def collector(
+    recipe: TrainingRegime, streams: int, seed: int, device: str = "cuda"
+) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         ObservationSpace(recipe.observation),
         Match(recipe.match),
@@ -68,9 +73,94 @@ def collector(recipe: TrainingRegime, streams: int, seed: int) -> SeatRoutedColl
         num_envs=streams,
         seed=seed,
         opponent_mode="self",
-        device="cuda",
+        device=device,
         recovery_max_microsteps=1_000_000,
     )
+
+
+@contextmanager
+def catalog_session(agent: Agent) -> Iterator[None]:
+    """Research-only cache lifetime: one collection, no gradients or weight changes."""
+    encoder = agent.semantic_cards
+    if encoder is None:
+        raise ValueError("catalog experiment requires semantic inputs")
+    original = encoder.definitions
+    versions = tuple(p._version for p in agent.parameters())
+    training = agent.training
+    value: torch.Tensor | None = None
+
+    def definitions() -> torch.Tensor:
+        nonlocal value
+        if torch.is_grad_enabled():
+            raise ValueError("cached inference reached a gradient-enabled forward")
+        if agent.training != training or versions != tuple(
+            p._version for p in agent.parameters()
+        ):
+            raise ValueError("policy changed during frozen collection")
+        if value is None:
+            value = original()
+        return value
+
+    with patch.object(encoder, "definitions", definitions):
+        yield
+
+
+def paired_collection(args: argparse.Namespace, recipe: TrainingRegime) -> None:
+    torch.manual_seed(args.seed)
+    agent = (
+        Agent(ObservationSpace(recipe.observation), recipe.agent).to(args.device).eval()
+    )
+    collector(recipe, args.streams, args.seed, args.device).collect(agent, 2)
+    order = (False, True, True, False) if args.seed % 2 else (True, False, False, True)
+    reference: tuple[str, str, str] | None = None
+    samples: list[dict[str, object]] = []
+    for cached in order:
+        env = collector(recipe, args.streams, args.seed, args.device)
+        if args.device == "cuda":
+            torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
+        started = time.perf_counter()
+        with catalog_session(agent) if cached else nullcontext():
+            batch = env.collect(agent, args.transitions // args.streams)
+        if args.device == "cuda":
+            torch.cuda.synchronize()
+        seconds = time.perf_counter() - started
+        identity = (
+            digest_batch(batch),
+            hashlib.sha256(json.dumps(env._journal).encode()).hexdigest(),
+            hashlib.sha256(
+                json.dumps(env._env.current_game_seeds()).encode()
+            ).hexdigest(),
+        )
+        if reference is not None and reference != identity:
+            raise ValueError("reference/cache trajectory parity failed")
+        reference = identity
+        samples.append(
+            {
+                "cached": cached,
+                "seconds": seconds,
+                "decisions": env.stats.micro_steps,
+                "learner_transitions": env.stats.learner_transitions,
+                "games": env.stats.games,
+                "truncations": env.stats.truncations,
+                "batch_sha256": identity[0],
+                "journal_sha256": identity[1],
+                "game_seeds_sha256": identity[2],
+                "peak_allocated_bytes": torch.cuda.max_memory_allocated()
+                if args.device == "cuda"
+                else None,
+            }
+        )
+        atomic_json(
+            args.out / "result.json",
+            {
+                "streams": args.streams,
+                "seed": args.seed,
+                "device": args.device,
+                "warmup_learner_steps": 2,
+                "samples": samples,
+            },
+        )
 
 
 def collection(
@@ -141,7 +231,9 @@ def collection(
         windows = [
             e
             for e in trace.traceEvents
-            if e.name == "validation/collection" and e.ph == "X"
+            if e.name == "validation/collection"
+            and e.ph == "X"
+            and e.cat == "user_annotation"
         ]
         atomic_json(
             out / "profile.json",
@@ -166,16 +258,45 @@ def collection(
 def child(args: argparse.Namespace) -> None:
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
-    if not torch.cuda.is_available():
+    if args.device == "cuda" and not torch.cuda.is_available():
         raise ValueError("CUDA unavailable; no CPU fallback")
-    if torch.cuda.get_device_name() != args.expected_gpu:
+    if args.device == "cuda" and torch.cuda.get_device_name() != args.expected_gpu:
         raise ValueError("assigned GPU differs from the frozen validation target")
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     recipe = TrainingRegime.model_validate_json(
         (args.root / "baseline.json").read_text()
     )
-    if args.child == "inputs":
+    if args.child == "paired":
+        paired_collection(args, recipe)
+    elif args.child == "loop":
+        cell = Cell(capacity="w64-d1", kind="loop", batch=512, streams=args.streams)
+        (args.root / cell.name).mkdir()
+        if args.cached:
+            original = SeatRoutedCollector.collect
+
+            def collect(
+                self: SeatRoutedCollector,
+                agent: Agent,
+                num_steps: int,
+                *,
+                deadline_monotonic: float | None = None,
+                check: Callable[[], None] | None = None,
+            ) -> RolloutBatch:
+                with catalog_session(agent):
+                    return original(
+                        self,
+                        agent,
+                        num_steps,
+                        deadline_monotonic=deadline_monotonic,
+                        check=check,
+                    )
+
+            with patch.object(SeatRoutedCollector, "collect", collect):
+                capacity_child(args.root, cell)
+        else:
+            capacity_child(args.root, cell)
+    elif args.child == "inputs":
         torch.manual_seed(10831)
         agent = (
             Agent(ObservationSpace(recipe.observation), recipe.agent).to("cuda").eval()
@@ -216,27 +337,48 @@ def child(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--child", choices=("inputs", "collect", "profile"))
+    parser.add_argument(
+        "--child", choices=("inputs", "collect", "profile", "paired", "loop")
+    )
     parser.add_argument("--out", type=Path)
     parser.add_argument("--streams", type=int, default=64)
     parser.add_argument("--seed", type=int, default=10831)
     parser.add_argument("--expected-gpu", default="NVIDIA L4")
+    parser.add_argument(
+        "--experiment", choices=("baseline", "catalog"), default="baseline"
+    )
+    parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
+    parser.add_argument("--transitions", type=int, default=4096)
+    parser.add_argument("--cached", action="store_true")
     args = parser.parse_args()
     if args.child:
         child(args)
         return
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
-    recipe = TrainingRegime.model_validate_json(
-        Path(os.environ["ETUDE_CONFIG"]).read_text()
-    )
+    config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
+    if args.experiment == "catalog":
+        bundle = SourceBundle.model_validate(config["source"])
+        for name, digest in bundle.files.items():
+            path = Path(name)
+            if path.is_absolute() or ".." in path.parts or file_sha256(path) != digest:
+                raise ValueError(f"prepared source mismatch: {name}")
+        for path in Path("managym").glob("*.so"):
+            bundle.files[str(path)] = file_sha256(path)
+        atomic_json(Path(".manabot-source.json"), bundle.model_dump(mode="json"))
+        if source_commit() != bundle.commit:
+            raise ValueError("source owner rejected exact archive identity")
+        atomic_json(root / "source-bundle.json", bundle.model_dump(mode="json"))
+        recipe = TrainingRegime.model_validate(config["recipe"])
+    else:
+        recipe = TrainingRegime.model_validate(config)
     atomic_json(root / "baseline.json", recipe.model_dump(mode="json"))
     attempts: list[Attempt] = []
     deadline = time.monotonic() + 600
 
     def run(name: str, command: list[str]) -> bool:
         out = root / name
-        out.mkdir(exist_ok=False)
+        out.mkdir(exist_ok=True)
         attempt = Attempt(name=name, command=command)
         attempts.append(attempt)
         started = time.monotonic()
@@ -279,6 +421,46 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
+        if args.experiment == "catalog":
+            for seed in (10831, 10832, 10833):
+                for streams in (64, 256):
+                    name = f"paired-s{streams}-seed{seed}"
+                    run(
+                        name,
+                        [
+                            *python,
+                            "--child",
+                            "paired",
+                            "--out",
+                            str(root / name),
+                            "--streams",
+                            str(streams),
+                            "--seed",
+                            str(seed),
+                        ],
+                    )
+            for streams in (16, 64):
+                for cached in (False, True):
+                    name = f"loop-s{streams}-{'cached' if cached else 'reference'}"
+                    nested = root / name
+                    nested.mkdir()
+                    atomic_json(
+                        nested / "baseline.json", recipe.model_dump(mode="json")
+                    )
+                    run(
+                        name,
+                        [
+                            *python,
+                            "--root",
+                            str(nested),
+                            "--child",
+                            "loop",
+                            "--streams",
+                            str(streams),
+                            *(["--cached"] if cached else []),
+                        ],
+                    )
+            return
         if not run("inputs", [*python, "--child", "inputs"]):
             raise RuntimeError("CUDA input admission failed")
         model_cells = [

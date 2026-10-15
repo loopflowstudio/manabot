@@ -89,3 +89,68 @@ full SHA-256 readback before renting. A local transport adapter may copy that
 verified object server-side to Etude's session-specific source key; bytes, Git
 source identity, worker execution and cleanup remain owned by the existing
 launcher. No changes to the Etude checkout or credential scope.
+
+Second source commit `724da6e1ab87381c65d1e85ed54cb4176df25ed5` was prepared
+and fully read back before renting (102.352 seconds). SHA-256 of its tar is
+`b6714a4476a4b98de52b74d0fce0ee901c6059dc89ded3e44340b5eb8e50204b`.
+Server-side copy to the new session key succeeded and matched size/hash metadata.
+Run `a7df3b8d1a77`, session `de4b7799f228`, pod `lhu3ok84ordvqw` is the active
+second attempt; worker start observed at 2026-10-15 02:34:42 UTC. Its observation
+process is the exact run's `etude wait`, not a new submission. Use the CLI adapter
+with `uv run --no-sync --with /Users/jack/src/etude/client --with boto3 python`
+under Doppler etude/prd. Logs are retained locally as `observed-002.log`.
+
+## Second allocation findings and next discriminating probe
+
+All 53 manifest entries verified on retrieval. Both exact provider pod IDs are
+absent; second machine estimated $0.08, total rental estimate $0.15. Reserve
+$0.25 conservatively plus the separate $5 ancillary reserve. Raw small records
+and failures are in `gpu-probes/l4-002`; the full archive is retained under
+`.runs/gpu-validation/result-002` (archive SHA in the portable summary).
+
+Width64 inference median rates at batches1/4/16/64/256/1024 were
+314/1,314/5,151/15,071/26,316/28,064 observations/s. Batch256 versus64 is1.75x,
+meeting the preregistered20% prediction. Width384/depth8 is942/934 at64/256:
+larger batching is not universally helpful. Repeated whole collection across
+three seeds delivered972–1,210 decisions/s at16streams,2,269–2,707 at64, and
+3,785–4,970 at256. All nine exact same-seed rollout comparisons passed, with
+no truncations. 256stream traces ended after16 learner steps and1–2 games;
+these short trajectories are not steady mature-policy traffic.
+
+The sole host profile interval is1.389588s, with0.207562s kernel/copy union
+(14.94%),68,114 kernels and4,955 copies. Three same-named GPU annotations are
+nested duplicate windows, not independent repetitions. CPU GRU inclusive time
+was0.2447s over119forwards; launch runtime0.5246s, overlapping those operations.
+Busy intervals do not measure SM occupancy. CPU catalog dominance must not be
+transferred quantitatively to GPU. Current attention length is202, unlike the
+historical203-slot curves, so old rates remain historical sensitivity evidence.
+
+Both actual-learning cells failed before any learning because a Git archive
+has no`.git`; `source_commit()` supports a verified`.manabot-source.json` bundle.
+This is source admission failure, not a measured learning rate. Preserve both
+failures and use the existing source-bundle contract on the next run.
+
+Third allocation preregistration: same L4/pool/price and caps, cohort
+`l4-validation-003`, maxoneattempt, no automatic retries. Compare reference and
+research-only catalog reuse within a frozen-policy collection call. Three seeds,
+64/256streams,4096learnertransitions, four paired measurements in ABBA/BAAB
+order after one short warmup. Cache first computation is included; destroy it
+before learning. Require exact rollout, journal and reset-seed equality and
+unchanged parameter versions. Never supply cached values with gradients enabled.
+Prediction: at least15% median collection gain at64streams, smaller relative gain
+at256. Losing that prediction is valid evidence. This does not select a production
+cache API or invalidate-on-update design.
+
+Rerun ordinary three-update TrainingRun cells at16/64streams, reference and cached
+collection, preserving actual learning/skip counters and comparing final tensor
+states where available. Keep gradients on the original uncached path. The source
+bundle binds the prepared Git archive's complete file hashes plus the freshly
+built native module; verify before invoking the existing source owner. Setup900s,
+measurement600s, eachchild90s, same$1.50job/$3cohort caps. One local small CPU
+smoke checks reference/cache parity within the remaining local probe allowance;
+it is not GPU performance evidence. No production code changes.
+
+Preflight: the4stream x16step CPU paired smoke passed all four ABBA trajectory
+hash comparisons in2.846commandseconds, sampled peak324.2MiB. This consumes the
+existing local cap, not GPU budget. Ruff check/format passed. The GPU experiment
+retains separate baseline/candidate processes for whole-training comparisons.
