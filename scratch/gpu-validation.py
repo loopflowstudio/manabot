@@ -414,6 +414,7 @@ def main() -> None:
             "serving-confirm",
             "staging",
             "collector-staging",
+            "collector-phase",
         ),
         default="baseline",
     )
@@ -437,6 +438,7 @@ def main() -> None:
         "serving-confirm",
         "staging",
         "collector-staging",
+        "collector-phase",
     ):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
@@ -507,9 +509,32 @@ def main() -> None:
             "serving-confirm",
             "staging",
             "collector-staging",
+            "collector-phase",
         ):
             if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
                 raise RuntimeError("frozen CUDA input admission failed")
+            if args.experiment == "collector-phase":
+                for seed in (10349, 10350):
+                    for variant in (
+                        ("reference", "staged") if seed % 2 else ("staged", "reference")
+                    ):
+                        name = f"phase-s4096-seed{seed}-{variant}"
+                        run(
+                            name,
+                            [
+                                sys.executable,
+                                "scratch/collector-phase-supervisor.py",
+                                "--root",
+                                str(root),
+                                "--out",
+                                str(root / name),
+                                "--seed",
+                                str(seed),
+                                "--variant",
+                                variant,
+                            ],
+                        )
+                return
             if args.experiment == "collector-staging":
                 for streams in (64, 512, 4096):
                     for seed in (10349, 10350):
