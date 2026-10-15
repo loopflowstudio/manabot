@@ -10,6 +10,7 @@ serving boundary, not the current CUDA collector or actual distributed training.
 
 import argparse
 from collections import Counter, deque
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 import hashlib
 import heapq
@@ -100,6 +101,18 @@ class Outcome:
     peak_queued_requests: int
 
 
+@dataclass(frozen=True)
+class BatchDemand:
+    """Rows transferred/processed and logical requests delivered by one service."""
+
+    padded_rows: int
+    useful_rows: int
+    requests: int
+
+
+type BatchService = Callable[[BatchDemand], float]
+
+
 def simulate(
     rows: list[int],
     cpu_seconds_per_row: float,
@@ -109,6 +122,7 @@ def simulate(
     *,
     request_host_seconds: list[float] | None = None,
     tail_host_seconds: float = 0.0,
+    batch_service: BatchService | None = None,
 ) -> Outcome:
     """Replay finite tapes with conserved requests and serial actor dependencies.
 
@@ -116,6 +130,8 @@ def simulate(
     at the same trace position or cyclically rotate their starting positions.
     Rotation is a sensitivity test, not independent game or policy evidence.
     Device and link service serialize per GPU; GPUs have independent links.
+    An explicit batch service replaces both model and transfer cost. It must
+    include every serial serving phase and return finite nonnegative seconds.
     """
     if not rows or min(rows) <= 0 or max(rows) > settings.max_batch:
         raise ValueError("requests must fit the selected maximum batch")
@@ -219,7 +235,13 @@ def simulate(
                 padded * payload_bytes_per_row / (settings.transfer_gb_per_second * 1e9)
                 + 2 * settings.transfer_latency_seconds
             )
-            duration = service_seconds[padded] + transfer
+            duration = (
+                service_seconds[padded] + transfer
+                if batch_service is None
+                else batch_service(BatchDemand(padded, used, len(selected)))
+            )
+            if not math.isfinite(duration) or duration < 0:
+                raise ValueError("invalid full-batch service duration")
             batch = Batch(tuple(selected), padded, duration)
             device_busy += duration
             padded_total += padded

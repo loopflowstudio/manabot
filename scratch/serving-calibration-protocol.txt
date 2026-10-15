@@ -1,0 +1,31 @@
+Complete serving boundary calibration — 2026-10-15, before fitting
+
+Prior turn made progress: physical run006 falsified all nine20%-timing predictions
+while preserving best-batch rankings. No machine remains rented. This pass spends
+$0 and uses only retained, hash-verified records; it does not run ML locally.
+
+Freeze a single calibration partition: actor8, repeat0, all maximum batches64/256/
+1024 from run006. Use every batch, including first-batch costs/outliers. For each
+non-forward phase (prepare,H2D,D2H,validate), fit a nonnegative affine duration in
+padded rows and request count by least squares; enumerate all coefficient active
+sets, no hyperparameter search or clipping. Forward service stays the same-rental
+six measured points, without interpolation or scaling. Replace the idealized
+transfer term, not add a second charge. Timer/delivery delays remain omitted.
+
+Use the existing FIFO event model through one optional full-batch service callback;
+retain the exact old path by default. Validate positive finite callback durations,
+request/row conservation and original modeled results. Calibration records bind
+source/input hashes, phase coefficient units and observed feature ranges.
+
+Evaluate against all three repeats at actors1 and64, which are excluded from the
+fit. These are retrospective excluded-data checks: their aggregate durations were
+already inspected before partition selection, so this is not blind validation.
+Keep actor8 repeats1/2 separately as within-actor repetition checks. Report every
+ratio,20% criterion, rank and request-count extrapolation, including failures.
+No refit after results. New physical traffic remains necessary for prospective
+validation before treating absolute high-scale rates as measured or validated.
+
+One combined calibration/check command, cap5seconds, one thread,6GiB sampled RSS,
+inside existing20second calibration slice (7.700317335used) and conservative300second
+measurement allowance (272.084288081used). If failed/timed out, retain failure;
+no cap increase. Artifact hashing and reading prior JSON are inspection, not ML.

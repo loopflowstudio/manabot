@@ -21,7 +21,7 @@ import sys
 from threading import Event
 import time
 from types import ModuleType
-from typing import cast
+from typing import Protocol, cast
 
 import torch
 
@@ -85,6 +85,37 @@ class LiveOutcome:
 
 type Backend = Callable[[tuple[LiveRequest, ...], int], ServiceReceipt]
 type Selector = Callable[[deque[LiveRequest], int], tuple[LiveRequest, ...]]
+
+
+class BatchDemand(Protocol):
+    @property
+    def padded_rows(self) -> int: ...
+
+    @property
+    def requests(self) -> int: ...
+
+
+type CostModel = Callable[[BatchDemand], float]
+
+
+def frozen_cost_model(path: Path, forward: dict[int, float]) -> CostModel:
+    """Load fixed overhead coefficients; only forward points follow this rental."""
+    spec = importlib.util.spec_from_file_location(
+        "serving_cost", "scratch/serving-cost-calibration.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    record = json.loads(path.read_text())
+    if record["schema"] != "manabot.research.serving-cost.v1":
+        raise ValueError("unsupported serving cost model")
+    model = module.ServingModel.model_validate(record["model"])
+    if set(forward) != set(model.forward_seconds):
+        raise ValueError("forward calibration support differs")
+    model = model.model_copy(update={"forward_seconds": forward})
+    # Dynamic scratch-module boundary narrowed to the shared demand contract.
+    return cast(CostModel, model.duration)
 
 
 def queue_module() -> ModuleType:
@@ -318,6 +349,11 @@ class CudaBackend:
 def check() -> None:
     module = queue_module()
     module.check()
+    costs = frozen_cost_model(
+        Path("scratch/accelerator-probes/serving-cost-calibration.json"),
+        {size: 0.01 for size in (1, 4, 16, 64, 256, 1024)},
+    )
+    assert costs(module.BatchDemand(64, 30, 2)) > 0.01
     # Dynamic scratch-module import, narrowed to the shared FIFO selector contract.
     select = cast(Selector, module.pop_batch)
     ready = deque(
@@ -370,6 +406,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--actors", type=int, default=8)
     parser.add_argument("--max-batch", type=int, default=256)
+    parser.add_argument("--cost-model", type=Path)
     args = parser.parse_args()
     if args.check:
         check()
@@ -443,6 +480,20 @@ def main() -> None:
         request_host_seconds=sample.request_host_seconds,
         tail_host_seconds=sample.tail_host_seconds,
     )
+    full_prediction = (
+        module.simulate(
+            [f.rows for f in tape.frames],
+            0,
+            service,
+            payload,
+            settings,
+            request_host_seconds=sample.request_host_seconds,
+            tail_host_seconds=sample.tail_host_seconds,
+            batch_service=frozen_cost_model(args.cost_model, service),
+        )
+        if args.cost_model is not None
+        else None
+    )
     results = []
     with ThreadPoolExecutor(max_workers=1) as executor:
         for _ in range(2):
@@ -508,6 +559,16 @@ def main() -> None:
             "Prediction assumes12GB/s links and20us per direction; all physical phases and timer lateness remain explicit.",
         ],
     }
+    if full_prediction is not None:
+        report["full_service_prediction"] = asdict(full_prediction)
+        report["median_actual_to_full_service_seconds"] = (
+            median(r.seconds for r in results) / full_prediction.seconds
+        )
+        for path in (
+            args.cost_model,
+            Path("scratch/serving-cost-calibration.py"),
+        ):
+            report["sources"][str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     args.out.mkdir(exist_ok=True)
     atomic_json(args.out / "result.json", report)
     print(

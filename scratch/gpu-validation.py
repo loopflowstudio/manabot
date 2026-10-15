@@ -405,7 +405,14 @@ def main() -> None:
     parser.add_argument("--expected-gpu", default="NVIDIA L4")
     parser.add_argument(
         "--experiment",
-        choices=("baseline", "catalog", "scale", "highend", "serving"),
+        choices=(
+            "baseline",
+            "catalog",
+            "scale",
+            "highend",
+            "serving",
+            "serving-confirm",
+        ),
         default="baseline",
     )
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
@@ -420,7 +427,7 @@ def main() -> None:
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    if args.experiment in ("catalog", "scale", "highend", "serving"):
+    if args.experiment in ("catalog", "scale", "highend", "serving", "serving-confirm"):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
             path = Path(name)
@@ -484,7 +491,7 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
-        if args.experiment in ("highend", "serving"):
+        if args.experiment in ("highend", "serving", "serving-confirm"):
             if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
                 raise RuntimeError("frozen CUDA input admission failed")
             models = [
@@ -510,12 +517,13 @@ def main() -> None:
                     ],
                 )
                 model_ok = completed and model_ok
-            if args.experiment == "serving":
+            if args.experiment in ("serving", "serving-confirm"):
                 if not model_ok:
                     raise RuntimeError(
                         "physical serving requires all six completed calibration points"
                     )
-                for actors in (1, 8, 64):
+                confirmation = args.experiment == "serving-confirm"
+                for actors in (4, 16, 128) if confirmation else (1, 8, 64):
                     for maximum in (64, 256, 1024):
                         name = f"serve-a{actors}-b{maximum}"
                         run(
@@ -531,6 +539,14 @@ def main() -> None:
                                 str(actors),
                                 "--max-batch",
                                 str(maximum),
+                                *(
+                                    [
+                                        "--cost-model",
+                                        "scratch/accelerator-probes/serving-cost-calibration.json",
+                                    ]
+                                    if confirmation
+                                    else []
+                                ),
                             ],
                         )
                 return

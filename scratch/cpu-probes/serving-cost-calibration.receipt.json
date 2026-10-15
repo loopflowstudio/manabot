@@ -1,0 +1,70 @@
+{
+  "phase": "calibration",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/serving-cost-calibration.py",
+    "--out",
+    "scratch/accelerator-probes/serving-cost-calibration.json"
+  ],
+  "started_utc": "2026-10-15T12:39:20.462505+00:00",
+  "limit_seconds": 5.0,
+  "load_start": [
+    9.04638671875,
+    6.55078125,
+    9.68017578125
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 2.3164926250465214,
+  "load_end": [
+    9.04638671875,
+    6.55078125,
+    9.68017578125
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.027644208981655538,
+      "rss_bytes": 5849088
+    },
+    {
+      "seconds": 0.2616036250256002,
+      "rss_bytes": 84017152
+    },
+    {
+      "seconds": 0.4949629590846598,
+      "rss_bytes": 179716096
+    },
+    {
+      "seconds": 0.7244242500746623,
+      "rss_bytes": 209108992
+    },
+    {
+      "seconds": 0.9561845000134781,
+      "rss_bytes": 233537536
+    },
+    {
+      "seconds": 1.182738000061363,
+      "rss_bytes": 252903424
+    },
+    {
+      "seconds": 1.4137594590429217,
+      "rss_bytes": 261062656
+    },
+    {
+      "seconds": 1.6459276670357212,
+      "rss_bytes": 280870912
+    },
+    {
+      "seconds": 1.8783425419824198,
+      "rss_bytes": 341966848
+    },
+    {
+      "seconds": 2.1113425840158015,
+      "rss_bytes": 338329600
+    }
+  ],
+  "sampled_tree_peak_bytes": 341966848
+}

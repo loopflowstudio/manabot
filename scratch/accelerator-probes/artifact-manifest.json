@@ -1078,8 +1078,8 @@
     },
     {
       "path": "scratch/accelerator-queue-probe.py",
-      "bytes": 21235,
-      "sha256": "a17d5d7d3d30cfbbd79531588ac07fa18aea7f023c8fa7af5230dbf336d0bcb8"
+      "bytes": 21999,
+      "sha256": "98c3fae2c4cd54404bdedc05075546eeab7932fec47a3b09fd498fd80fe50cc1"
     },
     {
       "path": "scratch/cpu-probe-command.py",
@@ -1158,8 +1158,8 @@
     },
     {
       "path": "scratch/physical-serving-probe.py",
-      "bytes": 18475,
-      "sha256": "4cd40120bcce54237413dfa8097c170b12ffd94bf81a2fe052aa09c79be92c17"
+      "bytes": 20822,
+      "sha256": "b96f9c0ad1b25f17652c8fd5be1b6b1f54243168fa1bfa3e58ba7b31804c391f"
     },
     {
       "path": "scratch/serving-validation-protocol.txt",
@@ -1480,6 +1480,91 @@
       "path": "scratch/gpu-probes/serving-006/evidence/serve-a8-b1024/worker.log",
       "bytes": 53,
       "sha256": "af986cedad65d87982885e44022924c18f8c8384344b6516842e95d5f3239aca"
+    },
+    {
+      "path": "scratch/serving-cost-calibration.py",
+      "bytes": 13202,
+      "sha256": "5cb47d88a6468d81549a9f2d1d005108909ce4629784355b48144ca114e86c19"
+    },
+    {
+      "path": "scratch/gpu-validation.py",
+      "bytes": 27002,
+      "sha256": "277ce9f2155cfea283f342c931bb1f3d5557aa26ab449d7891bb93635477080b"
+    },
+    {
+      "path": "scratch/gpu-validation-job.py",
+      "bytes": 1482,
+      "sha256": "2c80b3e36d9be2821e5430870b0193f53f77c11164e639f7fd62aef10b0c25e1"
+    },
+    {
+      "path": "scratch/serving-calibration-protocol.txt",
+      "bytes": 2094,
+      "sha256": "d1b2e8f9206d560c3f90ee87e2b41b839f83acede5603b38318f94d2a38cdc0d"
+    },
+    {
+      "path": "scratch/serving-confirmation-protocol.txt",
+      "bytes": 2743,
+      "sha256": "659ccc136e90c58146ef304d4e2a423a6f55ef87ff78213fec4bc4710c895e89"
+    },
+    {
+      "path": "scratch/accelerator-probes/serving-cost-calibration.json",
+      "bytes": 21030,
+      "sha256": "594d6503f30171b39022cc822bf8737b6f5ace59270040c76dc4533b1835543b"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cost-calibration.receipt.json",
+      "bytes": 1382,
+      "sha256": "187f24764c22997e8aff78ea6741341c7b3057b07ed4db4b4bd242220654d836"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cost-calibration.stdout.log",
+      "bytes": 1012,
+      "sha256": "8f8025cf0dadeb9d2ea7a4bc1e545b71e6c8ddd215fa978feab1cc3f706503b4"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-cost-calibration.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-confirm-preflight.receipt.json",
+      "bytes": 1165,
+      "sha256": "8538f2ead5cca711e920957b69fd36a78b73fcb342c3be86a4dcf92e49110fe3"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-confirm-preflight.stdout.log",
+      "bytes": 135,
+      "sha256": "04078b1a0e854f6a85529fbaa88b1dac90cac8853df4497622a915425cd57e0a"
+    },
+    {
+      "path": "scratch/cpu-probes/serving-confirm-preflight.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/accelerator-probes/98c3fae2c4cd54404bdedc05075546eeab7932fec47a3b09fd498fd80fe50cc1.source.txt",
+      "bytes": 21999,
+      "sha256": "98c3fae2c4cd54404bdedc05075546eeab7932fec47a3b09fd498fd80fe50cc1"
+    },
+    {
+      "path": "scratch/accelerator-probes/b96f9c0ad1b25f17652c8fd5be1b6b1f54243168fa1bfa3e58ba7b31804c391f.source.txt",
+      "bytes": 20822,
+      "sha256": "b96f9c0ad1b25f17652c8fd5be1b6b1f54243168fa1bfa3e58ba7b31804c391f"
+    },
+    {
+      "path": "scratch/accelerator-probes/5cb47d88a6468d81549a9f2d1d005108909ce4629784355b48144ca114e86c19.source.txt",
+      "bytes": 13202,
+      "sha256": "5cb47d88a6468d81549a9f2d1d005108909ce4629784355b48144ca114e86c19"
+    },
+    {
+      "path": "scratch/accelerator-probes/277ce9f2155cfea283f342c931bb1f3d5557aa26ab449d7891bb93635477080b.source.txt",
+      "bytes": 27002,
+      "sha256": "277ce9f2155cfea283f342c931bb1f3d5557aa26ab449d7891bb93635477080b"
+    },
+    {
+      "path": "scratch/accelerator-probes/2c80b3e36d9be2821e5430870b0193f53f77c11164e639f7fd62aef10b0c25e1.source.txt",
+      "bytes": 1482,
+      "sha256": "2c80b3e36d9be2821e5430870b0193f53f77c11164e639f7fd62aef10b0c25e1"
     }
   ]
 }
