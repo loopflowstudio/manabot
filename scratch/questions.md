@@ -387,3 +387,11 @@ control;25deals ×8legs ×2anchors). Calibration may reject capacity but cannot
 shorten10000. The5000-update export is unscored. Prior short w6 run is cancelled
 and retained; no optimizer/collector continuation is claimed. Reserve18h prior,
 53.5h new job,0.5h settlement. Five focused declaration/count tests passed.
+
+Sustained replacement `1ebb94c24ef2` is running on Mini at source `cd72366b`;
+session `0eaddc80a844`, attempt `5d47abf32db7`. Receipt:
+`.runs/mtg122/w6-sustained-launch.json`. SSH compression allowed normal SDK source
+delivery; no manual start recovery or duplicate attempt. Native w6 build passed;
+calibration gates the fixed10000-update ×3seed /3600-game campaign. Prior short
+run is terminal cancelled; `.runs/mtg122/w6-short-cancel.json` records0.63145h
+planned-to-finished, charged inside the18h reservation. No GPU spending.
