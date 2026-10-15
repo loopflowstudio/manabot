@@ -97,12 +97,18 @@ class SemanticCardEncoder(nn.Module):
         definitions = torch.cat((state.new_zeros((1, state.shape[-1])), state[0]))
         return definitions
 
+    def embed_definitions(
+        self, ids: torch.Tensor, definitions: torch.Tensor
+    ) -> torch.Tensor:
+        """Join visible cards or permanents to the same checked card programs."""
+        return definitions[self._rows(ids)]
+
     def forward(
         self, obs: dict[str, torch.Tensor], definitions: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if definitions is None:
             definitions = self.definitions()
-        cards = definitions[self._rows(obs["semantic_cards"])]
+        cards = self.embed_definitions(obs["semantic_cards"], definitions)
         knowledge = obs["known_hand"]
         known = definitions[self._rows(knowledge[..., 0])]
         known = (known * knowledge[..., 1, None] / 60.0).sum(dim=2)

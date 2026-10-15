@@ -96,9 +96,13 @@ class ActionSpaceEnum(IntEnum):
     LEGEND_RULE = 12
 
 
-# Native action tensor: family one-hot, declaration choice, validity.
+# Native action tensor: family, declaration, mode/ability selectors, validity.
 ACTION_TYPE_DIM = len(ActionEnum)
 ACTION_DECLARED_INDEX = ACTION_TYPE_DIM
+ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
+ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
+MAX_ACTION_SELECTOR = (1 << 24) - 1
+PERMANENT_DEFINITION_INDEX = 24
 
 
 class ZoneEnum(IntEnum):
@@ -178,12 +182,12 @@ class ObservationEncoder:
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
-        # (printed + until-EOT grants), death-to-exile replacement, validity.
-        self.permanent_dim = 25
+        # (printed + until-EOT grants), death-to-exile replacement, definition, validity.
+        self.permanent_dim = 26
         self.event_dim = 12 if hypers.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
-        self.action_dim = self.num_actions + 2  # declaration and validity bits
+        self.action_dim = self.num_actions + 4  # declaration, mode, ability, validity
 
         # This maps object IDS to their ultimate Game Object index.
         # This is used to map the focus object indices in the action space
@@ -503,6 +507,7 @@ class ObservationEncoder:
         arr[21] = float(perm.keywords.menace)
         arr[22] = float(perm.keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
+        arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr
@@ -530,6 +535,14 @@ class ObservationEncoder:
                 arr[idx, action_type] = 1.0
 
             arr[idx, ACTION_DECLARED_INDEX] = float(action.declared is True)
+            for column, selector in (
+                (ACTION_MODE_INDEX, action.mode_index),
+                (ACTION_ABILITY_INDEX, action.ability_index),
+            ):
+                if selector is not None:
+                    if not 0 <= selector <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: action selector")
+                    arr[idx, column] = selector + 1
 
             if len(action.focus) > self.max_focus_objects:
                 raise ValueError("observation capacity exceeded: action focus")

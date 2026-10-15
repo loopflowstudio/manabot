@@ -1,4 +1,4 @@
-"""ETU-88 custom-deck execution and the real play projection in world w4."""
+"""ETU-88 custom-deck execution and the real play projection in the current world."""
 
 import random
 
@@ -42,17 +42,17 @@ def candidate_match():
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("seed", [0, 1])
 def test_match_hypers_candidate_finishes_with_complete_native_and_python_encoding(
-    reverse, seed
-):
+    reverse: bool, seed: int
+) -> None:
     match = candidate_match()
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == 25
-    assert managym.WORLD_VERSION == "w4"
+    assert space.encoder.permanent_dim == 26
+    assert managym.WORLD_VERSION == "w6"
     env = Env(match, space, Reward(RewardHypers()), seed=seed)
     obs, _ = env.reset(seed=seed)
-    assert env.content_pack_manifest()["world_version"] == "w4"
+    assert env.content_pack_manifest()["world_version"] == "w6"
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])
@@ -135,19 +135,19 @@ def test_play_copy_distinguishes_mandatory_discard_and_legend_choice(legend):
         pytest.fail("required choice was not reached")
 
 
-def test_world_identity_records_w4_and_refuses_earlier_runtime_labels():
+def test_world_identity_records_current_world_and_refuses_earlier_runtime_labels() -> None:
     from manabot.sim.teacher1_evidence import runtime_fingerprints
     from scripts.train_challenger import world_identity
 
     identity = world_identity({})
-    assert identity["version"] == "w4"
-    assert identity["content_manifest"]["world_version"] == "w4"
+    assert identity["version"] == "w6"
+    assert identity["content_manifest"]["world_version"] == "w6"
     assert identity["dims"] == {
         "player": 28,
         "card": 39,
-        "permanent": 25,
+        "permanent": 26,
         "action_types": 16,
     }
-    for old_world in ("w2", "w3"):
+    for old_world in ("w2", "w3", "w4", "w5"):
         with pytest.raises(ValueError, match="cannot register"):
             runtime_fingerprints(world=old_world)

@@ -168,6 +168,8 @@ pub struct StackObjectData {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PermanentData {
     pub id: i32,
+    /// Definition of the backing card, in the match's bound content pack.
+    pub registry_key: i32,
     pub controller_id: i32,
     pub tapped: bool,
     pub damage: i32,
@@ -241,10 +243,10 @@ pub struct EventData {
 pub struct ActionOption {
     pub action_type: ActionType,
     pub focus: Vec<i32>,
-    /// Native yes/no declaration metadata for prompt copy. The learning
-    /// encoder ignores it; the experience adapter uses it to distinguish
-    /// attack/block from decline choices without relying on array position.
+    /// Native yes/no declaration, shared by learning and experience consumers.
     pub declared: Option<bool>,
+    pub mode_index: Option<usize>,
+    pub ability_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -342,6 +344,16 @@ impl Observation {
                             declared: match action {
                                 Action::DeclareAttacker { attack, .. } => Some(*attack),
                                 Action::DeclareBlocker { attacker, .. } => Some(attacker.is_some()),
+                                _ => None,
+                            },
+                            mode_index: match action {
+                                Action::ChooseMode { mode, .. } => Some(*mode),
+                                _ => None,
+                            },
+                            ability_index: match action {
+                                Action::ActivateAbility { ability_index, .. } => {
+                                    Some(*ability_index)
+                                }
                                 _ => None,
                             },
                         })
@@ -522,6 +534,7 @@ impl Observation {
         let (power, toughness) = game.effective_pt(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
+            registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
@@ -1068,6 +1081,9 @@ impl Observation {
                 json!({
                     "type": action.action_type as i32,
                     "focus": action.focus,
+                    "declared": action.declared,
+                    "mode_index": action.mode_index,
+                    "ability_index": action.ability_index,
                 })
             })
             .collect::<Vec<_>>();
