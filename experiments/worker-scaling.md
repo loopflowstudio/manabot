@@ -138,10 +138,10 @@ Etude outputs identified by the included lifecycle manifests.
 
 ## Inference serving optimization
 
-The next optimization target is inference serving. `--device cuda-local` gives
+The optimization target is inference serving. `--device cuda-local` gives
 each persistent worker its own model on the same GPU, keeping the original request
-shapes and exact-output checks. It is a candidate for comparison, not an accepted
-speedup. The shared mode remains the baseline. `--profile --device cuda` records
+shapes and exact-output checks. The ownership comparison below passed its screening
+gate; it is not yet a production training change. `--profile --device cuda` records
 separate synchronized transfer/forward attribution and a CPU/CUDA trace.
 
 `worker_experiment --serving-ownership` interleaves three complete curves per
@@ -159,3 +159,59 @@ paired with run012's GPU curve as a same-host decomposition. It demonstrates why
 GPU type alone cannot determine a training rental's throughput. Raw evidence is in
 [data/worker-scaling/gpu-014](data/worker-scaling/gpu-014). All three rentals were
 deleted; their receipts distinguish complete-rental costs from job-only estimates.
+
+## Same-GPU ownership result (run016)
+
+On one RTX 5090 / EPYC 7543 host with a 12.75-core CPU quota, three interleaved
+trials per design measured these median collection rates. Each case collected
+32,768 learner rows through 4,288 policy requests, preserving original shapes:
+
+| Active workers | Shared model rows/s | Worker-local models rows/s | Local / shared |
+|---|---:|---:|---:|
+| 1 | 1,035 | 1,157 | 1.118x |
+| 2 | 1,509 | 1,591 | 1.054x |
+| 4 | 1,503 | 1,736 | 1.155x |
+
+All 1,152 actor results matched across designs: row/decision counts, rollout and
+buffer hashes, journals and reset seeds. The candidate passes the prospective
+15% four-worker improvement gate and the one-worker non-regression gate, narrowly.
+Four-worker shared times were 20.143 / 22.122 / 21.795 seconds; local times were
+18.871 / 19.571 / 17.830. These three observations are not a population estimate.
+Peak summed RSS was 6.76–6.98 GiB shared versus 9.88–10.09 GiB local. Local models
+consume more host execution capacity: in the last four-worker trial, workers used
+about 70.5 CPU-seconds during 17.83 seconds of wall time. Removing central dispatch
+helps, but this is a modest gain and does not clear the entire serving bottleneck.
+
+The separate synchronized profile points toward fixed work per request. At
+1 / 16 / 32 / 64 input rows, median forward time was 7.130 / 6.995 / 6.973 / 7.166 ms.
+H2D was 0.411–0.640 ms and D2H 0.101–0.108 ms. Inside each forward, the inclusive
+catalog host span was 2.91–3.03 ms; the trace contained 15 scalar reads and three
+equality checks. Traced kernel/copy/memset intervals occupied only 0.882–1.150 ms
+of each forward window. These are profiler-instrumented initial observations,
+not unprofiled throughput or SM utilization. Catalog spans include host scheduling
+and synchronization; the figures do not assign every gap to a particular cause.
+
+This favors reducing repeated per-request work and amortizing it through larger
+inference batches as the next investigation. Merely adding model processes is
+insufficient. Catalog reuse alone remains unproven for whole training: its earlier
+w4 large-batch benefit was only 0.85%. Preserve that contrary evidence when testing
+the current w6 path. Admission checks, policy-version boundaries, sampling, and
+gradient-enabled learning must remain correct when changing serving execution.
+
+Unchanged ordinary training controls on this host reached 1,655 rows/s at 512
+streams and 3,454 rows/s at 4,096 streams (98,304 rows in 28.457 s). The latter
+projects to 10.45 million rows per rental dollar at $1.19/h, excluding setup.
+It is a host control, not a gain caused by worker-local inference. Its collection
+took 22.219 s and learning 4.269 s; neither worker architecture is integrated into
+this training path. Different trajectories and request shapes also prevent treating
+its rate as a matched comparison with the worker benchmark.
+
+Run `45a304b45d64` used published source
+`91b42f4677ee64a2ddfeb4f3861cdd7619cdfff6`. All 757 uploaded outputs and 756 manifest
+entries were verified; raw profile trace, timings and structured receipts are in
+[data/worker-scaling/gpu-016](data/worker-scaling/gpu-016). The provider confirmed
+pod deletion; estimated whole rental cost was $0.477. Admission015 failed before
+any experiment started, and the provider inventory found no pod. Its reservation
+remains conservatively held while cleanup observation continues; run016 was an
+explicit replacement admission with the same source/protocol, not a measurement
+retry. No training speedup or playing-strength improvement is claimed.
