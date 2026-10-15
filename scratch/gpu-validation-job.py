@@ -1,4 +1,4 @@
-"""Frozen catalog validation; exact archive manifest admits ordinary TrainingRuns."""
+"""Frozen learner-shape validation with exact source-bundle admission."""
 
 from decimal import Decimal
 import hashlib
@@ -25,10 +25,10 @@ def runs() -> Job:
                         source, "sha256"
                     ).hexdigest()
     return Job(
-        name="fantasia-gpu-catalog-l4-003",
+        name="fantasia-gpu-learner-shapes-l4-004",
         repo=str(Path.cwd()),
         revision="HEAD",
-        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment catalog --root "$ETUDE_OUTPUT_DIR/evidence"',
+        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment scale --root "$ETUDE_OUTPUT_DIR/evidence"',
         config=json.dumps(
             {
                 "recipe": json.loads(

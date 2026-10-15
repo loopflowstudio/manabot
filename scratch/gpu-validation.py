@@ -32,6 +32,7 @@ from manabot.infra.hypers import RewardHypers
 from manabot.model.agent import Agent
 from manabot.model.world import checkpoint_world
 from manabot.sim.net_opponent import RolloutBatch, SeatRoutedCollector
+from manabot.training import execution
 from manabot.training.execution import atomic_json
 from manabot.training.models import TrainingRegime
 from manabot.training.source_bundle import SourceBundle, source_commit
@@ -270,32 +271,67 @@ def child(args: argparse.Namespace) -> None:
     if args.child == "paired":
         paired_collection(args, recipe)
     elif args.child == "loop":
-        cell = Cell(capacity="w64-d1", kind="loop", batch=512, streams=args.streams)
+        cell = Cell(
+            capacity="w64-d1", kind="loop", batch=args.batch, streams=args.streams
+        )
         (args.root / cell.name).mkdir()
-        if args.cached:
-            original = SeatRoutedCollector.collect
+        timings: list[dict[str, str | float]] = []
 
-            def collect(
-                self: SeatRoutedCollector,
-                agent: Agent,
-                num_steps: int,
-                *,
-                deadline_monotonic: float | None = None,
-                check: Callable[[], None] | None = None,
-            ) -> RolloutBatch:
-                with catalog_session(agent):
-                    return original(
-                        self,
-                        agent,
-                        num_steps,
-                        deadline_monotonic=deadline_monotonic,
-                        check=check,
+        def measured[**P, R](name: str, function: Callable[P, R]) -> Callable[P, R]:
+            def call(*values: P.args, **keywords: P.kwargs) -> R:
+                torch.cuda.synchronize()
+                started = time.perf_counter()
+                try:
+                    return function(*values, **keywords)
+                finally:
+                    torch.cuda.synchronize()
+                    timings.append(
+                        {"phase": name, "seconds": time.perf_counter() - started}
                     )
 
-            with patch.object(SeatRoutedCollector, "collect", collect):
+            return call
+
+        original = SeatRoutedCollector.collect
+
+        def collect(
+            self: SeatRoutedCollector,
+            agent: Agent,
+            num_steps: int,
+            *,
+            deadline_monotonic: float | None = None,
+            check: Callable[[], None] | None = None,
+        ) -> RolloutBatch:
+            with catalog_session(agent) if args.cached else nullcontext():
+                return original(
+                    self,
+                    agent,
+                    num_steps,
+                    deadline_monotonic=deadline_monotonic,
+                    check=check,
+                )
+
+        try:
+            with (
+                patch.object(
+                    SeatRoutedCollector, "collect", measured("collect", collect)
+                ),
+                patch.object(
+                    execution,
+                    "update_iteration",
+                    measured("update_iteration", execution.update_iteration),
+                ),
+            ):
                 capacity_child(args.root, cell)
-        else:
-            capacity_child(args.root, cell)
+        finally:
+            atomic_json(
+                args.root / cell.name / "phase-timings.json",
+                {
+                    "cached": args.cached,
+                    "shape": [args.batch // args.streams, args.streams],
+                    "phases": timings,
+                    "limits": "Synchronized method boundaries; update_iteration excludes EMA and executor bookkeeping. Ordinary TrainingRun retains complete learning time.",
+                },
+            )
     elif args.child == "inputs":
         torch.manual_seed(10831)
         agent = (
@@ -345,11 +381,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=10831)
     parser.add_argument("--expected-gpu", default="NVIDIA L4")
     parser.add_argument(
-        "--experiment", choices=("baseline", "catalog"), default="baseline"
+        "--experiment", choices=("baseline", "catalog", "scale"), default="baseline"
     )
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--transitions", type=int, default=4096)
     parser.add_argument("--cached", action="store_true")
+    parser.add_argument("--batch", type=int, default=512)
     args = parser.parse_args()
     if args.child:
         child(args)
@@ -357,7 +394,7 @@ def main() -> None:
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    if args.experiment == "catalog":
+    if args.experiment in ("catalog", "scale"):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
             path = Path(name)
@@ -421,6 +458,38 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
+        if args.experiment == "scale":
+            cells = [
+                (64, False, "a"),
+                (64, True, "a"),
+                (64, False, "b"),
+                (64, True, "b"),
+                (512, False, "a"),
+                (512, True, "a"),
+                (4096, False, "a"),
+                (4096, True, "a"),
+            ]
+            for streams, cached, repeat in cells:
+                name = f"shape-t8-s{streams}-{'cached' if cached else 'reference'}-{repeat}"
+                nested = root / name
+                nested.mkdir()
+                atomic_json(nested / "baseline.json", recipe.model_dump(mode="json"))
+                run(
+                    name,
+                    [
+                        *python,
+                        "--root",
+                        str(nested),
+                        "--child",
+                        "loop",
+                        "--streams",
+                        str(streams),
+                        "--batch",
+                        str(streams * 8),
+                        *(["--cached"] if cached else []),
+                    ],
+                )
+            return
         if args.experiment == "catalog":
             for seed in (10831, 10832, 10833):
                 for streams in (64, 256):

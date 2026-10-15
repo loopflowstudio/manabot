@@ -118,3 +118,7 @@ from the prior rental's595.91.07, so use within-rental pairs. Zero completed gam
 in64stream learning also limits representativeness. This validates catalog reuse
 as an optimization direction; production API/invalidation, mature-policy traffic,
 and a learner/backpressure/policy-age model remain unimplemented/unmeasured.
+
+Next bounded allocation: `gpu-scale-protocol.txt` freezes a repeatability control
+and actual [8,64], [8,512], [8,4096] learner shapes on one L4. It retains the same
+per-job limits and original $50 total; no source or lease is yet active for it.
