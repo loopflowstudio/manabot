@@ -1,6 +1,6 @@
 # Corrected-world baseline — MTG-122
 
-2026-10-15. Sustained-horizon amendment: Jack Heart approved a 72-hour inclusive
+2026-10-15. Sustained-horizon amendment: Jack Heart initially approved a 72-hour inclusive
 Mini ceiling and 10,000 updates per seed with reduced evaluation. The prior
 3,200-update attempt is stopped and retained; it is not a continuation source.
 
@@ -36,9 +36,14 @@ TrainingRun/VerifyStore/arena execution and Etude job, on Mini only. No laptop
 experiment, GPU expenditure, automatic retry or resume. A single SDK hard deadline
 includes setup, native build, calibration, all learning/evaluation and cleanup.
 
-The revised **72-hour inclusive Mini ceiling** includes all earlier attempts.
-Reserve18 hours for prior attempts/preparation,53.5 hours for this new allocation
-and0.5 hour for external transfer/report/settlement. No GPU spending is added.
+After the conservative admission exceeded the53.5h job, Jack Heart requested
+launch without further budget fine-tuning. The bounded operational ceiling is now
+**80 inclusive Mini hours**:18h prior attempts/preparation,61.5h new allocation,
+0.5h settlement. Successful calibration from `1ebb94c24ef2` is reused, not rerun.
+Its100 updates and16 completed games bind the committed
+`corrected-world-baseline-plan.json` through exact receipt hashes; current recipe
+equality was checked. It reserves48.6918h training and4.8623h evaluation plus
+600s overhead. The60h plan allowance sits inside the61.5h job. No GPU spending is added.
 The stopped w4 and short w6 attempts retain original receipts and artifacts.
 The earlier w4 calibration reserves and failed admissions remain charged.
 

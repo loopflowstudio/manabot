@@ -6,6 +6,7 @@ its scores cannot select a recipe. Etude owns the one hard allocation deadline.
 """
 
 from datetime import datetime
+import json
 import os
 from pathlib import Path
 import socket
@@ -148,6 +149,16 @@ def run() -> None:
         raise ValueError("baseline requires Etude on Mini; local execution forbidden")
     if int(env["ETUDE_SEED"]) != CALIBRATION_SEED:
         raise ValueError("incorrect calibration seed")
+    config = json.loads(Path(env["ETUDE_CONFIG"]).read_text())
+    if "plan" in config:
+        # An already measured, pre-frozen plan avoids repeating calibration to
+        # obtain a favorable timing sample. The same execution admission applies.
+        plan = BaselinePlan.model_validate(config["plan"])
+        output = Path(env["ETUDE_OUTPUT_DIR"])
+        output.mkdir(parents=True, exist_ok=True)
+        atomic_json(output / "calibrated-plan.json", plan.model_dump(mode="json"))
+        execute(plan, pools=("l3",))
+        return
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
     output = Path(env["ETUDE_OUTPUT_DIR"])
     root_run, root_track = env["ETUDE_RUN"], env["ETUDE_TRACK_DIR"]

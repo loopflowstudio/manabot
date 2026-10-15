@@ -388,10 +388,12 @@ shorten10000. The5000-update export is unscored. Prior short w6 run is cancelled
 and retained; no optimizer/collector continuation is claimed. Reserve18h prior,
 53.5h new job,0.5h settlement. Five focused declaration/count tests passed.
 
-Sustained replacement `1ebb94c24ef2` is running on Mini at source `cd72366b`;
-session `0eaddc80a844`, attempt `5d47abf32db7`. Receipt:
-`.runs/mtg122/w6-sustained-launch.json`. SSH compression allowed normal SDK source
-delivery; no manual start recovery or duplicate attempt. Native w6 build passed;
-calibration gates the fixed10000-update ×3seed /3600-game campaign. Prior short
-run is terminal cancelled; `.runs/mtg122/w6-short-cancel.json` records0.63145h
-planned-to-finished, charged inside the18h reservation. No GPU spending.
+Sustained attempt `1ebb94c24ef2` (source `cd72366b`, session `0eaddc80a844`,
+attempt `5d47abf32db7`) stopped before science at budget admission after100
+successful calibration updates and16 games. Reserves:48.6918h training,4.8623h
+evaluation,53.7208h total with overhead. Jack Heart subsequently requested launch
+without further budget fine-tuning. Operational bound:80h inclusive (18h prior,
+61.5h job,0.5h settlement). Reuse those exact calibration receipts, checked against
+the unchanged recipe; no further calibration. Committed baseline plan fixes10000
+updates ×3seeds and3600 games. Private calibration copy:
+`.runs/mtg122/w6-calibration-retained`. Earlier attempts remain retained/charged.
