@@ -10,14 +10,18 @@ from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.models import AtaraxosMoveLearning, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def _recipe(name: str = "ataraxos-move") -> TrainingRegime:
-    return TrainingRegime.model_validate_json(
+    recipe = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes" / f"{name}.json").read_text()
     )
+    recipe.world = managym.WORLD_VERSION
+    recipe.id = f"test-{recipe.world}-{recipe.id}"
+    return recipe
 
 
 def test_iteration_schedule_and_invalid_config() -> None:

@@ -347,6 +347,7 @@ class SideboardCard:
 
 class Permanent:
     id: int
+    registry_key: int
     controller_id: int
     tapped: bool
     damage: int
@@ -370,6 +371,9 @@ class Turn:
 class Action:
     action_type: ActionEnum
     focus: List[int]
+    declared: bool | None
+    mode_index: int | None
+    ability_index: int | None
 
 class ActionSpace:
     action_space_type: ActionSpaceEnum
@@ -419,3 +423,6 @@ class Observation:
     def toJSON(self) -> str: ...
 
 class AgentError(RuntimeError): ...
+
+WORLD_VERSION: str
+CARD_DEFINITION_COUNT: int

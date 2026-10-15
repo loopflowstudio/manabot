@@ -22,6 +22,7 @@ from manabot.training import monitor_evaluation as monitor
 from manabot.training.etude_evaluation import publish_saved_evaluation
 from manabot.training.models import TrainingRegime, TrainingRun, TrainSelfPlay
 from manabot.training.monitoring import default_panels, evaluation_dashboard
+import managym
 
 
 def failure_summary(result: monitor.MonitorResult) -> str:
@@ -308,7 +309,7 @@ def test_real_arena_checkpoint_outcomes(
         )
         regime = TrainingRegime(
             id="monitor-fixture",
-            world="w4",
+            world=managym.WORLD_VERSION,
             match=match,
             agent=hypers,
             wall_seconds=10,

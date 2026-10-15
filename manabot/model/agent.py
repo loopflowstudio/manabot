@@ -13,11 +13,13 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX
 from manabot.infra import AgentSpec
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.sim.structured_policy import RaggedOfferBatch
+import managym
 
 
 class Agent(nn.Module):
@@ -52,10 +54,9 @@ class Agent(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        perm_dim = (
-            enc.permanent_dim
-        )  # fixed: use permanent_dim as defined in ObservationEncoder
-        action_dim = enc.action_dim  # e.g., 6 (5 action types + validity flag)
+        # Definition IDs are categorical joins, never numeric permanent features.
+        perm_dim = enc.permanent_dim - 1
+        action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = hypers.hidden_dim
         self.compound_decoder = (
@@ -63,10 +64,17 @@ class Agent(nn.Module):
         )
 
         self.semantic_cards = None
+        self.card_definitions: nn.Embedding | None = None
         if hypers.semantic_pack is not None:
             from .semantic_cards import SemanticCardEncoder
 
             self.semantic_cards = SemanticCardEncoder(hypers.semantic_pack, embed_dim)
+        else:
+            # Generic worlds still distinguish card definitions. The content
+            # manifest binds the vocabulary; this is identity, not rules transfer.
+            self.card_definitions = nn.Embedding(
+                managym.CARD_DEFINITION_COUNT + 1, embed_dim, padding_idx=0
+            )
 
         # Set up typed object embeddings.
         self.player_embedding = ProjectionLayer(player_dim, embed_dim)
@@ -364,6 +372,13 @@ class Agent(nn.Module):
         enc_agent_cards = self.card_embedding(obs["agent_cards"])
         enc_opp_cards = self.card_embedding(obs["opponent_cards"])
         definitions = None
+        permanent_ids = torch.stack(
+            [
+                obs[key][..., PERMANENT_DEFINITION_INDEX]
+                for key in ("agent_permanents", "opponent_permanents")
+            ],
+            dim=1,
+        )
         if self.semantic_cards is not None:
             definitions = self.semantic_cards.definitions()
             cards, known = self.semantic_cards(obs, definitions)
@@ -371,8 +386,26 @@ class Agent(nn.Module):
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-        enc_agent_perms = self.perm_embedding(obs["agent_permanents"])
-        enc_opp_perms = self.perm_embedding(obs["opponent_permanents"])
+            permanent_definitions = self.semantic_cards.embed_definitions(
+                permanent_ids, definitions
+            )
+        else:
+            cards = self._generic_definitions(obs["semantic_cards"])
+            enc_agent_cards = enc_agent_cards + cards[:, 0]
+            enc_opp_cards = enc_opp_cards + cards[:, 1]
+            permanent_definitions = self._generic_definitions(permanent_ids)
+        permanent_features = [
+            torch.cat(
+                (obs[key][..., :PERMANENT_DEFINITION_INDEX], obs[key][..., -1:]), dim=-1
+            )
+            for key in ("agent_permanents", "opponent_permanents")
+        ]
+        enc_agent_perms = (
+            self.perm_embedding(permanent_features[0]) + permanent_definitions[:, 0]
+        )
+        enc_opp_perms = (
+            self.perm_embedding(permanent_features[1]) + permanent_definitions[:, 1]
+        )
         object_parts = [
             enc_agent_player,
             enc_opp_player,
@@ -431,6 +464,17 @@ class Agent(nn.Module):
 
         validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity, history
+
+    def _generic_definitions(self, ids: torch.Tensor) -> torch.Tensor:
+        """Reject unbound/fractional IDs instead of silently aliasing definitions."""
+        assert self.card_definitions is not None
+        if (
+            not torch.equal(ids, ids.floor())
+            or bool((ids < 0).any())
+            or bool((ids >= self.card_definitions.num_embeddings).any())
+        ):
+            raise ValueError("policy received an unadmitted card definition")
+        return self.card_definitions(ids.long())
 
     def _belief_rows(
         self, obs: Dict[str, torch.Tensor]

@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX
 from manabot.infra.hypers import AgentSpec, RewardHypers
 from manabot.model.agent import Agent
 from manabot.sim.net_opponent import SeatRoutedCollector
@@ -150,7 +151,12 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
         "agent_permanents",
         "opponent_permanents",
     ):
-        changed[key][changed[key + "_valid"] == 0] = 123
+        padding = changed[key + "_valid"] == 0
+        changed[key][padding] = 123
+        if key.endswith("permanents"):
+            # Categorical IDs must remain admitted even in unused slots. Vary a
+            # valid identity alongside arbitrary numeric padding features.
+            changed[key][..., PERMANENT_DEFINITION_INDEX][padding] = 1
     actual = agent.forward_distribution(changed)
     for left, right in zip(expected, actual, strict=True):
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)

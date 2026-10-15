@@ -13,6 +13,7 @@ import torch
 from torch import Tensor
 from torch.nn import functional as F
 
+from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.agent import Agent
 from manabot.model.policy_distribution import (
     NumericalError,
@@ -271,7 +272,7 @@ def update_move_iteration(
                 *actions.shape, 1, observations["actions"].shape[-1]
             ),
         )
-        .squeeze(2)[..., :-1]
+        .squeeze(2)[..., :ACTION_TYPE_DIM]
         .argmax(-1)
     )
     diagnostics["selection_groups"] = selection_diagnostics(

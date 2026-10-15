@@ -443,7 +443,15 @@ class TestObservationEncoder:
         encoder.object_to_index = {1: 0, 2: 1}
         obs = SimpleNamespace(
             action_space=SimpleNamespace(
-                actions=[SimpleNamespace(action_type=0, focus=[1, 2])]
+                actions=[
+                    SimpleNamespace(
+                        action_type=0,
+                        focus=[1, 2],
+                        declared=None,
+                        mode_index=None,
+                        ability_index=None,
+                    )
+                ]
             )
         )
         with pytest.raises(ValueError, match="capacity exceeded: action focus"):

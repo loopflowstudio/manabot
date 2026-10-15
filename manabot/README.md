@@ -76,9 +76,10 @@ its existing bounded feature model. These models do not certify strength or
 semantic transfer; no previous checkpoint is relabeled compatible.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current world is **w4** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current world is **w6** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including corrected-Learn w3 artifacts, are not comparable to w4. The local
+including w5 artifacts with aliased object and mode choices, are not compatible
+with w6. The local
 challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](../docs/rules/learn-lesson.md).

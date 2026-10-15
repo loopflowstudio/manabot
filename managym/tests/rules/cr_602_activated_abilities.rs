@@ -181,3 +181,64 @@ fn cr_602_observation_exposes_stack_object_metadata_for_ability() {
     assert_eq!(stack_object.ability_index, Some(0));
     assert!(stack_object.targets.is_empty());
 }
+
+/// Two abilities on the same source must survive observation and encoding.
+#[test]
+fn cr_602_policy_preserves_ability_index_and_resolution() {
+    use managym::{
+        agent::{
+            action::Action,
+            observation_encoder::{
+                encode, ObservationEncoderConfig, ACTION_ABILITY_INDEX, ACTION_DIM,
+            },
+        },
+        state::ability::Effect,
+    };
+    for chosen in 0..2 {
+        let mut s = setup_shivan_with_mountains(60220, 1);
+        let shivan = s.battlefield_permanents_named(0, "Shivan Dragon")[0];
+        let card = s.game().state.permanents[shivan].as_ref().unwrap().card;
+        // Detach this scenario's printed definition; no production card is added.
+        let mut second = s.game().state.cards[card].activated_abilities[0].clone();
+        second.effect = Effect::ModifyUntilEot {
+            power_delta: 0,
+            toughness_delta: 1,
+        };
+        s.game_mut().state.cards[card]
+            .activated_abilities
+            .push(second);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let indices: Vec<_> = s
+            .action_space()
+            .actions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, action)| {
+                matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == shivan)
+                    .then_some(i)
+            })
+            .collect();
+        assert_eq!(indices.len(), 2);
+        let obs = Observation::new(s.game(), &[]);
+        let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
+        for (ability, &index) in indices.iter().enumerate() {
+            assert_eq!(obs.action_space.actions[index].ability_index, Some(ability));
+            assert_eq!(
+                encoded.actions[index * ACTION_DIM + ACTION_ABILITY_INDEX],
+                (ability + 1) as f32
+            );
+        }
+        assert_eq!(
+            obs.action_space.actions[indices[0]].focus,
+            obs.action_space.actions[indices[1]].focus
+        );
+        s.step_action(indices[chosen]);
+        s.pass_priority();
+        s.pass_priority();
+        let permanent = s.game().state.permanents[shivan].as_ref().unwrap();
+        assert_eq!(
+            (permanent.temp_power, permanent.temp_toughness),
+            if chosen == 0 { (1, 0) } else { (0, 1) }
+        );
+    }
+}

@@ -9,6 +9,7 @@ from manabot.sim.flat_mc import load_checkpoint_agent
 from manabot.training.execution import execute_regime
 from manabot.training.models import TrainingRegime
 from manabot.verify.store import VerifyStore
+import managym
 
 
 def bounded_regime():
@@ -17,6 +18,8 @@ def bounded_regime():
         / "experiments/regimes/direct-self-play.json"
     )
     recipe = TrainingRegime.model_validate_json(path.read_text())
+    recipe.world = managym.WORLD_VERSION
+    recipe.id = f"test-{recipe.world}-{recipe.id}"
     recipe.agent.hidden_dim = 8
     recipe.agent.num_attention_heads = 2
     recipe.stages = recipe.stages[:2]

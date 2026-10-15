@@ -5,6 +5,7 @@ import math
 import numpy as np
 import torch
 
+from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.agent import Agent
 from manabot.model.policy_distribution import (
     NumericalError,
@@ -120,13 +121,13 @@ def update_iteration(
         "value_residual_abs_mean": float((returns - values.flatten()).abs().mean()),
     }
     chosen_types = obs["actions"][
-        torch.arange(len(actions), device=dev), actions, :-1
+        torch.arange(len(actions), device=dev), actions, :ACTION_TYPE_DIM
     ].argmax(-1)
     diagnostics["action_types"] = torch.bincount(
-        chosen_types, minlength=obs["actions"].shape[-1] - 1
+        chosen_types, minlength=ACTION_TYPE_DIM
     ).tolist()
     diagnostics["selected_action_types"] = torch.bincount(
-        chosen_types[selected], minlength=obs["actions"].shape[-1] - 1
+        chosen_types[selected], minlength=ACTION_TYPE_DIM
     ).tolist()
     diagnostics["selection_groups"] = selection_diagnostics(
         advantages.reshape_as(ends),

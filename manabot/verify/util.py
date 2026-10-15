@@ -12,7 +12,7 @@ import torch
 
 from manabot.config.load import deep_merge
 from manabot.env import Env, Match, ObservationSpace, Reward, build_opponent_policy
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ACTION_DECLARED_INDEX, ActionEnum
 from manabot.infra import Hypers
 import managym
 
@@ -170,7 +170,9 @@ def _is_action_type(
 
 
 def _is_attack_action(obs: dict[str, np.ndarray], action_index: int) -> bool:
-    return _is_action_type(obs, action_index, ActionEnum.DECLARE_ATTACKER)
+    return _is_action_type(obs, action_index, ActionEnum.DECLARE_ATTACKER) and bool(
+        obs["actions"][action_index, ACTION_DECLARED_INDEX] > 0
+    )
 
 
 def _is_land_action(obs: dict[str, np.ndarray], action_index: int) -> bool:

@@ -38,7 +38,7 @@ import numpy as np
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
 from manabot.model.agent import Agent
 from manabot.model.policy_distribution import (
     NumericalError,
@@ -383,7 +383,7 @@ class SeatRoutedCollector:
     def _count_action_types(
         self, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
     ) -> None:
-        chosen = self._buffers["actions"][rows, actions, :-1]
+        chosen = self._buffers["actions"][rows, actions, :ACTION_TYPE_DIM]
         type_indices = chosen.argmax(axis=1)
         typed = chosen.max(axis=1) > 0
         for idx, has_type in zip(type_indices, typed):

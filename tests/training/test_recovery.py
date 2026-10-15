@@ -19,6 +19,7 @@ from manabot.training.models import (
 )
 from manabot.training.recovery import attempt_lock, load_update
 from manabot.verify.store import VerifyStore
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -43,6 +44,8 @@ def recipe() -> TrainingRegime:
     value = TrainingRegime.model_validate_json(
         (ROOT / "experiments/regimes/direct-self-play.json").read_text()
     )
+    value.world = managym.WORLD_VERSION
+    value.id = f"test-{value.world}-{value.id}"
     value.stages = value.stages[:1]
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)
