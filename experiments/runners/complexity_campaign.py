@@ -147,12 +147,13 @@ def calibrated_plan(calibration: Path, *, total_seconds: float) -> ComplexityPla
                 raise ValueError(f"incomplete calibration evaluation: {pool}/{anchor}")
             hashes[str(path.relative_to(calibration))] = file_sha256(path)
             # Charge the full coordinator/replay cost; also protect slow role cells.
-            evaluation_costs.append(result.evaluation_seconds / len(result.rows))
+            panel_costs = [result.evaluation_seconds / len(result.rows)]
             by_cell = ((0, 3), (1, 2), (4, 5), (6, 7))
-            evaluation_costs.extend(
+            panel_costs.extend(
                 sum(row.game_seconds for row in result.rows if row.leg in legs) / 2
                 for legs in by_cell
             )
+            evaluation_costs.append(max(panel_costs))
     slowest = max(update_costs)
     if slowest <= 0:
         raise ValueError("calibration has no positive measured update cost")
@@ -161,7 +162,7 @@ def calibrated_plan(calibration: Path, *, total_seconds: float) -> ComplexityPla
         updates=updates,
         training_seconds_per_run=7200,
         total_seconds=total_seconds,
-        evaluation_reserve_seconds=36000 * 1.5 * max(evaluation_costs),
+        evaluation_reserve_seconds=6000 * 1.5 * sum(evaluation_costs),
         calibration_hashes=hashes,
     )
 
