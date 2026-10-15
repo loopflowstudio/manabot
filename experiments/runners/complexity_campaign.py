@@ -110,6 +110,20 @@ class ComplexityPlan(Strict):
             range(1_225_100_000 + ordinal * 1000, 1_225_100_050 + ordinal * 1000)
         )
 
+    def protocol(
+        self, pool: Pool, anchor: Literal["scripted_greedy", "random"], update: int
+    ) -> MonitorProtocol:
+        return MonitorProtocol(
+            authored_matchup=roster(pool),
+            include_mirrors=True,
+            deal_seeds=self.deals(update),
+            opponent=anchor,
+            purpose="frozen-study-evaluation",
+            study_protocol_sha256=self.digest,
+            bootstrap_seed=12290,
+            bootstrap_replicates=10000,
+        )
+
 
 def calibrated_plan(calibration: Path, *, total_seconds: float) -> ComplexityPlan:
     """Admit unchanged cohort using 1.5× observed worst block/cell costs.
@@ -292,16 +306,7 @@ def execute(plan: ComplexityPlan) -> None:
                 for point in points:
                     milestone = point.coordinates.updates
                     for anchor in ("scripted_greedy", "random"):
-                        protocol = MonitorProtocol(
-                            authored_matchup=roster(pool),
-                            include_mirrors=True,
-                            deal_seeds=plan.deals(milestone),
-                            opponent=anchor,
-                            purpose="frozen-study-evaluation",
-                            study_protocol_sha256=plan.digest,
-                            bootstrap_seed=12290,
-                            bootstrap_replicates=10000,
-                        )
+                        protocol = plan.protocol(pool, anchor, milestone)
                         variants = (
                             (("candidate", point),)
                             if milestone == 0

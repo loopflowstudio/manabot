@@ -298,3 +298,17 @@ counts/seeds/recipes remain unchanged; no learned attempt was replaced. First
 `l1-12251/training/run.json` confirms learning has begun. SDK root progress does
 not aggregate child update clocks; nested TrainingRun receipts own per-fit work.
 The failed first scientific attempt remains retained and charged.
+
+## Offline scientific report (2026-10-14)
+
+`complexity_report` reads frozen plans/TrainingRuns/arena results and generates
+a create-once editable notebook, read-only HTML and hash-bound analysis JSON.
+It preserves four role cells and independent-seed versus whole-deal uncertainty,
+rejects protocol/source mismatches, and shows missing cohorts as unavailable.
+Reported executor/evaluator components do not invent inclusive settlement.
+Four report/declaration checks passed; real partial Mini evidence rendered
+headlessly at `.runs/mtg122/report/comparison.html`. This is a saved snapshot,
+not a live service or a learned result. No training/evaluation ran locally.
+The frozen scientific source was not edited; shared protocol construction in
+the checkout now also admits the offline reader. Final interpretation and
+all-attempt cost/artifact settlement remain open.

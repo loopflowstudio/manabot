@@ -317,3 +317,28 @@ updates need not mean equal exposures. Executor elapsed time is not total campai
 cost: external evaluation, transfer and failed-attempt accounting still belong to
 the campaign ledger. Censoring bounds are observation intervals, not statistical
 confidence intervals or proof of continuous progress between checkpoints.
+
+### Complexity notebook and dashboard
+
+```bash
+uv run --extra notebook python -m experiments.runners.complexity_report .runs/mtg122/science --out .runs/mtg122/report
+```
+
+This command reads saved scientific-plan, TrainingRun and arena JSON only. It
+creates `comparison.ipynb` once, then executes an in-memory copy to generate
+`comparison.html` and `comparison.analysis.json`. Existing notebook bytes and
+edits are preserved. Cells never train, play games, rent hardware or contact a
+tracker. The dashboard is a saved snapshot, not live monitoring.
+
+Each candidate/control pair must match the frozen role/deal protocol, exact
+producer initialization and checkpoint coordinate. Different scientific source
+freezes cannot be pooled. Tables retain all four oriented role cells and each
+seed; endpoint mean/95% t intervals require all three fits. Plots show per-fit
+whole-deal uncertainty, separately from training-seed uncertainty. Missing
+cohorts are unavailable rather than zero strength. Raw cross-pool scores are not
+an environment-difficulty ranking. Evidence hashes bind report regeneration.
+
+Displayed executor and evaluator costs are components, not the inclusive total.
+Launcher settlement must additionally retain failed setup, calibration, transfer,
+publication and reporting costs. Pending settlement remains explicit. Synthetic
+report tests and a running partial report establish no learned improvement.
