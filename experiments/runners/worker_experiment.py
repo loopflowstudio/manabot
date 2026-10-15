@@ -1,11 +1,13 @@
-"""Run bounded host replay and shared-CUDA worker curves on one paid machine.
+"""Run bounded collector and inference-ownership curves on one paid machine.
 
 Etude owns source admission, rental limits and deletion. This process records
-hardware/limits and runs the same resident workload in both modes, preserving
-failed/partial output. It never rents, changes credentials or retries a cell.
+hardware/limits and runs the same resident workload across selected modes,
+preserving failed/partial output. It never rents, changes credentials or retries
+a cell. Ordinary TrainingRun controls anchor the single-collector training path.
 """
 
 import argparse
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -24,6 +26,15 @@ from experiments.runners.worker_scaling import write_json
 from manabot.training.source_bundle import SourceBundle, source_commit
 
 
+@dataclass(frozen=True)
+class Trial:
+    name: str
+    device: str
+    repeats: int = 3
+    seconds: int = 600
+    profile: bool = False
+
+
 def read_optional(path: str) -> str | None:
     source = Path(path)
     return source.read_text() if source.exists() else None
@@ -38,7 +49,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--expected-gpu", required=True)
-    parser.add_argument("--replay-only", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--replay-only", action="store_true")
+    mode.add_argument("--serving-ownership", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     if config_path := os.environ.get("ETUDE_CONFIG"):
@@ -61,6 +74,8 @@ def main() -> None:
         args.out / "hardware.json",
         {
             "gpu": name,
+            "selected_device": torch.cuda.current_device(),
+            "visible_cuda_devices": torch.cuda.device_count(),
             "gpu_bytes": torch.cuda.get_device_properties(0).total_memory,
             "torch": str(torch.__version__),
             "cuda": str(torch.version.cuda),
@@ -77,7 +92,24 @@ def main() -> None:
     )
     statuses = []
     try:
-        for device in (("replay",) if args.replay_only else ("replay", "cuda")):
+        if args.serving_ownership:
+            # Interleave independent complete process-pool lifetimes, retaining
+            # startup in each receipt and all three fixed-work worker counts.
+            trials = [
+                Trial(f"ownership-{index}-{device}", device, repeats=1, seconds=180)
+                for index, device in enumerate(
+                    ("cuda", "cuda-local", "cuda-local", "cuda", "cuda", "cuda-local")
+                )
+            ]
+            trials.append(
+                Trial("service-profile", "cuda", repeats=1, seconds=45, profile=True)
+            )
+        else:
+            trials = [
+                Trial(device, device)
+                for device in (("replay",) if args.replay_only else ("replay", "cuda"))
+            ]
+        for trial in trials:
             command = [
                 sys.executable,
                 "-m",
@@ -85,24 +117,25 @@ def main() -> None:
                 "--tape",
                 "experiments/data/worker-scaling/tape-w6",
                 "--out",
-                str(args.out / device),
+                str(args.out / trial.name),
                 "--device",
-                device,
+                trial.device,
                 "--actors",
                 "64",
                 "--repeats",
-                "3",
+                str(trial.repeats),
                 "--seconds",
-                "600",
+                str(trial.seconds),
                 "--rss-gib",
                 "24",
-                *(["--capture-replay"] if device == "replay" else []),
+                *(["--capture-replay"] if trial.device == "replay" else []),
+                *(["--profile"] if trial.profile else []),
             ]
             started = time.monotonic()
             result = subprocess.run(command, check=False)
             statuses.append(
                 {
-                    "device": device,
+                    "device": trial.name,
                     "exit_code": result.returncode,
                     "seconds": time.monotonic() - started,
                     "command": command,
@@ -112,7 +145,7 @@ def main() -> None:
         tape = Tape.model_validate_json(
             Path("experiments/data/worker-scaling/tape-w6/tape.json").read_text()
         )
-        for streams in (() if args.replay_only else (512, 4096)):
+        for streams in () if args.replay_only else (512, 4096):
             root = args.out / f"ordinary-s{streams}"
             root.mkdir()
             write_json(root / "baseline.json", tape.recipe.model_dump(mode="json"))

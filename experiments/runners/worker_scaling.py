@@ -5,8 +5,9 @@ RSS. The controller coordinates prepare/collect/verify barriers; workers retain
 all actors and rollouts until verification finishes. Collection wall time includes
 IPC dispatch and the slowest worker. All other phases remain in the receipt.
 
-This is host replay, not GPU serving or learning. Repeated actors share one frozen
-trajectory intentionally. Run through uv; see experiments/protocols/.
+Modes use recorded outputs, a shared CUDA service, or worker-local CUDA models.
+No optimizer runs inside this curve. Repeated actors share one frozen trajectory
+intentionally. Run through uv; see experiments/protocols/.
 """
 
 import argparse
@@ -48,10 +49,16 @@ def read_payload(line: str) -> Payload:
 def worker(args: argparse.Namespace) -> None:
     import torch
 
-    from experiments.runners.pipeline_benchmark import PreparedReplay
+    from experiments.runners.pipeline_benchmark import PreparedReplay, Tape
+    from experiments.runners.worker_inference import CudaPolicy
 
     torch.set_num_threads(1)
     forward = None
+    policy: CudaPolicy | None = None
+    if args.device == "cuda-local":
+        tape = Tape.model_validate_json((args.tape / "tape.json").read_text())
+        policy = CudaPolicy(tape)
+        forward = policy.forward
     if args.exchange is not None:
         from experiments.runners.worker_inference import Exchange
 
@@ -62,6 +69,8 @@ def worker(args: argparse.Namespace) -> None:
         stage = command["stage"]
         started = time.perf_counter()
         cpu = resource.getrusage(resource.RUSAGE_SELF)
+        inference_calls = policy.calls if policy is not None else 0
+        inference_seconds = policy.seconds if policy is not None else 0.0
         result: Payload = {"worker": args.worker, "stage": stage}
         if stage == "prepare":
             actors.clear()
@@ -96,6 +105,13 @@ def worker(args: argparse.Namespace) -> None:
             system_seconds=finished.ru_stime - cpu.ru_stime,
             rss_bytes=psutil.Process().memory_info().rss,
         )
+        if policy is not None:
+            result.update(
+                inference_calls=policy.calls - inference_calls,
+                inference_seconds=policy.seconds - inference_seconds,
+                gpu_peak_allocated_bytes=torch.cuda.max_memory_allocated(),
+                gpu_peak_reserved_bytes=torch.cuda.max_memory_reserved(),
+            )
         print(json.dumps(result), flush=True)
 
 
@@ -113,6 +129,7 @@ def barrier(
 ) -> Payload:
     """Dispatch every worker before waiting; reject deaths and stage mismatch."""
     started = time.perf_counter()
+    cpu = resource.getrusage(resource.RUSAGE_SELF)
     results: list[Json] = []
     requests = 0
     service_seconds = 0.0
@@ -159,8 +176,11 @@ def barrier(
                     raise ValueError("worker response does not match barrier")
                 results.append(result)
                 selector.unregister(key.fileobj)
+    finished = resource.getrusage(resource.RUSAGE_SELF)
     return {
         "seconds": time.perf_counter() - started,
+        "controller_user_seconds": finished.ru_utime - cpu.ru_utime,
+        "controller_system_seconds": finished.ru_stime - cpu.ru_stime,
         "workers": results,
         "requests": requests,
         "service_seconds": service_seconds,
@@ -205,7 +225,7 @@ def controller(args: argparse.Namespace) -> None:
         hardware["capture"] = (
             "fresh CPU policy on this host; original portability audited separately"
         )
-    if args.device == "cuda":
+    if args.device in {"cuda", "cuda-local"}:
         from experiments.runners.worker_inference import CudaService
 
         service = CudaService(args.tape, args.out)
@@ -213,6 +233,18 @@ def controller(args: argparse.Namespace) -> None:
         tape = Tape.model_validate_json((args.tape / "tape.json").read_text())
         serve = service.handle
         hardware = dict(service.hardware)
+        if args.profile:
+            from experiments.runners.worker_service_profile import profile_service
+
+            profile_service(service, args.out)
+            return
+        if args.device == "cuda-local":
+            args.exchange = None
+            serve = None
+            hardware.update(
+                mode="worker-local-cuda",
+                ownership="one model per persistent worker on the same GPU; controller reference model remains resident",
+            )
     write_json(
         args.out / "identity.json",
         {
@@ -246,6 +278,8 @@ def controller(args: argparse.Namespace) -> None:
                 str(args.tape),
                 "--out",
                 str(args.out),
+                "--device",
+                args.device,
                 *exchange_args,
             ],
             stdin=subprocess.PIPE,
@@ -275,6 +309,11 @@ def controller(args: argparse.Namespace) -> None:
                 collected = barrier(
                     workers, [{"stage": "collect"} for _ in workers], serve
                 )
+                if args.device in {"cuda", "cuda-local"}:
+                    collected.update(
+                        controller_gpu_peak_allocated_bytes=torch.cuda.max_memory_allocated(),
+                        controller_gpu_peak_reserved_bytes=torch.cuda.max_memory_reserved(),
+                    )
                 write_json(stem.with_suffix(".collect.json"), collected)
                 verified = barrier(workers, [{"stage": "verify"} for _ in workers])
                 write_json(stem.with_suffix(".verify.json"), verified)
@@ -377,18 +416,27 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--seconds", type=float, default=14.5)
     parser.add_argument("--rss-gib", type=float, default=6)
-    parser.add_argument("--device", choices=["replay", "cuda"], default="replay")
+    parser.add_argument(
+        "--device", choices=["replay", "cuda", "cuda-local"], default="replay"
+    )
     parser.add_argument(
         "--capture-replay",
         action="store_true",
         help="audit the supplied tape, then capture a fresh host CPU tape",
     )
     parser.add_argument("--exchange", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="attribute one shared service separately from worker timing",
+    )
     parser.add_argument("--controller", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--worker", type=int, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.capture_replay and args.device != "replay":
         parser.error("--capture-replay requires --device replay")
+    if args.profile and args.device != "cuda":
+        parser.error("--profile requires --device cuda")
     if (
         args.actors < 4
         or args.actors > 64

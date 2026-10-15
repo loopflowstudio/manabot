@@ -1,16 +1,19 @@
-"""Single-flight shared-memory transport to one real CUDA policy service.
+"""Frozen CUDA policies and single-flight transport to a shared policy process.
 
 Each worker owns one input/output slot. It publishes a request only after writing
 inputs, and cannot reuse its slot until the controller acknowledges CPU outputs.
 The controller serves complete requests at their original batch sizes. This
 isolates actual collector concurrency without introducing cross-request batching
 or changing the neural computation's batch shape between worker-count cases.
+CudaPolicy can instead live in each worker, preserving the same forward path
+while removing the shared dispatcher and its transport from collection.
 """
 
 from collections.abc import Callable
 import json
 from pathlib import Path
 import sys
+import time
 from typing import TypeAlias
 
 import numpy as np
@@ -131,13 +134,10 @@ class Exchange:
 RequestHandler: TypeAlias = Callable[[int, int, int], None]
 
 
-class CudaService:
-    """One frozen CUDA model and four worker slots, owned by the controller."""
+class CudaPolicy:
+    """A frozen model owned by the calling process, with synchronous CPU outputs."""
 
-    def __init__(self, source_tape: Path, out: Path) -> None:
-        tape = Tape.model_validate_json((source_tape / "tape.json").read_text())
-        if tape.streams > 64:
-            raise ValueError("worker service supports at most64 streams per actor")
+    def __init__(self, tape: Tape) -> None:
         torch.set_num_threads(1)
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
@@ -147,6 +147,31 @@ class CudaService:
             .eval()
             .to("cuda")
         )
+        self.calls = 0
+        self.seconds = 0.0
+
+    def forward(
+        self, obs: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        started = time.perf_counter()
+        with torch.inference_mode():
+            logits, value = self.agent.forward_distribution(
+                {k: v.to("cuda") for k, v in obs.items()}
+            )
+            result = logits.cpu(), value.cpu()
+        self.calls += 1
+        self.seconds += time.perf_counter() - started
+        return result
+
+
+class CudaService(CudaPolicy):
+    """One frozen CUDA model and four worker slots, owned by the controller."""
+
+    def __init__(self, source_tape: Path, out: Path) -> None:
+        tape = Tape.model_validate_json((source_tape / "tape.json").read_text())
+        if tape.streams > 64:
+            raise ValueError("worker service supports at most64 streams per actor")
+        super().__init__(tape)
         self.tape_dir = out / "physical-tape"
         self.tape_dir.mkdir()
         # Freeze outputs on this GPU. CPU/CUDA numerical differences must not
@@ -179,15 +204,6 @@ class CudaService:
             "cuda": str(torch.version.cuda),
             "batching": "one complete request at a time, original batch shape",
         }
-
-    def forward(
-        self, obs: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        with torch.inference_mode():
-            logits, value = self.agent.forward_distribution(
-                {k: v.to("cuda") for k, v in obs.items()}
-            )
-            return logits.cpu(), value.cpu()
 
     def handle(self, worker: int, rows: int, sequence: int) -> None:
         self.exchanges[worker].serve(rows, sequence, self.forward)

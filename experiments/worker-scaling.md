@@ -94,3 +94,68 @@ PR submission synchronized upstream world w6. The current worker command uses
 `data/worker-scaling/tape-w6`; the initial laptop curve and queue calibration
 remain w4 historical evidence. The paid comparison captures w6 policies on each
 GPU. No w4 timing coefficient is claimed to calibrate w6.
+
+## Physical single-GPU results (w6)
+
+Three repetitions per worker count, fixed 32,768 learner rows per case:
+
+| Host / mode | 1 worker rows/s | 2 workers rows/s | 4 workers rows/s | 4-worker speedup |
+|---|---:|---:|---:|---:|
+| H100 host, recorded CPU outputs | 5,712 | 10,788 | 21,838 | 3.82x |
+| RTX 5090, shared CUDA | 1,160 | 1,418 | 1,389 | 1.20x |
+| H100, shared CUDA | 716 | 1,375 | 1,593 | 2.22x |
+
+These are medians of collection wall times, with exact verification of all 576
+actors in each completed mode. The Linux CPU result confirms that coarse process
+parallelism works. The shared service occupies about 98% of four-worker wall time
+on both hosts. Its interval includes host work and transfers; it is not a GPU
+utilization measurement. Original request sizes are small (at most 64 rows), and
+requests are serialized. These results do not establish a single-GPU ceiling.
+
+Ordinary three-update training at 4,096 streams delivered 2,277 learner rows/s on
+the RTX 5090 and 2,546 on H100. At actual rental rates of $1.19/h and $3.99/h,
+respectively, these project to 6.89 million versus 2.30 million rows per rental
+dollar, excluding setup. The RTX 5090 is the economic choice among these measured
+hosts for this width-64, one-layer policy. Peak allocated GPU memory was about
+10.2 GB on each. Short runs, different host CPUs, and untrained policies limit
+extrapolation; this is neither a global hardware optimum nor a strength result.
+
+The first RTX CPU replay failed the Mac tape's final parity check. H100 diagnostics
+subsequently isolated its portability mismatch to the batch hash; acting inputs,
+final buffers, journals and reset seeds matched. Fresh host-local CPU capture
+passed every worker check. This does not establish which batch field differed or
+its cause. The failed portability result remains in the receipts.
+
+Run012 used source `1f86d136a4e071ac34a9449705bfc225297eb185`; run013 used
+`a8574ddb056f6af54ef43b7e2d9e00303d8b5ba8` with named mismatch diagnostics and
+host-local CPU capture. CUDA and ordinary training algorithms were unchanged.
+Readable summaries, exact raw structured receipts, output manifests, retrieval
+verification and deletion records are retained in
+[data/worker-scaling/gpu-012](data/worker-scaling/gpu-012) and
+[data/worker-scaling/gpu-013](data/worker-scaling/gpu-013). `receipts.tar.gz` preserves
+original JSON/log files; model binaries and exchange slots remain in the verified
+Etude outputs identified by the included lifecycle manifests.
+
+## Inference serving optimization
+
+The next optimization target is inference serving. `--device cuda-local` gives
+each persistent worker its own model on the same GPU, keeping the original request
+shapes and exact-output checks. It is a candidate for comparison, not an accepted
+speedup. The shared mode remains the baseline. `--profile --device cuda` records
+separate synchronized transfer/forward attribution and a CPU/CUDA trace.
+
+`worker_experiment --serving-ownership` interleaves three complete curves per
+ownership strategy, then runs the separate profile and ordinary training controls.
+See the [prospective protocol](protocols/inference-serving.txt). The shared service
+is currently a benchmark implementation; ordinary TrainingRun uses its collector's
+GPU model directly. An isolated ownership win does not prove a training gain.
+
+The separate CPU-only RTX5090 run014 used a different host (Xeon Gold6530,
+13.6-core quota) and measured 1,581 / 2,396 / 3,473 learner rows/s at 1/2/4workers,
+a 2.20x four-worker gain. All576actor witnesses matched. Its sampled host load
+was232–249 and timings varied substantially: one-worker16.17–22.81s, four-worker
+6.79–13.19s. Load alone does not identify the cause. This CPU curve must not be
+paired with run012's GPU curve as a same-host decomposition. It demonstrates why
+GPU type alone cannot determine a training rental's throughput. Raw evidence is in
+[data/worker-scaling/gpu-014](data/worker-scaling/gpu-014). All three rentals were
+deleted; their receipts distinguish complete-rental costs from job-only estimates.
