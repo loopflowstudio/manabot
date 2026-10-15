@@ -1,51 +1,58 @@
-# Learner admission and backpressure
+# Learner admission and coupled cohort model
 
-This is a scheduling model, not a distributed learner. The complete preregistered
-protocol and analysis are retained in `accelerator-probes/6f66accbba689162134fad90ae0fb39fcd73baa166a12efe4ab7bcb83360ad96.learner-notes.txt`.
+## Coupled zero-lag control
 
-Current code collects a frozen behavior batch, then updates policy/EMA
-(`manabot/training/execution.py:1270–1355`). Ataraxos filtering is centralized,
-with one optimizer step per retained timestep (`ataraxos.py:211–310`). Existing
-research leaves nonzero policy-lag admission unselected (`docs/distributed-rl.md`).
-Thus equal row counts do not imply equal learning work: the real 512-row probes
-used 96 optimizer steps at 16 streams versus 24 at 64 streams over three updates.
+`scratch/cohort-flow-probe.py` now reuses the existing finite-request inference
+simulator, followed by measured ordinary learning service. One global cohort leases
+one64stream actor for8×64, or eight for8×512. Inference drains before one central
+update; publication precedes the next lease. Extra actor capacity stays idle.
+This models exclusive phase sharing on the GPUs, not concurrent inference/training
+or independent Adam owners. Larger unmeasured learner shapes are rejected.
 
-`scratch/learner-flow-probe.py` calibrates one fixed 8×64 batch from the retained
-L4 reference run: mean collection 0.395460 seconds, learning 0.250497 seconds.
-It counts production-start policy versions, waiting time, completed learning,
-stale/full discards, and queued/producer-held/active packets. Every admitted
-packet must have version lag zero. Synthetic offered rates are independent of
-the inference simulator; larger global cohorts require separate calibration.
+Seed10349 has8×64learner rows,1,099decisions,59requests and zero finished/truncated
+games. Input auditing and three exact replays passed. Repeat1:28.606ms host work,
+4.395ms final tail. Model/world contracts and hashes are checked; CPU/GPU trajectory
+equality is not claimed.
 
-Seventeen cases and serial timing, partial service, fractional-clock, zero-lag,
-block/drop, conservation and replay checks passed. Final evidence is
-`accelerator-probes/learner-flow-clock.json`. Earlier reports remain; a timestamp
-roundoff fix admits exact-horizon completions within 1e-12 seconds, never stale
-policy versions. Three invocations cost 0.703 seconds; legacy probe usage at that point was232.905/240seconds.
-No GPU allocation occurred.
+Fourth-L4 completed reference learning service is0.2252/0.2361s per8×64 batch and
+0.3690s per8×512; `gpu-probes/l4-004/learner-service.json` retains cold/repeated
+samples.8×4096 has no complete-loop calibration. All shapes keep filtering populations
+explicit; stationary raw rows/s and retained optimizer exposures/s are separate.
 
-Key counterexamples:
+27cases and closed-form timing, lease, memory, horizon, publication, unsupported-shape,
+request/CPU conservation checks passed. Results: `accelerator-probes/cohort-flow-detail.json`.
+Earlier24case output and exact source snapshot remain. Conditional examples:
 
-- With 4,096 complete-batch producers and queue capacity one, blocking retained
-  up to **511 completed packets**: 509 held, one queued, one active. Dropping
-  overflow bounded that peak at two but discarded 510 packets for overflow.
-- Both modes learned only two of 8,193 produced batches; the rest were stale or
-  overflow discards. At eight producers offering half nominal learner capacity,
-  only two of 17 batches were learned. Speculation can waste work below capacity.
-- The serial control completed 20 iterations with no discards and 38.78% learner
-  duty. Version lag and wall-clock age are distinct; generated rows are not
-  admitted learning rows. Pending work at the finite cutoff remains counted.
+| Leased actors / collector CPUs / inference servers | Max batch | Raw learning rows/s |
+|---|---:|---:|
+|8 /8 /1|64|3,279|
+|8 /8 /1|256|3,654|
+|8 /8 /1|1024|3,517|
+|8 /8 /8|64|6,265|
+|8 /8 /8|256|4,571|
+|8 /8 /8|1024|3,517|
 
-These are scheduling counterexamples, not steady-state training predictions.
-Queue length alone cannot bound retention or make stale learning valid. Candidate
-controls include global batch leases, other zero-lag quotas, or a separately
-validated learning rule; none is selected. Next: measured global-cohort service
-and integration with inference sharing, rather than summing independent
-optimizers as one consistent learner.
+At8servers, configuring4,096actors leaves4,088idle and exactly the same rates.
+64servers also fail to improve this eight-actor cohort. At one server/batch256,
+doubling host speed gains0.20%; assumed10ms aggregation plus10ms publication costs
+1.75%. These dependencies prevent transferring an inference-only batching optimum
+to useful learning. They do not establish distributed performance or strength.
 
-Fourth-rental service points are now in `gpu-probes/l4-004/learner-service.json`.
-Three-update reference learning averages are0.2252/0.2361s for8×64 and0.3690s for
-8×512; the latter is a different centrally filtered batch, not eight independent
-updates. Keep cold and repeated method samples visible.8×4096 has two completed
-updates before a collector deadline, so no complete-loop calibration is admitted.
-The existing admission model still uses the earlier fixed8×64 calibration.
+Array accounting retains actor rollouts while copying one global batch:348,121,088
+bytes at eight actors, including native array buffers. Idle capacity has no instantiated
+collectors in this scenario. Native games, Python, models and staging are excluded.
+Ten-second horizons retain unfinished phases; completed learning and published
+versions are distinct. CPU-work totals explicitly exclude the partial final epoch.
+
+Reproduce with a fresh output:
+`uv run --no-sync python scratch/cohort-flow-probe.py --out scratch/accelerator-probes/cohort-new.json`.
+Protocol: `cohort-protocol.txt`; capture helper only invokes existing capture/replay.
+This pass used5.109commandseconds; legacy total238.718/240, no GPU allocation.
+
+Limits: cloned stationary untrained tape, separate L4 rentals/drivers for inference
+and learning, assumed links, one extra serving CPU thread/server. Zero aggregation/
+publication is an optimistic network bound. Actual policy evolution, target CPU
+contention, high-end GPU calibration and multi-GPU optimization remain unmeasured.
+The strict zero-lag barrier is a compatibility control, not a selected production
+architecture. Next validation needs matching physical service and traffic before
+using modeled rates to choose a distributed design.

@@ -87,7 +87,7 @@ uv run --no-sync python scratch/accelerator-queue-probe.py host --tape scratch/a
 
 Six focused tests passed; ten closed-form/conservation checks cover queue timing,
 finite completion, padding and host tails. All measured attempts used bounded
-supervision. The legacy wrapper has consumed233.608of240aggregate probe seconds;
+supervision. The legacy wrapper has consumed238.718of240aggregate probe seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits also remain unexhausted. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
@@ -115,13 +115,10 @@ Raw evidence and source snapshots are indexed by`accelerator-probes/artifact-man
 Complete previous notes and exact historical/current source snapshots are retained
 by hash in that manifest; no old result was overwritten.
 
-Learner admission/backpressure now has a separate pure scheduling model and
-physical512row 8x64 learning-service calibration: see learner-flow.md. It counts
-zero-lag admission, stale/full discards and blocked-producer packet retention.
-It is not yet coupled to inference/network or a global-cohort learning protocol.
-
-Fourth L4 calibration (`gpu-probes/l4-004/learner-service.json`) records complete
-8×64 and8×512 runs with individual cold/repeated phase samples; reference learning
-rows/s improved4.883× at512streams.8×4096 completed two updates but timed out in
-collection; no successful whole-loop point is inferred. A single512stream cache
-pair regressed collection26%, so do not extrapolate the64/256stream cache gain.
+The learner model now couples the existing inference queue to measured8×64/8×512
+central updates under a zero-lag cohort barrier. It counts idle actor capacity,
+retained arrays, partial horizons and publication. The27case result reverses the
+preferred inference batch between one and eight servers; extra actors beyond the
+measured learner shape stay idle. See `learner-flow.md` for protocol, reproduction,
+evidence and limits. This is a stationary scheduling control, not a distributed
+training implementation.8×4096 whole-loop service remains unavailable.

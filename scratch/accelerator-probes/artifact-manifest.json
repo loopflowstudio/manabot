@@ -905,6 +905,116 @@
       "path": "scratch/compare-training-states.py",
       "bytes": 5713,
       "sha256": "eab2f9f550b0962a863294024a186b06359b06842665ab2d97c13c59ab1b0c7d"
+    },
+    {
+      "path": "scratch/accelerator-probes/44a1c12352bd33bb6f4b30ffb2a3c2c8a8b06006adc152be122f995dd066ca6e.notes.txt",
+      "bytes": 7977,
+      "sha256": "44a1c12352bd33bb6f4b30ffb2a3c2c8a8b06006adc152be122f995dd066ca6e"
+    },
+    {
+      "path": "scratch/accelerator-probes/4e8a93c9578cdbd83de223b0adcb0374e8cba10ecd1f684a8ebd35d5d296d681.source.txt",
+      "bytes": 1686,
+      "sha256": "4e8a93c9578cdbd83de223b0adcb0374e8cba10ecd1f684a8ebd35d5d296d681"
+    },
+    {
+      "path": "scratch/accelerator-probes/6d17f2c38683675be63198a9cdf288a8beae5f1614b76c3cf9a6ea5b2cb0c33c.source.txt",
+      "bytes": 14681,
+      "sha256": "6d17f2c38683675be63198a9cdf288a8beae5f1614b76c3cf9a6ea5b2cb0c33c"
+    },
+    {
+      "path": "scratch/accelerator-probes/b6d8069e3d428ad7c425b4519b5e4b44cb9d55e11c6d8dd4442c283a2bca1107.source.txt",
+      "bytes": 15143,
+      "sha256": "b6d8069e3d428ad7c425b4519b5e4b44cb9d55e11c6d8dd4442c283a2bca1107"
+    },
+    {
+      "path": "scratch/accelerator-probes/cd9dea97691c1ed7a056f8aae2c88b03611acba75d30fdb8aa56142cf53a3ac4.notes.txt",
+      "bytes": 3316,
+      "sha256": "cd9dea97691c1ed7a056f8aae2c88b03611acba75d30fdb8aa56142cf53a3ac4"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-flow-detail.json",
+      "bytes": 46389,
+      "sha256": "5e967dc4ea022616b8fb56cfdf40220e5cde901da997206166638f250e8f3627"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-flow.json",
+      "bytes": 34668,
+      "sha256": "4230174e9ab327daa71434b5755d6540bdf9d64db9244fd831947f60ad1c2fab"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-t8-s64/outputs.pt",
+      "bytes": 316627,
+      "sha256": "885e65457053d23aefbb3cfca6fb9927aa5074682dfd3f6db8b10eb1c6c783e1"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-t8-s64/replay.json",
+      "bytes": 15225,
+      "sha256": "a82bdf2dc7b4b490a547516122e7291c3c2aabfe7fbebc146a4f3b4cf9f4452f"
+    },
+    {
+      "path": "scratch/accelerator-probes/cohort-t8-s64/tape.json",
+      "bytes": 41425,
+      "sha256": "caff7743072bb4b153b17e6093d0727b05e6f240005df1c89a379e240b582670"
+    },
+    {
+      "path": "scratch/capture-cohort-probe.py",
+      "bytes": 1686,
+      "sha256": "4e8a93c9578cdbd83de223b0adcb0374e8cba10ecd1f684a8ebd35d5d296d681"
+    },
+    {
+      "path": "scratch/cohort-flow-probe.py",
+      "bytes": 15143,
+      "sha256": "b6d8069e3d428ad7c425b4519b5e4b44cb9d55e11c6d8dd4442c283a2bca1107"
+    },
+    {
+      "path": "scratch/cohort-protocol.txt",
+      "bytes": 3066,
+      "sha256": "b909aeec58aec6bfb6f300c579aaf0d4fbda0ac784cbcea37252feee7f6abe8c"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-capture.receipt.json",
+      "bytes": 1290,
+      "sha256": "66b57a7e93446ce1e347e712e00fc9dbf97b01dedf6e356456d8f84852a0cd40"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-capture.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-capture.stdout.log",
+      "bytes": 126,
+      "sha256": "3fb6f8a20f8475cfbf6cea7e9688ee773eb3a9c255f30d22b4731fccc7235175"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-flow-detail.receipt.json",
+      "bytes": 1053,
+      "sha256": "e3f0a4243e827290b5d8934057ac4f118aae8e4e9c830f3490f152e903641c04"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-flow-detail.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-flow-detail.stdout.log",
+      "bytes": 186,
+      "sha256": "5686bea590d230a5bd6c494f7a1a3287aff35efd14ee59e6bd1f65ded614af28"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-flow.receipt.json",
+      "bytes": 1046,
+      "sha256": "69147f9171ff7cd60c573bd1d65c847c938d8b849583ee79cf460d84e9abd2f2"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-flow.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/cpu-probes/cohort-flow.stdout.log",
+      "bytes": 186,
+      "sha256": "0c7099c7a63d7529d9f68f4ba323294af883ab95750a80c301d318c99a77db85"
     }
   ]
 }
