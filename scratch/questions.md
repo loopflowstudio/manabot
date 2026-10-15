@@ -369,17 +369,7 @@ stopped to free transport during recovery, so full local archival remains open.
 
 ## Sustained horizon correction (2026-10-15)
 
-Jack Heart accepted targeting10000 updates per seed and reducing evaluation load,
-with a slight budget increase permitted in principle. Exact increased ceiling is
-not yet fixed. The running3200-update plan is unchanged; first fit was observed
-at155 updates. W6 calibration's slowest20-update block is3.6620606374s/update;
-three10000-update fits at the existing1.5x margin alone reserve45.78h. A proposed
-3600-game initialization/endpoint/frozen-control matrix (25deals ×8legs ×2anchors
-×3cohorts ×3seeds) adds4.88h at retained panel rates. Prior spending and setup push
-the inclusive requirement to roughly68h; proposed ceiling72h needs explicit
-confirmation because that is not a slight increase over48h. No live source,
-plan, seed, deadline or budget was silently changed. Historical running outputs
-remain evidence, not resumed optimizer/collector state for a new10000-update job.
+Earlier horizon/budget deliberation remains at `cd72366b`; subsequent decisions below supersede it.
 
 Jack Heart approved72 inclusive Mini hours. The replacement protocol fixes10000
 updates ×3 seeds,3600 evaluation games (initialization, endpoint and paired frozen
@@ -397,3 +387,9 @@ without further budget fine-tuning. Operational bound:80h inclusive (18h prior,
 the unchanged recipe; no further calibration. Committed baseline plan fixes10000
 updates ×3seeds and3600 games. Private calibration copy:
 `.runs/mtg122/w6-calibration-retained`. Earlier attempts remain retained/charged.
+
+The admitted baseline is now running: `335bd645dafe`, source `09dc662d`,
+session `f89409f36a91`, attempt `a9878311d7d9`; receipt
+`.runs/mtg122/w6-admitted-launch.json`. Native build and retained-calibration
+admission passed; first scientific seed12261 has a10000-update target. No new
+calibration or checkpoint continuation. Other attempts remain terminal and charged.
