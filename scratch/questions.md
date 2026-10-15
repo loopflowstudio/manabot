@@ -356,16 +356,9 @@ stops, with no quiet cohort reduction. The original product semantic catalog and
 small sustained masked-mean recipe are used; pool/curriculum contrasts stay deferred.
 Check: nine focused baseline/declaration/attack-choice checks passed on rebuilt w6.
 
-Corrected baseline Etude run `2b9b05606661` is running on Mini, frozen source
-`3ba24a2566e88b72ea8877c34760ef93802f84b5`, session `8195349c53c3`, attempt
-`9d6ff7a31ea6`. The initial183MB source delivery timed out before any start claim.
-The exact tar was separately staged and SHA256-checked; the same exclusive SDK
-start completed with an absolute deadline bounded from its original planned time.
-No replacement attempt, source change or allowance extension occurred. Receipts:
-`.runs/mtg122/w6-baseline-launch.json` and `w6-delivery-recovery.json`.
-Native w6 build completed; calibration precedes automatic count admission and
-three scientific fits. Prior evidence remains on Mini; partial local rsync was
-stopped to free transport during recovery, so full local archival remains open.
+The short w6 launch and source-delivery recovery remain at `cd72366b` and
+`.runs/mtg122/w6-baseline-launch.json`; that attempt was later cancelled.
+Prior originals remain on Mini; full local archival is incomplete.
 
 ## Sustained horizon correction (2026-10-15)
 
@@ -401,3 +394,10 @@ evaluation is supplemental, not a new scientific cohort or cross-world causal
 claim. Etude's own `reports write` generated `.runs/mtg122/etude-report/self-play.html`
 from copied SDK tracking files; it is a local snapshot, not live strength evidence.
 No strength evaluations were present and no auxiliary games have run yet.
+
+Jack Heart approved 500-update saves / 1,000-update diagnostics for future seeds
+and only the existing 5,000 export for seed12261. The Mini sidecar is waiting for
+that export, then holds the old job only after the completed 10,000-update fit.
+The immutable handoff and diagnostic budgets are in
+`experiments/corrected-world-baseline.md`; first-seed learning stays untouched.
+Check: seven focused cadence/declaration tests passed, no local scientific work.
