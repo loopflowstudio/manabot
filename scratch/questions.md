@@ -388,16 +388,18 @@ admission passed; first scientific seed12261 has a10000-update target. No new
 calibration or checkpoint continuation. Other attempts remain terminal and charged.
 
 Jack Heart requested quick latest-checkpoint evaluation and an Etude report.
-At4494 updates only initialization was exported; trained export is scheduled5000.
-Do not interrupt learning or evaluate initialization as a trained policy. Quick
-evaluation is supplemental, not a new scientific cohort or cross-world causal
-claim. Etude's own `reports write` generated `.runs/mtg122/etude-report/self-play.html`
-from copied SDK tracking files; it is a local snapshot, not live strength evidence.
-No strength evaluations were present and no auxiliary games have run yet.
+Etude reports are generated snapshots under `.runs/mtg122/etude-report`, not live
+strength evidence. At 4712 updates, seed12261 remained running, without its5000
+export. The bounded Mini watcher waits for that export and evaluates208 games,
+then holds only after the completed10000-update first fit.
 
-Jack Heart approved 500-update saves / 1,000-update diagnostics for future seeds
-and only the existing 5,000 export for seed12261. The Mini sidecar is waiting for
-that export, then holds the old job only after the completed 10,000-update fit.
-The immutable handoff and diagnostic budgets are in
-`experiments/corrected-world-baseline.md`; first-seed learning stays untouched.
-Check: seven focused cadence/declaration tests passed, no local scientific work.
+Jack Heart approved 500-update saves / 1000-update diagnostics for future seeds.
+Queued `c1ec4899c7dd`, source `135c34a0`, retains seed1 for fixed evaluation and
+runs12262/12263 with the new cadence. The44h cap and unchanged scientific plan
+are documented in `experiments/corrected-world-baseline.md`. Local bounded Etude
+controller PID50923 services the queue; it performs no training/evaluation.
+Receipt/log: `.runs/mtg122/w6-cadence-launch.json`, `cadence-controller.json`,
+`cadence-controller.log`. It was observed alive with successor queued behind
+`335bd645dafe`; this is not successor launch or midpoint strength evidence.
+Task periodic automation is disabled and CI watcher stopped; neither owns this
+scientific queue. Seven focused software checks passed; no local science ran.
