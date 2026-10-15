@@ -153,6 +153,11 @@ teacher/student, belief-modeling, and semantic-transfer frontiers. Live work
 and ownership remain in Linear; frozen predictions and results remain in
 `experiments/`.
 
+[Understanding Strategic Learning](LEARNING_RESEARCH_GUIDE.md) is a scientific
+guide informed by Ataraxos, covering regularization, training trajectories,
+strategic cycling, simulation efficiency, and policy-guided search. It frames
+research questions and experimental interpretation, not an implementation plan.
+
 ## Style
 
 ```python
