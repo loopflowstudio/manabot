@@ -1,0 +1,29 @@
+"""Freeze the same learner across three worlds; no scientific execution."""
+
+import pytest
+
+from experiments.runners.environment_complexity import calibrate, regime, roster
+
+
+def test_pool_recipes_only_change_declared_environment() -> None:
+    recipes = [regime(pool, updates=100, seconds=600) for pool in ("l1", "l2", "l3")]
+    common = []
+    for recipe in recipes:
+        value = recipe.model_dump()
+        value.pop("id")
+        value.pop("match")
+        common.append(value)
+        assert recipe.stages[0].matchup_curriculum == "cross-balanced"
+        assert recipe.stages[0].streams * recipe.stages[0].transitions == 256
+    assert common[0] == common[1] == common[2]
+    for pool, recipe in zip(("l1", "l2", "l3"), recipes, strict=True):
+        assert recipe.match == roster(pool).match()
+        assert recipe.match.content_pack == recipe.agent.semantic_pack
+
+
+def test_calibration_rejects_unowned_local_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ETUDE_RUN", raising=False)
+    with pytest.raises(ValueError, match="Etude-owned"):
+        calibrate()
