@@ -1,0 +1,13 @@
+{
+  "requested": "disabled",
+  "before": 0,
+  "after": 1,
+  "sysfs": {
+    "enabled": "always [madvise] never\n",
+    "defrag": "always defer defer+madvise [madvise] never\n",
+    "hpage_pmd_size": "2097152\n",
+    "use_zero_page": "1\n"
+  },
+  "process_status": "Name:\tpython3\nUmask:\t0022\nState:\tR (running)\nTgid:\t2153\nNgid:\t0\nPid:\t2153\nPPid:\t2152\nTracerPid:\t0\nUid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t64\nGroups:\t0 \nNStgid:\t2153\nNSpid:\t2153\nNSpgid:\t2153\nNSsid:\t2153\nKthread:\t0\nVmPeak:\t   26692 kB\nVmSize:\t   26648 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t   18412 kB\nVmRSS:\t   18412 kB\nRssAnon:\t    8320 kB\nRssFile:\t   10092 kB\nRssShmem:\t       0 kB\nVmData:\t   10488 kB\nVmStk:\t     132 kB\nVmExe:\t    2956 kB\nVmLib:\t    6100 kB\nVmPTE:\t      88 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t0\nuntag_mask:\t0xffffffffffffffff\nThreads:\t1\nSigQ:\t0/8255011\nSigPnd:\t0000000000000000\nShdPnd:\t0000000000000000\nSigBlk:\t0000000000000000\nSigIgn:\t0000000001001000\nSigCgt:\t0000000000000002\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1\nSpeculation_Store_Bypass:\tthread vulnerable\nSpeculationIndirectBranch:\tconditional enabled\nCpus_allowed:\tffff,ffffffff,ffffffff,ffffffff,ffffffff,ffffffff,ffffffff\nCpus_allowed_list:\t0-207\nMems_allowed:\t00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000000,00000003\nMems_allowed_list:\t0-1\nvoluntary_ctxt_switches:\t0\nnonvoluntary_ctxt_switches:\t1\nx86_Thread_features:\t\nx86_Thread_features_locked:\t\n",
+  "meaning": "Inherited control or process-only disable before ML imports."
+}

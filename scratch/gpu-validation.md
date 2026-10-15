@@ -1,38 +1,40 @@
 # GPU validation — evidence and budget
 
-Jack Heart authorized $50 total. All ten rentals are provider-confirmed deleted.
-Bills/whole-rental estimates total **$3.443180**; conservative charges $4.58 plus
-$5 ancillary reserve leave **$40.42 unallocated**, with no pending reservation.
-`gpu-probes/phase-010/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
+Jack Heart authorized $50 total. All eleven rentals are provider-confirmed deleted.
+Bills/whole-rental estimates total **$3.707791**; conservative charges $5.11 plus
+$5 ancillary reserve leave **$39.89 unallocated**, with no pending reservation.
+`gpu-probes/assembly-011/budget.json` freezes this receipt; `.runs/gpu-validation/budget.json`
 is the live ledger. Final invoices are not all settled.
 
-## Large-collection stalls: assembly boundary identified
+## Collection: CPU costs and a rejected memory-policy change
 
-Run010`4370fade4b40`, source`88e91fc149d6af2c46dc3834113313f0ad5ca257`,
-H100/driver580.126.09, retained4096streams x8steps and both seeds. Externally enforced
-25s collections:10349/reference was killed inside `_build_batch`, active at least
-14.532s; three cells completed. Completed assembly times ranged .863–7.194s;
-slow10349 staged assembly used6.551/2.681s system CPU versus .649/.635s user CPU.
-Container memory-pressure counters rose, but their scope does not isolate a cause.
-This localizes a new stall; it does not explain run009's untraced64.393s sample.
+Run011`ed9273017de6` compared default/process-disabled huge pages,4096streams x8steps,
+two seeds, two fresh collections per cell. All four cells completed; disabling THP
+made median collection4.00%/9.48% and assembly28.77%/40.87% slower. Both diagnostic
+advance gates missed. Allocation calls took5–8ms; row copy .704–1.060s dominated
+assembly. Sampled container pressure stayed flat during rows; the earlier stall did
+not recur. Eight samples match across policies and prior same-seed identities.
+All67manifest/69outputs verified. Keep default policy and run007 calibration.
+`collector-assembly-results.txt` records policy readback, counters and proof limits;
+`gpu-probes/assembly-011` retains raw evidence. The failed monitor was resumed for
+the same run; pod deletion confirmed. Next: matched actual1/2/4-worker replay scaling.
 
-Six retained samples match within seed; all four10350 samples match across variants
-and prior009. No completed10349 reference identity exists. All41manifest files and
-43outputs verified. Whole rental$.521702; pod deletion confirmed. Full outcomes,
-raw traces, limits and next discriminating checks: `collector-phase-results.txt`
-and `gpu-probes/phase-010`. Synchronized, process-isolated attribution supplies no
-speedup ratio. Native stepping is41–45% of completed10350 collection, so the earlier
-CPU-only1.25% share cannot rule out GPU-host parallelism. Assembly variability and
-real multiworker/shared-memory scaling remain unresolved; calibration stays run007.
+Run010`4370fade4b40` caught10349/reference at25s inside `_build_batch`, active at
+least14.532s. Three cells completed; assembly .863–7.194s, slow10349 calls dominated
+by system CPU. Container pressure rose but did not isolate a cause. Six retained
+samples match within seed; four10350 match across variants and prior009. The10349
+reference identity is missing. Native stepping was41–45% of completed10350 collection,
+contradicting transfer of the CPU-only1.25% share. `collector-phase-results.txt` and
+`gpu-probes/phase-010` retain all41manifest/43outputs. Synchronized/process-isolated
+attribution supplies no production speed ratio; the kernel-level cause stays open.
 
-Run009`d17e9ea3ee14`, source`677710a879e6e9b7c670d268e676a28658c8af8b`, tested
-ordinary64/512/4096stream x8step collection, two seeds, ABBA/BAAB. Four64/512 cells
-had exact trajectories but mixed gains:64stream1.078×/.951×,512stream1.438×/1.034×.
-One64case regressed5.13%; one512case missed10%; the large512gain has a slow first
-reference. Both4096cells timed out90s; one staged64.393s/reference6.625s pair was
-exact but incomplete and exceeded25s. All six fixed gates and18sample identities
-passed;28manifest/30outputs verified. `collector-staging-results.txt` retains every
-sample and proof limit. Ordinary collection performance gates remain unmet.
+Run009`d17e9ea3ee14` ordinary64/512/4096stream x8step ABBA/BAAB collection failed its
+performance gates.64stream gains1.078×/.951×;512stream1.438×/1.034×. One64case regressed
+5.13%; the large512gain has a slow first reference. Both4096cells timed out90s; one
+staged64.393s/reference6.625s pair was exact but incomplete and exceeded25s. All six
+fixed gates/18sample identities passed;28manifest/30outputs verified. Complete
+samples and proof limits remain in`collector-staging-results.txt`. Later faster
+runs do not erase these failures or identify the untraced64.393s sample's cause.
 
 ## Reusable serving buffers: narrower validation passed
 

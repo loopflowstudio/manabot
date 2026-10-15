@@ -81,8 +81,8 @@ its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
 calibration-analysis slice used19.589804seconds; conservative combined usage283.973775/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
-records$3.443180 billed/estimated rentals,$4.58 conservative charges+$5reserve,
-$40.42 free; all ten machines are confirmed deleted.
+records$3.707791 billed/estimated rentals,$5.11 conservative charges+$5reserve,
+$39.89 free; all eleven machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -102,9 +102,10 @@ gains, one5.13% regression and two4096stream timeouts. See`collector-staging-res
 Run010 localized a25s reference timeout inside rollout assembly; completed assembly
 costs varied .863–7.194s, largely in system CPU. Native stepping was41–45% in completed
 10350 GPU collections. See`collector-phase-results.txt`; no speedup ratio follows.
-Next: separate assembly allocation/copy/release and host pressure, then validate
-actual CPU concurrency, learning/mature-policy traces and backpressure. Multi-GPU
-rates remain conditional on independent links.
+Run011 separated assembly costs: allocation5–8ms, copy .704–1.060s. Disabling process
+huge pages lost both seed comparisons; no pressure stall recurred. Keep default
+policy; see`collector-assembly-results.txt`. Next: actual1/2/4-worker replay scaling,
+then learning/mature-policy traces and backpressure. Multi-GPU rates remain conditional.
 Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and
@@ -114,9 +115,6 @@ Raw evidence and source snapshots are indexed by`accelerator-probes/artifact-man
 Complete previous notes and exact historical/current source snapshots are retained
 by hash in that manifest; no old result was overwritten.
 
-The learner model couples the existing inference queue to measured central updates
-under a zero-lag barrier, with explicit hardware/service selection. H100 calibration
-now supports complete8×4096 cohorts; L4 does not. It counts idle actors, arrays,
-partial horizons and publication. All27L4 outputs remain exact; two27case H100
-matrices passed. See `learner-flow.md` for reproduction and limits. This remains a
-stationary scheduling control, not a distributed training implementation.
+See `learner-flow.md` for the measured central learner and zero-lag cohort model,
+its explicit hardware/service selection, memory accounting and proof limits. It
+remains a stationary scheduling control, not distributed training.

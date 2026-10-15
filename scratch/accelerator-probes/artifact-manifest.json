@@ -13,8 +13,8 @@
     },
     {
       "path": "scratch/accelerator-benchmark.md",
-      "bytes": 8158,
-      "sha256": "c4956e1bbea025df27568acfca00aa78ed5366a193ec917959d0ebdd7a6ca6bb"
+      "bytes": 8039,
+      "sha256": "11d76a21faa915711369efb6a4af706007c0c8fe5924f1403b59f06a019dba1a"
     },
     {
       "path": "scratch/accelerator-probes/026094ce10234d52c1e4d6600d4662d071765e85cc7c09149a6565b2d27e04cd.source.txt",
@@ -332,6 +332,11 @@
       "sha256": "c267dc11cc0057635717e552ddfbbad327bf0b7a1ceef174bb43f6c9f54be268"
     },
     {
+      "path": "scratch/accelerator-probes/c4956e1bbea025df27568acfca00aa78ed5366a193ec917959d0ebdd7a6ca6bb.notes.txt",
+      "bytes": 8158,
+      "sha256": "c4956e1bbea025df27568acfca00aa78ed5366a193ec917959d0ebdd7a6ca6bb"
+    },
+    {
       "path": "scratch/accelerator-probes/c5d94d6807698966686ba6e4121548ad250ada983971366b5a710ee1344bfb2f.notes.txt",
       "bytes": 4215,
       "sha256": "c5d94d6807698966686ba6e4121548ad250ada983971366b5a710ee1344bfb2f"
@@ -340,6 +345,11 @@
       "path": "scratch/accelerator-probes/c7bf88f30c2e06dea29206e017b2a1cc224fa8835a9c87e8d91b49c4e3230b2c.source.txt",
       "bytes": 15028,
       "sha256": "c7bf88f30c2e06dea29206e017b2a1cc224fa8835a9c87e8d91b49c4e3230b2c"
+    },
+    {
+      "path": "scratch/accelerator-probes/c896f85a4614cb32d29e711d5180f601a989e567da929d882f4ddb5cf9d99c1f.notes.txt",
+      "bytes": 6200,
+      "sha256": "c896f85a4614cb32d29e711d5180f601a989e567da929d882f4ddb5cf9d99c1f"
     },
     {
       "path": "scratch/accelerator-probes/capture-s64/attempt.json",
@@ -802,6 +812,11 @@
       "sha256": "e2bf426412e9a8c0e81991c8f91549307203aaf640949463d34ce255dee165fd"
     },
     {
+      "path": "scratch/collector-assembly-results.txt",
+      "bytes": 7176,
+      "sha256": "d12fa444460ce9ca5a976b315a91b9efac8a1f11c21c06872539b03beb1cd040"
+    },
+    {
       "path": "scratch/collector-phase-protocol.txt",
       "bytes": 3624,
       "sha256": "3f30a0589ad8b90e0132147277404c30bfdb1a16c2c766659474a2e08447be98"
@@ -1125,6 +1140,456 @@
       "path": "scratch/gpu-highend-protocol.txt",
       "bytes": 3162,
       "sha256": "8b98a65c140964c6c7d5db3d39823b3770c05b98c48c63a6d6bf37430a55f288"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/analysis.source.txt",
+      "bytes": 11343,
+      "sha256": "7426eb6d00f1600044b1934d7275e497af1eabeb11615eb41d4a95b6b1671075"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/budget.json",
+      "bytes": 7825,
+      "sha256": "26678c409c312bafaba328ccc047b2c4fac4cdedb86dfcc63486fae4f05a07e6"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/download-recovery-011.json",
+      "bytes": 517,
+      "sha256": "dc60fa969ba62180d8b56f9b2025ecd4f181dbe710411bf9e7bac1889364d74c"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/download.source.txt",
+      "bytes": 3439,
+      "sha256": "214ad390497816d6db08e94e024519286f6d73de6f74e3d1831cf81107be6881"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/eleventh-cleanup.json",
+      "bytes": 122,
+      "sha256": "59504bf698518369168df2cf882300b75d0dc3e612cf85b479672ab37708d19b"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/eleventh-pod.json",
+      "bytes": 176,
+      "sha256": "a003f0ab0eec16708ecf71830fd55c86756477c97edd0b61e7461a59ffca871d"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/assembly-01.json",
+      "bytes": 858,
+      "sha256": "4bf1100a92e631ac98eb02b4640b2a1aad2707a4a2846ea667834934e9a0fe4c"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/assembly-02.json",
+      "bytes": 848,
+      "sha256": "4742bbbf9fc93c6eeacb5d0d03242e2e7b57f0cacb90c0ec2648fd7b995e2974"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/assembly-03.json",
+      "bytes": 852,
+      "sha256": "09bb59d0ff883694f1bfbc6e369c5cc2757f8ec366b019a4190ecfafa8169ae0"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/assembly-04.json",
+      "bytes": 848,
+      "sha256": "b46313074ea9226f91028ebd879583a81bfa152046e4b2bff87b3f59b64d9a09"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/assembly-method.json",
+      "bytes": 5847,
+      "sha256": "87fc03bc8f06afcee4b864f0a85f267f6311c60b3c444df81b481ac5444ba7a2"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/bounds.json",
+      "bytes": 397,
+      "sha256": "5b85d87d9442f91daa0acd811500d410aab738ae3c513c41572437f8ffbb031b"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/child.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/events.jsonl",
+      "bytes": 401441,
+      "sha256": "d9cf862284ea53da84048f536cb940ffbd327d9d60fda04654353f04fc4b041a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/fixed-witnesses.json",
+      "bytes": 177,
+      "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/host-after.json",
+      "bytes": 5752,
+      "sha256": "f673d2a4736b1ba3a1e91d7c7e6f02150ede3e35f757d3c199b3092e0a62345a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/host-before.json",
+      "bytes": 5752,
+      "sha256": "8375b90fcefa2448693729526a5e824d1ec5758436c09f8ec07754a3ef472d7a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/result.json",
+      "bytes": 1755,
+      "sha256": "5d19aa699dbde22808324bdac60929b5d224341313d40b94ac9fc099c3b95539"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/supervision.json",
+      "bytes": 1142730,
+      "sha256": "102898d9ad3c7c9682ed9f72231efce629a78614809b3bae7290fca1757f61c5"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/thp-policy.json",
+      "bytes": 2005,
+      "sha256": "05e09289c852694f7269fb389b019762a53e7b3268a0b63084ca27b9a00f679b"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-default/worker.log",
+      "bytes": 77,
+      "sha256": "b5aad598bf3b44a5f886f279ff866aae8307226b2b685afea86a7adbbf178c4f"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/assembly-01.json",
+      "bytes": 859,
+      "sha256": "725459e2d391782f51d8c215280a7d5d566a26f39b86e5701de640676b4b6628"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/assembly-02.json",
+      "bytes": 853,
+      "sha256": "378ee635242fef9dae7d6f922219e38cbb3fb4e0021329662a2e16ac31035383"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/assembly-03.json",
+      "bytes": 856,
+      "sha256": "ee3488f5e45476fbcaecf4953b6ba286bcf1e00f8206110db3b16b39bf801f37"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/assembly-04.json",
+      "bytes": 852,
+      "sha256": "a34494ce224bf7c66aec470c25fc3e3c685ade2c257272dd52fd4514eebf7f04"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/assembly-method.json",
+      "bytes": 5847,
+      "sha256": "87fc03bc8f06afcee4b864f0a85f267f6311c60b3c444df81b481ac5444ba7a2"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/bounds.json",
+      "bytes": 396,
+      "sha256": "012a2fb6beac1e7fc09f51121b56b16430961285b82da79796486f53e481a1e1"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/child.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/events.jsonl",
+      "bytes": 401910,
+      "sha256": "0d823a21cd9a74883266e1b67271d1678a1b9031cc2c28c88b521912b55f8fda"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/fixed-witnesses.json",
+      "bytes": 177,
+      "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/host-after.json",
+      "bytes": 5752,
+      "sha256": "6e2c8cd70ae400e74f94bce6ad0459843ea161259c2aef4a5e6d2ed0a730def4"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/host-before.json",
+      "bytes": 5752,
+      "sha256": "5f8aa586eeb031038b31c75d322403ccc667882f710b7f30198efe78e578597a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/result.json",
+      "bytes": 1755,
+      "sha256": "5d19aa699dbde22808324bdac60929b5d224341313d40b94ac9fc099c3b95539"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/supervision.json",
+      "bytes": 1180927,
+      "sha256": "177f4c8106d5d2252070b22bd74b8c13eed1b6297294434db90eeecd680c699e"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/thp-policy.json",
+      "bytes": 2006,
+      "sha256": "86d0d49e9e13c75e2ceac0460283eb7c8cc677ba991bbcb2924353527ce3707b"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10349-disabled/worker.log",
+      "bytes": 77,
+      "sha256": "25e03834057fb816358a62d0a4abfc8e307400216eb3820e9b9cb18ad4a3f46e"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/assembly-01.json",
+      "bytes": 856,
+      "sha256": "fef1eb22c12d61592778546d4c18008b70f08437a9f0c6f0e5eeeed448ab6d19"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/assembly-02.json",
+      "bytes": 850,
+      "sha256": "5ae271ad9b6d17ad96dbf831d14c9d74990c9bbe3c5617b61b557424e1c40ce3"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/assembly-03.json",
+      "bytes": 851,
+      "sha256": "b1dc17c672d36a8af49a878ce18c76c86fff93649c5238811a6ed28376a132a0"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/assembly-04.json",
+      "bytes": 852,
+      "sha256": "767f7ee7a7107e216b9047d096f394c21e869db36a6e6b371a907c6688c535f1"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/assembly-method.json",
+      "bytes": 5847,
+      "sha256": "87fc03bc8f06afcee4b864f0a85f267f6311c60b3c444df81b481ac5444ba7a2"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/bounds.json",
+      "bytes": 398,
+      "sha256": "b7d46ab149dd45ed2f99b5a047c5db7ca692db364fcd23e073666bb45f6ebaf0"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/child.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/events.jsonl",
+      "bytes": 417168,
+      "sha256": "4df2bba86feebc5ca10eaa01cfe03caa7ae240b459d82e58801e433f97205d4e"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/fixed-witnesses.json",
+      "bytes": 177,
+      "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/host-after.json",
+      "bytes": 5752,
+      "sha256": "ba94ff47373322d7db8247bfdb9d14c2f4ddaf58bc586665d58a6da4c89684ae"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/host-before.json",
+      "bytes": 5752,
+      "sha256": "be96521fcc6775da6f72ace07f719c0deeb40f9cb51c5c04d2c773dcef5d163b"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/result.json",
+      "bytes": 1755,
+      "sha256": "d4f607fae61ea30a24d5dabcac66d9dd1089e39c677290131f3e5eb0242ccffa"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/supervision.json",
+      "bytes": 1155556,
+      "sha256": "144a9df7cb7049d2b790aff3b88f1b75c309a4086ce39e916dd5eacb7acb9a1a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/thp-policy.json",
+      "bytes": 2005,
+      "sha256": "89a285fe7a0c6868aff663c89af080ebcd75fcc831996b786d1e47fde9ae65ae"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-default/worker.log",
+      "bytes": 77,
+      "sha256": "a89a2e55deb6b13a073f552d534bc28a3902a17ed7351dd615e851f955e70a4a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/assembly-01.json",
+      "bytes": 858,
+      "sha256": "15c12cbd1e6a699c87995f04772ac2925248bdb30439e586f57ee19180592450"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/assembly-02.json",
+      "bytes": 855,
+      "sha256": "9af74a60d0bbc2d8ab4dbf54e2a0c17e2cc1d4c1792eb8551755fb8db9bb1b0c"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/assembly-03.json",
+      "bytes": 853,
+      "sha256": "19225b3f474e48cf65b7379c4d4489b3336f41d776057a8d7a00793cb5bb7c29"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/assembly-04.json",
+      "bytes": 852,
+      "sha256": "81cc0e665b98c4bd79d1cb8ab962fdcabe4fe9bb5bdceb8dfcff43324fa2640d"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/assembly-method.json",
+      "bytes": 5847,
+      "sha256": "87fc03bc8f06afcee4b864f0a85f267f6311c60b3c444df81b481ac5444ba7a2"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/bounds.json",
+      "bytes": 396,
+      "sha256": "98cdeaec88028688c403ade4502291acc1ff51d521dbd70705baa01f07639d64"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/child.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/events.jsonl",
+      "bytes": 418476,
+      "sha256": "444228391b4104f44cf84ecb4ccb2bc0840c740251869680c1f66376ca323536"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/fixed-witnesses.json",
+      "bytes": 177,
+      "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/host-after.json",
+      "bytes": 5751,
+      "sha256": "6347b6e40bee68db4d18d440ad2f901ec811e301d0d9953eca6080e131bb4326"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/host-before.json",
+      "bytes": 5752,
+      "sha256": "50d3667b74f8490fffe92dfb50c195cc8079886181b07991057860d674ccee0f"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/result.json",
+      "bytes": 1755,
+      "sha256": "d4f607fae61ea30a24d5dabcac66d9dd1089e39c677290131f3e5eb0242ccffa"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/supervision.json",
+      "bytes": 1242237,
+      "sha256": "d13eb4f26e1b0e5cc516d1e37d8e9814257047d8e37905fb74ec7179eda2b0e1"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/thp-policy.json",
+      "bytes": 2006,
+      "sha256": "08c151929a584cafd2a25e7a872bf7b33844877ee29a8a464c87b9885b41d540"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/assembly-s4096-seed10350-disabled/worker.log",
+      "bytes": 77,
+      "sha256": "fb7049e960409f6585ecce70a3231671a39e3cd206202b943794e8f0ccfa3549"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/attempts.json",
+      "bytes": 2864,
+      "sha256": "f438761a86df1d188f9650c83b6eb9dfc339e56350caffe94bcdab9037bd8661"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/baseline.json",
+      "bytes": 4194,
+      "sha256": "2e490db96cbcfd196f5ad96877ed3d1d8b365004aa3f00db401b4d1ad2016ed2"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/frozen-input-receipt.json",
+      "bytes": 330,
+      "sha256": "3a5f0c786a8a38211a02803bac8b59cfa8082c5d99f51461a900fcd46550173f"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/identity.json",
+      "bytes": 8964,
+      "sha256": "c4997e60f1ff592a7790f1e8865570339fa433d40ba12cdf2fb74f5019b8fcee"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/inputs/worker.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/manifest.json",
+      "bytes": 11356,
+      "sha256": "238c739cddcdead69e483fc7f30f644348f19c43c6196ea694b6134745dabbfe"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/evidence/source-bundle.json",
+      "bytes": 377016,
+      "sha256": "e32784bf5bb754663df9cc1df82af6493e8b7cefb5361fc0cb44a4450725b57e"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/job-011.json",
+      "bytes": 380957,
+      "sha256": "b4dc2e1dd37ceec5a201cf9805cc42b6c084f1865ccfd2b209bf336dc6572435"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/launch-011.json",
+      "bytes": 201,
+      "sha256": "1f68461c796ea856e0635e97bc85ff2c5dc932663e2ec5940f7fe1920620d557"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/lifecycle-011.json",
+      "bytes": 14556,
+      "sha256": "aa3b685f4a8928c0dfe5bb3e6d6803a065ac33de2e4ca583dabb8fb4eb340ef9"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/lifecycle-summary.json",
+      "bytes": 426,
+      "sha256": "8ce9e66cb9010aa4dcfe4c02eec84027ebe22a2c393df4e1093f256bdb62db5a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/monitor-cleanup-011.json",
+      "bytes": 174,
+      "sha256": "b2a27b4e84c630cd99f7eb3f8a2f6d5d1bea2a5d7f03393dec034641a090c61e"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/monitor-interruption-011.json",
+      "bytes": 247,
+      "sha256": "6231a548989b715877427731f414f6b66067907cf72d049af2cde09ae310104a"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/monitor-resume.source.txt",
+      "bytes": 1051,
+      "sha256": "0cd0a9139465e05415f54c49a04081dafb41be235e8f4c8e2ee10d8e2a5421a3"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/monitor.source.txt",
+      "bytes": 2095,
+      "sha256": "78576c5cc2a6410c13d6ef57c1d3636450595f13d957dc9372c2920957c54bee"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/observed-011.log",
+      "bytes": 10466,
+      "sha256": "d9be4003d4c774aba9c5c328bc26dbce97c6eea896526da5cc3f1383469c90fb"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/preflight-011.json",
+      "bytes": 427,
+      "sha256": "a4647ad9317e4fd1d0355d40b4a410b6e7752188203f10697e3b41cf042e3e50"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/prepared-source.json",
+      "bytes": 455,
+      "sha256": "6be463e0fcaab07f57a1cde72df6dab8f9bc15df763945109f9753a59ec0c46b"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/protocol.txt",
+      "bytes": 3565,
+      "sha256": "e2bf426412e9a8c0e81991c8f91549307203aaf640949463d34ce255dee165fd"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/rental-costs-011.json",
+      "bytes": 3347,
+      "sha256": "618fd1b9eca0b2c34308f6b17ea473d145ebfa637207b0c7fc72a2db0e6fd591"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/source-copy.json",
+      "bytes": 222,
+      "sha256": "54a5e820cc14ca733e1fda29992866540eacbe2fccbe930352861cfcf3bc0a12"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/summary.json",
+      "bytes": 1620747,
+      "sha256": "aaddc4f650980fe76625622723afcfd77530000feb64160e721dde6919c00c97"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/supplemental-audit.json",
+      "bytes": 2324,
+      "sha256": "890dc6c898cfc319ff5a8efef4beb0ac5b5971857a3c68593a2ce0a27ef6c64c"
+    },
+    {
+      "path": "scratch/gpu-probes/assembly-011/verification.json",
+      "bytes": 182,
+      "sha256": "b936c711fd24f955a4abc2c6f595ece9902f2d0dfa87d352a211d6f2fb7580e6"
     },
     {
       "path": "scratch/gpu-probes/collector-009/analysis.source.txt",
@@ -2963,8 +3428,8 @@
     },
     {
       "path": "scratch/gpu-validation.md",
-      "bytes": 6200,
-      "sha256": "c896f85a4614cb32d29e711d5180f601a989e567da929d882f4ddb5cf9d99c1f"
+      "bytes": 6419,
+      "sha256": "bcb80470aef08ec4a2f799da596957484bac1ad588839b66cb14ddaf369bcc5f"
     },
     {
       "path": "scratch/gpu-validation.py",

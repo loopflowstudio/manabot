@@ -1,0 +1,35 @@
+{
+  "stack": [
+    "warm-reference",
+    "build_batch"
+  ],
+  "completed_rows": 4096,
+  "complete": true,
+  "costs": {
+    "copy": {
+      "calls": 4096,
+      "seconds": 0.24661550670862198,
+      "user_cpu": 0.12386999999996284,
+      "system_cpu": 0.11535999999999369,
+      "minor_faults": 65880,
+      "major_faults": 0
+    },
+    "release": {
+      "calls": 4096,
+      "seconds": 0.017270676791667938,
+      "user_cpu": 0.00557400000001973,
+      "system_cpu": 0.005001999999994844,
+      "minor_faults": 0,
+      "major_faults": 0
+    },
+    "bootstrap": {
+      "calls": 4096,
+      "seconds": 0.12481853365898132,
+      "user_cpu": 0.061183999999980365,
+      "system_cpu": 0.056501999999994945,
+      "minor_faults": 34819,
+      "major_faults": 0
+    }
+  },
+  "meaning": "Aggregates exclude timer/receipt overhead; partial rows may be missing."
+}
