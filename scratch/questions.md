@@ -209,3 +209,19 @@ Update, transition, exposure, active-learning and executor-elapsed clocks stay
 separate. None reconstructs inclusive campaign cost. Check: ten synthetic paired
 analysis/censoring tests passed; these do not measure learning. Full cost ledger,
 notebook, simple native/schema admission and the authorized campaign remain open.
+
+## Research content admission (2026-10-14)
+
+The research pack adds Savannah Lions (W2/1), Glory Seeker (1W2/2) and Hill Giant
+(3R3/3), all ability-free. L2 adds Bolt and unchanged Yip Yip!; none of the vanilla
+creatures is an Ally. Six exact roles share the full research catalog, including
+unchanged product decks/programs. Its explicit native pack and extended learning
+schema are hash-bound by ordinary checkpoint admission. Original product JSON
+bytes stay unchanged; the general native catalog gains three definitions and a
+new digest. No frozen artifacts are adapted. The generator is reproducible.
+
+Check: native debug roster test, release extension build, two static content tests
+and six catalog/reload checks passed; the 20-test product/catalog/world suite
+passed before adding the three research reload cases. These are software tests,
+not local calibration/training. Remote full-game admission and the actual
+calibrated campaign/report remain unfinished.

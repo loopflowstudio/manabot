@@ -1,18 +1,19 @@
 # MTG-122 — Is a simpler full game a useful learning diagnostic?
 
-**2026-10-14 · Active execution goal; scientific allocation pending.**
+**2026-10-14 · Active execution goal; remote allocation authorized.**
 Jack Heart requested running and analyzing this experiment through the public
 Etude SDK, replacing corresponding local experiment infrastructure. The previous
 design-only restriction is superseded for implementation and bounded software
-proof. Scientific machine/budget remains awaiting confirmation; proposed protocol
-choices below are not measured results. Gameplay complexity and catalog size stay
+proof. Jack Heart authorized Mini for 48 hours or GPU for $25, with no local experiment
+execution. Protocol choices below are not measured results. Gameplay complexity and catalog size stay
 separate contrasts; curriculum transfer remains separately selectable.
 
 Main 9576dc40 is integrated at fcbea2f8. Academy namespace separation,
 cross-balanced collection and selected-roster mirror admission now exist; the
 historical source inventory below describes 43c6e479 and must not be treated as
 current missing-work authority. Simple-pool native semantic authoring and common
-catalog admission remain required. Public etude-sdk 0.1.0 is pinned; Python 3.12
+catalog/checkpoint reload now pass bounded software checks; remote full-game
+admission remains required. Public etude-sdk 0.1.0 is pinned; Python 3.12
 is the minimum. SDK tracking/checkpoint/offline-report admission passed, not yet
 an end-to-end training migration. The native w4 extension now builds/imports.
 
@@ -109,15 +110,15 @@ building another collector. Mirrors are evaluation only; no matchup mixing.
 
 Draft simple-deck shape (counts; empty sideboards). Jack Heart requested on
 2026-10-13 that L1 omit haste and first strike. Replacement vanilla definitions
-remain to be selected; this is not a frozen or runnable decklist:
+are now authored below; scientific source/count freeze remains pending:
 
 | Card | L1 swift-rw | L1 heavy-rw | L2 swift-rw | L2 heavy-rw |
 |---|---:|---:|---:|---:|
 | Mountain | 9 | 9 | 9 | 9 |
 | Plains | 8 | 8 | 8 | 8 |
-| Vanilla low-cost creature (TBD) | 8 | 4 | 6 | 2 |
-| Vanilla mid-cost creature (TBD) | 8 | 8 | 5 | 5 |
-| Gray Ogre | 7 | 11 | 4 | 8 |
+| Savannah Lions (W, 2/1) | 8 | 4 | 6 | 2 |
+| Glory Seeker (1W, 2/2) | 8 | 8 | 5 | 5 |
+| Hill Giant (3R, 3/3) | 7 | 11 | 4 | 8 |
 | Lightning Bolt | 0 | 0 | 4 | 4 |
 | Yip Yip! | 0 | 0 | 4 | 4 |
 | **Total** | **40** | **40** | **40** | **40** |
@@ -127,21 +128,24 @@ or other keyword, triggered, activated, or static abilities. L2 shares that
 vanilla base and replaces eight creatures with removal and a combat trick.
 Do not strip abilities from existing card definitions to satisfy this constraint.
 
-The earlier Raging Goblin / Youthful Knight selection is withdrawn. Static
-inspection of this base finds Gray Ogre and Craw Wurm as explicitly registered
-vanilla creatures; it does not establish suitable low-cost red/white replacements.
-Select implemented vanilla definitions and reconsider colors/curve together
-before freezing the lists. The counts above retain the draft's 40-card shape,
-not an approved card choice. Any need for new native cards is a scope decision,
-not authorized by this revision. Semantic authoring/admission remains required.
+Jack Heart authorized adding vanilla creatures. The research pack now adds
+Savannah Lions, Glory Seeker and Hill Giant as native ability-free definitions.
+The generator `scripts/compile_complexity_content.py` preserves every original
+product definition and deck, adds Lightning Bolt semantics, and builds six
+explicit deck roles under `mtg122-complexity-v1`. A separate learning schema
+appends Giant without renumbering existing subtype IDs. Product source/IR/schema
+bytes are unchanged; the general native catalog gains three definitions, so its
+digest changes and historical general-pack artifacts are not relabeled compatible.
 
 Yip Yip! retains its real Ally-dependent flying clause in L2; the final vanilla
 roster must be checked for Ally subtypes rather than silently assuming that
 clause cannot apply. High copy counts are a diagnostic custom format, not
 sanctioned constructed decks.
 
-L3 is **unchanged** `MatchHypers.authored("ur-lessons-vs-gw-allies",
-"ur_lessons", "gw_allies")`, with each sideboard traveling with its deck.
+L3 preserves the **unchanged product decklists and programs** within the shared
+research catalog, explicitly selecting `mtg122-complexity-v1` with roles
+`ur_lessons` / `gw_allies`. This is a distinct content binding, not permission to
+reuse product checkpoints. Each sideboard travels with its deck.
 Freeze resolved counts from `content/semantic/v1/two_deck.source.json`:
 
 - UR Lessons (41): Island 9, Mountain 8, Tiger-Seal 2, Otter-Penguin 2,

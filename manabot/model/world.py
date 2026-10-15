@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from manabot.semantic.policy_catalog import learning_schema_path
 import managym
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
@@ -89,6 +90,9 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         key: {"shape": list(shape), "dtype": str(observation_space.encoder.dtypes[key])}
         for key, shape in observation_space.shapes.items()
     }
+    manifest = engine.content_pack_manifest()
+    compiled = manifest.get("compiled_semantics")
+    schema_path = learning_schema_path(compiled["pack_key"] if compiled else None)
     return {
         "world": WORLD,
         "policy_input_version": POLICY_INPUT_VERSION,
@@ -97,11 +101,9 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
             "possible_world_version": POSSIBLE_WORLD_SPACE_VERSION,
         },
         "setups": setups,
-        "content_manifest": engine.content_pack_manifest(),
+        "content_manifest": manifest,
         "input_schema": schema,
-        "learning_schema_sha256": hashlib.sha256(
-            (ROOT / "content/semantic/v1/learning_schema.json").read_bytes()
-        ).hexdigest(),
+        "learning_schema_sha256": hashlib.sha256(schema_path.read_bytes()).hexdigest(),
     }
 
 

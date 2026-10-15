@@ -74,10 +74,14 @@ static AUTHORED_RUNTIME_CATALOG: OnceLock<Result<Vec<AuthoredRuntime>, IrError>>
 fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
     AUTHORED_RUNTIME_CATALOG
         .get_or_init(|| {
-            [SemanticPack::two_deck()?, SemanticPack::jeong_increment()?]
-                .into_iter()
-                .map(AuthoredRuntime::compile)
-                .collect()
+            [
+                SemanticPack::two_deck()?,
+                SemanticPack::jeong_increment()?,
+                SemanticPack::complexity()?,
+            ]
+            .into_iter()
+            .map(AuthoredRuntime::compile)
+            .collect()
         })
         .clone()
 }
@@ -170,6 +174,57 @@ mod catalog_tests {
             wrong[0].content_pack = Some("missing-pack".into());
             assert!(select_authored_runtime(&wrong, &catalog).is_err());
         }
+    }
+
+    #[test]
+    fn complexity_roster_is_explicit_and_vanilla() {
+        let catalog = authored_runtime_catalog().unwrap();
+        let runtime = catalog
+            .iter()
+            .find(|r| r.pack_key == "mtg122-complexity-v1")
+            .unwrap();
+        assert_eq!(runtime.setups.len(), 6);
+        let semantic = SemanticPack::complexity().unwrap();
+        for key in [
+            "research.savannah_lions",
+            "research.glory_seeker",
+            "research.hill_giant",
+        ] {
+            let definition = semantic
+                .definitions
+                .iter()
+                .find(|d| d.semantic_key == key)
+                .unwrap();
+            assert!(!semantic
+                .programs
+                .iter()
+                .any(|p| p.definition_index == definition.semantic_index));
+        }
+        for setup in &runtime.setups {
+            let mut config = setup.clone();
+            config.content_pack = Some(runtime.pack_key.clone());
+            assert_eq!(
+                select_authored_runtime(&[config.clone(), config], &catalog)
+                    .unwrap()
+                    .unwrap()
+                    .pack_key,
+                "mtg122-complexity-v1"
+            );
+        }
+        // An ordinary product pair must still choose the original product pack.
+        let pair = catalog
+            .iter()
+            .find(|r| r.pack_key == "ur-lessons-vs-gw-allies")
+            .unwrap()
+            .setups
+            .clone();
+        assert_eq!(
+            select_authored_runtime(&pair, &catalog)
+                .unwrap()
+                .unwrap()
+                .pack_key,
+            "ur-lessons-vs-gw-allies"
+        );
     }
 
     #[test]

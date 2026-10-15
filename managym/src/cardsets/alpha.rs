@@ -133,6 +133,34 @@ impl ContentPack {
         self.register_tla();
         self.register_tla_lessons_increment();
         self.register_mkm();
+        // Append research vanilla definitions without renumbering existing cards.
+        self.register_creature(
+            "Savannah Lions",
+            "W",
+            &["Cat"],
+            2,
+            1,
+            Keywords::default(),
+            "",
+        );
+        self.register_creature(
+            "Glory Seeker",
+            "1W",
+            &["Human", "Soldier"],
+            2,
+            2,
+            Keywords::default(),
+            "",
+        );
+        self.register_creature(
+            "Hill Giant",
+            "3R",
+            &["Giant"],
+            3,
+            3,
+            Keywords::default(),
+            "",
+        );
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {

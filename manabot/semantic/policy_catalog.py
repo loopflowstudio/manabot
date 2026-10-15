@@ -20,11 +20,17 @@ ROOT = Path(__file__).resolve().parents[2] / "content/semantic/v1/generated"
 class PolicyCatalogSpec:
     ir_file: str
     setup_keys: tuple[str, str]
+    schema_file: str = "learning_schema.json"
 
 
 _CATALOGS = {
     "ur-lessons-vs-gw-allies": PolicyCatalogSpec(
         "two_deck.ir.json", ("ur_lessons", "gw_allies")
+    ),
+    "mtg122-complexity-v1": PolicyCatalogSpec(
+        "complexity.ir.json",
+        ("l1_swift", "l1_heavy"),
+        "complexity.learning_schema.json",
     ),
 }
 
@@ -40,7 +46,11 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
         [managym.authored_deck_setup(pack_key, key) for key in spec.setup_keys]
     )
     manifest = engine.content_pack_manifest()
-    pack = BoundSemanticPack.bind(manifest, ir_path=ROOT / spec.ir_file)
+    pack = BoundSemanticPack.bind(
+        manifest,
+        ir_path=ROOT / spec.ir_file,
+        schema_path=ROOT.parent / spec.schema_file,
+    )
     compiled = manifest.get("compiled_semantics")
     expected = {
         "pack_key": pack_key,
@@ -56,3 +66,13 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
             "policy catalog does not cover native definitions"
         )
     return pack
+
+
+def learning_schema_path(pack_key: str | None) -> Path:
+    """Select schema by registered pack, retaining the historical general default."""
+    if pack_key is None:
+        return ROOT.parent / "learning_schema.json"
+    try:
+        return ROOT.parent / _CATALOGS[pack_key].schema_file
+    except KeyError as error:
+        raise ValueError(f"unsupported policy semantic pack: {pack_key}") from error

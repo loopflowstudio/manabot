@@ -6,9 +6,15 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.arena.matchup import AuthoredMatchup
+from manabot.env import Match, ObservationSpace
+from manabot.infra.hypers import AgentSpec
+from manabot.model import Agent
 from manabot.model.semantic_cards import SemanticCardEncoder
+from manabot.model.world import checkpoint_world
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
+from manabot.sim.flat_mc import load_checkpoint_agent
 
 
 def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
@@ -40,11 +46,46 @@ def test_native_ir_receipt_must_match(monkeypatch: pytest.MonkeyPatch) -> None:
     original = BoundSemanticPack.bind
 
     def altered_binding(
-        cls: type[BoundSemanticPack], manifest: dict[str, object], *, ir_path: Path
+        cls: type[BoundSemanticPack],
+        manifest: dict[str, object],
+        *,
+        ir_path: Path,
+        schema_path: Path,
     ) -> BoundSemanticPack:
-        pack = original(manifest, ir_path=ir_path)
+        pack = original(manifest, ir_path=ir_path, schema_path=schema_path)
         return replace(pack, ir=replace(pack.ir, ir_hash="not-native-ir"))
 
     monkeypatch.setattr(BoundSemanticPack, "bind", classmethod(altered_binding))
     with pytest.raises(ContentPackBindingError, match="differs from IR"):
         SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
+
+
+@pytest.mark.parametrize(
+    "roles",
+    [("l1_swift", "l1_heavy"), ("l2_swift", "l2_heavy"), ("ur_lessons", "gw_allies")],
+)
+def test_research_checkpoint_binds_common_catalog(
+    roles: tuple[str, str], tmp_path: Path
+) -> None:
+    key = "mtg122-complexity-v1"
+    roster = AuthoredMatchup(pack_key=key, role_a=roles[0], role_b=roles[1])
+    space = ObservationSpace()
+    torch.manual_seed(12251)
+    agent = Agent(
+        space, AgentSpec(hidden_dim=8, num_attention_heads=2, semantic_pack=key)
+    )
+    payload = {
+        "model_state_dict": agent.state_dict(),
+        "hypers": {
+            "agent_hypers": agent.hypers.model_dump(),
+            "observation_hypers": space.encoder.hypers.model_dump(),
+        },
+        "world_binding": checkpoint_world(Match(roster.match()).to_rust(), space),
+    }
+    path = tmp_path / "research.pt"
+    torch.save(payload, path)
+    loaded, _ = load_checkpoint_agent(str(path))
+    assert loaded.world_binding == payload["world_binding"]
+    for name, tensor in agent.state_dict().items():
+        assert torch.equal(tensor, loaded.state_dict()[name])
+    assert bind_policy_catalog(key).schema.raw["enums"]["subtype"]["Giant"] > 0

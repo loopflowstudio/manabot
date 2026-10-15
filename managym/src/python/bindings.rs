@@ -3331,6 +3331,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
     let packs = [
         crate::semantic::SemanticPack::two_deck(),
         crate::semantic::SemanticPack::jeong_increment(),
+        crate::semantic::SemanticPack::complexity(),
     ];
     for pack in packs {
         let pack = pack.map_err(|error| PyValueError::new_err(error.to_string()))?;
