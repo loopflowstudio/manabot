@@ -79,7 +79,7 @@ finite completion, padding and host tails. All measured attempts used bounded
 supervision. The original probe phase closed at238.718of240seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
-calibration-analysis slice used19.589804seconds; conservative combined usage283.973775/300. New measured
+calibration-analysis slice used19.589804seconds; conservative combined usage293.821475/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
 records$3.707791 billed/estimated rentals,$5.11 conservative charges+$5reserve,
 $39.89 free; all eleven machines are confirmed deleted.
@@ -104,7 +104,7 @@ costs varied .863–7.194s, largely in system CPU. Native stepping was41–45% i
 10350 GPU collections. See`collector-phase-results.txt`; no speedup ratio follows.
 Run011 separated assembly costs: allocation5–8ms, copy .704–1.060s. Disabling process
 huge pages lost both seed comparisons; no pressure stall recurred. Keep default
-policy; see`collector-assembly-results.txt`. Next: actual1/2/4-worker replay scaling,
+policy; see`collector-assembly-results.txt`. Actual1/2/4worker replay:1.98x/3.80x; see experiments/worker-scaling.md. Next: shared CUDA,
 then learning/mature-policy traces and backpressure. Multi-GPU rates remain conditional.
 Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU

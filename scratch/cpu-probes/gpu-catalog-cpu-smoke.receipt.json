@@ -1,0 +1,88 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/gpu-validation.py",
+    "--root",
+    ".runs/gpu-validation/cpu-smoke",
+    "--child",
+    "paired",
+    "--device",
+    "cpu",
+    "--streams",
+    "4",
+    "--transitions",
+    "64",
+    "--out",
+    ".runs/gpu-validation/cpu-smoke/pair"
+  ],
+  "started_utc": "2026-10-15T02:45:48.400531+00:00",
+  "limit_seconds": 30.0,
+  "load_start": [
+    3.912109375,
+    3.2314453125,
+    3.630859375
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 2.8459700000239536,
+  "load_end": [
+    4.0791015625,
+    3.27734375,
+    3.64453125
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.02918733295518905,
+      "rss_bytes": 5816320
+    },
+    {
+      "seconds": 0.2641818330157548,
+      "rss_bytes": 102383616
+    },
+    {
+      "seconds": 0.5023190829670057,
+      "rss_bytes": 180617216
+    },
+    {
+      "seconds": 0.7337155409622937,
+      "rss_bytes": 208896000
+    },
+    {
+      "seconds": 0.9705162909813225,
+      "rss_bytes": 240304128
+    },
+    {
+      "seconds": 1.2084208329906687,
+      "rss_bytes": 253476864
+    },
+    {
+      "seconds": 1.4475419159280136,
+      "rss_bytes": 266321920
+    },
+    {
+      "seconds": 1.6781923329690471,
+      "rss_bytes": 288243712
+    },
+    {
+      "seconds": 1.9187583749881014,
+      "rss_bytes": 325517312
+    },
+    {
+      "seconds": 2.158151707961224,
+      "rss_bytes": 333922304
+    },
+    {
+      "seconds": 2.4007672909647226,
+      "rss_bytes": 339869696
+    },
+    {
+      "seconds": 2.6359121249988675,
+      "rss_bytes": 339902464
+    }
+  ],
+  "sampled_tree_peak_bytes": 339902464
+}

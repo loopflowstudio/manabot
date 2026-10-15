@@ -1,0 +1,68 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/cpu-collection-probe.py"
+  ],
+  "started_utc": "2026-10-15T01:21:05.224336+00:00",
+  "limit_seconds": 30.0,
+  "load_start": [
+    8.3427734375,
+    7.76416015625,
+    6.93310546875
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 2.3477075000992045,
+  "load_end": [
+    8.23486328125,
+    7.75146484375,
+    6.93310546875
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.027726292028091848,
+      "rss_bytes": 6668288
+    },
+    {
+      "seconds": 0.2602458340115845,
+      "rss_bytes": 186597376
+    },
+    {
+      "seconds": 0.495597334112972,
+      "rss_bytes": 232603648
+    },
+    {
+      "seconds": 0.7265396671136841,
+      "rss_bytes": 255213568
+    },
+    {
+      "seconds": 0.9644992920802906,
+      "rss_bytes": 278446080
+    },
+    {
+      "seconds": 1.194855917012319,
+      "rss_bytes": 302759936
+    },
+    {
+      "seconds": 1.432612750097178,
+      "rss_bytes": 305479680
+    },
+    {
+      "seconds": 1.666098125046119,
+      "rss_bytes": 307593216
+    },
+    {
+      "seconds": 1.902236125082709,
+      "rss_bytes": 314671104
+    },
+    {
+      "seconds": 2.1376165420515463,
+      "rss_bytes": 315424768
+    }
+  ],
+  "sampled_tree_peak_bytes": 315424768
+}

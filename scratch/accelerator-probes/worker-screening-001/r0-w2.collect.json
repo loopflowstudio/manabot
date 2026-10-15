@@ -1,0 +1,43 @@
+{
+  "seconds": 0.992749375058338,
+  "workers": [
+    {
+      "worker": 2,
+      "stage": "collect",
+      "count": 0,
+      "seconds": 5.500041879713535e-06,
+      "user_seconds": 2.9999999999752447e-06,
+      "system_seconds": 9.999999999732445e-07,
+      "rss_bytes": 275365888
+    },
+    {
+      "worker": 3,
+      "stage": "collect",
+      "count": 0,
+      "seconds": 6.167101673781872e-06,
+      "user_seconds": 2.9999999999752447e-06,
+      "system_seconds": 9.999999999732445e-07,
+      "rss_bytes": 276152320
+    },
+    {
+      "worker": 0,
+      "stage": "collect",
+      "count": 32,
+      "seconds": 0.9654914999846369,
+      "user_seconds": 0.9483310000000005,
+      "system_seconds": 0.01572100000000004,
+      "rss_bytes": 1647198208
+    },
+    {
+      "worker": 1,
+      "stage": "collect",
+      "count": 32,
+      "seconds": 0.9925170410424471,
+      "user_seconds": 0.953651,
+      "system_seconds": 0.036268999999999996,
+      "rss_bytes": 1165246464
+    }
+  ],
+  "requests": 0,
+  "service_seconds": 0.0
+}

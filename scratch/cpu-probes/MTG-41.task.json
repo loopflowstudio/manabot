@@ -1,0 +1,303 @@
+{
+  "sync": {
+    "connected": false,
+    "changes": []
+  },
+  "task": {
+    "id": "task_e09c371cacb6f401cef5d2bc5fcaf862",
+    "revision": 0,
+    "identifier": "MTG-41",
+    "title": "Measure played release and training workloads against product budgets",
+    "description": "Advances the Playable Curated World workload KR. Run the fixed UR Lessons versus GW Allies release-stack authority workload and one production training workload through the compiled semantic Command path. Pre-state explicit interactive and rollout budgets, pin workload/source/binary identity, and retain raw evidence for command p50/p95 latency, step throughput, complete-game throughput, peak RSS, semantic-program token counts/overflow, and every fallback counter. Add a fail-closed verifier and focused tests. Diagnose an observed budget miss, but do not change the selected representation without decision-bearing evidence.",
+    "rank": 0,
+    "assignee": null,
+    "due_date": null,
+    "state": "completed",
+    "completed": true,
+    "completed_at": "2026-09-29T19:25:05Z",
+    "linear_id": "385571d1-31df-4ccc-8048-a8159f473b06",
+    "pm_snapshot_synced_at": 1784364791,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+    "worktree": "/Users/jack/src/etude.measure-played-release-and-training",
+    "workspace_slug": "measure-played-release-and-training",
+    "branch": "jack-heart/measure-played-release-and-training",
+    "base_commit": "cebe049b4774fae68d6e4304a1e32543f43ee9c0",
+    "parent_pr_id": null,
+    "agent": null,
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      199,
+      8,
+      54,
+      56,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "project": {
+    "id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+    "summary": "Make one complete creator-selected Etude Fantasia matchup run through the compiled semantic runtime as the exercised production authority for human play, replay, and agent belief/search. Drive real play, replay, and agent interaction through typed program",
+    "slug": "rules-playable-curated-world",
+    "name": "Rules — Playable Curated World",
+    "description": "",
+    "krs": [
+      {
+        "text": "A deterministic release-stack UR Lessons versus GW Allies match reaches terminal with every encountered card behavior executed from admitted typed programs and every player decision submitted through structured InteractionOffer and Command values, with no card-name dispatch, candidate cap, or client-side legality in the trace.",
+        "holds": true
+      },
+      {
+        "text": "Live play, headless engine play, and canonical replay reproduce the same state witnesses and ordered semantic consequences for fixed terminal seeds, while viewer-private facts and stale ObjectRef values remain inaccessible at their public boundaries.",
+        "holds": true
+      },
+      {
+        "text": "The selected matchup exposes every reachable prompt family needed by its real cards through structured offers, including targeting and combinatorial combat, and records zero legacy fixed-action fallback for the exercised release traces.",
+        "holds": true
+      },
+      {
+        "text": "Across a fixed terminal UR Lessons versus GW Allies trace, every admitted public commitment consumed by exact-range belief tracking carries a stable viewer-safe managym-owned identity that reproduces live, in canonical replay, and on an exact fork; the exercised RulesProviderGap count is zero, unsupported commitments fail closed without match or belief mutation, and no hidden truth enters the public Observation or receipt.",
+        "holds": true
+      },
+      {
+        "text": "A release and training workload records command p50/p95 latency, step and complete-game throughput, peak RSS, semantic-program token counts, and fallback counters; the compiled path stays within explicit product and rollout budgets.",
+        "holds": true
+      },
+      {
+        "text": "One subsequent creator-selected card or mechanic increment is admitted as a playable vertical slice and records whether the change was content-only or required a reusable IR or kernel extension, with terminal play evidence rather than coverage markers alone.",
+        "holds": true
+      }
+    ],
+    "metric_targets": [],
+    "workflow": "",
+    "status": "completed",
+    "linear_id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+    "pm_snapshot_synced_at": 1791592070,
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      197,
+      20,
+      4,
+      42,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      200,
+      2,
+      13,
+      26,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "observed_at": null,
+  "planning_error": null,
+  "planning_stale": true,
+  "planning_state": "unavailable",
+  "execution": {
+    "machine_id": "home_39860354aaca640c2ccb50bf6ca609d8",
+    "issue_id": "385571d1-31df-4ccc-8048-a8159f473b06",
+    "issue_identifier": "MTG-41",
+    "task_id": "task_e09c371cacb6f401cef5d2bc5fcaf862",
+    "external_project_id": "ac34789f-d691-49ed-aea4-a4ba0f1e8e90",
+    "project": "rules-playable-curated-world",
+    "pm_snapshot_synced_at": 1784364791,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave": "rules",
+    "project_id": "proj_2163bf6f00f6566c3c6026b12a6785a7",
+    "status": "done",
+    "completion_pending": null,
+    "execution": {
+      "state": "idle",
+      "reason": "No Task Flow has run; independent Sessions may still be active",
+      "step": null,
+      "captured": null
+    },
+    "work": {
+      "sessions": [],
+      "flow_processes": [],
+      "processes": [],
+      "workflow": {
+        "name": "unplanned",
+        "nodes": [],
+        "edges": [
+          {
+            "from": "start",
+            "to": "end",
+            "flow": null
+          }
+        ],
+        "position": {
+          "kind": "node",
+          "node": "end"
+        },
+        "outgoing": [],
+        "history": [
+          {
+            "workflow": "unplanned",
+            "kind": "set",
+            "from": "start",
+            "to": "end",
+            "edge": null,
+            "lf_process_id": null,
+            "actor": "person",
+            "session_id": null,
+            "note": "completed before Workflows",
+            "at": 1790709905
+          }
+        ]
+      }
+    },
+    "worktree": "/Users/jack/src/etude.measure-played-release-and-training",
+    "workspace_slug": "measure-played-release-and-training",
+    "branch": "jack-heart/measure-played-release-and-training",
+    "base_commit": "cebe049b4774fae68d6e4304a1e32543f43ee9c0",
+    "agent": null,
+    "provider": "codex",
+    "pr": {
+      "id": "pr_d99b2d49fc7048cfa98bb170952686db",
+      "task_id": "task_e09c371cacb6f401cef5d2bc5fcaf862",
+      "sequence": 1,
+      "slug": "measure-played-release-and-training",
+      "branch": "jack-heart/measure-played-release-and-training",
+      "base_commit": "cebe049b4774fae68d6e4304a1e32543f43ee9c0",
+      "parent_pr_id": null,
+      "publication": {
+        "requested_at": [
+          2026,
+          199,
+          9,
+          44,
+          30,
+          0,
+          0,
+          0,
+          0
+        ],
+        "presentation": null,
+        "github": {
+          "number": 159,
+          "url": "https://github.com/loopflowstudio/etude/pull/159",
+          "head_sha": "0edca2ddde5c781f9aaeb204c11f0b5d25f95675"
+        },
+        "merge": null
+      },
+      "merge_commit": "d895ac9f2617be11c47353a3cd9ab98601d08b9e",
+      "abandoned_at": null,
+      "ci_observation": {
+        "head_sha": "0ce3afaa76c9dff0f6756fdabd881743117ef05d",
+        "state": "passing",
+        "failing_checks": [],
+        "observed_at": [
+          2026,
+          199,
+          10,
+          46,
+          59,
+          707880000,
+          0,
+          0,
+          0
+        ]
+      },
+      "github_observation": {
+        "checked_at": [
+          2026,
+          199,
+          10,
+          54,
+          9,
+          726772000,
+          0,
+          0,
+          0
+        ],
+        "result": {
+          "state": "degraded",
+          "reason": "failed to parse gh api response for PR #159: trailing characters at line 1 column 22449"
+        }
+      },
+      "linear_attachment_id": "e6e66572-b088-4b5f-84e2-ea8e471bfa37",
+      "linear_comment_id": "de2e2461-b93d-4ba3-bcd4-4bf2f447e216",
+      "linear_link_error": null,
+      "created_at": [
+        2026,
+        199,
+        8,
+        54,
+        56,
+        0,
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        2026,
+        199,
+        11,
+        5,
+        13,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "latest_event": null,
+    "created_at": [
+      2026,
+      199,
+      8,
+      54,
+      56,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ],
+    "observation": {
+      "freshness": "not_required"
+    },
+    "actions": {
+      "recommended": "no_action",
+      "reason": "Task is terminal"
+    }
+  }
+}

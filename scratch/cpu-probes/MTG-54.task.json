@@ -1,0 +1,260 @@
+{
+  "sync": {
+    "connected": false,
+    "changes": []
+  },
+  "task": {
+    "id": "task_8407bacb0a86716c23a30a406ab40a06",
+    "revision": 0,
+    "identifier": "MTG-54",
+    "title": "Build whole-rollout branching benchmark harness",
+    "description": "Create a reproducible benchmark harness for the search-state contract using the current engine: compact full clone baseline, deterministic hash/equivalence checks, and realistic worker x actor x rollout scenarios that report total rollout throughput and peak RSS as well as clone latency. Define common driver hooks for later clone-plus-undo and dense page-COW-plus-undo implementations, but do not implement or select either yet. Record hardware, seeds, workload, commands, and raw/summary output in a durable artifact. Every Python command must use uv.",
+    "rank": 0,
+    "assignee": null,
+    "due_date": null,
+    "state": "completed",
+    "completed": true,
+    "completed_at": "2026-09-29T19:25:05Z",
+    "linear_id": "c2c2cb99-e2c8-4e42-accf-5dde4a17277b",
+    "pm_snapshot_synced_at": 1784150765,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "project_id": "proj_2d1578d31903053033f94d60aa647e33",
+    "worktree": "/Users/jack/src/manabot.build-whole-rollout-branching-benchmark",
+    "workspace_slug": "build-whole-rollout-branching-benchmark",
+    "branch": "jack-heart/build-whole-rollout-branching-benchmark",
+    "base_commit": "82bae3a15e6875dcb92f7037f01fbc66cce4d1bb",
+    "parent_pr_id": null,
+    "agent": null,
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      30,
+      9,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "project": {
+    "id": "proj_2d1578d31903053033f94d60aa647e33",
+    "summary": "Give human play and training one faithful, reproducible Allies versus Lessons world, supporting the intended card interactions and actual consumer workloads without divergent rules or hidden-state leakage.",
+    "slug": "rules-faithful-play-and-training",
+    "name": "Rules — Faithful Play and Training",
+    "description": "",
+    "krs": [
+      {
+        "text": "**Play the intended rules.** Establish the selected format and eligible Lesson-pool setup and implement the full Learn choice, including the outside-game Lesson path where available, optional discard/draw, and decline. Exercise it through the real human and agent paths with correct visibility and deterministic replay. Reproduce and fix further selected-matchup discrepancies; a deliberately reduced mechanic is not faithful to the agreed world.",
+        "holds": false
+      },
+      {
+        "text": "**Meet real consumer budgets.** Jointly with Intelligence, freeze representative training/play consumers, machine/build profiles, throughput/latency/RSS measures and budgets before accepting performance. Measure current behavior; remove only demonstrated blockers and verify the same workloads and semantics afterward. Adequate existing performance may satisfy a budget without new optimization. Preserve negative results; do not restart deferred calibration or general provider work by inertia.",
+        "holds": false
+      },
+      {
+        "text": "**Keep one exact authority.** Human Commands, bot actions, replay and search forks actually required by the chosen agent use consistent versioned rules and identities. On a prospectively declared complete-game cohort, executing the same recorded Commands from equivalent roots reproduces state witnesses and ordered consequences across consumers; independently acting humans and bots need not choose the same moves. Retain executable witnesses for stale/duplicate rejection, deterministic replay, viewer privacy and fork/root isolation where applicable. Include Lesson-pool state and visibility in the contract. Changed mechanics invalidate old compatible-looking evidence until rebound and checked; no consumer rebuilds its own rules.",
+        "holds": false
+      }
+    ],
+    "metric_targets": [],
+    "workflow": "",
+    "status": "completed",
+    "linear_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+    "pm_snapshot_synced_at": 1791592070,
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      30,
+      9,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      200,
+      14,
+      4,
+      20,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "observed_at": null,
+  "planning_error": null,
+  "planning_stale": true,
+  "planning_state": "unavailable",
+  "execution": {
+    "machine_id": "home_39860354aaca640c2ccb50bf6ca609d8",
+    "issue_id": "c2c2cb99-e2c8-4e42-accf-5dde4a17277b",
+    "issue_identifier": "MTG-54",
+    "task_id": "task_8407bacb0a86716c23a30a406ab40a06",
+    "external_project_id": "35bbc647-c7e4-450b-9ef7-108628b39335",
+    "project": "rules-faithful-play-and-training",
+    "pm_snapshot_synced_at": 1784150765,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave": "rules",
+    "project_id": "proj_2d1578d31903053033f94d60aa647e33",
+    "status": "done",
+    "completion_pending": null,
+    "execution": {
+      "state": "idle",
+      "reason": "No Task Flow has run; independent Sessions may still be active",
+      "step": null,
+      "captured": null
+    },
+    "work": {
+      "sessions": [],
+      "flow_processes": [],
+      "processes": [],
+      "workflow": {
+        "name": "unplanned",
+        "nodes": [],
+        "edges": [
+          {
+            "from": "start",
+            "to": "end",
+            "flow": null
+          }
+        ],
+        "position": {
+          "kind": "node",
+          "node": "end"
+        },
+        "outgoing": [],
+        "history": [
+          {
+            "workflow": "unplanned",
+            "kind": "set",
+            "from": "start",
+            "to": "end",
+            "edge": null,
+            "lf_process_id": null,
+            "actor": "person",
+            "session_id": null,
+            "note": "completed before Workflows",
+            "at": 1790709905
+          }
+        ]
+      }
+    },
+    "worktree": "/Users/jack/src/manabot.build-whole-rollout-branching-benchmark",
+    "workspace_slug": "build-whole-rollout-branching-benchmark",
+    "branch": "jack-heart/build-whole-rollout-branching-benchmark",
+    "base_commit": "82bae3a15e6875dcb92f7037f01fbc66cce4d1bb",
+    "agent": null,
+    "provider": "codex",
+    "pr": {
+      "id": "pr_390ccd16fe55438c9ffae07506e788c4",
+      "task_id": "task_8407bacb0a86716c23a30a406ab40a06",
+      "sequence": 1,
+      "slug": "build-whole-rollout-branching-benchmark",
+      "branch": "jack-heart/build-whole-rollout-branching-benchmark",
+      "base_commit": "82bae3a15e6875dcb92f7037f01fbc66cce4d1bb",
+      "parent_pr_id": null,
+      "publication": {
+        "requested_at": [
+          2026,
+          196,
+          22,
+          43,
+          36,
+          0,
+          0,
+          0,
+          0
+        ],
+        "presentation": null,
+        "github": {
+          "number": 72,
+          "url": "https://github.com/loopflowstudio/manabot/pull/72",
+          "head_sha": "6a738120348fa2f52917c4e4ea8547e267302e96"
+        },
+        "merge": null
+      },
+      "merge_commit": "d2b7c6443c6239fdf6129f136882ff3a3ba2e137",
+      "abandoned_at": null,
+      "ci_observation": null,
+      "github_observation": null,
+      "linear_attachment_id": null,
+      "linear_comment_id": null,
+      "linear_link_error": null,
+      "created_at": [
+        2026,
+        196,
+        21,
+        30,
+        9,
+        0,
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        2026,
+        196,
+        23,
+        18,
+        25,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "latest_event": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      30,
+      9,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ],
+    "observation": {
+      "freshness": "not_required"
+    },
+    "actions": {
+      "recommended": "no_action",
+      "reason": "Task is terminal"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "scripts/bench_branching.py",
+    "run",
+    "--profile",
+    "smoke",
+    "--output",
+    "scratch/cpu-probes/branching-smoke.json",
+    "--report",
+    "scratch/cpu-probes/branching-smoke.md"
+  ],
+  "started_utc": "2026-10-15T01:18:41.565716+00:00",
+  "limit_seconds": 60.0,
+  "load_start": [
+    7.060546875,
+    7.80517578125,
+    6.81982421875
+  ],
+  "status": "failed",
+  "exit_code": 1,
+  "elapsed_seconds": 0.23732258297968656,
+  "load_end": [
+    7.060546875,
+    7.80517578125,
+    6.81982421875
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.02719374990556389,
+      "rss_bytes": 5373952
+    }
+  ],
+  "sampled_tree_peak_bytes": 5373952
+}

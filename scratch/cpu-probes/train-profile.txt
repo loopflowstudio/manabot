@@ -1,0 +1,65 @@
+Wed Oct 14 18:18:27 2026    scratch/cpu-probes/train.pstats
+
+         8988500 function calls (8670885 primitive calls) in 4.919 seconds
+
+   Ordered by: cumulative time
+   List reduced from 12812 to 55 due to restriction <55>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      379    0.004    0.000   12.259    0.032 __init__.py:1(<module>)
+        1    0.000    0.000    1.778    1.778 triton_kernel_wrap.py:1033(__init__)
+     2651    0.009    0.000    1.685    0.001 <frozen importlib._bootstrap_external>:1066(get_code)
+        1    0.000    0.000    1.534    1.534 calibrate_training.py:1(<module>)
+        1    0.000    0.000    1.469    1.469 model_capacity.py:1(<module>)
+       40    0.001    0.000    1.341    0.034 utils.py:1(<module>)
+        2    0.000    0.000    1.320    0.660 exc.py:1(<module>)
+      774    0.001    0.000    1.167    0.002 <frozen importlib._bootstrap_external>:1058(source_to_code)
+     4662    1.149    0.000    1.149    0.000 {built-in method builtins.compile}
+        1    0.000    0.000    1.087    1.087 symbolic_shapes.py:1(<module>)
+7151/7042    0.042    0.000    0.978    0.000 {built-in method builtins.__build_class__}
+      647    0.010    0.000    0.963    0.001 _model_construction.py:83(__new__)
+        1    0.000    0.000    0.943    0.943 experiment.py:1(<module>)
+       12    0.000    0.000    0.821    0.068 _jit_internal.py:1023(_overload)
+        1    0.000    0.000    0.818    0.818 artifact.py:1(<module>)
+      646    0.001    0.000    0.612    0.001 _model_construction.py:553(set_model_fields)
+      646    0.013    0.000    0.611    0.001 _fields.py:216(collect_model_fields)
+5970/5840    0.140    0.000    0.471    0.000 inspect.py:988(getmodule)
+      343    0.000    0.000    0.465    0.001 _fields.py:113(_update_fields_from_docstrings)
+      343    0.002    0.000    0.465    0.001 _docs_extraction.py:82(extract_docstrings_from_cls)
+      342    0.003    0.000    0.429    0.001 _docs_extraction.py:52(_extract_source_from_frame)
+      800    0.009    0.000    0.366    0.000 _model_construction.py:584(complete_model_class)
+        1    0.000    0.000    0.366    0.366 experiments.py:1(<module>)
+        1    0.000    0.000    0.351    0.351 job_client.py:1(<module>)
+        1    0.000    0.000    0.338    0.338 checkpoint_queue.py:1(<module>)
+        3    0.000    0.000    0.333    0.111 artifacts.py:1(<module>)
+        1    0.000    0.000    0.316    0.316 execution.py:1(<module>)
+2734/2638    0.002    0.000    0.305    0.000 <frozen importlib._bootstrap>:806(module_from_spec)
+        1    0.000    0.000    0.298    0.298 _fully_shard.py:1(<module>)
+        1    0.000    0.000    0.295    0.295 _fsdp_init.py:1(<module>)
+   253/89    0.001    0.000    0.293    0.003 _ops.py:349(fallthrough)
+        2    0.000    0.000    0.292    0.146 _factories.py:1(<module>)
+        1    0.000    0.000    0.288    0.288 teacher1_evidence.py:1(<module>)
+ 3931/698    0.005    0.000    0.285    0.000 _generate_schema.py:702(generate_schema)
+        1    0.000    0.000    0.285    0.285 wandb_storage_policy.py:1(<module>)
+      878    0.001    0.000    0.283    0.000 dataclasses.py:1264(wrap)
+      878    0.015    0.000    0.282    0.000 dataclasses.py:921(_process_class)
+ 7984/698    0.012    0.000    0.280    0.000 _generate_schema.py:1002(_generate_schema_inner)
+    20/17    0.000    0.000    0.279    0.016 <frozen importlib._bootstrap_external>:1291(create_module)
+    20/17    0.242    0.012    0.279    0.016 {built-in method _imp.create_dynamic}
+        1    0.000    0.000    0.270    0.270 artifact_file_cache.py:1(<module>)
+        6    0.000    0.000    0.268    0.045 models.py:1(<module>)
+ 1940/656    0.010    0.000    0.262    0.000 _generate_schema.py:741(_model_schema)
+       30    0.000    0.000    0.259    0.009 library.py:676(wrap)
+        1    0.000    0.000    0.251    0.251 server.py:1(<module>)
+        1    0.000    0.000    0.245    0.245 _fsdp_state.py:1(<module>)
+        1    0.000    0.000    0.245    0.245 polyfuncs.py:1(<module>)
+        1    0.000    0.000    0.243    0.243 specialpolys.py:1(<module>)
+      131    0.001    0.000    0.242    0.002 agent.py:201(forward_distribution)
+3696/2875    0.003    0.000    0.234    0.000 _generate_schema.py:1221(_generate_md_field_schema)
+3855/2923    0.017    0.000    0.234    0.000 _generate_schema.py:1261(_common_field_schema)
+8122/1834    0.003    0.000    0.225    0.000 module.py:1772(_wrapped_call_impl)
+8122/1834    0.005    0.000    0.224    0.000 module.py:1780(_call_impl)
+      8/6    0.000    0.000    0.215    0.036 main.py:888(__class_getitem__)
+        1    0.000    0.000    0.215    0.215 rings.py:1(<module>)
+
+

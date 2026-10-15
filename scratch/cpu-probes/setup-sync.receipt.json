@@ -1,0 +1,52 @@
+{
+  "phase": "setup",
+  "command": [
+    "uv",
+    "sync",
+    "--locked",
+    "--python",
+    "3.12",
+    "--extra",
+    "play",
+    "--extra",
+    "dev"
+  ],
+  "started_utc": "2026-10-15T01:16:30.456714+00:00",
+  "limit_seconds": 180.0,
+  "load_start": [
+    7.7333984375,
+    8.2734375,
+    6.80712890625
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 1.165114082978107,
+  "load_end": [
+    7.7333984375,
+    8.2734375,
+    6.80712890625
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.028082708013243973,
+      "rss_bytes": 7159808
+    },
+    {
+      "seconds": 0.26375720801297575,
+      "rss_bytes": 47529984
+    },
+    {
+      "seconds": 0.49379041604697704,
+      "rss_bytes": 60047360
+    },
+    {
+      "seconds": 0.7210617080563679,
+      "rss_bytes": 60047360
+    },
+    {
+      "seconds": 0.9550368329510093,
+      "rss_bytes": 64897024
+    }
+  ],
+  "sampled_tree_peak_bytes": 64897024
+}

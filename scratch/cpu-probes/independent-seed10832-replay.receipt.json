@@ -1,0 +1,109 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "-m",
+    "experiments.runners.pipeline_benchmark",
+    "replay",
+    "--tape",
+    "scratch/accelerator-probes/capture-seed10832",
+    "--out",
+    "scratch/accelerator-probes/replay-seed10832",
+    "--request-timings",
+    "--seconds",
+    "8"
+  ],
+  "started_utc": "2026-10-15T03:07:09.410197+00:00",
+  "limit_seconds": 10.0,
+  "load_start": [
+    2.685546875,
+    2.93505859375,
+    3.09912109375
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 4.24951812508516,
+  "load_end": [
+    2.71044921875,
+    2.93603515625,
+    3.09814453125
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.029381541069597006,
+      "rss_bytes": 5734400
+    },
+    {
+      "seconds": 0.2677500410936773,
+      "rss_bytes": 186761216
+    },
+    {
+      "seconds": 0.5021909161005169,
+      "rss_bytes": 226312192
+    },
+    {
+      "seconds": 0.7380532081006095,
+      "rss_bytes": 255410176
+    },
+    {
+      "seconds": 0.9759115000488237,
+      "rss_bytes": 272531456
+    },
+    {
+      "seconds": 1.2097664580214769,
+      "rss_bytes": 324812800
+    },
+    {
+      "seconds": 1.444486082997173,
+      "rss_bytes": 470908928
+    },
+    {
+      "seconds": 1.6766012080479413,
+      "rss_bytes": 510361600
+    },
+    {
+      "seconds": 1.9145923330215737,
+      "rss_bytes": 533659648
+    },
+    {
+      "seconds": 2.1526358330156654,
+      "rss_bytes": 556597248
+    },
+    {
+      "seconds": 2.383826833101921,
+      "rss_bytes": 629686272
+    },
+    {
+      "seconds": 2.6218527080491185,
+      "rss_bytes": 759267328
+    },
+    {
+      "seconds": 2.8573651250917464,
+      "rss_bytes": 984924160
+    },
+    {
+      "seconds": 3.095251166028902,
+      "rss_bytes": 985219072
+    },
+    {
+      "seconds": 3.3263277910882607,
+      "rss_bytes": 985300992
+    },
+    {
+      "seconds": 3.564805291010998,
+      "rss_bytes": 985366528
+    },
+    {
+      "seconds": 3.8025399160105735,
+      "rss_bytes": 984383488
+    },
+    {
+      "seconds": 4.039426791016012,
+      "rss_bytes": 297025536
+    }
+  ],
+  "sampled_tree_peak_bytes": 985366528
+}

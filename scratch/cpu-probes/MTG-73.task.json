@@ -1,0 +1,256 @@
+{
+  "sync": {
+    "connected": false,
+    "changes": []
+  },
+  "task": {
+    "id": "task_303ee54c3587a63fd8d19cf0db74a7b1",
+    "revision": 0,
+    "identifier": "MTG-73",
+    "title": "Separate ContentPack and measure clone costs",
+    "description": "Implement the smallest behavior-preserving vertical slice that separates immutable card definitions from mutable match facts. Introduce stable CardDefId values and a shared versioned ContentPack where the current architecture permits, preserve the Python and fixed-action ABIs, and add deterministic seeded-trace coverage. Capture before/after step throughput, MatchState clone cost, representative rollout throughput, allocations or peak RSS, and object-size evidence. Do not introduce page-COW, a broad rules rewrite, deckbuilding, or generic catalog infrastructure. Follow AGENTS.md: all Python commands through uv; rebuild the PyO3 extension after Rust changes. Use docs/research/semantic-kernel.md and wave/rules/README.md as design context.",
+    "rank": 0,
+    "assignee": null,
+    "due_date": null,
+    "state": "completed",
+    "completed": true,
+    "completed_at": "2026-09-29T19:25:05Z",
+    "linear_id": "e2ddddbc-0207-4bcf-987e-c74b4005d2cb",
+    "pm_snapshot_synced_at": 1784150765,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+    "worktree": "/Users/jack/src/manabot.separate-contentpack-and-measure-clone",
+    "workspace_slug": "separate-contentpack-and-measure-clone",
+    "branch": "jack-heart/separate-contentpack-and-measure-clone",
+    "base_commit": "82bae3a15e6875dcb92f7037f01fbc66cce4d1bb",
+    "parent_pr_id": null,
+    "agent": null,
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      29,
+      49,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "project": {
+    "id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+    "summary": "Provide the compact authoritative state foundation used by every playable world and fork: immutable versioned content is shared, mutable match facts have stable identity, and equivalent seeded executions have deterministic state witnesses. Consumer perfor",
+    "slug": "rules-runtime-state-foundation",
+    "name": "Rules — Runtime State Foundation",
+    "description": "",
+    "krs": [
+      {
+        "text": "Every environment and branch shares one versioned ContentPack while mutable-state cloning duplicates no immutable card definitions, with independently reset roots and siblings remaining isolated.",
+        "holds": true
+      },
+      {
+        "text": "Stable CardDefId-based definitions and versioned deterministic state witnesses reproduce equivalent seeded traces without allocation-address, Debug-format, or card-name identity at the state boundary.",
+        "holds": true
+      }
+    ],
+    "metric_targets": [],
+    "workflow": "",
+    "status": "completed",
+    "linear_id": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+    "pm_snapshot_synced_at": 1791592070,
+    "wave_id": "74d9efbc-444b-4e88-b4a4-c67983448649",
+    "abandon_intent": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      29,
+      48,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      197,
+      1,
+      48,
+      41,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "observed_at": null,
+  "planning_error": null,
+  "planning_stale": true,
+  "planning_state": "unavailable",
+  "execution": {
+    "machine_id": "home_39860354aaca640c2ccb50bf6ca609d8",
+    "issue_id": "e2ddddbc-0207-4bcf-987e-c74b4005d2cb",
+    "issue_identifier": "MTG-73",
+    "task_id": "task_303ee54c3587a63fd8d19cf0db74a7b1",
+    "external_project_id": "94a7cb2d-f527-411a-9784-ceceb6617dac",
+    "project": "rules-runtime-state-foundation",
+    "pm_snapshot_synced_at": 1784150765,
+    "pm_writeback": {
+      "state": "current"
+    },
+    "wave": "rules",
+    "project_id": "proj_e3b8a4d2177633f5d060e410d8e5e414",
+    "status": "done",
+    "completion_pending": null,
+    "execution": {
+      "state": "idle",
+      "reason": "No Task Flow has run; independent Sessions may still be active",
+      "step": null,
+      "captured": null
+    },
+    "work": {
+      "sessions": [],
+      "flow_processes": [],
+      "processes": [],
+      "workflow": {
+        "name": "unplanned",
+        "nodes": [],
+        "edges": [
+          {
+            "from": "start",
+            "to": "end",
+            "flow": null
+          }
+        ],
+        "position": {
+          "kind": "node",
+          "node": "end"
+        },
+        "outgoing": [],
+        "history": [
+          {
+            "workflow": "unplanned",
+            "kind": "set",
+            "from": "start",
+            "to": "end",
+            "edge": null,
+            "lf_process_id": null,
+            "actor": "person",
+            "session_id": null,
+            "note": "completed before Workflows",
+            "at": 1790709905
+          }
+        ]
+      }
+    },
+    "worktree": "/Users/jack/src/manabot.separate-contentpack-and-measure-clone",
+    "workspace_slug": "separate-contentpack-and-measure-clone",
+    "branch": "jack-heart/separate-contentpack-and-measure-clone",
+    "base_commit": "82bae3a15e6875dcb92f7037f01fbc66cce4d1bb",
+    "agent": null,
+    "provider": "codex",
+    "pr": {
+      "id": "pr_e193071affe84456af8ab66f4ab09cdc",
+      "task_id": "task_303ee54c3587a63fd8d19cf0db74a7b1",
+      "sequence": 1,
+      "slug": "separate-contentpack-and-measure-clone",
+      "branch": "jack-heart/separate-contentpack-and-measure-clone",
+      "base_commit": "82bae3a15e6875dcb92f7037f01fbc66cce4d1bb",
+      "parent_pr_id": null,
+      "publication": {
+        "requested_at": [
+          2026,
+          196,
+          21,
+          51,
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        "presentation": null,
+        "github": {
+          "number": 64,
+          "url": "https://github.com/loopflowstudio/manabot/pull/64",
+          "head_sha": "fcb5b542f7691a9bf3e744e969cbf64c7ff90e78"
+        },
+        "merge": null
+      },
+      "merge_commit": "61b7e15db25421143dae0db1d9c76cdedde872cb",
+      "abandoned_at": null,
+      "ci_observation": null,
+      "github_observation": null,
+      "linear_attachment_id": null,
+      "linear_comment_id": null,
+      "linear_link_error": null,
+      "created_at": [
+        2026,
+        196,
+        21,
+        29,
+        49,
+        0,
+        0,
+        0,
+        0
+      ],
+      "updated_at": [
+        2026,
+        196,
+        21,
+        53,
+        26,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "latest_event": null,
+    "created_at": [
+      2026,
+      196,
+      21,
+      29,
+      49,
+      0,
+      0,
+      0,
+      0
+    ],
+    "updated_at": [
+      2026,
+      272,
+      19,
+      25,
+      5,
+      0,
+      0,
+      0,
+      0
+    ],
+    "observation": {
+      "freshness": "not_required"
+    },
+    "actions": {
+      "recommended": "no_action",
+      "reason": "Task is terminal"
+    }
+  }
+}
