@@ -66,9 +66,18 @@ TrainingRun closes producer pools on completion, interruption or failure. Direct
 `contextlib.closing`). Worker errors settle all submitted writers before closing
 the pool; partially written observations cannot be reused after failure. Native
 calls retain their cooperative deadline behavior, so remote hard limits still
-belong to the enclosing job/process supervisor. This implementation's performance
-is pending a matched ordinary-training GPU comparison; more workers are not yet
-a recommended default.
+belong to the enclosing job/process supervisor. The first matched GPU comparison
+measured an11.9% four-worker improvement at4,096streams but failed the complete
+performance/correctness gates; see [run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
+More workers are not yet a recommended default.
+
+The collector writes sampled observations and policy outputs directly into one
+update's final `[learner step, stream, ...]` arrays. Each stream's pending slot
+awaits only its reward and terminal flag. Collection stops before sampling an
+extra action, and the returned arrays remain owned by that batch through learning.
+Failed collection cannot be snapshotted or silently reused; recovery restores the
+last durable update into a fresh collector. This storage change preserves the
+existing rollout and recovery formats; its GPU performance is still unverified.
 
 Training comparisons use [declarative typed-Python experiments](training-experiments.md):
 named components, frozen baselines/versioned presets, explicit overrides and ordered

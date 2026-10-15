@@ -21,6 +21,8 @@ Design notes, kept simple and honest:
   decision, else 0. The Rust reward stream is ignored.
 - Streams pause at the exact next learner observation once their quota is
   complete. No sampled action or excess transition crosses an update boundary.
+- One ``_RolloutStorage`` owns an update's final arrays. Sampled data is written
+  directly into its time/stream slot; reward finalization never recopies it.
 - ``NetOpponentTrainer`` reuses the stock ``Trainer`` PPO update machinery
   (flatten, minibatch, optimize, save), with transition-end GAE for this
   collector's boundary convention.
@@ -35,6 +37,7 @@ import time
 from typing import Any, Dict
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 
 from manabot.env import Match, ObservationSpace, Reward
@@ -67,29 +70,6 @@ OPPONENT_MODES = ("random", "frozen", "self")
 
 
 @dataclass
-class _Pending:
-    """A learner transition awaiting its reward (next learner decision or
-    game end)."""
-
-    obs: Dict[str, np.ndarray]
-    action: int
-    logprob: float
-    value: float
-    probabilities: np.ndarray
-    log_probabilities: np.ndarray
-    outcome_probabilities: np.ndarray | None = None
-
-
-@dataclass
-class _Transition:
-    """Finalized learner row with its collection-time outcome distribution."""
-
-    pending: _Pending
-    reward: float
-    done: bool
-
-
-@dataclass
 class RolloutBatch:
     """One PPO update's worth of learner transitions, (num_steps, num_envs)."""
 
@@ -105,6 +85,57 @@ class RolloutBatch:
     log_probabilities: np.ndarray
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
     outcome_probabilities: np.ndarray | None = None
+
+
+@dataclass
+class _RolloutStorage:
+    """One update's final arrays and the reward-finalization state per stream.
+
+    completed is the next writable time index; a pending slot has an observation
+    and sampled action but awaits its terminal reward or next learner decision.
+    No slot crosses an update boundary. Failed collection keeps this owner so it
+    cannot be silently snapshotted or resumed without restoring a fresh collector.
+    """
+
+    batch: RolloutBatch
+    completed: NDArray[np.int64]
+    pending: NDArray[np.bool_]
+
+    @classmethod
+    def allocate(
+        cls, space: ObservationSpace, streams: int, steps: int, *, categorical: bool
+    ) -> _RolloutStorage:
+        shapes = space.encoder.allocate(1)
+        obs = {
+            key: np.zeros((steps, streams) + value.shape[1:], dtype=value.dtype)
+            for key, value in shapes.items()
+        }
+        next_obs = {
+            key: np.zeros((streams,) + value.shape[1:], dtype=value.dtype)
+            for key, value in shapes.items()
+        }
+        probabilities = np.zeros_like(obs["actions_valid"])
+        return cls(
+            batch=RolloutBatch(
+                obs=obs,
+                actions=np.zeros((steps, streams), dtype=np.int64),
+                logprobs=np.zeros((steps, streams), dtype=np.float32),
+                rewards=np.zeros((steps, streams), dtype=np.float32),
+                dones=np.zeros((steps, streams), dtype=bool),
+                values=np.zeros((steps, streams), dtype=np.float32),
+                next_obs=next_obs,
+                next_done=np.zeros(streams, dtype=bool),
+                probabilities=probabilities,
+                log_probabilities=np.full_like(probabilities, -np.inf),
+                outcome_probabilities=(
+                    np.zeros((steps, streams, 3), dtype=np.float32)
+                    if categorical
+                    else None
+                ),
+            ),
+            completed=np.zeros(streams, dtype=np.int64),
+            pending=np.zeros(streams, dtype=bool),
+        )
 
 
 @dataclass
@@ -268,8 +299,7 @@ class SeatRoutedCollector:
             #: half the streams have the learner on the play — seat-balanced.
             self.learner_seat = np.arange(num_envs, dtype=np.int64) % 2
 
-            self._streams: list[list[_Transition]] = [[] for _ in range(num_envs)]
-            self._pending: list[_Pending | None] = [None] * num_envs
+            self._rollout: _RolloutStorage | None = None
 
             if opponent_mode == "random":
                 self._opponent: Any = RandomBatchController(seed=seed + 1)
@@ -296,7 +326,7 @@ class SeatRoutedCollector:
         """Capture a completed update boundary, including native RNG replay."""
         if self._recovery_limit is None and self._game_recovery_limit is None:
             raise ValueError("collector recovery is disabled")
-        if any(self._streams) or any(p is not None for p in self._pending):
+        if self._rollout is not None:
             raise ValueError("collector snapshot requires an update boundary")
         return CollectorSnapshot(
             deepcopy(self._journal),
@@ -457,13 +487,23 @@ class SeatRoutedCollector:
         check: Callable[[], None] | None,
     ) -> RolloutBatch:
 
+        if num_steps < 1:
+            raise ValueError("num_steps must be positive")
+        if self._rollout is not None:
+            raise ValueError(
+                "collector has an unfinished rollout; restore a fresh collector"
+            )
         start = time.perf_counter()
         buffers = self._buffers
         env = self._env
         num_envs = self.num_envs
-
-        if num_steps < 1:
-            raise ValueError("num_steps must be positive")
+        rollout = _RolloutStorage.allocate(
+            self.observation_space,
+            num_envs,
+            num_steps,
+            categorical=agent.hypers.value_kind == "categorical_wdl",
+        )
+        self._rollout = rollout
         while True:
             if check is not None:
                 check()
@@ -473,13 +513,10 @@ class SeatRoutedCollector:
             ):
                 raise TimeoutError("collector exceeded training deadline")
             acting = np.asarray(env.current_agent_indices(), dtype=np.int64)
-            for row in range(num_envs):
-                if (
-                    acting[row] == self.learner_seat[row]
-                    and self._pending[row] is not None
-                ):
-                    self._finalize(row, reward=0.0, done=False)
-            active = np.array([len(stream) < num_steps for stream in self._streams])
+            ready = np.flatnonzero((acting == self.learner_seat) & rollout.pending)
+            for row in ready:
+                self._finalize(int(row), reward=0.0, done=False)
+            active = rollout.completed < num_steps
             if not active.any():
                 break
             actions = np.zeros(num_envs, dtype=np.int64)
@@ -514,20 +551,22 @@ class SeatRoutedCollector:
                 acts = action_t.cpu().numpy().astype(np.int64)
                 logprobs = logprob_t.cpu().numpy()
                 values = value_t.view(-1).cpu().numpy()
-                # One copied slice per key; per-row dicts view into it.
-                obs_rows = {key: buffers[key][learner_rows].copy() for key in OBS_KEYS}
-                for j, row in enumerate(learner_rows):
-                    self._pending[row] = _Pending(
-                        obs={key: obs_rows[key][j] for key in OBS_KEYS},
-                        action=int(acts[j]),
-                        logprob=float(logprobs[j]),
-                        value=float(values[j]),
-                        probabilities=probabilities[j].copy(),
-                        log_probabilities=log_probabilities[j].copy(),
-                        outcome_probabilities=(
-                            None if outcomes is None else outcomes[j].copy()
-                        ),
-                    )
+                # Capture directly in final [learner step, stream] slots before
+                # native stepping overwrites the observation buffers. These arrays
+                # belong to this update and remain owned by the returned batch.
+                slots = (rollout.completed[learner_rows], learner_rows)
+                batch = rollout.batch
+                for key in OBS_KEYS:
+                    batch.obs[key][slots] = buffers[key][learner_rows]
+                batch.actions[slots] = acts
+                batch.logprobs[slots] = logprobs
+                batch.values[slots] = values
+                batch.probabilities[slots] = probabilities
+                batch.log_probabilities[slots] = log_probabilities
+                if batch.outcome_probabilities is not None:
+                    assert outcomes is not None
+                    batch.outcome_probabilities[slots] = outcomes
+                rollout.pending[learner_rows] = True
                 actions[learner_rows] = acts
                 self._count_action_types(
                     self.stats.learner_action_types, learner_rows, acts
@@ -582,7 +621,7 @@ class SeatRoutedCollector:
                         reward = self._win_reward
                     else:
                         reward = self._lose_reward
-                    if self._pending[row] is not None:
+                    if rollout.pending[row]:
                         self._finalize(int(row), reward=reward, done=True)
 
         batch = self._build_batch(num_steps)
@@ -590,75 +629,26 @@ class SeatRoutedCollector:
         return batch
 
     def _finalize(self, row: int, *, reward: float, done: bool) -> None:
-        pending = self._pending[row]
-        assert pending is not None
-        self._streams[row].append(_Transition(pending, reward, done))
-        self._pending[row] = None
+        rollout = self._rollout
+        assert rollout is not None and rollout.pending[row]
+        step = rollout.completed[row]
+        rollout.batch.rewards[step, row] = reward
+        rollout.batch.dones[step, row] = done
+        rollout.completed[row] += 1
+        rollout.pending[row] = False
         self.stats.learner_transitions += 1
 
     def _build_batch(self, num_steps: int) -> RolloutBatch:
-        num_envs = self.num_envs
-        shapes = self.observation_space.encoder.allocate(1)
-        obs = {
-            key: np.zeros((num_steps, num_envs) + value.shape[1:], dtype=value.dtype)
-            for key, value in shapes.items()
-        }
-        actions = np.zeros((num_steps, num_envs), dtype=np.int64)
-        logprobs = np.zeros((num_steps, num_envs), dtype=np.float32)
-        rewards = np.zeros((num_steps, num_envs), dtype=np.float32)
-        dones = np.zeros((num_steps, num_envs), dtype=bool)
-        values = np.zeros((num_steps, num_envs), dtype=np.float32)
-        next_obs = {
-            key: np.zeros((num_envs,) + value.shape[1:], dtype=value.dtype)
-            for key, value in shapes.items()
-        }
-        next_done = np.zeros((num_envs,), dtype=bool)
-        probabilities = np.zeros_like(obs["actions_valid"])
-        log_probabilities = np.full_like(probabilities, -np.inf)
-        outcome_probabilities = (
-            np.zeros((num_steps, num_envs, 3), dtype=np.float32)
-            if self._streams[0][0].pending.outcome_probabilities is not None
-            else None
-        )
-
-        for env_index in range(num_envs):
-            stream = self._streams[env_index]
-            for step in range(num_steps):
-                transition = stream[step]
-                pending = transition.pending
-                probabilities[step, env_index] = pending.probabilities
-                log_probabilities[step, env_index] = pending.log_probabilities
-                if outcome_probabilities is not None:
-                    assert pending.outcome_probabilities is not None
-                    outcome_probabilities[step, env_index] = (
-                        pending.outcome_probabilities
-                    )
-                for key in OBS_KEYS:
-                    obs[key][step, env_index] = pending.obs[key]
-                actions[step, env_index] = pending.action
-                logprobs[step, env_index] = pending.logprob
-                values[step, env_index] = pending.value
-                rewards[step, env_index] = transition.reward
-                dones[step, env_index] = transition.done
-            del stream[:num_steps]
-            assert not stream and self._pending[env_index] is None
-            for key in OBS_KEYS:
-                next_obs[key][env_index] = self._buffers[key][env_index]
-            next_done[env_index] = dones[num_steps - 1, env_index]
-
-        return RolloutBatch(
-            obs=obs,
-            actions=actions,
-            logprobs=logprobs,
-            rewards=rewards,
-            dones=dones,
-            values=values,
-            next_obs=next_obs,
-            next_done=next_done,
-            probabilities=probabilities,
-            log_probabilities=log_probabilities,
-            outcome_probabilities=outcome_probabilities,
-        )
+        """Finish bootstrap observations; sampled transition data is already stored."""
+        rollout = self._rollout
+        assert rollout is not None
+        assert np.all(rollout.completed == num_steps) and not rollout.pending.any()
+        batch = rollout.batch
+        for key in OBS_KEYS:
+            batch.next_obs[key][:] = self._buffers[key]
+        batch.next_done[:] = batch.dones[-1]
+        self._rollout = None
+        return batch
 
 
 # -----------------------------------------------------------------------------
