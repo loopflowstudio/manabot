@@ -1,0 +1,232 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Experiment metric guide</title><style>
+body{font:15px/1.5 'Avenir Next',system-ui,sans-serif;color:#23342d;background:#fffdf8;max-width:1120px;margin:40px auto;padding:0 28px}h1{font:46px/1.12 Georgia,serif;letter-spacing:-1px;margin:12px 0}h2{font:28px/1.2 Georgia,serif;margin:12px 0}a{color:#176b57;text-underline-offset:3px}.eyebrow,.section-label{font-size:11px;letter-spacing:2px;font-weight:700;color:#66776d}.stamp,.muted{font-size:12px;color:#627067}nav{display:flex;gap:24px;margin:22px 0;font-weight:600}.stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:2px solid #284b3b;border-bottom:1px solid #bbc4b8;margin:22px 0}.stats>div{padding:16px 12px}.stats span{display:block;font-size:12px;color:#627067}.stats strong{font:28px Georgia,serif}.table{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}th{text-align:left;color:#627067;font-weight:600}td,th{padding:10px 8px;border-bottom:1px solid #e0e3d9;vertical-align:top}section{margin-top:36px}summary{cursor:pointer;font-weight:600;padding:12px 0}details.panel{border-top:1px solid #bbc4b8}.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.charts svg{width:100%;height:auto}.reading{background:#eff2e8;border-left:3px solid #718764;padding:12px 18px;font-size:13px;margin:12px 0}.reading p{margin:6px 0}.figure svg{width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere}#details{margin-top:36px;border-top:2px solid #bbc4b8}#details h1{font-size:26px}@media(max-width:650px){body{margin:24px auto;padding:0 16px}h1{font-size:34px}h2{font-size:24px}nav{gap:14px;font-size:12px}.stats strong{font-size:22px}.stats>div{padding:12px 6px}.charts{grid-template-columns:1fr}.table{max-width:100%}td,th{min-width:78px}summary{font-size:13px}}@media print{details{display:block}section{break-inside:avoid}}
+
+.latest-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:20px 0}.latest{border:1px solid #d7dfce;padding:12px 16px;font-size:12px}.latest>div{display:flex;gap:28px;margin:8px 0}.latest strong{font:25px Georgia,serif}.latest small{color:#627067}.progress td{white-space:nowrap}@media(max-width:650px){.latest-grid{grid-template-columns:1fr}.progress thead{display:none}.progress tr{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #bbc4b8}.progress td{display:block;white-space:normal;border:0;padding:5px 8px}.progress td:before{content:attr(data-label);display:block;font-size:11px;color:#627067}.progress td:first-child{grid-column:1/-1}}
+</style><main><h1 id="reading-the-experiment-report">Reading the experiment report<a class="anchor-link" href="#reading-the-experiment-report">&#182;</a></h1><p>The notebook is the editable report generator. Run All reads local evidence and
+writes one HTML dashboard. HTML is the default read-only surface; it does not
+poll, train, evaluate, or access a tracker. Change the notebook's question,
+selected metrics and plotting code to regenerate that surface. Existing notebooks
+are create-once: use a new filename to adopt a newer generator without losing edits.</p>
+<h2 id="freshness">Freshness<a class="anchor-link" href="#freshness">&#182;</a></h2><p>Rendered time is the UTC time of report generation. Evidence as-of is the
+execution coordinator's saved <code>last_seen_unix</code>, not the JSON file modification
+time (copies change modification time). Age is seconds since that heartbeat.
+A running status with an old heartbeat is stale, not proof that training is still
+running. A completed execution is labeled final; otherwise status is in-flight.
+Checkpoint age is lag in recorded training seconds from the latest diagnostic,
+not wall-clock time since export. Missing time coordinates are unavailable.</p>
+<h2 id="learning">Learning<a class="anchor-link" href="#learning">&#182;</a></h2><p>Progress is shown separately for each variant and independent training seed.
+Updates are collect/update iterations, including empty-filter skips; planned
+updates come from declared stages. Supervised epoch counters are labeled as
+such; an active-time recipe labels its update safety ceiling separately from
+the active-hour target. Learner transitions, native decisions and
+optimizer exposures count different work. SPS explicitly means cumulative
+learner transitions divided by recorded training seconds at the latest diagnostic.
+It includes measured training overhead, not just model inference. Host contention
+is uncorrected. There is no uncertainty interval for these process measurements.</p>
+<p>RL loss is the latest retained optimized minibatch objective, with policy/value
+and regularization semantics defined by the recipe. It is not predictive log
+loss, is not necessarily comparable across recipes, and can be absent on an
+empty-filter update. Distillation cross-entropy is labeled as such. Do not infer
+strength from either loss. Latest rows without a loss remain unavailable rather
+than carrying a stale optimized value forward without a label.</p>
+<p>Deeper example in a notebook cell (figures go into the HTML <code>sections</code> list):</p>
+<div class="highlight"><pre><span></span><span class="n">sections</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39;Collection KL&#39;</span><span class="p">,</span> <span class="s1">&#39;learning&#39;</span><span class="p">,</span>
+                 <span class="p">[</span><span class="n">metric_figure</span><span class="p">(</span><span class="n">evidence</span><span class="p">,</span> <span class="s1">&#39;rl/collection_kl&#39;</span><span class="p">)]))</span>
+<span class="c1"># Inspect all retained learning/resource scalars before selecting other panels.</span>
+<span class="n">rows</span> <span class="o">=</span> <span class="n">evidence</span><span class="o">.</span><span class="n">metrics</span><span class="p">(</span><span class="n">evidence</span><span class="o">.</span><span class="n">runs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+</pre></div>
+<h2 id="evaluation">Evaluation<a class="anchor-link" href="#evaluation">&#182;</a></h2><p>Win fraction counts wins over all valid games; draws are not wins. The source
+monitor also retains score (win + half draw) and draw fractions. Latest evaluation
+is checkpoint status, not a ranking of variants. Each row identifies the original
+checkpoint's updates/transitions, training-time lag, opponent and completed/planned
+game counts. Incomplete or failed evaluation attempts cannot supply rates.</p>
+<p>The saved 95% percentile interval resamples complete four-leg deals, retaining
+both deck and seat assignments. It conditions on one checkpoint and does not
+measure training-seed uncertainty. One deal can yield a zero-width interval,
+including in the tiny demo; this does not establish precision. Monitoring deals
+are inspected development evidence, not the scientific held-out endpoint cohort.</p>
+<p>Deeper analysis: <code>compatible_panels(evidence)</code> returns complete MonitorResult
+records, retaining raw game rows, score/draw intervals, protocol, artifact digest
+and opponent identity. Report paired independent-seed effects under the scientific
+protocol before making a method claim; never pool games as independent fits.</p>
+<h2 id="comparisons">Comparisons<a class="anchor-link" href="#comparisons">&#182;</a></h2><p>The <code>strength_figures</code> cross-run comparison includes only stage/update
+coordinates present exactly once for every expected run in a compatible cohort. Protocol, opponent, world,
+ABI and inference envelope must agree. Missing runs or unmatched milestones
+produce unavailable panels. No interpolation, cherry-picked best checkpoint,
+or unequal-latest ranking is performed. Points and intervals remain per seed. The default dashboard instead makes each
+retained seed’s monitoring history available independently, so an unrun seed
+does not hide the ongoing run; this is not a matched multi-seed comparison.</p>
+<p>New notebooks lead with <code>strength_figures(evidence)</code>, using completed self-play
+steps, followed by learner transitions and active training time. Other training
+units are not combined on this step axis. Optional optimizer-call and exposure
+axes retain their measured units; a missing historical counter suppresses that
+panel instead of plotting zero. Edited existing notebooks remain unchanged.</p>
+<p>The time axis is original checkpoint cumulative recorded training seconds. The
+work axis is cumulative native environment decisions, explicitly a work proxy,
+not FLOPs or hardware-normalized compute. Equal updates need not mean equal
+transitions, exposures, seconds or dollars. Curves show these differences; they
+do not assert an equal-cost treatment effect. Sparse single-point fixtures do
+not establish learning trends.</p>
+<p>For deeper analysis use <code>matched_milestones(evidence)</code> and inspect
+<code>coordinates.optimizer_exposures</code> or <code>coordinates.learner_transitions</code>. Equal-cost
+analysis needs overlapping observed support and a predeclared cutoff/selection
+rule; do not extrapolate absent checkpoints. Keep regime-specific configuration,
+independent seeds and held-out scientific cohorts attached to any conclusion.</p>
+<h2 id="costs">Costs<a class="anchor-link" href="#costs">&#182;</a></h2><p>The training-only time profile shows a flamegraph-style hierarchy for each saved
+attempt: setup, stages, collection, learning, stage exports and remaining time.
+Widths are aggregate elapsed seconds, not chronological spans. Unattributed time
+is visible; detailed inference/simulation and learning subphases are unavailable
+unless separately profiled. Diagnostics can include failure accounting, so they
+are not universally pure diagnostic computation. Monitoring exports and recovery
+costs are already inside stage time and are not added again.</p>
+<p>Completed stages copied into a recovery child are excluded from that child's
+cost. Missing parent records or inconsistent timing totals produce a visible
+attribution warning rather than normalized percentages. The downloadable training
+time JSON contains the hierarchy, intervals and source-file hashes.</p>
+<p>The training-attempt timeline uses execution start/end timestamps where available;
+otherwise it uses the run's recorded calendar span. These bases are labeled:
+process lifetime includes work outside a regime, and calendar spans may include
+downtime. Running intervals stop at the saved heartbeat, not the rendering time.
+Missing timestamps remain unavailable. Overlapping lane durations cannot be added
+to obtain elapsed time; cross-machine clock uncertainty is unrecorded. Evaluation
+lanes and causal critical-path attribution are deferred.</p>
+<p>Elapsed wall seconds and additive worker-process seconds come from ExperimentRun.
+Process seconds include concurrent learner and evaluator duration; evaluator
+seconds are already included and must not be added again. They are occupied
+process time, not CPU utilization or hardware-normalized compute. Host dollars
+are available only when an hourly rate was configured; absent prices are unknown.</p>
+<p>TrainingRun stage costs give collection, optimization, export and diagnostics.
+Resource curves expose sampled process RSS in bytes; the summary uses MiB.
+Sampling misses peaks and does not measure the whole host. Load averages measure
+contention but do not correct throughput. Failures, interrupted attempts and
+pending work remain visible; a missing cost record is not zero cost. Timing has
+no statistical uncertainty estimate; repeat calibration for performance claims.</p>
+<p>Deeper examples: <code>evidence.executions</code> retains attempt allowances, failures,
+conservative crash charges and costs; <code>evidence.runs</code> retains per-stage costs,
+imported producer references and artifacts. Add <code>progress/host_load_1m</code> or
+<code>progress/process_cpu_seconds</code> through <code>metric_figure</code>. Do not sum ancestor costs
+again when recovery receipts already charge them. Source preparation and external
+costs absent from these receipts remain unavailable.</p>
+<h2 id="sampling">Sampling<a class="anchor-link" href="#sampling">&#182;</a></h2><p>The default diagnostics are separate per regime and metric, with independent seeds
+identified by color. Solid lines use a trailing arithmetic mean of <strong>up to 25 saved
+diagnostic records</strong>, not 25 games, samples, or elapsed seconds. Faint lines are raw
+values. The window restarts at missing values, missing update coordinates and stage
+boundaries. Smoothing shows local variation; it is not a confidence interval or a
+reconstruction of unrecorded minibatches. Raw scalar JSON is downloadable from HTML;
+<code>metric_figure</code> and <code>evidence.metrics(run)</code> remain available to edited notebooks.</p>
+<p>For Ataraxos move updates, each learner timestep is an optimized minibatch across
+selected environments. The loop overwrites <code>loss</code>, <code>policy_loss</code>, <code>value_loss</code>,
+<code>entropy</code>, <code>collection_kl</code> and <code>reference_kl</code> each time. The saved values therefore
+come from the <strong>last optimized timestep minibatch</strong>, evaluated before that
+minibatch's optimizer step. They are neither update-wide means nor evaluations on
+fixed positions. The sampled positions and number of legal offers change over time.
+Empty actor/critic filters skip optimization and retain no loss or entropy.</p>
+<p><code>policy_loss</code> is the clipped surrogate <strong>plus</strong> weighted collection/reference
+reverse KL in this recipe. The unregularized surrogate was not saved separately;
+the report does not subtract guessed penalties. The KL panels show unweighted
+nats. Scalar value loss is MSE against lambda targets; categorical value loss is
+cross-entropy against outcome-distribution lambda targets. Neither is an independent
+terminal-outcome test. PPO and distillation retain their own objective semantics.</p>
+<p><code>rows</code> and <code>retained</code> cover the collection batch, unlike the last-minibatch losses.
+The report totals these only where both are present, names the record count, and
+separately counts explicit skips and records without a loss. Missing retention is
+unavailable, never zero. Optimizer exposures can differ from selected rows because
+recipes can reuse rows or select actor and critic samples differently. Stage/run
+counters and diagnostic samples cannot reconstruct absent historical updates.</p>
+<p>Entropy is <code>−sum(p log p)</code> over legal offers, in nats. A uniform binary distribution
+has entropy ln(2), about 0.6931, but that value alone cannot establish two legal
+actions: larger skewed distributions or averages of different supports can have
+the same entropy. Normalizing by log(number of legal actions) requires the actual
+sampled support sizes, which these historical diagnostics did not retain. Entropy
+measures dispersion, not competence; a confident wrong policy can have low entropy.
+See the <a href="https://github.com/loopflowstudio/manabot/blob/main/docs/evidence/history-report-learning-2026-10-06.md">saved history investigation</a>
+for measured counts and the remaining explanatory limit.</p>
+<h2 id="scientific-studies-and-software-demonstrations">Scientific studies and software demonstrations<a class="anchor-link" href="#scientific-studies-and-software-demonstrations">&#182;</a></h2><p><code>load_study</code> reads the existing <code>study/study.json</code> export as a scientific cohort,
+separately from MonitorResult. The notebook explicitly selects this path; it does
+not relabel monitoring games. <code>study_strength_figures</code> separates opponent, phase and
+raw/EMA variant, requiring one complete cell per declared regime/seed at each shared
+cutoff, matching world/inference identity and four-leg deals. It checks summary
+scores against terminal arena rows. Incomplete cohorts have no comparative point.
+Thin lines retain seed variation; black diamonds show means with the existing
+training-seed/common-deal bootstrap's descriptive 95% intervals when at least three
+seeds and a shared x coordinate exist. These are score fractions (win + half draw);
+monitoring plots are explicitly win fractions. No line extrapolates to initialization.
+Zero-work evaluations appear if retained and matched; otherwise baseline is unavailable.</p>
+<p>Cost plots retain each seed's actual checkpoint time. An equal cutoff is not an
+equal-cost effect; different information, parameter counts and optimizer exposures
+can change both collection and learning cost. The saved experiment's cost analysis
+owns common-window comparisons. Two sparse checkpoints cannot explain learning
+speed. Scientific <em>development</em> cohorts remain distinct from held-out endpoints,
+and both remain distinct from earlier single-seed monitoring.</p>
+<p>Passing pipeline, artifact reload and exact-replay smoke checks shows software
+execution. A positive control must separately demonstrate a predeclared behavioral
+improvement under a suitable training/evaluation design. This reporting change
+neither runs that study nor treats changing weights/loss/entropy as its substitute.</p>
+<h2 id="opponent-asymmetry">Opponent asymmetry<a class="anchor-link" href="#opponent-asymmetry">&#182;</a></h2><p>The overview and default learning curves separate the <strong>model's</strong> deck from its
+opponent. Each row uses <code>seat_decks[player_a_seat]</code>, never leg parity or seat zero
+alone. Model-playing-Lessons means the opponent plays Allies. Greedy's creature
+and attack choices on Allies may be stronger than its targeting choices on
+Lessons: this is a hypothesis about the fixed opponent, not a causal conclusion
+from scores. Aggregate scores can conceal this asymmetry. Random and greedy stay
+in distinct panels with their immutable registration identity.</p>
+<p>Deck intervals resample the protocol's complete deals, retaining both seat legs
+for that deck and using the saved bootstrap seed/replicate count. Wins exclude
+draws; raw wins/games and draw counts remain in the checkpoint table. Incomplete
+cohorts supply no rate. Missing seat metadata supplies no deck estimate. Bands
+measure deal noise conditional on one checkpoint; they do not measure independent
+training-seed variability. No significance claim follows from inspecting a peak.</p>
+<p>Default panels show one seed at a time in expandable sections. Pending seeds
+remain named in the overview; there is no pooled partial-cohort average. The
+short interpretation computes first-to-latest change and observed range using
+only that panel. It does not impute initialization, infer strategic causes or
+select a best checkpoint. <code>deck_results</code>, <code>checkpoint_panels</code> and <code>panel_figures</code>
+in <code>manabot.training.learning_dashboard</code> expose the same calculations to notebooks.</p>
+<h2 id="portable-snapshots">Portable snapshots<a class="anchor-link" href="#portable-snapshots">&#182;</a></h2><p>For an actively written experiment, take a read-only SQLite online backup and
+export its TrainingRun rows before reporting. Do not copy a live <code>.sqlite</code> file
+without its transaction state:</p>
+<div class="highlight"><pre><span></span>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>manabot.training.report_snapshot<span class="w"> </span>SOURCE_DIRECTORY<span class="w"> </span>SNAPSHOT_DIRECTORY
+</pre></div>
+<p>The destination must not exist. The command copies only reporting evidence,
+retains source hashes and capture times in <code>snapshot.json</code>, and never loads a
+checkpoint or launches games. SQLite is transaction-consistent; atomic monitor
+JSON files are captured separately within the stated window. Their completion
+timestamps and original checkpoint coordinates stay intact. A snapshot's saved
+<code>running</code> status is not a live process check. Older records without a distinct
+active clock say unavailable; recorded training and elapsed wall remain separate.</p>
+<p>Create a fresh notebook with <code>write_comparison_notebook(snapshot, notebook_path)</code>
+to adopt a newer default without overwriting a personal notebook. Execute with
+<code>nbclient</code> using the notebook directory as its working directory. The HTML embeds
+SVG graphs, uses system fonts, and writes sibling metric-guide HTML, raw monitoring
+JSON and diagnostic JSON. Keep that directory together when copying. The editable
+notebook uses a relative data root. Its source receipt records exact run IDs,
+checkpoint digests, deal/leg rows and fixed opponent registrations. Absolute
+checkpoint/trace paths in the source are provenance; reporting does not open them.
+Newer additive producer metadata is retained in read-only reporting projections;
+this is not permission to execute a newer recipe through an older trainer.</p>
+<h2 id="numerical-health">Numerical health<a class="anchor-link" href="#numerical-health">&#182;</a></h2><p>Numerical diagnostics live below the playing-strength story. Gradient norms,
+rounded legal zeros, skipped steps and measured parameter movement describe
+optimizer behavior, not competence. Missing cadence samples stay unavailable.
+See the <a href="https://github.com/loopflowstudio/manabot/blob/main/docs/numerical-health.md">numerical health contract</a>
+for units, sampling and failure investigation. A saturated all-win bootstrap may
+also produce a zero-width interval; that is an empirical resampling limitation,
+not certainty of winning future games.</p>
+<h2 id="self-play">Self-play<a class="anchor-link" href="#self-play">&#182;</a></h2><p>Self-play deck and play/draw win rates describe the training distribution, not
+playing strength. <code>self_play_figures(evidence, window_updates=100)</code> plots completed
+outcomes in non-overlapping training-update windows. Each game contributes one
+observation on the play (seat 0, the engine's first player) and one on the draw
+(seat 1). A drawn game counts in the denominator but not as a win. Rates weight
+completed games, not updates or stream allocations.</p>
+<p>Separate panels keep cross-deck and mirror matchups apart. The deck view pools
+both starting seats; the play/draw view pools both decks within that matchup.
+<code>self_play_points(run)</code> exposes joint deck, opposing deck, starting position,
+win/loss/draw counts and update coordinates for further notebook analysis.
+In a mirror match, pooled deck win rate is mechanically 50% without draws;
+play/draw imbalance remains informative. Different training seeds and stages
+never share a curve. No uncertainty interval claims independent training seeds.</p>
+<p>Historical runs without these counters remain unavailable. New default notebooks
+include this section. Existing editable notebooks can import
+<code>self_play_figures</code> from <code>manabot.training.self_play_report</code> and append
+<code>('Self-play balance', 'self-play', self_play_figures(evidence))</code> to <code>sections</code>.
+Raw per-update counts are retained under <code>self_play_outcomes</code> in each stage's
+diagnostics. This instrumentation does not change losses, actions or schedules.</p>
+</main></html>

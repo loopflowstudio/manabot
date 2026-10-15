@@ -94,6 +94,37 @@ independent seeds and held-out scientific cohorts attached to any conclusion.
 
 ## Costs
 
+The training-only time profile shows a flamegraph-style hierarchy for each saved
+attempt: setup, stages, collection, learning, stage exports and remaining time.
+Widths are aggregate elapsed seconds, not chronological spans. Unattributed time
+is visible; detailed inference/simulation and learning subphases are unavailable
+unless separately profiled. Diagnostics can include failure accounting, so they
+are not universally pure diagnostic computation. Monitoring exports and recovery
+costs are already inside stage time and are not added again.
+
+The main dashboard includes this view. To generate a standalone training-only
+report from saved records in a notebook or script run through `uv run`:
+
+```python
+from pathlib import Path
+from manabot.training.experiment_report import load_evidence, write_time_profile
+
+write_time_profile(load_evidence(Path("saved-experiment")), Path("training-time.html"))
+```
+
+Completed stages copied into a recovery child are excluded from that child's
+cost. Missing parent records or inconsistent timing totals produce a visible
+attribution warning rather than normalized percentages. The downloadable training
+time JSON contains the hierarchy, intervals and source-file hashes.
+
+The training-attempt timeline uses execution start/end timestamps where available;
+otherwise it uses the run's recorded calendar span. These bases are labeled:
+process lifetime includes work outside a regime, and calendar spans may include
+downtime. Running intervals stop at the saved heartbeat, not the rendering time.
+Missing timestamps remain unavailable. Overlapping lane durations cannot be added
+to obtain elapsed time; cross-machine clock uncertainty is unrecorded. Evaluation
+lanes and causal critical-path attribution are deferred.
+
 Elapsed wall seconds and additive worker-process seconds come from ExperimentRun.
 Process seconds include concurrent learner and evaluator duration; evaluator
 seconds are already included and must not be added again. They are occupied

@@ -46,6 +46,11 @@ def test_saved_notebook_generates_html_without_inline_plots(
     html = (tmp_path / "chosen.html").read_text()
     assert html.count("<svg") >= 4
     assert "Download all raw scalar diagnostics" in html
+    assert "Where training time goes" in html
+    time_profile = json.loads((tmp_path / "chosen-training-time.json").read_text())
+    assert len(time_profile["profiles"]) == 4
+    assert len(time_profile["intervals"]) == 4
+    assert time_profile["sources"]
     assert "Initialization unavailable; first measured update is 1" in html
     assert "Monitoring initialization: unavailable" in html
     assert html.index("Separate the decks") < html.index("Progress, throughput")

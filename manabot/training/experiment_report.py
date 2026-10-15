@@ -5,7 +5,7 @@ figures; write_dashboard only renders those choices. Matching requires every
 retained run in a compatible cohort at the same stage/update coordinate.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from functools import cached_property
 from html import escape
@@ -27,6 +27,11 @@ from manabot.training.models import TrainingRegime, TrainingRun
 from manabot.training.monitor_evaluation import MonitorResult
 from manabot.training.monitoring import Scalar, training_dashboard
 from manabot.training.report_study import ScientificStudy
+from manabot.training.time_profile import (
+    training_intervals,
+    training_profiles,
+    training_time_report,
+)
 
 
 class RetainedRegime(TrainingRegime):
@@ -488,6 +493,52 @@ def _svg(figure: Figure) -> str:
     return stream.getvalue()[stream.getvalue().index("<svg") :]
 
 
+def _training_time(evidence: ReportEvidence, output: Path) -> str:
+    """Write the downloadable projection and render its existing training records."""
+    time_path = output.with_name(output.stem + "-training-time.json")
+    intervals, unavailable = training_intervals(evidence.runs, evidence.executions)
+    time_path.write_text(
+        json.dumps(
+            {
+                "units": "seconds",
+                "profiles": [asdict(p) for p in training_profiles(evidence.runs)],
+                "intervals": [asdict(i) for i in intervals],
+                "unavailable_intervals": unavailable,
+                "sources": [
+                    {
+                        "path": str(p.relative_to(evidence.root)),
+                        "sha256": file_sha256(p),
+                    }
+                    for p in evidence.paths
+                    if p.name in {"run.json", "experiment.json"}
+                ],
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    return training_time_report(evidence.runs, evidence.executions) + (
+        f'<p><a href="{escape(time_path.name, quote=True)}" download>'
+        "Download training time accounting and source hashes (JSON)</a></p>"
+    )
+
+
+def write_time_profile(evidence: ReportEvidence, output: Path) -> Path:
+    """Write a standalone training-only report and its auditable timing data."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        '<!doctype html><html lang="en"><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        "<title>Training time profile · manabot</title><style>"
+        + DASHBOARD_CSS
+        + "</style><main><h1>Training time profile</h1>"
+        + "<p>Saved evidence only. No training, evaluation or network access.</p>"
+        + _training_time(evidence, output)
+        + "</main></html>"
+    )
+    return output
+
+
 def write_dashboard(
     evidence: ReportEvidence,
     output: Path,
@@ -756,6 +807,7 @@ def write_dashboard(
             '<p class="muted">Intervals resample complete deals for one checkpoint, not training seeds. A one-deal fixture can have a zero-width interval; this is not precision or strength evidence.</p>'
         )
     parts.append(f"<h2>{link('Costs, resources and failures', 'costs')}</h2>")
+    parts.append(_training_time(evidence, output))
     rss = [
         s.sampled_peak_rss_bytes
         for r in evidence.runs
@@ -771,32 +823,6 @@ def write_dashboard(
         parts.append(
             f"<p>Scientific evaluation: {study.seconds:.2f} s. {escape(study.accounting)}</p>"
         )
-    parts.append(
-        _table(
-            [
-                "Regime / seed",
-                "Collection s",
-                "Learning s",
-                "Export s",
-                "Diagnostics s",
-            ],
-            [
-                [
-                    evidence.label(r.id),
-                    *[
-                        _number(sum(getattr(stage, field) for stage in r.stages))
-                        for field in (
-                            "collection_seconds",
-                            "learning_seconds",
-                            "export_seconds",
-                            "diagnostic_seconds",
-                        )
-                    ],
-                ]
-                for r in evidence.runs
-            ],
-        )
-    )
     if not evidence.executions:
         parts.append(
             f"<p>Sampled training peak RSS {_number(peak_mib)} MiB. Host price and execution heartbeat unavailable.</p>"
