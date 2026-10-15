@@ -518,3 +518,63 @@ both to subsequent parent commands and their children. Four native-selection/
 environment tests pass; shell syntax, Ruff and diff checks pass. The protocol's
 setup amendment requires a separately admitted fixed-source cohort and leaves
 all workload, deadline, performance and exact-state gates unchanged.
+
+## Native configuration borrowing result (run022)
+
+Both native variants built successfully after the environment fix. All32cases
+completed, with exact declared work counts, selected-library provenance and no
+remaining producer threads. Both libraries used the same toolchain and flags;
+their recorded Rust inputs differ only in `vector_env.rs`. This comparison used
+one RTX5090 / AMD EPYC7543 host, a12.75-core CPU quota, driver570.195.03 and
+Torch2.10/cu128. Absolute timings should not be compared with other rental hosts.
+
+Ordinary complete-training medians, three repetitions per condition:
+
+| Streams | Config handling | Workers | Training seconds | Learner rows/s |
+|---|---|---:|---:|---:|
+|512|Cloned|1|6.288|1,954|
+|512|Borrowed|1|6.115|2,010|
+|512|Borrowed|4|5.856|2,098|
+|512|Cloned|4|5.845|2,102|
+|4096|Cloned|1|23.587|4,168|
+|4096|Borrowed|1|20.818|4,722|
+|4096|Borrowed|4|18.566|5,295|
+|4096|Cloned|4|22.007|4,467|
+
+At4096streams, borrowed4/cloned1 is **1.2705x** (target1.25), and
+borrowed4/cloned4 is **1.1854x** (target1.15). Borrowing with one worker gives
+1.1330x; four versus one borrowed workers gives1.1213x. At512streams, borrowed4
+takes0.9312x the cloned1duration, passing the1.05ceiling. All performance gates
+pass. These are gains in the complete three-update recipe, not just a serving
+microbenchmark; they do not establish sustained-run or playing-strength gains.
+
+The large collection medians for cloned1/borrowed1/borrowed4/cloned4 are
+17.447/14.639/12.569/15.996s. Learning stays4.235–4.254s. SummedCPU time falls
+from32.536s to25.059s in the matched four-worker comparison. This supports removing
+producer copying as the measured mechanism; it does not isolate allocator
+contention or establish an asynchronous pipeline benefit.
+
+All eight deterministic full-trajectory and learned-state proofs match exactly.
+The ordinary exact-state gate nevertheless fails. At4096streams, raw/EMA weights
+and scientific diagnostics agree; Adam differs in up to two elements per distinct
+group, at most9.09e-13 against the first cloned1baseline, including variation
+within cloned controls. At512streams, two borrowed4repetitions also differ in
+raw weights (max2.38e-7), EMA(max7.45e-9) and diagnostics, while ordinary Adam
+variation also occurs within cloned1. The posthoc audit retains every distinct
+checkpoint group against the first declared baseline. It identifies differences,
+not their cause; the deterministic proof does not waive the ordinary gate.
+Overall adoption remains **unaccepted**, despite passing performance targets.
+
+Run `87b1e95e4119` measured source `90d7894a420fc4c622cdbf79a27356e7ee091a3c`.
+The90,214,784-byte archive (SHA256
+`059eca615f07bd70ce6e0e8a3d0debe6f40d10835d733ce7e7d519f7780f3c38`) and all512manifest
+files were verified. [Complete structured evidence](data/worker-scaling/gpu-022)
+includes all cases, native build/source provenance and the exact-state audit.
+Provider deletion is confirmed; estimated whole rental cost is$0.277. Updated
+provider accounting puts estimated rentals at$6.39of the original$50, with$31.05
+unallocated after conservative charges and reserves. No admitted GPU run remains.
+
+The next research direction is regime-level and cross-run time attribution,
+including evaluations, then focused benchmarks calibrated against those real
+workloads. This successful short-run performance result is one calibration point,
+not evidence that the inference-service goal is complete.
