@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import socket
 import time
-from typing import Literal
+from typing import Literal, Protocol
 
 from etude.track.records import Step
 from etude.track.run import init
@@ -190,7 +190,25 @@ def parameter_digest(agent: torch.nn.Module) -> str:
     return digest.hexdigest()
 
 
-def execute(plan: ComplexityPlan) -> None:
+class CampaignPlan(Protocol):
+    """A frozen recipe cohort consumed by the shared arena execution path."""
+
+    updates: int
+    seed_order: tuple[int, int, int]
+    training_seconds_per_run: float
+    evaluation_reserve_seconds: float
+
+    @property
+    def digest(self) -> str: ...
+    def model_dump(self, *, mode: str) -> dict[str, object]: ...
+    def experiment(self) -> Experiment: ...
+    def recipes(self) -> dict[str, TrainingRegime]: ...
+    def protocol(
+        self, pool: Pool, anchor: Literal["scripted_greedy", "random"], update: int
+    ) -> MonitorProtocol: ...
+
+
+def execute(plan: CampaignPlan, *, pools: tuple[Pool, ...] = POOLS) -> None:
     """Execute all declared runs/cohorts; launcher's guardian owns hard stopping."""
     env = os.environ
     if not env.get("ETUDE_RUN") or not socket.gethostname().startswith("mini-heart"):
@@ -199,7 +217,9 @@ def execute(plan: ComplexityPlan) -> None:
         )
     deadline = datetime.fromisoformat(env["ETUDE_DEADLINE"]).timestamp()
     if deadline - time.time() < (
-        9 * plan.training_seconds_per_run + plan.evaluation_reserve_seconds + 300
+        len(pools) * len(plan.seed_order) * plan.training_seconds_per_run
+        + plan.evaluation_reserve_seconds
+        + 300
     ):
         raise ValueError("remaining SDK allocation cannot admit the frozen campaign")
     output = Path(env["ETUDE_OUTPUT_DIR"])
@@ -240,7 +260,7 @@ def execute(plan: ComplexityPlan) -> None:
         recipes = plan.recipes()
         expected: dict[int, str] = {}
         for seed in plan.seed_order:
-            for pool in POOLS:
+            for pool in pools:
                 torch.manual_seed(seed)
                 initial_model = Agent(
                     ObservationSpace(recipes[pool].observation), recipes[pool].agent
@@ -251,7 +271,8 @@ def execute(plan: ComplexityPlan) -> None:
                 expected[seed] = digest
         atomic_json(output / "initialization-parameters.json", expected)
         for seed_index, seed in enumerate(plan.seed_order):
-            order = POOLS[seed_index:] + POOLS[:seed_index]
+            offset = seed_index % len(pools)
+            order = pools[offset:] + pools[:offset]
             for pool in order:
                 if deadline - time.time() < plan.training_seconds_per_run + 60:
                     raise RuntimeError("allocation exhausted before next declared run")
@@ -342,7 +363,10 @@ def execute(plan: ComplexityPlan) -> None:
                 state["elapsed_seconds"] = time.time() - start
                 atomic_json(manifest, state)
         state["status"] = "completed"
-        atomic_json(output / "etude-result.json", {"clocks": {"completed_runs": 9}})
+        atomic_json(
+            output / "etude-result.json",
+            {"clocks": {"completed_runs": len(pools) * len(plan.seed_order)}},
+        )
     except BaseException as error:
         state["status"] = "failed"
         state["error"] = f"{type(error).__name__}: {error}"
