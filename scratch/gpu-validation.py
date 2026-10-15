@@ -9,6 +9,7 @@ from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, nullcontext
 from dataclasses import fields
+import gzip
 import hashlib
 import json
 import os
@@ -25,7 +26,11 @@ from pydantic import BaseModel
 import torch
 
 from experiments.runners.cuda_collection_profile import Trace, busy_microseconds
-from experiments.runners.cuda_performance import Cell, child as capacity_child
+from experiments.runners.cuda_performance import (
+    Cell,
+    child as capacity_child,
+    load_observations,
+)
 from manabot.arena.models import file_sha256
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.hypers import RewardHypers
@@ -333,18 +338,36 @@ def child(args: argparse.Namespace) -> None:
                 },
             )
     elif args.child == "inputs":
-        torch.manual_seed(10831)
-        agent = (
-            Agent(ObservationSpace(recipe.observation), recipe.agent).to("cuda").eval()
-        )
-        env = collector(recipe, 64, 10831)
-        batch = env.collect(agent, 16)
-        observations = {
-            key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
-            for key, value in batch.obs.items()
-        }
-        observations["action_focus"] = observations["action_focus"].float()
-        torch.save(observations, args.root / "observations.pt")
+        if args.frozen_inputs:
+            compressed = Path("scratch/gpu-probes/frozen-l4-inputs.pt.gz")
+            receipt = json.loads(compressed.with_suffix(".json").read_text())
+            if file_sha256(compressed) != receipt["compressed_sha256"]:
+                raise ValueError("frozen input archive hash differs")
+            with gzip.open(compressed, "rb") as source:
+                payload = source.read()
+            if (
+                len(payload) != receipt["uncompressed_bytes"]
+                or hashlib.sha256(payload).hexdigest() != receipt["uncompressed_sha256"]
+            ):
+                raise ValueError("frozen input bytes differ")
+            (args.root / "observations.pt").write_bytes(payload)
+            observations = load_observations(args.root / "observations.pt")
+            atomic_json(args.root / "frozen-input-receipt.json", receipt)
+        else:
+            torch.manual_seed(10831)
+            agent = (
+                Agent(ObservationSpace(recipe.observation), recipe.agent)
+                .to("cuda")
+                .eval()
+            )
+            env = collector(recipe, 64, 10831)
+            batch = env.collect(agent, 16)
+            observations = {
+                key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
+                for key, value in batch.obs.items()
+            }
+            observations["action_focus"] = observations["action_focus"].float()
+            torch.save(observations, args.root / "observations.pt")
         atomic_json(
             args.root / "identity.json",
             {
@@ -381,11 +404,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=10831)
     parser.add_argument("--expected-gpu", default="NVIDIA L4")
     parser.add_argument(
-        "--experiment", choices=("baseline", "catalog", "scale"), default="baseline"
+        "--experiment",
+        choices=("baseline", "catalog", "scale", "highend"),
+        default="baseline",
     )
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--transitions", type=int, default=4096)
     parser.add_argument("--cached", action="store_true")
+    parser.add_argument("--frozen-inputs", action="store_true")
     parser.add_argument("--batch", type=int, default=512)
     args = parser.parse_args()
     if args.child:
@@ -394,7 +420,7 @@ def main() -> None:
     root = args.root.resolve()
     root.mkdir(parents=True, exist_ok=False)
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    if args.experiment in ("catalog", "scale"):
+    if args.experiment in ("catalog", "scale", "highend"):
         bundle = SourceBundle.model_validate(config["source"])
         for name, digest in bundle.files.items():
             path = Path(name)
@@ -458,16 +484,40 @@ def main() -> None:
         args.expected_gpu,
     ]
     try:
-        if args.experiment == "scale":
+        if args.experiment == "highend":
+            if not run("inputs", [*python, "--child", "inputs", "--frozen-inputs"]):
+                raise RuntimeError("frozen CUDA input admission failed")
+            models = [
+                Cell(capacity="w64-d1", kind="model", batch=b)
+                for b in (1, 4, 16, 64, 256, 1024)
+            ]
+            models += [
+                Cell(capacity="w384-d8", kind="model", batch=b) for b in (64, 256)
+            ]
+            for cell in models:
+                run(
+                    cell.name,
+                    [
+                        sys.executable,
+                        "-m",
+                        "experiments.runners.cuda_performance",
+                        "--root",
+                        str(root),
+                        "--cell",
+                        cell.model_dump_json(),
+                    ],
+                )
+        if args.experiment in ("scale", "highend"):
             cells = [
-                (64, False, "a"),
-                (64, True, "a"),
-                (64, False, "b"),
-                (64, True, "b"),
-                (512, False, "a"),
-                (512, True, "a"),
-                (4096, False, "a"),
-                (4096, True, "a"),
+                (streams, cached, repeat)
+                for streams in (64, 512, 4096)
+                for repeat in (
+                    ("a", "b")
+                    if streams == 64
+                    or (args.experiment == "highend" and streams == 512)
+                    else ("a",)
+                )
+                for cached in (False, True)
             ]
             for streams, cached, repeat in cells:
                 name = f"shape-t8-s{streams}-{'cached' if cached else 'reference'}-{repeat}"

@@ -25,10 +25,10 @@ def runs() -> Job:
                         source, "sha256"
                     ).hexdigest()
     return Job(
-        name="fantasia-gpu-learner-shapes-l4-004",
+        name="fantasia-gpu-highend-h100-005",
         repo=str(Path.cwd()),
         revision="HEAD",
-        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment scale --root "$ETUDE_OUTPUT_DIR/evidence"',
+        command='timeout 900 bash scratch/gpu-validation-setup.sh && uv run --no-sync python scratch/gpu-validation.py --experiment highend --expected-gpu "NVIDIA H100 80GB HBM3" --root "$ETUDE_OUTPUT_DIR/evidence"',
         config=json.dumps(
             {
                 "recipe": json.loads(
@@ -38,6 +38,6 @@ def runs() -> Job:
             }
         ),
         max_hours=0.5,
-        max_usd=Decimal("1.50"),
+        max_usd=Decimal("3.00"),
         max_attempts=1,
     )
