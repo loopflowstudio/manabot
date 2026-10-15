@@ -54,6 +54,7 @@ def main() -> None:
     mode.add_argument("--replay-only", action="store_true")
     mode.add_argument("--serving-ownership", action="store_true")
     mode.add_argument("--serving-preparation", action="store_true")
+    mode.add_argument("--collection-profile", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     if config_path := os.environ.get("ETUDE_CONFIG"):
@@ -94,7 +95,9 @@ def main() -> None:
     )
     statuses = []
     try:
-        if args.serving_preparation:
+        if args.collection_profile:
+            trials = []
+        elif args.serving_preparation:
             trials = [
                 Trial(
                     f"preparation-{index}-{'reference' if reference else 'prepared'}",
@@ -179,6 +182,17 @@ def main() -> None:
                 for streams in (() if args.replay_only else (512, 4096))
             ]
         )
+        if args.collection_profile:
+            training_cases = [
+                (
+                    f"{kind}-{'reference' if reference else 'prepared'}-s{streams}",
+                    streams,
+                    reference,
+                )
+                for kind in ("control", "torch", "python")
+                for reference in (True, False)
+                for streams in ((4096,) if kind == "python" else (512, 4096))
+            ]
         for name, streams, reference in training_cases:
             root = args.out / name
             root.mkdir()
@@ -188,18 +202,23 @@ def main() -> None:
             )
             (root / cell.name).mkdir()
             started = time.monotonic()
+            profile_kind = name.split("-", 1)[0] if args.collection_profile else None
+            profiling = profile_kind in ("torch", "python")
             command = [
                 sys.executable,
                 "-m",
                 (
-                    "experiments.runners.inference_preparation"
-                    if args.serving_preparation
+                    "experiments.runners.collection_attribution"
+                    if profiling
+                    else "experiments.runners.inference_preparation"
+                    if args.serving_preparation or args.collection_profile
                     else "experiments.runners.cuda_performance"
                 ),
                 "--root",
                 str(root),
                 "--cell",
                 cell.model_dump_json(),
+                *(["--profile-kind", profile_kind] if profiling else []),
                 *(["--reference-policy"] if reference else []),
             ]
             with (root / "worker.log").open("w") as log:
