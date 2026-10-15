@@ -263,3 +263,28 @@ controls use the exact initial bytes, and parameter hashes check paired starts.
 SDK publication retains every arena cohort. Missing fits/cells stop with failed
 evidence rather than reducing counts. Declaration tests pass; scientific runner
 has not executed and still needs measured admission and final reporting.
+
+## Calibration complete; scientific cohort launched (2026-10-14)
+
+Etude calibration `60cfb89655fa` succeeded: all three 100-update runs and48
+complete replayed games. Original outputs are retained on Mini and copied to
+`.runs/mtg122/calibration`. No calibration scores select scientific candidates.
+Global-worst-cell cost applied to every game rejected the draft budget; the
+pre-scoring protocol amendment instead reserves each of six pool/anchor panels
+at its own worst measured cell/coordinator cost, with the same1.5× margin.
+All36,000 games and three seeds remain. The calibrated target is1,200 updates,
+midpoint600;26.833692 evaluator hours plus18 learner hours and600 seconds reserve
+total45.000359 hours. No sparse timing guarantee is claimed.
+
+Scientific run `030a6ea72338` was admitted through Etude on Mini, exact source
+`16636408`, plan digest `f5bff8cd0a5b77fdd5898943f4bcb656e92d5800f4ccdc023b21c4cbfbf0500c`.
+Its46.75-hour cap plus one-hour inclusive calibration reserve and15-minute
+external setup/settlement reserve remain within48 hours. No GPU/local training.
+The fixed protocol/plan live in `experiments/environment-complexity.md` and
+`experiments/environment-complexity-plan.json`. Launch authority
+and attempt receipt: `.runs/mtg122/science-launch.json`, SDK database beside it.
+The original calibration convenience SDK checkpoint names collided between child
+pools; original nested TrainingRun exports remain intact. Scientific child output
+directories now isolate those copies. Four declaration/cohort tests passed.
+Scientific learning, final analysis, editable notebook/HTML and archival are still
+unfinished; admission is not a result. Do not edit the frozen remote source.
