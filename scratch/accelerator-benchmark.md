@@ -79,10 +79,10 @@ finite completion, padding and host tails. All measured attempts used bounded
 supervision. The original probe phase closed at238.718of240seconds;
 its original600second setup cap is separate. The accelerator-specific300second
 measurement/180second focused-test limits remain unexhausted. The new20second
-calibration-analysis slice used17.944seconds; conservative combined usage282.328/300. New measured
+calibration-analysis slice used19.589804seconds; conservative combined usage283.973775/300. New measured
 work needs an explicit protocol and adequate remaining allowance. The GPU ledger
-records$2.191590 billed/estimated rentals,$2.82 conservative charges+$5reserve,
-$42.18 free; all seven machines are confirmed deleted.
+records$2.505036 billed/estimated rentals,$3.32 conservative charges+$5reserve,
+$41.68 free; all eight machines are confirmed deleted.
 
 ## Limits and next discriminating work
 
@@ -96,8 +96,9 @@ does not predict how a changed trained policy changes its game distribution.
 
 Full serving integration completed in2.570s; the4096actor/64server sweep took3.506s,
 ~302MB laptop RSS. Exact commands and results are in`serving-integration-results.txt`.
-Next: paired GPU staging/materialization optimization, then mixed mature-policy
-traces and real backpressure. Multi-GPU rates remain conditional on independent links.
+Paired H100 staging passed:1.234×/1.421× gains at128actors, exact serving witnesses;
+see`staging-validation-results.txt`. Next: ordinary collection/learning validation,
+then mixed mature-policy traces and real backpressure. Multi-GPU rates remain conditional on independent links.
 Reference/reference controls reproduce tiny Adam differences without caching.
 Optimize host code by paired semantic replay; change GPU
 service only with matching hardware measurements; require actual collection and

@@ -1,0 +1,12 @@
+{
+  "run": "3375fdd99515",
+  "bucket": "etude-job-journals-324288363980-us-west-2",
+  "key": "etude/fantasia-gpu-validation-20261014/a18dd05b7125/out/attempts/108abb443fab/outputs/evidence.tar.gz",
+  "previous_fetch": "StorageUnavailable: GET evidence.tar.gz: no reply; exit 1",
+  "method": "ordered 4MiB authenticated range GET, four readers, If-Match ETag",
+  "seconds": 27.449634499964304,
+  "verified_files": 23,
+  "archive_bytes": 23965735,
+  "archive_sha256": "5021f07ee226da30d7bf81954196dd3a51d464feaba77231e497b75723579df0",
+  "authoritative_outputs_verified": 25
+}

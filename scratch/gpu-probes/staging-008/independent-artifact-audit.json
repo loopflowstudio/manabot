@@ -1,0 +1,27 @@
+{
+  "cases": [
+    "staging-a128-b1024",
+    "staging-a128-b256",
+    "staging-a16-b1024",
+    "staging-a16-b256"
+  ],
+  "fixed_groups": 44,
+  "fixed_forward_calls": 176,
+  "live_deliveries_checked": 67968,
+  "exact_live_deliveries": true,
+  "identical_batch_histograms_within_each_case": true,
+  "all_measured_source_hashes_matched": true,
+  "pre_result_note_archives": [
+    {
+      "original": "scratch/accelerator-benchmark.md",
+      "archive": "scratch/accelerator-probes/357cee9992cb852c3ef250ecfbefb6698ec2b95f2debed42f468c8be8394c2e4.notes.txt",
+      "sha256": "357cee9992cb852c3ef250ecfbefb6698ec2b95f2debed42f468c8be8394c2e4"
+    },
+    {
+      "original": "scratch/gpu-validation.md",
+      "archive": "scratch/accelerator-probes/a2d459317544ec8fb8a99cf2e33d6a30aec48738642f672849938b82a9fd54c6.notes.txt",
+      "sha256": "a2d459317544ec8fb8a99cf2e33d6a30aec48738642f672849938b82a9fd54c6"
+    }
+  ],
+  "audit_source_sha256": "f20ba950af3b4d048e1bcb47a7e78a061b44b1894513314f9a76b789c9bad9eb"
+}

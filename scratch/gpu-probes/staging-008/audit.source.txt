@@ -1,0 +1,92 @@
+"""Audit returned evidence and preserve lifecycle and pre-result notes."""
+
+from datetime import datetime
+import hashlib
+import json
+from pathlib import Path
+import shutil
+
+
+def sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main() -> None:
+    private = Path(__file__).parent
+    destination = Path("scratch/gpu-probes/staging-008")
+    evidence = destination / "evidence"
+    index = json.loads(Path("scratch/accelerator-probes/artifact-manifest.json").read_text())
+    for entry in index["artifacts"]:
+        path = Path(entry["path"])
+        assert path.stat().st_size == entry["bytes"] and sha(path) == entry["sha256"], path
+    notes = []
+    for name in ("accelerator-benchmark.md", "gpu-validation.md"):
+        path = Path("scratch") / name
+        target = Path("scratch/accelerator-probes") / f"{sha(path)}.notes.txt"
+        if target.exists():
+            assert target.read_bytes() == path.read_bytes()
+        else:
+            shutil.copy2(path, target)
+        notes.append({"original": str(path), "archive": str(target), "sha256": sha(target)})
+    fixed_groups = 0
+    deliveries_checked = 0
+    cases = []
+    for path in sorted(evidence.glob("staging-*/result.json")):
+        record = json.loads(path.read_text())
+        witnesses = json.loads(path.with_name("fixed-witnesses.json").read_text())
+        assert witnesses["storage_identity_passed"] and witnesses["oversize_rejected"]
+        for group in witnesses["fixed_batches"]:
+            receipts = group["receipts"]
+            assert group["exact"] and len(receipts) == 4
+            assert all(r["deliveries"] == receipts[0]["deliveries"] for r in receipts)
+            fixed_groups += 1
+        first = record["trials"][0]["outcome"]
+        expected = {(d["actor"], d["position"]): d for d in first["deliveries"]}
+        expected_keys = {(a, p) for a in range(record["actors"]) for p in range(59)}
+        assert set(expected) == expected_keys
+        for trial in record["trials"]:
+            outcome = trial["outcome"]
+            actual = {(d["actor"], d["position"]): d for d in outcome["deliveries"]}
+            assert len(actual) == len(outcome["deliveries"]) == record["actors"] * 59
+            assert actual == expected
+            assert sum(d["rows"] for d in actual.values()) == record["actors"] * 1099
+            assert outcome["padded_batch_counts"] == first["padded_batch_counts"]
+            assert trial["output_hash_differences_vs_first_reference"] == 0
+            deliveries_checked += len(actual)
+        for source, expected_sha in record["sources"].items():
+            local = (private / "result-008/evidence/observations.pt" if source.endswith("observations.pt")
+                     else Path("scratch") / source.split("scratch/", 1)[1])
+            assert sha(local) == expected_sha
+        cases.append(path.parent.name)
+    assert len(cases) == 4 and fixed_groups == 44
+    audit = {"cases": cases, "fixed_groups": fixed_groups, "fixed_forward_calls": fixed_groups * 4,
+             "live_deliveries_checked": deliveries_checked, "exact_live_deliveries": True,
+             "identical_batch_histograms_within_each_case": True,
+             "all_measured_source_hashes_matched": True,
+             "pre_result_note_archives": notes, "audit_source_sha256": sha(Path(__file__))}
+    (destination / "independent-artifact-audit.json").write_text(json.dumps(audit, indent=2) + "\n")
+    attempt = json.loads((private / "lifecycle-008.json").read_text())[0]
+    cleanup = json.loads((private / "monitor-cleanup-008.json").read_text())
+    ledger = json.loads((private / "budget.json").read_text())
+    allocation = next(a for a in ledger["allocations"] if a["run_id"] == attempt["run"])
+    assert all("deletion-confirmed" in a["status"] for a in ledger["allocations"])
+    assert all(a["conservative_charge_usd"] >= a["estimated_cost_usd"] for a in ledger["allocations"])
+    lifecycle = {"run": attempt["run"], "started_at": attempt["started_at"],
+                 "finished_at": attempt["finished_at"], **cleanup,
+                 "post_job_until_deletion_seconds": (datetime.fromisoformat(cleanup["deleted_at"]) - datetime.fromisoformat(attempt["finished_at"])).total_seconds(),
+                 "whole_rental_estimate_usd": allocation["estimated_cost_usd"],
+                 "job_status_estimate_usd": 0.2641972792083333,
+                 "meaning": "Observed billable interval; no causal claim about caffeinate or prior delay. Budget uses whole rental.",
+                 "lifecycle_source_sha256": sha(private / "lifecycle-008.json")}
+    (destination / "lifecycle-summary.json").write_text(json.dumps(lifecycle, indent=2) + "\n")
+    for name in ("lifecycle-008.json", "download-recovery-008.json"):
+        shutil.copy2(private / name, destination / name)
+    for source, target in (("recover-008.py", "download-recovery.source.txt"),
+                           ("launch-wait-008.py", "monitor.source.txt"),
+                           ("finalize-008.py", "audit.source.txt")):
+        shutil.copy2(private / source, destination / target)
+    print(json.dumps({"audit": audit, "lifecycle": lifecycle}))
+
+
+if __name__ == "__main__":
+    main()
