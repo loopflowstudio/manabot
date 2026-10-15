@@ -1,0 +1,338 @@
+{
+  "world_binding": {
+    "world": "w4",
+    "policy_input_version": 1,
+    "rules": {
+      "decision_version": 6,
+      "possible_world_version": 2
+    },
+    "setups": [
+      {
+        "deck": {
+          "Fire Nation Cadets": 2,
+          "First-Time Flyer": 2,
+          "Pop Quiz": 2,
+          "Island": 9,
+          "Igneous Inspiration": 2,
+          "Accumulate Wisdom": 2,
+          "It'll Quench Ya!": 2,
+          "Firebending Lesson": 4,
+          "Forecasting Fortune Teller": 1,
+          "Mountain": 8,
+          "Tiger-Seal": 2,
+          "Otter-Penguin": 2,
+          "Dragonfly Swarm": 1,
+          "Divide by Zero": 2
+        },
+        "sideboard": {
+          "Accumulate Wisdom": 1,
+          "Firebending Lesson": 1,
+          "It'll Quench Ya!": 1
+        }
+      },
+      {
+        "deck": {
+          "Plains": 9,
+          "Water Tribe Rallier": 2,
+          "Earth Kingdom Jailer": 2,
+          "Allies at Last": 2,
+          "South Pole Voyager": 1,
+          "Yip Yip!": 1,
+          "Badgermole Cub": 2,
+          "Kyoshi Warriors": 2,
+          "White Lotus Reinforcements": 2,
+          "Earth King's Lieutenant": 2,
+          "Fancy Footwork": 2,
+          "Compassionate Healer": 2,
+          "Invasion Reinforcements": 2,
+          "Forest": 8,
+          "Suki, Kyoshi Warrior": 1
+        },
+        "sideboard": {
+          "Fancy Footwork": 1,
+          "Yip Yip!": 1
+        }
+      }
+    ],
+    "content_manifest": {
+      "world_version": "w4",
+      "schema_version": 1,
+      "content_digest": "dca9ab421ff18dc33546a35a0555c9817c302267f8fe21ff75d247e1600ce124",
+      "compiled_semantics": {
+        "pack_key": "ur-lessons-vs-gw-allies",
+        "ir_hash": "7a70679a4f4952976a286c4a31ffa90318bd0569745aace26353348fe6ee1edd",
+        "source_hash": "a8a8bdf74177b50afb8275e3a4de29ac1c8f4f96a10cda6cc8d3c1f8f2a65a2c"
+      },
+      "definitions": [
+        {
+          "card_def_id": 0,
+          "registry_name": "Forest"
+        },
+        {
+          "card_def_id": 1,
+          "registry_name": "Island"
+        },
+        {
+          "card_def_id": 2,
+          "registry_name": "Mountain"
+        },
+        {
+          "card_def_id": 3,
+          "registry_name": "Plains"
+        },
+        {
+          "card_def_id": 4,
+          "registry_name": "Divide by Zero"
+        },
+        {
+          "card_def_id": 5,
+          "registry_name": "Igneous Inspiration"
+        },
+        {
+          "card_def_id": 6,
+          "registry_name": "Pop Quiz"
+        },
+        {
+          "card_def_id": 7,
+          "registry_name": "Accumulate Wisdom"
+        },
+        {
+          "card_def_id": 8,
+          "registry_name": "Allies at Last"
+        },
+        {
+          "card_def_id": 9,
+          "registry_name": "Badgermole Cub"
+        },
+        {
+          "card_def_id": 10,
+          "registry_name": "Compassionate Healer"
+        },
+        {
+          "card_def_id": 11,
+          "registry_name": "Dragonfly Swarm"
+        },
+        {
+          "card_def_id": 12,
+          "registry_name": "Earth Kingdom Jailer"
+        },
+        {
+          "card_def_id": 13,
+          "registry_name": "Earth King's Lieutenant"
+        },
+        {
+          "card_def_id": 14,
+          "registry_name": "Fancy Footwork"
+        },
+        {
+          "card_def_id": 15,
+          "registry_name": "Fire Nation Cadets"
+        },
+        {
+          "card_def_id": 16,
+          "registry_name": "Firebending Lesson"
+        },
+        {
+          "card_def_id": 17,
+          "registry_name": "First-Time Flyer"
+        },
+        {
+          "card_def_id": 18,
+          "registry_name": "Forecasting Fortune Teller"
+        },
+        {
+          "card_def_id": 19,
+          "registry_name": "Invasion Reinforcements"
+        },
+        {
+          "card_def_id": 20,
+          "registry_name": "It'll Quench Ya!"
+        },
+        {
+          "card_def_id": 21,
+          "registry_name": "Kyoshi Warriors"
+        },
+        {
+          "card_def_id": 22,
+          "registry_name": "Otter-Penguin"
+        },
+        {
+          "card_def_id": 23,
+          "registry_name": "South Pole Voyager"
+        },
+        {
+          "card_def_id": 24,
+          "registry_name": "Suki, Kyoshi Warrior"
+        },
+        {
+          "card_def_id": 25,
+          "registry_name": "Tiger-Seal"
+        },
+        {
+          "card_def_id": 26,
+          "registry_name": "Water Tribe Rallier"
+        },
+        {
+          "card_def_id": 27,
+          "registry_name": "White Lotus Reinforcements"
+        },
+        {
+          "card_def_id": 28,
+          "registry_name": "Yip Yip!"
+        },
+        {
+          "card_def_id": 29,
+          "registry_name": "Ally"
+        },
+        {
+          "card_def_id": 30,
+          "registry_name": "Clue"
+        }
+      ]
+    },
+    "input_schema": {
+      "semantic_cards": {
+        "shape": [
+          2,
+          60
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "known_hand": {
+        "shape": [
+          2,
+          60,
+          2
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "agent_player": {
+        "shape": [
+          1,
+          28
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "opponent_player": {
+        "shape": [
+          1,
+          28
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "agent_cards": {
+        "shape": [
+          60,
+          39
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "opponent_cards": {
+        "shape": [
+          60,
+          39
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "agent_permanents": {
+        "shape": [
+          40,
+          25
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "opponent_permanents": {
+        "shape": [
+          40,
+          25
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "actions": {
+        "shape": [
+          64,
+          17
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "events": {
+        "shape": [
+          32,
+          7
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "action_focus": {
+        "shape": [
+          64,
+          2
+        ],
+        "dtype": "<class 'numpy.int32'>"
+      },
+      "agent_player_valid": {
+        "shape": [
+          1
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "opponent_player_valid": {
+        "shape": [
+          1
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "agent_cards_valid": {
+        "shape": [
+          60
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "opponent_cards_valid": {
+        "shape": [
+          60
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "agent_permanents_valid": {
+        "shape": [
+          40
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "opponent_permanents_valid": {
+        "shape": [
+          40
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "actions_valid": {
+        "shape": [
+          64
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      },
+      "events_valid": {
+        "shape": [
+          32
+        ],
+        "dtype": "<class 'numpy.float32'>"
+      }
+    },
+    "learning_schema_sha256": "511b29376f300cf7e8145ee7f28ad22a7320d5939cb438a84736d09c23163237"
+  },
+  "torch": "2.10.0",
+  "python": "3.12.12",
+  "training_source_sha256": "ba2fb33b20bde8c883062a1d4acc8048bee002ea303d3eb29dee2c02f04bfc04",
+  "native_world": "w4",
+  "native_sha256": "f1a2622036d899bfde12b153d20950f02631bb6e11b24b9c862d9903c286a190",
+  "seed": 108,
+  "device": "cpu",
+  "threads": 1,
+  "regime_digest": "ff62a52d7659fd687cea5fa111316a77a67831aeb7f7e4744bc179add45da811",
+  "requested_memory_bytes_by_stage": {
+    "policy-0": 34359738368,
+    "policy-1": 34359738368
+  },
+  "memory_limit_enforced": false,
+  "recipe_sha256": "011a35610eaeab0ce1bc6a945dd59c9a8d4cde5bf367b3c0213e9fe2100d67d3"
+}

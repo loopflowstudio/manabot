@@ -1,0 +1,258 @@
+# Laptop benchmark for accelerator-scale decisions
+
+Active direction, Jack Heart, 2026-10-14: figure out a laptop benchmark setup
+that represents high-scale GPU circumstances, then keep optimizing. This
+supersedes the initial report-only stopping point for new work in this session.
+The earlier findings and artifacts remain historical evidence. No publication,
+paid compute, remote operation or interference with other experiments is implied.
+
+The previous turn made progress: measured profiles, negative evidence and a
+research artifact. Its CPU inference fraction is not a GPU-scale priority rule.
+
+## Design
+
+Use the real collector to capture a frozen-policy output tape, then replay it
+through the same native VectorEnv and buffer interface with inference removed.
+Require exact replayed buffers and current-game seeds. Keep per-call CPU timings,
+active/learner rows, transfer payload sizes and retained rollout bytes. This
+exposes CPU demand when inference is fast without substituting random actions.
+Capture and replay are separate modes so optimizations reuse identical work.
+
+Combine that measured CPU demand with existing retained L4/A40 model curves
+(`cuda-capacity/capacity-report.json`) and explicit CPU speed, transfer bandwidth,
+latency, GPU-count, batch and learner-work assumptions. Fail on absent/OOM batch
+points; do not extrapolate CUDA kernels from CPU/MPS times. Initial projections
+are resource bounds for blocking versus ideally overlapped execution, not a
+queueing simulator or a hardware prediction. Preserve that distinction in JSON.
+
+Large-batch hardware timings are conditional evidence: recipe/precision/input
+shape/source identity accompany them; report source drift rather than claiming
+current calibrated service. The host vector workload and model capacity may be
+varied independently to expose bottleneck changes. Highest scale is not a fixed
+known GPU topology; sweep explicitly named scenarios and leave deployment
+predictions uncalibrated until a target GPU run supplies matching measurements.
+
+Delete — do not maintain: no production predecessor is replaced. Reuse the
+existing collector/recovery journal, CUDA receipts and measurement owners. Do
+not create another learner, optimizer, distributed runtime or rules engine.
+
+## Current slice and acceptance
+
+- Reusable typed capture/replay and resource-bound model, with a bounded CLI.
+- Replay records source identity, rejects changed world setup and requires exact
+  acting inputs, action journal, rollout arrays, final buffers and reset seeds.
+  Source changes are allowed so the same workload can test optimizations.
+- Report raw timings, copies/bytes, model-only service evidence, memory and
+  extrapolation limits. Keep simulator throughput distinct from learner progress.
+- Tests exercise parity, corruption, no unsupported GPU extrapolation,
+  resource bottleneck changes, and finite in-flight capacity.
+- Run a small real laptop capture/replay and sweep existing GPU curves; use the
+  evidence to choose the next optimization, then continue the active goal.
+
+## Local limits for this slice (declared before new measured work)
+
+At most 300 aggregate seconds for capture/replay/model experiments and 180
+seconds for focused tests; 90 seconds per command; one Torch/BLAS thread, one
+measured child at a time, 6 GiB sampled RSS stop. At most 64 streams × 64 learner
+transitions in one capture, with 3 timed replays. No training updates in this
+slice. No CUDA/MPS execution or network services. Analytical sweeps do not
+allocate virtual actors/GPUs. New artifacts under `scratch/accelerator-probes/`.
+
+Remaining after this slice: queue/batch formation and straggler dynamics, actual
+large resident actor memory/throughput, learner overlap/calibration, mature
+checkpoint traces, shared-root search at scale, and measured optimization passes.
+Keep the goal active; a resource-bound report alone does not finish it.
+
+## Measured pilot, 2026-10-14
+
+The draft instrument is `experiments/runners/pipeline_benchmark.py`; resource
+bounds are in `manabot/infra/accelerator_model.py`. Existing focused tests passed:
+`uv run --no-sync pytest tests/infra/test_accelerator_model.py tests/bench/test_pipeline_benchmark.py -q`
+(6 passed, 2.19 seconds). Ruff check/format passed on those four files. This is
+local verification, not a repository-wide type-check or CI claim.
+
+Reproduce from the repository root with fresh output directory names:
+
+```sh
+uv run --no-sync python -m experiments.runners.pipeline_benchmark capture --out scratch/accelerator-probes/capture-s64 --recipe scratch/cpu-probes/update-recipe.json --streams 64 --transitions 64 --seconds 90
+uv run --no-sync python -m experiments.runners.pipeline_benchmark replay --out scratch/accelerator-probes/replay-s64 --tape scratch/accelerator-probes/capture-s64 --repeats 3 --seconds 90
+uv run --no-sync python -m experiments.runners.pipeline_benchmark project --out scratch/accelerator-probes/projection-s64 --replay scratch/accelerator-probes/replay-s64/replay.json --hardware experiments/data/cuda-capacity/capacity-report.json --seconds 90
+```
+
+The recipe is the previously retained width-64, depth-1 semantic scalar policy,
+initialized untrained with seed 10831. No stage in that recipe was trained.
+The three supervised commands completed in 6.850, 3.152 and 1.464 seconds;
+sampled child peak RSS was 1.124, 0.725 and 0.296 GB. A separate diagnostic
+profile took 1.887 seconds, guarded by the earlier wrapper; its receipt is
+`cpu-probes/accelerator-host-profile.receipt.json`, and its binary/text outputs
+are in `accelerator-probes/`. It counts against both applicable probe caps.
+An initial wrapper invocation placed options after its remainder positional and
+failed argument parsing before starting work; the corrected invocation is in
+the receipt. Total measured command wall time for this pilot is 13.353 seconds,
+plus that negligible parse failure. No paid resources or training updates.
+
+Observed replay outcomes:
+
+| Quantity | Observation |
+| --- | --- |
+| Decisions / learner transitions | 8,888 / 4,096 |
+| Games / truncations | 31 / 0 |
+| Timed collection repeats | 0.27728, 0.27434, 0.27355 seconds |
+| Decisions per second | 32,054–32,491 |
+| Native stepping | 0.14177–0.14287 seconds; 51.5–51.8% of replay |
+| Native vector calls / policy calls | 269 / 491 |
+| Policy rows per call | mean 18.10, median 21, maximum 43 |
+| Calls with at most 4 rows | 139 / 491 (28.3%) |
+| Policy input / recorded output bytes | 314,066,368 / 2,310,880 |
+| Retained rollout / native buffer arrays | 149,180,992 / 2,262,144 bytes |
+
+Every replay matched the captured rollout, final buffers, journal and reset
+seeds. An additional audited replay matched every policy input before the timed
+repeats. The capture's 5.343-second collection time includes output capture and
+input hashing: dividing it by replay time is not a measured optimization gain.
+Host load was approximately 8–10 at command starts. Three repeats of one seed
+do not characterize independent workloads, thermal behavior or idle-machine
+performance.
+
+The diagnostic profile attributes 0.145 seconds to native stepping, 0.043 to
+rollout assembly and 0.031 cumulative to observation slicing. Its full 0.403
+seconds also includes setup, tape loading and final hashing outside the timed
+collection interval. Do not mix those denominators. The earlier small-CPU-run
+inference-dominated profile and this native-heavy replay are compatible: they
+measure different inference service assumptions.
+
+## Interpretation and limits that affect the decision
+
+The useful setup has three layers: exact host replay; a finite-actor scheduling
+model driven by real requests; target-device service measurements. The first
+layer has a verified pilot, the current second layer is only resource arithmetic,
+and the third reuses historical L4/A40 evidence. The laptop does not emulate CUDA
+kernels, memory contention or communication. The 3,384 projection rows retain
+every host repeat and vary resource counts, transfer assumptions and diagnostic
+learning demand. Neither 64 GPUs nor 4,096 actors were actually allocated.
+
+For illustration, the historical L4 width-64/depth-1, batch-1024 service is
+29,697 inference observations/second. One 64-stream actor cannot fill that
+batch under the model's full-batch-only rule. With enough virtual actors, the
+64-GPU scenario's ideal inference bound is about 1.90 million decisions/second;
+adding one diagnostic optimizer observation per decision lowers it to about
+257,408. These are conditional arithmetic, not throughput forecasts. The same
+4,096-actor scenario needs at least 577.7 GiB just for the observed rollout and
+buffer arrays. Native games, pending transitions, staging and model copies add
+to that. Width-384/depth-8 batch-1024 is OOM on both retained cards and is omitted,
+never estimated by interpolation.
+
+Two source-level mismatches prevent treating these bounds as current GPU timing:
+
+- Replay runs policy normalization, sampling and value checks on CPU. The real
+  CUDA collector executes these Torch operations on its device. Thus replay
+  measures the existing CPU collector with a zero-compute policy oracle; it does
+  not isolate precisely the CPU work left by the current CUDA collector.
+- The model assumes one coalesced input and output transfer per batch. Current
+  `_slice_obs_tensors` transfers each observation key separately; learner paths
+  return probabilities, log probabilities, sampled actions and values through
+  multiple `.cpu()` calls. Recorded raw logits/value bytes are not that exact
+  transfer protocol. The coalesced model describes a possible serving boundary.
+
+See `manabot/sim/net_opponent.py:349–493` for these ownership boundaries and
+`experiments/runners/cuda_performance.py` for model-only versus ordinary training
+measurements. The retained model protocol uses float32, TF32 disabled, fixed
+203 attention slots, and cycles 256 real observations for larger batches; source,
+input and native identities are retained in `capacity-report.json`. Its diagnostic
+Adam loss is not the configured filtered RL update. Historical ordinary loop
+measurements include learning and persistence and must not be compared directly
+with replay decision throughput.
+
+## Next discriminating work
+
+Before choosing a production optimization, trace per-vector-step request
+dependencies and host service durations. A discrete-event replay should model
+whole-actor waits, seat-separated requests, batching timeouts, finite queues,
+learner service and bounded policy lag. Sweep those scheduling choices against
+the measured batch curves, preserving missing/OOM cells. Validate zero-service,
+single-actor and saturated-resource limits; report queue latency, batch occupancy,
+GPU idle fraction and memory alongside throughput. The current mean-demand
+formula loses the small-batch tail and cannot settle these choices.
+
+Keep native stepping and rollout assembly as CPU optimization candidates, with
+identical-tape parity and independent seeds as acceptance gates. Batch formation
+and rollout memory are already material scale constraints; faster CPU neural
+inference alone is not evidence of a GPU-scale improvement. Mature checkpoint
+traces, actual learner service and a matching target-GPU validation remain needed.
+No production optimization or GPU speedup is established by this pilot.
+
+## Scheduling probe protocol
+
+The preceding replay turn yielded new evidence and counts as progress. The next
+bounded research probe uses the exact sequence of 491 request sizes, preserving
+one outstanding request per virtual actor. It assigns measured mean CPU demand
+per decision to each request; it does not invent per-request CPU measurements.
+Actors share finite CPU workers and GPU servers. FIFO batching dispatches at a
+configured maximum size or timeout, pads partial batches to the next retained
+CUDA measurement point, and charges that point's measured service. No missing
+cell is interpolated. Transfers are explicitly coalesced and serialized with
+device service. This is a prospective serving design, not production simulation.
+
+Within the existing 300-second aggregate cap, allow up to 90 seconds per
+scheduling command, one process, one thread and the same 6 GiB RSS guard. Use
+the existing process wrapper; its receipts also count against its earlier
+240-second probe cap. No new environment transitions, models or updates are
+needed. First verify synthetic conservation/latency cases, then sweep batching
+choices at small and large virtual topologies. Retain failures and distinguish
+finite-trace throughput from steady-state capacity. Use local notes and scratch
+probe code only; production implementation is outside the active research skill.
+
+## Scheduling evidence, 2026-10-14
+
+`scratch/accelerator-queue-probe.py` completed 51 scenarios and eight final
+closed-form/conservation checks. The checks cover serial latency, CPU capacity,
+extra idle GPUs, timeout cost, padding, awkward FIFO packing, obsolete timers
+and rotated-trace conservation. No GPU executes in this probe. The four reports
+are `accelerator-probes/queue-{sweep,scale,sensitivity,phase}.json`; wrapper
+receipts/logs are `cpu-probes/accelerator-queue-*.{receipt.json,stdout.log,stderr.log}`.
+The five commands took 1.898, 1.895, 15.015, 1.868 and 15.864 seconds (36.540
+total), with sampled process-tree RSS below 303 MB. Source snapshots are retained
+by SHA-256 in `accelerator-probes/*.source.txt` so earlier report hashes remain
+resolvable after adding the phase sensitivity case.
+
+Observations below are simulation results for the historical L4 width-64/depth-1
+curve, not observed deployment performance. All rows use a 250 µs batching wait.
+Busy fraction in the reports includes serialized link service as well as device
+service; it is not measured CUDA kernel utilization.
+
+| Virtual actors / GPUs | Actor trace phases | Max batch 64 | Max batch 256 | Max batch 1,024 |
+| --- | --- | ---: | ---: | ---: |
+| 64 / 1 | aligned | 12,919 | 22,913 | 22,448 |
+| 64 / 1 | rotated | 12,816 | 24,582 | 19,062 |
+| 4,096 / 64 | aligned | 775,000 | 1,522,100 | 1,342,457 |
+| 4,096 / 64 | rotated | 804,697 | 1,561,194 | 1,717,470 |
+
+Values are decisions/second over finite tapes. Cyclic rotation preserves every
+actor's total decisions and request-size multiset; it is synthetic timing
+sensitivity, not independent games. The favored batch size reverses at large
+scale. This contradicts a universal batch-256 recommendation from the aligned
+case and revises the model requirement: arrival correlation and workload tails
+must be represented, not just actor count and mean demand.
+
+Other discriminating results:
+
+- With one actor, increasing the batching wait from zero to 2 ms lowers modeled
+  throughput from 4,659 to 3,076 decisions/second; the blocked actor cannot fill
+  its own batch by waiting longer. A timeout is not additional concurrency.
+- At 64 actors / one GPU, doubling host speed changes batch-256 throughput from
+  22,913 to 22,937 (about 0.1%). A host-only microbenchmark improvement is not
+  sufficient evidence of useful pipeline speedup in this scenario.
+- Reserving one diagnostic optimizer observation per decision reduces that
+  same case to 3,889 decisions/second and increases mean request completion
+  latency from about 50 ms to 297 ms. Real learner scheduling and policy-version
+  age remain unmodeled; an inference-only winner is not a training winner.
+- Near-full server busy time coexists with substantial padding and queue delay.
+  In the aligned 64-actor case, batch 64 uses only 77.6% of padded rows and mean
+  request completion takes 89 ms. Busy time alone is an inadequate objective.
+
+Next evidence should replace proportional CPU demand with per-request timing,
+use independently captured seeds/checkpoints rather than phase rotation alone,
+and test learner/backpressure scheduling. Keep each purported improvement tied
+to exact replay parity and throughput/latency/memory across those cases. The
+current evidence supports this benchmark design; it does not select one global
+batch setting or establish any production optimization.

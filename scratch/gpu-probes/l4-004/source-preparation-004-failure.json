@@ -1,0 +1,7 @@
+{
+  "source": "d056d09218d3be3c234b40c9eafa70ad736f5c81",
+  "stage": "full source readback",
+  "error": "read timeout",
+  "gpu_rented": false,
+  "recovery": "same uploaded object, complete ordered range readback with If-Match"
+}

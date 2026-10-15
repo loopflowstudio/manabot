@@ -1,0 +1,14 @@
+{
+  "run": "3375fdd99515",
+  "started_at": "2026-10-15T14:39:45.637858Z",
+  "finished_at": "2026-10-15T14:43:02.548912Z",
+  "run_id": "3375fdd99515",
+  "pod_id": "imgv30qpm2lpmw",
+  "deleted_at": "2026-10-15T14:44:16.583347+00:00",
+  "confirmed_absent_at": "2026-10-15T14:44:17.821584+00:00",
+  "post_job_until_deletion_seconds": 74.034435,
+  "whole_rental_estimate_usd": 0.34625211133333333,
+  "job_status_estimate_usd": 0.2641972792083333,
+  "meaning": "Observed billable interval; no causal claim about caffeinate or prior delay. Budget uses whole rental.",
+  "lifecycle_source_sha256": "f4b76b9675000435740fa4c9a95eb967ccc69cc04c12ec7ab3c3c34fc6d7e1e1"
+}

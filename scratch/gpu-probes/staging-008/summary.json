@@ -1,0 +1,514 @@
+{
+  "run": "3375fdd99515",
+  "source": "317cbdbd352394f60c46274616510bcc179de40c",
+  "verified_files": 23,
+  "archive_bytes": 23965735,
+  "archive_sha256": "5021f07ee226da30d7bf81954196dd3a51d464feaba77231e497b75723579df0",
+  "authoritative_outputs_verified": 25,
+  "analysis_sha256": "f47cabf4bea6665c529d9f3d541392c8b0f57437222dc3c94ca63fe192345728",
+  "cells": [
+    {
+      "name": "staging-a16-b256",
+      "actors": 16,
+      "max_batch": 256,
+      "status": "completed",
+      "order": "ABBA",
+      "fixed_batch_witnesses": 10,
+      "variants": {
+        "reference": {
+          "seconds": [
+            0.8737851893529296,
+            0.8716639261692762
+          ],
+          "median_seconds": 0.8727245577611029,
+          "phase_samples": [
+            {
+              "d2h": 0.007709532044827938,
+              "forward": 0.5249820817261934,
+              "h2d": 0.10748301818966866,
+              "prepare": 0.17686854302883148,
+              "validate": 0.026948903687298298
+            },
+            {
+              "d2h": 0.007664800621569157,
+              "forward": 0.5244029238820076,
+              "h2d": 0.10759522300213575,
+              "prepare": 0.17664881981909275,
+              "validate": 0.02688384521752596
+            }
+          ],
+          "phase_medians": {
+            "prepare": 0.17675868142396212,
+            "h2d": 0.1075391205959022,
+            "forward": 0.5246925028041005,
+            "d2h": 0.007687166333198547,
+            "validate": 0.02691637445241213
+          },
+          "batch_counts": [
+            {
+              "1": 2,
+              "4": 2,
+              "16": 17,
+              "64": 19,
+              "256": 84
+            },
+            {
+              "1": 2,
+              "4": 2,
+              "16": 17,
+              "64": 19,
+              "256": 84
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.0001594526693224907,
+            0.0001093810424208641
+          ]
+        },
+        "staged": {
+          "seconds": [
+            0.7266514357179403,
+            0.7282491875812411
+          ],
+          "median_seconds": 0.7274503116495907,
+          "phase_samples": [
+            {
+              "d2h": 0.00773738045245409,
+              "forward": 0.5283753676339984,
+              "h2d": 0.036160875111818314,
+              "prepare": 0.09926349855959415,
+              "validate": 0.02738785557448864
+            },
+            {
+              "d2h": 0.007860873825848103,
+              "forward": 0.5304086115211248,
+              "h2d": 0.036405776627361774,
+              "prepare": 0.09920177236199379,
+              "validate": 0.027148853987455368
+            }
+          ],
+          "phase_medians": {
+            "prepare": 0.09923263546079397,
+            "h2d": 0.036283325869590044,
+            "forward": 0.5293919895775616,
+            "d2h": 0.007799127139151096,
+            "validate": 0.027268354780972004
+          },
+          "batch_counts": [
+            {
+              "1": 2,
+              "4": 2,
+              "16": 17,
+              "64": 19,
+              "256": 84
+            },
+            {
+              "1": 2,
+              "4": 2,
+              "16": 17,
+              "64": 19,
+              "256": 84
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.00021214410662651062,
+            0.00011387374252080917
+          ]
+        }
+      },
+      "speedup": 1.1997033251413192,
+      "target": "<=5% duration regression",
+      "target_passed": true,
+      "persistent_pinned_bytes": 9046016,
+      "persistent_device_bytes": 9046016,
+      "allocation_seconds": 0.007085378281772137,
+      "peak_allocated_with_both_backends": 455754240
+    },
+    {
+      "name": "staging-a16-b1024",
+      "actors": 16,
+      "max_batch": 1024,
+      "status": "completed",
+      "order": "BAAB",
+      "fixed_batch_witnesses": 12,
+      "variants": {
+        "reference": {
+          "seconds": [
+            1.0043869707733393,
+            1.0438004853203893
+          ],
+          "median_seconds": 1.0240937280468643,
+          "phase_samples": [
+            {
+              "d2h": 0.007757258601486683,
+              "forward": 0.5478337621316314,
+              "h2d": 0.14311205316334963,
+              "prepare": 0.24892521649599075,
+              "validate": 0.030007590539753437
+            },
+            {
+              "d2h": 0.00840729009360075,
+              "forward": 0.573842991143465,
+              "h2d": 0.14633720461279154,
+              "prepare": 0.2566731749102473,
+              "validate": 0.03181706741452217
+            }
+          ],
+          "phase_medians": {
+            "prepare": 0.25279919570311904,
+            "h2d": 0.14472462888807058,
+            "forward": 0.5608383766375482,
+            "d2h": 0.008082274347543716,
+            "validate": 0.030912328977137804
+          },
+          "batch_counts": [
+            {
+              "16": 24,
+              "64": 14,
+              "256": 62,
+              "1024": 17
+            },
+            {
+              "16": 24,
+              "64": 14,
+              "256": 62,
+              "1024": 17
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.0003815069794654846,
+            0.0004932228475809097
+          ]
+        },
+        "staged": {
+          "seconds": [
+            0.8026364659890532,
+            0.7929597422480583
+          ],
+          "median_seconds": 0.7977981041185558,
+          "phase_samples": [
+            {
+              "d2h": 0.00798124261200428,
+              "forward": 0.5592346554622054,
+              "h2d": 0.04269599821418524,
+              "prepare": 0.13433200679719448,
+              "validate": 0.030198867432773113
+            },
+            {
+              "d2h": 0.007788960821926594,
+              "forward": 0.5528295524418354,
+              "h2d": 0.04232075996696949,
+              "prepare": 0.13382941111922264,
+              "validate": 0.031017066910862923
+            }
+          ],
+          "phase_medians": {
+            "prepare": 0.13408070895820856,
+            "h2d": 0.042508379090577364,
+            "forward": 0.5560321039520204,
+            "d2h": 0.007885101716965437,
+            "validate": 0.030607967171818018
+          },
+          "batch_counts": [
+            {
+              "16": 24,
+              "64": 14,
+              "256": 62,
+              "1024": 17
+            },
+            {
+              "16": 24,
+              "64": 14,
+              "256": 62,
+              "1024": 17
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.0001684185117483139,
+            0.000156438909471035
+          ]
+        }
+      },
+      "speedup": 1.2836502402801901,
+      "target": "<=5% duration regression",
+      "target_passed": true,
+      "persistent_pinned_bytes": 36184064,
+      "persistent_device_bytes": 36184064,
+      "allocation_seconds": 0.02605927549302578,
+      "peak_allocated_with_both_backends": 1713870336
+    },
+    {
+      "name": "staging-a128-b256",
+      "actors": 128,
+      "max_batch": 256,
+      "status": "completed",
+      "order": "BAAB",
+      "fixed_batch_witnesses": 10,
+      "variants": {
+        "reference": {
+          "seconds": [
+            4.819240223616362,
+            4.773987294174731
+          ],
+          "median_seconds": 4.796613758895546,
+          "phase_samples": [
+            {
+              "d2h": 0.0381535729393363,
+              "forward": 2.6348756439983845,
+              "h2d": 0.6461562654003501,
+              "prepare": 1.1447248309850693,
+              "validate": 0.18114108126610518
+            },
+            {
+              "d2h": 0.03823687136173248,
+              "forward": 2.612288569100201,
+              "h2d": 0.6306715700775385,
+              "prepare": 1.1441741585731506,
+              "validate": 0.17544339410960674
+            }
+          ],
+          "phase_medians": {
+            "prepare": 1.14444949477911,
+            "h2d": 0.6384139177389443,
+            "forward": 2.623582106549293,
+            "d2h": 0.03819522215053439,
+            "validate": 0.17829223768785596
+          },
+          "batch_counts": [
+            {
+              "1": 1,
+              "4": 2,
+              "16": 1,
+              "64": 9,
+              "256": 583
+            },
+            {
+              "1": 1,
+              "4": 2,
+              "16": 1,
+              "64": 9,
+              "256": 583
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.0002041049301624298,
+            0.0003254031762480736
+          ]
+        },
+        "staged": {
+          "seconds": [
+            3.8654316142201424,
+            3.9071713155135512
+          ],
+          "median_seconds": 3.886301464866847,
+          "phase_samples": [
+            {
+              "d2h": 0.038859070278704166,
+              "forward": 2.648299931548536,
+              "h2d": 0.20242338720709085,
+              "prepare": 0.6211043633520603,
+              "validate": 0.1782943205907941
+            },
+            {
+              "d2h": 0.03819764032959938,
+              "forward": 2.72576086781919,
+              "h2d": 0.19695397280156612,
+              "prepare": 0.6104960273951292,
+              "validate": 0.1747245378792286
+            }
+          ],
+          "phase_medians": {
+            "prepare": 0.6158001953735948,
+            "h2d": 0.1996886800043285,
+            "forward": 2.687030399683863,
+            "d2h": 0.03852835530415177,
+            "validate": 0.17650942923501134
+          },
+          "batch_counts": [
+            {
+              "1": 1,
+              "4": 2,
+              "16": 1,
+              "64": 9,
+              "256": 583
+            },
+            {
+              "1": 1,
+              "4": 2,
+              "16": 1,
+              "64": 9,
+              "256": 583
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.00021975766867399216,
+            0.00015485752373933792
+          ]
+        }
+      },
+      "speedup": 1.2342361502982087,
+      "target": ">=1.15x speedup",
+      "target_passed": true,
+      "persistent_pinned_bytes": 9046016,
+      "persistent_device_bytes": 9046016,
+      "allocation_seconds": 0.007092660292983055,
+      "peak_allocated_with_both_backends": 455754240
+    },
+    {
+      "name": "staging-a128-b1024",
+      "actors": 128,
+      "max_batch": 1024,
+      "status": "completed",
+      "order": "ABBA",
+      "fixed_batch_witnesses": 12,
+      "variants": {
+        "reference": {
+          "seconds": [
+            3.0925303231924772,
+            3.096913820132613
+          ],
+          "median_seconds": 3.094722071662545,
+          "phase_samples": [
+            {
+              "d2h": 0.014934184961020947,
+              "forward": 1.224988010711968,
+              "h2d": 0.48453635163605213,
+              "prepare": 1.1103918347507715,
+              "validate": 0.14563371147960424
+            },
+            {
+              "d2h": 0.014943674206733704,
+              "forward": 1.2372575495392084,
+              "h2d": 0.5016242088750005,
+              "prepare": 1.110032838769257,
+              "validate": 0.1444378001615405
+            }
+          ],
+          "phase_medians": {
+            "prepare": 1.1102123367600143,
+            "h2d": 0.4930802802555263,
+            "forward": 1.2311227801255882,
+            "d2h": 0.014938929583877325,
+            "validate": 0.14503575582057238
+          },
+          "batch_counts": [
+            {
+              "4": 2,
+              "16": 1,
+              "64": 12,
+              "256": 16,
+              "1024": 146
+            },
+            {
+              "4": 2,
+              "16": 1,
+              "64": 12,
+              "256": 16,
+              "1024": 146
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.00021216832101345062,
+            0.00017717014998197556
+          ]
+        },
+        "staged": {
+          "seconds": [
+            2.161885146982968,
+            2.1928254244849086
+          ],
+          "median_seconds": 2.177355285733938,
+          "phase_samples": [
+            {
+              "d2h": 0.014847843907773495,
+              "forward": 1.224495681002736,
+              "h2d": 0.12660421431064606,
+              "prepare": 0.55008873809129,
+              "validate": 0.14126549568027258
+            },
+            {
+              "d2h": 0.014614260755479336,
+              "forward": 1.2319604437798262,
+              "h2d": 0.1272356202825904,
+              "prepare": 0.5742500349879265,
+              "validate": 0.14216987509280443
+            }
+          ],
+          "phase_medians": {
+            "prepare": 0.5621693865396082,
+            "h2d": 0.12691991729661822,
+            "forward": 1.2282280623912811,
+            "d2h": 0.014731052331626415,
+            "validate": 0.1417176853865385
+          },
+          "batch_counts": [
+            {
+              "4": 2,
+              "16": 1,
+              "64": 12,
+              "256": 16,
+              "1024": 146
+            },
+            {
+              "4": 2,
+              "16": 1,
+              "64": 12,
+              "256": 16,
+              "1024": 146
+            }
+          ],
+          "output_hash_differences": [
+            0,
+            0
+          ],
+          "maximum_delivery_seconds": [
+            0.00016446784138679504,
+            0.00016454793512821198
+          ]
+        }
+      },
+      "speedup": 1.4213215876798824,
+      "target": ">=1.15x speedup",
+      "target_passed": true,
+      "persistent_pinned_bytes": 36184064,
+      "persistent_device_bytes": 36184064,
+      "allocation_seconds": 0.023008039221167564,
+      "peak_allocated_with_both_backends": 1713870336
+    }
+  ],
+  "limits": [
+    "Combined CPU index_select, buffer reuse and pinned/asynchronous-copy intervention; this experiment does not identify individual component effects.",
+    "Fixed-batch input/output parity is exact; live batching may differ, so output hash differences remain explicit and no trajectory/optimizer-equivalence claim follows.",
+    "Virtual host work and one-worker service, without actual games, learning, IPC, network or multi-GPU execution.",
+    "Allocation is separate from warm live timing; peak GPU footprint includes both backends coexisting.",
+    "Two observations per variant/case, ordered ABBA/BAAB; no population confidence interval or training-speed claim."
+  ]
+}

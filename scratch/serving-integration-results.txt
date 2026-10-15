@@ -1,0 +1,69 @@
+Complete serving model integrated into laptop sweeps — 2026-10-15
+
+Use --serving-costs with scratch/gpu-probes/serving-007/service-model.json and its
+matching capacity-report.json. The loader verifies frozen overhead provenance,
+validation-summary digest, exact hardware report/forward points, model/world/match/
+observation contract and bytes per row. Original model-plus-link behavior remains
+available by omitting the option. Serving coefficients now have one typed owner:
+experiments/runners/serving_cost.py. No production learning/rules changes.
+
+Measurement receipts:
+- serving-cli-integration:2.570180s,304840704 sampled tree RSS bytes, completed.
+- serving-cli-scale:3.506500s,301613056 sampled tree RSS bytes, completed.
+- All five admission mismatch guards passed;9prospective predictions exact;
+  all27original L4 cohort outcomes exact.54full-service and54same-forward control
+  learner cases completed across512/4096global streams. Extra diagnostic optimizer
+  reservation and out-of-support counters passed. Ruff/diff checks passed.
+- Original local probe cap remains238.717656/240. Calibration now17.944340/20;
+  conservative combined usage282.328310/300. No new GPU allocation or local ML.
+
+Sources: accelerator-probes/serving-integration/execution-sources.json records the
+exact measured implementation. Later edits only add implementation provenance to
+future reports and clarify one report limitation; all measured source snapshots
+remain hash-indexed. Complete report data is in the same serving-integration folder.
+
+Same run007 forward curve + run005 completed ordinary learner service:
+Global streams | inference servers | model+link best rows/s | full-service best rows/s
+512            |1                  |5284.33 (batch1024)     |4223.48 (batch1024)
+512            |8                  |6036.18 (batch64)       |5609.66 (batch64)
+4096           |1                  |11923.03(batch1024)     |8874.10 (batch1024)
+4096           |64                 |16731.65(batch64)       |16272.35(batch64)
+
+These are raw learner rows/s, not optimizer exposures or decisions/s. Full serving
+reduces the4096stream one-server estimate25.6%;64servers still yield only1.83x
+that rate because one central learner and the zero-lag barrier remain. Doubling
+collector CPU speed changes8874.10→8879.54rows/s(0.061%). This scenario prioritizes
+serving preparation before collector speed, while central learning bounds returns
+from more inference servers. It does not prove that a code optimization improves
+actual training, playing strength or distributed throughput.
+
+Inference-only synthetic scaling, eight-step64stream tape(seed10349):
+Actors / collector cores / servers | batch64 /256 /1024 decisions per second
+512 /128 /8                       |75001 /225099 /317644
+4096/512 /64                      |598131 /1787826 /2342864
+
+The largest model uses4096actors, each with64streams (262144 total streams), not
+the4096-global-stream learner cohort (64leased actors). No262144stream learner
+measurement is available. The raw-array lower bound for4096short-tape actors is
+93751869440bytes, excluding native games, Python, staging and model copies. This
+is modeled target memory; the laptop executes only event records (~302MB RSS).
+
+Maxbatch1024 at4096actors makes4648 batches,4637 outside the1..8request calibration
+range, maximum730requests/batch. Physical confirmation tested up to128actors,
+so the highest-scale result remains an explicit extrapolation despite matching
+per-worker service at smaller counts. Per-case request/row support counters are
+retained. One extra serving CPU thread plus independent calibrated CPU/memory/link
+capacity per GPU is assumed; shared-host bandwidth, network, all-reduce, stragglers,
+policy evolution and contention remain unvalidated. The learner composition uses
+two rentals; it is not simultaneous measured inference and training.
+
+Reproduction from repository root, fresh output filenames required:
+uv run --no-sync python scratch/accelerator-queue-probe.py scale --card h100 --hardware scratch/gpu-probes/serving-007/capacity-report.json --serving-costs scratch/gpu-probes/serving-007/service-model.json --tape scratch/accelerator-probes/cohort-t8-s64/tape.json --replay scratch/accelerator-probes/cohort-t8-s64/replay.json --request-timings --out scratch/accelerator-probes/scale-new.json
+uv run --no-sync python scratch/cohort-flow-probe.py --card h100 --hardware scratch/gpu-probes/serving-007/capacity-report.json --serving-costs scratch/gpu-probes/serving-007/service-model.json --learner-service scratch/gpu-probes/h100-005/learner-service.json --global-streams 4096 --out scratch/accelerator-probes/cohort-new.json
+
+Use the existing bounded wrapper and remaining allowance for new measurements;
+these reproduction commands do not reset the local budget. Next discriminating
+optimization: paired real-GPU reusable host/device staging, using fresh observation
+materialization (not preloading the frozen pool to GPU), exact response witnesses,
+all attempts retained, then ordinary collection/learning verification before any
+training-speed claim. No such optimization was executed in this integration pass.

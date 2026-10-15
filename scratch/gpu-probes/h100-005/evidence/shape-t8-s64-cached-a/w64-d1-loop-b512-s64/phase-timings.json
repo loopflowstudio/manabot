@@ -1,0 +1,34 @@
+{
+  "cached": true,
+  "limits": "Synchronized method boundaries; update_iteration excludes EMA and executor bookkeeping. Ordinary TrainingRun retains complete learning time.",
+  "phases": [
+    {
+      "phase": "collect",
+      "seconds": 0.5726390741765499
+    },
+    {
+      "phase": "update_iteration",
+      "seconds": 0.390765942633152
+    },
+    {
+      "phase": "collect",
+      "seconds": 0.19838229939341545
+    },
+    {
+      "phase": "update_iteration",
+      "seconds": 0.20000102743506432
+    },
+    {
+      "phase": "collect",
+      "seconds": 0.2504873611032963
+    },
+    {
+      "phase": "update_iteration",
+      "seconds": 0.261043943464756
+    }
+  ],
+  "shape": [
+    8,
+    64
+  ]
+}

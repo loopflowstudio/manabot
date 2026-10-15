@@ -1,0 +1,7 @@
+{
+  "peak_allocated_bytes": 1184729600,
+  "peak_reserved_bytes": 1637875712,
+  "run_id": "b829db2a9b5d4aee9de92c0ecf0aefc7",
+  "status": "completed",
+  "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+}

@@ -1,0 +1,240 @@
+[
+  {
+    "id": "6b47de8afb13",
+    "run": "4370fade4b40",
+    "session": "75e300d010ce",
+    "machine": "h100-validation-75e300d010ce",
+    "number": 1,
+    "position": 0,
+    "limit_seconds": 1800,
+    "limit_kind": "out_of_time",
+    "started_at": "2026-10-15T17:19:42.271731Z",
+    "finished_at": "2026-10-15T17:23:58.268633Z",
+    "outcome": "succeeded",
+    "cause": null,
+    "clocks": {},
+    "checkpoint": null,
+    "outputs": [
+      {
+        "name": "evidence/attempts.json",
+        "sha256": "ec5c624aababa18ae135a6aad6899f54bfde642ec90c74d117b9cdb4d2169d40",
+        "size_bytes": 2851
+      },
+      {
+        "name": "evidence/baseline.json",
+        "sha256": "2e490db96cbcfd196f5ad96877ed3d1d8b365004aa3f00db401b4d1ad2016ed2",
+        "size_bytes": 4194
+      },
+      {
+        "name": "evidence/frozen-input-receipt.json",
+        "sha256": "3a5f0c786a8a38211a02803bac8b59cfa8082c5d99f51461a900fcd46550173f",
+        "size_bytes": 330
+      },
+      {
+        "name": "evidence/identity.json",
+        "sha256": "8e25f3a54e2852716770f7abbb986ae564bafe5799bc1486c169dd1ff11931ca",
+        "size_bytes": 8964
+      },
+      {
+        "name": "evidence/inputs/worker.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      {
+        "name": "evidence/manifest.json",
+        "sha256": "ef0dd8ffa493aef10ab6a486e567dc18e84852de2cb9bccc08c6f3b5b3946513",
+        "size_bytes": 6720
+      },
+      {
+        "name": "evidence/observations.pt",
+        "sha256": "424ab00b9f07e56f47a1072d9fa9a080b99a93d785197a8ddc70be7f4f03dfa2",
+        "size_bytes": 36190695
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/bounds.json",
+        "sha256": "2cf12b848f2931d99613304bb1010046923df51c66f49caea28a42a7f202996b",
+        "size_bytes": 285
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/child.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/events.jsonl",
+        "sha256": "a6c8479e396afbf8e6ef3e2e7a396c47e8855dda54d9bf0099338d1c17f142b0",
+        "size_bytes": 234448
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/fixed-witnesses.json",
+        "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457",
+        "size_bytes": 177
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/host-before.json",
+        "sha256": "89a13dcbd98280f3b0bca79412aca71e5b97637d35368ee8de58e6633ac95996",
+        "size_bytes": 5758
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/supervision.json",
+        "sha256": "6568f9ba23571abdc8ef3745ec53395e36ee0ec253d02a2b5540c7ce73054838",
+        "size_bytes": 58449
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-reference/worker.log",
+        "sha256": "9b424baa86c255105832e83b3c8d7998e7b3338cca48ebb0c421b049ac1363e8",
+        "size_bytes": 244
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/bounds.json",
+        "sha256": "5b604f9bc5071b3cdf47311d20b43de105b3f330a98992e7a11d566bd8f14875",
+        "size_bytes": 395
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/child.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/events.jsonl",
+        "sha256": "098d6acdd86a5bd796223ffdd07eddfe1342ab2d83f1e0b25a61d2b98c8491dd",
+        "size_bytes": 396051
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/fixed-witnesses.json",
+        "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457",
+        "size_bytes": 177
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/host-after.json",
+        "sha256": "eb2753de0fcecd4f874ae73e757b48d8921fa02d0c7db0904d1c3fd310e456e0",
+        "size_bytes": 5774
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/host-before.json",
+        "sha256": "573afcd343aca26991e73064a10954729e3d9afbdc53c9db26f464e320538f4a",
+        "size_bytes": 5772
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/result.json",
+        "sha256": "e060d3f16c034afde9d0463f17a9f9257741c222bd75bef2b381c8d80e5c5c72",
+        "size_bytes": 1778
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/supervision.json",
+        "sha256": "8f4b6fcec0837078a7345211a310e6a499fd40cc6f588ed6c8455f90d458dd5d",
+        "size_bytes": 79199
+      },
+      {
+        "name": "evidence/phase-s4096-seed10349-staged/worker.log",
+        "sha256": "88b2962dc53438637505c9a6bdf833ed3fc9f22bb3bda2624efa987517d4112f",
+        "size_bytes": 216
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/bounds.json",
+        "sha256": "83b41ca713b5fa8205889e63f5f3ed1b975cfac82ffff3f90e6ef5c501f1e89f",
+        "size_bytes": 396
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/child.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/events.jsonl",
+        "sha256": "8918ef505cb785e89a03af7c0ef663b9f0cd9c06ec4bb57a26197dac250b653b",
+        "size_bytes": 413919
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/fixed-witnesses.json",
+        "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457",
+        "size_bytes": 177
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/host-after.json",
+        "sha256": "863b6cc4de8698bff5e850808d8126b0dbd7b3b7220df43471ddd4ab5e102dfd",
+        "size_bytes": 5776
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/host-before.json",
+        "sha256": "7441aa2fa5dccb4ca8b377e4087aad342faccb8f984693b328d2ce2e3960b293",
+        "size_bytes": 5774
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/result.json",
+        "sha256": "d4f607fae61ea30a24d5dabcac66d9dd1089e39c677290131f3e5eb0242ccffa",
+        "size_bytes": 1755
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/supervision.json",
+        "sha256": "5ad1a82c2d989009bc176f32aac2f882fbf3815dafadea9fe76886932ef0f911",
+        "size_bytes": 56716
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-reference/worker.log",
+        "sha256": "59e1ffcf376354ab39599949cacc11addc64e7f8895ac9eb96d1d8825d095947",
+        "size_bytes": 215
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/bounds.json",
+        "sha256": "c197cccf0cb6c459159db62cec570a205845dcbfdb9b08ff39bb697df920ae43",
+        "size_bytes": 397
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/child.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/events.jsonl",
+        "sha256": "27459bf28b28d208c0547bdf52bd58a4d6b3790505a26e561ed021c074d671af",
+        "size_bytes": 413361
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/fixed-witnesses.json",
+        "sha256": "182a56ba28dcc002f243ca1562353fa9bc1355ed44ff243338095fcb6e7bb457",
+        "size_bytes": 177
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/host-after.json",
+        "sha256": "7defd03b62c083bc2e454aba9d665d5441156d82bd1dc23ac5b974a4956b4730",
+        "size_bytes": 5775
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/host-before.json",
+        "sha256": "a3f6ddfaf0687f12d46460eb7e37f298b7e138ea3ee059e413ecb1ac0eb586e7",
+        "size_bytes": 5774
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/result.json",
+        "sha256": "a48992f39cf81dfb2e1d109616eea62630a3f2fa45bf0d9e04e01fb56d897487",
+        "size_bytes": 1778
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/supervision.json",
+        "sha256": "319f29c98894fc19f82ded396b0e4fc203da29eb81546d434a4f865d308adf6f",
+        "size_bytes": 64447
+      },
+      {
+        "name": "evidence/phase-s4096-seed10350-staged/worker.log",
+        "sha256": "5e5c24bbd2d4c17b9ee636715c1d2ee47c09242ffd29cd8fc67cbe9a11e51428",
+        "size_bytes": 215
+      },
+      {
+        "name": "evidence/source-bundle.json",
+        "sha256": "36ba5061e8a376129da9db0aeb38ab0df6ae97a4e3cbc3e73132823371896dad",
+        "size_bytes": 365374
+      },
+      {
+        "name": "evidence.tar.gz",
+        "sha256": "e89da83af1fdf584f68481b8f2066b075c8ce081b5aaf6fa1907abac7cd7e8cb",
+        "size_bytes": 457204
+      }
+    ],
+    "exit_code": 0,
+    "version": 77,
+    "planned_at": "2026-10-15T17:16:30.946677Z",
+    "added": true,
+    "checkpoint_clocks": {}
+  }
+]

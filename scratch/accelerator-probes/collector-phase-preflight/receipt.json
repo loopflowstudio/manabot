@@ -1,0 +1,16 @@
+{
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/collector-phase-supervisor.py",
+    "--check"
+  ],
+  "status": "passed",
+  "exit_code": 0,
+  "seconds": 0.4498883750056848,
+  "limit_seconds": 2,
+  "budget": "Focused standard-library supervisor checks under the existing180second test allowance; no local ML or benchmark measurement",
+  "source_sha256": "5fdfd25ad3efc519258e003b108df0795539e024c7e411834c8c0f386b2e4db5"
+}

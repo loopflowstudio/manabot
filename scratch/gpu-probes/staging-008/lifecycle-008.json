@@ -1,0 +1,150 @@
+[
+  {
+    "id": "108abb443fab",
+    "run": "3375fdd99515",
+    "session": "a18dd05b7125",
+    "machine": "h100-validation-a18dd05b7125",
+    "number": 1,
+    "position": 0,
+    "limit_seconds": 1800,
+    "limit_kind": "out_of_time",
+    "started_at": "2026-10-15T14:39:45.637858Z",
+    "finished_at": "2026-10-15T14:43:02.548912Z",
+    "outcome": "succeeded",
+    "cause": null,
+    "clocks": {},
+    "checkpoint": null,
+    "outputs": [
+      {
+        "name": "evidence/attempts.json",
+        "sha256": "ac936a61206b572e9e77ba42ad8bdb405bd3923aeb97e517a8958e9055ad631c",
+        "size_bytes": 2724
+      },
+      {
+        "name": "evidence/baseline.json",
+        "sha256": "2e490db96cbcfd196f5ad96877ed3d1d8b365004aa3f00db401b4d1ad2016ed2",
+        "size_bytes": 4194
+      },
+      {
+        "name": "evidence/frozen-input-receipt.json",
+        "sha256": "3a5f0c786a8a38211a02803bac8b59cfa8082c5d99f51461a900fcd46550173f",
+        "size_bytes": 330
+      },
+      {
+        "name": "evidence/identity.json",
+        "sha256": "48016da72aec2d082dedd160eff62814d3392d2bdfcf9fae588c7ad7dc752f26",
+        "size_bytes": 8964
+      },
+      {
+        "name": "evidence/inputs/worker.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_bytes": 0
+      },
+      {
+        "name": "evidence/manifest.json",
+        "sha256": "1c12fa6b2be501f9af013eaf131740ce19af4fae205e618d2bd54650fa8d241b",
+        "size_bytes": 3516
+      },
+      {
+        "name": "evidence/observations.pt",
+        "sha256": "424ab00b9f07e56f47a1072d9fa9a080b99a93d785197a8ddc70be7f4f03dfa2",
+        "size_bytes": 36190695
+      },
+      {
+        "name": "evidence/source-bundle.json",
+        "sha256": "3866ce76a4bfe713eed5f4cc05d0171a52746f16495efe8ea3b8f13693c116a8",
+        "size_bytes": 349182
+      },
+      {
+        "name": "evidence/staging-a128-b1024/fixed-witnesses.json",
+        "sha256": "50ef8458409dfe5b59a2f1166d9b065f9f11aeca456ff62b9c7e64d8f78e0fd4",
+        "size_bytes": 415080
+      },
+      {
+        "name": "evidence/staging-a128-b1024/result.json",
+        "sha256": "cc1dc9c0322293da1c5c57cd09d8209a9302e0739dbe4daafde4ebd3da17520d",
+        "size_bytes": 19327325
+      },
+      {
+        "name": "evidence/staging-a128-b1024/trials.json",
+        "sha256": "a0a528f076afff87c68683c1b7d6526ed95605ce67897f51982e588269dd1f6e",
+        "size_bytes": 18456723
+      },
+      {
+        "name": "evidence/staging-a128-b1024/worker.log",
+        "sha256": "d8f3f27dce8e16103827d6e50579791ef235deaab0ecc14e8f0de77e511d39ff",
+        "size_bytes": 53
+      },
+      {
+        "name": "evidence/staging-a128-b256/fixed-witnesses.json",
+        "sha256": "5879253f39fdf04986c57baf99356137db08007d37e864ac06821663f05ad4e4",
+        "size_bytes": 90772
+      },
+      {
+        "name": "evidence/staging-a128-b256/result.json",
+        "sha256": "8c6231abfde7b2c44e6128d600595ca269c0e6677c7a262ae570c6b0d918563e",
+        "size_bytes": 20202002
+      },
+      {
+        "name": "evidence/staging-a128-b256/trials.json",
+        "sha256": "91297905433d298be45e2832b8dd40d56d45d7c13b1d110c975c02380ced9ff5",
+        "size_bytes": 19277771
+      },
+      {
+        "name": "evidence/staging-a128-b256/worker.log",
+        "sha256": "1fe39ba93ac6db33b39c89015109b8f89fe980441c949237085ba35a17090ed0",
+        "size_bytes": 52
+      },
+      {
+        "name": "evidence/staging-a16-b1024/fixed-witnesses.json",
+        "sha256": "3da908c5398779a7a0a0185d4eccbb14a137b76034eb9ddb17a036dc51f2cfe2",
+        "size_bytes": 415094
+      },
+      {
+        "name": "evidence/staging-a16-b1024/result.json",
+        "sha256": "576125636c29d6c6d93fb95285cfe8f25f80297285befa6d40f30a5eae9f51b2",
+        "size_bytes": 2614798
+      },
+      {
+        "name": "evidence/staging-a16-b1024/trials.json",
+        "sha256": "c71fa3d45a142c8597e572698971716bcefeaceac07b5132fc522a47bc5b3b8f",
+        "size_bytes": 2491980
+      },
+      {
+        "name": "evidence/staging-a16-b1024/worker.log",
+        "sha256": "794b578d9bfa8bb743e00c7e730c1c1c899f6530c9f5da0a35bbcb043b6fa30a",
+        "size_bytes": 52
+      },
+      {
+        "name": "evidence/staging-a16-b256/fixed-witnesses.json",
+        "sha256": "7d961ada55c36ffce4680e568248612057be25605756035f505db7cf55e8eed5",
+        "size_bytes": 90779
+      },
+      {
+        "name": "evidence/staging-a16-b256/result.json",
+        "sha256": "a07a72e096397ab5dd265f8a79d19c699cda73d9f81860104b3cde447513cb17",
+        "size_bytes": 2629559
+      },
+      {
+        "name": "evidence/staging-a16-b256/trials.json",
+        "sha256": "642da7304fc83e562b6f8aab6510aacbc5e65a5300147a4577431fb98c766303",
+        "size_bytes": 2505839
+      },
+      {
+        "name": "evidence/staging-a16-b256/worker.log",
+        "sha256": "1aaa5c8f4d93de1dd32816394d69a9196e57358d62e58bed7c4c828d242bfdfa",
+        "size_bytes": 51
+      },
+      {
+        "name": "evidence.tar.gz",
+        "sha256": "5021f07ee226da30d7bf81954196dd3a51d464feaba77231e497b75723579df0",
+        "size_bytes": 23965735
+      }
+    ],
+    "exit_code": 0,
+    "version": 73,
+    "planned_at": "2026-10-15T14:39:04.175427Z",
+    "added": true,
+    "checkpoint_clocks": {}
+  }
+]

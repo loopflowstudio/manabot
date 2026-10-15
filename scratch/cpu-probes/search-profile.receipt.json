@@ -1,0 +1,52 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/cpu-search-probe.py"
+  ],
+  "started_utc": "2026-10-15T01:19:43.882591+00:00",
+  "limit_seconds": 45.0,
+  "load_start": [
+    6.4501953125,
+    7.49072265625,
+    6.7734375
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 1.4125404170481488,
+  "load_end": [
+    6.4501953125,
+    7.49072265625,
+    6.7734375
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.02755441702902317,
+      "rss_bytes": 6045696
+    },
+    {
+      "seconds": 0.26333404204342514,
+      "rss_bytes": 187318272
+    },
+    {
+      "seconds": 0.4993990840157494,
+      "rss_bytes": 233570304
+    },
+    {
+      "seconds": 0.7358138340059668,
+      "rss_bytes": 255377408
+    },
+    {
+      "seconds": 0.9716647090390325,
+      "rss_bytes": 270352384
+    },
+    {
+      "seconds": 1.2052425000583753,
+      "rss_bytes": 273317888
+    }
+  ],
+  "sampled_tree_peak_bytes": 273317888
+}

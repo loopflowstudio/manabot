@@ -1,0 +1,49 @@
+"""Preserve prior notes and audit completed and censored collection evidence."""
+from datetime import datetime
+import hashlib
+import json
+from pathlib import Path
+import shutil
+
+
+def main() -> None:
+    private=Path(__file__).parent
+    dest=Path('scratch/gpu-probes/collector-009')
+    summary=json.loads((dest/'summary.json').read_text())
+    notes=[]
+    for name in ('gpu-validation.md','accelerator-benchmark.md'):
+        p=Path('scratch')/name; data=p.read_bytes(); sha=hashlib.sha256(data).hexdigest()
+        copy=Path('scratch/accelerator-probes')/(sha+'.notes.txt')
+        if copy.exists(): assert copy.read_bytes()==data
+        else: copy.write_bytes(data)
+        notes.append({'original':str(p),'archive':str(copy),'sha256':sha})
+    violations=[]; complete=0; samples=0; staged_ownership=0
+    for cell in summary['cells']:
+        fixed=cell['fixed_witnesses']
+        assert fixed['all_fields_exact'] and fixed['stable_pointers'] and fixed['invalid_rows_rejected'] and fixed['action_focus_dtype']=='float32'
+        values=cell.get('samples',[])
+        if cell['status']=='completed':
+            complete+=1;assert len(values)==4
+        for i,sample in enumerate(values):
+            samples+=1
+            assert sample['identity']==values[0]['identity'] and sample['exact']
+            if sample['staged']:
+                assert sample['rollout_storage_independent'];staged_ownership+=1
+            if sample['seconds']>25:
+                violations.append({'cell':cell['name'],'sample':i,'staged':sample['staged'],'recorded_seconds':sample['seconds'],'declared_collect_limit_seconds':25,'classification':'cooperative collection limit exceeded; not a valid completed timing cell'})
+    assert complete==4 and samples==18 and len(violations)==1
+    audit={'completed_cells':complete,'timed_out_cells':2,'fixed_witness_cells':6,'retained_samples':samples,'exact_retained_identities':True,'staged_storage_checks':staged_ownership,'deadline_violations':violations,'pre_result_note_archives':notes,'audit_source_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    (dest/'artifact-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
+    attempts=json.loads((private/'lifecycle-009.json').read_text());assert len(attempts)==1
+    a=attempts[0];cleanup=json.loads((private/'monitor-cleanup-009.json').read_text())
+    ledger=json.loads((private/'budget.json').read_text())
+    assert all('deletion-confirmed' in r['status'] for r in ledger['allocations'])
+    assert all(r['conservative_charge_usd']>=r['estimated_cost_usd'] for r in ledger['allocations'])
+    allocation=ledger['allocations'][-1]
+    receipt={'run':a['run'],'started_at':a['started_at'],'finished_at':a['finished_at'],**cleanup,'post_job_until_deletion_seconds':(datetime.fromisoformat(cleanup['deleted_at'])-datetime.fromisoformat(a['finished_at'])).total_seconds(),'whole_rental_estimate_usd':allocation['estimated_cost_usd'],'job_status_estimate_usd':0.4139318446083333,'meaning':'Outer job packaged evidence successfully; two child measurements timed out. No claim that all experiment gates passed.'}
+    (dest/'lifecycle-summary.json').write_text(json.dumps(receipt,indent=2)+'\n')
+    shutil.copy2(__file__,dest/'audit.source.txt')
+    print(json.dumps({'audit':audit,'lifecycle':receipt}))
+
+
+if __name__=='__main__':main()

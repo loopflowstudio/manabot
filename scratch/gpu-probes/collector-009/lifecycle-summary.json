@@ -1,0 +1,13 @@
+{
+  "run": "d17e9ea3ee14",
+  "started_at": "2026-10-15T16:43:00.753934Z",
+  "finished_at": "2026-10-15T16:48:15.589341Z",
+  "run_id": "d17e9ea3ee14",
+  "pod_id": "e425o5azw4ho66",
+  "deleted_at": "2026-10-15T16:48:36.262287+00:00",
+  "confirmed_absent_at": "2026-10-15T16:48:39.151478+00:00",
+  "post_job_until_deletion_seconds": 20.672946,
+  "whole_rental_estimate_usd": 0.43684435975833336,
+  "job_status_estimate_usd": 0.4139318446083333,
+  "meaning": "Outer job packaged evidence successfully; two child measurements timed out. No claim that all experiment gates passed."
+}

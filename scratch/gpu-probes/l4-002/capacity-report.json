@@ -1,0 +1,110 @@
+{
+  "run": "a7df3b8d1a77",
+  "hardware": [
+    {
+      "card": "l4",
+      "capacity": "w384-d8",
+      "cell": "w384-d8-model-b256-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 256,
+      "inference_observations_per_second": 934.488060390537,
+      "optimizer_observations_per_second": 268.7264765229728,
+      "peak_allocated_bytes": 14146889728,
+      "source_sha256": "44fbd50dfb80c6b6fca12524123caf890abbc4f678b98b58b4c3930929bfe1e2",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w384-d8",
+      "cell": "w384-d8-model-b64-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 64,
+      "inference_observations_per_second": 942.533056601247,
+      "optimizer_observations_per_second": 272.41448655114414,
+      "peak_allocated_bytes": 3730317824,
+      "source_sha256": "6f66cfdc2da7f6641fec67659d1be11b94441f9061d9141d9c1b567904bd9ced",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w64-d1",
+      "cell": "w64-d1-model-b1-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 1,
+      "inference_observations_per_second": 313.9678877332763,
+      "optimizer_observations_per_second": 90.90346124944658,
+      "peak_allocated_bytes": 36262400,
+      "source_sha256": "a90b59500f9e6f415cf064642c740d134168194bae4a32260896335e349f286c",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w64-d1",
+      "cell": "w64-d1-model-b1024-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 1024,
+      "inference_observations_per_second": 28063.737076233167,
+      "optimizer_observations_per_second": 4445.054397105966,
+      "peak_allocated_bytes": 4482688000,
+      "source_sha256": "a62fbe9f57831d21edf4a344c4923eba90dc9c7417722f5fa6ad4119ca99b4b1",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w64-d1",
+      "cell": "w64-d1-model-b16-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 16,
+      "inference_observations_per_second": 5150.925923626202,
+      "optimizer_observations_per_second": 1392.282452500091,
+      "peak_allocated_bytes": 94053888,
+      "source_sha256": "dda01393c5a40b0f3294260468181f6a12a65b4288f5a01510cced4cf42f097a",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w64-d1",
+      "cell": "w64-d1-model-b256-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 256,
+      "inference_observations_per_second": 26315.829264689542,
+      "optimizer_observations_per_second": 4957.371768189007,
+      "peak_allocated_bytes": 1138213376,
+      "source_sha256": "81b877a75e6be05fc048b7e0939642a5fd98e933e8661d626d479f5a866be9fb",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w64-d1",
+      "cell": "w64-d1-model-b4-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 4,
+      "inference_observations_per_second": 1313.6592025113991,
+      "optimizer_observations_per_second": 383.2080805974201,
+      "peak_allocated_bytes": 41854464,
+      "source_sha256": "f1a35615618d435790af9f0084fc67dee168c1f5cc1a76fcdb5285fcee0e24ba",
+      "attention_slots": 202
+    },
+    {
+      "card": "l4",
+      "capacity": "w64-d1",
+      "cell": "w64-d1-model-b64-s0",
+      "kind": "model",
+      "status": "completed",
+      "batch": 64,
+      "inference_observations_per_second": 15070.70492583465,
+      "optimizer_observations_per_second": 3501.69208940002,
+      "peak_allocated_bytes": 303446016,
+      "source_sha256": "ef1c801ec68dbdf219b13e77a91756cd2af514ea9469a05570cd2fbbd6250f26",
+      "attention_slots": 202
+    }
+  ],
+  "aggregation": "median of three measured windows; diagnostic Adam is not RL"
+}

@@ -1,0 +1,68 @@
+{
+  "phase": "probe",
+  "command": [
+    "uv",
+    "run",
+    "--no-sync",
+    "python",
+    "scratch/capture-cohort-probe.py"
+  ],
+  "started_utc": "2026-10-15T03:58:20.876835+00:00",
+  "limit_seconds": 4.0,
+  "load_start": [
+    3.375,
+    3.23193359375,
+    3.22265625
+  ],
+  "status": "completed",
+  "exit_code": 0,
+  "elapsed_seconds": 2.3361162079963833,
+  "load_end": [
+    3.3447265625,
+    3.22802734375,
+    3.22119140625
+  ],
+  "rss_samples": [
+    {
+      "seconds": 0.027656625024974346,
+      "rss_bytes": 5767168
+    },
+    {
+      "seconds": 0.26040183298755437,
+      "rss_bytes": 187187200
+    },
+    {
+      "seconds": 0.4974941669497639,
+      "rss_bytes": 227934208
+    },
+    {
+      "seconds": 0.7259945420082659,
+      "rss_bytes": 255868928
+    },
+    {
+      "seconds": 0.9627357079880312,
+      "rss_bytes": 274186240
+    },
+    {
+      "seconds": 1.191529207979329,
+      "rss_bytes": 393330688
+    },
+    {
+      "seconds": 1.4209102919558063,
+      "rss_bytes": 533348352
+    },
+    {
+      "seconds": 1.6504549169912934,
+      "rss_bytes": 563920896
+    },
+    {
+      "seconds": 1.8874737500445917,
+      "rss_bytes": 574439424
+    },
+    {
+      "seconds": 2.126137917046435,
+      "rss_bytes": 574717952
+    }
+  ],
+  "sampled_tree_peak_bytes": 574717952
+}

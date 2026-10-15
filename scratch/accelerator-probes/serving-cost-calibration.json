@@ -1,0 +1,625 @@
+{
+  "schema": "manabot.research.serving-cost.v1",
+  "model": {
+    "phases": {
+      "prepare": {
+        "batch_seconds": 0.0,
+        "padded_row_seconds": 8.887330144327139e-06,
+        "request_seconds": 0.0
+      },
+      "h2d": {
+        "batch_seconds": 0.0002587262660944883,
+        "padded_row_seconds": 3.3435941008232693e-06,
+        "request_seconds": 0.0
+      },
+      "d2h": {
+        "batch_seconds": 4.954905650143923e-05,
+        "padded_row_seconds": 3.8762566038966985e-08,
+        "request_seconds": 1.937982183742835e-07
+      },
+      "validate": {
+        "batch_seconds": 7.086489200110387e-05,
+        "padded_row_seconds": 2.6078401730425624e-07,
+        "request_seconds": 9.383262428528938e-06
+      }
+    },
+    "forward_seconds": {
+      "1": 0.003611903704050592,
+      "4": 0.003616445552429944,
+      "16": 0.0035091679302285184,
+      "64": 0.003625661564950386,
+      "256": 0.0042636274805966205,
+      "1024": 0.007277414327541339
+    },
+    "calibration_rows_range": [
+      4,
+      1024
+    ],
+    "calibration_requests_range": [
+      1,
+      8
+    ],
+    "calibration_batches": 381
+  },
+  "fit": "NNLS phases from actor8 repeat0, all batches, no clipping/refitting",
+  "sources": {
+    "scratch/gpu-probes/serving-006/evidence/w64-d1-model-b1-s0/result.json": "8df2ba38dd9f45fd494f831554a734c5b6fbc8647b6f55868b0901d0061e2175",
+    "scratch/gpu-probes/serving-006/evidence/w64-d1-model-b4-s0/result.json": "fae83b77a69659e36e815925fdca62978e9436f4723faacbe9794fe6110251c9",
+    "scratch/gpu-probes/serving-006/evidence/w64-d1-model-b16-s0/result.json": "d2b6bb527e3a74191754258623baeabde53cf6e3a601def9375a56ae4a49a862",
+    "scratch/gpu-probes/serving-006/evidence/w64-d1-model-b64-s0/result.json": "89423903e1e6e63ea7a384bf487448cff32baad1d6b16c865b9fad5e797cea84",
+    "scratch/gpu-probes/serving-006/evidence/w64-d1-model-b256-s0/result.json": "860a74a73f60eb9e50fe9cb59501df4c370d59800f86c7c5da640ca9a5662d02",
+    "scratch/gpu-probes/serving-006/evidence/w64-d1-model-b1024-s0/result.json": "d892929941bbe402fd625cd60050569e204eb1ab7af243e9eb2ce43df43de87e",
+    "scratch/gpu-probes/serving-006/evidence/serve-a8-b64/result.json": "bec5f6bf00e38ad2dd595b5684be5832eb62d275f86097381c56eabbca4bee33",
+    "scratch/gpu-probes/serving-006/evidence/serve-a8-b256/result.json": "f497488993635db7f225ff754cc6a9bcb3ed071de2a96ae3e8e61e8d0a7c7dec",
+    "scratch/gpu-probes/serving-006/evidence/serve-a8-b1024/result.json": "811e0217f039433c33d6559c9bead623531e9aba540c60a58b5a7994315fe345",
+    "scratch/gpu-probes/serving-006/evidence/serve-a1-b64/result.json": "95e6ef15779c760e10b66d38742d9bf28a123ec8db1a743e55233e49cd370427",
+    "scratch/gpu-probes/serving-006/evidence/serve-a1-b256/result.json": "ce89daa6507b67574be2861cdb9528478d920eb39098d3659f49413ccb7e9dca",
+    "scratch/gpu-probes/serving-006/evidence/serve-a1-b1024/result.json": "19c9bb3c2828a595f4de14656c7a931ba53fc159f68f88b7beb46b5aac6fc971",
+    "scratch/gpu-probes/serving-006/evidence/serve-a64-b64/result.json": "716b27c867a509193f3e9f6e2128ce6c4edc25c01d6a6dbd4adcc81fc9ef947f",
+    "scratch/gpu-probes/serving-006/evidence/serve-a64-b256/result.json": "c41e2ddfb1287c85e6af85995d1101f1021c7d1cf46c65525b6d906a17473283",
+    "scratch/gpu-probes/serving-006/evidence/serve-a64-b1024/result.json": "57f31a3562ddf9c22ed2fd313cb201fe6afc34e3211262991d65bb82685979ae",
+    "/Users/jack/src/managym-cpu-research/scratch/serving-cost-calibration.py": "5cb47d88a6468d81549a9f2d1d005108909ce4629784355b48144ca114e86c19",
+    "scratch/accelerator-queue-probe.py": "98c3fae2c4cd54404bdedc05075546eeab7932fec47a3b09fd498fd80fe50cc1",
+    "scratch/serving-calibration-protocol.txt": "d1b2e8f9206d560c3f90ee87e2b41b839f83acede5603b38318f94d2a38cdc0d",
+    "scratch/accelerator-probes/cohort-t8-s64/tape.json": "caff7743072bb4b153b17e6093d0727b05e6f240005df1c89a379e240b582670",
+    "scratch/accelerator-probes/cohort-t8-s64/replay.json": "a82bdf2dc7b4b490a547516122e7291c3c2aabfe7fbebc146a4f3b4cf9f4452f"
+  },
+  "cases": [
+    {
+      "name": "serve-a1-b64",
+      "actors": 1,
+      "maximum": 64,
+      "partition": "excluded_actor",
+      "predicted": {
+        "settings": {
+          "actors": 1,
+          "cpu_workers": 1,
+          "gpus": 1,
+          "max_batch": 64,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 0.3070245138882588,
+        "decisions": 1099,
+        "requests": 59,
+        "decisions_per_second": 3579.5187364093663,
+        "cpu_busy_fraction": 0.09317076582247101,
+        "cpu_busy_seconds": 0.02860570908524096,
+        "inference_server_and_transfer_busy_fraction": 0.8587874676970579,
+        "padded_batch_counts": {
+          "1": 11,
+          "4": 4,
+          "16": 12,
+          "64": 32
+        },
+        "useful_row_fraction": 0.48478164975738863,
+        "mean_queue_seconds": 0.00024999999999999507,
+        "max_queue_seconds": 0.0002500000000000002,
+        "mean_request_seconds": 0.004718962793271489,
+        "max_request_seconds": 0.005066328973217918,
+        "peak_queued_rows": 37,
+        "peak_queued_requests": 1
+      },
+      "original_predicted_seconds": 0.26476829494733845,
+      "physical_seconds": [
+        0.3774646450765431,
+        0.36840049899183214,
+        0.35453341505490243
+      ],
+      "actual_over_predicted": [
+        1.229428361586531,
+        1.199905813142696,
+        1.1547397651248605
+      ],
+      "median_actual_over_predicted": 1.199905813142696,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "serve-a1-b256",
+      "actors": 1,
+      "maximum": 256,
+      "partition": "excluded_actor",
+      "predicted": {
+        "settings": {
+          "actors": 1,
+          "cpu_workers": 1,
+          "gpus": 1,
+          "max_batch": 256,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 0.3070245138882588,
+        "decisions": 1099,
+        "requests": 59,
+        "decisions_per_second": 3579.5187364093663,
+        "cpu_busy_fraction": 0.09317076582247101,
+        "cpu_busy_seconds": 0.02860570908524096,
+        "inference_server_and_transfer_busy_fraction": 0.8587874676970579,
+        "padded_batch_counts": {
+          "1": 11,
+          "4": 4,
+          "16": 12,
+          "64": 32
+        },
+        "useful_row_fraction": 0.48478164975738863,
+        "mean_queue_seconds": 0.00024999999999999507,
+        "max_queue_seconds": 0.0002500000000000002,
+        "mean_request_seconds": 0.004718962793271489,
+        "max_request_seconds": 0.005066328973217918,
+        "peak_queued_rows": 37,
+        "peak_queued_requests": 1
+      },
+      "original_predicted_seconds": 0.26476829494733845,
+      "physical_seconds": [
+        0.3607816412113607,
+        0.35144306207075715,
+        0.3581426239106804
+      ],
+      "actual_over_predicted": [
+        1.1750906683062667,
+        1.1446742724871293,
+        1.166495207092897
+      ],
+      "median_actual_over_predicted": 1.166495207092897,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "serve-a1-b1024",
+      "actors": 1,
+      "maximum": 1024,
+      "partition": "excluded_actor",
+      "predicted": {
+        "settings": {
+          "actors": 1,
+          "cpu_workers": 1,
+          "gpus": 1,
+          "max_batch": 1024,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 0.3070245138882588,
+        "decisions": 1099,
+        "requests": 59,
+        "decisions_per_second": 3579.5187364093663,
+        "cpu_busy_fraction": 0.09317076582247101,
+        "cpu_busy_seconds": 0.02860570908524096,
+        "inference_server_and_transfer_busy_fraction": 0.8587874676970579,
+        "padded_batch_counts": {
+          "1": 11,
+          "4": 4,
+          "16": 12,
+          "64": 32
+        },
+        "useful_row_fraction": 0.48478164975738863,
+        "mean_queue_seconds": 0.00024999999999999507,
+        "max_queue_seconds": 0.0002500000000000002,
+        "mean_request_seconds": 0.004718962793271489,
+        "max_request_seconds": 0.005066328973217918,
+        "peak_queued_rows": 37,
+        "peak_queued_requests": 1
+      },
+      "original_predicted_seconds": 0.26476829494733845,
+      "physical_seconds": [
+        0.36281657312065363,
+        0.3572995059657842,
+        0.35189032810740173
+      ],
+      "actual_over_predicted": [
+        1.1817185817699896,
+        1.1637491138437985,
+        1.1461310487913412
+      ],
+      "median_actual_over_predicted": 1.1637491138437985,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "serve-a8-b64",
+      "actors": 8,
+      "maximum": 64,
+      "partition": "repeat0_fit_repeats1_2_check",
+      "predicted": {
+        "settings": {
+          "actors": 8,
+          "cpu_workers": 8,
+          "gpus": 1,
+          "max_batch": 64,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 0.9687481958341284,
+        "decisions": 8792,
+        "requests": 472,
+        "decisions_per_second": 9075.629805359027,
+        "cpu_busy_fraction": 0.02952852888733421,
+        "cpu_busy_seconds": 0.22884567268192768,
+        "inference_server_and_transfer_busy_fraction": 0.9953251091162643,
+        "padded_batch_counts": {
+          "4": 18,
+          "16": 10,
+          "64": 176
+        },
+        "useful_row_fraction": 0.7647877522616562,
+        "mean_queue_seconds": 0.011205167268184298,
+        "max_queue_seconds": 0.033714302812525396,
+        "mean_request_seconds": 0.015865641295710588,
+        "max_request_seconds": 0.038540208846390214,
+        "peak_queued_rows": 259,
+        "peak_queued_requests": 7
+      },
+      "original_predicted_seconds": 0.7850938947866333,
+      "physical_seconds": [
+        1.0818468139041215,
+        1.0825572279281914,
+        1.0622704999987036
+      ],
+      "actual_over_predicted": [
+        1.1167471780142113,
+        1.1174805099854346,
+        1.0965393324774648
+      ],
+      "median_actual_over_predicted": 1.1167471780142113,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "serve-a8-b256",
+      "actors": 8,
+      "maximum": 256,
+      "partition": "repeat0_fit_repeats1_2_check",
+      "predicted": {
+        "settings": {
+          "actors": 8,
+          "cpu_workers": 8,
+          "gpus": 1,
+          "max_batch": 256,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 0.6843562923488273,
+        "decisions": 8792,
+        "requests": 472,
+        "decisions_per_second": 12847.109171487791,
+        "cpu_busy_fraction": 0.0417994389838388,
+        "cpu_busy_seconds": 0.22884567268192768,
+        "inference_server_and_transfer_busy_fraction": 0.9933824059777446,
+        "padded_batch_counts": {
+          "4": 12,
+          "16": 19,
+          "64": 44,
+          "256": 43
+        },
+        "useful_row_fraction": 0.6202031602708804,
+        "mean_queue_seconds": 0.004737197959454543,
+        "max_queue_seconds": 0.011895859542206955,
+        "mean_request_seconds": 0.011062744693811168,
+        "max_request_seconds": 0.01976558189078878,
+        "peak_queued_rows": 264,
+        "peak_queued_requests": 8
+      },
+      "original_predicted_seconds": 0.5042361612696473,
+      "physical_seconds": [
+        0.9340971589554101,
+        0.7690005949698389,
+        0.7446459729690105
+      ],
+      "actual_over_predicted": [
+        1.3649281367011759,
+        1.1236845537439246,
+        1.0880969186580556
+      ],
+      "median_actual_over_predicted": 1.1236845537439246,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "serve-a8-b1024",
+      "actors": 8,
+      "maximum": 1024,
+      "partition": "repeat0_fit_repeats1_2_check",
+      "predicted": {
+        "settings": {
+          "actors": 8,
+          "cpu_workers": 8,
+          "gpus": 1,
+          "max_batch": 1024,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 0.5583463183161241,
+        "decisions": 8792,
+        "requests": 472,
+        "decisions_per_second": 15746.499460254614,
+        "cpu_busy_fraction": 0.05123291431653177,
+        "cpu_busy_seconds": 0.22884567268192768,
+        "inference_server_and_transfer_busy_fraction": 0.9223497896144571,
+        "padded_batch_counts": {
+          "16": 12,
+          "64": 7,
+          "256": 31,
+          "1024": 9
+        },
+        "useful_row_fraction": 0.4941546762589928,
+        "mean_queue_seconds": 0.0002499999999999809,
+        "max_queue_seconds": 0.0002500000000000002,
+        "mean_request_seconds": 0.00897865439374367,
+        "max_request_seconds": 0.020814373155691082,
+        "peak_queued_rows": 296,
+        "peak_queued_requests": 8
+      },
+      "original_predicted_seconds": 0.36365153871566946,
+      "physical_seconds": [
+        0.5990350239444524,
+        0.5922419831622392,
+        0.5915914059150964
+      ],
+      "actual_over_predicted": [
+        1.0728735988643006,
+        1.060707241606497,
+        1.0595420557249016
+      ],
+      "median_actual_over_predicted": 1.060707241606497,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "name": "serve-a64-b64",
+      "actors": 64,
+      "maximum": 64,
+      "partition": "excluded_actor",
+      "predicted": {
+        "settings": {
+          "actors": 64,
+          "cpu_workers": 8,
+          "gpus": 1,
+          "max_batch": 64,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 6.8926463523811,
+        "decisions": 70336,
+        "requests": 3776,
+        "decisions_per_second": 10204.498592286265,
+        "cpu_busy_fraction": 0.033201423804787515,
+        "cpu_busy_seconds": 1.8307653814554214,
+        "inference_server_and_transfer_busy_fraction": 0.996795812798689,
+        "padded_batch_counts": {
+          "1": 1,
+          "64": 1421
+        },
+        "useful_row_fraction": 0.7733905107482545,
+        "mean_queue_seconds": 0.1109300393428096,
+        "max_queue_seconds": 0.3026002252905493,
+        "mean_request_seconds": 0.11583113680557242,
+        "max_request_seconds": 0.307426131324414,
+        "peak_queued_rows": 2331,
+        "peak_queued_requests": 63
+      },
+      "original_predicted_seconds": 5.506932956375717,
+      "physical_seconds": [
+        7.579338503070176,
+        7.586508743930608,
+        7.6145590539090335
+      ],
+      "actual_over_predicted": [
+        1.099626778392867,
+        1.1006670524028568,
+        1.104736651878062
+      ],
+      "median_actual_over_predicted": 1.1006670524028568,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        55,
+        55,
+        55
+      ]
+    },
+    {
+      "name": "serve-a64-b256",
+      "actors": 64,
+      "maximum": 256,
+      "partition": "excluded_actor",
+      "predicted": {
+        "settings": {
+          "actors": 64,
+          "cpu_workers": 8,
+          "gpus": 1,
+          "max_batch": 256,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 2.4649748643679703,
+        "decisions": 70336,
+        "requests": 3776,
+        "decisions_per_second": 28534.16520254637,
+        "cpu_busy_fraction": 0.09283894776777152,
+        "cpu_busy_seconds": 1.8307653814554214,
+        "inference_server_and_transfer_busy_fraction": 0.9971994366086352,
+        "padded_batch_counts": {
+          "1": 2,
+          "4": 2,
+          "16": 2,
+          "64": 17,
+          "256": 295
+        },
+        "useful_row_fraction": 0.9176255707762557,
+        "mean_queue_seconds": 0.03311943907496945,
+        "max_queue_seconds": 0.07095301077794192,
+        "mean_request_seconds": 0.04069608790508365,
+        "max_request_seconds": 0.07887607066272195,
+        "peak_queued_rows": 2084,
+        "peak_queued_requests": 58
+      },
+      "original_predicted_seconds": 1.591731212167717,
+      "physical_seconds": [
+        2.3971120109781623,
+        2.48277434008196,
+        2.5716191329993308
+      ],
+      "actual_over_predicted": [
+        0.972469149941126,
+        1.0072209562747625,
+        1.043263836144108
+      ],
+      "median_actual_over_predicted": 1.0072209562747625,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        111,
+        111,
+        111
+      ]
+    },
+    {
+      "name": "serve-a64-b1024",
+      "actors": 64,
+      "maximum": 1024,
+      "partition": "excluded_actor",
+      "predicted": {
+        "settings": {
+          "actors": 64,
+          "cpu_workers": 8,
+          "gpus": 1,
+          "max_batch": 1024,
+          "wait_seconds": 0.00025,
+          "host_speed": 1.0,
+          "actor_phase": "aligned",
+          "transfer_gb_per_second": 12.0,
+          "transfer_latency_seconds": 2e-05,
+          "optimizer_observations_per_decision": 0.0
+        },
+        "seconds": 1.967242762619208,
+        "decisions": 70336,
+        "requests": 3776,
+        "decisions_per_second": 35753.59449097879,
+        "cpu_busy_fraction": 0.11632813043228082,
+        "cpu_busy_seconds": 1.8307653814554214,
+        "inference_server_and_transfer_busy_fraction": 0.9924266473044133,
+        "padded_batch_counts": {
+          "1": 1,
+          "4": 2,
+          "16": 1,
+          "64": 19,
+          "256": 19,
+          "1024": 81
+        },
+        "useful_row_fraction": 0.7898572695931454,
+        "mean_queue_seconds": 0.015648217427859788,
+        "max_queue_seconds": 0.041007300067517204,
+        "mean_request_seconds": 0.03179136913299633,
+        "max_request_seconds": 0.061791945618087055,
+        "peak_queued_rows": 1584,
+        "peak_queued_requests": 48
+      },
+      "original_predicted_seconds": 1.0407335718782291,
+      "physical_seconds": [
+        1.9769057580269873,
+        2.2752665341831744,
+        1.7768895600456744
+      ],
+      "actual_over_predicted": [
+        1.0049119486376525,
+        1.1565763907825286,
+        0.9032385803162924
+      ],
+      "median_actual_over_predicted": 1.0049119486376525,
+      "median_within_20_percent": true,
+      "batches_outside_calibration_request_range": [
+        120,
+        120,
+        120
+      ]
+    }
+  ],
+  "rankings": [
+    {
+      "actors": 1,
+      "predicted_best": [
+        64,
+        256,
+        1024
+      ],
+      "actual_best": 1024,
+      "preserved": true
+    },
+    {
+      "actors": 8,
+      "predicted_best": [
+        1024
+      ],
+      "actual_best": 1024,
+      "preserved": true
+    },
+    {
+      "actors": 64,
+      "predicted_best": [
+        1024
+      ],
+      "actual_best": 1024,
+      "preserved": true
+    }
+  ],
+  "limits": [
+    "Retrospective excluded-data checks; aggregate evaluation times were seen before partition selection.",
+    "Same machine, driver, fixed inputs and finite stationary traffic; no network, actual host compute, learning or distributed validation.",
+    "Request counts beyond calibration range are extrapolation, reported per case; no forward batch-size interpolation.",
+    "Timer release and manager delivery delays remain omitted."
+  ]
+}

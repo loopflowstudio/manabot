@@ -1,0 +1,23 @@
+{
+  "copy_events": 4955,
+  "kernel_events": 68114,
+  "trace_sha256": "a7e991701a8bc846d9000b8970f16c35a093c6ee9e8a21956e7c79b917dfa613",
+  "windows": [
+    {
+      "device_busy_seconds": 0.20756243725585938,
+      "seconds": 1.3895882050000001
+    },
+    {
+      "device_busy_seconds": 0.20756243725585938,
+      "seconds": 1.35882413
+    },
+    {
+      "device_busy_seconds": 0.20607591430664063,
+      "seconds": 1.215338611
+    },
+    {
+      "device_busy_seconds": 0.206960232421875,
+      "seconds": 1.216786286
+    }
+  ]
+}

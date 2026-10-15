@@ -1,0 +1,36 @@
+"""Summarize preregistered paired staging gains and retain exact parity gates."""
+import hashlib
+import json
+from pathlib import Path
+from statistics import median
+import shutil
+
+root=Path('.runs/gpu-validation/result-008');evidence=root/'evidence';private=Path('.runs/gpu-validation')
+ledger=json.loads((private/'budget.json').read_text());allocation=next(a for a in ledger['allocations'] if a['name']=='h100-validation-008');assert allocation['status']=='terminal-deletion-confirmed'
+attempts=json.loads((evidence/'attempts.json').read_text());by_name={a['name']:a for a in attempts};cells=[]
+for actors in (16,128):
+    for maximum in (256,1024):
+        name=f'staging-a{actors}-b{maximum}';attempt=by_name.get(name);row={'name':name,'actors':actors,'max_batch':maximum,'status':attempt['status'] if attempt else 'not_attempted'}
+        if row['status']=='completed':
+            record=json.loads((evidence/name/'result.json').read_text());witness=json.loads((evidence/name/'fixed-witnesses.json').read_text());assert witness['storage_identity_passed'] and witness['oversize_rejected'] and all(c['exact'] for c in witness['fixed_batches'])
+            groups={variant:[t for t in record['trials'] if t['variant']==variant] for variant in ('reference','staged')};assert all(len(v)==2 for v in groups.values())
+            variants={}
+            for variant,trials in groups.items():
+                for t in trials:
+                    outcome=t['outcome'];assert outcome['requests']==actors*59 and outcome['decisions']==actors*1099
+                    assert abs(sum(outcome['service_phase_seconds'].values())-outcome['service_seconds'])<1e-8
+                variants[variant]={'seconds':[t['outcome']['seconds'] for t in trials],'median_seconds':median(t['outcome']['seconds'] for t in trials),'phase_samples':[t['outcome']['service_phase_seconds'] for t in trials],'phase_medians':{phase:median(t['outcome']['service_phase_seconds'][phase] for t in trials) for phase in ('prepare','h2d','forward','d2h','validate')},'batch_counts':[t['outcome']['padded_batch_counts'] for t in trials],'output_hash_differences':[t['output_hash_differences_vs_first_reference'] for t in trials],'maximum_delivery_seconds':[t['outcome']['max_delivery_seconds'] for t in trials]}
+            speedup=variants['reference']['median_seconds']/variants['staged']['median_seconds'];assert speedup==record['median_speedup']
+            row.update(order=record['order'],fixed_batch_witnesses=len(witness['fixed_batches']),variants=variants,speedup=speedup,target=('>=1.15x speedup' if actors==128 else '<=5% duration regression'),target_passed=(speedup>=1.15 if actors==128 else 1/speedup<=1.05),persistent_pinned_bytes=record['persistent_pinned_bytes'],persistent_device_bytes=record['persistent_device_bytes'],allocation_seconds=record['allocation_seconds'],peak_allocated_with_both_backends=max(t['coexisting_backends_peak_allocated_bytes'] for t in record['trials']))
+        cells.append(row)
+summary={'run':allocation['run_id'],'source':allocation['source'],**json.loads((root/'verification.json').read_text()),'analysis_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cells':cells,'limits':['Combined CPU index_select, buffer reuse and pinned/asynchronous-copy intervention; this experiment does not identify individual component effects.','Fixed-batch input/output parity is exact; live batching may differ, so output hash differences remain explicit and no trajectory/optimizer-equivalence claim follows.','Virtual host work and one-worker service, without actual games, learning, IPC, network or multi-GPU execution.','Allocation is separate from warm live timing; peak GPU footprint includes both backends coexisting.','Two observations per variant/case, ordered ABBA/BAAB; no population confidence interval or training-speed claim.']}
+(root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+for c in cells:print(c['name'],c['status'],c.get('speedup'),c.get('target_passed'))
+destination=Path('scratch/gpu-probes/staging-008');staging=destination.with_name('.staging-008-staging');assert not destination.exists() and not staging.exists();staging.mkdir()
+for p in evidence.rglob('*'):
+    if p.is_file() and p.suffix in {'.json','.log'}:
+        target=staging/'evidence'/p.relative_to(evidence);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target)
+for name in ('summary.json','verification.json'):shutil.copy2(root/name,staging/name)
+for name in ('eighth-cleanup.json','monitor-cleanup-008.json','rental-costs-008.json','source-copy.json','job-008.json','launch-008.json','preflight-008.json','eighth-pod.json','prepared-source.json','budget.json'):
+    shutil.copy2(private/name,staging/name)
+shutil.copy2(__file__,staging/'analysis.source.txt');shutil.copy2('scratch/staging-validation-protocol.txt',staging/'protocol.txt');shutil.copy2(private/'observed-008.log',staging/'observed.log');staging.rename(destination)

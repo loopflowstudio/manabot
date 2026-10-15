@@ -1,0 +1,39 @@
+{
+  "seconds": 0.02579887502361089,
+  "workers": [
+    {
+      "worker": 1,
+      "stage": "release",
+      "seconds": 7.042079232633114e-06,
+      "user_seconds": 3.999999999892978e-06,
+      "system_seconds": 1.0000000000287557e-06,
+      "rss_bytes": 276627456
+    },
+    {
+      "worker": 3,
+      "stage": "release",
+      "seconds": 6.791902706027031e-06,
+      "user_seconds": 2.9999999999752447e-06,
+      "system_seconds": 2.000000000002e-06,
+      "rss_bytes": 276152320
+    },
+    {
+      "worker": 2,
+      "stage": "release",
+      "seconds": 6.541959010064602e-06,
+      "user_seconds": 2.9999999999752447e-06,
+      "system_seconds": 9.999999999732445e-07,
+      "rss_bytes": 275365888
+    },
+    {
+      "worker": 0,
+      "stage": "release",
+      "seconds": 0.02548629092052579,
+      "user_seconds": 0.015468999999999511,
+      "system_seconds": 0.010003999999999957,
+      "rss_bytes": 1530036224
+    }
+  ],
+  "requests": 0,
+  "service_seconds": 0.0
+}

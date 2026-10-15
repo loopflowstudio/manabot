@@ -1,0 +1,39 @@
+"""One launch and its continuous bounded-rental monitor; never automatic resubmit."""
+from datetime import UTC, datetime
+from decimal import Decimal
+import json
+import os
+from pathlib import Path
+import time
+
+from cli import configure, use_prepared_source
+
+configure()
+use_prepared_source()
+from etude.launch.client import default
+from etude.launch.cli import read_job_file
+from etude.launch.providers.runpod.api import RunPodAPI
+
+root=Path(__file__).parent
+receipt=json.loads((root/'prepared-source.json').read_text())
+assert receipt['commit']=='f8ab80e3399df4ba003242451f3fb88e9ef7f8b7' and receipt['status']=='verified'
+s=default();assert not s.runs(done=True,cohort='h100-validation-011')
+runs=read_job_file(Path('scratch/gpu-validation-job.py'))
+assert len(runs)==1 and json.loads(runs[0].job.config)['source']['commit']==receipt['commit']
+assert runs[0].job.max_hours==0.5 and runs[0].job.max_usd==Decimal('3') and runs[0].job.max_attempts==1
+(root/'job-011.json').write_text(runs[0].job.model_dump_json(indent=2)+'\n')
+ids=s.launch_cohort('h100-validation-011',runs,pool='h100-validation',parallel=1,max_usd=Decimal('4'))
+assert len(ids)==1
+(root/'launch-011.json').write_text(json.dumps({'run_id':ids[0],'source':receipt['commit'],'created_at':datetime.now(UTC).isoformat(),'monitor':'continuous scheduler wait under caffeinate -i'},indent=2)+'\n')
+print('LAUNCHED',ids[0],flush=True)
+result=s.wait(*ids,every=2)[0]
+print(result.model_dump_json(),flush=True)
+api=RunPodAPI(os.environ['RUNPOD_API_KEY'])
+while True:
+    status=s.status(ids[0])
+    machine=next(m for m in s.machines('h100-validation',rented=True) if m.name==status.machine)
+    if machine.deleted_at is not None and machine.provider_id is not None and api.pod(machine.provider_id) is None:
+        (root/'monitor-cleanup-011.json').write_text(json.dumps({'run_id':ids[0],'pod_id':machine.provider_id,'deleted_at':machine.deleted_at.isoformat(),'confirmed_absent_at':datetime.now(UTC).isoformat()},indent=2)+'\n')
+        print('PROVIDER DELETION CONFIRMED',machine.provider_id,flush=True)
+        break
+    time.sleep(2)

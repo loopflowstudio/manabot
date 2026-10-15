@@ -1,0 +1,117 @@
+# Laptop benchmark for accelerator-scale decisions
+
+Jack Heart's active goal is a laptop benchmark representing high-scale GPU
+conditions, followed by continued optimization. Initial research-only findings
+remain in cpu-findings.md. GPU validation now has a separate authorized $50
+inclusive budget; see [gpu-validation.md](gpu-validation.md). Earlier no-paid
+limits do not override that authorization. No publication/merge or interference
+with other experiments is implied; source publication needed by the launcher is
+part of the bounded GPU run.
+
+## Existing instruments and evidence
+
+Draft instrument: `experiments/runners/pipeline_benchmark.py` captures real frozen
+policy outputs, replays the actual collector with those outputs, and requires
+exact input/rollout/journal/final-buffer/reset-seed parity. Source changes are
+recorded so the same workload can check optimizations. `manabot/infra/accelerator_model.py`
+combines measured host demand with historical named CUDA service points. Six
+focused tests passed; this is not a whole-repo type-safety claim.
+
+The seed10831, 64-stream x64-transition pilot retained 8,888 decisions, 4,096
+learner transitions and 31 games without truncation. Three replay timings were
+0.27728/0.27434/0.27355 seconds (32,054–32,491 decisions/s); native stepping was
+51.5–51.8%. Its 491 policy calls averaged 18.10 rows, maximum43; 28.3% had <=4
+rows. Retained rollout/buffer arrays total151,443,136bytes. At4096 actors that
+alone is577.7GiB, excluding native games/pending objects/staging/models.
+
+`scratch/accelerator-queue-probe.py` models finite actors/CPUs/GPUs, FIFO batching,
+partial-batch padding to retained measured CUDA sizes, and timeouts. It completed
+51 scenarios and eight final closed-form/conservation cases. It is research code,
+not the production serving path. Results in `accelerator-probes/queue-*.json`.
+
+Historical queue results and the original batching reversal remain in the raw
+queue reports and archived design. Current L4 calibration is summarized below.
+
+## Proof limits and next discriminating work
+
+CPU replay normalizes/samples on CPU; production CUDA does that work on GPU.
+The simulated coalesced H2D/D2H boundary differs from current per-key transfers
+and multiple `.cpu()` returns. Host request costs are proportional averages,
+not yet measured per-request timings. Phase rotations reuse one untrained
+trace; they are not independent seeds. Learning reserve uses diagnostic Adam,
+not an actual learner queue or policy-lag model. Finite traces include startup
+and drain. Historical CUDA kernels use float32/TF32off and203 attention slots;
+matching current hardware/source calibration remains necessary.
+
+Next: actual GPU service and whole-collector calibration, independent seeds,
+per-request host timing, learner/backpressure and policy-age accounting. Every
+optimization must preserve replay semantics and improve relevant throughput,
+latency or memory across these cases. No production speedup is established.
+
+## Local limits and durable records
+
+Local accelerator slice:300 aggregate measurement seconds,180 focused-test
+seconds,90 per command, one Torch/BLAS thread, one measured child and6GiB RSS
+sample guard. Capture <=64streams x64transitions,3 timed repeats. The first
+pilot used13.353 command seconds; queue work36.540 more. No updates locally in
+this slice. The older wrapper independently caps probe work at240 seconds;
+137.411 used as of GPU preparation. Its setup600-second cap is separate.
+GPU limits are separately declared in gpu-validation.md.
+
+Full pilot design, exact commands, detailed tables and scheduling analysis are
+preserved byte-for-byte in
+`accelerator-probes/2f03d257d2aa5c5b2cdc66f27bb1143ab21ec6f8877a4d673b96f4c0830c0b90.notes.txt`.
+Raw artifacts and source snapshots are indexed by accelerator-probes/artifact-manifest.json;
+wrapper receipts/logs are under cpu-probes/accelerator-*. Historical negative
+results are not overwritten. The preceding goal turns made progress through
+verified replay and a scheduling contradiction; the goal remains active.
+
+## Current L4 calibration and reproduction
+
+Use `gpu-probes/l4-002/capacity-report.json` for the measured202slot model;
+keep historical203slot reports separate. `accelerator-queue-probe.py --hardware`
+accepts either explicit source. Six aligned and six rotated recalibrated cases
+passed conservation checks in31.163commandseconds. At4096actors/64virtualGPUs,
+batch256/1024 yielded1.436M/1.273M decisions/s aligned,1.473M/1.630M rotated.
+The reversal survives actual-device calibration. These remain simulations with
+the CPU/serving/phase limitations above, not a measured64GPU result.
+
+Example bounded reproduction, always with fresh output directories:
+
+```bash
+uv run --no-sync python -m experiments.runners.pipeline_benchmark capture --recipe scratch/cpu-probes/update-recipe.json --streams 64 --transitions 64 --out scratch/accelerator-probes/capture-new
+uv run --no-sync python -m experiments.runners.pipeline_benchmark replay --tape scratch/accelerator-probes/capture-new/tape.json --out scratch/accelerator-probes/replay-new
+uv run --no-sync python scratch/accelerator-queue-probe.py phase --hardware scratch/gpu-probes/l4-002/capacity-report.json --out scratch/accelerator-probes/queue-new.json
+```
+
+Queue modes currently use the retained capture-s64/replay-s64 workload; a fresh
+capture/replay is a separate parity/host-demand check, not silently substituted.
+Use baseline/candidate paired replays for host changes, refresh service curves
+for GPU changes, then require actual collection/training validation before
+claiming a system improvement. Preserve all negative cells and budget receipts.
+
+
+The bounded physical L4 comparison now validates one optimization direction:
+collection-scoped catalog reuse gave median1.49x/1.25x collection speed at64/256
+streams with exact trajectory parity. See gpu-validation.md for the small Adam
+state discrepancy, actual learning counters, driver/variance limits and complete
+cost accounting. This remains a research prototype; no production change or
+playing-strength improvement is claimed. Local wrapper probe usage is171.420s
+of240; the accelerator-specific slice includes the additional2.846s CPU smoke
+and31.163s calibrated queue cases, still within its300s aggregate allowance.
+
+
+## Per-request timing refinement (before measurement)
+
+Replace proportional mean host demand with measured intervals preceding each
+policy request, plus the final host tail after the last response. Their sum must
+reconstruct measured collection wall time; queue simulation must conserve this
+CPU work across all actors and include final assembly before completion. Keep
+proportional demand as a selectable control. Paired fresh replay attempts will
+measure clock overhead with the same exact semantic gates. No CPU/GPU equivalence
+is inferred: normalization/sampling remains CPU work here. Four virtual4096actor/
+64GPU cases cross aligned/rotated phases with256/1024batches, using current L4
+service, comparing measured intervals against proportional timing. Predict the
+batch-ranking reversal survives; retain any contradiction. Use the remaining
+existing local caps (240s wrapper/300s accelerator), max60s per command, one
+thread and6GiB guard. No rental or training is needed for this refinement.

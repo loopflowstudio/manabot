@@ -1,0 +1,87 @@
+"""Bound commands using existing instruments; retain logs and sampled tree RSS."""
+
+import argparse
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import time
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("name")
+    parser.add_argument("--phase", choices=("setup", "probe"), required=True)
+    parser.add_argument("--seconds", type=float, required=True)
+    parser.add_argument("command", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    command: list[str] = args.command
+    if command and command[0] == "--":
+        command = command[1:]
+    root = Path("scratch/cpu-probes")
+    root.mkdir(exist_ok=True)
+    used = sum(
+        item["elapsed_seconds"]
+        for path in root.glob("*.receipt.json")
+        if (item := json.loads(path.read_text()))["phase"] == args.phase
+    )
+    cap = 600 if args.phase == "setup" else 240
+    remaining = min(args.seconds, cap - used, 600 if args.phase == "setup" else 90)
+    if remaining <= 0:
+        raise SystemExit("Declared phase cap exhausted")
+    receipt: dict[str, object] = {
+        "phase": args.phase, "command": command,
+        "started_utc": datetime.now(timezone.utc).isoformat(),
+        "limit_seconds": remaining, "load_start": os.getloadavg(),
+    }
+    samples: list[dict[str, float | int]] = []
+    start = time.monotonic()
+    env = dict(os.environ, OMP_NUM_THREADS="1", MKL_NUM_THREADS="1",
+               OPENBLAS_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1",
+               WANDB_MODE="disabled", CARGO_BUILD_JOBS="2")
+    with (root / f"{args.name}.stdout.log").open("wb") as stdout, (
+        root / f"{args.name}.stderr.log"
+    ).open("wb") as stderr:
+        process = subprocess.Popen(command, stdout=stdout, stderr=stderr,
+                                   env=env, start_new_session=True)
+        status = "completed"
+        while process.poll() is None:
+            rows = subprocess.check_output(["ps", "-axo", "pid=,ppid=,rss="], text=True)
+            processes = [tuple(map(int, row.split())) for row in rows.splitlines()]
+            descendants = {process.pid}
+            while True:
+                expanded = descendants | {pid for pid, parent, _ in processes if parent in descendants}
+                if expanded == descendants:
+                    break
+                descendants = expanded
+            rss = sum(kib * 1024 for pid, _, kib in processes if pid in descendants)
+            elapsed = time.monotonic() - start
+            samples.append({"seconds": elapsed, "rss_bytes": rss})
+            if elapsed >= remaining or rss > 6 * 1024**3:
+                status = "timeout" if elapsed >= remaining else "memory_guard"
+                # Also covers children that create their own session (existing supervisor).
+                for pid in sorted(descendants, reverse=True):
+                    try:
+                        os.kill(pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                break
+            time.sleep(0.2)
+        code = process.wait()
+    receipt.update(status=status if code == 0 or status != "completed" else "failed",
+                   exit_code=code, elapsed_seconds=time.monotonic() - start,
+                   load_end=os.getloadavg(), rss_samples=samples,
+                   sampled_tree_peak_bytes=max((s["rss_bytes"] for s in samples), default=0))
+    (root / f"{args.name}.receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    print(json.dumps({key: value for key, value in receipt.items() if key != "rss_samples"}))
+    raise SystemExit(code if status == "completed" else 124)
+
+
+if __name__ == "__main__":
+    main()

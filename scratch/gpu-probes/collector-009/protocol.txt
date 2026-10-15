@@ -1,0 +1,51 @@
+Ordinary collector staging — prospective protocol, 2026-10-15
+
+Prior run008 established paired serving gains1.23–1.42x at128actors, with exact
+fixed and live witnesses. Virtual host delays and Torch CPU pools do not prove
+ordinary NumPy collector gains. This experiment keeps actual rules, seat routing,
+sampling, pending transitions and rollout assembly through SeatRoutedCollector.
+No production code, learning rule, catalog cache, precision or GPU rules changes.
+
+One H10080GB HBM3 at<=4.10/hour, maxoneattempt, job30min/$3, cohort$4. All eight
+prior pods must be absent. $50 total, recorded conservative charges$3.32 plus$5
+ancillary reserve leave$41.68. Reserve$4 before launch. Setup900s, total measured
+children600s, eachchild90s, eachcollect25s. No retries or relaxed parity/timing gates.
+Freeze source before renting, preserve every failure, continuously monitor under
+process-scoped caffeinate and confirm provider deletion. Whole-rental billing owns
+budget, including setup/idle time. Upload/admission happens before GPU allocation.
+
+Research-only collector adapter replaces _slice_obs_tensors for one collector
+instance. Index current native NumPy-backed CPU tensors into reusable pinned host
+buffers; preserve the special action_focus float32 conversion via a separate pinned
+float32 buffer; copy to reusable device tensors. Synchronize before reusing storage,
+then enqueue copies and normal forward on the same CUDA stream. Native arrays are
+never changed by gathering. No immutable observations or model outputs cached.
+Returned tensors are transient until the next slice, used only by this collector.
+The ordinary pending observation copies and learner batches remain independent.
+
+Six cells: streams64/512/4096 × seeds10349/10350;8learnersteps percollection.
+ABBA order for odd seed, BAAB for even; fresh equal-seed collector eachsample,
+one common fixed untrained policy percell. Two warmup learnersteps/backend outside
+timing. Allocation and construction outside warm collection timing, reported
+separately; also report allocation+collection as startup-inclusive sensitivity.
+Two observations/backend/cell; retain both, no strongest/fastest selection.
+
+Before timing, compare every field/dtype to original helper for full, singleton,
+ragged and reversed row selections, repeated at different sizes. Exact CUDA field
+values, float32 action_focus, pinned pointers and device pointers; invalid indices
+rejected before writing. Every sample must match complete rollout arrays, final
+native buffers, action journal, reset seeds and sampling RNG. Verify no returned
+rollout array aliases staging/native storage. Store the complete sample receipt
+before raising any mismatch; do not add a numerical tolerance. If a parity gate
+fails, stop that cell, retain failure and partial results, continue other cells.
+
+Hypothesis: at512 and4096streams, >=1.10x median collection gain for both seeds;
+no64stream cell >5% duration regression. Record cell/seed heterogeneity and games.
+A failed speed target is a result, not grounds to retune cases. Three-update ordinary
+training is the next boundary only if collection semantics pass; no training gain
+is claimed here. Laptop models remain run007 reference costs until separately
+validated staged calibration, never a pooled speed multiplier.
+
+No local ML/collector execution in this turn. Local syntax/lint/source inspection
+only; the existing20second calibration slice has.410196seconds left and is not
+extended. All new model/collector execution stays inside this paid GPU protocol.

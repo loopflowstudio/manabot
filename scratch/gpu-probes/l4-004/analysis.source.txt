@@ -1,0 +1,57 @@
+"""Derive fourth-run observations from the verified immutable artifact archive."""
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import shutil
+import sys
+
+root = Path('.runs/gpu-validation/result-004')
+evidence = root / 'evidence'
+spec = importlib.util.spec_from_file_location('comparison', 'scratch/compare-training-states.py')
+assert spec is not None and spec.loader is not None
+comparison = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = comparison
+spec.loader.exec_module(comparison)
+rows: list[dict[str, object]] = []
+for p in sorted(evidence.glob('shape*/**/run.json')):
+    run = json.loads(p.read_text())
+    stage = run['stages'][0]
+    cell = p.parent.parent
+    phases = json.loads((cell / 'phase-timings.json').read_text())
+    result = json.loads((cell / 'result.json').read_text()) if (cell / 'result.json').exists() else None
+    row = {k: stage[k] for k in ('collection_seconds', 'learning_seconds', 'learner_transitions', 'environment_decisions', 'games', 'optimizer_exposures', 'optimizer_updates', 'sampled_peak_rss_bytes')}
+    row.update(name=p.parts[-4], status=run['status'], error=run['error'], run_id=run['id'], run_seconds=run['seconds'], shape=phases['shape'], phases=phases['phases'], gpu_memory=result)
+    row['completed_update_iterations'] = len(stage['diagnostics'])
+    row['nonfinite_count'] = sum(d['numerical']['nonfinite_count'] for d in stage['diagnostics'])
+    row['skipped_steps'] = sum(d['numerical']['skipped_steps'] for d in stage['diagnostics'])
+    row['rows_per_complete_learning_second'] = stage['learner_transitions'] / stage['learning_seconds'] if stage['learning_seconds'] else None
+    row['changed_raw_state_tensors'] = len(comparison.compare(comparison.state(p.parent/'policy-0-initial-raw.pt', 'initial-raw'), comparison.state(p.parent/'policy-0-raw.pt', 'raw'))) if run['status'] == 'completed' else None
+    rows.append(row)
+verification = json.loads((root/'verification.json').read_text())
+by_name = {str(r['name']): r for r in rows}
+ref64 = by_name['shape-t8-s64-reference-a']
+ref512 = by_name['shape-t8-s512-reference-a']
+summary = {'run':'1f97b066ed87', 'source':'d056d09218d3be3c234b40c9eafa70ad736f5c81', **verification, 'analysis_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(), 'cells':rows, 'reference_512_vs_64_learning_rows_per_second_ratio':ref512['rows_per_complete_learning_second']/ref64['rows_per_complete_learning_second'], 'limits':['Three update iterations, untrained initial policy; no strength or steady-state training claim.', 'Run and stage failure retain partial completed updates but exclude incomplete whole-loop capacity.', 'Synchronized update_iteration excludes EMA; learning_seconds includes it.', '4096-stream GPU memory result absent after timeout; absence is not zero memory or proof of OOM.', 'Only one ordered reference/cache pair at512streams; collection slowdown does not isolate cache causality.', 'Reference/reference Adam discrepancy rules out cache as a necessary condition for non-exact optimizer moments; it does not identify the kernel or establish all future equivalence.']}
+(root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+print('Reference learning rate ratio:',summary['reference_512_vs_64_learning_rows_per_second_ratio'])
+for r in rows:
+ print(r['name'],r['run_seconds'],r['rows_per_complete_learning_second'],r['changed_raw_state_tensors'],r['sampled_peak_rss_bytes'])
+# Publish complete portable small evidence atomically. Large tensors/SQLite remain in archive.
+destination = Path('scratch/gpu-probes/l4-004')
+staging = destination.with_name('.l4-004-staging')
+assert not destination.exists() and not staging.exists()
+staging.mkdir()
+for p in evidence.rglob('*'):
+ if p.is_file() and p.suffix in {'.json','.log'}:
+  target = staging/'evidence'/p.relative_to(evidence)
+  target.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(p,target)
+for name in ('verification.json','summary.json','tensor-comparison.json'):
+ shutil.copy2(root/name,staging/name)
+for name in ('fourth-cleanup.json','rental-costs-004.json','source-copy.json','source-preparation-004-failure.json','job-004.json','preflight-004.json','fourth-pod.json','prepared-source.json'):
+ shutil.copy2(Path('.runs/gpu-validation')/name,staging/name)
+shutil.copy2(__file__,staging/'analysis.source.txt')
+shutil.copy2('scratch/compare-training-states.py',staging/'comparison.source.txt')
+shutil.copy2('scratch/gpu-scale-protocol.txt',staging/'protocol.txt')
+shutil.copy2('.runs/gpu-validation/observed-004.log',staging/'observed.log')
+staging.rename(destination)

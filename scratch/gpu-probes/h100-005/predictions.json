@@ -1,0 +1,24 @@
+{
+  "same_inputs_and_model_contract_verified_cells": 8,
+  "predictions": [
+    {
+      "cell": "w64-d1-model-b1-s0",
+      "prediction": "less than2x",
+      "inference_ratio": 0.8784592447534585,
+      "supported": true
+    },
+    {
+      "cell": "w64-d1-model-b1024-s0",
+      "prediction": "at least2x",
+      "inference_ratio": 4.999072640121351,
+      "supported": true
+    },
+    {
+      "cell": "w384-d8-model-b256-s0",
+      "prediction": "at least2x",
+      "inference_ratio": 5.488755170164679,
+      "supported": true
+    }
+  ],
+  "limits": "Different host/GPU/driver; identical inputs do not isolate chip-only causality."
+}

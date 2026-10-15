@@ -1,0 +1,29 @@
+fatal: not a git repository (or any of the parent directories): .git
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/experiments/runners/cuda_performance.py", line 363, in <module>
+    main()
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/experiments/runners/cuda_performance.py", line 357, in main
+    child(args.root, Cell.model_validate_json(args.cell))
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/experiments/runners/cuda_performance.py", line 266, in child
+    run = execute_regime(recipe, 10349, out / "run", store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/manabot/training/execution.py", line 259, in execute_regime
+    return _execute_regime(
+           ^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/manabot/training/execution.py", line 543, in _execute_regime
+    identities = _runtime_identities(seed, regime, space)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/manabot/training/execution.py", line 144, in _runtime_identities
+    source_commit=source_commit(),
+                  ^^^^^^^^^^^^^^^
+  File "/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src/manabot/training/source_bundle.py", line 37, in source_commit
+    return subprocess.check_output(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', '-C', '/run/etude/sessions/de4b7799f228/attempts/f2c2a1f34ab6/src', 'rev-parse', 'HEAD']' returned non-zero exit status 128.

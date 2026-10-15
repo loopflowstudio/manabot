@@ -1,0 +1,455 @@
+{
+  "run": "1f97b066ed87",
+  "source": "d056d09218d3be3c234b40c9eafa70ad736f5c81",
+  "verified_files": 91,
+  "archive_bytes": 16801494,
+  "archive_sha256": "a17b8f2dcb250ba4e58b1ff559fc89dabcdca65c91ef849cdfe1646c3be4ff86",
+  "analysis_sha256": "120bf5ab93f6fbe6ca970adf45e486dd038b603c128f354010216a6ede6188cd",
+  "cells": [
+    {
+      "collection_seconds": 49.55296037346125,
+      "learning_seconds": 4.451050989329815,
+      "learner_transitions": 65536,
+      "environment_decisions": 139107,
+      "games": 21,
+      "optimizer_exposures": 16384,
+      "optimizer_updates": 16,
+      "sampled_peak_rss_bytes": 4836245504,
+      "name": "shape-t8-s4096-cached-a",
+      "status": "interrupted",
+      "error": "TimeoutError: collector exceeded training deadline",
+      "run_id": "143dda0e9ee246b38efd4185ef5ac9de",
+      "run_seconds": 55.246570352464914,
+      "shape": [
+        8,
+        4096
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 27.64575131982565
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 2.3113823048770428
+        },
+        {
+          "phase": "collect",
+          "seconds": 17.700156528502703
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 2.1381787583231926
+        },
+        {
+          "phase": "collect",
+          "seconds": 4.0014412850141525
+        }
+      ],
+      "gpu_memory": null,
+      "completed_update_iterations": 2,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 14723.713603170296,
+      "changed_raw_state_tensors": null
+    },
+    {
+      "collection_seconds": 48.81382265686989,
+      "learning_seconds": 4.451058849692345,
+      "learner_transitions": 65536,
+      "environment_decisions": 139107,
+      "games": 21,
+      "optimizer_exposures": 16384,
+      "optimizer_updates": 16,
+      "sampled_peak_rss_bytes": 4841091072,
+      "name": "shape-t8-s4096-reference-a",
+      "status": "interrupted",
+      "error": "TimeoutError: collector exceeded training deadline",
+      "run_id": "bf2ff0dd84024fa1a0da9508543ea8db",
+      "run_seconds": 55.34862369671464,
+      "shape": [
+        8,
+        4096
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 28.515247210860252
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 2.3103525564074516
+        },
+        {
+          "phase": "collect",
+          "seconds": 18.79003071784973
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 2.139221526682377
+        },
+        {
+          "phase": "collect",
+          "seconds": 1.2996248938143253
+        }
+      ],
+      "gpu_memory": null,
+      "completed_update_iterations": 2,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 14723.68760177813,
+      "changed_raw_state_tensors": null
+    },
+    {
+      "collection_seconds": 5.91547990962863,
+      "learning_seconds": 1.1253013536334038,
+      "learner_transitions": 12288,
+      "environment_decisions": 25582,
+      "games": 4,
+      "optimizer_exposures": 3072,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2269106176,
+      "name": "shape-t8-s512-cached-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "f1c449a74f50460fa79f48518d1fea34",
+      "run_seconds": 8.151773821562529,
+      "shape": [
+        8,
+        512
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 2.0257094390690327
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.49269095808267593
+        },
+        {
+          "phase": "collect",
+          "seconds": 2.143004558980465
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3159879520535469
+        },
+        {
+          "phase": "collect",
+          "seconds": 1.7260594218969345
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3145887330174446
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 1135156736,
+        "peak_reserved_bytes": 1619001344,
+        "run_id": "f1c449a74f50460fa79f48518d1fea34",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 10919.741596616916,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 4.693889182060957,
+      "learning_seconds": 1.1070914790034294,
+      "learner_transitions": 12288,
+      "environment_decisions": 25582,
+      "games": 4,
+      "optimizer_exposures": 3072,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 2258391040,
+      "name": "shape-t8-s512-reference-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "b9a4f2b085ed4cbd81660b289101be1d",
+      "run_seconds": 7.01360834389925,
+      "shape": [
+        8,
+        512
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 1.4750398807227612
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.4859143942594528
+        },
+        {
+          "phase": "collect",
+          "seconds": 1.451495997607708
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3105161674320698
+        },
+        {
+          "phase": "collect",
+          "seconds": 1.746219027787447
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.30860816687345505
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 1135156736,
+        "peak_reserved_bytes": 1619001344,
+        "run_id": "b9a4f2b085ed4cbd81660b289101be1d",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 11099.353786970963,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 0.8621391803026199,
+      "learning_seconds": 0.6767642721533775,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 1899761664,
+      "name": "shape-t8-s64-cached-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "6668ac55ea50422cb71a13d3edf7d04d",
+      "run_seconds": 2.6866575814783573,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.49403147399425507
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3568284437060356
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.16390370950102806
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.157850444316864
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.20233217254281044
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.1601610966026783
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 166784000,
+        "peak_reserved_bytes": 285212672,
+        "run_id": "6668ac55ea50422cb71a13d3edf7d04d",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 2269.623358089877,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 0.8696228750050068,
+      "learning_seconds": 0.7099800668656826,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 1896157184,
+      "name": "shape-t8-s64-cached-b",
+      "status": "completed",
+      "error": null,
+      "run_id": "7f3972ff668949ac9ace83403c5fe7a2",
+      "run_seconds": 2.6676850579679012,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.49785634502768517
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.35538314655423164
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.1671733818948269
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.1711731217801571
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.20293732732534409
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.18146169930696487
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 166784000,
+        "peak_reserved_bytes": 285212672,
+        "run_id": "7f3972ff668949ac9ace83403c5fe7a2",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 2163.441019944279,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 1.120711576193571,
+      "learning_seconds": 0.6757097989320755,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 1911103488,
+      "name": "shape-t8-s64-reference-a",
+      "status": "completed",
+      "error": null,
+      "run_id": "ea2c932b99a04cd691caadae00de22cb",
+      "run_seconds": 4.772905744612217,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.5765971355140209
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.3717644661664963
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.23822623491287231
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.12903408333659172
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.30393653362989426
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.17289292439818382
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 166784000,
+        "peak_reserved_bytes": 285212672,
+        "run_id": "ea2c932b99a04cd691caadae00de22cb",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 2273.1651996575583,
+      "changed_raw_state_tensors": 48
+    },
+    {
+      "collection_seconds": 1.1579829268157482,
+      "learning_seconds": 0.7082432545721531,
+      "learner_transitions": 1536,
+      "environment_decisions": 3133,
+      "games": 0,
+      "optimizer_exposures": 384,
+      "optimizer_updates": 24,
+      "sampled_peak_rss_bytes": 1900331008,
+      "name": "shape-t8-s64-reference-b",
+      "status": "completed",
+      "error": null,
+      "run_id": "a4025cc14ced4db4995e75c7fae25cf3",
+      "run_seconds": 3.012419179081917,
+      "shape": [
+        8,
+        64
+      ],
+      "phases": [
+        {
+          "phase": "collect",
+          "seconds": 0.6052780970931053
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.37262218445539474
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.24149014055728912
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.164757389575243
+        },
+        {
+          "phase": "collect",
+          "seconds": 0.30960915610194206
+        },
+        {
+          "phase": "update_iteration",
+          "seconds": 0.1688501201570034
+        }
+      ],
+      "gpu_memory": {
+        "peak_allocated_bytes": 166784000,
+        "peak_reserved_bytes": 285212672,
+        "run_id": "a4025cc14ced4db4995e75c7fae25cf3",
+        "status": "completed",
+        "warmup": "first ordinary collect/update is reported separately; next two are repeated steady observations"
+      },
+      "completed_update_iterations": 3,
+      "nonfinite_count": 0,
+      "skipped_steps": 0,
+      "rows_per_complete_learning_second": 2168.7463877476553,
+      "changed_raw_state_tensors": 48
+    }
+  ],
+  "reference_512_vs_64_learning_rows_per_second_ratio": 4.882774814889402,
+  "limits": [
+    "Three update iterations, untrained initial policy; no strength or steady-state training claim.",
+    "Run and stage failure retain partial completed updates but exclude incomplete whole-loop capacity.",
+    "Synchronized update_iteration excludes EMA; learning_seconds includes it.",
+    "4096-stream GPU memory result absent after timeout; absence is not zero memory or proof of OOM.",
+    "Only one ordered reference/cache pair at512streams; collection slowdown does not isolate cache causality.",
+    "Reference/reference Adam discrepancy rules out cache as a necessary condition for non-exact optimizer moments; it does not identify the kernel or establish all future equivalence."
+  ]
+}

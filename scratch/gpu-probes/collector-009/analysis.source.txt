@@ -1,0 +1,66 @@
+"""Retain all collector cells, including partial parity/performance failures."""
+import hashlib
+import json
+from pathlib import Path
+from statistics import median
+import shutil
+
+
+def main() -> None:
+    private=Path(__file__).parent
+    root=private/'result-009'
+    evidence=root/'evidence'
+    ledger=json.loads((private/'budget.json').read_text())
+    allocation=next(a for a in ledger['allocations'] if a['name']=='h100-validation-009')
+    assert allocation['status']=='terminal-deletion-confirmed'
+    attempts=json.loads((evidence/'attempts.json').read_text())
+    rows=[]
+    for attempt in attempts:
+        name=attempt['name']
+        if not name.startswith('collector-'):
+            continue
+        path=evidence/name
+        row={'name':name,'status':attempt['status'],'child_seconds':attempt['seconds']}
+        if (path/'fixed-witnesses.json').exists():
+            row['fixed_witnesses']=json.loads((path/'fixed-witnesses.json').read_text())
+        if (path/'result.json').exists():
+            record=json.loads((path/'result.json').read_text())
+            samples=record['samples']
+            row.update(streams=record['streams'],seed=record['seed'],order=record['order'],samples=samples)
+            identity=samples[0]['identity']
+            row['identity_differences']=[{'sample':i,'fields':[k for k,v in sample['identity'].items() if v!=identity[k]]} for i,sample in enumerate(samples)]
+            if attempt['status']=='completed':
+                assert len(samples)==4 and all(s['identity']==identity and s['exact'] and s['rollout_storage_independent'] for s in samples)
+                assert all(s['learner_transitions']==record['streams']*8 and s['truncations']==0 for s in samples)
+                ref=[s for s in samples if not s['staged']];staged=[s for s in samples if s['staged']]
+                assert len(ref)==len(staged)==2
+                gain=median(s['seconds'] for s in ref)/median(s['seconds'] for s in staged)
+                summary=json.loads((path/'summary.json').read_text())
+                assert gain==summary['median_speedup']
+                passed=1/gain<=1.05 if record['streams']==64 else gain>=1.10
+                assert passed==summary['target_passed']
+                row.update(median_speedup=gain,target_passed=passed,startup_inclusive_speedup=median(s['startup_inclusive_seconds'] for s in ref)/median(s['startup_inclusive_seconds'] for s in staged))
+        rows.append(row)
+    assert len(rows)==6
+    summary={'run':allocation['run_id'],'source':allocation['source'],**json.loads((root/'verification.json').read_text()),'analysis_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'cells':rows,'limits':['Two observations per variant/seed/shape; no population confidence interval.','Actual ordinary collection with fixed untrained policies, without optimizer updates or distributed execution.','Initialization is outside warm collection time; startup-inclusive ratios are reported separately.','Laptop service models remain run007 reference costs; no universal staged speed multiplier.']}
+    (root/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+    dest=Path('scratch/gpu-probes/collector-009');temporary=dest.with_name('.collector-009-staging')
+    assert not dest.exists() and not temporary.exists()
+    temporary.mkdir()
+    for p in evidence.rglob('*'):
+        if p.is_file() and p.suffix in {'.json','.log'}:
+            target=temporary/'evidence'/p.relative_to(evidence);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target)
+    for name in ('summary.json','verification.json'):
+        shutil.copy2(root/name,temporary/name)
+    for name in ('ninth-cleanup.json','monitor-cleanup-009.json','rental-costs-009.json','source-copy.json','job-009.json','launch-009.json','preflight-009.json','ninth-pod.json','prepared-source.json','budget.json','lifecycle-009.json','download-recovery-009.json','observed-009.log'):
+        shutil.copy2(private/name,temporary/name)
+    for name,target in (('analyze-009.py','analysis.source.txt'),('recover-009.py','download.source.txt'),('launch-wait-009.py','monitor.source.txt')):
+        shutil.copy2(private/name,temporary/target)
+    shutil.copy2('scratch/collector-staging-protocol.txt',temporary/'protocol.txt')
+    temporary.rename(dest)
+    for r in rows:
+        print(r['name'],r['status'],r.get('median_speedup'),r.get('target_passed'),r.get('identity_differences'))
+
+
+if __name__=='__main__':
+    main()

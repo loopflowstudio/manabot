@@ -1,0 +1,210 @@
+{
+  "architecture": {
+    "components": {
+      "action_embedding": {
+        "total": 5248,
+        "trainable": 5248
+      },
+      "action_layer": {
+        "total": 16512,
+        "trainable": 16512
+      },
+      "attention": {
+        "total": 50048,
+        "trainable": 50048
+      },
+      "card_embedding": {
+        "total": 6720,
+        "trainable": 6720
+      },
+      "perm_embedding": {
+        "total": 5824,
+        "trainable": 5824
+      },
+      "player_embedding": {
+        "total": 6016,
+        "trainable": 6016
+      },
+      "policy_head": {
+        "total": 4225,
+        "trainable": 4225
+      },
+      "semantic_cards": {
+        "total": 35456,
+        "trainable": 35456
+      },
+      "value_head": {
+        "total": 8385,
+        "trainable": 8385
+      }
+    },
+    "identity": "e0c15664c20c6a67c67a87a48f3a13bbced5848854ee24247be4341d36f9f859",
+    "parameters": {
+      "total": 138434,
+      "trainable": 138434
+    },
+    "schema_version": 1
+  },
+  "attention_slots": 202,
+  "batch": 1024,
+  "device": "NVIDIA H100 80GB HBM3",
+  "inference": {
+    "construction_seconds": 0.04068003222346306,
+    "first_call_seconds": 0.32039104867726564,
+    "peak_allocated_bytes": 1677555200,
+    "peak_reserved_bytes": 2082471936,
+    "windows": [
+      {
+        "calls": 133,
+        "observations": 136192,
+        "seconds": 1.003002842888236
+      },
+      {
+        "calls": 133,
+        "observations": 136192,
+        "seconds": 1.003604088909924
+      },
+      {
+        "calls": 133,
+        "observations": 136192,
+        "seconds": 1.0007420405745506
+      }
+    ]
+  },
+  "input_sha256": "424ab00b9f07e56f47a1072d9fa9a080b99a93d785197a8ddc70be7f4f03dfa2",
+  "input_shapes": {
+    "action_focus": [
+      1024,
+      64,
+      2
+    ],
+    "actions": [
+      1024,
+      64,
+      17
+    ],
+    "actions_valid": [
+      1024,
+      64
+    ],
+    "agent_cards": [
+      1024,
+      60,
+      39
+    ],
+    "agent_cards_valid": [
+      1024,
+      60
+    ],
+    "agent_permanents": [
+      1024,
+      40,
+      25
+    ],
+    "agent_permanents_valid": [
+      1024,
+      40
+    ],
+    "agent_player": [
+      1024,
+      1,
+      28
+    ],
+    "agent_player_valid": [
+      1024,
+      1
+    ],
+    "events": [
+      1024,
+      32,
+      7
+    ],
+    "events_valid": [
+      1024,
+      32
+    ],
+    "known_hand": [
+      1024,
+      2,
+      60,
+      2
+    ],
+    "opponent_cards": [
+      1024,
+      60,
+      39
+    ],
+    "opponent_cards_valid": [
+      1024,
+      60
+    ],
+    "opponent_permanents": [
+      1024,
+      40,
+      25
+    ],
+    "opponent_permanents_valid": [
+      1024,
+      40
+    ],
+    "opponent_player": [
+      1024,
+      1,
+      28
+    ],
+    "opponent_player_valid": [
+      1024,
+      1
+    ],
+    "semantic_cards": [
+      1024,
+      2,
+      60
+    ]
+  },
+  "native_sha256": {
+    "_managym.cpython-312-x86_64-linux-gnu.so": "c758ca57609c4686c0799ce1e44d3e569f3b1eed78c880ac20378a88c3551d7e"
+  },
+  "optimizer": {
+    "construction_seconds": 0.825182830914855,
+    "first_call_seconds": 0.3439253568649292,
+    "peak_allocated_bytes": 4532205056,
+    "peak_reserved_bytes": 8170504192,
+    "windows": [
+      {
+        "calls": 6,
+        "observations": 6144,
+        "seconds": 1.0350918918848038
+      },
+      {
+        "calls": 6,
+        "observations": 6144,
+        "seconds": 1.035255504772067
+      },
+      {
+        "calls": 6,
+        "observations": 6144,
+        "seconds": 1.0333575019612908
+      }
+    ]
+  },
+  "padding": "unchanged fixed slots; no packing; batches above available rows cycle exact real rows",
+  "precision": "float32; TF32 disabled",
+  "python": "3.12.3",
+  "target_window_seconds": 1.0,
+  "torch": "2.10.0+cu128",
+  "total_memory_bytes": 85028372480,
+  "unique_input_rows_available": 1024,
+  "valid_counts": {
+    "actions_valid": 3524.0,
+    "agent_cards_valid": 13192.0,
+    "agent_permanents_valid": 3303.0,
+    "agent_player_valid": 1024.0,
+    "events_valid": 1830.0,
+    "opponent_cards_valid": 5047.0,
+    "opponent_permanents_valid": 3869.0,
+    "opponent_player_valid": 1024.0
+  },
+  "warmups": 2,
+  "windows": 3
+}
