@@ -225,3 +225,18 @@ and six catalog/reload checks passed; the 20-test product/catalog/world suite
 passed before adding the three research reload cases. These are software tests,
 not local calibration/training. Remote full-game admission and the actual
 calibrated campaign/report remain unfinished.
+
+## Mini calibration admitted (2026-10-14)
+
+Etude run `ff9f4cd90d03`, session `372ed2d82ced`, source `5f007a18` owns the
+first remote calibration attempt: one hour including native build, seed 12250,
+100 updates per pool and one eight-leg deal per anchor/pool. All three recipes
+use the common catalog and four-stream cross-balanced collection. The isolated
+launcher disables local placement; Mini had no unfinished SDK attempts or
+observed learner process at admission. The 48-hour allocation includes this
+attempt and failures; no GPU spending is combined. Source/launch receipt is
+`.runs/mtg122/allocation.json`, SDK authority `.runs/mtg122/launcher`.
+Two declaration/remote-guard checks passed. Native build was observed running;
+no calibration or scientific result is claimed yet. A remote build failure,
+incomplete matrix or timing projection that cannot fit remains evidence, not
+permission to replace the cohort silently.
