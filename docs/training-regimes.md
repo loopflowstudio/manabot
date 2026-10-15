@@ -71,17 +71,15 @@ measured an11.9% four-worker improvement at4,096streams but failed the complete
 performance/correctness gates; see [run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 More workers are not yet a recommended default.
 
-The collector writes sampled observations and policy outputs directly into one
-update's final `[learner step, stream, ...]` arrays. Each stream's pending slot
-awaits only its reward and terminal flag. Collection stops before sampling an
-extra action, and the returned arrays remain owned by that batch through learning.
-Failed collection cannot be snapshotted or silently reused; recovery restores the
-last durable update into a fresh collector. This storage change preserves the
-existing rollout and recovery formats. The matched GPU comparison completed all
-32cells and passed deterministic proofs, but failed the large-workload performance
-and ordinary learned-state gates; see
-[run020](../experiments/worker-scaling.md#direct-rollout-storage-result-run020).
-The direct-storage candidate is not accepted as a training optimization.
+The collector retains pending learner transitions until their reward and terminal
+flag are known, then assembles an owned update batch. Collection stops before
+sampling an extra action. The direct-storage candidate was removed after
+[run020](../experiments/worker-scaling.md#direct-rollout-storage-result-run020)
+failed the large-workload performance and ordinary learned-state gates; its
+measured source and complete evidence remain retained. Native producers borrow
+immutable stream setups during stepping rather than copying every deck on each
+micro-step. This removes repeated configuration allocation without changing
+active masks, game rules or auto-reset seeds; its GPU benefit remains unmeasured.
 
 Training comparisons use [declarative typed-Python experiments](training-experiments.md):
 named components, frozen baselines/versioned presets, explicit overrides and ordered

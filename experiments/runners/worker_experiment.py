@@ -44,7 +44,6 @@ class TrainingTrial:
     reference: bool = False
     workers: Literal[1, 2, 4] = 1
     deterministic: bool = False
-    reference_collector: bool = False
 
 
 def read_optional(path: str) -> str | None:
@@ -67,7 +66,6 @@ def main() -> None:
     mode.add_argument("--serving-preparation", action="store_true")
     mode.add_argument("--collection-profile", action="store_true")
     mode.add_argument("--producer-scaling", action="store_true")
-    mode.add_argument("--rollout-storage", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     if config_path := os.environ.get("ETUDE_CONFIG"):
@@ -108,7 +106,7 @@ def main() -> None:
     )
     statuses = []
     try:
-        if args.collection_profile or args.producer_scaling or args.rollout_storage:
+        if args.collection_profile or args.producer_scaling:
             trials = []
         elif args.serving_preparation:
             trials = [
@@ -240,36 +238,6 @@ def main() -> None:
                 for index, (reference, workers) in enumerate(order)
                 for streams in (512, 4096)
             ]
-        if args.rollout_storage:
-            storage_order: tuple[tuple[bool, Literal[1, 2, 4]], ...] = (
-                (True, 1),
-                (False, 1),
-                (False, 4),
-                (True, 4),
-                (True, 4),
-                (False, 4),
-                (False, 1),
-                (True, 1),
-                (False, 4),
-                (True, 1),
-                (True, 4),
-                (False, 1),
-            )
-            training_cases = [
-                TrainingTrial(
-                    name=f"{kind}-{index}-{'frozen' if frozen else 'direct'}-w{workers}-s{streams}",
-                    streams=streams,
-                    workers=workers,
-                    deterministic=kind == "proof",
-                    reference_collector=frozen,
-                )
-                for kind, order in (
-                    ("proof", storage_order[:4]),
-                    ("timing", storage_order),
-                )
-                for index, (frozen, workers) in enumerate(order)
-                for streams in (512, 4096)
-            ]
         for training in training_cases:
             name, streams, reference = (
                 training.name,
@@ -300,7 +268,6 @@ def main() -> None:
                     if args.serving_preparation
                     or args.collection_profile
                     or args.producer_scaling
-                    or args.rollout_storage
                     else "experiments.runners.cuda_performance"
                 ),
                 "--root",
@@ -309,7 +276,6 @@ def main() -> None:
                 cell.model_dump_json(),
                 *(["--profile-kind", profile_kind] if profiling else []),
                 *(["--reference-policy"] if reference else []),
-                *(["--reference-collector"] if training.reference_collector else []),
                 *(["--deterministic"] if training.deterministic else []),
             ]
             with (root / "worker.log").open("w") as log:

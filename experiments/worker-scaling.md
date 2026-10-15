@@ -477,3 +477,15 @@ entries were verified. Structured receipts and all cells are retained in
 Etude output. Provider deletion is confirmed. Estimated whole rental cost is$0.251;
 the original$50 budget has about$6.31 estimated rental usage, with$31.68unallocated
 after conservative charges and reserves. No new rental is active.
+
+The subsequent implementation removes direct storage and its comparison-only
+runner/tests, restoring the pre-storage collector. The frozen fixture and020's
+measured source remain historical evidence. It also removes complete player-setup
+clones from native vector stepping/reset iteration: each stream borrows its owned
+immutable config while mutating only its environment and seed. The018measured
+source cloned all setups before checking active masks, including paused streams.
+This is producer allocation work, not a change to rules simulation. Its cost was
+not separately measured, and no GPU speedup is claimed for the borrowing change.
+Nine Rust debug vector tests and20Python producer/collector/inference tests pass,
+including mixed per-stream setups through masked terminal auto-reset and recovery.
+A matched same-host native comparison remains required.

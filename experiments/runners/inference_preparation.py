@@ -1,9 +1,8 @@
-"""Compare inference preparation and collector storage through one TrainingRun.
+"""Compare scoped preparation with ordinary inputs through the same TrainingRun.
 
 The reference changes only preparation to the original CPU-to-device dictionary
 transfer. Checkpoint witnesses are computed after training timing completes and
 include raw/EMA parameters and Adam state, not serialization-specific file bytes.
-An immutable historical collector supplies the optional storage reference.
 """
 
 import argparse
@@ -21,7 +20,6 @@ from unittest.mock import patch
 
 import torch
 
-from experiments.runners.collector_reference import collector_implementation
 from experiments.runners.cuda_performance import Cell, child
 from experiments.runners.pipeline_benchmark import (
     _batch_tensors,
@@ -113,15 +111,13 @@ class _WitnessEnvironment(_TimedEnvironment):
 
 
 @contextmanager
-def collection_witnesses(
-    root: Path, collector_type: type[SeatRoutedCollector] = SeatRoutedCollector
-) -> Iterator[None]:
+def collection_witnesses(root: Path) -> Iterator[None]:
     """Diagnostic only: hash each full rollout and its final collection state.
 
     The environment proxy is restored even on collection failure. Hashing adds
     CPU work and synchronization, so this scope is excluded from timing cells.
     """
-    original = collector_type.collect
+    original = SeatRoutedCollector.collect
     count = 0
 
     @wraps(original)
@@ -161,7 +157,7 @@ def collection_witnesses(
         finally:
             collector._env = native
 
-    with patch.object(collector_type, "collect", collect):
+    with patch.object(SeatRoutedCollector, "collect", collect):
         yield
 
 
@@ -170,7 +166,6 @@ def main() -> None:
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--cell", type=Cell.model_validate_json, required=True)
     parser.add_argument("--reference-policy", action="store_true")
-    parser.add_argument("--reference-collector", action="store_true")
     parser.add_argument("--deterministic", action="store_true")
     args = parser.parse_args()
     if args.cell.kind != "loop":
@@ -185,14 +180,9 @@ def main() -> None:
     started = time.perf_counter()
     before = resource.getrusage(resource.RUSAGE_SELF)
     out = args.root / args.cell.name
-    with collector_implementation(args.reference_collector) as collector_type:
-        proof = (
-            collection_witnesses(out, collector_type)
-            if args.deterministic
-            else nullcontext()
-        )
-        with reference_inference(args.reference_policy), proof:
-            child(args.root, args.cell)
+    proof = collection_witnesses(out) if args.deterministic else nullcontext()
+    with reference_inference(args.reference_policy), proof:
+        child(args.root, args.cell)
     after = resource.getrusage(resource.RUSAGE_SELF)
     remaining = [
         t.name for t in threading.enumerate() if t.name.startswith("manabot-producer")
