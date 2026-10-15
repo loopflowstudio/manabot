@@ -379,6 +379,7 @@ def _execute_regime(
     outputs = {}
     self_play_session = None
     resources = ExitStack()
+    producers = resources.enter_context(ExitStack())
     game_index = 0
     fixed_validation_dataset: dict[str, np.ndarray] | None = None
     last_monitor_seconds = 0.0
@@ -1171,6 +1172,7 @@ def _execute_regime(
                                 != record.artifacts["initial_raw"]["sha256"]
                             ):
                                 raise ValueError("initial evaluation admission differs")
+                    producers.close()
                     collector = SeatRoutedCollector(
                         space,
                         Match(regime.match),
@@ -1190,7 +1192,9 @@ def _execute_regime(
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
                         device=stage.execution.device,
+                        workers=stage.execution.workers,
                     )
+                    producers.callback(collector.close)
                     experiment = Experiment(
                         ExperimentHypers(
                             wandb=False,

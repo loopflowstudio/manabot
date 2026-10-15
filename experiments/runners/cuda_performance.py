@@ -32,6 +32,7 @@ class Cell(BaseModel):
     kind: Literal["model", "loop"]
     batch: int = Field(gt=0)
     streams: int = Field(default=0, ge=0)
+    workers: Literal[1, 2, 4] = 1
 
     @property
     def name(self) -> str:
@@ -258,6 +259,7 @@ def child(root: Path, cell: Cell) -> None:
             3,
         )
         stage.execution.device, stage.execution.threads = "cuda", 1
+        stage.execution.workers = cell.workers
         stage.execution.wall_seconds, recipe.wall_seconds = 55, 60
         recipe = TrainingRegime.model_validate(recipe.model_dump())
         atomic_json(out / "regime.json", recipe.model_dump(mode="json"))

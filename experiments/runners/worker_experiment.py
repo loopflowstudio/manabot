@@ -16,6 +16,7 @@ import platform
 import subprocess
 import sys
 import time
+from typing import Literal
 
 import psutil
 import torch
@@ -34,6 +35,15 @@ class Trial:
     seconds: int = 600
     profile: bool = False
     reference: bool = False
+
+
+@dataclass(frozen=True)
+class TrainingTrial:
+    name: str
+    streams: int
+    reference: bool = False
+    workers: Literal[1, 2, 4] = 1
+    deterministic: bool = False
 
 
 def read_optional(path: str) -> str | None:
@@ -55,6 +65,7 @@ def main() -> None:
     mode.add_argument("--serving-ownership", action="store_true")
     mode.add_argument("--serving-preparation", action="store_true")
     mode.add_argument("--collection-profile", action="store_true")
+    mode.add_argument("--producer-scaling", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=False)
     if config_path := os.environ.get("ETUDE_CONFIG"):
@@ -95,7 +106,7 @@ def main() -> None:
     )
     statuses = []
     try:
-        if args.collection_profile:
+        if args.collection_profile or args.producer_scaling:
             trials = []
         elif args.serving_preparation:
             trials = [
@@ -166,7 +177,7 @@ def main() -> None:
         )
         training_cases = (
             [
-                (
+                TrainingTrial(
                     f"training-{index}-{'reference' if reference else 'prepared'}-s{streams}",
                     streams,
                     reference,
@@ -178,13 +189,13 @@ def main() -> None:
             ]
             if args.serving_preparation
             else [
-                (f"ordinary-s{streams}", streams, False)
+                TrainingTrial(f"ordinary-s{streams}", streams)
                 for streams in (() if args.replay_only else (512, 4096))
             ]
         )
         if args.collection_profile:
             training_cases = [
-                (
+                TrainingTrial(
                     f"{kind}-{'reference' if reference else 'prepared'}-s{streams}",
                     streams,
                     reference,
@@ -193,12 +204,55 @@ def main() -> None:
                 for reference in (True, False)
                 for streams in ((4096,) if kind == "python" else (512, 4096))
             ]
-        for name, streams, reference in training_cases:
+        if args.producer_scaling:
+            proof_order: tuple[tuple[bool, Literal[1, 2, 4]], ...] = (
+                (True, 1),
+                (False, 1),
+                (False, 2),
+                (False, 4),
+                (True, 1),
+            )
+            timing_order: tuple[tuple[bool, Literal[1, 2, 4]], ...] = (
+                (True, 1),
+                (False, 1),
+                (False, 2),
+                (False, 4),
+                (False, 4),
+                (False, 2),
+                (False, 1),
+                (True, 1),
+                (False, 2),
+                (True, 1),
+                (False, 4),
+                (False, 1),
+            )
+            training_cases = [
+                TrainingTrial(
+                    f"{kind}-{index}-{'reference' if reference else 'prepared'}-w{workers}-s{streams}",
+                    streams,
+                    reference,
+                    workers,
+                    kind == "proof",
+                )
+                for kind, order in (("proof", proof_order), ("timing", timing_order))
+                for index, (reference, workers) in enumerate(order)
+                for streams in (512, 4096)
+            ]
+        for training in training_cases:
+            name, streams, reference = (
+                training.name,
+                training.streams,
+                training.reference,
+            )
             root = args.out / name
             root.mkdir()
             write_json(root / "baseline.json", tape.recipe.model_dump(mode="json"))
             cell = Cell(
-                capacity="w64-d1", kind="loop", batch=streams * 8, streams=streams
+                capacity="w64-d1",
+                kind="loop",
+                batch=streams * 8,
+                streams=streams,
+                workers=training.workers,
             )
             (root / cell.name).mkdir()
             started = time.monotonic()
@@ -211,7 +265,9 @@ def main() -> None:
                     "experiments.runners.collection_attribution"
                     if profiling
                     else "experiments.runners.inference_preparation"
-                    if args.serving_preparation or args.collection_profile
+                    if args.serving_preparation
+                    or args.collection_profile
+                    or args.producer_scaling
                     else "experiments.runners.cuda_performance"
                 ),
                 "--root",
@@ -220,6 +276,7 @@ def main() -> None:
                 cell.model_dump_json(),
                 *(["--profile-kind", profile_kind] if profiling else []),
                 *(["--reference-policy"] if reference else []),
+                *(["--deterministic"] if training.deterministic else []),
             ]
             with (root / "worker.log").open("w") as log:
                 try:

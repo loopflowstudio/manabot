@@ -48,6 +48,7 @@ from manabot.model.policy_distribution import (
     require,
 )
 from manabot.model.train import Trainer
+from manabot.sim.producers import ShardedVectorEnv
 from manabot.sim.rollout import (
     OBS_KEYS,
     BatchedSampler,
@@ -193,7 +194,12 @@ class SeatRoutedCollector:
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
+        workers: int = 1,
     ) -> None:
+        if workers not in (1, 2, 4) or workers > num_envs:
+            raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
+        if workers != 1 and root is not None:
+            raise ValueError("diagnostic roots require one producer")
         if opponent_mode not in OPPONENT_MODES:
             raise ValueError(
                 f"opponent_mode must be one of {OPPONENT_MODES}, got {opponent_mode!r}"
@@ -219,11 +225,15 @@ class SeatRoutedCollector:
         self._journal: list[tuple[list[int], list[bool]]] = []
 
         if root is None:
-            self._env = managym.VectorEnv(
-                num_envs=num_envs,
-                seed=seed,
-                skip_trivial=True,
-                opponent_policy="none",
+            self._env = (
+                ShardedVectorEnv(num_envs, seed, workers)
+                if workers > 1
+                else managym.VectorEnv(
+                    num_envs=num_envs,
+                    seed=seed,
+                    skip_trivial=True,
+                    opponent_policy="none",
+                )
             )
         else:
             from manabot.env.target_practice import TargetPracticeVector
@@ -235,43 +245,52 @@ class SeatRoutedCollector:
             ):
                 raise ValueError("unsupported training root or root recovery")
             self._env = TargetPracticeVector(observation_space, match, num_envs, seed)
-        self._buffers = _allocate_buffers(observation_space, num_envs)
-        self._env.set_buffers(self._buffers)
-        self.stream_matches = stream_matches(match, num_envs, matchup_curriculum)
-        if matchup_curriculum == "fixed":
-            self._env.reset_all_into_buffers(match.to_rust())
-        else:
-            self._env.reset_each_into_buffers(
-                [m.to_rust() for m in self.stream_matches]
-            )
+        try:
+            self._buffers = _allocate_buffers(observation_space, num_envs)
+            self._env.set_buffers(self._buffers)
+            self.stream_matches = stream_matches(match, num_envs, matchup_curriculum)
+            if matchup_curriculum == "fixed":
+                self._env.reset_all_into_buffers(match.to_rust())
+            else:
+                self._env.reset_each_into_buffers(
+                    [m.to_rust() for m in self.stream_matches]
+                )
 
-        self._self_play_decks = [
-            (
-                deck_identity(m.hero_deck, m.hero_sideboard),
-                deck_identity(m.villain_deck, m.villain_sideboard),
-            )
-            for m in self.stream_matches
-        ]
+            self._self_play_decks = [
+                (
+                    deck_identity(m.hero_deck, m.hero_sideboard),
+                    deck_identity(m.villain_deck, m.villain_sideboard),
+                )
+                for m in self.stream_matches
+            ]
 
-        #: Learner seat per stream: stream s seats the learner at s % 2, so
-        #: half the streams have the learner on the play — seat-balanced.
-        self.learner_seat = np.arange(num_envs, dtype=np.int64) % 2
+            #: Learner seat per stream: stream s seats the learner at s % 2, so
+            #: half the streams have the learner on the play — seat-balanced.
+            self.learner_seat = np.arange(num_envs, dtype=np.int64) % 2
 
-        self._streams: list[list[_Transition]] = [[] for _ in range(num_envs)]
-        self._pending: list[_Pending | None] = [None] * num_envs
+            self._streams: list[list[_Transition]] = [[] for _ in range(num_envs)]
+            self._pending: list[_Pending | None] = [None] * num_envs
 
-        if opponent_mode == "random":
-            self._opponent: Any = RandomBatchController(seed=seed + 1)
-        elif opponent_mode == "frozen":
-            self._opponent = BatchedSampler(
-                opponent_agent, deterministic=False, seed=seed + 1, device=device
-            )
-        else:  # self-play: live learner weights, bound at collect() time
-            self._opponent = None
-        self._self_rng = torch.Generator(device=self.device).manual_seed(seed + 1)
+            if opponent_mode == "random":
+                self._opponent: Any = RandomBatchController(seed=seed + 1)
+            elif opponent_mode == "frozen":
+                self._opponent = BatchedSampler(
+                    opponent_agent, deterministic=False, seed=seed + 1, device=device
+                )
+            else:  # self-play: live learner weights, bound at collect() time
+                self._opponent = None
+            self._self_rng = torch.Generator(device=self.device).manual_seed(seed + 1)
 
-        self._win_reward = float(reward.hypers.win_reward)
-        self._lose_reward = float(reward.hypers.lose_reward)
+            self._win_reward = float(reward.hypers.win_reward)
+            self._lose_reward = float(reward.hypers.lose_reward)
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        """Join owned CPU producers; ordinary single-vector collectors own no pool."""
+        if isinstance(self._env, ShardedVectorEnv):
+            self._env.close()
 
     def snapshot(self) -> CollectorSnapshot:
         """Capture a completed update boundary, including native RNG replay."""

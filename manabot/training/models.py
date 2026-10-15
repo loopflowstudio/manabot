@@ -178,7 +178,8 @@ class AtaraxosMoveLearning(Strict):
 class Execution(Strict):
     device: Literal["cpu", "cuda"] = "cpu"
     precision: Literal["float32"] = "float32"
-    workers: Literal[1] = 1
+    # Coarse native observation producers; policy/learning remain on one device.
+    workers: Literal[1, 2, 4] = 1
     threads: int = Field(default=1, ge=1, le=4)
     wall_seconds: float = Field(default=300, gt=0)
     memory_bytes: int = Field(default=32 * 1024**3, gt=0)
@@ -187,6 +188,17 @@ class Execution(Strict):
 class Stage(Strict):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     execution: Execution = Execution()
+
+    @model_validator(mode="after")
+    def supported_workers(self) -> "Stage":
+        if (
+            self.execution.workers != 1
+            and getattr(self, "operation", None) != "train_self_play"
+        ):
+            raise ValueError(
+                "multiple producers are supported only for train_self_play"
+            )
+        return self
 
 
 class ImportPolicy(Stage):
@@ -345,6 +357,10 @@ class TrainSelfPlay(Stage):
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.execution.workers > self.streams:
+            raise ValueError("producer count cannot exceed streams")
+        if self.execution.workers != 1 and self.root is not None:
+            raise ValueError("diagnostic roots require one producer")
         if self.matchup_curriculum != "fixed":
             width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
             if self.streams % width or self.behavior != "current-self":
@@ -714,6 +730,7 @@ class TrainingRegime(Strict):
                     )
                 if (
                     parent.execution.device != stage.execution.device
+                    or parent.execution.workers != stage.execution.workers
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.matchup_curriculum != stage.matchup_curriculum
@@ -724,7 +741,7 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock and opponent"
+                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock, workers and opponent"
                     )
             if isinstance(stage, TrainCompound):
                 if initial and parent is not latest_compound:

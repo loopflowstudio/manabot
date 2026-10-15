@@ -51,6 +51,21 @@ impl VectorEnv {
         self.envs.len()
     }
 
+    /// Preserve global stream reset identities when this vector owns a shard.
+    /// Configure before resetting; ordinary vectors retain their local stride.
+    pub fn with_seed_stride(mut self, stride: u64) -> Result<Self, AgentError> {
+        if stride < self.envs.len().max(1) as u64 {
+            return Err(AgentError(
+                "seed stride must cover all local streams".into(),
+            ));
+        }
+        if !self.player_configs.is_empty() {
+            return Err(AgentError("seed stride must be set before reset".into()));
+        }
+        self.seed_stride = stride;
+        Ok(self)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.envs.is_empty()
     }
@@ -589,5 +604,51 @@ mod tests {
             })
             .expect_err("step_into should fail");
         assert_eq!(err.0, "env error 1");
+    }
+
+    #[test]
+    fn shards_preserve_global_seeds_through_autoreset_and_restore() {
+        let mut whole = VectorEnv::new(3, 19, true, OpponentPolicy::None);
+        let mut left = VectorEnv::new(2, 19, true, OpponentPolicy::None)
+            .with_seed_stride(3)
+            .unwrap();
+        let mut right = VectorEnv::new(1, 21, true, OpponentPolicy::None)
+            .with_seed_stride(3)
+            .unwrap();
+        for vector in [&mut whole, &mut left, &mut right] {
+            vector.reset_all(sample_player_configs()).unwrap();
+        }
+        let mut terminals = 0;
+        for step in 0..1000 {
+            if step == 333 {
+                for (vector, seeds) in [
+                    (&mut whole, vec![45, 109, 1011]),
+                    (&mut left, vec![45, 109]),
+                    (&mut right, vec![1011]),
+                ] {
+                    vector
+                        .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
+                        .unwrap();
+                }
+            }
+            let expected = whole.step(&[0, 0, 0]).unwrap();
+            let mut actual = left.step(&[0, 0]).unwrap();
+            actual.extend(right.step(&[0]).unwrap());
+            for (expected, actual) in expected.iter().zip(actual.iter()) {
+                assert_eq!(format!("{:?}", expected.obs), format!("{:?}", actual.obs));
+                assert_eq!(expected.reward, actual.reward);
+                assert_eq!(expected.terminated, actual.terminated);
+                assert_eq!(expected.truncated, actual.truncated);
+                terminals += usize::from(actual.terminated);
+            }
+            let mut seeds = left.current_game_seeds();
+            seeds.extend(right.current_game_seeds());
+            assert_eq!(whole.current_game_seeds(), seeds);
+        }
+        assert!(terminals > 0);
+        assert!(VectorEnv::new(2, 0, true, OpponentPolicy::None)
+            .with_seed_stride(1)
+            .is_err());
+        assert!(left.with_seed_stride(3).is_err());
     }
 }

@@ -41,14 +41,34 @@ physical-deal baseline, history-dropout treatment and scientific limits.
 
 The recipe reuses `AgentSpec`, `ObservationSpaceHypers`, and authored
 `MatchHypers`, including both sideboards. Architecture and match binding live
-once per regime. Every stage declares its CPU device, float32 precision, one
-worker, thread count, wall and memory limits. Learning settings independently
+once per regime. Every stage declares its device, float32 precision, worker
+count, Torch thread count, wall and memory limits. Learning settings independently
 select estimators, filtering, regularization reference, schedules, and EMA.
 Schedules use `run_elapsed_budget`: elapsed wall time since run creation divided
 by the regime's total `wall_seconds`, including generation, collection, updates
 and export. Continuation stages do not reset that clock. Stage deadlines remain
 independent bounds inside the same total allowance. Evaluation is outside the
 training execution and does not consume this clock.
+
+Self-play `execution.workers` accepts 1 (the default), 2 or 4 CPU observation
+producers. Persistent threads own disjoint native stream ranges; native buffered
+stepping releases the GIL. A barrier completes all writes before the one policy
+owner reads global observations. Inference batch sizes, GPU sampling order,
+learner layout and update barriers remain unchanged. Producers share contiguous
+NumPy row views and use the global reset-seed stride, preserving stream identities
+and ordinary recovery snapshots across partitions. A live stage continuation must
+retain its worker count. Other stage kinds and diagnostic roots require one worker;
+there must be at least one stream per producer. `execution.threads` still controls
+Torch CPU threads and is independent of this producer count.
+
+TrainingRun closes producer pools on completion, interruption or failure. Direct
+`SeatRoutedCollector` users must call `close()` (for example through
+`contextlib.closing`). Worker errors settle all submitted writers before closing
+the pool; partially written observations cannot be reused after failure. Native
+calls retain their cooperative deadline behavior, so remote hard limits still
+belong to the enclosing job/process supervisor. This implementation's performance
+is pending a matched ordinary-training GPU comparison; more workers are not yet
+a recommended default.
 
 Training comparisons use [declarative typed-Python experiments](training-experiments.md):
 named components, frozen baselines/versioned presets, explicit overrides and ordered
